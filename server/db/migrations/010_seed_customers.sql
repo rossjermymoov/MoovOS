@@ -2,6 +2,9 @@
 -- Seed 119 MOOV customer accounts from production export (April 2026)
 -- Ordered by account number.
 
+-- registered_address is superseded by structured address fields; make it nullable
+ALTER TABLE customers ALTER COLUMN registered_address DROP NOT NULL;
+
 INSERT INTO customers (
   account_number, business_name, primary_email, phone_number,
   address_line_1, address_line_2, city, county, postcode, country,
