@@ -52,7 +52,7 @@ router.get('/couriers/:id', async (req, res, next) => {
        FROM courier_services cs
        LEFT JOIN zones z ON z.courier_service_id = cs.id
        WHERE cs.courier_id = $1
-       GROUP BY cs.id ORDER BY cs.name`,
+       GROUP BY cs.id ORDER BY cs.sort_order NULLS LAST, cs.name`,
       [req.params.id]
     );
 
@@ -117,7 +117,7 @@ router.get('/services', async (req, res, next) => {
                LEFT JOIN zones z ON z.courier_service_id = cs.id`;
     const values = [];
     if (courier_id) { sql += ' WHERE cs.courier_id = $1'; values.push(courier_id); }
-    sql += ' GROUP BY cs.id, c.id ORDER BY c.name, cs.name';
+    sql += ' GROUP BY cs.id, c.id ORDER BY c.name, cs.sort_order NULLS LAST, cs.name';
     const result = await query(sql, values);
     res.json(result.rows);
   } catch (err) { next(err); }
@@ -187,6 +187,26 @@ router.post('/services', async (req, res, next) => {
     if (err.code === '23505') return res.status(409).json({ error: 'Service code already exists' });
     next(err);
   }
+});
+
+// PUT /api/carriers/couriers/:id/services/reorder
+// Body: { service_ids: [3, 1, 5, 2, 4] }  — ordered array assigns sort_order 1,2,3…
+router.put('/couriers/:id/services/reorder', async (req, res, next) => {
+  try {
+    const { service_ids } = req.body;
+    if (!Array.isArray(service_ids) || service_ids.length === 0)
+      return res.status(400).json({ error: 'service_ids array required' });
+
+    await Promise.all(
+      service_ids.map((svcId, i) =>
+        query(
+          'UPDATE courier_services SET sort_order = $1, updated_at = NOW() WHERE id = $2 AND courier_id = $3',
+          [i + 1, svcId, req.params.id]
+        )
+      )
+    );
+    res.json({ ok: true });
+  } catch (err) { next(err); }
 });
 
 // PATCH /api/carriers/services/:id

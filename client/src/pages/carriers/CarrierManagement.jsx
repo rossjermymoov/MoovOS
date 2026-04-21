@@ -11,6 +11,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, ChevronRight, Trash2, X, Check, Phone, Mail,
   User, Building2, Edit2, Zap, AlertTriangle, ArrowLeft,
+  ChevronUp, ChevronDown,
 } from 'lucide-react';
 import { carriersApi } from '../../api/carriers';
 import axios from 'axios';
@@ -289,6 +290,20 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
     onSuccess: refetch,
   });
 
+  const reorder = useMutation({
+    mutationFn: (ids) => api.put(`/carriers/couriers/${carrierId}/services/reorder`, { service_ids: ids }).then(r => r.data),
+    onSuccess: refetch,
+  });
+
+  const moveService = (idx, dir) => {
+    if (!carrier?.services) return;
+    const ids = carrier.services.map(s => s.id);
+    const swapIdx = idx + dir;
+    if (swapIdx < 0 || swapIdx >= ids.length) return;
+    [ids[idx], ids[swapIdx]] = [ids[swapIdx], ids[idx]];
+    reorder.mutate(ids);
+  };
+
   if (isLoading) return <div style={{ padding:40, textAlign:'center', color:'#AAAAAA' }}>Loading…</div>;
   if (!carrier) return null;
 
@@ -357,6 +372,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
           <table className="moov-table">
             <thead>
               <tr>
+                <th style={{ width:64 }}>Order</th>
                 <th>Service</th>
                 <th>Code</th>
                 <th>Zones</th>
@@ -365,10 +381,35 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
               </tr>
             </thead>
             <tbody>
-              {carrier.services.map(svc => (
+              {carrier.services.map((svc, idx) => (
                 <tr key={svc.id} onClick={() => onDrillService(svc.id)} style={{ cursor:'pointer' }}
                   onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,0.03)'}
                   onMouseLeave={e => e.currentTarget.style.background='none'}>
+
+                  {/* ── Order controls ── */}
+                  <td onClick={e => e.stopPropagation()} style={{ padding:'6px 8px' }}>
+                    <div style={{ display:'flex', flexDirection:'column', gap:1, alignItems:'center' }}>
+                      <button
+                        onClick={() => moveService(idx, -1)}
+                        disabled={idx === 0}
+                        style={{
+                          background:'none', border:'none', cursor: idx===0 ? 'default':'pointer',
+                          color: idx===0 ? '#2A2A3A':'#7B2FBE', padding:'1px 4px', lineHeight:1,
+                        }}>
+                        <ChevronUp size={13}/>
+                      </button>
+                      <button
+                        onClick={() => moveService(idx, 1)}
+                        disabled={idx === carrier.services.length - 1}
+                        style={{
+                          background:'none', border:'none', cursor: idx===carrier.services.length-1 ? 'default':'pointer',
+                          color: idx===carrier.services.length-1 ? '#2A2A3A':'#7B2FBE', padding:'1px 4px', lineHeight:1,
+                        }}>
+                        <ChevronDown size={13}/>
+                      </button>
+                    </div>
+                  </td>
+
                   <td style={{ fontWeight:600 }}>{svc.name}</td>
                   <td><span style={{ ...pill('rgba(0,200,83,0.08)','#00C853'), fontFamily:'monospace' }}>{svc.service_code}</span></td>
                   <td style={{ color:'#AAAAAA' }}>{svc.zone_count} zone{svc.zone_count!==1?'s':''}</td>
