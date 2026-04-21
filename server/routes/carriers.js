@@ -16,12 +16,47 @@ const router = express.Router();
 router.get('/couriers', async (req, res, next) => {
   try {
     const result = await query(
-      `SELECT c.*, COUNT(cs.id)::int AS service_count
+      `SELECT c.*,
+         COUNT(cs.id)::int AS service_count,
+         COALESCE(json_agg(jsonb_build_object(
+           'id',cc.id,'name',cc.name,'phone',cc.phone,'email',cc.email,
+           'department',cc.department,'role',cc.role,'notes',cc.notes
+         ) ORDER BY cc.id) FILTER (WHERE cc.id IS NOT NULL), '[]') AS additional_contacts
        FROM couriers c
        LEFT JOIN courier_services cs ON cs.courier_id = c.id
+       LEFT JOIN courier_contacts cc ON cc.courier_id = c.id
        GROUP BY c.id ORDER BY c.name`
     );
     res.json(result.rows);
+  } catch (err) { next(err); }
+});
+
+// GET /api/carriers/couriers/:id — full detail with contacts and services
+router.get('/couriers/:id', async (req, res, next) => {
+  try {
+    const courier = await query(
+      `SELECT c.*,
+         COALESCE(json_agg(jsonb_build_object(
+           'id',cc.id,'name',cc.name,'phone',cc.phone,'email',cc.email,
+           'department',cc.department,'role',cc.role,'notes',cc.notes
+         ) ORDER BY cc.id) FILTER (WHERE cc.id IS NOT NULL), '[]') AS additional_contacts
+       FROM couriers c
+       LEFT JOIN courier_contacts cc ON cc.courier_id = c.id
+       WHERE c.id = $1 GROUP BY c.id`,
+      [req.params.id]
+    );
+    if (!courier.rows.length) return res.status(404).json({ error: 'Courier not found' });
+
+    const services = await query(
+      `SELECT cs.*, COUNT(z.id)::int AS zone_count
+       FROM courier_services cs
+       LEFT JOIN zones z ON z.courier_service_id = cs.id
+       WHERE cs.courier_id = $1
+       GROUP BY cs.id ORDER BY cs.name`,
+      [req.params.id]
+    );
+
+    res.json({ ...courier.rows[0], services: services.rows });
   } catch (err) { next(err); }
 });
 
@@ -45,7 +80,7 @@ router.post('/couriers', async (req, res, next) => {
 // PATCH /api/carriers/couriers/:id
 router.patch('/couriers/:id', async (req, res, next) => {
   try {
-    const allowed = ['code', 'name'];
+    const allowed = ['code', 'name', 'account_number', 'primary_contact_name', 'primary_contact_phone', 'primary_contact_email', 'notes'];
     const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));
     if (!updates.length) return res.status(400).json({ error: 'No valid fields to update' });
     const setClauses = updates.map(([k], i) => `${k} = $${i + 2}`).join(', ');
@@ -506,6 +541,48 @@ router.patch('/custom-cost-rates/:id', async (req, res, next) => {
 router.delete('/custom-cost-rates/:id', async (req, res, next) => {
   try {
     await query('DELETE FROM custom_cost_rate_cards WHERE id = $1', [req.params.id]);
+    res.json({ deleted: true });
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COURIER ADDITIONAL CONTACTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /api/carriers/couriers/:id/contacts
+router.post('/couriers/:id/contacts', async (req, res, next) => {
+  try {
+    const { name, phone, email, department, role, notes } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'name is required' });
+    const result = await query(
+      `INSERT INTO courier_contacts (courier_id, name, phone, email, department, role, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [req.params.id, name.trim(), phone||null, email||null, department||null, role||null, notes||null]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/carriers/couriers/contacts/:id
+router.patch('/couriers/contacts/:id', async (req, res, next) => {
+  try {
+    const allowed = ['name','phone','email','department','role','notes'];
+    const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));
+    if (!updates.length) return res.status(400).json({ error: 'No valid fields' });
+    const setClauses = updates.map(([k],i) => `${k} = $${i+2}`).join(', ');
+    const result = await query(
+      `UPDATE courier_contacts SET ${setClauses}, updated_at = NOW() WHERE id = $1 RETURNING *`,
+      [req.params.id, ...updates.map(([,v]) => v)]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Contact not found' });
+    res.json(result.rows[0]);
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/carriers/couriers/contacts/:id
+router.delete('/couriers/contacts/:id', async (req, res, next) => {
+  try {
+    await query('DELETE FROM courier_contacts WHERE id = $1', [req.params.id]);
     res.json({ deleted: true });
   } catch (err) { next(err); }
 });
