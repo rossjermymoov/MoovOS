@@ -506,12 +506,28 @@ export default function CustomerRecord() {
               </span>
             </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
             <HealthBadge score={c.health_score} />
             <AccountStatusBadge status={c.account_status} />
-            {!c.is_on_stop && (
-              <button className="btn-ghost" style={{ fontSize: 12, padding: '6px 14px', color: '#E91E8C', borderColor: '#E91E8C' }} onClick={() => setOnStopModal('apply')}>
+            {!c.is_on_stop ? (
+              <button onClick={() => setOnStopModal('apply')} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                height: 22, padding: '0 9px', borderRadius: 11,
+                background: 'rgba(233,30,140,0.15)', border: '1px solid #E91E8C',
+                fontSize: 11, fontWeight: 700, color: '#E91E8C',
+                cursor: 'pointer', whiteSpace: 'nowrap', lineHeight: 1,
+              }}>
                 Place On Stop
+              </button>
+            ) : (
+              <button onClick={() => setOnStopModal('remove')} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                height: 22, padding: '0 9px', borderRadius: 11,
+                background: 'rgba(0,200,83,0.12)', border: '1px solid #00C853',
+                fontSize: 11, fontWeight: 700, color: '#00C853',
+                cursor: 'pointer', whiteSpace: 'nowrap', lineHeight: 1,
+              }}>
+                Remove On Stop
               </button>
             )}
           </div>

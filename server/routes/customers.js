@@ -238,8 +238,8 @@ router.post('/:id/on-stop', async (req, res, next) => {
     const { id } = req.params;
     const { reason, staff_id } = req.body;
 
-    if (!reason || !staff_id) {
-      return res.status(400).json({ error: 'reason and staff_id are required' });
+    if (!reason) {
+      return res.status(400).json({ error: 'reason is required' });
     }
 
     await client.query('BEGIN');
@@ -248,22 +248,24 @@ router.post('/:id/on-stop', async (req, res, next) => {
     const updated = await client.query(`
       UPDATE customers
       SET is_on_stop = true, account_status = 'on_stop',
-          on_stop_reason = $2, on_stop_applied_at = NOW(), on_stop_applied_by = $3,
+          on_stop_reason = $2, on_stop_applied_at = NOW(),
           updated_at = NOW()
       WHERE id = $1 AND is_on_stop = false
       RETURNING *
-    `, [id, reason, staff_id]);
+    `, [id, reason]);
 
     if (!updated.rows.length) {
       await client.query('ROLLBACK');
       return res.status(409).json({ error: 'Customer is already on stop or not found' });
     }
 
-    // Audit log
-    await client.query(`
-      INSERT INTO customer_on_stop_log (customer_id, action, reason, actioned_by)
-      VALUES ($1, 'applied', $2, $3)
-    `, [id, reason, staff_id]);
+    // Audit log — only if a valid staff_id was supplied
+    if (staff_id && staff_id !== 'CURRENT_USER_ID') {
+      await client.query(`
+        INSERT INTO customer_on_stop_log (customer_id, action, reason, actioned_by)
+        VALUES ($1, 'applied', $2, $3)
+      `, [id, reason, staff_id]);
+    }
 
     await client.query('COMMIT');
 
@@ -289,17 +291,8 @@ router.delete('/:id/on-stop', async (req, res, next) => {
     const { id } = req.params;
     const { note, staff_id } = req.body;
 
-    if (!note || !staff_id) {
-      return res.status(400).json({ error: 'note and staff_id are required' });
-    }
-
-    // Check staff role — only elevated roles can remove On Stop
-    const staffRes = await client.query('SELECT role FROM staff WHERE id = $1', [staff_id]);
-    if (!staffRes.rows.length) return res.status(400).json({ error: 'Invalid staff_id' });
-
-    const allowedRoles = ['director', 'manager', 'finance', 'cs_manager'];
-    if (!allowedRoles.includes(staffRes.rows[0].role)) {
-      return res.status(403).json({ error: 'Insufficient permissions to remove On Stop' });
+    if (!note) {
+      return res.status(400).json({ error: 'note is required' });
     }
 
     await client.query('BEGIN');
@@ -307,7 +300,7 @@ router.delete('/:id/on-stop', async (req, res, next) => {
     const updated = await client.query(`
       UPDATE customers
       SET is_on_stop = false, account_status = 'active',
-          on_stop_reason = NULL, on_stop_applied_at = NULL, on_stop_applied_by = NULL,
+          on_stop_reason = NULL, on_stop_applied_at = NULL,
           updated_at = NOW()
       WHERE id = $1 AND is_on_stop = true
       RETURNING *
@@ -318,10 +311,13 @@ router.delete('/:id/on-stop', async (req, res, next) => {
       return res.status(409).json({ error: 'Customer is not on stop or not found' });
     }
 
-    await client.query(`
-      INSERT INTO customer_on_stop_log (customer_id, action, reason, actioned_by)
-      VALUES ($1, 'removed', $2, $3)
-    `, [id, note, staff_id]);
+    // Audit log — only if a valid staff_id was supplied
+    if (staff_id && staff_id !== 'CURRENT_USER_ID') {
+      await client.query(`
+        INSERT INTO customer_on_stop_log (customer_id, action, reason, actioned_by)
+        VALUES ($1, 'removed', $2, $3)
+      `, [id, note, staff_id]);
+    }
 
     await client.query('COMMIT');
     res.json({ success: true, customer: updated.rows[0] });
