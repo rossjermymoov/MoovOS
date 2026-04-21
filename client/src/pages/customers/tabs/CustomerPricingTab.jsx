@@ -106,7 +106,7 @@ function weightClassCoversKg(weightClassName, weightKg) {
 }
 
 // ─── International rate overlay ───────────────────────────────
-function InternationalRateOverlay({ service, customerId, onClose, onRateUpdate, onRateDelete, onRefresh }) {
+function InternationalRateOverlay({ service, onClose, onRateUpdate, onRateDelete }) {
   const [searchText, setSearchText] = useState('');
   const [parsed, setParsed]         = useState({ weightKg: null, zoneTerm: null });
   const searchRef                   = useRef(null);
@@ -126,6 +126,7 @@ function InternationalRateOverlay({ service, customerId, onClose, onRateUpdate, 
   }, [searchText]);
 
   const rates = service.rates;
+
   function isMatch(rate) {
     if (!searchText.trim()) return false;
     const { weightKg, zoneTerm } = parsed;
@@ -137,19 +138,30 @@ function InternationalRateOverlay({ service, customerId, onClose, onRateUpdate, 
     return false;
   }
 
-  const hasSearch  = searchText.trim().length > 0;
-  const matchCount = hasSearch ? rates.filter(isMatch).length : 0;
-  const weightClasses = [...new Set(rates.map(r => r.weight_class_name))].sort();
-  const zones         = [...new Set(rates.map(r => r.zone_name))].sort();
+  const hasSearch   = searchText.trim().length > 0;
+  const matchedRates = hasSearch ? rates.filter(isMatch) : rates;
+  const matchCount   = hasSearch ? matchedRates.length : 0;
+
+  // Rows to display: filtered when searching, all when not
+  const displayRates = matchedRates;
+
+  // Build matrix from displayRates
+  const weightClasses = [...new Set(displayRates.map(r => r.weight_class_name))].sort();
+  const zones         = [...new Set(displayRates.map(r => r.zone_name))].sort();
   const rateMap = {};
-  for (const r of rates) {
+  for (const r of displayRates) {
     if (!rateMap[r.zone_name]) rateMap[r.zone_name] = {};
     rateMap[r.zone_name][r.weight_class_name] = r;
   }
-  const multiWeight = weightClasses.length > 1;
+  const multiWeight = [...new Set(rates.map(r => r.weight_class_name))].length > 1;
+  const totalZones  = [...new Set(rates.map(r => r.zone_name))].length;
+
+  // Single exact match: show big price card
+  const exactMatch = hasSearch && matchCount === 1 ? matchedRates[0] : null;
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(8,9,26,0.97)', display: 'flex', flexDirection: 'column' }}>
+
       {/* Header */}
       <div style={{ flexShrink: 0, padding: '20px 28px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: 16, background: '#0A0B1E' }}>
         <Globe size={20} color="#00BCD4" style={{ flexShrink: 0 }} />
@@ -157,18 +169,20 @@ function InternationalRateOverlay({ service, customerId, onClose, onRateUpdate, 
           <div style={{ fontSize: 17, fontWeight: 700, color: '#fff' }}>{service.service_name}</div>
           <div style={{ fontSize: 12, color: '#AAAAAA', marginTop: 2 }}>
             <span style={{ color: '#00BCD4', fontFamily: 'monospace', fontWeight: 700, marginRight: 10 }}>{service.service_code}</span>
-            {rates.length.toLocaleString()} rates · {zones.length} zones
-            {multiWeight && ` · ${weightClasses.length} weight classes`}
+            {rates.length.toLocaleString()} rates · {totalZones} zones
+            {multiWeight && ` · ${[...new Set(rates.map(r => r.weight_class_name))].length} weight classes`}
           </div>
         </div>
-        <div style={{ position: 'relative', flex: '0 0 420px' }}>
+
+        {/* Search */}
+        <div style={{ position: 'relative', flex: '0 0 440px' }}>
           <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#AAAAAA', pointerEvents: 'none' }} />
           <input
             ref={searchRef}
             value={searchText}
             onChange={e => setSearchText(e.target.value)}
-            placeholder='e.g. "Jamaica" or "13kg to France"'
-            style={{ width: '100%', boxSizing: 'border-box', background: '#0D0E2A', border: '1px solid rgba(0,188,212,0.4)', borderRadius: 8, padding: '9px 36px 9px 36px', color: '#fff', fontSize: 13, outline: 'none' }}
+            placeholder='e.g. "Jamaica"  or  "1kg to France"'
+            style={{ width: '100%', boxSizing: 'border-box', background: '#0D0E2A', border: '1px solid rgba(0,188,212,0.5)', borderRadius: 8, padding: '10px 36px 10px 36px', color: '#fff', fontSize: 13, outline: 'none' }}
           />
           {searchText && (
             <button onClick={() => setSearchText('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#AAAAAA', cursor: 'pointer', padding: 0, display: 'flex' }}>
@@ -176,152 +190,199 @@ function InternationalRateOverlay({ service, customerId, onClose, onRateUpdate, 
             </button>
           )}
         </div>
-        <button onClick={onClose} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, color: '#AAAAAA', fontSize: 12, padding: '7px 14px', cursor: 'pointer', flexShrink: 0 }}>Close  esc</button>
+
+        <button onClick={onClose} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, color: '#AAAAAA', fontSize: 12, padding: '7px 14px', cursor: 'pointer', flexShrink: 0 }}>
+          Close  <span style={{ opacity: 0.5, fontSize: 11 }}>esc</span>
+        </button>
       </div>
 
+      {/* Search status bar */}
       {hasSearch && (
-        <div style={{ flexShrink: 0, padding: '8px 28px', background: 'rgba(0,188,212,0.05)', borderBottom: '1px solid rgba(0,188,212,0.12)', display: 'flex', alignItems: 'center', gap: 12, fontSize: 12 }}>
-          <span style={{ color: '#00BCD4', fontWeight: 700 }}>{matchCount === 0 ? 'No matches' : `${matchCount} match${matchCount !== 1 ? 'es' : ''} found`}</span>
-          {parsed.zoneTerm && <span style={{ color: '#AAAAAA' }}>Zone: <span style={{ color: '#fff' }}>{parsed.zoneTerm}</span></span>}
+        <div style={{ flexShrink: 0, padding: '7px 28px', background: 'rgba(0,188,212,0.05)', borderBottom: '1px solid rgba(0,188,212,0.10)', display: 'flex', alignItems: 'center', gap: 14, fontSize: 12 }}>
+          <span style={{ color: matchCount === 0 ? '#E91E8C' : '#00BCD4', fontWeight: 700 }}>
+            {matchCount === 0 ? 'No matches found' : matchCount === 1 ? '1 match' : `${matchCount} matches`}
+          </span>
+          {parsed.zoneTerm   && <span style={{ color: '#AAAAAA' }}>Zone: <span style={{ color: '#fff' }}>{parsed.zoneTerm}</span></span>}
           {parsed.weightKg != null && <span style={{ color: '#AAAAAA' }}>Weight: <span style={{ color: '#fff' }}>{parsed.weightKg} kg</span></span>}
+          <button onClick={() => setSearchText('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 12 }}>Clear ✕</button>
         </div>
       )}
 
-      <div style={{ flex: 1, overflow: 'auto', padding: '0 0 40px' }}>
-        {rates.length === 0 ? (
-          <div style={{ padding: 40, textAlign: 'center', color: '#555', fontSize: 14, fontStyle: 'italic' }}>No pricing found for this service</div>
-        ) : multiWeight ? (
-          <table style={{ borderCollapse: 'collapse', minWidth: '100%', fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: '#0A0B1E', position: 'sticky', top: 0, zIndex: 10 }}>
-                <th style={{ textAlign: 'left', padding: '12px 20px 12px 28px', color: '#AAAAAA', fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.08)', minWidth: 220 }}>Zone</th>
-                {weightClasses.map(wc => (
-                  <th key={wc} style={{ textAlign: 'right', padding: '12px 20px', color: '#AAAAAA', fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.08)', minWidth: 110 }}>{wc}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {zones.map((zone, zi) => {
-                const zoneRates  = weightClasses.map(wc => rateMap[zone]?.[wc] || null);
-                const rowMatches = hasSearch && zoneRates.some(r => r && isMatch(r));
-                return (
-                  <tr key={zone} style={{ background: rowMatches ? 'rgba(0,188,212,0.10)' : zi % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)', outline: rowMatches ? '1px solid rgba(0,188,212,0.4)' : 'none' }}>
-                    <td style={{ padding: '8px 20px 8px 28px', color: rowMatches ? '#00BCD4' : '#DDD', fontWeight: rowMatches ? 700 : 400, whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>{zone}</td>
+      {/* ── Exact match: big price display ───────────────────── */}
+      {exactMatch && (
+        <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 28px', gap: 16 }}>
+          <div style={{ fontSize: 13, color: '#AAAAAA', fontWeight: 600, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            {service.service_name} · {exactMatch.zone_name}
+            {multiWeight && <> · {exactMatch.weight_class_name}</>}
+          </div>
+          <div style={{ fontSize: 72, fontWeight: 900, color: '#00C853', fontFamily: 'monospace', lineHeight: 1, letterSpacing: '-0.02em' }}>
+            {gbp(exactMatch.price)}
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <PriceCell rateId={exactMatch.id} initialPrice={exactMatch.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
+          </div>
+          <div style={{ fontSize: 12, color: '#444', marginTop: 4 }}>Click the price above to edit</div>
+        </div>
+      )}
+
+      {/* ── Multiple matches or no search: table ─────────────── */}
+      {!exactMatch && (
+        <div style={{ flex: 1, overflow: 'auto', padding: '0 0 40px' }}>
+          {rates.length === 0 ? (
+            <div style={{ padding: 40, textAlign: 'center', color: '#555', fontSize: 14, fontStyle: 'italic' }}>No pricing found for this service</div>
+          ) : hasSearch && matchCount === 0 ? (
+            <div style={{ padding: 60, textAlign: 'center' }}>
+              <div style={{ fontSize: 40, marginBottom: 16 }}>🔍</div>
+              <div style={{ fontSize: 16, color: '#555', fontWeight: 600 }}>No rates match your search</div>
+              <div style={{ fontSize: 13, color: '#444', marginTop: 8 }}>Try a different zone name or weight</div>
+            </div>
+          ) : multiWeight ? (
+            /* Matrix: zones × weight classes */
+            <table style={{ borderCollapse: 'collapse', minWidth: '100%', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: '#0A0B1E', position: 'sticky', top: 0, zIndex: 10 }}>
+                  <th style={{ textAlign: 'left', padding: '12px 20px 12px 28px', color: '#AAAAAA', fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.08)', minWidth: 220 }}>Zone</th>
+                  {weightClasses.map(wc => (
+                    <th key={wc} style={{ textAlign: 'right', padding: '12px 20px', color: '#AAAAAA', fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.08)', minWidth: 120 }}>{wc}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {zones.map((zone, zi) => (
+                  <tr key={zone} style={{ background: zi % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                    <td style={{ padding: '8px 20px 8px 28px', color: '#DDD', whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>{zone}</td>
                     {weightClasses.map(wc => {
                       const rate = rateMap[zone]?.[wc];
-                      const cellMatch = hasSearch && rate && isMatch(rate);
                       return (
-                        <td key={wc} style={{ textAlign: 'right', padding: '8px 20px', borderBottom: '1px solid rgba(255,255,255,0.03)', background: cellMatch ? 'rgba(0,188,212,0.15)' : 'transparent' }}>
-                          {rate ? <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} /> : <span style={{ color: '#333', fontSize: 12 }}>—</span>}
+                        <td key={wc} style={{ textAlign: 'right', padding: '8px 20px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                          {rate
+                            ? <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
+                            : <span style={{ color: '#333', fontSize: 12 }}>—</span>}
                         </td>
                       );
                     })}
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        ) : (
-          <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: '#0A0B1E', position: 'sticky', top: 0, zIndex: 10 }}>
-                <th style={{ textAlign: 'left', padding: '12px 20px 12px 28px', color: '#AAAAAA', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>Zone</th>
-                <th style={{ textAlign: 'right', padding: '12px 28px 12px 20px', color: '#AAAAAA', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>Price</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rates.map((rate, ri) => {
-                const matched = hasSearch && isMatch(rate);
-                return (
-                  <tr key={rate.id} style={{ background: matched ? 'rgba(0,188,212,0.10)' : ri % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)', outline: matched ? '1px solid rgba(0,188,212,0.4)' : 'none' }}>
-                    <td style={{ padding: '8px 20px 8px 28px', color: matched ? '#00BCD4' : '#DDD', fontWeight: matched ? 700 : 400, borderBottom: '1px solid rgba(255,255,255,0.03)' }}>{rate.zone_name}</td>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            /* Simple list */
+            <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: '#0A0B1E', position: 'sticky', top: 0, zIndex: 10 }}>
+                  <th style={{ textAlign: 'left', padding: '12px 20px 12px 28px', color: '#AAAAAA', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>Zone</th>
+                  <th style={{ textAlign: 'right', padding: '12px 28px 12px 20px', color: '#AAAAAA', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>Price</th>
+                </tr>
+              </thead>
+              <tbody>
+                {displayRates.map((rate, ri) => (
+                  <tr key={rate.id} style={{ background: ri % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                    <td style={{ padding: '8px 20px 8px 28px', color: '#DDD', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>{rate.zone_name}</td>
                     <td style={{ textAlign: 'right', padding: '8px 28px 8px 20px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
                       <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-// ─── Domestic service block ───────────────────────────────────
-const PREVIEW = 3;
+// ─── Service block — horizontal zone layout ───────────────────
+const PREVIEW = 8; // zones shown before "+ N more"
 
 function ServiceBlock({ service, onRateUpdate, onRateDelete }) {
-  const [showAll, setShowAll] = useState(false);
-  const [overlayOpen, setOverlayOpen] = useState(false);
+  const [showAll, setShowAll]     = useState(false);
+  const [overlayOpen, setOverlay] = useState(false);
 
   const isIntl      = service.service_type === 'international';
   const multiWeight = [...new Set(service.rates.map(r => r.weight_class_name))].length > 1;
   const display     = showAll ? service.rates : service.rates.slice(0, PREVIEW);
   const extra       = service.rates.length - PREVIEW;
 
+  // ── International: collapsed row → fullscreen overlay ───────
   if (isIntl) {
     return (
       <>
         <div
-          onClick={() => setOverlayOpen(true)}
-          style={{ display: 'flex', alignItems: 'center', padding: '10px 18px', borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: 'rgba(0,188,212,0.03)' }}
+          onClick={() => setOverlay(true)}
+          style={{ display: 'flex', alignItems: 'center', padding: '10px 18px', borderTop: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: 'rgba(0,188,212,0.03)' }}
           onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,188,212,0.07)'}
           onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,188,212,0.03)'}
         >
-          <Globe size={13} color="#00BCD4" style={{ marginRight: 8, flexShrink: 0 }} />
+          <Globe size={12} color="#00BCD4" style={{ marginRight: 8, flexShrink: 0 }} />
           <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', flex: 1 }}>{service.service_name}</span>
-          <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#00BCD4', background: 'rgba(0,188,212,0.1)', padding: '2px 8px', borderRadius: 4, marginRight: 10 }}>{service.service_code}</span>
-          <span style={{ fontSize: 11, color: '#AAAAAA', marginRight: 12 }}>{service.rate_count.toLocaleString()} rates</span>
-          <span style={{ fontSize: 11, color: '#00BCD4', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}><Search size={11} /> View &amp; search →</span>
+          <span style={{ fontSize: 11, color: '#AAAAAA', marginRight: 16 }}>{service.rate_count.toLocaleString()} rates</span>
+          <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#00BCD4', background: 'rgba(0,188,212,0.1)', padding: '2px 8px', borderRadius: 4, marginRight: 12 }}>{service.service_code}</span>
+          <span style={{ fontSize: 11, color: '#00BCD4', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}><Search size={11} /> Search →</span>
         </div>
         {overlayOpen && (
           <InternationalRateOverlay
             service={service}
-            onClose={() => setOverlayOpen(false)}
+            onClose={() => setOverlay(false)}
             onRateUpdate={onRateUpdate}
             onRateDelete={onRateDelete}
-            onRefresh={() => setOverlayOpen(false)}
           />
         )}
       </>
     );
   }
 
+  // ── Domestic: all zones in a horizontal row ──────────────────
   return (
-    <div style={{ marginBottom: 2 }}>
-      <div style={{ display: 'flex', alignItems: 'center', padding: '9px 18px', borderBottom: '1px solid rgba(255,255,255,0.04)', background: 'rgba(255,255,255,0.01)' }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', flex: 1 }}>{service.service_name}</span>
-        <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#00C853', background: 'rgba(0,200,83,0.08)', padding: '2px 8px', borderRadius: 4 }}>{service.service_code}</span>
+    <div style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+      {/* Service name header row */}
+      <div style={{ display: 'flex', alignItems: 'center', padding: '8px 18px 4px', gap: 10 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{service.service_name}</span>
+        <span style={{ fontSize: 11, color: '#555' }}>({service.rate_count})</span>
+        <span style={{ flex: 1 }} />
+        <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#00C853', background: 'rgba(0,200,83,0.08)', padding: '1px 7px', borderRadius: 4 }}>{service.service_code}</span>
       </div>
 
+      {/* Zones inline */}
       {service.rates.length === 0 ? (
-        <div style={{ padding: '10px 18px', fontSize: 12, color: '#555', fontStyle: 'italic' }}>No pricing found</div>
+        <div style={{ padding: '4px 18px 10px', fontSize: 12, color: '#444', fontStyle: 'italic' }}>No pricing found</div>
       ) : (
-        <>
-          {display.map(rate => (
-            <div key={rate.id} style={{ display: 'flex', alignItems: 'center', padding: '6px 18px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-              <span style={{ fontSize: 12, color: '#DDDDDD', flex: 1 }}>
+        <div style={{ padding: '4px 18px 10px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px 0' }}>
+          {display.map((rate, i) => (
+            <span key={rate.id} style={{ display: 'inline-flex', alignItems: 'center' }}>
+              {/* Divider between items */}
+              {i > 0 && <span style={{ color: 'rgba(255,255,255,0.08)', margin: '0 14px', fontSize: 14, userSelect: 'none' }}>|</span>}
+              <span style={{ fontSize: 12, color: '#AAAAAA', marginRight: 10 }}>
                 {rate.zone_name}
-                {multiWeight && <span style={{ color: '#AAAAAA', marginLeft: 8, fontSize: 11 }}>· {rate.weight_class_name}</span>}
+                {multiWeight && <span style={{ color: '#666', fontSize: 11 }}> · {rate.weight_class_name}</span>}
               </span>
-              <span style={{ minWidth: 110, display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
-                <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
-              </span>
-            </div>
+              <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
+            </span>
           ))}
+
           {extra > 0 && !showAll && (
-            <button onClick={() => setShowAll(true)} style={{ width: '100%', padding: '7px 18px', background: 'none', border: 'none', color: '#00C853', fontSize: 12, fontWeight: 700, cursor: 'pointer', textAlign: 'left', borderTop: '1px solid rgba(255,255,255,0.03)' }}>
-              + {extra} more zone{extra !== 1 ? 's' : ''}…
-            </button>
+            <>
+              <span style={{ color: 'rgba(255,255,255,0.08)', margin: '0 14px', fontSize: 14, userSelect: 'none' }}>|</span>
+              <button
+                onClick={() => setShowAll(true)}
+                style={{ background: 'none', border: 'none', color: '#00C853', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 }}
+              >
+                +{extra} more…
+              </button>
+            </>
           )}
           {showAll && extra > 0 && (
-            <button onClick={() => setShowAll(false)} style={{ width: '100%', padding: '7px 18px', background: 'none', border: 'none', color: '#AAAAAA', fontSize: 12, cursor: 'pointer', textAlign: 'left', borderTop: '1px solid rgba(255,255,255,0.03)' }}>
-              Show less
-            </button>
+            <>
+              <span style={{ color: 'rgba(255,255,255,0.08)', margin: '0 14px', fontSize: 14, userSelect: 'none' }}>|</span>
+              <button
+                onClick={() => setShowAll(false)}
+                style={{ background: 'none', border: 'none', color: '#AAAAAA', fontSize: 12, cursor: 'pointer', padding: 0 }}
+              >
+                show less
+              </button>
+            </>
           )}
-        </>
+        </div>
       )}
     </div>
   );
@@ -389,6 +450,7 @@ function ServiceSelector({ customerId }) {
   }
 
   const [openCouriers, setOpenCouriers] = useState({});
+  // default: all collapsed — only open when explicitly toggled
   function toggleCourier(name) { setOpenCouriers(o => ({ ...o, [name]: !o[name] })); }
 
   const totalSelected = selectedIds.size;
@@ -401,13 +463,13 @@ function ServiceSelector({ customerId }) {
         <h3 style={{ fontSize: 15, fontWeight: 700, color: '#7B2FBE', margin: 0, flex: 1 }}>Service Selection</h3>
         {totalSelected > 0
           ? <span style={{ fontSize: 12, color: '#00C853', fontWeight: 700 }}>{totalSelected} service{totalSelected !== 1 ? 's' : ''} active</span>
-          : <span style={{ fontSize: 12, color: '#AAAAAA', fontStyle: 'italic' }}>All services shown (none selected — showing by rates)</span>
+          : <span style={{ fontSize: 12, color: '#AAAAAA', fontStyle: 'italic' }}>No services selected — showing all rates</span>
         }
       </div>
 
       {/* Courier groups */}
       {Object.entries(byCourier).map(([courierName, { services }]) => {
-        const isOpen       = openCouriers[courierName] !== false; // default open
+        const isOpen       = openCouriers[courierName] === true; // default collapsed
         const countInGroup = services.filter(s => selectedIds.has(s.id)).length;
         return (
           <div key={courierName} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
