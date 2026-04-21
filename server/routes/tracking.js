@@ -85,6 +85,150 @@ function pick(obj, ...keys) {
   return null;
 }
 
+// ─── Normalise a raw payload into a flat array of processable events ──────────
+// Supports:
+//   A) Shipment-platform format: { json: { tracking_update: { parcels: [...] }, shipment: {...} } }
+//   B) Simple flat object or array of flat objects
+
+function normalisePayload(body) {
+  // Unwrap platform wrapper — some services POST { json: {...}, verify: false, ... }
+  const payload = (body.json && typeof body.json === 'object') ? body.json : body;
+
+  // Format A: nested tracking_update.parcels
+  if (payload.tracking_update && Array.isArray(payload.tracking_update.parcels)) {
+    const tu       = payload.tracking_update;
+    const shipment = payload.shipment || {};
+    const events   = [];
+
+    for (const parcel of tu.parcels) {
+      const consignment = parcel.tracking_code || parcel.trackingCode;
+      if (!consignment) continue;
+
+      const trackingEvents = parcel.tracking_events || parcel.trackingEvents || [{}];
+
+      // Sort events oldest→newest so the last upsert reflects the latest status
+      const sorted = [...trackingEvents].sort((a, b) => {
+        const ta = new Date(a.update_date || a.timestamp || 0).getTime();
+        const tb = new Date(b.update_date || b.timestamp || 0).getTime();
+        return ta - tb;
+      });
+
+      for (const ev of sorted) {
+        events.push({
+          _consignment:        consignment,
+          _courier_name:       shipment.courier || null,
+          _courier_code:       shipment.courier ? shipment.courier.toLowerCase() : null,
+          _service_name:       shipment.friendly_service_name || null,
+          _customer_name:      shipment.account_name || null,
+          _customer_account:   shipment.account_number || null,
+          _recipient_name:     shipment.ship_to_name || shipment.ship_to_company_name || null,
+          _recipient_postcode: shipment.ship_to_postcode || tu.address_information?.postcode || null,
+          _recipient_address:  shipment.ship_to_address || null,
+          _weight_kg:          parcel.weight || null,
+          _estimated_delivery: tu.expected_delivery || shipment.tracking_expected_delivery_date || null,
+          _raw:                ev,
+          status:              ev.status || null,
+          status_description:  ev.status_description || null,
+          location:            null,
+          timestamp:           ev.update_date || null,
+          event_code:          ev.update_id != null ? String(ev.update_id) : null,
+        });
+      }
+    }
+    return events;
+  }
+
+  // Format B: simple flat event(s)
+  return Array.isArray(payload) ? payload : [payload];
+}
+
+// ─── Shared upsert logic ─────────────────────────────────────────────────────
+
+async function upsertEvent(event, rawBody) {
+  const consignment = event._consignment || pick(event,
+    'consignment_number', 'consignmentNumber', 'tracking_number', 'trackingNumber',
+    'tracking_code', 'trackingCode', 'reference', 'barcode', 'parcel_id', 'shipment_id', 'id'
+  );
+  if (!consignment) return { skipped: true, reason: 'no consignment number' };
+
+  const rawStatus   = event.status || pick(event, 'event_type', 'event_code', 'eventType', 'state', 'type');
+  const status      = normaliseStatus(rawStatus);
+  const description = event.status_description || pick(event,
+    'description', 'event_description', 'message', 'detail', 'text', 'statusDescription');
+  const location    = event.location || pick(event, 'depot', 'hub', 'facility', 'scan_location', 'scanLocation');
+  const eventAt     = event.timestamp || pick(event,
+    'event_time', 'eventTime', 'datetime', 'date_time', 'scanned_at', 'created_at') || new Date().toISOString();
+  const eventCode   = event.event_code || pick(event, 'eventCode', 'code', 'status_code', 'update_id');
+
+  const courierName    = event._courier_name    || pick(event, 'courier_name', 'courierName', 'courier', 'carrier', 'carrier_name');
+  const courierCode    = event._courier_code    || pick(event, 'courier_code', 'courierCode', 'carrier_code', 'carrierCode');
+  const serviceName    = event._service_name    || pick(event, 'service', 'service_name', 'serviceName', 'product', 'service_type');
+  const customerName   = event._customer_name   || pick(event, 'customer.name', 'customer_name', 'customerName', 'sender', 'sender_name', 'account_name');
+  const customerAccount= event._customer_account|| pick(event, 'customer.account_number', 'account_number', 'accountNumber', 'moov_account', 'moovAccount');
+  const recipientName  = event._recipient_name  || pick(event, 'recipient.name', 'recipient_name', 'recipientName', 'consignee', 'delivery_name');
+  const recipientPost  = event._recipient_postcode || pick(event, 'recipient.postcode', 'postcode', 'delivery_postcode', 'recipientPostcode', 'zip');
+  const recipientAddr  = event._recipient_address  || pick(event, 'recipient.address', 'address', 'delivery_address', 'recipientAddress');
+  const weightKg       = event._weight_kg       || pick(event, 'weight_kg', 'weightKg', 'weight', 'gross_weight');
+  const estDelivery    = event._estimated_delivery || pick(event, 'estimated_delivery', 'estimatedDelivery', 'eta', 'due_date');
+
+  // Resolve customer_id from account number
+  let customerId = null;
+  if (customerAccount) {
+    const cr = await query('SELECT id FROM customers WHERE account_number = $1', [customerAccount]);
+    if (cr.rows.length) customerId = cr.rows[0].id;
+  }
+
+  // Upsert the parcel
+  const parcelRes = await query(`
+    INSERT INTO parcels
+      (consignment_number, courier_name, courier_code, service_name,
+       customer_id, customer_name, customer_account,
+       recipient_name, recipient_postcode, recipient_address,
+       weight_kg, estimated_delivery,
+       status, status_description, last_location, last_event_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+    ON CONFLICT (consignment_number) DO UPDATE SET
+      courier_name       = COALESCE(EXCLUDED.courier_name,       parcels.courier_name),
+      courier_code       = COALESCE(EXCLUDED.courier_code,       parcels.courier_code),
+      service_name       = COALESCE(EXCLUDED.service_name,       parcels.service_name),
+      customer_id        = COALESCE(EXCLUDED.customer_id,        parcels.customer_id),
+      customer_name      = COALESCE(EXCLUDED.customer_name,      parcels.customer_name),
+      customer_account   = COALESCE(EXCLUDED.customer_account,   parcels.customer_account),
+      recipient_name     = COALESCE(EXCLUDED.recipient_name,     parcels.recipient_name),
+      recipient_postcode = COALESCE(EXCLUDED.recipient_postcode, parcels.recipient_postcode),
+      recipient_address  = COALESCE(EXCLUDED.recipient_address,  parcels.recipient_address),
+      weight_kg          = COALESCE(EXCLUDED.weight_kg,          parcels.weight_kg),
+      estimated_delivery = COALESCE(EXCLUDED.estimated_delivery, parcels.estimated_delivery),
+      status             = EXCLUDED.status,
+      status_description = EXCLUDED.status_description,
+      last_location      = EXCLUDED.last_location,
+      last_event_at      = EXCLUDED.last_event_at,
+      delivered_at       = CASE WHEN EXCLUDED.status = 'delivered' THEN EXCLUDED.last_event_at ELSE parcels.delivered_at END,
+      updated_at         = NOW()
+    RETURNING id
+  `, [
+    consignment, courierName, courierCode, serviceName,
+    customerId, customerName, customerAccount,
+    recipientName, recipientPost, recipientAddr,
+    weightKg ? parseFloat(weightKg) : null,
+    estDelivery || null,
+    status, description, location, eventAt,
+  ]);
+
+  const parcelId = parcelRes.rows[0].id;
+
+  // Insert tracking event (ignore duplicate event_codes for the same parcel)
+  await query(`
+    INSERT INTO tracking_events
+      (parcel_id, consignment_number, event_code, status, description, location, event_at, raw_payload)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+    ON CONFLICT DO NOTHING
+  `, [parcelId, consignment, eventCode, status, description, location, eventAt,
+      JSON.stringify(event._raw || event)]);
+
+  return { ok: true, consignment, status, parcel_id: parcelId };
+}
+
 // ─── POST /api/tracking/webhook ──────────────────────────────────────────────
 
 router.post('/webhook', async (req, res, next) => {
@@ -92,92 +236,11 @@ router.post('/webhook', async (req, res, next) => {
     const body = req.body;
     if (!body) return res.status(400).json({ error: 'Empty payload' });
 
-    // Support array or single event
-    const events = Array.isArray(body) ? body : [body];
+    const events  = normalisePayload(body);
     const results = [];
 
     for (const event of events) {
-      const consignment = pick(event,
-        'consignment_number', 'consignmentNumber', 'tracking_number', 'trackingNumber',
-        'tracking_code', 'trackingCode', 'reference', 'barcode', 'parcel_id', 'shipment_id', 'id'
-      );
-      if (!consignment) { results.push({ skipped: true, reason: 'no consignment number' }); continue; }
-
-      const rawStatus   = pick(event, 'status', 'event_type', 'event_code', 'eventType', 'state', 'type');
-      const status      = normaliseStatus(rawStatus);
-      const description = pick(event, 'description', 'event_description', 'status_description',
-                               'message', 'detail', 'text', 'statusDescription');
-      const location    = pick(event, 'location', 'depot', 'hub', 'facility', 'scan_location', 'scanLocation');
-      const eventAt     = pick(event, 'timestamp', 'event_time', 'eventTime', 'datetime',
-                               'date_time', 'scanned_at', 'created_at') || new Date().toISOString();
-
-      const courierName = pick(event, 'courier_name', 'courierName', 'courier', 'carrier', 'carrier_name');
-      const courierCode = pick(event, 'courier_code', 'courierCode', 'carrier_code', 'carrierCode');
-      const serviceName = pick(event, 'service', 'service_name', 'serviceName', 'product', 'service_type');
-
-      const customerName    = pick(event, 'customer.name', 'customer_name', 'customerName', 'sender', 'sender_name', 'account_name');
-      const customerAccount = pick(event, 'customer.account_number', 'account_number', 'accountNumber', 'moov_account', 'moovAccount');
-      const recipientName   = pick(event, 'recipient.name', 'recipient_name', 'recipientName', 'consignee', 'delivery_name');
-      const recipientPost   = pick(event, 'recipient.postcode', 'postcode', 'delivery_postcode', 'recipientPostcode', 'zip');
-      const recipientAddr   = pick(event, 'recipient.address', 'address', 'delivery_address', 'recipientAddress');
-      const weightKg        = pick(event, 'weight_kg', 'weightKg', 'weight', 'gross_weight');
-      const estDelivery     = pick(event, 'estimated_delivery', 'estimatedDelivery', 'eta', 'due_date');
-      const eventCode       = pick(event, 'event_code', 'eventCode', 'code', 'status_code');
-
-      // Resolve customer_id from account number
-      let customerId = null;
-      if (customerAccount) {
-        const cr = await query('SELECT id FROM customers WHERE account_number = $1', [customerAccount]);
-        if (cr.rows.length) customerId = cr.rows[0].id;
-      }
-
-      // Upsert the parcel (update status + last event fields)
-      const parcelRes = await query(`
-        INSERT INTO parcels
-          (consignment_number, courier_name, courier_code, service_name,
-           customer_id, customer_name, customer_account,
-           recipient_name, recipient_postcode, recipient_address,
-           weight_kg, estimated_delivery,
-           status, status_description, last_location, last_event_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
-        ON CONFLICT (consignment_number) DO UPDATE SET
-          courier_name       = COALESCE(EXCLUDED.courier_name,       parcels.courier_name),
-          courier_code       = COALESCE(EXCLUDED.courier_code,       parcels.courier_code),
-          service_name       = COALESCE(EXCLUDED.service_name,       parcels.service_name),
-          customer_id        = COALESCE(EXCLUDED.customer_id,        parcels.customer_id),
-          customer_name      = COALESCE(EXCLUDED.customer_name,      parcels.customer_name),
-          customer_account   = COALESCE(EXCLUDED.customer_account,   parcels.customer_account),
-          recipient_name     = COALESCE(EXCLUDED.recipient_name,     parcels.recipient_name),
-          recipient_postcode = COALESCE(EXCLUDED.recipient_postcode, parcels.recipient_postcode),
-          recipient_address  = COALESCE(EXCLUDED.recipient_address,  parcels.recipient_address),
-          weight_kg          = COALESCE(EXCLUDED.weight_kg,          parcels.weight_kg),
-          estimated_delivery = COALESCE(EXCLUDED.estimated_delivery, parcels.estimated_delivery),
-          status             = EXCLUDED.status,
-          status_description = EXCLUDED.status_description,
-          last_location      = EXCLUDED.last_location,
-          last_event_at      = EXCLUDED.last_event_at,
-          delivered_at       = CASE WHEN EXCLUDED.status = 'delivered' THEN EXCLUDED.last_event_at ELSE parcels.delivered_at END,
-          updated_at         = NOW()
-        RETURNING id
-      `, [
-        consignment, courierName, courierCode, serviceName,
-        customerId, customerName, customerAccount,
-        recipientName, recipientPost, recipientAddr,
-        weightKg ? parseFloat(weightKg) : null,
-        estDelivery || null,
-        status, description, location, eventAt,
-      ]);
-
-      const parcelId = parcelRes.rows[0].id;
-
-      // Insert tracking event
-      await query(`
-        INSERT INTO tracking_events
-          (parcel_id, consignment_number, event_code, status, description, location, event_at, raw_payload)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-      `, [parcelId, consignment, eventCode, status, description, location, eventAt, JSON.stringify(event)]);
-
-      results.push({ ok: true, consignment, status, parcel_id: parcelId });
+      results.push(await upsertEvent(event, body));
     }
 
     res.json({ received: results.length, results });
