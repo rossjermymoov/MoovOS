@@ -47,12 +47,9 @@ const CSV_TO_MOOV = {
 const BATCH_SIZE = 500;
 
 export async function seedCustomerRates() {
-  // Check if already seeded
+  // Check total — used for logging only, not for skipping
   const { rows: countRows } = await query('SELECT COUNT(*) FROM customer_rates');
-  if (parseInt(countRows[0].count) > 0) {
-    console.log(`ℹ️  customer_rates already seeded (${countRows[0].count} rows) — skipping`);
-    return;
-  }
+  console.log(`ℹ️  customer_rates currently has ${countRows[0].count} rows — checking per customer for gaps…`);
 
   console.log('📦 Seeding customer_rates from prices.csv…');
 
@@ -97,13 +94,25 @@ export async function seedCustomerRates() {
     rl.on('error', reject);
   });
 
-  // Batch insert per customer
-  const client = await getClient();
-  let totalInserted = 0;
-  try {
-    await client.query('BEGIN');
+  // Fetch which customers already have rates
+  const { rows: existingRows } = await query(
+    'SELECT DISTINCT customer_id FROM customer_rates'
+  );
+  const alreadySeeded = new Set(existingRows.map(r => r.customer_id));
 
-    for (const [uuid, rows] of Object.entries(rowsByCustomer)) {
+  const toSeed = Object.entries(rowsByCustomer).filter(([uuid]) => !alreadySeeded.has(uuid));
+  if (toSeed.length === 0) {
+    console.log('ℹ️  All customers already have rate data — skipping');
+    return;
+  }
+  console.log(`📦 Seeding rates for ${toSeed.length} customers with missing data…`);
+
+  // One transaction per customer so a large customer failing doesn't affect others
+  let totalInserted = 0;
+  for (const [uuid, rows] of toSeed) {
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
       for (let i = 0; i < rows.length; i += BATCH_SIZE) {
         const batch = rows.slice(i, i + BATCH_SIZE);
         const values = [];
@@ -116,20 +125,19 @@ export async function seedCustomerRates() {
           INSERT INTO customer_rates
             (customer_id, courier_id, courier_code, courier_name, service_id, service_code, service_name, zone_id, zone_name, weight_class_id, weight_class_name, price)
           VALUES ${placeholders.join(',')}
-          ON CONFLICT (customer_id, service_id, zone_id, weight_class_id) DO NOTHING
+          ON CONFLICT (customer_id, service_id, zone_name, weight_class_name) DO NOTHING
         `, values);
         totalInserted += batch.length;
       }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      console.error(`❌ Failed to seed rates for customer ${uuid}:`, err.message);
+    } finally {
+      client.release();
     }
-
-    await client.query('COMMIT');
-    console.log(`✅ Seeded ${totalInserted.toLocaleString()} customer rate rows for ${Object.keys(rowsByCustomer).length} customers`);
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('❌ Failed to seed customer_rates:', err.message);
-  } finally {
-    client.release();
   }
+  console.log(`✅ Seeded ${totalInserted.toLocaleString()} rate rows for ${toSeed.length} customers`);
 }
 
 // Simple CSV parser that handles quoted fields

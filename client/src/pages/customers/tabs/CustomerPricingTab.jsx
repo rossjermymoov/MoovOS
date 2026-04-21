@@ -52,7 +52,7 @@ function PriceCell({ rateId, initialPrice, onSaved, onDelete }) {
       <span
         onClick={startEdit}
         title="Click to edit"
-        style={{ fontSize: 13, fontWeight: 700, color: '#fff', cursor: 'pointer', padding: '2px 6px', borderRadius: 4, border: '1px solid transparent' }}
+        style={{ fontSize: 13, fontWeight: 700, color: '#fff', cursor: 'pointer', padding: '2px 6px', borderRadius: 4, border: '1px solid transparent', fontFamily: 'monospace', minWidth: 60, textAlign: 'right', display: 'inline-block' }}
         onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(0,200,83,0.4)'}
         onMouseLeave={e => e.currentTarget.style.borderColor = 'transparent'}
       >
@@ -156,19 +156,19 @@ function ServiceBlock({ service, customerId, onRateUpdate, onRateDelete, onRefre
       ) : (
         <>
           {display.map(rate => (
-            <div key={rate.id} style={{ display: 'flex', alignItems: 'center', padding: '6px 18px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}
-              onMouseEnter={e => { e.currentTarget.querySelector('.rate-delete-btn')?.style && (e.currentTarget.querySelector('.rate-delete-btn').style.color = '#555'); }}
-            >
+            <div key={rate.id} style={{ display: 'flex', alignItems: 'center', padding: '6px 18px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
               <span style={{ fontSize: 12, color: '#DDDDDD', flex: 1 }}>
                 {rate.zone_name}
                 {multiWeight && <span style={{ color: '#AAAAAA', marginLeft: 8, fontSize: 11 }}>· {rate.weight_class_name}</span>}
               </span>
-              <PriceCell
-                rateId={rate.id}
-                initialPrice={rate.price}
-                onSaved={onRateUpdate}
-                onDelete={onRateDelete}
-              />
+              <span style={{ minWidth: 110, display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+                <PriceCell
+                  rateId={rate.id}
+                  initialPrice={rate.price}
+                  onSaved={onRateUpdate}
+                  onDelete={onRateDelete}
+                />
+              </span>
             </div>
           ))}
 
