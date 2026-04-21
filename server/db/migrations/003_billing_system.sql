@@ -268,9 +268,17 @@ CREATE TABLE IF NOT EXISTS invoices (
 );
 
 -- FK from charges.invoice_id → invoices.id (added after invoices table exists)
-ALTER TABLE charges
-  ADD CONSTRAINT IF NOT EXISTS charges_invoice_fk
-  FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE SET NULL;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_name = 'charges_invoice_fk'
+  ) THEN
+    ALTER TABLE charges
+      ADD CONSTRAINT charges_invoice_fk
+      FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
 -- ── invoice_line_items ────────────────────────────────────────────────────────
 
