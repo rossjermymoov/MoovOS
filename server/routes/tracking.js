@@ -99,7 +99,7 @@ router.post('/webhook', async (req, res, next) => {
     for (const event of events) {
       const consignment = pick(event,
         'consignment_number', 'consignmentNumber', 'tracking_number', 'trackingNumber',
-        'reference', 'barcode', 'parcel_id', 'shipment_id', 'id'
+        'tracking_code', 'trackingCode', 'reference', 'barcode', 'parcel_id', 'shipment_id', 'id'
       );
       if (!consignment) { results.push({ skipped: true, reason: 'no consignment number' }); continue; }
 
