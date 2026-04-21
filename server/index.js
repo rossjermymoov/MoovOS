@@ -7,6 +7,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 import customersRouter from './routes/customers.js';
+import staffRouter from './routes/staff.js';
 
 dotenv.config();
 
@@ -25,6 +26,7 @@ app.use(morgan(isProd ? 'combined' : 'dev'));
 
 // ─── API Routes ──────────────────────────────────────────────
 app.use('/api/customers', customersRouter);
+app.use('/api/staff',     staffRouter);
 
 // ─── Health check ────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'moov-os' }));

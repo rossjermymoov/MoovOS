@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import AppShell from './components/layout/AppShell';
 import CustomerList from './pages/customers/CustomerList';
 import CustomerRecord from './pages/customers/CustomerRecord';
+import CustomerNew from './pages/customers/CustomerNew';
 
 // Placeholder pages for other sections (to be built)
 const Placeholder = ({ name }) => (
@@ -17,8 +18,9 @@ export default function App() {
     <Routes>
       <Route element={<AppShell />}>
         <Route path="/"             element={<Placeholder name="Dashboard" />} />
-        <Route path="/customers"    element={<CustomerList />} />
-        <Route path="/customers/:id" element={<CustomerRecord />} />
+        <Route path="/customers"      element={<CustomerList />} />
+        <Route path="/customers/new"  element={<CustomerNew />} />
+        <Route path="/customers/:id"  element={<CustomerRecord />} />
         <Route path="/pricing"      element={<Placeholder name="Pricing & Rate Cards" />} />
         <Route path="/tracking"     element={<Placeholder name="Tracking & Parcel Data" />} />
         <Route path="/finance"      element={<Placeholder name="Finance & Billing" />} />
