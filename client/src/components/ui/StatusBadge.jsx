@@ -1,46 +1,33 @@
 import { healthScoreColor, accountStatusColor, tierColor } from '../../design/tokens';
 
-export function HealthBadge({ score }) {
-  const c = healthScoreColor[score] || healthScoreColor.green;
+// Uniform pill — same height/shape for every status badge
+function Pill({ bg, border, color, dot, label }) {
   return (
-    <span
-      className="status-badge"
-      style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}` }}
-    >
-      <span style={{ width: 6, height: 6, borderRadius: '50%', background: c.text, display: 'inline-block', marginRight: 6 }} />
-      {c.label}
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      height: 22, padding: '0 9px', borderRadius: 11,
+      background: bg, border: `1px solid ${border || color}`,
+      fontSize: 11, fontWeight: 700, color, whiteSpace: 'nowrap', lineHeight: 1,
+    }}>
+      {dot && <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />}
+      {label}
     </span>
   );
+}
+
+export function HealthBadge({ score }) {
+  const c = healthScoreColor[score] || healthScoreColor.green;
+  return <Pill bg={c.bg} border={c.border} color={c.text} dot label={c.label} />;
 }
 
 export function AccountStatusBadge({ status }) {
   const c = accountStatusColor[status] || accountStatusColor.active;
-  return (
-    <span className="status-badge" style={{ background: c.bg, color: c.text }}>
-      {c.label}
-    </span>
-  );
+  return <Pill bg={c.bg} border={c.bg} color={c.text} dot label={c.label} />;
 }
 
 export function TierBadge({ tier }) {
   const c = tierColor[tier] || tierColor.bronze;
-  return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        padding: '2px 8px',
-        borderRadius: 4,
-        fontSize: 11,
-        fontWeight: 600,
-        background: c.bg,
-        color: c.text,
-        textTransform: 'capitalize',
-      }}
-    >
-      {tier}
-    </span>
-  );
+  return <Pill bg={c.bg} border={c.bg} color={c.text} label={tier ? tier.charAt(0).toUpperCase() + tier.slice(1) : '—'} />;
 }
 
 export function CreditUtilisationBar({ pct = 0 }) {

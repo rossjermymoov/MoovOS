@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, AlertTriangle, Phone, Mail, MapPin, Building2,
   Users, MessageSquare, TrendingUp, DollarSign, Zap, Info,
-  Pencil, X, Check,
+  Pencil, X, Check, ShieldCheck,
 } from 'lucide-react';
 import { customersApi } from '../../api/customers';
 import { HealthBadge, AccountStatusBadge, TierBadge, CreditUtilisationBar } from '../../components/ui/StatusBadge';
@@ -91,6 +91,7 @@ function OverviewTab({ c, onSaved }) {
       billing_cycle:      c.billing_cycle || 'monthly',
       payment_terms_days: c.payment_terms_days ?? 7,
       credit_limit:       c.credit_limit ?? 0,
+      bond_amount_held:   c.bond_amount_held ?? 0,
       tier:               c.tier || 'bronze',
     });
     setEdit(true);
@@ -103,6 +104,7 @@ function OverviewTab({ c, onSaved }) {
       ...form,
       payment_terms_days: parseInt(form.payment_terms_days),
       credit_limit:       parseFloat(form.credit_limit) || 0,
+      bond_amount_held:   parseFloat(form.bond_amount_held) || 0,
       company_reg_number: form.company_reg_number || null,
       vat_number:         form.vat_number || null,
       address_line_1:     form.address_line_1 || null,
@@ -208,6 +210,8 @@ function OverviewTab({ c, onSaved }) {
               } />
             <Row label="Credit Limit" value={gbp(c.credit_limit)} edit={edit}
               editNode={<input style={inp()} type="number" min="0" value={form.credit_limit} onChange={e => set('credit_limit', e.target.value)} />} />
+            <Row label="Bond Held" value={parseFloat(c.bond_amount_held) > 0 ? gbp(c.bond_amount_held) : 'None'} edit={edit}
+              editNode={<input style={inp()} type="number" min="0" step="0.01" value={form.bond_amount_held} onChange={e => set('bond_amount_held', e.target.value)} placeholder="0.00" />} />
             <Row label="Billing Period" value={BILLING_PERIOD_LABELS[c.billing_cycle] || c.billing_cycle} edit={edit}
               editNode={
                 <select style={sel()} value={form.billing_cycle} onChange={e => set('billing_cycle', e.target.value)}>
@@ -454,6 +458,18 @@ export default function CustomerRecord() {
             <span style={{ color: '#AAAAAA', fontSize: 13, marginLeft: 12 }}>Shipment access blocked · Reason: {c.on_stop_reason}</span>
           </div>
           <button className="btn-ghost" style={{ fontSize: 13 }} onClick={() => setOnStopModal('remove')}>Remove On Stop</button>
+        </div>
+      )}
+
+      {parseFloat(c.bond_amount_held) > 0 && (
+        <div style={{ background: 'rgba(255,193,7,0.08)', border: '1.5px solid #FFC107', borderRadius: 12, padding: '14px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <ShieldCheck size={20} style={{ color: '#FFC107', flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <span style={{ color: '#FFC107', fontWeight: 700, fontSize: 15 }}>Bond Held</span>
+            <span style={{ color: '#AAAAAA', fontSize: 13, marginLeft: 12 }}>
+              Amount: {gbp(c.bond_amount_held)}
+            </span>
+          </div>
         </div>
       )}
 

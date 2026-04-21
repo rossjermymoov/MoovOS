@@ -16,7 +16,7 @@ const ALLOWED_SORT_COLS = ['business_name', 'account_number', 'tier', 'account_s
 function buildCustomerListQuery(filters = {}) {
   const {
     search, status, tier, health_score, account_manager_id,
-    is_on_stop, sort = 'business_name', order = 'asc', limit = 50, offset = 0
+    is_on_stop, has_bond, sort = 'business_name', order = 'asc', limit = 50, offset = 0
   } = filters;
 
   const col = ALLOWED_SORT_COLS.includes(sort) ? sort : 'business_name';
@@ -49,6 +49,9 @@ function buildCustomerListQuery(filters = {}) {
     conditions.push(`c.is_on_stop = $${idx++}`);
     values.push(is_on_stop === 'true');
   }
+  if (has_bond === 'true') {
+    conditions.push(`c.bond_amount_held > 0`);
+  }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
@@ -57,7 +60,7 @@ function buildCustomerListQuery(filters = {}) {
       c.id, c.account_number, c.business_name, c.primary_email, c.phone_number,
       c.postcode, c.city, c.county, c.country,
       c.tier, c.account_status, c.health_score, c.is_on_stop,
-      c.outstanding_balance, c.credit_limit, c.date_onboarded,
+      c.outstanding_balance, c.credit_limit, c.bond_amount_held, c.date_onboarded,
       c.billing_cycle, c.payment_terms_days, c.company_type,
       am.full_name AS account_manager_name,
       sp.full_name AS salesperson_name,
@@ -207,7 +210,7 @@ router.patch('/:id', async (req, res, next) => {
       'business_name', 'address_line_1', 'address_line_2', 'city', 'county', 'postcode', 'country',
       'phone_number', 'primary_email',
       'company_type', 'company_reg_number', 'vat_number',
-      'tier', 'account_status', 'payment_terms_days', 'billing_cycle', 'credit_limit',
+      'tier', 'account_status', 'payment_terms_days', 'billing_cycle', 'credit_limit', 'bond_amount_held',
       'accounts_email', 'eori_number', 'ioss_number',
       'salesperson_id', 'account_manager_id', 'onboarding_person_id',
     ];
