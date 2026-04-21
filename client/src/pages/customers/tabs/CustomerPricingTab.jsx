@@ -42,19 +42,26 @@ function PriceCell({ rateId, initialPrice, onSaved, onDelete }) {
         onChange={e => setVal(e.target.value)}
         onBlur={commit}
         onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setVal(String(parseFloat(initialPrice).toFixed(2))); setEditing(false); } }}
-        style={{ ...inp, width: 80, textAlign: 'right' }}
+        style={{ ...inp, width: 80, textAlign: 'right', color: '#00C853', fontWeight: 700, fontFamily: 'monospace', border: '1px solid rgba(0,200,83,0.6)', background: 'rgba(0,200,83,0.08)' }}
       />
     );
   }
 
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
       <span
         onClick={startEdit}
         title="Click to edit"
-        style={{ fontSize: 13, fontWeight: 700, color: '#fff', cursor: 'pointer', padding: '2px 6px', borderRadius: 4, border: '1px solid transparent', fontFamily: 'monospace', minWidth: 60, textAlign: 'right', display: 'inline-block' }}
-        onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(0,200,83,0.4)'}
-        onMouseLeave={e => e.currentTarget.style.borderColor = 'transparent'}
+        style={{
+          fontSize: 13, fontWeight: 700, color: '#00C853',
+          cursor: 'pointer', padding: '3px 10px', borderRadius: 5,
+          border: '1px solid rgba(0,200,83,0.35)',
+          background: 'rgba(0,200,83,0.08)',
+          fontFamily: 'monospace', display: 'inline-block',
+          transition: 'border-color 0.12s, background 0.12s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(0,200,83,0.7)'; e.currentTarget.style.background = 'rgba(0,200,83,0.15)'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,200,83,0.35)'; e.currentTarget.style.background = 'rgba(0,200,83,0.08)'; }}
       >
         {gbp(initialPrice)}
       </span>
@@ -63,8 +70,8 @@ function PriceCell({ rateId, initialPrice, onSaved, onDelete }) {
             <button onClick={() => onDelete(rateId)} style={{ background: '#E91E8C', border: 'none', borderRadius: 4, color: '#fff', fontSize: 10, padding: '2px 6px', cursor: 'pointer' }}>Delete</button>
             <button onClick={() => setConfirm(false)} style={{ background: 'none', border: 'none', color: '#AAAAAA', fontSize: 10, cursor: 'pointer' }}>✕</button>
           </>
-        : <button onClick={() => setConfirm(true)} style={{ background: 'none', border: 'none', color: 'transparent', cursor: 'pointer', padding: 0 }}>
-            <Trash2 size={11} color="#555" />
+        : <button onClick={() => setConfirm(true)} style={{ background: 'none', border: 'none', color: 'transparent', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
+            <Trash2 size={11} color="#333" />
           </button>
       }
     </span>
@@ -327,31 +334,38 @@ function ServiceBlock({ service, onRateUpdate, onRateDelete }) {
     );
   }
 
-  // ── Domestic: all zones in a horizontal row ──────────────────
+  // ── Domestic: zone chips ─────────────────────────────────────
   return (
-    <div style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-      {/* Service name header row */}
-      <div style={{ display: 'flex', alignItems: 'center', padding: '8px 18px 4px', gap: 10 }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{service.service_name}</span>
-        <span style={{ fontSize: 11, color: '#555' }}>({service.rate_count})</span>
-        <span style={{ flex: 1 }} />
-        <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#00C853', background: 'rgba(0,200,83,0.08)', padding: '1px 7px', borderRadius: 4 }}>{service.service_code}</span>
+    <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', padding: '10px 18px 14px' }}>
+      {/* Service name header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#AAAAAA', textTransform: 'uppercase', letterSpacing: '0.06em', flex: 1 }}>
+          {service.service_name}
+        </span>
+        <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#555', background: 'rgba(255,255,255,0.04)', padding: '1px 6px', borderRadius: 3, border: '1px solid rgba(255,255,255,0.07)' }}>
+          {service.service_code}
+        </span>
       </div>
 
-      {/* Zones inline */}
+      {/* Zone chips */}
       {service.rates.length === 0 ? (
-        <div style={{ padding: '4px 18px 10px', fontSize: 12, color: '#444', fontStyle: 'italic' }}>No pricing found</div>
+        <div style={{ fontSize: 12, color: '#444', fontStyle: 'italic' }}>No pricing found</div>
       ) : (
-        <div style={{ padding: '4px 18px 10px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px 0' }}>
-          {service.rates.map((rate, i) => (
-            <span key={rate.id} style={{ display: 'inline-flex', alignItems: 'center' }}>
-              {i > 0 && <span style={{ color: 'rgba(255,255,255,0.08)', margin: '0 14px', fontSize: 14, userSelect: 'none' }}>|</span>}
-              <span style={{ fontSize: 12, color: '#AAAAAA', marginRight: 10 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {service.rates.map((rate) => (
+            <div key={rate.id} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              padding: '5px 8px 5px 10px',
+              background: 'rgba(255,255,255,0.02)',
+              border: '1px solid rgba(255,255,255,0.07)',
+              borderRadius: 7,
+            }}>
+              <span style={{ fontSize: 11, color: '#666', fontWeight: 500, whiteSpace: 'nowrap' }}>
                 {rate.zone_name}
-                {multiWeight && <span style={{ color: '#666', fontSize: 11 }}> · {rate.weight_class_name}</span>}
+                {multiWeight && <span style={{ color: '#444', marginLeft: 5 }}>· {rate.weight_class_name}</span>}
               </span>
               <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
-            </span>
+            </div>
           ))}
         </div>
       )}
