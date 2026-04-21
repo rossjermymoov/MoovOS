@@ -221,7 +221,22 @@ async function upsertEvent(event, rawBody) {
 
   const parcelId = parcelRes.rows[0].id;
 
-  // Insert tracking event (ignore duplicate event_codes for the same parcel)
+  // Deduplicate: skip event if the last recorded status for this parcel is the same.
+  // This prevents flooding the timeline with repeated scans at the same stage
+  // (e.g. five "collected" pings seconds apart from the same courier hub).
+  const lastEvt = await query(
+    `SELECT status FROM tracking_events
+     WHERE parcel_id = $1
+     ORDER BY event_at DESC, id DESC
+     LIMIT 1`,
+    [parcelId]
+  );
+  const lastStatus = lastEvt.rows[0]?.status;
+
+  if (lastStatus && lastStatus === status) {
+    return { ok: true, consignment, status, parcel_id: parcelId, deduped: true };
+  }
+
   await query(`
     INSERT INTO tracking_events
       (parcel_id, consignment_number, event_code, status, description, location, event_at, raw_payload)
