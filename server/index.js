@@ -12,6 +12,8 @@ import carriersRouter from './routes/carriers.js';
 import customerPricingRouter from './routes/customerPricing.js';
 import webhooksRouter from './routes/webhooks.js';
 import { runMigrations } from './db/migrate.js';
+import { seedCustomerRates } from './scripts/seedCustomerRates.js';
+import customerRatesRouter from './routes/customerRates.js';
 
 dotenv.config();
 
@@ -33,6 +35,7 @@ app.use('/api/customers',        customersRouter);
 app.use('/api/staff',            staffRouter);
 app.use('/api/carriers',         carriersRouter);
 app.use('/api/customer-pricing', customerPricingRouter);
+app.use('/api/customer-rates',   customerRatesRouter);
 app.use('/api/v1/webhooks',      webhooksRouter);
 
 // ─── Health check ────────────────────────────────────────────
@@ -66,6 +69,7 @@ async function start() {
 
   try {
     await runMigrations();
+    await seedCustomerRates();
   } catch (err) {
     console.error('❌ Migration failed — server will not start.');
     console.error('   Error code:   ', err.code    || 'unknown');
