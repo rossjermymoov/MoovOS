@@ -268,15 +268,140 @@ function CarrierCard({ carrier, onDrill, onRefresh }) {
   );
 }
 
+// ─── Fuel group card ──────────────────────────────────────────────────────────
+
+function FuelGroupCard({ group, carrierId, availableServices, onRefresh }) {
+  const [editing, setEditing]   = useState(false);
+  const [form, setForm]         = useState({ name: group.name, fuel_surcharge_pct: String(group.fuel_surcharge_pct) });
+  const [confirmDel, setConfirmDel] = useState(false);
+
+  const updateGroup = useMutation({
+    mutationFn: () => api.patch(`/carriers/fuel-groups/${group.id}`, { name: form.name, fuel_surcharge_pct: parseFloat(form.fuel_surcharge_pct) || 0 }).then(r => r.data),
+    onSuccess: () => { setEditing(false); onRefresh(); },
+  });
+  const deleteGroup = useMutation({
+    mutationFn: () => api.delete(`/carriers/fuel-groups/${group.id}`).then(r => r.data),
+    onSuccess: onRefresh,
+  });
+  const assignService = useMutation({
+    mutationFn: (serviceId) => api.patch(`/carriers/services/${serviceId}`, { fuel_group_id: group.id }).then(r => r.data),
+    onSuccess: onRefresh,
+  });
+  const removeService = useMutation({
+    mutationFn: (serviceId) => api.patch(`/carriers/services/${serviceId}`, { fuel_group_id: null }).then(r => r.data),
+    onSuccess: onRefresh,
+  });
+
+  const groupServices = group.services || [];
+
+  return (
+    <div style={{ border:'1px solid rgba(255,193,7,0.2)', borderRadius:10, overflow:'hidden', background:'rgba(255,193,7,0.03)' }}>
+      {/* Header */}
+      <div style={{ padding:'12px 16px', borderBottom:'1px solid rgba(255,193,7,0.12)', display:'flex', alignItems:'center', gap:10 }}>
+        <Zap size={14} color="#FFC107"/>
+        {editing ? (
+          <div style={{ display:'flex', gap:8, flex:1, alignItems:'center' }}>
+            <div className="pill-input-wrap" style={{ height:30, flex:1 }}>
+              <input value={form.name} onChange={e => setForm(f=>({...f,name:e.target.value}))} placeholder="Group name" autoFocus style={{ fontSize:12 }}/>
+            </div>
+            <div className="pill-input-wrap" style={{ height:30, width:90 }}>
+              <input type="number" step="0.01" value={form.fuel_surcharge_pct} onChange={e => setForm(f=>({...f,fuel_surcharge_pct:e.target.value}))} placeholder="0.00" style={{ fontSize:12 }}/>
+              <div className="green-cap" style={{ fontSize:11 }}>%</div>
+            </div>
+            <button onClick={() => updateGroup.mutate()} className="btn-primary" style={{ height:30, padding:'0 12px', fontSize:12 }}><Check size={11}/></button>
+            <button onClick={() => setEditing(false)} className="btn-ghost" style={{ height:30, padding:'0 8px', fontSize:12 }}>✕</button>
+          </div>
+        ) : (
+          <>
+            <span style={{ fontWeight:700, color:'#fff', fontSize:14, flex:1 }}>{group.name}</span>
+            <span style={{ fontSize:13, fontWeight:700, color:'#FFC107', background:'rgba(255,193,7,0.12)', padding:'2px 10px', borderRadius:9999 }}>
+              {parseFloat(group.fuel_surcharge_pct).toFixed(2)}%
+            </span>
+            <button onClick={() => { setForm({ name:group.name, fuel_surcharge_pct: String(group.fuel_surcharge_pct) }); setEditing(true); }}
+              style={{ background:'none', border:'none', color:'#AAAAAA', cursor:'pointer' }}><Edit2 size={12}/></button>
+            <button onClick={() => setConfirmDel(true)}
+              style={{ background:'none', border:'none', color:'#555', cursor:'pointer' }}><Trash2 size={12}/></button>
+          </>
+        )}
+      </div>
+
+      {confirmDel && (
+        <div style={{ padding:'8px 14px' }}>
+          <Confirm message={`Delete "${group.name}"? Services will lose this fuel group.`}
+            onConfirm={() => deleteGroup.mutate()} onCancel={() => setConfirmDel(false)}/>
+        </div>
+      )}
+
+      {/* Services in this group */}
+      <div style={{ padding:'10px 16px' }}>
+        <div style={{ fontSize:11, fontWeight:700, color:'#AAAAAA', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>
+          Services ({groupServices.length})
+        </div>
+
+        {groupServices.length === 0 ? (
+          <p style={{ fontSize:12, color:'#444', fontStyle:'italic', margin:'0 0 8px' }}>No services yet — assign from below</p>
+        ) : (
+          <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:10 }}>
+            {groupServices.map(svc => (
+              <span key={svc.id} style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'3px 10px', borderRadius:9999, fontSize:12, fontWeight:600, background:'rgba(255,193,7,0.08)', color:'#FFC107', border:'1px solid rgba(255,193,7,0.2)' }}>
+                {svc.name}
+                <button onClick={() => removeService.mutate(svc.id)} style={{ background:'none', border:'none', color:'#FFC107', cursor:'pointer', padding:0 }}><X size={9}/></button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Assign a service */}
+        {availableServices.length > 0 && (
+          <div className="pill-input-wrap" style={{ height:30 }}>
+            <select
+              defaultValue=""
+              onChange={e => { if (e.target.value) { assignService.mutate(parseInt(e.target.value)); e.target.value = ''; } }}
+              style={{ fontSize:12, paddingLeft:10 }}>
+              <option value="">+ Assign a service…</option>
+              {availableServices.map(s => (
+                <option key={s.id} value={s.id}>{s.name} ({s.service_code})</option>
+              ))}
+            </select>
+            <div className="green-cap">▾</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── LEVEL 2 — Carrier detail (services list) ─────────────────────────────────
 
 function CarrierDetail({ carrierId, onBack, onDrillService }) {
   const [addingService, setAddingService] = useState(false);
   const [serviceForm, setServiceForm] = useState({ service_code:'', name:'', fuel_surcharge_pct:'' });
+  const [addingGroup, setAddingGroup]   = useState(false);
+  const [groupForm, setGroupForm]       = useState({ name:'', fuel_surcharge_pct:'' });
 
   const { data: carrier, isLoading, refetch } = useQuery({
     queryKey: ['carrier-detail', carrierId],
     queryFn: () => api.get(`/carriers/couriers/${carrierId}`).then(r => r.data),
+  });
+
+  const { data: fuelGroups = [], refetch: refetchGroups } = useQuery({
+    queryKey: ['fuel-groups', carrierId],
+    queryFn: () => api.get(`/carriers/couriers/${carrierId}/fuel-groups`).then(r => r.data),
+  });
+
+  const refetchAll = () => { refetch(); refetchGroups(); };
+
+  const createGroup = useMutation({
+    mutationFn: () => api.post(`/carriers/couriers/${carrierId}/fuel-groups`, {
+      name: groupForm.name,
+      fuel_surcharge_pct: parseFloat(groupForm.fuel_surcharge_pct) || 0,
+    }).then(r => r.data),
+    onSuccess: () => { setAddingGroup(false); setGroupForm({ name:'', fuel_surcharge_pct:'' }); refetchAll(); },
+  });
+
+  const updateServiceField = useMutation({
+    mutationFn: ({ id, ...data }) => api.patch(`/carriers/services/${id}`, data).then(r => r.data),
+    onSuccess: refetchAll,
   });
 
   const addService = useMutation({
@@ -389,55 +514,86 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                 <th style={{ width:32 }}></th>
                 <th>Service</th>
                 <th>Code</th>
+                <th>Type</th>
+                <th>Fuel Group</th>
                 <th>Zones</th>
-                <th>Fuel Surcharge</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {carrier.services.map((svc, idx) => (
-                <tr
-                  key={svc.id}
-                  draggable
-                  onDragStart={e => onDragStart(e, idx)}
-                  onDragOver={e => onDragOver(e, idx)}
-                  onDrop={e => onDrop(e, idx)}
-                  onDragEnd={onDragEnd}
-                  onClick={() => onDrillService(svc.id)}
-                  style={{
-                    cursor: dragIdx === idx ? 'grabbing' : 'pointer',
-                    opacity: dragIdx === idx ? 0.4 : 1,
-                    borderTop: overIdx === idx && dragIdx !== idx
-                      ? '2px solid #7B2FBE' : '2px solid transparent',
-                    transition: 'opacity 0.1s, border-color 0.1s',
-                  }}
-                  onMouseEnter={e => { if (dragIdx === null) e.currentTarget.style.background='rgba(255,255,255,0.03)'; }}
-                  onMouseLeave={e => e.currentTarget.style.background='none'}
-                >
-                  {/* Drag handle */}
-                  <td style={{ padding:'8px 10px', color:'#333', cursor:'grab' }}
-                    onMouseDown={e => e.currentTarget.style.cursor='grabbing'}
-                    onMouseUp={e => e.currentTarget.style.cursor='grab'}>
-                    <GripVertical size={14}/>
-                  </td>
+              {carrier.services.map((svc, idx) => {
+                const typeColors = {
+                  domestic:      { bg:'rgba(0,200,83,0.1)',    fg:'#00C853', label:'DOM' },
+                  international: { bg:'rgba(123,47,190,0.12)', fg:'#7B2FBE', label:'INT' },
+                };
+                const tc = typeColors[svc.service_type];
+                const nextType = svc.service_type === 'domestic' ? 'international'
+                               : svc.service_type === 'international' ? null : 'domestic';
 
-                  <td style={{ fontWeight:600 }}>{svc.name}</td>
-                  <td><span style={{ ...pill('rgba(0,200,83,0.08)','#00C853'), fontFamily:'monospace' }}>{svc.service_code}</span></td>
-                  <td style={{ color:'#AAAAAA' }}>{svc.zone_count} zone{svc.zone_count!==1?'s':''}</td>
-                  <td>{svc.fuel_surcharge_pct
-                    ? <span style={pill('rgba(255,193,7,0.12)','#FFC107')}>{parseFloat(svc.fuel_surcharge_pct).toFixed(2)}%</span>
-                    : <span style={{ color:'#555' }}>—</span>}
-                  </td>
-                  <td style={{ textAlign:'right', display:'flex', alignItems:'center', gap:10, justifyContent:'flex-end' }}>
-                    <span style={{ fontSize:12, color:'#AAAAAA' }}>View rate card</span>
-                    <ChevronRight size={14} color="#AAAAAA"/>
-                    <button onClick={e => { e.stopPropagation(); delService.mutate(svc.id); }}
-                      style={{ background:'none', border:'none', color:'#555', cursor:'pointer', padding:0 }}>
-                      <Trash2 size={13}/>
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                return (
+                  <tr
+                    key={svc.id}
+                    draggable
+                    onDragStart={e => onDragStart(e, idx)}
+                    onDragOver={e => onDragOver(e, idx)}
+                    onDrop={e => onDrop(e, idx)}
+                    onDragEnd={onDragEnd}
+                    onClick={() => onDrillService(svc.id)}
+                    style={{
+                      cursor: dragIdx === idx ? 'grabbing' : 'pointer',
+                      opacity: dragIdx === idx ? 0.4 : 1,
+                      borderTop: overIdx === idx && dragIdx !== idx
+                        ? '2px solid #7B2FBE' : '2px solid transparent',
+                      transition: 'opacity 0.1s, border-color 0.1s',
+                    }}
+                    onMouseEnter={e => { if (dragIdx === null) e.currentTarget.style.background='rgba(255,255,255,0.03)'; }}
+                    onMouseLeave={e => e.currentTarget.style.background='none'}
+                  >
+                    {/* Drag handle */}
+                    <td style={{ padding:'8px 10px', color:'#333', cursor:'grab' }}>
+                      <GripVertical size={14}/>
+                    </td>
+
+                    <td style={{ fontWeight:600 }}>{svc.name}</td>
+                    <td><span style={{ ...pill('rgba(0,200,83,0.08)','#00C853'), fontFamily:'monospace' }}>{svc.service_code}</span></td>
+
+                    {/* Type badge — click to cycle DOM → INT → unset */}
+                    <td onClick={e => e.stopPropagation()}>
+                      <span
+                        onClick={() => updateServiceField.mutate({ id: svc.id, service_type: nextType })}
+                        title="Click to toggle type"
+                        style={{
+                          display:'inline-block', padding:'2px 9px', borderRadius:9999,
+                          fontSize:11, fontWeight:700, cursor:'pointer', userSelect:'none',
+                          background: tc ? tc.bg : 'rgba(255,255,255,0.04)',
+                          color: tc ? tc.fg : '#555',
+                        }}>
+                        {tc ? tc.label : '—'}
+                      </span>
+                    </td>
+
+                    {/* Fuel group badge (read-only — managed from Fuel Groups section) */}
+                    <td onClick={e => e.stopPropagation()}>
+                      {svc.fuel_group_name
+                        ? <span style={{ ...pill('rgba(255,193,7,0.1)','#FFC107'), display:'inline-flex', alignItems:'center', gap:4 }}>
+                            <Zap size={9}/>{svc.fuel_group_name} ({parseFloat(svc.fuel_group_pct||0).toFixed(1)}%)
+                          </span>
+                        : <span style={{ color:'#444', fontSize:12 }}>—</span>
+                      }
+                    </td>
+
+                    <td style={{ color:'#AAAAAA' }}>{svc.zone_count} zone{svc.zone_count!==1?'s':''}</td>
+                    <td style={{ textAlign:'right', display:'flex', alignItems:'center', gap:10, justifyContent:'flex-end' }}>
+                      <span style={{ fontSize:12, color:'#AAAAAA' }}>View rate card</span>
+                      <ChevronRight size={14} color="#AAAAAA"/>
+                      <button onClick={e => { e.stopPropagation(); delService.mutate(svc.id); }}
+                        style={{ background:'none', border:'none', color:'#555', cursor:'pointer', padding:0 }}>
+                        <Trash2 size={13}/>
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -673,6 +829,73 @@ function CountryPickerModal({ zone, onClose, onRefresh }) {
         <div style={{ marginTop:14, textAlign:'right' }}>
           <button onClick={onClose} className="btn-ghost" style={{ height:32, padding:'0 16px', fontSize:13 }}>Close</button>
         </div>
+      </div>
+
+      {/* ── Fuel Groups section ── */}
+      <div style={{ marginTop:20 }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+          <div>
+            <h2 style={{ fontSize:17, fontWeight:700, color:'#FFC107', margin:0, display:'flex', alignItems:'center', gap:8 }}>
+              <Zap size={16}/> Fuel Groups
+            </h2>
+            <p style={{ fontSize:13, color:'#AAAAAA', margin:'4px 0 0' }}>
+              Group services by fuel rate — assign services using the dropdown on each card
+            </p>
+          </div>
+          <button onClick={() => setAddingGroup(a => !a)} className="btn-primary"><Plus size={13}/> New Group</button>
+        </div>
+
+        {addingGroup && (
+          <div className="moov-card" style={{ padding:16, marginBottom:14, border:'1px solid rgba(255,193,7,0.25)' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr auto auto', gap:10, alignItems:'flex-end' }}>
+              <div>
+                <label style={{ fontSize:11, color:'#AAAAAA', display:'block', marginBottom:4 }}>Group Name</label>
+                <div className="pill-input-wrap" style={{ height:34 }}>
+                  <input value={groupForm.name} onChange={e => setGroupForm(f=>({...f,name:e.target.value}))}
+                    placeholder="e.g. Domestic Fuel, International Fuel" autoFocus style={{ fontSize:13 }}/>
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize:11, color:'#AAAAAA', display:'block', marginBottom:4 }}>Fuel Surcharge %</label>
+                <div className="pill-input-wrap" style={{ height:34 }}>
+                  <input type="number" step="0.01" value={groupForm.fuel_surcharge_pct}
+                    onChange={e => setGroupForm(f=>({...f,fuel_surcharge_pct:e.target.value}))}
+                    placeholder="5.50" style={{ fontSize:13 }}/>
+                  <div className="green-cap" style={{ fontSize:12 }}>%</div>
+                </div>
+              </div>
+              <button onClick={() => createGroup.mutate()} className="btn-primary" style={{ height:34, alignSelf:'flex-end' }}>
+                <Check size={13}/> Create
+              </button>
+              <button onClick={() => setAddingGroup(false)} className="btn-ghost" style={{ height:34, alignSelf:'flex-end' }}>Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {fuelGroups.length === 0 ? (
+          <div className="moov-card" style={{ padding:32, textAlign:'center', color:'#555', fontSize:13 }}>
+            No fuel groups yet — create one above, then assign services to it.
+          </div>
+        ) : (() => {
+          // Services not in any group = available to assign
+          const assignedIds = new Set(fuelGroups.flatMap(g => (g.services||[]).map(s => s.id)));
+          return (
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(340px, 1fr))', gap:14 }}>
+              {fuelGroups.map(group => {
+                const available = (carrier.services || []).filter(s => !assignedIds.has(s.id));
+                return (
+                  <FuelGroupCard
+                    key={group.id}
+                    group={group}
+                    carrierId={carrierId}
+                    availableServices={available}
+                    onRefresh={refetchAll}
+                  />
+                );
+              })}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
@@ -1464,6 +1687,7 @@ export default function CarrierManagement() {
       )}
 
       {tab === 1 && <RulesEngine services={services}/>}
+
     </div>
   );
 }

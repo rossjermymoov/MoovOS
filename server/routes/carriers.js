@@ -48,11 +48,14 @@ router.get('/couriers/:id', async (req, res, next) => {
     if (!courier.rows.length) return res.status(404).json({ error: 'Courier not found' });
 
     const services = await query(
-      `SELECT cs.*, COUNT(z.id)::int AS zone_count
+      `SELECT cs.*, fg.name AS fuel_group_name, fg.fuel_surcharge_pct AS fuel_group_pct,
+              COUNT(z.id)::int AS zone_count
        FROM courier_services cs
        LEFT JOIN zones z ON z.courier_service_id = cs.id
+       LEFT JOIN fuel_groups fg ON fg.id = cs.fuel_group_id
        WHERE cs.courier_id = $1
-       GROUP BY cs.id ORDER BY cs.sort_order NULLS LAST, cs.name`,
+       GROUP BY cs.id, fg.name, fg.fuel_surcharge_pct
+       ORDER BY cs.sort_order NULLS LAST, cs.name`,
       [req.params.id]
     );
 
@@ -212,7 +215,7 @@ router.put('/couriers/:id/services/reorder', async (req, res, next) => {
 // PATCH /api/carriers/services/:id
 router.patch('/services/:id', async (req, res, next) => {
   try {
-    const allowed = ['service_code', 'name', 'fuel_surcharge_pct'];
+    const allowed = ['service_code', 'name', 'fuel_surcharge_pct', 'service_type', 'fuel_group_id'];
     const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));
     if (!updates.length) return res.status(400).json({ error: 'No valid fields to update' });
     const setClauses = updates.map(([k], i) => `${k} = $${i + 2}`).join(', ');
@@ -230,6 +233,66 @@ router.delete('/services/:id', async (req, res, next) => {
   try {
     const result = await query('DELETE FROM courier_services WHERE id = $1 RETURNING id', [req.params.id]);
     if (!result.rows.length) return res.status(404).json({ error: 'Service not found' });
+    res.json({ deleted: true });
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FUEL GROUPS
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/carriers/couriers/:id/fuel-groups
+router.get('/couriers/:id/fuel-groups', async (req, res, next) => {
+  try {
+    const groups = await query(
+      `SELECT fg.*,
+         COALESCE(json_agg(
+           jsonb_build_object('id',cs.id,'name',cs.name,'service_code',cs.service_code,'service_type',cs.service_type)
+           ORDER BY cs.sort_order NULLS LAST, cs.name
+         ) FILTER (WHERE cs.id IS NOT NULL), '[]') AS services
+       FROM fuel_groups fg
+       LEFT JOIN courier_services cs ON cs.fuel_group_id = fg.id
+       WHERE fg.courier_id = $1
+       GROUP BY fg.id ORDER BY fg.name`,
+      [req.params.id]
+    );
+    res.json(groups.rows);
+  } catch (err) { next(err); }
+});
+
+// POST /api/carriers/couriers/:id/fuel-groups
+router.post('/couriers/:id/fuel-groups', async (req, res, next) => {
+  try {
+    const { name, fuel_surcharge_pct = 0 } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'name is required' });
+    const result = await query(
+      'INSERT INTO fuel_groups (courier_id, name, fuel_surcharge_pct) VALUES ($1,$2,$3) RETURNING *',
+      [req.params.id, name.trim(), fuel_surcharge_pct]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/carriers/fuel-groups/:id
+router.patch('/fuel-groups/:id', async (req, res, next) => {
+  try {
+    const allowed = ['name', 'fuel_surcharge_pct'];
+    const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));
+    if (!updates.length) return res.status(400).json({ error: 'No valid fields' });
+    const setClauses = updates.map(([k], i) => `${k} = $${i + 2}`).join(', ');
+    const result = await query(
+      `UPDATE fuel_groups SET ${setClauses}, updated_at = NOW() WHERE id = $1 RETURNING *`,
+      [req.params.id, ...updates.map(([, v]) => v)]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Fuel group not found' });
+    res.json(result.rows[0]);
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/carriers/fuel-groups/:id
+router.delete('/fuel-groups/:id', async (req, res, next) => {
+  try {
+    await query('DELETE FROM fuel_groups WHERE id = $1', [req.params.id]);
     res.json({ deleted: true });
   } catch (err) { next(err); }
 });
