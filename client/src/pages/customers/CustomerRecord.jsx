@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -24,6 +24,11 @@ export default function CustomerRecord() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  // Guard: "new" is a reserved path, not a customer ID
+  useEffect(() => {
+    if (id === 'new') navigate('/customers/new', { replace: true });
+  }, [id, navigate]);
   const [activeTab, setActiveTab] = useState('overview');
   const [onStopModal, setOnStopModal] = useState(null); // 'apply' | 'remove'
   const [onStopInput, setOnStopInput] = useState('');
