@@ -19,12 +19,13 @@ const STATUS = {
   booked:           { label: 'Booked',           color: '#00BCD4', bg: 'rgba(0,188,212,0.12)',    icon: Package },
   collected:        { label: 'Collected',         color: '#2196F3', bg: 'rgba(33,150,243,0.12)',   icon: Package },
   in_transit:       { label: 'In Transit',        color: '#7B2FBE', bg: 'rgba(123,47,190,0.12)',   icon: Truck },
+  at_depot:         { label: 'At Depot',          color: '#5C6BC0', bg: 'rgba(92,107,192,0.12)',   icon: Package },
   out_for_delivery: { label: 'Out for Delivery',  color: '#FFC107', bg: 'rgba(255,193,7,0.12)',    icon: Truck },
   delivered:        { label: 'Delivered',         color: '#00C853', bg: 'rgba(0,200,83,0.12)',     icon: PackageCheck },
-  failed_delivery:  { label: 'Failed Delivery',   color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
+  failed_delivery:  { label: 'Address Issue',     color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
   on_hold:          { label: 'On Hold',           color: '#FF9800', bg: 'rgba(255,152,0,0.12)',    icon: Clock },
   customs_hold:     { label: 'Customs Hold',      color: '#E91E8C', bg: 'rgba(233,30,140,0.12)',   icon: ShieldAlert },
-  exception:        { label: 'Exception',         color: '#E91E8C', bg: 'rgba(233,30,140,0.12)',   icon: AlertTriangle },
+  exception:        { label: 'Address Issue',     color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
   returned:         { label: 'Returned',          color: '#607D8B', bg: 'rgba(96,125,139,0.12)',   icon: RotateCcw },
   unknown:          { label: 'Unknown',           color: '#555555', bg: 'rgba(255,255,255,0.05)',  icon: Package },
 };
@@ -285,13 +286,13 @@ export default function TrackingPage() {
 
       {/* ── Stat cards ─────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 24 }}>
-        <StatCard label="In Transit"       value={(bs.in_transit||0)+(bs.collected||0)+(bs.booked||0)} color="#7B2FBE" icon={Truck}        active={statusFilter==='in_transit'}       onClick={() => toggleStatus('in_transit')} />
-        <StatCard label="Out for Delivery" value={bs.out_for_delivery}  color="#FFC107" icon={Truck}        active={statusFilter==='out_for_delivery'} onClick={() => toggleStatus('out_for_delivery')} />
-        <StatCard label="Failed"           value={bs.failed_delivery}   color="#F44336" icon={AlertTriangle} active={statusFilter==='failed_delivery'}  onClick={() => toggleStatus('failed_delivery')} />
-        <StatCard label="On Hold"          value={bs.on_hold}           color="#FF9800" icon={Clock}         active={statusFilter==='on_hold'}           onClick={() => toggleStatus('on_hold')} />
-        <StatCard label="Customs Hold"     value={bs.customs_hold}      color="#E91E8C" icon={ShieldAlert}   active={statusFilter==='customs_hold'}      onClick={() => toggleStatus('customs_hold')} />
-        <StatCard label="Exception"        value={bs.exception}         color="#E91E8C" icon={AlertTriangle} active={statusFilter==='exception'}         onClick={() => toggleStatus('exception')} />
-        <StatCard label="Delivered Today"  value={stats?.delivered_today} color="#00C853" icon={PackageCheck} active={statusFilter==='delivered'}        onClick={() => toggleStatus('delivered')} />
+        <StatCard label="In Transit"       value={bs.in_transit}          color="#7B2FBE" icon={Truck}         active={statusFilter==='in_transit'}            onClick={() => toggleStatus('in_transit')} />
+        <StatCard label="At Depot"         value={bs.at_depot}            color="#5C6BC0" icon={Package}       active={statusFilter==='at_depot'}             onClick={() => toggleStatus('at_depot')} />
+        <StatCard label="Out for Delivery" value={bs.out_for_delivery}    color="#FFC107" icon={Truck}         active={statusFilter==='out_for_delivery'}      onClick={() => toggleStatus('out_for_delivery')} />
+        <StatCard label="On Hold"          value={bs.on_hold}             color="#FF9800" icon={Clock}         active={statusFilter==='on_hold'}               onClick={() => toggleStatus('on_hold')} />
+        <StatCard label="Address Issue"    value={(bs.failed_delivery||0)+(bs.exception||0)} color="#F44336" icon={AlertTriangle} active={statusFilter==='failed_delivery,exception'} onClick={() => toggleStatus('failed_delivery,exception')} />
+        <StatCard label="Customs Hold"     value={bs.customs_hold}        color="#E91E8C" icon={ShieldAlert}   active={statusFilter==='customs_hold'}          onClick={() => toggleStatus('customs_hold')} />
+        <StatCard label="Delivered Today"  value={stats?.delivered_today} color="#00C853" icon={PackageCheck}  active={statusFilter==='delivered'}             onClick={() => toggleStatus('delivered')} />
       </div>
 
       {/* ── Filters row ─────────────────────────────────────────── */}
