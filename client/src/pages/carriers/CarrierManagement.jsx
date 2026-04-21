@@ -287,9 +287,9 @@ function CarrierCard({ carrier, onDrill, onRefresh }) {
 
 // ─── Fuel group card ──────────────────────────────────────────────────────────
 
-function FuelGroupCard({ group, carrierId, availableServices, onRefresh }) {
-  const [editing, setEditing]   = useState(false);
-  const [form, setForm]         = useState({ name: group.name, fuel_surcharge_pct: String(group.fuel_surcharge_pct) });
+function FuelGroupCard({ group, onRefresh }) {
+  const [editing, setEditing]       = useState(false);
+  const [form, setForm]             = useState({ name: group.name, fuel_surcharge_pct: String(group.fuel_surcharge_pct) });
   const [confirmDel, setConfirmDel] = useState(false);
 
   const updateGroup = useMutation({
@@ -300,21 +300,10 @@ function FuelGroupCard({ group, carrierId, availableServices, onRefresh }) {
     mutationFn: () => api.delete(`/carriers/fuel-groups/${group.id}`).then(r => r.data),
     onSuccess: onRefresh,
   });
-  const assignService = useMutation({
-    mutationFn: (serviceId) => api.patch(`/carriers/services/${serviceId}`, { fuel_group_id: group.id }).then(r => r.data),
-    onSuccess: onRefresh,
-  });
-  const removeService = useMutation({
-    mutationFn: (serviceId) => api.patch(`/carriers/services/${serviceId}`, { fuel_group_id: null }).then(r => r.data),
-    onSuccess: onRefresh,
-  });
-
-  const groupServices = group.services || [];
 
   return (
     <div style={{ border:'1px solid rgba(255,193,7,0.2)', borderRadius:10, overflow:'hidden', background:'rgba(255,193,7,0.03)' }}>
-      {/* Header */}
-      <div style={{ padding:'12px 16px', borderBottom:'1px solid rgba(255,193,7,0.12)', display:'flex', alignItems:'center', gap:10 }}>
+      <div style={{ padding:'12px 16px', display:'flex', alignItems:'center', gap:10 }}>
         <Zap size={14} color="#FFC107"/>
         {editing ? (
           <div style={{ display:'flex', gap:8, flex:1, alignItems:'center' }}>
@@ -325,7 +314,7 @@ function FuelGroupCard({ group, carrierId, availableServices, onRefresh }) {
               <input type="number" step="0.01" value={form.fuel_surcharge_pct} onChange={e => setForm(f=>({...f,fuel_surcharge_pct:e.target.value}))} placeholder="0.00" style={{ fontSize:12 }}/>
               <div className="green-cap" style={{ fontSize:11 }}>%</div>
             </div>
-            <button onClick={() => updateGroup.mutate()} className="btn-primary" style={{ height:30, padding:'0 12px', fontSize:12 }}><Check size={11}/></button>
+            <button onClick={() => updateGroup.mutate()} disabled={updateGroup.isPending} className="btn-primary" style={{ height:30, padding:'0 12px', fontSize:12 }}><Check size={11}/></button>
             <button onClick={() => setEditing(false)} className="btn-ghost" style={{ height:30, padding:'0 8px', fontSize:12 }}>✕</button>
           </div>
         ) : (
@@ -344,46 +333,10 @@ function FuelGroupCard({ group, carrierId, availableServices, onRefresh }) {
 
       {confirmDel && (
         <div style={{ padding:'8px 14px' }}>
-          <Confirm message={`Delete "${group.name}"? Services will lose this fuel group.`}
+          <Confirm message={`Delete "${group.name}"? Services using it will be unaffected until reassigned.`}
             onConfirm={() => deleteGroup.mutate()} onCancel={() => setConfirmDel(false)}/>
         </div>
       )}
-
-      {/* Services in this group */}
-      <div style={{ padding:'10px 16px' }}>
-        <div style={{ fontSize:11, fontWeight:700, color:'#AAAAAA', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>
-          Services ({groupServices.length})
-        </div>
-
-        {groupServices.length === 0 ? (
-          <p style={{ fontSize:12, color:'#444', fontStyle:'italic', margin:'0 0 8px' }}>No services yet — assign from below</p>
-        ) : (
-          <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:10 }}>
-            {groupServices.map(svc => (
-              <span key={svc.id} style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'3px 10px', borderRadius:9999, fontSize:12, fontWeight:600, background:'rgba(255,193,7,0.08)', color:'#FFC107', border:'1px solid rgba(255,193,7,0.2)' }}>
-                {svc.name}
-                <button onClick={() => removeService.mutate(svc.id)} style={{ background:'none', border:'none', color:'#FFC107', cursor:'pointer', padding:0 }}><X size={9}/></button>
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* Assign a service */}
-        {availableServices.length > 0 && (
-          <div className="pill-input-wrap" style={{ height:30 }}>
-            <select
-              defaultValue=""
-              onChange={e => { if (e.target.value) { assignService.mutate(parseInt(e.target.value)); e.target.value = ''; } }}
-              style={{ fontSize:12, paddingLeft:10 }}>
-              <option value="">+ Assign a service…</option>
-              {availableServices.map(s => (
-                <option key={s.id} value={s.id}>{s.name} ({s.service_code})</option>
-              ))}
-            </select>
-            <div className="green-cap">▾</div>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
@@ -589,14 +542,34 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                       </span>
                     </td>
 
-                    {/* Fuel group badge (read-only — managed from Fuel Groups section) */}
-                    <td onClick={e => e.stopPropagation()}>
-                      {svc.fuel_group_name
-                        ? <span style={{ ...pill('rgba(255,193,7,0.1)','#FFC107'), display:'inline-flex', alignItems:'center', gap:4 }}>
-                            <Zap size={9}/>{svc.fuel_group_name} ({parseFloat(svc.fuel_group_pct||0).toFixed(1)}%)
-                          </span>
-                        : <span style={{ color:'#444', fontSize:12 }}>—</span>
-                      }
+                    {/* Fuel group — inline dropdown */}
+                    <td onClick={e => e.stopPropagation()} style={{ minWidth: 160 }}>
+                      <select
+                        value={svc.fuel_group_id ?? ''}
+                        onChange={e => updateServiceField.mutate({
+                          id: svc.id,
+                          fuel_group_id: e.target.value ? parseInt(e.target.value) : null,
+                        })}
+                        style={{
+                          background: '#0D0E2A',
+                          border: '1px solid rgba(255,193,7,0.25)',
+                          borderRadius: 6,
+                          color: svc.fuel_group_id ? '#FFC107' : '#555',
+                          fontSize: 12,
+                          fontWeight: svc.fuel_group_id ? 700 : 400,
+                          padding: '3px 8px',
+                          cursor: 'pointer',
+                          outline: 'none',
+                          width: '100%',
+                        }}
+                      >
+                        <option value="">— None —</option>
+                        {fuelGroups.map(fg => (
+                          <option key={fg.id} value={fg.id}>
+                            {fg.name} ({parseFloat(fg.fuel_surcharge_pct).toFixed(1)}%)
+                          </option>
+                        ))}
+                      </select>
                     </td>
 
                     <td style={{ color:'#AAAAAA' }}>{svc.zone_count} zone{svc.zone_count!==1?'s':''}</td>
@@ -677,19 +650,13 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
           </div>
         ) : (
           <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-            {fuelGroups.map(group => {
-              const assignedIds = new Set((group.services || []).map(s => s.id));
-              const availableServices = (carrier.services || []).filter(s => !assignedIds.has(s.id));
-              return (
-                <FuelGroupCard
-                  key={group.id}
-                  group={group}
-                  carrierId={carrierId}
-                  availableServices={availableServices}
-                  onRefresh={refetchAll}
-                />
-              );
-            })}
+            {fuelGroups.map(group => (
+              <FuelGroupCard
+                key={group.id}
+                group={group}
+                onRefresh={refetchAll}
+              />
+            ))}
           </div>
         )}
       </div>
