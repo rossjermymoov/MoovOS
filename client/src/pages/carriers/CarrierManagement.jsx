@@ -47,10 +47,9 @@ function Confirm({ message, onConfirm, onCancel }) {
 
 // ─── Contact row ─────────────────────────────────────────────────────────────
 
-function ContactRow({ contact, onDelete, onUpdate }) {
+function ContactRow({ contact, onDelete, onUpdate, onMakePrimary }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ ...contact });
-  const qc = useQueryClient();
 
   const save = useMutation({
     mutationFn: () => api.patch(`/carriers/couriers/contacts/${contact.id}`, form).then(r => r.data),
@@ -72,7 +71,7 @@ function ContactRow({ contact, onDelete, onUpdate }) {
           ))}
         </div>
         <div style={{ display:'flex', gap:8 }}>
-          <button onClick={() => save.mutate()} className="btn-primary" style={{ height:28, padding:'0 12px', fontSize:12 }}><Check size={11}/> Save</button>
+          <button onClick={() => save.mutate()} disabled={save.isPending} className="btn-primary" style={{ height:28, padding:'0 12px', fontSize:12 }}><Check size={11}/> Save</button>
           <button onClick={() => setEditing(false)} className="btn-ghost" style={{ height:28, padding:'0 10px', fontSize:12 }}>Cancel</button>
         </div>
       </div>
@@ -89,6 +88,15 @@ function ContactRow({ contact, onDelete, onUpdate }) {
       </div>
       {contact.phone && <a href={`tel:${contact.phone}`} style={{ fontSize:12, color:'#00BCD4', display:'flex', alignItems:'center', gap:4, textDecoration:'none' }}><Phone size={11}/>{contact.phone}</a>}
       {contact.email && <a href={`mailto:${contact.email}`} style={{ fontSize:12, color:'#00C853', display:'flex', alignItems:'center', gap:4, textDecoration:'none' }}><Mail size={11}/>{contact.email}</a>}
+      {onMakePrimary && (
+        <button
+          onClick={() => onMakePrimary(contact)}
+          title="Make primary contact"
+          style={{ background:'none', border:'1px solid rgba(255,193,7,0.3)', borderRadius:5, color:'#FFC107', cursor:'pointer', fontSize:11, fontWeight:700, padding:'2px 8px' }}
+        >
+          ★ Primary
+        </button>
+      )}
       <button onClick={() => setEditing(true)} style={{ background:'none', border:'none', color:'#AAAAAA', cursor:'pointer' }}><Edit2 size={12}/></button>
       <button onClick={() => del.mutate()} style={{ background:'none', border:'none', color:'#555', cursor:'pointer' }}><Trash2 size={12}/></button>
     </div>
@@ -121,6 +129,15 @@ function CarrierCard({ carrier, onDrill, onRefresh }) {
   const addContact = useMutation({
     mutationFn: () => api.post(`/carriers/couriers/${carrier.id}/contacts`, newContact).then(r => r.data),
     onSuccess: () => { setAddingContact(false); setNewContact({ name:'', phone:'', email:'', department:'', role:'' }); onRefresh(); },
+  });
+
+  const makePrimary = useMutation({
+    mutationFn: (contact) => api.patch(`/carriers/couriers/${carrier.id}`, {
+      primary_contact_name:  contact.name  || '',
+      primary_contact_phone: contact.phone || '',
+      primary_contact_email: contact.email || '',
+    }).then(r => r.data),
+    onSuccess: onRefresh,
   });
 
   const delCarrier = useMutation({
@@ -243,7 +260,7 @@ function CarrierCard({ carrier, onDrill, onRefresh }) {
             </button>
           </div>
           {additional.map(c => (
-            <ContactRow key={c.id} contact={c} onDelete={onRefresh} onUpdate={onRefresh} />
+            <ContactRow key={c.id} contact={c} onDelete={onRefresh} onUpdate={onRefresh} onMakePrimary={c => makePrimary.mutate(c)} />
           ))}
         </div>
       )}
@@ -259,7 +276,7 @@ function CarrierCard({ carrier, onDrill, onRefresh }) {
             ))}
           </div>
           <div style={{ display:'flex', gap:8 }}>
-            <button onClick={() => addContact.mutate()} className="btn-primary" style={{ height:28, padding:'0 12px', fontSize:12 }}><Check size={11}/> Add</button>
+            <button onClick={() => addContact.mutate()} disabled={addContact.isPending || !newContact.name.trim()} className="btn-primary" style={{ height:28, padding:'0 12px', fontSize:12 }}><Check size={11}/> {addContact.isPending ? 'Saving…' : 'Add'}</button>
             <button onClick={() => setAddingContact(false)} className="btn-ghost" style={{ height:28, padding:'0 10px', fontSize:12 }}>Cancel</button>
           </div>
         </div>
@@ -504,7 +521,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
         </div>
       )}
 
-      <div className="moov-card" style={{ overflow:'hidden' }}>
+      <div className="moov-card" style={{ overflow:'hidden', marginBottom: 32 }}>
         {(!carrier.services || carrier.services.length === 0) ? (
           <div style={{ padding:40, textAlign:'center', color:'#555', fontSize:13 }}>No services yet — add one above</div>
         ) : (
@@ -596,6 +613,84 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
               })}
             </tbody>
           </table>
+        )}
+      </div>
+
+      {/* ── Fuel Groups ────────────────────────────────────────── */}
+      <div>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+          <h2 style={{ fontSize:17, fontWeight:700, color:'#FFC107', margin:0, display:'flex', alignItems:'center', gap:8 }}>
+            <Zap size={16}/> Fuel Groups
+          </h2>
+          <button
+            onClick={() => setAddingGroup(a => !a)}
+            style={{ display:'inline-flex', alignItems:'center', gap:6, height:34, padding:'0 16px', background:'rgba(255,193,7,0.12)', border:'1px solid rgba(255,193,7,0.35)', borderRadius:8, color:'#FFC107', fontSize:13, fontWeight:700, cursor:'pointer' }}
+          >
+            <Plus size={13}/> Add Fuel Group
+          </button>
+        </div>
+
+        {addingGroup && (
+          <div className="moov-card" style={{ padding:18, marginBottom:16, border:'1px solid rgba(255,193,7,0.3)', background:'rgba(255,193,7,0.03)' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr auto auto', gap:10, alignItems:'flex-end' }}>
+              <div>
+                <label style={{ fontSize:11, color:'#AAAAAA', display:'block', marginBottom:4 }}>Group Name</label>
+                <div className="pill-input-wrap" style={{ height:34 }}>
+                  <input
+                    value={groupForm.name}
+                    onChange={e => setGroupForm(f => ({ ...f, name: e.target.value }))}
+                    placeholder="e.g. International Express"
+                    autoFocus
+                    style={{ fontSize:13 }}
+                  />
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize:11, color:'#AAAAAA', display:'block', marginBottom:4 }}>Fuel Surcharge %</label>
+                <div className="pill-input-wrap" style={{ height:34 }}>
+                  <input
+                    type="number" step="0.01" min="0"
+                    value={groupForm.fuel_surcharge_pct}
+                    onChange={e => setGroupForm(f => ({ ...f, fuel_surcharge_pct: e.target.value }))}
+                    placeholder="0.00"
+                    style={{ fontSize:13 }}
+                  />
+                  <div className="green-cap" style={{ fontSize:11, color:'#FFC107', background:'rgba(255,193,7,0.15)' }}>%</div>
+                </div>
+              </div>
+              <button
+                onClick={() => createGroup.mutate()}
+                disabled={createGroup.isPending || !groupForm.name.trim()}
+                className="btn-primary"
+                style={{ height:34, background:'rgba(255,193,7,0.2)', border:'1px solid rgba(255,193,7,0.4)', color:'#FFC107' }}
+              >
+                <Check size={13}/>
+              </button>
+              <button onClick={() => setAddingGroup(false)} className="btn-ghost" style={{ height:34, padding:'0 10px' }}>✕</button>
+            </div>
+          </div>
+        )}
+
+        {fuelGroups.length === 0 && !addingGroup ? (
+          <div className="moov-card" style={{ padding:32, textAlign:'center', color:'#555', fontSize:13, fontStyle:'italic' }}>
+            No fuel groups yet — click Add Fuel Group to create one
+          </div>
+        ) : (
+          <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+            {fuelGroups.map(group => {
+              const assignedIds = new Set((group.services || []).map(s => s.id));
+              const availableServices = (carrier.services || []).filter(s => !assignedIds.has(s.id));
+              return (
+                <FuelGroupCard
+                  key={group.id}
+                  group={group}
+                  carrierId={carrierId}
+                  availableServices={availableServices}
+                  onRefresh={refetchAll}
+                />
+              );
+            })}
+          </div>
         )}
       </div>
     </div>
