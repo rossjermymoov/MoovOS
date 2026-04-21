@@ -10,8 +10,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, ChevronRight, Trash2, X, Check, Phone, Mail,
-  User, Building2, Edit2, Zap, AlertTriangle, ArrowLeft,
-  ChevronUp, ChevronDown,
+  User, Building2, Edit2, Zap, AlertTriangle, ArrowLeft, GripVertical,
 } from 'lucide-react';
 import { carriersApi } from '../../api/carriers';
 import axios from 'axios';
@@ -290,19 +289,34 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
     onSuccess: refetch,
   });
 
+  const [dragIdx, setDragIdx] = useState(null);
+  const [overIdx, setOverIdx] = useState(null);
+
   const reorder = useMutation({
     mutationFn: (ids) => api.put(`/carriers/couriers/${carrierId}/services/reorder`, { service_ids: ids }).then(r => r.data),
     onSuccess: refetch,
   });
 
-  const moveService = (idx, dir) => {
-    if (!carrier?.services) return;
-    const ids = carrier.services.map(s => s.id);
-    const swapIdx = idx + dir;
-    if (swapIdx < 0 || swapIdx >= ids.length) return;
-    [ids[idx], ids[swapIdx]] = [ids[swapIdx], ids[idx]];
-    reorder.mutate(ids);
+  const onDragStart = (e, idx) => {
+    setDragIdx(idx);
+    e.dataTransfer.effectAllowed = 'move';
   };
+  const onDragOver = (e, idx) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (idx !== overIdx) setOverIdx(idx);
+  };
+  const onDrop = (e, idx) => {
+    e.preventDefault();
+    if (dragIdx === null || dragIdx === idx) { setDragIdx(null); setOverIdx(null); return; }
+    const ids = carrier.services.map(s => s.id);
+    const [moved] = ids.splice(dragIdx, 1);
+    ids.splice(idx, 0, moved);
+    reorder.mutate(ids);
+    setDragIdx(null);
+    setOverIdx(null);
+  };
+  const onDragEnd = () => { setDragIdx(null); setOverIdx(null); };
 
   if (isLoading) return <div style={{ padding:40, textAlign:'center', color:'#AAAAAA' }}>Loading…</div>;
   if (!carrier) return null;
@@ -372,7 +386,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
           <table className="moov-table">
             <thead>
               <tr>
-                <th style={{ width:64 }}>Order</th>
+                <th style={{ width:32 }}></th>
                 <th>Service</th>
                 <th>Code</th>
                 <th>Zones</th>
@@ -382,32 +396,29 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
             </thead>
             <tbody>
               {carrier.services.map((svc, idx) => (
-                <tr key={svc.id} onClick={() => onDrillService(svc.id)} style={{ cursor:'pointer' }}
-                  onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,0.03)'}
-                  onMouseLeave={e => e.currentTarget.style.background='none'}>
-
-                  {/* ── Order controls ── */}
-                  <td onClick={e => e.stopPropagation()} style={{ padding:'6px 8px' }}>
-                    <div style={{ display:'flex', flexDirection:'column', gap:1, alignItems:'center' }}>
-                      <button
-                        onClick={() => moveService(idx, -1)}
-                        disabled={idx === 0}
-                        style={{
-                          background:'none', border:'none', cursor: idx===0 ? 'default':'pointer',
-                          color: idx===0 ? '#2A2A3A':'#7B2FBE', padding:'1px 4px', lineHeight:1,
-                        }}>
-                        <ChevronUp size={13}/>
-                      </button>
-                      <button
-                        onClick={() => moveService(idx, 1)}
-                        disabled={idx === carrier.services.length - 1}
-                        style={{
-                          background:'none', border:'none', cursor: idx===carrier.services.length-1 ? 'default':'pointer',
-                          color: idx===carrier.services.length-1 ? '#2A2A3A':'#7B2FBE', padding:'1px 4px', lineHeight:1,
-                        }}>
-                        <ChevronDown size={13}/>
-                      </button>
-                    </div>
+                <tr
+                  key={svc.id}
+                  draggable
+                  onDragStart={e => onDragStart(e, idx)}
+                  onDragOver={e => onDragOver(e, idx)}
+                  onDrop={e => onDrop(e, idx)}
+                  onDragEnd={onDragEnd}
+                  onClick={() => onDrillService(svc.id)}
+                  style={{
+                    cursor: dragIdx === idx ? 'grabbing' : 'pointer',
+                    opacity: dragIdx === idx ? 0.4 : 1,
+                    borderTop: overIdx === idx && dragIdx !== idx
+                      ? '2px solid #7B2FBE' : '2px solid transparent',
+                    transition: 'opacity 0.1s, border-color 0.1s',
+                  }}
+                  onMouseEnter={e => { if (dragIdx === null) e.currentTarget.style.background='rgba(255,255,255,0.03)'; }}
+                  onMouseLeave={e => e.currentTarget.style.background='none'}
+                >
+                  {/* Drag handle */}
+                  <td style={{ padding:'8px 10px', color:'#333', cursor:'grab' }}
+                    onMouseDown={e => e.currentTarget.style.cursor='grabbing'}
+                    onMouseUp={e => e.currentTarget.style.cursor='grab'}>
+                    <GripVertical size={14}/>
                   </td>
 
                   <td style={{ fontWeight:600 }}>{svc.name}</td>
