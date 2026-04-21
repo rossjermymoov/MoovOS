@@ -1,0 +1,157 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-primary:   #0A0B1E;
+  --bg-secondary: #14162A;
+  --bg-surface:   #1A1D35;
+  --accent-green:   #00C853;
+  --accent-purple:  #7B2FBE;
+  --accent-magenta: #E91E8C;
+  --accent-amber:   #FFC107;
+  --accent-teal:    #00BCD4;
+  --text-primary:   #FFFFFF;
+  --text-secondary: #AAAAAA;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-secondary); }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+
+/* Green glow on focus */
+.focus-green:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-green);
+}
+
+/* Pill input — the distinctive "green cap" pattern */
+.pill-input-wrap {
+  display: flex;
+  align-items: center;
+  background: #1E2040;
+  border-radius: 9999px;
+  border: 1px solid rgba(255,255,255,0.1);
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+.pill-input-wrap:focus-within { border-color: var(--accent-green); }
+.pill-input-wrap input, .pill-input-wrap select {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  padding: 10px 16px;
+  font-size: 14px;
+}
+.pill-input-wrap .green-cap {
+  background: var(--accent-green);
+  color: #000;
+  padding: 0 14px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  min-height: 44px;
+}
+
+/* Status badge */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+/* Card */
+.moov-card {
+  background: var(--bg-secondary);
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+
+/* Table */
+.moov-table { width: 100%; border-collapse: collapse; }
+.moov-table thead tr {
+  background: var(--bg-primary);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.moov-table thead th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.moov-table tbody tr {
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  transition: background 0.1s;
+}
+.moov-table tbody tr:hover { background: rgba(255,255,255,0.03); cursor: pointer; }
+.moov-table tbody td { padding: 14px 16px; font-size: 13px; }
+
+/* Button variants */
+.btn-primary {
+  background: var(--accent-green);
+  color: #000;
+  font-weight: 700;
+  border-radius: 9999px;
+  padding: 10px 24px;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: opacity 0.15s;
+  min-height: 44px;
+}
+.btn-primary:hover { opacity: 0.88; }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-primary);
+  font-weight: 700;
+  border-radius: 9999px;
+  padding: 9px 24px;
+  font-size: 14px;
+  border: 1.5px solid rgba(255,255,255,0.2);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: border-color 0.15s;
+  min-height: 44px;
+}
+.btn-ghost:hover { border-color: var(--accent-green); }
+
+.btn-danger {
+  background: var(--accent-magenta);
+  color: #fff;
+  font-weight: 700;
+  border-radius: 9999px;
+  padding: 10px 24px;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+  min-height: 44px;
+}

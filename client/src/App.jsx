@@ -1,0 +1,34 @@
+import { Routes, Route, Navigate } from 'react-router-dom';
+import AppShell from './components/layout/AppShell';
+import CustomerList from './pages/customers/CustomerList';
+import CustomerRecord from './pages/customers/CustomerRecord';
+
+// Placeholder pages for other sections (to be built)
+const Placeholder = ({ name }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 300, color: '#AAAAAA' }}>
+    <div style={{ fontSize: 40, marginBottom: 12 }}>🚧</div>
+    <div style={{ fontSize: 18, fontWeight: 700, color: '#fff', marginBottom: 6 }}>{name}</div>
+    <div style={{ fontSize: 13 }}>This section is coming soon</div>
+  </div>
+);
+
+export default function App() {
+  return (
+    <Routes>
+      <Route element={<AppShell />}>
+        <Route path="/"             element={<Placeholder name="Dashboard" />} />
+        <Route path="/customers"    element={<CustomerList />} />
+        <Route path="/customers/:id" element={<CustomerRecord />} />
+        <Route path="/pricing"      element={<Placeholder name="Pricing & Rate Cards" />} />
+        <Route path="/tracking"     element={<Placeholder name="Tracking & Parcel Data" />} />
+        <Route path="/finance"      element={<Placeholder name="Finance & Billing" />} />
+        <Route path="/queries"      element={<Placeholder name="Queries & Claims" />} />
+        <Route path="/carriers"     element={<Placeholder name="Carrier Management" />} />
+        <Route path="/reports"      element={<Placeholder name="Dashboards & Reporting" />} />
+        <Route path="/knowledge"    element={<Placeholder name="Knowledge Base & AI" />} />
+        <Route path="/settings"     element={<Placeholder name="Settings" />} />
+        <Route path="*"             element={<Navigate to="/" replace />} />
+      </Route>
+    </Routes>
+  );
+}

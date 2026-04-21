@@ -1,0 +1,464 @@
+/**
+ * Moov OS — Customer Management API
+ * Covers: Section 1.1 – 1.11 of the Parcel Reseller OS Specification
+ */
+
+import express from 'express';
+import { query } from '../db/index.js';
+
+const router = express.Router();
+
+// ─── Helpers ────────────────────────────────────────────────
+
+const ALLOWED_SORT_COLS = ['business_name', 'account_number', 'tier', 'account_status',
+  'health_score', 'date_onboarded', 'outstanding_balance', 'credit_limit'];
+
+function buildCustomerListQuery(filters = {}) {
+  const {
+    search, status, tier, health_score, account_manager_id,
+    is_on_stop, sort = 'business_name', order = 'asc', limit = 50, offset = 0
+  } = filters;
+
+  const col = ALLOWED_SORT_COLS.includes(sort) ? sort : 'business_name';
+  const dir = order === 'desc' ? 'DESC' : 'ASC';
+
+  let conditions = [];
+  let values = [];
+  let idx = 1;
+
+  if (search) {
+    conditions.push(`(
+      c.business_name ILIKE $${idx} OR
+      c.account_number ILIKE $${idx} OR
+      c.primary_email ILIKE $${idx}
+    )`);
+    values.push(`%${search}%`);
+    idx++;
+  }
+  if (status)             { conditions.push(`c.account_status = $${idx++}`); values.push(status); }
+  if (tier)               { conditions.push(`c.tier = $${idx++}`); values.push(tier); }
+  if (health_score)       { conditions.push(`c.health_score = $${idx++}`); values.push(health_score); }
+  if (account_manager_id) { conditions.push(`c.account_manager_id = $${idx++}`); values.push(account_manager_id); }
+  if (is_on_stop !== undefined) {
+    conditions.push(`c.is_on_stop = $${idx++}`);
+    values.push(is_on_stop === 'true');
+  }
+
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const sql = `
+    SELECT
+      c.id, c.account_number, c.business_name, c.primary_email, c.phone_number,
+      c.tier, c.account_status, c.health_score, c.is_on_stop,
+      c.outstanding_balance, c.credit_limit, c.date_onboarded,
+      am.full_name AS account_manager_name,
+      sp.full_name AS salesperson_name,
+      (SELECT COUNT(*) FROM customer_communications cc WHERE cc.customer_id = c.id)::int AS comm_count,
+      (c.outstanding_balance / NULLIF(c.credit_limit, 0) * 100)::numeric(5,1) AS credit_utilisation_pct
+    FROM customers c
+    LEFT JOIN staff am ON am.id = c.account_manager_id
+    LEFT JOIN staff sp ON sp.id = c.salesperson_id
+    ${where}
+    ORDER BY c.${col} ${dir}
+    LIMIT $${idx++} OFFSET $${idx++}
+  `;
+
+  const countSql = `SELECT COUNT(*) FROM customers c ${where}`;
+
+  return { sql, countSql, values, limitOffset: [limit, offset] };
+}
+
+// ─────────────────────────────────────────────────────────────
+// GET /api/customers  — paginated list with filters
+// ─────────────────────────────────────────────────────────────
+router.get('/', async (req, res, next) => {
+  try {
+    const { sql, countSql, values, limitOffset } = buildCustomerListQuery(req.query);
+    const [rows, countResult] = await Promise.all([
+      query(sql, [...values, ...limitOffset]),
+      query(countSql, values),
+    ]);
+    res.json({
+      data: rows.rows,
+      total: parseInt(countResult.rows[0].count, 10),
+      limit: parseInt(req.query.limit || 50),
+      offset: parseInt(req.query.offset || 0),
+    });
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────
+// GET /api/customers/:id  — full customer record
+// ─────────────────────────────────────────────────────────────
+router.get('/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const [customerRes, contactsRes, commSummaryRes, volumeRes, alertRes] = await Promise.all([
+      query(`
+        SELECT
+          c.*,
+          am.full_name AS account_manager_name,
+          sp.full_name AS salesperson_name,
+          ob.full_name AS onboarding_person_name,
+          (c.outstanding_balance / NULLIF(c.credit_limit, 0) * 100)::numeric(5,1) AS credit_utilisation_pct
+        FROM customers c
+        LEFT JOIN staff am ON am.id = c.account_manager_id
+        LEFT JOIN staff sp ON sp.id = c.salesperson_id
+        LEFT JOIN staff ob ON ob.id = c.onboarding_person_id
+        WHERE c.id = $1
+      `, [id]),
+
+      query(`
+        SELECT * FROM customer_contacts WHERE customer_id = $1 ORDER BY is_main_contact DESC, full_name
+      `, [id]),
+
+      query(`
+        SELECT * FROM customer_comm_summaries WHERE customer_id = $1
+      `, [id]),
+
+      // Last 90 days of volume snapshots for trend calculation
+      query(`
+        SELECT snapshot_date, parcel_count, revenue
+        FROM customer_volume_snapshots
+        WHERE customer_id = $1 AND snapshot_date >= NOW() - INTERVAL '90 days'
+        ORDER BY snapshot_date DESC
+      `, [id]),
+
+      // Active volume drop alerts
+      query(`
+        SELECT * FROM customer_volume_alerts
+        WHERE customer_id = $1 AND is_dismissed = false
+        ORDER BY created_at DESC LIMIT 1
+      `, [id]),
+    ]);
+
+    if (!customerRes.rows.length) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    res.json({
+      customer: customerRes.rows[0],
+      contacts: contactsRes.rows,
+      comm_summary: commSummaryRes.rows[0] || null,
+      volume_snapshots: volumeRes.rows,
+      active_volume_alert: alertRes.rows[0] || null,
+    });
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────
+// POST /api/customers  — create customer
+// ─────────────────────────────────────────────────────────────
+router.post('/', async (req, res, next) => {
+  try {
+    const {
+      business_name, registered_address, postcode, phone_number, primary_email,
+      company_reg_number, tier, payment_terms_days = 7, credit_limit = 0,
+      salesperson_id, account_manager_id, onboarding_person_id,
+    } = req.body;
+
+    if (!business_name || !registered_address || !postcode || !phone_number || !primary_email) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const result = await query(`
+      INSERT INTO customers (
+        business_name, registered_address, postcode, phone_number, primary_email,
+        company_reg_number, tier, payment_terms_days, credit_limit,
+        salesperson_id, account_manager_id, onboarding_person_id
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      RETURNING *
+    `, [
+      business_name, registered_address, postcode, phone_number, primary_email,
+      company_reg_number || null, tier || 'bronze', payment_terms_days, credit_limit,
+      salesperson_id || null, account_manager_id || null, onboarding_person_id || null,
+    ]);
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────
+// PATCH /api/customers/:id  — update customer
+// ─────────────────────────────────────────────────────────────
+router.patch('/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const allowed = [
+      'business_name', 'registered_address', 'postcode', 'phone_number', 'primary_email',
+      'company_reg_number', 'tier', 'account_status', 'payment_terms_days', 'credit_limit',
+      'salesperson_id', 'account_manager_id', 'onboarding_person_id',
+    ];
+    const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));
+    if (!updates.length) return res.status(400).json({ error: 'No valid fields to update' });
+
+    const setClauses = updates.map(([k], i) => `${k} = $${i + 2}`).join(', ');
+    const values = [id, ...updates.map(([, v]) => v)];
+
+    const result = await query(
+      `UPDATE customers SET ${setClauses}, updated_at = NOW() WHERE id = $1 RETURNING *`,
+      values
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Customer not found' });
+    res.json(result.rows[0]);
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────
+// POST /api/customers/:id/on-stop  — apply On Stop (Section 1.11)
+// ─────────────────────────────────────────────────────────────
+router.post('/:id/on-stop', async (req, res, next) => {
+  const client = await (await import('../db/index.js')).getClient();
+  try {
+    const { id } = req.params;
+    const { reason, staff_id } = req.body;
+
+    if (!reason || !staff_id) {
+      return res.status(400).json({ error: 'reason and staff_id are required' });
+    }
+
+    await client.query('BEGIN');
+
+    // Update customer
+    const updated = await client.query(`
+      UPDATE customers
+      SET is_on_stop = true, account_status = 'on_stop',
+          on_stop_reason = $2, on_stop_applied_at = NOW(), on_stop_applied_by = $3,
+          updated_at = NOW()
+      WHERE id = $1 AND is_on_stop = false
+      RETURNING *
+    `, [id, reason, staff_id]);
+
+    if (!updated.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Customer is already on stop or not found' });
+    }
+
+    // Audit log
+    await client.query(`
+      INSERT INTO customer_on_stop_log (customer_id, action, reason, actioned_by)
+      VALUES ($1, 'applied', $2, $3)
+    `, [id, reason, staff_id]);
+
+    await client.query('COMMIT');
+
+    // TODO: trigger MoveNinja API call to block shipment access
+    // moveninja.blockCustomer(updated.rows[0].account_number)
+
+    res.json({ success: true, customer: updated.rows[0] });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// DELETE /api/customers/:id/on-stop  — remove On Stop
+// Restricted: only Director, Manager, Finance Manager, CS Manager
+// ─────────────────────────────────────────────────────────────
+router.delete('/:id/on-stop', async (req, res, next) => {
+  const client = await (await import('../db/index.js')).getClient();
+  try {
+    const { id } = req.params;
+    const { note, staff_id } = req.body;
+
+    if (!note || !staff_id) {
+      return res.status(400).json({ error: 'note and staff_id are required' });
+    }
+
+    // Check staff role — only elevated roles can remove On Stop
+    const staffRes = await client.query('SELECT role FROM staff WHERE id = $1', [staff_id]);
+    if (!staffRes.rows.length) return res.status(400).json({ error: 'Invalid staff_id' });
+
+    const allowedRoles = ['director', 'manager', 'finance', 'cs_manager'];
+    if (!allowedRoles.includes(staffRes.rows[0].role)) {
+      return res.status(403).json({ error: 'Insufficient permissions to remove On Stop' });
+    }
+
+    await client.query('BEGIN');
+
+    const updated = await client.query(`
+      UPDATE customers
+      SET is_on_stop = false, account_status = 'active',
+          on_stop_reason = NULL, on_stop_applied_at = NULL, on_stop_applied_by = NULL,
+          updated_at = NOW()
+      WHERE id = $1 AND is_on_stop = true
+      RETURNING *
+    `, [id]);
+
+    if (!updated.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Customer is not on stop or not found' });
+    }
+
+    await client.query(`
+      INSERT INTO customer_on_stop_log (customer_id, action, reason, actioned_by)
+      VALUES ($1, 'removed', $2, $3)
+    `, [id, note, staff_id]);
+
+    await client.query('COMMIT');
+    res.json({ success: true, customer: updated.rows[0] });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// GET /api/customers/:id/on-stop/log
+// ─────────────────────────────────────────────────────────────
+router.get('/:id/on-stop/log', async (req, res, next) => {
+  try {
+    const result = await query(`
+      SELECT l.*, s.full_name AS actioned_by_name
+      FROM customer_on_stop_log l
+      JOIN staff s ON s.id = l.actioned_by
+      WHERE l.customer_id = $1
+      ORDER BY l.actioned_at DESC
+    `, [req.params.id]);
+    res.json(result.rows);
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────
+// GET /api/customers/:id/contacts
+// ─────────────────────────────────────────────────────────────
+router.get('/:id/contacts', async (req, res, next) => {
+  try {
+    const result = await query(
+      'SELECT * FROM customer_contacts WHERE customer_id = $1 ORDER BY is_main_contact DESC, full_name',
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────
+// POST /api/customers/:id/contacts
+// ─────────────────────────────────────────────────────────────
+router.post('/:id/contacts', async (req, res, next) => {
+  const client = await (await import('../db/index.js')).getClient();
+  try {
+    const { id } = req.params;
+    const { full_name, job_title, phone_number, email_address, is_main_contact, is_finance_contact } = req.body;
+
+    if (!full_name || !email_address) {
+      return res.status(400).json({ error: 'full_name and email_address are required' });
+    }
+
+    await client.query('BEGIN');
+
+    // Clear existing flags if this contact will hold them (spec: only one per customer)
+    if (is_main_contact) {
+      await client.query(
+        'UPDATE customer_contacts SET is_main_contact = false WHERE customer_id = $1',
+        [id]
+      );
+    }
+    if (is_finance_contact) {
+      await client.query(
+        'UPDATE customer_contacts SET is_finance_contact = false WHERE customer_id = $1',
+        [id]
+      );
+    }
+
+    const result = await client.query(`
+      INSERT INTO customer_contacts
+        (customer_id, full_name, job_title, phone_number, email_address, is_main_contact, is_finance_contact)
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      RETURNING *
+    `, [id, full_name, job_title || null, phone_number || null, email_address,
+        is_main_contact || false, is_finance_contact || false]);
+
+    await client.query('COMMIT');
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// GET /api/customers/:id/communications
+// ─────────────────────────────────────────────────────────────
+router.get('/:id/communications', async (req, res, next) => {
+  try {
+    const { limit = 50, offset = 0, channel } = req.query;
+    let sql = `
+      SELECT cc.*, s.full_name AS staff_name
+      FROM customer_communications cc
+      LEFT JOIN staff s ON s.id = cc.staff_id
+      WHERE cc.customer_id = $1
+    `;
+    const values = [req.params.id];
+    if (channel) { sql += ` AND cc.channel = $2`; values.push(channel); }
+    sql += ` ORDER BY cc.created_at DESC LIMIT $${values.length + 1} OFFSET $${values.length + 2}`;
+    values.push(limit, offset);
+
+    const result = await query(sql, values);
+    res.json(result.rows);
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────
+// GET /api/customers/:id/volume  — Section 1.5 period totals
+// ─────────────────────────────────────────────────────────────
+router.get('/:id/volume', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const result = await query(`
+      SELECT
+        -- Today
+        COALESCE(SUM(CASE WHEN snapshot_date = CURRENT_DATE THEN parcel_count END), 0)                        AS today_parcels,
+        COALESCE(SUM(CASE WHEN snapshot_date >= CURRENT_DATE - 6 THEN parcel_count END), 0)                   AS last_7_days_parcels,
+        COALESCE(SUM(CASE WHEN snapshot_date >= CURRENT_DATE - 29 THEN parcel_count END), 0)                  AS last_30_days_parcels,
+        -- 13-week rolling average (daily avg over 91 days)
+        ROUND(
+          COALESCE(SUM(CASE WHEN snapshot_date >= CURRENT_DATE - 90 THEN parcel_count END), 0)::numeric / 91,
+          1
+        )                                                                                                       AS rolling_13wk_daily_avg,
+        -- YTD
+        COALESCE(SUM(CASE WHEN EXTRACT(YEAR FROM snapshot_date) = EXTRACT(YEAR FROM CURRENT_DATE)
+                          THEN parcel_count END), 0)                                                           AS ytd_parcels,
+        -- All time
+        COALESCE(SUM(parcel_count), 0)                                                                         AS all_time_parcels,
+        -- Revenue mirrors
+        COALESCE(SUM(CASE WHEN snapshot_date = CURRENT_DATE THEN revenue END), 0)                             AS today_revenue,
+        COALESCE(SUM(CASE WHEN snapshot_date >= CURRENT_DATE - 29 THEN revenue END), 0)                       AS last_30_days_revenue
+      FROM customer_volume_snapshots
+      WHERE customer_id = $1
+    `, [id]);
+
+    res.json(result.rows[0]);
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────
+// POST /api/customers/:id/volume-alerts/:alertId/dismiss
+// ─────────────────────────────────────────────────────────────
+router.post('/:id/volume-alerts/:alertId/dismiss', async (req, res, next) => {
+  try {
+    const { alertId } = req.params;
+    const { note, staff_id } = req.body;
+    if (!note || !staff_id) return res.status(400).json({ error: 'note and staff_id are required' });
+
+    const result = await query(`
+      UPDATE customer_volume_alerts
+      SET is_dismissed = true, dismissed_by = $2, dismissed_at = NOW(), dismissal_note = $3
+      WHERE id = $1 AND is_dismissed = false
+      RETURNING *
+    `, [alertId, staff_id, note]);
+
+    if (!result.rows.length) return res.status(404).json({ error: 'Alert not found or already dismissed' });
+    res.json(result.rows[0]);
+  } catch (err) { next(err); }
+});
+
+export default router;
