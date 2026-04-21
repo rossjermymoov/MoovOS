@@ -394,8 +394,171 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
   );
 }
 
-// ─── LEVEL 3 — Service rate card detail ──────────────────────────────────────
-// (reused from before — zones, weight bands, congestion, dim weight)
+// ─── LEVEL 3 — Rate card matrix ──────────────────────────────────────────────
+
+function formatBandLabel(min, max) {
+  const mn = parseFloat(min);
+  const mx = parseFloat(max);
+  if (mn === 0) {
+    const mxFmt = mx % 1 === 0 ? mx : mx.toFixed(1);
+    return `Up to ${mxFmt}kg`;
+  }
+  const mnFmt = mn % 1 === 0 ? mn : mn.toFixed(1);
+  const mxFmt = mx % 1 === 0 ? mx : mx.toFixed(1);
+  return `${mnFmt} – ${mxFmt}kg`;
+}
+
+function RateMatrix({ zones }) {
+  // Collect all unique weight bands across zones, keyed by "min|max"
+  const bandMap = new Map();
+  zones.forEach(z => {
+    (z.weight_bands || []).forEach(b => {
+      const key = `${b.min_weight_kg}|${b.max_weight_kg}`;
+      if (!bandMap.has(key)) bandMap.set(key, b);
+    });
+  });
+
+  const sortedBands = [...bandMap.values()]
+    .sort((a, b) => parseFloat(a.min_weight_kg) - parseFloat(b.min_weight_kg));
+
+  // Per-zone lookup: zone_id → { "min|max" → band }
+  const lookup = {};
+  zones.forEach(z => {
+    lookup[z.id] = {};
+    (z.weight_bands || []).forEach(b => {
+      lookup[z.id][`${b.min_weight_kg}|${b.max_weight_kg}`] = b;
+    });
+  });
+
+  if (zones.length === 0) {
+    return (
+      <div style={{ padding:'48px 0', textAlign:'center', color:'#555', fontSize:13 }}>
+        No zones configured — go to Zone Config to add zones and weight bands.
+      </div>
+    );
+  }
+
+  if (sortedBands.length === 0) {
+    return (
+      <div style={{ padding:'48px 0', textAlign:'center', color:'#555', fontSize:13 }}>
+        No weight bands found. Go to Zone Config to add them.
+      </div>
+    );
+  }
+
+  const hasSub = zones.some(z =>
+    (z.weight_bands || []).some(b => b.price_sub && parseFloat(b.price_sub) > 0)
+  );
+
+  return (
+    <div>
+      {/* Legend */}
+      <div style={{ display:'flex', gap:16, marginBottom:14, alignItems:'center' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:'#AAAAAA' }}>
+          <span style={{ width:10, height:10, borderRadius:2, background:'#00C853', display:'inline-block' }}/>
+          1st parcel cost price
+        </div>
+        {hasSub && (
+          <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:'#AAAAAA' }}>
+            <span style={{ width:10, height:10, borderRadius:2, background:'#FFC107', display:'inline-block' }}/>
+            Each subsequent parcel
+          </div>
+        )}
+        <span style={{ marginLeft:'auto', fontSize:12, color:'#555' }}>
+          {sortedBands.length} weight {sortedBands.length === 1 ? 'band' : 'bands'} · {zones.length} {zones.length === 1 ? 'zone' : 'zones'}
+        </span>
+      </div>
+
+      {/* Matrix table */}
+      <div style={{ overflowX:'auto', borderRadius:10, border:'1px solid rgba(255,255,255,0.07)' }}>
+        <table style={{ borderCollapse:'collapse', width:'100%' }}>
+          <thead>
+            <tr style={{ background:'rgba(255,255,255,0.025)' }}>
+              {/* Sticky weight column header */}
+              <th style={{
+                position:'sticky', left:0, zIndex:3,
+                background:'#0D0F28',
+                padding:'10px 16px',
+                textAlign:'left', fontSize:11, fontWeight:700,
+                color:'#AAAAAA', textTransform:'uppercase', letterSpacing:'0.06em',
+                borderBottom:'2px solid rgba(255,255,255,0.07)',
+                borderRight:'1px solid rgba(255,255,255,0.07)',
+                whiteSpace:'nowrap', minWidth:140,
+              }}>Weight</th>
+              {zones.map(z => (
+                <th key={z.id} style={{
+                  padding:'10px 16px',
+                  textAlign:'center', fontSize:11, fontWeight:700,
+                  color:'#7B2FBE', textTransform:'uppercase', letterSpacing:'0.04em',
+                  borderBottom:'2px solid rgba(123,47,190,0.3)',
+                  borderLeft:'1px solid rgba(255,255,255,0.04)',
+                  whiteSpace:'nowrap', minWidth:120,
+                }}>{z.name}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sortedBands.map((band, i) => {
+              const key = `${band.min_weight_kg}|${band.max_weight_kg}`;
+              const label = formatBandLabel(band.min_weight_kg, band.max_weight_kg);
+              const isEven = i % 2 === 0;
+              const rowBg = isEven ? 'transparent' : 'rgba(255,255,255,0.012)';
+              const stickyBg = isEven ? '#0A0B1E' : '#0C0D20';
+
+              return (
+                <tr key={key}>
+                  {/* Sticky weight label */}
+                  <td style={{
+                    position:'sticky', left:0, zIndex:1,
+                    background: stickyBg,
+                    padding:'9px 16px',
+                    fontSize:12, fontWeight:600, color:'#CCCCCC',
+                    borderRight:'1px solid rgba(255,255,255,0.06)',
+                    whiteSpace:'nowrap',
+                  }}>{label}</td>
+
+                  {zones.map(z => {
+                    const b = lookup[z.id]?.[key];
+                    return (
+                      <td key={z.id} style={{
+                        padding:'9px 16px', textAlign:'center',
+                        background: rowBg,
+                        borderLeft:'1px solid rgba(255,255,255,0.03)',
+                      }}>
+                        {b ? (
+                          <div>
+                            <div style={{
+                              fontSize:13, fontWeight:700, color:'#00C853',
+                              fontFamily:'monospace', letterSpacing:'0.02em',
+                            }}>
+                              £{parseFloat(b.price_first).toFixed(2)}
+                            </div>
+                            {b.price_sub && parseFloat(b.price_sub) > 0 && (
+                              <div style={{
+                                fontSize:10, color:'#FFC107',
+                                fontFamily:'monospace', marginTop:2,
+                              }}>
+                                +£{parseFloat(b.price_sub).toFixed(2)}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span style={{ color:'#2A2A3A', fontSize:14 }}>—</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── LEVEL 3 — Zone config (accordion per zone) ───────────────────────────────
 
 function WeightBandsTable({ zoneId, bands, onRefresh }) {
   const [adding, setAdding] = useState(false);
@@ -527,10 +690,11 @@ function ZoneCard({ zone, onRefresh }) {
 }
 
 function ServiceDetail({ serviceId, carrierName, onBack }) {
+  const [innerTab, setInnerTab]   = useState(0); // 0 = Rate Card, 1 = Zone Config
   const [addingZone, setAddingZone] = useState(false);
-  const [zoneName, setZoneName] = useState('');
-  const [fuelPct, setFuelPct] = useState('');
-  const [editFuel, setEditFuel] = useState(false);
+  const [zoneName, setZoneName]   = useState('');
+  const [fuelPct, setFuelPct]     = useState('');
+  const [editFuel, setEditFuel]   = useState(false);
 
   const { data: svc, isLoading, refetch } = useQuery({
     queryKey: ['carrier-service', serviceId],
@@ -549,76 +713,130 @@ function ServiceDetail({ serviceId, carrierName, onBack }) {
   if (isLoading) return <div style={{ padding:40, textAlign:'center', color:'#AAAAAA' }}>Loading…</div>;
   if (!svc) return null;
 
+  const INNER_TABS = ['Rate Card', 'Zone Config'];
+
   return (
     <div>
-      <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:24 }}>
+      {/* ── Breadcrumb header ── */}
+      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:20, flexWrap:'wrap' }}>
         <button onClick={onBack} className="btn-ghost" style={{ padding:'6px 14px', fontSize:13 }}>
           <ArrowLeft size={13}/> {carrierName}
         </button>
-        <div>
-          <h1 style={{ fontSize:22, fontWeight:700, color:'#7B2FBE', margin:0 }}>{svc.name}</h1>
-          <span style={{ fontSize:13, color:'#AAAAAA' }}>{svc.courier_name} · <span style={{ fontFamily:'monospace', color:'#00C853' }}>{svc.service_code}</span></span>
-        </div>
-      </div>
+        <span style={{ color:'#333', fontSize:16 }}>/</span>
+        <h1 style={{ fontSize:20, fontWeight:700, color:'#7B2FBE', margin:0 }}>{svc.name}</h1>
+        <span style={{
+          display:'inline-block', padding:'2px 9px', borderRadius:9999,
+          fontSize:11, fontWeight:700, fontFamily:'monospace',
+          background:'rgba(0,200,83,0.08)', color:'#00C853',
+        }}>{svc.service_code}</span>
 
-      {/* Fuel surcharge */}
-      <div className="moov-card" style={{ padding:'14px 20px', marginBottom:14, display:'flex', alignItems:'center', gap:16 }}>
-        <span style={{ fontSize:13, fontWeight:600, color:'#fff', flex:1 }}>Fuel Surcharge</span>
-        {editFuel ? (
-          <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-            <div className="pill-input-wrap" style={{ height:32, width:110 }}>
-              <input type="number" step="0.01" value={fuelPct} onChange={e => setFuelPct(e.target.value)} placeholder="5.00" style={{ fontSize:13 }}/>
-              <div className="green-cap" style={{ fontSize:12 }}>%</div>
-            </div>
-            <button onClick={() => updateFuel.mutate(fuelPct)} className="btn-primary" style={{ height:32, padding:'0 14px', fontSize:12 }}>Save</button>
-            <button onClick={() => setEditFuel(false)} className="btn-ghost" style={{ height:32, padding:'0 10px', fontSize:12 }}>Cancel</button>
-          </div>
+        {/* Fuel surcharge pill / edit */}
+        {!editFuel ? (
+          <span
+            onClick={() => { setFuelPct(svc.fuel_surcharge_pct||''); setEditFuel(true); }}
+            style={{
+              display:'inline-flex', alignItems:'center', gap:5,
+              padding:'3px 11px', borderRadius:9999, cursor:'pointer',
+              fontSize:12, fontWeight:700,
+              background: svc.fuel_surcharge_pct ? 'rgba(255,193,7,0.12)' : 'rgba(255,255,255,0.05)',
+              color: svc.fuel_surcharge_pct ? '#FFC107' : '#555',
+              border: '1px solid transparent',
+            }}
+          >
+            <Zap size={11}/>
+            {svc.fuel_surcharge_pct
+              ? `Fuel: ${parseFloat(svc.fuel_surcharge_pct).toFixed(2)}%`
+              : 'Set fuel surcharge'}
+          </span>
         ) : (
-          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-            <span style={{ fontSize:15, fontWeight:700, color: svc.fuel_surcharge_pct ? '#FFC107':'#555' }}>
-              {svc.fuel_surcharge_pct ? `${parseFloat(svc.fuel_surcharge_pct).toFixed(2)}%` : 'Not set'}
-            </span>
-            <button onClick={() => { setFuelPct(svc.fuel_surcharge_pct||''); setEditFuel(true); }} className="btn-ghost" style={{ height:28, padding:'0 12px', fontSize:12 }}>Edit</button>
-          </div>
-        )}
-      </div>
-
-      {/* Zones */}
-      <div className="moov-card" style={{ padding:18, marginBottom:14 }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
-          <h3 style={{ fontSize:15, fontWeight:700, color:'#fff', margin:0 }}>Zones & Weight Bands</h3>
-          <button onClick={() => setAddingZone(a=>!a)} className="btn-primary" style={{ height:30, padding:'0 12px', fontSize:12 }}><Plus size={12}/> Add Zone</button>
-        </div>
-        {addingZone && (
-          <div style={{ display:'flex', gap:8, marginBottom:14 }}>
-            <div className="pill-input-wrap" style={{ flex:1, height:34 }}>
-              <input value={zoneName} onChange={e => setZoneName(e.target.value)} placeholder="Zone name — e.g. Mainland, Northern Ireland"/>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <div className="pill-input-wrap" style={{ height:30, width:110 }}>
+              <input type="number" step="0.01" value={fuelPct}
+                onChange={e => setFuelPct(e.target.value)} placeholder="5.00"
+                style={{ fontSize:12 }} autoFocus/>
+              <div className="green-cap" style={{ fontSize:11 }}>%</div>
             </div>
-            <button onClick={() => addZone.mutate()} className="btn-primary" style={{ height:34 }}><Check size={13}/> Add</button>
-            <button onClick={() => setAddingZone(false)} className="btn-ghost" style={{ height:34 }}>Cancel</button>
+            <button onClick={() => updateFuel.mutate(fuelPct)} className="btn-primary" style={{ height:30, padding:'0 12px', fontSize:12 }}>Save</button>
+            <button onClick={() => setEditFuel(false)} className="btn-ghost" style={{ height:30, padding:'0 8px', fontSize:12 }}>✕</button>
           </div>
         )}
-        {(svc.zones||[]).length === 0
-          ? <p style={{ color:'#555', fontSize:13, margin:0 }}>No zones yet. Add one above.</p>
-          : (svc.zones||[]).map(z => <ZoneCard key={z.id} zone={z} onRefresh={refetch}/>)
-        }
+
+        {/* Congestion surcharge count */}
+        {(svc.congestion_surcharges||[]).length > 0 && (
+          <span style={{
+            display:'inline-block', padding:'3px 11px', borderRadius:9999,
+            fontSize:12, fontWeight:700,
+            background:'rgba(233,30,140,0.10)', color:'#E91E8C',
+          }}>
+            {(svc.congestion_surcharges||[]).length} congestion zone{(svc.congestion_surcharges||[]).length!==1?'s':''}
+          </span>
+        )}
       </div>
 
-      {/* Congestion surcharges */}
-      <div className="moov-card" style={{ padding:18, marginBottom:14 }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
-          <h3 style={{ fontSize:15, fontWeight:700, color:'#fff', margin:0 }}>Congestion Surcharges</h3>
-        </div>
-        {(svc.congestion_surcharges||[]).length === 0
-          ? <p style={{ color:'#555', fontSize:13, margin:0 }}>No congestion surcharges.</p>
-          : <table className="moov-table" style={{ fontSize:12 }}>
-              <thead><tr><th>Postcode</th><th>Fee</th></tr></thead>
-              <tbody>{(svc.congestion_surcharges||[]).map(cs => (
-                <tr key={cs.id}><td><span style={pill('rgba(255,193,7,0.12)','#FFC107')}>{cs.postcode_prefix}</span></td><td style={{ color:'#E91E8C' }}>£{parseFloat(cs.fee).toFixed(4)}</td></tr>
-              ))}</tbody>
-            </table>
-        }
+      {/* ── Inner tabs ── */}
+      <div style={{ display:'flex', gap:4, marginBottom:20, borderBottom:'1px solid rgba(255,255,255,0.06)' }}>
+        {INNER_TABS.map((t, i) => (
+          <button key={t} onClick={() => setInnerTab(i)} style={{
+            background:'none', border:'none', cursor:'pointer',
+            padding:'9px 18px', fontSize:13, fontWeight:600,
+            color: innerTab===i ? '#00C853':'#AAAAAA',
+            borderBottom: innerTab===i ? '2px solid #00C853':'2px solid transparent',
+            marginBottom:-1, transition:'all 0.15s',
+          }}>{t}</button>
+        ))}
       </div>
+
+      {/* ── Tab: Rate Card matrix ── */}
+      {innerTab === 0 && (
+        <RateMatrix zones={svc.zones || []} />
+      )}
+
+      {/* ── Tab: Zone Config ── */}
+      {innerTab === 1 && (
+        <div>
+          {/* Zones */}
+          <div className="moov-card" style={{ padding:18, marginBottom:14 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+              <h3 style={{ fontSize:15, fontWeight:700, color:'#fff', margin:0 }}>Zones & Coverage</h3>
+              <button onClick={() => setAddingZone(a=>!a)} className="btn-primary" style={{ height:30, padding:'0 12px', fontSize:12 }}>
+                <Plus size={12}/> Add Zone
+              </button>
+            </div>
+            {addingZone && (
+              <div style={{ display:'flex', gap:8, marginBottom:14 }}>
+                <div className="pill-input-wrap" style={{ flex:1, height:34 }}>
+                  <input value={zoneName} onChange={e => setZoneName(e.target.value)}
+                    placeholder="Zone name — e.g. Mainland, Northern Ireland" autoFocus/>
+                </div>
+                <button onClick={() => addZone.mutate()} className="btn-primary" style={{ height:34 }}><Check size={13}/> Add</button>
+                <button onClick={() => setAddingZone(false)} className="btn-ghost" style={{ height:34 }}>Cancel</button>
+              </div>
+            )}
+            {(svc.zones||[]).length === 0
+              ? <p style={{ color:'#555', fontSize:13, margin:0 }}>No zones yet — add one above.</p>
+              : (svc.zones||[]).map(z => <ZoneCard key={z.id} zone={z} onRefresh={refetch}/>)
+            }
+          </div>
+
+          {/* Congestion surcharges */}
+          {(svc.congestion_surcharges||[]).length > 0 && (
+            <div className="moov-card" style={{ padding:18 }}>
+              <h3 style={{ fontSize:15, fontWeight:700, color:'#fff', margin:'0 0 12px' }}>Congestion Surcharges</h3>
+              <table className="moov-table" style={{ fontSize:12 }}>
+                <thead><tr><th>Postcode Prefix</th><th>Fee</th></tr></thead>
+                <tbody>
+                  {(svc.congestion_surcharges||[]).map(cs => (
+                    <tr key={cs.id}>
+                      <td><span style={{ display:'inline-block', padding:'2px 10px', borderRadius:9999, fontSize:11, fontWeight:700, background:'rgba(255,193,7,0.12)', color:'#FFC107' }}>{cs.postcode_prefix}</span></td>
+                      <td style={{ color:'#E91E8C', fontFamily:'monospace' }}>£{parseFloat(cs.fee).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
