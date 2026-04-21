@@ -3,25 +3,40 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 import customersRouter from './routes/customers.js';
 
 dotenv.config();
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
+
 const app = express();
 const PORT = process.env.PORT || 5000;
+const isProd = process.env.NODE_ENV === 'production';
 
 // ─── Middleware ───────────────────────────────────────────────
-app.use(helmet());
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:3000' }));
 app.use(express.json());
-app.use(morgan('dev'));
+app.use(morgan(isProd ? 'combined' : 'dev'));
 
-// ─── Routes ──────────────────────────────────────────────────
+// ─── API Routes ──────────────────────────────────────────────
 app.use('/api/customers', customersRouter);
 
 // ─── Health check ────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'moov-os' }));
+
+// ─── Serve built React app in production ─────────────────────
+if (isProd) {
+  const clientDist = path.join(__dirname, '..', 'client', 'dist');
+  app.use(express.static(clientDist));
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+}
 
 // ─── Error handler ───────────────────────────────────────────
 app.use((err, _req, res, _next) => {
