@@ -4,6 +4,7 @@ import CustomerList from './pages/customers/CustomerList';
 import CustomerRecord from './pages/customers/CustomerRecord';
 import CustomerNew from './pages/customers/CustomerNew';
 import StaffSettings from './pages/settings/StaffSettings';
+import CarrierManagement from './pages/carriers/CarrierManagement';
 
 // Placeholder pages for other sections (to be built)
 const Placeholder = ({ name }) => (
@@ -31,7 +32,7 @@ export default function App() {
         <Route path="tracking"  element={<Placeholder name="Tracking & Parcel Data" />} />
         <Route path="finance"   element={<Placeholder name="Finance & Billing" />} />
         <Route path="queries"   element={<Placeholder name="Queries & Claims" />} />
-        <Route path="carriers"  element={<Placeholder name="Carrier Management" />} />
+        <Route path="carriers"  element={<CarrierManagement />} />
         <Route path="reports"   element={<Placeholder name="Dashboards & Reporting" />} />
         <Route path="knowledge" element={<Placeholder name="Knowledge Base & AI" />} />
         <Route path="settings">

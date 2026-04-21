@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { customersApi } from '../../api/customers';
 import { HealthBadge, AccountStatusBadge, TierBadge, CreditUtilisationBar } from '../../components/ui/StatusBadge';
+import CustomerPricingTab from './tabs/CustomerPricingTab';
 import { format } from 'date-fns';
 
 const TABS = [
@@ -15,6 +16,7 @@ const TABS = [
   { key: 'comms',      label: 'Communications', icon: MessageSquare },
   { key: 'volume',     label: 'Performance',  icon: TrendingUp },
   { key: 'financial',  label: 'Financial',    icon: DollarSign },
+  { key: 'pricing',    label: 'Pricing',      icon: Zap },
 ];
 
 // ─── Currency formatter ──────────────────────────────────────
@@ -213,6 +215,12 @@ export default function CustomerRecord() {
       {activeTab === 'volume'   && <VolumeTab snapshots={volume_snapshots} />}
       {activeTab === 'financial' && <FinancialTab c={c} creditPct={creditPct} />}
       {activeTab === 'comms'    && <CommsPlaceholder />}
+      {activeTab === 'pricing'  && (
+        <CustomerPricingTab
+          customer={c}
+          onCustomerUpdate={(updated) => queryClient.setQueryData(['customer', id], d => ({ ...d, customer: { ...d.customer, ...updated } }))}
+        />
+      )}
 
       {/* On Stop Modal */}
       {onStopModal && (

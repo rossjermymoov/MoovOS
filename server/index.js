@@ -8,6 +8,9 @@ import { fileURLToPath } from 'url';
 
 import customersRouter from './routes/customers.js';
 import staffRouter from './routes/staff.js';
+import carriersRouter from './routes/carriers.js';
+import customerPricingRouter from './routes/customerPricing.js';
+import webhooksRouter from './routes/webhooks.js';
 import { runMigrations } from './db/migrate.js';
 
 dotenv.config();
@@ -26,8 +29,11 @@ app.use(express.json());
 app.use(morgan(isProd ? 'combined' : 'dev'));
 
 // ─── API Routes ──────────────────────────────────────────────
-app.use('/api/customers', customersRouter);
-app.use('/api/staff',     staffRouter);
+app.use('/api/customers',        customersRouter);
+app.use('/api/staff',            staffRouter);
+app.use('/api/carriers',         carriersRouter);
+app.use('/api/customer-pricing', customerPricingRouter);
+app.use('/api/v1/webhooks',      webhooksRouter);
 
 // ─── Health check ────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'moov-os' }));
