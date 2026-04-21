@@ -496,4 +496,56 @@ router.post('/:id/volume-alerts/:alertId/dismiss', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─────────────────────────────────────────────────────────────
+// Customer service selections (which carrier services are visible)
+// ─────────────────────────────────────────────────────────────
+
+// GET /api/customers/:id/services  — returns selected courier_service_ids
+router.get('/:id/services', async (req, res, next) => {
+  try {
+    const result = await query(
+      `SELECT cs.courier_service_id,
+              csvc.name          AS service_name,
+              csvc.service_code  AS service_code,
+              c.name             AS courier_name,
+              c.id               AS courier_id
+       FROM customer_services cs
+       JOIN courier_services csvc ON csvc.id = cs.courier_service_id
+       JOIN couriers c ON c.id = csvc.courier_id
+       WHERE cs.customer_id = $1
+       ORDER BY c.name, csvc.sort_order NULLS LAST, csvc.name`,
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) { next(err); }
+});
+
+// POST /api/customers/:id/services  — add a service selection
+router.post('/:id/services', async (req, res, next) => {
+  try {
+    const { courier_service_id } = req.body;
+    if (!courier_service_id) return res.status(400).json({ error: 'courier_service_id is required' });
+    const result = await query(
+      `INSERT INTO customer_services (customer_id, courier_service_id)
+       VALUES ($1, $2)
+       ON CONFLICT (customer_id, courier_service_id) DO NOTHING
+       RETURNING *`,
+      [req.params.id, courier_service_id]
+    );
+    res.status(201).json(result.rows[0] || { already_exists: true });
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/customers/:id/services/:serviceId  — remove a service selection
+router.delete('/:id/services/:serviceId', async (req, res, next) => {
+  try {
+    await query(
+      `DELETE FROM customer_services
+       WHERE customer_id = $1 AND courier_service_id = $2`,
+      [req.params.id, req.params.serviceId]
+    );
+    res.json({ deleted: true });
+  } catch (err) { next(err); }
+});
+
 export default router;
