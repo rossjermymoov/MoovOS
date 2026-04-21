@@ -14,6 +14,7 @@ import webhooksRouter from './routes/webhooks.js';
 import { runMigrations } from './db/migrate.js';
 import { seedCustomerRates } from './scripts/seedCustomerRates.js';
 import customerRatesRouter from './routes/customerRates.js';
+import trackingRouter from './routes/tracking.js';
 
 dotenv.config();
 
@@ -37,6 +38,7 @@ app.use('/api/carriers',         carriersRouter);
 app.use('/api/customer-pricing', customerPricingRouter);
 app.use('/api/customer-rates',   customerRatesRouter);
 app.use('/api/v1/webhooks',      webhooksRouter);
+app.use('/api/tracking',         trackingRouter);
 
 // ─── Health check ────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'moov-os' }));
