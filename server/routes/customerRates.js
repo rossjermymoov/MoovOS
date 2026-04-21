@@ -77,16 +77,18 @@ router.get('/:customerId', async (req, res, next) => {
   try {
     const { customerId } = req.params;
 
-    // Service summary with rate counts
+    // Service summary with rate counts + service_type from carrier_services
     const summaryRes = await query(`
       SELECT
-        courier_id, courier_code, courier_name,
-        service_id, service_code, service_name,
-        COUNT(*) AS rate_count
-      FROM customer_rates
-      WHERE customer_id = $1
-      GROUP BY courier_id, courier_code, courier_name, service_id, service_code, service_name
-      ORDER BY courier_name, service_name
+        cr.courier_id, cr.courier_code, cr.courier_name,
+        cr.service_id, cr.service_code, cr.service_name,
+        COUNT(*) AS rate_count,
+        COALESCE(cs.service_type::text, 'domestic') AS service_type
+      FROM customer_rates cr
+      LEFT JOIN carrier_services cs ON cs.service_code = cr.service_code
+      WHERE cr.customer_id = $1
+      GROUP BY cr.courier_id, cr.courier_code, cr.courier_name, cr.service_id, cr.service_code, cr.service_name, cs.service_type
+      ORDER BY cr.courier_name, cr.service_name
     `, [customerId]);
 
     // All rate rows (include id for edit/delete)
@@ -116,6 +118,7 @@ router.get('/:customerId', async (req, res, next) => {
       service_id:   s.service_id,
       service_code: s.service_code,
       service_name: s.service_name,
+      service_type: s.service_type,
       rate_count:   parseInt(s.rate_count),
       rates:        ratesByService[s.service_id] || [],
     }));
