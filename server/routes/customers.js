@@ -30,7 +30,13 @@ function buildCustomerListQuery(filters = {}) {
     conditions.push(`(
       c.business_name ILIKE $${idx} OR
       c.account_number ILIKE $${idx} OR
-      c.primary_email ILIKE $${idx}
+      c.primary_email ILIKE $${idx} OR
+      c.postcode ILIKE $${idx} OR
+      c.city ILIKE $${idx} OR
+      EXISTS (
+        SELECT 1 FROM customer_contacts cc2
+        WHERE cc2.customer_id = c.id AND cc2.full_name ILIKE $${idx}
+      )
     )`);
     values.push(`%${search}%`);
     idx++;
@@ -49,10 +55,13 @@ function buildCustomerListQuery(filters = {}) {
   const sql = `
     SELECT
       c.id, c.account_number, c.business_name, c.primary_email, c.phone_number,
+      c.postcode, c.city, c.county, c.country,
       c.tier, c.account_status, c.health_score, c.is_on_stop,
       c.outstanding_balance, c.credit_limit, c.date_onboarded,
+      c.billing_cycle, c.payment_terms_days, c.company_type,
       am.full_name AS account_manager_name,
       sp.full_name AS salesperson_name,
+      (SELECT full_name FROM customer_contacts cc WHERE cc.customer_id = c.id AND cc.is_main_contact = true LIMIT 1) AS main_contact_name,
       (SELECT COUNT(*) FROM customer_communications cc WHERE cc.customer_id = c.id)::int AS comm_count,
       (c.outstanding_balance / NULLIF(c.credit_limit, 0) * 100)::numeric(5,1) AS credit_utilisation_pct
     FROM customers c
@@ -153,25 +162,34 @@ router.get('/:id', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const {
-      business_name, registered_address, postcode, phone_number, primary_email,
-      company_reg_number, tier, payment_terms_days = 7, credit_limit = 0,
+      business_name, address_line_1, address_line_2, city, county, postcode, country,
+      phone_number, primary_email,
+      company_type, company_reg_number, vat_number,
+      tier, payment_terms_days = 7, billing_cycle = 'monthly', credit_limit = 0,
+      accounts_email, eori_number, ioss_number,
       salesperson_id, account_manager_id, onboarding_person_id,
     } = req.body;
 
-    if (!business_name || !registered_address || !postcode || !phone_number || !primary_email) {
+    if (!business_name || !postcode || !phone_number || !primary_email) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
     const result = await query(`
       INSERT INTO customers (
-        business_name, registered_address, postcode, phone_number, primary_email,
-        company_reg_number, tier, payment_terms_days, credit_limit,
+        business_name, address_line_1, address_line_2, city, county, postcode, country,
+        phone_number, primary_email,
+        company_type, company_reg_number, vat_number,
+        tier, payment_terms_days, billing_cycle, credit_limit,
+        accounts_email, eori_number, ioss_number,
         salesperson_id, account_manager_id, onboarding_person_id
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
       RETURNING *
     `, [
-      business_name, registered_address, postcode, phone_number, primary_email,
-      company_reg_number || null, tier || 'bronze', payment_terms_days, credit_limit,
+      business_name, address_line_1 || null, address_line_2 || null, city || null, county || null,
+      postcode, country || 'United Kingdom', phone_number, primary_email,
+      company_type || null, company_reg_number || null, vat_number || null,
+      tier || 'bronze', payment_terms_days, billing_cycle, credit_limit,
+      accounts_email || null, eori_number || null, ioss_number || null,
       salesperson_id || null, account_manager_id || null, onboarding_person_id || null,
     ]);
 
@@ -186,8 +204,11 @@ router.patch('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
     const allowed = [
-      'business_name', 'registered_address', 'postcode', 'phone_number', 'primary_email',
-      'company_reg_number', 'tier', 'account_status', 'payment_terms_days', 'credit_limit',
+      'business_name', 'address_line_1', 'address_line_2', 'city', 'county', 'postcode', 'country',
+      'phone_number', 'primary_email',
+      'company_type', 'company_reg_number', 'vat_number',
+      'tier', 'account_status', 'payment_terms_days', 'billing_cycle', 'credit_limit',
+      'accounts_email', 'eori_number', 'ioss_number',
       'salesperson_id', 'account_manager_id', 'onboarding_person_id',
     ];
     const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));

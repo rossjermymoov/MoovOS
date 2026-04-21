@@ -13,6 +13,12 @@ const STEPS = [
   { key: 'contact',   label: 'First Contact',     icon: UserPlus },
 ];
 
+const COMPANY_TYPES = [
+  { value: 'limited_company', label: 'Limited Company (Ltd)' },
+  { value: 'partnership',     label: 'Partnership / LLP' },
+  { value: 'sole_trader',     label: 'Sole Trader' },
+];
+
 const TIERS = [
   { value: 'bronze',     label: 'Bronze',     desc: 'Low volume, higher margin target' },
   { value: 'silver',     label: 'Silver',     desc: 'Mid-tier accounts' },
@@ -20,35 +26,51 @@ const TIERS = [
   { value: 'enterprise', label: 'Enterprise', desc: 'High volume, negotiated rates' },
 ];
 
+const BILLING_PERIODS = [
+  { value: 'weekly',      label: 'Weekly' },
+  { value: 'fortnightly', label: 'Fortnightly' },
+  { value: 'monthly',     label: 'Monthly' },
+];
+
 const PAYMENT_TERMS = [
-  { value: 7,  label: '7 days',  note: 'Standard' },
-  { value: 14, label: '14 days', note: 'Manager approval required' },
-  { value: 28, label: '28 days', note: 'Manager approval required' },
-  { value: 30, label: 'Net 30',  note: 'Director approval required' },
+  { value: 7,  label: '7 days',  note: 'Default' },
+  { value: 14, label: '14 days', note: '' },
+  { value: 28, label: '28 days', note: '' },
+  { value: 30, label: '30 days', note: '' },
 ];
 
 const EMPTY_FORM = {
   // Step 1 — Business Details
-  business_name: '',
-  registered_address: '',
-  postcode: '',
-  phone_number: '',
-  primary_email: '',
+  business_name:      '',
+  company_type:       'limited_company',
   company_reg_number: '',
+  vat_number:         '',
+  address_line_1:     '',
+  address_line_2:     '',
+  city:               '',
+  county:             '',
+  postcode:           '',
+  country:            'United Kingdom',
+  phone_number:       '',
+  primary_email:      '',
+  accounts_email:     '',
+  eori_number:        '',
+  ioss_number:        '',
   // Step 2 — Staff
-  salesperson_id: '',
-  account_manager_id: '',
+  salesperson_id:       '',
+  account_manager_id:   '',
   onboarding_person_id: '',
   // Step 3 — Account Setup
-  tier: 'bronze',
-  credit_limit: '',
+  tier:               'bronze',
+  credit_limit:       '',
+  billing_cycle:      'monthly',
   payment_terms_days: 7,
   // Step 4 — First Contact
-  contact_full_name: '',
-  contact_job_title: '',
-  contact_phone: '',
-  contact_email: '',
-  contact_is_main: true,
+  contact_full_name:  '',
+  contact_job_title:  '',
+  contact_phone:      '',
+  contact_email:      '',
+  contact_is_main:    true,
   contact_is_finance: false,
 };
 
@@ -56,12 +78,13 @@ const EMPTY_FORM = {
 function validate(step, form) {
   const errors = {};
   if (step === 0) {
-    if (!form.business_name.trim())      errors.business_name = 'Business name is required';
-    if (!form.registered_address.trim()) errors.registered_address = 'Address is required';
-    if (!form.postcode.trim())           errors.postcode = 'Postcode is required';
-    if (!form.phone_number.trim())       errors.phone_number = 'Phone number is required';
-    if (!form.primary_email.trim())      errors.primary_email = 'Email is required';
+    if (!form.business_name.trim())  errors.business_name = 'Business name is required';
+    if (!form.postcode.trim())       errors.postcode = 'Postcode is required';
+    if (!form.phone_number.trim())   errors.phone_number = 'Phone number is required';
+    if (!form.primary_email.trim())  errors.primary_email = 'Email is required';
     else if (!/\S+@\S+\.\S+/.test(form.primary_email)) errors.primary_email = 'Enter a valid email';
+    if (form.accounts_email && !/\S+@\S+\.\S+/.test(form.accounts_email))
+      errors.accounts_email = 'Enter a valid email';
   }
   if (step === 2) {
     if (!form.credit_limit || isNaN(form.credit_limit) || parseFloat(form.credit_limit) < 0)
@@ -75,38 +98,351 @@ function validate(step, form) {
   return errors;
 }
 
-// ─── Main component ──────────────────────────────────────────
+// ─── Field helpers ────────────────────────────────────────────
+function Field({ label, error, required, children }) {
+  return (
+    <div>
+      <label style={{ display: 'block', fontSize: 12, color: '#AAAAAA', marginBottom: 6 }}>
+        {label}{required && <span style={{ color: '#E91E8C', marginLeft: 3 }}>*</span>}
+      </label>
+      {children}
+      {error && <p style={{ fontSize: 11, color: '#E91E8C', marginTop: 4 }}>{error}</p>}
+    </div>
+  );
+}
+
+const inputStyle = (error) => ({
+  width: '100%', boxSizing: 'border-box',
+  background: '#0D0E2A', border: `1px solid ${error ? '#E91E8C' : 'rgba(255,255,255,0.1)'}`,
+  borderRadius: 6, padding: '10px 12px', color: '#fff', fontSize: 14, outline: 'none',
+});
+
+const selectStyle = {
+  width: '100%', boxSizing: 'border-box',
+  background: '#0D0E2A', border: '1px solid rgba(255,255,255,0.1)',
+  borderRadius: 6, padding: '10px 12px', color: '#fff', fontSize: 14, outline: 'none',
+};
+
+const grid2 = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 };
+const grid3 = { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 };
+
+const sectionHeading = { fontSize: 11, color: '#7B2FBE', fontWeight: 600, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1 };
+
+// ─── Step 1: Business Details ─────────────────────────────────
+function StepBusiness({ form, set, errors }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+      <div style={grid2}>
+        <Field label="Business / Company Name" required error={errors.business_name}>
+          <input style={inputStyle(errors.business_name)} value={form.business_name}
+            onChange={e => set('business_name', e.target.value)} placeholder="Acme Ltd" />
+        </Field>
+        <Field label="Company Type">
+          <select style={selectStyle} value={form.company_type} onChange={e => set('company_type', e.target.value)}>
+            {COMPANY_TYPES.map(ct => <option key={ct.value} value={ct.value}>{ct.label}</option>)}
+          </select>
+        </Field>
+      </div>
+
+      <div style={grid2}>
+        <Field label="Company Registration Number">
+          <input style={inputStyle()} value={form.company_reg_number}
+            onChange={e => set('company_reg_number', e.target.value)} placeholder="12345678" />
+        </Field>
+        <Field label="VAT Number">
+          <input style={inputStyle()} value={form.vat_number}
+            onChange={e => set('vat_number', e.target.value)} placeholder="GB123456789" />
+        </Field>
+      </div>
+
+      <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16 }}>
+        <p style={sectionHeading}>Address</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Field label="Address Line 1">
+            <input style={inputStyle()} value={form.address_line_1}
+              onChange={e => set('address_line_1', e.target.value)} placeholder="Unit 4, Business Park" />
+          </Field>
+          <Field label="Address Line 2">
+            <input style={inputStyle()} value={form.address_line_2}
+              onChange={e => set('address_line_2', e.target.value)} placeholder="Optional" />
+          </Field>
+          <div style={grid3}>
+            <Field label="City / Town">
+              <input style={inputStyle()} value={form.city}
+                onChange={e => set('city', e.target.value)} placeholder="Manchester" />
+            </Field>
+            <Field label="County">
+              <input style={inputStyle()} value={form.county}
+                onChange={e => set('county', e.target.value)} placeholder="Greater Manchester" />
+            </Field>
+            <Field label="Postcode" required error={errors.postcode}>
+              <input style={inputStyle(errors.postcode)} value={form.postcode}
+                onChange={e => set('postcode', e.target.value.toUpperCase())} placeholder="M1 1AB" />
+            </Field>
+          </div>
+          <Field label="Country">
+            <input style={inputStyle()} value={form.country}
+              onChange={e => set('country', e.target.value)} />
+          </Field>
+        </div>
+      </div>
+
+      <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16 }}>
+        <p style={sectionHeading}>Contact Details</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={grid2}>
+            <Field label="Main Phone Number" required error={errors.phone_number}>
+              <input style={inputStyle(errors.phone_number)} value={form.phone_number}
+                onChange={e => set('phone_number', e.target.value)} placeholder="+44 7700 900000" />
+            </Field>
+            <Field label="Main Email Address" required error={errors.primary_email}>
+              <input style={inputStyle(errors.primary_email)} value={form.primary_email}
+                onChange={e => set('primary_email', e.target.value)} placeholder="info@company.co.uk" />
+            </Field>
+          </div>
+          <Field label="Accounts / Billing Email" error={errors.accounts_email}>
+            <input style={inputStyle(errors.accounts_email)} value={form.accounts_email}
+              onChange={e => set('accounts_email', e.target.value)}
+              placeholder="accounts@company.co.uk — leave blank if same as above" />
+          </Field>
+        </div>
+      </div>
+
+      <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16 }}>
+        <p style={sectionHeading}>International Trade</p>
+        <div style={grid2}>
+          <Field label="EORI Number">
+            <input style={inputStyle()} value={form.eori_number}
+              onChange={e => set('eori_number', e.target.value)} placeholder="GB123456789000" />
+          </Field>
+          <Field label="IOSS Number">
+            <input style={inputStyle()} value={form.ioss_number}
+              onChange={e => set('ioss_number', e.target.value)} placeholder="IM1234567890" />
+          </Field>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Step 2: Assign Staff ─────────────────────────────────────
+function StepStaff({ form, set, salespeople, accountManagers, onboarders }) {
+  const staffSelect = (field, options, placeholder) => (
+    <select style={selectStyle} value={form[field]} onChange={e => set(field, e.target.value)}>
+      <option value="">{placeholder}</option>
+      {options.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+    </select>
+  );
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <Field label="Salesperson">{staffSelect('salesperson_id', salespeople, 'Select salesperson (optional)')}</Field>
+      <Field label="Account Manager">{staffSelect('account_manager_id', accountManagers, 'Select account manager (optional)')}</Field>
+      <Field label="Onboarding Person">{staffSelect('onboarding_person_id', onboarders, 'Select onboarding person (optional)')}</Field>
+    </div>
+  );
+}
+
+// ─── Step 3: Account Setup ────────────────────────────────────
+function StepAccount({ form, set, errors }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+      <div>
+        <label style={{ display: 'block', fontSize: 12, color: '#AAAAAA', marginBottom: 10 }}>Account Tier</label>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          {TIERS.map(t => (
+            <button key={t.value} onClick={() => set('tier', t.value)} style={{
+              padding: '12px 16px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
+              background: form.tier === t.value ? 'rgba(123,47,190,0.2)' : 'rgba(255,255,255,0.03)',
+              border: form.tier === t.value ? '1px solid #7B2FBE' : '1px solid rgba(255,255,255,0.08)',
+              color: '#fff',
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{t.label}</div>
+              <div style={{ fontSize: 11, color: '#AAAAAA', marginTop: 2 }}>{t.desc}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <Field label="Credit Limit (£)" required error={errors.credit_limit}>
+        <input style={inputStyle(errors.credit_limit)} value={form.credit_limit} type="number" min="0"
+          onChange={e => set('credit_limit', e.target.value)} placeholder="0.00" />
+      </Field>
+
+      <div>
+        <label style={{ display: 'block', fontSize: 12, color: '#AAAAAA', marginBottom: 10 }}>Billing Period</label>
+        <div style={{ display: 'flex', gap: 10 }}>
+          {BILLING_PERIODS.map(bp => (
+            <button key={bp.value} onClick={() => set('billing_cycle', bp.value)} style={{
+              flex: 1, padding: '10px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+              background: form.billing_cycle === bp.value ? 'rgba(0,200,83,0.15)' : 'rgba(255,255,255,0.03)',
+              border: form.billing_cycle === bp.value ? '1px solid #00C853' : '1px solid rgba(255,255,255,0.08)',
+              color: form.billing_cycle === bp.value ? '#00C853' : '#AAAAAA',
+            }}>
+              {bp.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label style={{ display: 'block', fontSize: 12, color: '#AAAAAA', marginBottom: 10 }}>Billing Terms</label>
+        <div style={{ display: 'flex', gap: 10 }}>
+          {PAYMENT_TERMS.map(pt => (
+            <button key={pt.value} onClick={() => set('payment_terms_days', pt.value)} style={{
+              flex: 1, padding: '10px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+              background: form.payment_terms_days === pt.value ? 'rgba(0,200,83,0.15)' : 'rgba(255,255,255,0.03)',
+              border: form.payment_terms_days === pt.value ? '1px solid #00C853' : '1px solid rgba(255,255,255,0.08)',
+              color: form.payment_terms_days === pt.value ? '#00C853' : '#AAAAAA',
+            }}>
+              <div>{pt.label}</div>
+              {pt.note && <div style={{ fontSize: 10, marginTop: 2, opacity: 0.7 }}>{pt.note}</div>}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Step 4: First Contact ────────────────────────────────────
+function StepContact({ form, set, errors }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={grid2}>
+        <Field label="Full Name" required error={errors.contact_full_name}>
+          <input style={inputStyle(errors.contact_full_name)} value={form.contact_full_name}
+            onChange={e => set('contact_full_name', e.target.value)} placeholder="Jane Smith" />
+        </Field>
+        <Field label="Job Title">
+          <input style={inputStyle()} value={form.contact_job_title}
+            onChange={e => set('contact_job_title', e.target.value)} placeholder="Operations Manager" />
+        </Field>
+      </div>
+      <div style={grid2}>
+        <Field label="Email Address" required error={errors.contact_email}>
+          <input style={inputStyle(errors.contact_email)} value={form.contact_email}
+            onChange={e => set('contact_email', e.target.value)} placeholder="jane@company.co.uk" />
+        </Field>
+        <Field label="Phone Number">
+          <input style={inputStyle()} value={form.contact_phone}
+            onChange={e => set('contact_phone', e.target.value)} placeholder="+44 7700 900000" />
+        </Field>
+      </div>
+      <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: '#AAAAAA' }}>
+          <input type="checkbox" checked={form.contact_is_main}
+            onChange={e => set('contact_is_main', e.target.checked)} style={{ accentColor: '#7B2FBE' }} />
+          Main contact
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: '#AAAAAA' }}>
+          <input type="checkbox" checked={form.contact_is_finance}
+            onChange={e => set('contact_is_finance', e.target.checked)} style={{ accentColor: '#7B2FBE' }} />
+          Finance contact
+        </label>
+      </div>
+    </div>
+  );
+}
+
+// ─── Step indicator ───────────────────────────────────────────
+function StepIndicator({ steps, current }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center' }}>
+      {steps.map((s, i) => {
+        const done = i < current;
+        const active = i === current;
+        const Icon = s.icon;
+        return (
+          <div key={s.key} style={{ display: 'flex', alignItems: 'center', flex: i < steps.length - 1 ? 1 : 'none' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+              <div style={{
+                width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: done ? '#00C853' : active ? '#7B2FBE' : 'rgba(255,255,255,0.05)',
+                border: `2px solid ${done ? '#00C853' : active ? '#7B2FBE' : 'rgba(255,255,255,0.1)'}`,
+                color: done || active ? '#fff' : '#666',
+              }}>
+                {done ? <Check size={16} /> : <Icon size={16} />}
+              </div>
+              <span style={{ fontSize: 11, color: active ? '#fff' : '#666', whiteSpace: 'nowrap' }}>{s.label}</span>
+            </div>
+            {i < steps.length - 1 && (
+              <div style={{ flex: 1, height: 2, background: done ? '#00C853' : 'rgba(255,255,255,0.08)', margin: '0 8px', marginBottom: 20 }} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function stepSubtitle(step) {
+  return [
+    "Enter the company's registration details, address, and contact information.",
+    'Assign internal team members to this account.',
+    'Set the account tier, credit limit, billing period and payment terms.',
+    'Add the primary contact person for this company.',
+  ][step];
+}
+
+// ─── Success screen ───────────────────────────────────────────
+function SuccessScreen({ customer, navigate }) {
+  return (
+    <div style={{ maxWidth: 480, margin: '80px auto', textAlign: 'center' }}>
+      <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(0,200,83,0.15)', border: '2px solid #00C853', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+        <Check size={28} color="#00C853" />
+      </div>
+      <h2 style={{ fontSize: 22, fontWeight: 700, color: '#fff', marginBottom: 8 }}>Customer Created</h2>
+      <p style={{ color: '#AAAAAA', marginBottom: 4 }}>{customer.business_name}</p>
+      <p style={{ color: '#00C853', fontWeight: 600, marginBottom: 28 }}>{customer.account_number}</p>
+      <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+        <button className="btn-primary" onClick={() => navigate(`/customers/${customer.id}`)}>View Customer</button>
+        <button className="btn-ghost" onClick={() => navigate('/customers/new')}>Add Another</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────
 export default function CustomerNew() {
   const navigate = useNavigate();
-  const [step, setStep]     = useState(0);
-  const [form, setForm]     = useState(EMPTY_FORM);
-  const [errors, setErrors] = useState({});
-  const [done, setDone]     = useState(false);
+  const [step, setStep]               = useState(0);
+  const [form, setForm]               = useState(EMPTY_FORM);
+  const [errors, setErrors]           = useState({});
+  const [done, setDone]               = useState(false);
   const [newCustomer, setNewCustomer] = useState(null);
 
-  // Staff queries
-  const { data: salespeople = [] } = useQuery({ queryKey: ['staff', 'sales'],              queryFn: () => staffApi.list('sales') });
+  const { data: salespeople = [] }     = useQuery({ queryKey: ['staff', 'sales'],              queryFn: () => staffApi.list('sales') });
   const { data: accountManagers = [] } = useQuery({ queryKey: ['staff', 'account_management'], queryFn: () => staffApi.list('account_management') });
-  const { data: onboarders = [] } = useQuery({ queryKey: ['staff', 'onboarding'],          queryFn: () => staffApi.list('onboarding') });
+  const { data: onboarders = [] }      = useQuery({ queryKey: ['staff', 'onboarding'],         queryFn: () => staffApi.list('onboarding') });
 
   const createCustomer = useMutation({
     mutationFn: async () => {
-      // 1. Create customer
       const customer = await customersApi.create({
         business_name:        form.business_name,
-        registered_address:   form.registered_address,
+        company_type:         form.company_type || undefined,
+        company_reg_number:   form.company_reg_number || undefined,
+        vat_number:           form.vat_number || undefined,
+        address_line_1:       form.address_line_1 || undefined,
+        address_line_2:       form.address_line_2 || undefined,
+        city:                 form.city || undefined,
+        county:               form.county || undefined,
         postcode:             form.postcode,
+        country:              form.country || 'United Kingdom',
         phone_number:         form.phone_number,
         primary_email:        form.primary_email,
-        company_reg_number:   form.company_reg_number || undefined,
+        accounts_email:       form.accounts_email || undefined,
+        eori_number:          form.eori_number || undefined,
+        ioss_number:          form.ioss_number || undefined,
         salesperson_id:       form.salesperson_id || undefined,
         account_manager_id:   form.account_manager_id || undefined,
         onboarding_person_id: form.onboarding_person_id || undefined,
         tier:                 form.tier,
         credit_limit:         parseFloat(form.credit_limit) || 0,
+        billing_cycle:        form.billing_cycle,
         payment_terms_days:   form.payment_terms_days,
       });
-      // 2. Add first contact
       if (form.contact_full_name) {
         await customersApi.addContact(customer.id, {
           full_name:          form.contact_full_name,
@@ -119,10 +455,7 @@ export default function CustomerNew() {
       }
       return customer;
     },
-    onSuccess: (customer) => {
-      setNewCustomer(customer);
-      setDone(true);
-    },
+    onSuccess: (customer) => { setNewCustomer(customer); setDone(true); },
   });
 
   function set(field, value) {
@@ -141,21 +474,15 @@ export default function CustomerNew() {
     }
   }
 
-  function back() {
-    setErrors({});
-    setStep(s => s - 1);
-  }
+  function back() { setErrors({}); setStep(s => s - 1); }
 
   if (done && newCustomer) return <SuccessScreen customer={newCustomer} navigate={navigate} />;
 
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto' }}>
-      {/* Header */}
+    <div style={{ maxWidth: 760, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
-        <button
-          onClick={() => navigate('/customers')}
-          style={{ background: 'none', border: 'none', color: '#AAAAAA', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}
-        >
+        <button onClick={() => navigate('/customers')}
+          style={{ background: 'none', border: 'none', color: '#AAAAAA', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
           <ArrowLeft size={14} /> Customers
         </button>
         <span style={{ color: '#444' }}>/</span>
@@ -164,10 +491,8 @@ export default function CustomerNew() {
 
       <h1 style={{ fontSize: 24, fontWeight: 700, color: '#00C853', marginBottom: 24 }}>Add Customer</h1>
 
-      {/* Step indicator */}
       <StepIndicator steps={STEPS} current={step} />
 
-      {/* Form card */}
       <div className="moov-card" style={{ padding: 32, marginTop: 24 }}>
         <h2 style={{ fontSize: 18, fontWeight: 600, color: '#7B2FBE', marginBottom: 4 }}>
           {STEPS[step].label}
@@ -187,21 +512,13 @@ export default function CustomerNew() {
           </div>
         )}
 
-        {/* Nav buttons */}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 32, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          <button
-            className="btn-ghost"
-            onClick={step === 0 ? () => navigate('/customers') : back}
-          >
+          <button className="btn-ghost" onClick={step === 0 ? () => navigate('/customers') : back}>
             <ArrowLeft size={14} /> {step === 0 ? 'Cancel' : 'Back'}
           </button>
-          <button
-            className="btn-primary"
-            onClick={next}
-            disabled={createCustomer.isPending}
-          >
+          <button className="btn-primary" onClick={next} disabled={createCustomer.isPending}>
             {createCustomer.isPending
-              ? 'Creating…'
+              ? 'Saving…'
               : step === STEPS.length - 1
                 ? <><Check size={14} /> Create Customer</>
                 : <>Next <ArrowRight size={14} /></>}
@@ -210,349 +527,4 @@ export default function CustomerNew() {
       </div>
     </div>
   );
-}
-
-// ─── Step subtitles ──────────────────────────────────────────
-function stepSubtitle(step) {
-  return [
-    'Enter the core details for this business account.',
-    'Assign the internal team responsible for this customer. All fields are optional.',
-    'Set the customer\'s pricing tier, credit limit, and payment terms.',
-    'Add the primary contact for this account. You can add more contacts from the customer record.',
-  ][step];
-}
-
-// ─── Step 1: Business Details ────────────────────────────────
-function StepBusiness({ form, set, errors }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <Row2>
-        <Field label="Business Name" required error={errors.business_name}>
-          <PillInput value={form.business_name} onChange={v => set('business_name', v)} placeholder="Acme Logistics Ltd" error={errors.business_name} />
-        </Field>
-        <Field label="Company Reg. Number" error={errors.company_reg_number}>
-          <PillInput value={form.company_reg_number} onChange={v => set('company_reg_number', v)} placeholder="12345678 (optional)" />
-        </Field>
-      </Row2>
-
-      <Field label="Registered Address" required error={errors.registered_address}>
-        <textarea
-          value={form.registered_address}
-          onChange={e => set('registered_address', e.target.value)}
-          placeholder="123 High Street, Birmingham"
-          style={{
-            width: '100%', minHeight: 80,
-            background: '#1A1D35', border: `1px solid ${errors.registered_address ? '#E91E8C' : 'rgba(255,255,255,0.1)'}`,
-            borderRadius: 12, padding: '12px 16px', color: '#fff', fontSize: 14,
-            resize: 'vertical', fontFamily: 'inherit',
-          }}
-        />
-        {errors.registered_address && <ErrMsg>{errors.registered_address}</ErrMsg>}
-      </Field>
-
-      <Row2>
-        <Field label="Postcode" required error={errors.postcode}>
-          <PillInput value={form.postcode} onChange={v => set('postcode', v.toUpperCase())} placeholder="B1 1BB" error={errors.postcode} />
-        </Field>
-        <Field label="Phone Number" required error={errors.phone_number}>
-          <PillInput value={form.phone_number} onChange={v => set('phone_number', v)} placeholder="0121 000 0000" type="tel" error={errors.phone_number} />
-        </Field>
-      </Row2>
-
-      <Field label="Primary Email" required error={errors.primary_email}>
-        <PillInput value={form.primary_email} onChange={v => set('primary_email', v)} placeholder="accounts@acmelogistics.co.uk" type="email" error={errors.primary_email} />
-      </Field>
-    </div>
-  );
-}
-
-// ─── Step 2: Assign Staff ────────────────────────────────────
-function StepStaff({ form, set, salespeople, accountManagers, onboarders }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <StaffSelect
-        label="Salesperson"
-        hint="The sales team member who won or is managing this deal."
-        value={form.salesperson_id}
-        onChange={v => set('salesperson_id', v)}
-        options={salespeople}
-        emptyLabel="No salesperson assigned"
-      />
-      <StaffSelect
-        label="Account Manager"
-        hint="Responsible for the ongoing relationship after onboarding."
-        value={form.account_manager_id}
-        onChange={v => set('account_manager_id', v)}
-        options={accountManagers}
-        emptyLabel="Unmanaged"
-      />
-      <StaffSelect
-        label="Onboarding Person"
-        hint="Who will guide this customer through the setup process."
-        value={form.onboarding_person_id}
-        onChange={v => set('onboarding_person_id', v)}
-        options={onboarders}
-        emptyLabel="Not assigned"
-      />
-    </div>
-  );
-}
-
-function StaffSelect({ label, hint, value, onChange, options, emptyLabel }) {
-  return (
-    <div>
-      <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 4 }}>{label}</label>
-      {hint && <p style={{ fontSize: 12, color: '#AAAAAA', marginBottom: 8 }}>{hint}</p>}
-      <div className="pill-input-wrap">
-        <select value={value} onChange={e => onChange(e.target.value)} style={{ paddingLeft: 16 }}>
-          <option value="">{emptyLabel}</option>
-          {options.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
-        </select>
-        <div className="green-cap">▾</div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Step 3: Account Setup ───────────────────────────────────
-function StepAccount({ form, set, errors }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* Tier */}
-      <div>
-        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 12 }}>Customer Tier</label>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          {TIERS.map(t => (
-            <button
-              key={t.value}
-              type="button"
-              onClick={() => set('tier', t.value)}
-              style={{
-                padding: '14px 16px', borderRadius: 12, cursor: 'pointer', textAlign: 'left',
-                border: form.tier === t.value ? '2px solid #00C853' : '1px solid rgba(255,255,255,0.1)',
-                background: form.tier === t.value ? 'rgba(0,200,83,0.08)' : '#1A1D35',
-                transition: 'all 0.15s',
-              }}
-            >
-              <div style={{ fontSize: 14, fontWeight: 700, color: form.tier === t.value ? '#00C853' : '#fff' }}>{t.label}</div>
-              <div style={{ fontSize: 12, color: '#AAAAAA', marginTop: 2 }}>{t.desc}</div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <Row2>
-        {/* Credit limit */}
-        <Field label="Credit Limit" required error={errors.credit_limit}>
-          <div className="pill-input-wrap">
-            <div className="green-cap" style={{ borderRight: '1px solid rgba(0,200,83,0.3)' }}>£</div>
-            <input
-              type="number"
-              min="0"
-              step="100"
-              value={form.credit_limit}
-              onChange={e => set('credit_limit', e.target.value)}
-              placeholder="5000"
-              style={{ border: errors.credit_limit ? '1px solid #E91E8C' : undefined }}
-            />
-          </div>
-          {errors.credit_limit && <ErrMsg>{errors.credit_limit}</ErrMsg>}
-        </Field>
-
-        {/* Payment terms */}
-        <div>
-          <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 4 }}>Payment Terms</label>
-          <div className="pill-input-wrap">
-            <select
-              value={form.payment_terms_days}
-              onChange={e => set('payment_terms_days', parseInt(e.target.value))}
-              style={{ paddingLeft: 16 }}
-            >
-              {PAYMENT_TERMS.map(pt => (
-                <option key={pt.value} value={pt.value}>{pt.label} — {pt.note}</option>
-              ))}
-            </select>
-            <div className="green-cap">▾</div>
-          </div>
-          {form.payment_terms_days > 7 && (
-            <p style={{ fontSize: 12, color: '#FFC107', marginTop: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
-              ⚠ This requires manager or director approval before the account goes live.
-            </p>
-          )}
-        </div>
-      </Row2>
-    </div>
-  );
-}
-
-// ─── Step 4: First Contact ───────────────────────────────────
-function StepContact({ form, set, errors }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <Row2>
-        <Field label="Full Name" required error={errors.contact_full_name}>
-          <PillInput value={form.contact_full_name} onChange={v => set('contact_full_name', v)} placeholder="Jane Smith" error={errors.contact_full_name} />
-        </Field>
-        <Field label="Job Title">
-          <PillInput value={form.contact_job_title} onChange={v => set('contact_job_title', v)} placeholder="Finance Director" />
-        </Field>
-      </Row2>
-      <Row2>
-        <Field label="Email Address" required error={errors.contact_email}>
-          <PillInput value={form.contact_email} onChange={v => set('contact_email', v)} placeholder="jane@acmelogistics.co.uk" type="email" error={errors.contact_email} />
-        </Field>
-        <Field label="Phone Number">
-          <PillInput value={form.contact_phone} onChange={v => set('contact_phone', v)} placeholder="07700 000000" type="tel" />
-        </Field>
-      </Row2>
-
-      {/* Contact flags */}
-      <div style={{ display: 'flex', gap: 12 }}>
-        <Toggle
-          label="Main Contact"
-          hint="Primary point of contact for all communications"
-          checked={form.contact_is_main}
-          onChange={v => set('contact_is_main', v)}
-          color="#00C853"
-        />
-        <Toggle
-          label="Finance Contact"
-          hint="Receives invoices and billing communications"
-          checked={form.contact_is_finance}
-          onChange={v => set('contact_is_finance', v)}
-          color="#7B2FBE"
-        />
-      </div>
-    </div>
-  );
-}
-
-// ─── Success screen ──────────────────────────────────────────
-function SuccessScreen({ customer, navigate }) {
-  return (
-    <div style={{ maxWidth: 560, margin: '60px auto', textAlign: 'center' }}>
-      <div style={{
-        width: 72, height: 72, borderRadius: '50%',
-        background: 'rgba(0,200,83,0.15)', border: '2px solid #00C853',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        margin: '0 auto 24px',
-      }}>
-        <Check size={32} style={{ color: '#00C853' }} />
-      </div>
-      <h2 style={{ fontSize: 24, fontWeight: 700, color: '#fff', marginBottom: 8 }}>Customer Created</h2>
-      <p style={{ color: '#AAAAAA', fontSize: 14, marginBottom: 4 }}>
-        <span style={{ color: '#00BCD4', fontWeight: 600 }}>{customer.account_number}</span> — {customer.business_name}
-      </p>
-      <p style={{ color: '#AAAAAA', fontSize: 13, marginBottom: 32 }}>
-        The account is active and ready. Next step: set up their rate card.
-      </p>
-      <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-        <button className="btn-ghost" onClick={() => navigate('/customers')}>
-          Back to Customers
-        </button>
-        <button className="btn-primary" onClick={() => navigate(`/customers/${customer.id}`)}>
-          View Customer Record →
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Step indicator ──────────────────────────────────────────
-function StepIndicator({ steps, current }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-      {steps.map((s, i) => {
-        const done    = i < current;
-        const active  = i === current;
-        const color   = done ? '#00C853' : active ? '#00C853' : '#AAAAAA';
-        const bgColor = done ? 'rgba(0,200,83,0.15)' : active ? 'rgba(0,200,83,0.08)' : 'rgba(255,255,255,0.04)';
-
-        return (
-          <div key={s.key} style={{ display: 'flex', alignItems: 'center', flex: i < steps.length - 1 ? 1 : 'none' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 9999, background: bgColor, border: `1px solid ${active || done ? color : 'transparent'}` }}>
-              <div style={{
-                width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-                background: done ? '#00C853' : active ? 'rgba(0,200,83,0.2)' : 'rgba(255,255,255,0.08)',
-                border: `1.5px solid ${color}`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 11, fontWeight: 700, color: done ? '#000' : color,
-              }}>
-                {done ? <Check size={12} /> : i + 1}
-              </div>
-              <span style={{ fontSize: 12, fontWeight: 600, color, whiteSpace: 'nowrap' }}>{s.label}</span>
-            </div>
-            {i < steps.length - 1 && (
-              <div style={{ flex: 1, height: 1, background: i < current ? '#00C853' : 'rgba(255,255,255,0.08)', margin: '0 4px', minWidth: 16 }} />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── Shared sub-components ───────────────────────────────────
-function Field({ label, required, error, children }) {
-  return (
-    <div style={{ flex: 1 }}>
-      <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 6 }}>
-        {label}{required && <span style={{ color: '#E91E8C', marginLeft: 3 }}>*</span>}
-      </label>
-      {children}
-      {error && <ErrMsg>{error}</ErrMsg>}
-    </div>
-  );
-}
-
-function PillInput({ value, onChange, placeholder, type = 'text', error }) {
-  return (
-    <div className="pill-input-wrap" style={error ? { borderColor: '#E91E8C' } : {}}>
-      <input
-        type={type}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-      />
-    </div>
-  );
-}
-
-function Toggle({ label, hint, checked, onChange, color }) {
-  return (
-    <div
-      onClick={() => onChange(!checked)}
-      style={{
-        flex: 1, padding: '14px 16px', borderRadius: 12, cursor: 'pointer',
-        border: checked ? `2px solid ${color}` : '1px solid rgba(255,255,255,0.1)',
-        background: checked ? `rgba(${color === '#00C853' ? '0,200,83' : '123,47,190'},0.08)` : '#1A1D35',
-        transition: 'all 0.15s',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: checked ? color : '#fff' }}>{label}</span>
-        <div style={{
-          width: 36, height: 20, borderRadius: 10,
-          background: checked ? color : 'rgba(255,255,255,0.15)',
-          position: 'relative', transition: 'background 0.2s',
-        }}>
-          <div style={{
-            position: 'absolute', top: 2,
-            left: checked ? 18 : 2,
-            width: 16, height: 16, borderRadius: '50%',
-            background: '#fff', transition: 'left 0.2s',
-          }} />
-        </div>
-      </div>
-      {hint && <p style={{ fontSize: 11, color: '#AAAAAA', marginTop: 4 }}>{hint}</p>}
-    </div>
-  );
-}
-
-function Row2({ children }) {
-  return <div style={{ display: 'flex', gap: 16 }}>{children}</div>;
-}
-
-function ErrMsg({ children }) {
-  return <p style={{ fontSize: 12, color: '#E91E8C', marginTop: 4 }}>{children}</p>;
 }
