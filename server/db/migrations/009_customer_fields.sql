@@ -15,6 +15,11 @@ DO $$ BEGIN
   ALTER TYPE billing_cycle ADD VALUE IF NOT EXISTS 'fortnightly';
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+-- ── Drop NOT NULL on registered_address (superseded by structured address fields) ─
+
+ALTER TABLE customers
+  ALTER COLUMN registered_address DROP NOT NULL;
+
 -- ── Extend customers ──────────────────────────────────────────────────────────
 
 ALTER TABLE customers
