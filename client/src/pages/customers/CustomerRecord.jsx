@@ -37,37 +37,37 @@ const gbp = (n) => `£${parseFloat(n || 0).toLocaleString('en-GB', { minimumFrac
 // ─── Shared field components ─────────────────────────────────
 const inp = (extra = {}) => ({
   background: '#0D0E2A', border: '1px solid rgba(255,255,255,0.15)',
-  borderRadius: 6, padding: '7px 10px', color: '#fff', fontSize: 13,
+  borderRadius: 5, padding: '5px 8px', color: '#fff', fontSize: 12,
   outline: 'none', width: '100%', boxSizing: 'border-box', ...extra,
 });
 const sel = () => inp({ cursor: 'pointer' });
 
-function ERow({ label, value, edit, editNode }) {
+function Row({ label, value, edit, editNode }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: edit ? 'flex-start' : 'center', gap: 12, minHeight: 32 }}>
-      <span style={{ fontSize: 12, color: '#AAAAAA', flexShrink: 0, paddingTop: edit ? 8 : 0 }}>{label}</span>
-      {edit ? <div style={{ flex: 1 }}>{editNode}</div>
-             : <span style={{ fontSize: 13, color: '#fff', textAlign: 'right' }}>{value || '—'}</span>}
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, minHeight: 26 }}>
+      <span style={{ fontSize: 12, color: '#AAAAAA', flexShrink: 0, whiteSpace: 'nowrap', minWidth: 110 }}>{label}</span>
+      {edit
+        ? <div style={{ width: 180, flexShrink: 0 }}>{editNode}</div>
+        : <span style={{ fontSize: 12, color: '#fff', textAlign: 'right', wordBreak: 'break-word' }}>{value || '—'}</span>}
     </div>
   );
 }
 
 function SectionTitle({ children }) {
-  return <h3 style={{ fontSize: 13, fontWeight: 700, color: '#7B2FBE', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>{children}</h3>;
+  return <h3 style={{ fontSize: 11, fontWeight: 700, color: '#7B2FBE', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>{children}</h3>;
 }
 
 function InfoCard({ title, children }) {
   return (
-    <div className="moov-card" style={{ padding: 20 }}>
+    <div className="moov-card" style={{ padding: '16px 18px' }}>
       <SectionTitle>{title}</SectionTitle>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{children}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{children}</div>
     </div>
   );
 }
 
 // ─── Overview Tab ────────────────────────────────────────────
 function OverviewTab({ c, onSaved }) {
-  const queryClient = useQueryClient();
   const [edit, setEdit] = useState(false);
   const [form, setForm] = useState({});
 
@@ -113,140 +113,141 @@ function OverviewTab({ c, onSaved }) {
       eori_number:        form.eori_number || null,
       ioss_number:        form.ioss_number || null,
     }),
-    onSuccess: (updated) => {
-      onSaved(updated);
-      setEdit(false);
-    },
+    onSuccess: (updated) => { onSaved(updated); setEdit(false); },
   });
-
-  const g2 = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 };
 
   return (
     <div>
       {/* Edit / Save bar */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12, gap: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10, gap: 8 }}>
         {edit ? (
           <>
-            <button className="btn-ghost" onClick={() => setEdit(false)} style={{ fontSize: 13 }}>
-              <X size={13} /> Cancel
-            </button>
-            <button className="btn-primary" onClick={() => save.mutate()} disabled={save.isPending} style={{ fontSize: 13 }}>
-              <Check size={13} /> {save.isPending ? 'Saving…' : 'Save Changes'}
+            <button className="btn-ghost" onClick={() => setEdit(false)} style={{ fontSize: 12 }}><X size={12} /> Cancel</button>
+            <button className="btn-primary" onClick={() => save.mutate()} disabled={save.isPending} style={{ fontSize: 12 }}>
+              <Check size={12} /> {save.isPending ? 'Saving…' : 'Save Changes'}
             </button>
           </>
         ) : (
-          <button className="btn-ghost" onClick={startEdit} style={{ fontSize: 13 }}>
-            <Pencil size={13} /> Edit Details
-          </button>
+          <button className="btn-ghost" onClick={startEdit} style={{ fontSize: 12 }}><Pencil size={12} /> Edit Details</button>
         )}
       </div>
 
       {save.isError && (
-        <div style={{ marginBottom: 12, padding: 10, background: 'rgba(233,30,140,0.1)', border: '1px solid #E91E8C', borderRadius: 8, fontSize: 13, color: '#E91E8C' }}>
+        <div style={{ marginBottom: 10, padding: 8, background: 'rgba(233,30,140,0.1)', border: '1px solid #E91E8C', borderRadius: 6, fontSize: 12, color: '#E91E8C' }}>
           Failed to save. Please try again.
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Two-column grid — same as before */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
 
-        {/* Company Info */}
-        <InfoCard title="Company Information">
-          <ERow label="Business Name" value={c.business_name} edit={edit}
-            editNode={<input style={inp()} value={form.business_name} onChange={e => set('business_name', e.target.value)} />} />
-          <ERow label="Company Type" value={COMPANY_TYPE_LABELS[c.company_type] || '—'} edit={edit}
-            editNode={
-              <select style={sel()} value={form.company_type} onChange={e => set('company_type', e.target.value)}>
-                <option value="limited_company">Limited Company (Ltd)</option>
-                <option value="partnership">Partnership / LLP</option>
-                <option value="sole_trader">Sole Trader</option>
-              </select>
-            } />
-          <div style={edit ? g2 : {}}>
-            <ERow label="Company Reg. No." value={c.company_reg_number} edit={edit}
+        {/* LEFT COLUMN */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+          <InfoCard title="Business Details">
+            <Row label="Business Name" value={c.business_name} edit={edit}
+              editNode={<input style={inp()} value={form.business_name} onChange={e => set('business_name', e.target.value)} />} />
+            <Row label="Company Type" value={COMPANY_TYPE_LABELS[c.company_type]} edit={edit}
+              editNode={
+                <select style={sel()} value={form.company_type} onChange={e => set('company_type', e.target.value)}>
+                  <option value="limited_company">Limited Company (Ltd)</option>
+                  <option value="partnership">Partnership / LLP</option>
+                  <option value="sole_trader">Sole Trader</option>
+                </select>
+              } />
+            <Row label="Company Reg. No." value={c.company_reg_number} edit={edit}
               editNode={<input style={inp()} value={form.company_reg_number} onChange={e => set('company_reg_number', e.target.value)} placeholder="12345678" />} />
-            <ERow label="VAT Number" value={c.vat_number} edit={edit}
+            <Row label="VAT Number" value={c.vat_number} edit={edit}
               editNode={<input style={inp()} value={form.vat_number} onChange={e => set('vat_number', e.target.value)} placeholder="GB123456789" />} />
-          </div>
-        </InfoCard>
-
-        {/* Address */}
-        <InfoCard title="Registered Address">
-          <ERow label="Address Line 1" value={c.address_line_1} edit={edit}
-            editNode={<input style={inp()} value={form.address_line_1} onChange={e => set('address_line_1', e.target.value)} />} />
-          <ERow label="Address Line 2" value={c.address_line_2} edit={edit}
-            editNode={<input style={inp()} value={form.address_line_2} onChange={e => set('address_line_2', e.target.value)} />} />
-          <div style={edit ? g2 : {}}>
-            <ERow label="City / Town" value={c.city} edit={edit}
-              editNode={<input style={inp()} value={form.city} onChange={e => set('city', e.target.value)} />} />
-            <ERow label="County" value={c.county} edit={edit}
-              editNode={<input style={inp()} value={form.county} onChange={e => set('county', e.target.value)} />} />
-          </div>
-          <div style={edit ? g2 : {}}>
-            <ERow label="Postcode" value={c.postcode} edit={edit}
-              editNode={<input style={inp()} value={form.postcode} onChange={e => set('postcode', e.target.value.toUpperCase())} />} />
-            <ERow label="Country" value={c.country} edit={edit}
-              editNode={<input style={inp()} value={form.country} onChange={e => set('country', e.target.value)} />} />
-          </div>
-        </InfoCard>
-
-        {/* Contact Details */}
-        <InfoCard title="Contact Details">
-          <ERow label="Phone" value={c.phone_number} edit={edit}
-            editNode={<input style={inp()} value={form.phone_number} onChange={e => set('phone_number', e.target.value)} />} />
-          <ERow label="Main Email" value={c.primary_email} edit={edit}
-            editNode={<input style={inp()} value={form.primary_email} onChange={e => set('primary_email', e.target.value)} />} />
-          <ERow label="Accounts Email" value={c.accounts_email} edit={edit}
-            editNode={<input style={inp()} value={form.accounts_email} onChange={e => set('accounts_email', e.target.value)} placeholder="accounts@company.co.uk" />} />
-        </InfoCard>
-
-        {/* International Trade */}
-        {(c.eori_number || c.ioss_number || edit) && (
-          <InfoCard title="International Trade">
-            <ERow label="EORI Number" value={c.eori_number} edit={edit}
-              editNode={<input style={inp()} value={form.eori_number} onChange={e => set('eori_number', e.target.value)} placeholder="GB123456789000" />} />
-            <ERow label="IOSS Number" value={c.ioss_number} edit={edit}
-              editNode={<input style={inp()} value={form.ioss_number} onChange={e => set('ioss_number', e.target.value)} placeholder="IM1234567890" />} />
+            <Row label="Phone" value={c.phone_number} edit={edit}
+              editNode={<input style={inp()} value={form.phone_number} onChange={e => set('phone_number', e.target.value)} />} />
+            <Row label="Main Email" value={c.primary_email} edit={edit}
+              editNode={<input style={inp()} value={form.primary_email} onChange={e => set('primary_email', e.target.value)} />} />
+            <Row label="Accounts Email" value={c.accounts_email} edit={edit}
+              editNode={<input style={inp()} value={form.accounts_email} onChange={e => set('accounts_email', e.target.value)} placeholder="(same as main)" />} />
           </InfoCard>
-        )}
 
-        {/* Account Settings */}
-        <InfoCard title="Account Settings">
-          <ERow label="Account Tier" value={c.tier ? c.tier.charAt(0).toUpperCase() + c.tier.slice(1) : '—'} edit={edit}
-            editNode={
-              <select style={sel()} value={form.tier} onChange={e => set('tier', e.target.value)}>
-                <option value="bronze">Bronze</option>
-                <option value="silver">Silver</option>
-                <option value="gold">Gold</option>
-                <option value="enterprise">Enterprise</option>
-              </select>
-            } />
-          <ERow label="Credit Limit" value={gbp(c.credit_limit)} edit={edit}
-            editNode={<input style={inp()} type="number" min="0" value={form.credit_limit} onChange={e => set('credit_limit', e.target.value)} />} />
-          <ERow label="Billing Period" value={BILLING_PERIOD_LABELS[c.billing_cycle] || c.billing_cycle || '—'} edit={edit}
-            editNode={
-              <select style={sel()} value={form.billing_cycle} onChange={e => set('billing_cycle', e.target.value)}>
-                <option value="weekly">Weekly</option>
-                <option value="fortnightly">Fortnightly</option>
-                <option value="monthly">Monthly</option>
-              </select>
-            } />
-          <ERow label="Payment Terms" value={`${c.payment_terms_days} days`} edit={edit}
-            editNode={
-              <select style={sel()} value={form.payment_terms_days} onChange={e => set('payment_terms_days', e.target.value)}>
-                <option value={7}>7 days</option>
-                <option value={14}>14 days</option>
-                <option value={28}>28 days</option>
-                <option value={30}>30 days</option>
-              </select>
-            } />
-          <ERow label="Health Score"      value={<HealthBadge score={c.health_score} />} />
-          <ERow label="Account Status"    value={<AccountStatusBadge status={c.account_status} />} />
-          <ERow label="Account Manager"   value={c.account_manager_name || 'Unmanaged'} />
-          <ERow label="Salesperson"       value={c.salesperson_name || '—'} />
-          <ERow label="Onboarding Person" value={c.onboarding_person_name || '—'} />
-          <ERow label="Customer Since"    value={c.date_onboarded ? format(new Date(c.date_onboarded), 'dd MMM yyyy') : '—'} />
-        </InfoCard>
+          <InfoCard title="Address">
+            <Row label="Address Line 1" value={c.address_line_1} edit={edit}
+              editNode={<input style={inp()} value={form.address_line_1} onChange={e => set('address_line_1', e.target.value)} />} />
+            <Row label="Address Line 2" value={c.address_line_2} edit={edit}
+              editNode={<input style={inp()} value={form.address_line_2} onChange={e => set('address_line_2', e.target.value)} />} />
+            <Row label="City / Town" value={c.city} edit={edit}
+              editNode={<input style={inp()} value={form.city} onChange={e => set('city', e.target.value)} />} />
+            <Row label="County" value={c.county} edit={edit}
+              editNode={<input style={inp()} value={form.county} onChange={e => set('county', e.target.value)} />} />
+            <Row label="Postcode" value={c.postcode} edit={edit}
+              editNode={<input style={inp()} value={form.postcode} onChange={e => set('postcode', e.target.value.toUpperCase())} />} />
+            <Row label="Country" value={c.country} edit={edit}
+              editNode={<input style={inp()} value={form.country} onChange={e => set('country', e.target.value)} />} />
+          </InfoCard>
 
+          {(c.eori_number || c.ioss_number || edit) && (
+            <InfoCard title="International Trade">
+              <Row label="EORI Number" value={c.eori_number} edit={edit}
+                editNode={<input style={inp()} value={form.eori_number} onChange={e => set('eori_number', e.target.value)} placeholder="GB123456789000" />} />
+              <Row label="IOSS Number" value={c.ioss_number} edit={edit}
+                editNode={<input style={inp()} value={form.ioss_number} onChange={e => set('ioss_number', e.target.value)} placeholder="IM1234567890" />} />
+            </InfoCard>
+          )}
+
+        </div>
+
+        {/* RIGHT COLUMN */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+          <InfoCard title="Account Settings">
+            <Row label="Tier" value={c.tier ? c.tier.charAt(0).toUpperCase() + c.tier.slice(1) : '—'} edit={edit}
+              editNode={
+                <select style={sel()} value={form.tier} onChange={e => set('tier', e.target.value)}>
+                  <option value="bronze">Bronze</option>
+                  <option value="silver">Silver</option>
+                  <option value="gold">Gold</option>
+                  <option value="enterprise">Enterprise</option>
+                </select>
+              } />
+            <Row label="Credit Limit" value={gbp(c.credit_limit)} edit={edit}
+              editNode={<input style={inp()} type="number" min="0" value={form.credit_limit} onChange={e => set('credit_limit', e.target.value)} />} />
+            <Row label="Billing Period" value={BILLING_PERIOD_LABELS[c.billing_cycle] || c.billing_cycle} edit={edit}
+              editNode={
+                <select style={sel()} value={form.billing_cycle} onChange={e => set('billing_cycle', e.target.value)}>
+                  <option value="weekly">Weekly</option>
+                  <option value="fortnightly">Fortnightly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              } />
+            <Row label="Payment Terms" value={`${c.payment_terms_days} days`} edit={edit}
+              editNode={
+                <select style={sel()} value={form.payment_terms_days} onChange={e => set('payment_terms_days', e.target.value)}>
+                  <option value={7}>7 days</option>
+                  <option value={14}>14 days</option>
+                  <option value={28}>28 days</option>
+                  <option value={30}>30 days</option>
+                </select>
+              } />
+            <Row label="Account Status"    value={<AccountStatusBadge status={c.account_status} />} />
+            <Row label="Health Score"      value={<HealthBadge score={c.health_score} />} />
+          </InfoCard>
+
+          <InfoCard title="Team">
+            <Row label="Account Manager"   value={c.account_manager_name || 'Unmanaged'} />
+            <Row label="Salesperson"       value={c.salesperson_name || '—'} />
+            <Row label="Onboarding Person" value={c.onboarding_person_name || '—'} />
+            <Row label="Customer Since"    value={c.date_onboarded ? format(new Date(c.date_onboarded), 'dd MMM yyyy') : '—'} />
+          </InfoCard>
+
+          {c.health_score_summary && (
+            <InfoCard title="Health Score Detail">
+              <p style={{ fontSize: 12, color: '#DDDDDD', lineHeight: 1.6 }}>{c.health_score_summary}</p>
+              {c.health_score_updated && (
+                <p style={{ fontSize: 11, color: '#AAAAAA', marginTop: 4 }}>
+                  Last calculated: {format(new Date(c.health_score_updated), 'dd MMM yyyy, HH:mm')}
+                </p>
+              )}
+            </InfoCard>
+          )}
+
+        </div>
       </div>
     </div>
   );
