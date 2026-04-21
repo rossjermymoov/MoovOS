@@ -7,6 +7,7 @@ export const customersApi = {
   get: (id) => api.get(`/customers/${id}`).then(r => r.data),
   create: (data) => api.post('/customers', data).then(r => r.data),
   update: (id, data) => api.patch(`/customers/${id}`, data).then(r => r.data),
+  delete: (id) => api.delete(`/customers/${id}`).then(r => r.data),
 
   applyOnStop: (id, { reason, staff_id }) =>
     api.post(`/customers/${id}/on-stop`, { reason, staff_id }).then(r => r.data),

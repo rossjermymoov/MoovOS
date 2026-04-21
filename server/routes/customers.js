@@ -230,6 +230,21 @@ router.patch('/:id', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// DELETE /api/customers/:id  — permanently delete a customer
+// ─────────────────────────────────────────────────────────────
+router.delete('/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const result = await query(
+      `DELETE FROM customers WHERE id = $1 RETURNING id, account_number, business_name`,
+      [id]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Customer not found' });
+    res.json({ deleted: true, ...result.rows[0] });
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────
 // POST /api/customers/:id/on-stop  — apply On Stop (Section 1.11)
 // ─────────────────────────────────────────────────────────────
 router.post('/:id/on-stop', async (req, res, next) => {

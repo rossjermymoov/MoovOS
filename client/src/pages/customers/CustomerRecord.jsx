@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, AlertTriangle, Phone, Mail, MapPin, Building2,
   Users, MessageSquare, TrendingUp, DollarSign, Zap, Info,
-  Pencil, X, Check, ShieldCheck,
+  Pencil, X, Check, ShieldCheck, Trash2,
 } from 'lucide-react';
 import { customersApi } from '../../api/customers';
 import { HealthBadge, AccountStatusBadge, TierBadge, CreditUtilisationBar } from '../../components/ui/StatusBadge';
@@ -67,7 +67,7 @@ function InfoCard({ title, children }) {
 }
 
 // ─── Overview Tab ────────────────────────────────────────────
-function OverviewTab({ c, onSaved }) {
+function OverviewTab({ c, onSaved, onDeleteRequest }) {
   const [edit, setEdit] = useState(false);
   const [form, setForm] = useState({});
 
@@ -253,6 +253,26 @@ function OverviewTab({ c, onSaved }) {
 
         </div>
       </div>
+
+      {/* Danger zone */}
+      {!edit && (
+        <div style={{ marginTop: 24, padding: '16px 18px', border: '1px solid rgba(233,30,140,0.25)', borderRadius: 10, background: 'rgba(233,30,140,0.04)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#E91E8C' }}>Delete Customer</div>
+              <div style={{ fontSize: 12, color: '#AAAAAA', marginTop: 2 }}>
+                Permanently removes this customer and all associated data. This cannot be undone.
+              </div>
+            </div>
+            <button
+              onClick={onDeleteRequest}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 6, background: 'rgba(233,30,140,0.12)', border: '1px solid #E91E8C', color: '#E91E8C', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+            >
+              <Trash2 size={13} /> Delete Customer
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -407,9 +427,11 @@ export default function CustomerRecord() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab]   = useState('overview');
+  const [activeTab, setActiveTab]     = useState('overview');
   const [onStopModal, setOnStopModal] = useState(null);
   const [onStopInput, setOnStopInput] = useState('');
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['customer', id],
@@ -428,6 +450,11 @@ export default function CustomerRecord() {
   function handleCustomerSaved(updated) {
     queryClient.setQueryData(['customer', id], d => ({ ...d, customer: { ...d.customer, ...updated } }));
   }
+
+  const deleteCustomer = useMutation({
+    mutationFn: () => customersApi.delete(id),
+    onSuccess: () => navigate('/customers'),
+  });
 
   if (isLoading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: '#AAAAAA' }}>
@@ -579,7 +606,7 @@ export default function CustomerRecord() {
         ))}
       </div>
 
-      {activeTab === 'overview'  && <OverviewTab c={c} onSaved={handleCustomerSaved} />}
+      {activeTab === 'overview'  && <OverviewTab c={c} onSaved={handleCustomerSaved} onDeleteRequest={() => { setDeleteModal(true); setDeleteConfirm(''); }} />}
       {activeTab === 'contacts'  && <ContactsTab contacts={contacts} />}
       {activeTab === 'volume'    && <VolumeTab snapshots={volume_snapshots} />}
       {activeTab === 'financial' && <FinancialTab c={c} creditPct={creditPct} />}
@@ -588,6 +615,44 @@ export default function CustomerRecord() {
         <CustomerPricingTab customer={c}
           onCustomerUpdate={(updated) => queryClient.setQueryData(['customer', id], d => ({ ...d, customer: { ...d.customer, ...updated } }))}
         />
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="moov-card" style={{ width: 460, padding: 28, border: '2px solid #E91E8C' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <Trash2 size={18} style={{ color: '#E91E8C' }} />
+              <h3 style={{ fontSize: 17, fontWeight: 700, color: '#E91E8C', margin: 0 }}>Delete {c.business_name}?</h3>
+            </div>
+            <p style={{ color: '#AAAAAA', fontSize: 13, marginBottom: 20, lineHeight: 1.6 }}>
+              This will permanently delete this customer and all associated contacts, rates, and communications.
+              This action <strong style={{ color: '#fff' }}>cannot be undone</strong>.
+            </p>
+            <label style={{ fontSize: 12, color: '#AAAAAA', display: 'block', marginBottom: 6 }}>
+              Type <strong style={{ color: '#fff', fontFamily: 'monospace' }}>{c.account_number}</strong> to confirm
+            </label>
+            <input
+              value={deleteConfirm}
+              onChange={e => setDeleteConfirm(e.target.value)}
+              placeholder={c.account_number}
+              style={{ width: '100%', background: '#0D0E2A', border: '1px solid rgba(233,30,140,0.4)', borderRadius: 6, padding: '9px 12px', color: '#fff', fontSize: 13, fontFamily: 'monospace', boxSizing: 'border-box', outline: 'none' }}
+            />
+            <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
+              <button className="btn-ghost" onClick={() => { setDeleteModal(false); setDeleteConfirm(''); }}>Cancel</button>
+              <button
+                disabled={deleteConfirm !== c.account_number || deleteCustomer.isPending}
+                onClick={() => deleteCustomer.mutate()}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 6, background: deleteConfirm === c.account_number ? '#E91E8C' : 'rgba(233,30,140,0.2)', border: 'none', color: '#fff', fontSize: 13, fontWeight: 700, cursor: deleteConfirm === c.account_number ? 'pointer' : 'not-allowed' }}
+              >
+                <Trash2 size={13} /> {deleteCustomer.isPending ? 'Deleting…' : 'Delete Customer'}
+              </button>
+            </div>
+            {deleteCustomer.isError && (
+              <p style={{ marginTop: 10, fontSize: 12, color: '#E91E8C' }}>Failed to delete. Please try again.</p>
+            )}
+          </div>
+        </div>
       )}
 
       {/* On Stop Modal */}
