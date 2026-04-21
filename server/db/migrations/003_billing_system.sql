@@ -140,7 +140,7 @@ CREATE TABLE IF NOT EXISTS custom_cost_rate_cards (
 
 CREATE TABLE IF NOT EXISTS customer_pricing (
   id                  SERIAL PRIMARY KEY,
-  customer_id         INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  customer_id         UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
   courier_service_id  INTEGER NOT NULL REFERENCES courier_services(id) ON DELETE CASCADE,
   zone_id             INTEGER NOT NULL REFERENCES zones(id) ON DELETE CASCADE,
   min_weight_kg       NUMERIC(8,3) NOT NULL,
@@ -157,7 +157,7 @@ CREATE TABLE IF NOT EXISTS customer_pricing (
 
 CREATE TABLE IF NOT EXISTS volume_tiers (
   id                  SERIAL PRIMARY KEY,
-  customer_id         INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  customer_id         UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
   courier_service_id  INTEGER NOT NULL REFERENCES courier_services(id) ON DELETE CASCADE,
   zone_id             INTEGER REFERENCES zones(id) ON DELETE SET NULL,
   min_parcels         INTEGER NOT NULL,
@@ -219,7 +219,7 @@ CREATE TABLE IF NOT EXISTS rules_engine_conditions (
 
 CREATE TABLE IF NOT EXISTS charges (
   id                    SERIAL PRIMARY KEY,
-  customer_id           INTEGER NOT NULL REFERENCES customers(id),
+  customer_id           UUID NOT NULL REFERENCES customers(id),
   voila_shipment_id     BIGINT NOT NULL,
   order_id              VARCHAR(100) NOT NULL,
   tracking_code         VARCHAR(100),
@@ -253,7 +253,7 @@ CREATE INDEX IF NOT EXISTS charges_order_id_idx ON charges(order_id);
 
 CREATE TABLE IF NOT EXISTS invoices (
   id                   SERIAL PRIMARY KEY,
-  customer_id          INTEGER NOT NULL REFERENCES customers(id),
+  customer_id          UUID NOT NULL REFERENCES customers(id),
   invoice_number       VARCHAR(50) UNIQUE NOT NULL,
   billing_period_start DATE NOT NULL,
   billing_period_end   DATE NOT NULL,
@@ -313,7 +313,7 @@ CREATE TABLE IF NOT EXISTS price_increases (
 CREATE TABLE IF NOT EXISTS price_increase_exclusions (
   id                SERIAL PRIMARY KEY,
   price_increase_id INTEGER NOT NULL REFERENCES price_increases(id) ON DELETE CASCADE,
-  customer_id       INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  customer_id       UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
   UNIQUE (price_increase_id, customer_id)
 );
 
