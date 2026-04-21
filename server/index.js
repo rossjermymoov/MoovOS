@@ -49,14 +49,28 @@ app.use((err, _req, res, _next) => {
   });
 });
 
-// Run migrations then start listening
-runMigrations()
-  .then(() => {
-    app.listen(PORT, () => {
-      console.log(`🟢 Moov OS server running on port ${PORT}`);
-    });
-  })
-  .catch(err => {
-    console.error('❌ Migration failed — server will not start:', err.message);
+// ─── Startup ─────────────────────────────────────────────────
+async function start() {
+  // Check DATABASE_URL is set before attempting anything
+  if (!process.env.DATABASE_URL) {
+    console.error('❌ DATABASE_URL environment variable is not set.');
+    console.error('   On Railway: add a PostgreSQL plugin to your service, or set DATABASE_URL manually.');
     process.exit(1);
+  }
+
+  try {
+    await runMigrations();
+  } catch (err) {
+    console.error('❌ Migration failed — server will not start.');
+    console.error('   Error code:   ', err.code    || 'unknown');
+    console.error('   Error detail: ', err.detail  || err.message || err);
+    console.error('   Hint:         ', err.hint    || 'Check your DATABASE_URL and that your PostgreSQL service is running.');
+    process.exit(1);
+  }
+
+  app.listen(PORT, () => {
+    console.log(`🟢 Moov OS server running on port ${PORT}`);
   });
+}
+
+start();
