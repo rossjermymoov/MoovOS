@@ -394,6 +394,238 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
   );
 }
 
+// ─── Country data ─────────────────────────────────────────────────────────────
+
+const COUNTRIES = [
+  { iso:'AD', name:'Andorra' }, { iso:'AE', name:'United Arab Emirates' },
+  { iso:'AF', name:'Afghanistan' }, { iso:'AG', name:'Antigua and Barbuda' },
+  { iso:'AI', name:'Anguilla' }, { iso:'AL', name:'Albania' },
+  { iso:'AM', name:'Armenia' }, { iso:'AO', name:'Angola' },
+  { iso:'AR', name:'Argentina' }, { iso:'AS', name:'American Samoa' },
+  { iso:'AT', name:'Austria' }, { iso:'AU', name:'Australia' },
+  { iso:'AW', name:'Aruba' }, { iso:'AZ', name:'Azerbaijan' },
+  { iso:'BA', name:'Bosnia and Herzegovina' }, { iso:'BB', name:'Barbados' },
+  { iso:'BD', name:'Bangladesh' }, { iso:'BE', name:'Belgium' },
+  { iso:'BF', name:'Burkina Faso' }, { iso:'BG', name:'Bulgaria' },
+  { iso:'BH', name:'Bahrain' }, { iso:'BI', name:'Burundi' },
+  { iso:'BJ', name:'Benin' }, { iso:'BM', name:'Bermuda' },
+  { iso:'BN', name:'Brunei' }, { iso:'BO', name:'Bolivia' },
+  { iso:'BR', name:'Brazil' }, { iso:'BS', name:'Bahamas' },
+  { iso:'BT', name:'Bhutan' }, { iso:'BW', name:'Botswana' },
+  { iso:'BY', name:'Belarus' }, { iso:'BZ', name:'Belize' },
+  { iso:'CA', name:'Canada' }, { iso:'CD', name:'DR Congo' },
+  { iso:'CF', name:'Central African Republic' }, { iso:'CG', name:'Republic of the Congo' },
+  { iso:'CH', name:'Switzerland' }, { iso:'CI', name:"Côte d'Ivoire" },
+  { iso:'CK', name:'Cook Islands' }, { iso:'CL', name:'Chile' },
+  { iso:'CM', name:'Cameroon' }, { iso:'CN', name:'China' },
+  { iso:'CO', name:'Colombia' }, { iso:'CR', name:'Costa Rica' },
+  { iso:'CU', name:'Cuba' }, { iso:'CV', name:'Cape Verde' },
+  { iso:'CW', name:'Curaçao' }, { iso:'CY', name:'Cyprus' },
+  { iso:'CZ', name:'Czech Republic' }, { iso:'DE', name:'Germany' },
+  { iso:'DJ', name:'Djibouti' }, { iso:'DK', name:'Denmark' },
+  { iso:'DM', name:'Dominica' }, { iso:'DO', name:'Dominican Republic' },
+  { iso:'DZ', name:'Algeria' }, { iso:'EC', name:'Ecuador' },
+  { iso:'EE', name:'Estonia' }, { iso:'EG', name:'Egypt' },
+  { iso:'ER', name:'Eritrea' }, { iso:'ES', name:'Spain' },
+  { iso:'ET', name:'Ethiopia' }, { iso:'FI', name:'Finland' },
+  { iso:'FJ', name:'Fiji' }, { iso:'FK', name:'Falkland Islands' },
+  { iso:'FM', name:'Micronesia' }, { iso:'FO', name:'Faroe Islands' },
+  { iso:'FR', name:'France' }, { iso:'GA', name:'Gabon' },
+  { iso:'GB', name:'United Kingdom' }, { iso:'GD', name:'Grenada' },
+  { iso:'GE', name:'Georgia' }, { iso:'GF', name:'French Guiana' },
+  { iso:'GG', name:'Guernsey' }, { iso:'GH', name:'Ghana' },
+  { iso:'GI', name:'Gibraltar' }, { iso:'GL', name:'Greenland' },
+  { iso:'GM', name:'Gambia' }, { iso:'GN', name:'Guinea' },
+  { iso:'GP', name:'Guadeloupe' }, { iso:'GQ', name:'Equatorial Guinea' },
+  { iso:'GR', name:'Greece' }, { iso:'GT', name:'Guatemala' },
+  { iso:'GU', name:'Guam' }, { iso:'GW', name:'Guinea-Bissau' },
+  { iso:'GY', name:'Guyana' }, { iso:'HK', name:'Hong Kong' },
+  { iso:'HN', name:'Honduras' }, { iso:'HR', name:'Croatia' },
+  { iso:'HT', name:'Haiti' }, { iso:'HU', name:'Hungary' },
+  { iso:'ID', name:'Indonesia' }, { iso:'IE', name:'Ireland' },
+  { iso:'IL', name:'Israel' }, { iso:'IM', name:'Isle of Man' },
+  { iso:'IN', name:'India' }, { iso:'IQ', name:'Iraq' },
+  { iso:'IR', name:'Iran' }, { iso:'IS', name:'Iceland' },
+  { iso:'IT', name:'Italy' }, { iso:'JE', name:'Jersey' },
+  { iso:'JM', name:'Jamaica' }, { iso:'JO', name:'Jordan' },
+  { iso:'JP', name:'Japan' }, { iso:'KE', name:'Kenya' },
+  { iso:'KG', name:'Kyrgyzstan' }, { iso:'KH', name:'Cambodia' },
+  { iso:'KI', name:'Kiribati' }, { iso:'KM', name:'Comoros' },
+  { iso:'KN', name:'Saint Kitts and Nevis' }, { iso:'KP', name:'North Korea' },
+  { iso:'KR', name:'South Korea' }, { iso:'KW', name:'Kuwait' },
+  { iso:'KY', name:'Cayman Islands' }, { iso:'KZ', name:'Kazakhstan' },
+  { iso:'LA', name:'Laos' }, { iso:'LB', name:'Lebanon' },
+  { iso:'LC', name:'Saint Lucia' }, { iso:'LI', name:'Liechtenstein' },
+  { iso:'LK', name:'Sri Lanka' }, { iso:'LR', name:'Liberia' },
+  { iso:'LS', name:'Lesotho' }, { iso:'LT', name:'Lithuania' },
+  { iso:'LU', name:'Luxembourg' }, { iso:'LV', name:'Latvia' },
+  { iso:'LY', name:'Libya' }, { iso:'MA', name:'Morocco' },
+  { iso:'MC', name:'Monaco' }, { iso:'MD', name:'Moldova' },
+  { iso:'ME', name:'Montenegro' }, { iso:'MG', name:'Madagascar' },
+  { iso:'MH', name:'Marshall Islands' }, { iso:'MK', name:'North Macedonia' },
+  { iso:'ML', name:'Mali' }, { iso:'MM', name:'Myanmar' },
+  { iso:'MN', name:'Mongolia' }, { iso:'MO', name:'Macau' },
+  { iso:'MQ', name:'Martinique' }, { iso:'MR', name:'Mauritania' },
+  { iso:'MS', name:'Montserrat' }, { iso:'MT', name:'Malta' },
+  { iso:'MU', name:'Mauritius' }, { iso:'MV', name:'Maldives' },
+  { iso:'MW', name:'Malawi' }, { iso:'MX', name:'Mexico' },
+  { iso:'MY', name:'Malaysia' }, { iso:'MZ', name:'Mozambique' },
+  { iso:'NA', name:'Namibia' }, { iso:'NC', name:'New Caledonia' },
+  { iso:'NE', name:'Niger' }, { iso:'NG', name:'Nigeria' },
+  { iso:'NI', name:'Nicaragua' }, { iso:'NL', name:'Netherlands' },
+  { iso:'NO', name:'Norway' }, { iso:'NP', name:'Nepal' },
+  { iso:'NR', name:'Nauru' }, { iso:'NZ', name:'New Zealand' },
+  { iso:'OM', name:'Oman' }, { iso:'PA', name:'Panama' },
+  { iso:'PE', name:'Peru' }, { iso:'PF', name:'French Polynesia' },
+  { iso:'PG', name:'Papua New Guinea' }, { iso:'PH', name:'Philippines' },
+  { iso:'PK', name:'Pakistan' }, { iso:'PL', name:'Poland' },
+  { iso:'PR', name:'Puerto Rico' }, { iso:'PS', name:'Palestine' },
+  { iso:'PT', name:'Portugal' }, { iso:'PW', name:'Palau' },
+  { iso:'PY', name:'Paraguay' }, { iso:'QA', name:'Qatar' },
+  { iso:'RE', name:'Réunion' }, { iso:'RO', name:'Romania' },
+  { iso:'RS', name:'Serbia' }, { iso:'RU', name:'Russia' },
+  { iso:'RW', name:'Rwanda' }, { iso:'SA', name:'Saudi Arabia' },
+  { iso:'SB', name:'Solomon Islands' }, { iso:'SC', name:'Seychelles' },
+  { iso:'SD', name:'Sudan' }, { iso:'SE', name:'Sweden' },
+  { iso:'SG', name:'Singapore' }, { iso:'SH', name:'Saint Helena' },
+  { iso:'SI', name:'Slovenia' }, { iso:'SK', name:'Slovakia' },
+  { iso:'SL', name:'Sierra Leone' }, { iso:'SM', name:'San Marino' },
+  { iso:'SN', name:'Senegal' }, { iso:'SO', name:'Somalia' },
+  { iso:'SR', name:'Suriname' }, { iso:'SS', name:'South Sudan' },
+  { iso:'ST', name:'São Tomé and Príncipe' }, { iso:'SV', name:'El Salvador' },
+  { iso:'SY', name:'Syria' }, { iso:'SZ', name:'Eswatini' },
+  { iso:'TC', name:'Turks and Caicos Islands' }, { iso:'TD', name:'Chad' },
+  { iso:'TG', name:'Togo' }, { iso:'TH', name:'Thailand' },
+  { iso:'TJ', name:'Tajikistan' }, { iso:'TL', name:'Timor-Leste' },
+  { iso:'TM', name:'Turkmenistan' }, { iso:'TN', name:'Tunisia' },
+  { iso:'TO', name:'Tonga' }, { iso:'TR', name:'Turkey' },
+  { iso:'TT', name:'Trinidad and Tobago' }, { iso:'TV', name:'Tuvalu' },
+  { iso:'TW', name:'Taiwan' }, { iso:'TZ', name:'Tanzania' },
+  { iso:'UA', name:'Ukraine' }, { iso:'UG', name:'Uganda' },
+  { iso:'US', name:'United States' }, { iso:'UY', name:'Uruguay' },
+  { iso:'UZ', name:'Uzbekistan' }, { iso:'VA', name:'Vatican City' },
+  { iso:'VC', name:'Saint Vincent and the Grenadines' }, { iso:'VE', name:'Venezuela' },
+  { iso:'VG', name:'British Virgin Islands' }, { iso:'VI', name:'US Virgin Islands' },
+  { iso:'VN', name:'Vietnam' }, { iso:'VU', name:'Vanuatu' },
+  { iso:'WS', name:'Samoa' }, { iso:'XK', name:'Kosovo' },
+  { iso:'YE', name:'Yemen' }, { iso:'YT', name:'Mayotte' },
+  { iso:'ZA', name:'South Africa' }, { iso:'ZM', name:'Zambia' },
+  { iso:'ZW', name:'Zimbabwe' },
+];
+
+const COUNTRY_MAP = Object.fromEntries(COUNTRIES.map(c => [c.iso, c.name]));
+const getCountryName = iso => COUNTRY_MAP[iso] || iso;
+
+// ─── Country picker modal ─────────────────────────────────────────────────────
+
+function CountryPickerModal({ zone, onClose, onRefresh }) {
+  const [search, setSearch] = useState('');
+
+  const addCountry = useMutation({
+    mutationFn: iso => carriersApi.addCountry(zone.id, { country_iso: iso }),
+    onSuccess: onRefresh,
+  });
+  const delCountry = useMutation({
+    mutationFn: id => carriersApi.removeCountry(id),
+    onSuccess: onRefresh,
+  });
+
+  const addedSet  = new Set((zone.country_codes || []).map(cc => cc.country_iso));
+  const addedList = COUNTRIES.filter(c => addedSet.has(c.iso));
+  const q = search.toLowerCase();
+  const filtered  = COUNTRIES.filter(c =>
+    !addedSet.has(c.iso) &&
+    (c.name.toLowerCase().includes(q) || c.iso.toLowerCase().includes(q))
+  );
+
+  return (
+    <div style={{
+      position:'fixed', top:0, left:0, right:0, bottom:0,
+      background:'rgba(0,0,0,0.72)', zIndex:2000,
+      display:'flex', alignItems:'center', justifyContent:'center',
+    }} onClick={onClose}>
+      <div style={{
+        background:'#0F1128', borderRadius:14, padding:24,
+        width:580, maxHeight:'82vh', display:'flex', flexDirection:'column',
+        border:'1px solid rgba(255,255,255,0.1)',
+        boxShadow:'0 32px 80px rgba(0,0,0,0.7)',
+      }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+          <h3 style={{ margin:0, color:'#fff', fontSize:16, fontWeight:700 }}>
+            Select a Country — <span style={{ color:'#7B2FBE' }}>{zone.name}</span>
+          </h3>
+          <button onClick={onClose} style={{ background:'none', border:'none', color:'#555', cursor:'pointer', fontSize:20, lineHeight:1 }}>✕</button>
+        </div>
+
+        {/* Already added */}
+        {addedList.length > 0 && (
+          <div style={{ marginBottom:14 }}>
+            <p style={{ fontSize:11, fontWeight:700, color:'#AAAAAA', textTransform:'uppercase', letterSpacing:'0.06em', margin:'0 0 8px' }}>Added to this zone</p>
+            {addedList.map(c => {
+              const cc = (zone.country_codes||[]).find(x => x.country_iso === c.iso);
+              return (
+                <div key={c.iso} style={{ display:'flex', alignItems:'center', padding:'6px 10px', borderRadius:7, background:'rgba(0,200,83,0.07)', marginBottom:4, border:'1px solid rgba(0,200,83,0.15)' }}>
+                  <span style={{ fontSize:13, color:'#fff', fontWeight:500 }}>{c.name}</span>
+                  <span style={{ fontSize:12, color:'#00C853', fontFamily:'monospace', fontWeight:700, marginLeft:10, marginRight:'auto' }}>{c.iso}</span>
+                  <button
+                    onClick={() => cc && delCountry.mutate(cc.id)}
+                    style={{ background:'rgba(233,30,140,0.12)', border:'1px solid rgba(233,30,140,0.25)', borderRadius:6, color:'#E91E8C', cursor:'pointer', fontSize:11, fontWeight:600, padding:'3px 10px' }}
+                  >Remove</button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Search */}
+        <p style={{ fontSize:11, fontWeight:700, color:'#AAAAAA', textTransform:'uppercase', letterSpacing:'0.06em', margin:'0 0 6px' }}>Full country list</p>
+        <div className="pill-input-wrap" style={{ height:36, marginBottom:10 }}>
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search by name or ISO code…" autoFocus style={{ fontSize:13 }}/>
+        </div>
+
+        {/* Country list */}
+        <div style={{ overflowY:'auto', flex:1, borderRadius:8, border:'1px solid rgba(255,255,255,0.06)' }}>
+          <table style={{ width:'100%', borderCollapse:'collapse' }}>
+            <thead style={{ position:'sticky', top:0, background:'#0F1128', zIndex:1 }}>
+              <tr>
+                <th style={{ padding:'8px 12px', textAlign:'left', fontSize:11, color:'#AAAAAA', fontWeight:700, textTransform:'uppercase', borderBottom:'1px solid rgba(255,255,255,0.07)' }}>Country</th>
+                <th style={{ padding:'8px 12px', textAlign:'left', fontSize:11, color:'#AAAAAA', fontWeight:700, textTransform:'uppercase', borderBottom:'1px solid rgba(255,255,255,0.07)', width:55 }}>ISO</th>
+                <th style={{ padding:'8px 12px', borderBottom:'1px solid rgba(255,255,255,0.07)', width:70 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((c, i) => (
+                <tr key={c.iso} style={{ background: i%2===0?'transparent':'rgba(255,255,255,0.012)' }}>
+                  <td style={{ padding:'7px 12px', fontSize:13, color:'#fff' }}>{c.name}</td>
+                  <td style={{ padding:'7px 12px', fontSize:12, color:'#00C853', fontFamily:'monospace', fontWeight:700 }}>{c.iso}</td>
+                  <td style={{ padding:'7px 12px', textAlign:'right' }}>
+                    <button onClick={() => addCountry.mutate(c.iso)}
+                      style={{ background:'rgba(0,200,83,0.1)', border:'1px solid rgba(0,200,83,0.3)', borderRadius:6, color:'#00C853', cursor:'pointer', fontSize:11, fontWeight:600, padding:'3px 10px', display:'inline-flex', alignItems:'center', gap:3 }}>
+                      <Plus size={10}/> Add
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr><td colSpan={3} style={{ padding:'24px', textAlign:'center', color:'#555', fontSize:13 }}>
+                  No countries match "{search}"
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div style={{ marginTop:14, textAlign:'right' }}>
+          <button onClick={onClose} className="btn-ghost" style={{ height:32, padding:'0 16px', fontSize:13 }}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── LEVEL 3 — Rate card matrix ──────────────────────────────────────────────
 
 function formatBandLabel(min, max) {
@@ -615,75 +847,186 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
 }
 
 function ZoneCard({ zone, onRefresh }) {
-  const [open, setOpen] = useState(false);
-  const [confirmDel, setConfirmDel] = useState(false);
-  const [countryInput, setCountryInput] = useState('');
-  const [postcodeInput, setPostcodeInput] = useState('');
-  const [postcodeType, setPostcodeType] = useState('include');
+  const [open, setOpen]                     = useState(false);
+  const [confirmDel, setConfirmDel]         = useState(false);
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
+  const [inclInput, setInclInput]           = useState('');
+  const [exclInput, setExclInput]           = useState('');
 
   const delZone     = useMutation({ mutationFn: () => carriersApi.deleteZone(zone.id), onSuccess: onRefresh });
-  const addCountry  = useMutation({ mutationFn: () => carriersApi.addCountry(zone.id, { country_iso: countryInput.toUpperCase() }), onSuccess: () => { setCountryInput(''); onRefresh(); }});
-  const delCountry  = useMutation({ mutationFn: (id) => carriersApi.removeCountry(id), onSuccess: onRefresh });
-  const addPostcode = useMutation({ mutationFn: () => carriersApi.addPostcodeRule(zone.id, { postcode_prefix: postcodeInput.toUpperCase(), rule_type: postcodeType }), onSuccess: () => { setPostcodeInput(''); onRefresh(); }});
-  const delPostcode = useMutation({ mutationFn: (id) => carriersApi.removePostcodeRule(id), onSuccess: onRefresh });
+  const delCountry  = useMutation({ mutationFn: id => carriersApi.removeCountry(id), onSuccess: onRefresh });
+  const addPostcode = useMutation({
+    mutationFn: ({ prefix, type }) => carriersApi.addPostcodeRule(zone.id, { postcode_prefix: prefix.toUpperCase().trim(), rule_type: type }),
+    onSuccess: (_, { type }) => { type === 'include' ? setInclInput('') : setExclInput(''); onRefresh(); },
+  });
+  const delPostcode = useMutation({ mutationFn: id => carriersApi.removePostcodeRule(id), onSuccess: onRefresh });
+
+  const inclRules = (zone.postcode_rules || []).filter(r => r.rule_type === 'include');
+  const exclRules = (zone.postcode_rules || []).filter(r => r.rule_type === 'exclude');
 
   return (
-    <div style={{ border:'1px solid rgba(255,255,255,0.06)', borderRadius:10, marginBottom:8 }}>
-      <div onClick={() => setOpen(o=>!o)} style={{ display:'flex', alignItems:'center', padding:'10px 14px', cursor:'pointer', userSelect:'none' }}>
-        <ChevronRight size={13} style={{ marginRight:8, transform: open?'rotate(90deg)':'none', transition:'0.15s', color:'#00C853' }}/>
+    <div style={{ border:'1px solid rgba(255,255,255,0.07)', borderRadius:10, marginBottom:8, overflow:'hidden' }}>
+
+      {/* Zone header row */}
+      <div onClick={() => setOpen(o => !o)}
+        style={{ display:'flex', alignItems:'center', padding:'11px 14px', cursor:'pointer', userSelect:'none',
+          background: open ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
+        <ChevronRight size={13} style={{ marginRight:8, color:'#00C853', transition:'0.15s',
+          transform: open ? 'rotate(90deg)' : 'none' }}/>
         <span style={{ fontWeight:600, color:'#fff', flex:1, fontSize:13 }}>{zone.name}</span>
-        <span style={{ fontSize:11, color:'#AAAAAA', marginRight:10 }}>
-          {(zone.country_codes||[]).length} countries · {(zone.weight_bands||[]).length} bands
-        </span>
-        <button onClick={e => { e.stopPropagation(); setConfirmDel(true); }} style={{ background:'none', border:'none', color:'#555', cursor:'pointer' }}><Trash2 size={12}/></button>
-      </div>
-      {confirmDel && <div style={{ padding:'0 14px 10px' }}><Confirm message={`Delete zone "${zone.name}"?`} onConfirm={() => delZone.mutate()} onCancel={() => setConfirmDel(false)}/></div>}
-      {open && (
-        <div style={{ padding:'0 14px 14px', borderTop:'1px solid rgba(255,255,255,0.05)' }}>
-          {/* Country codes */}
-          <div style={{ marginTop:12, marginBottom:10 }}>
-            <span style={{ fontSize:11, fontWeight:700, color:'#AAAAAA', textTransform:'uppercase', letterSpacing:'0.05em' }}>Country Codes</span>
-            <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:8 }}>
-              {(zone.country_codes||[]).map(cc => (
-                <span key={cc.id} style={{ ...pill('rgba(0,200,83,0.1)','#00C853'), display:'inline-flex', alignItems:'center', gap:4, fontSize:11 }}>
-                  {cc.country_iso}
-                  <button onClick={() => delCountry.mutate(cc.id)} style={{ background:'none', border:'none', color:'#00C853', cursor:'pointer', padding:0 }}><X size={9}/></button>
-                </span>
-              ))}
-              <div style={{ display:'flex', gap:6 }}>
-                <div className="pill-input-wrap" style={{ height:26, width:70 }}>
-                  <input value={countryInput} onChange={e => setCountryInput(e.target.value)} placeholder="GB" maxLength={3} style={{ fontSize:11 }}/>
-                </div>
-                <button onClick={() => addCountry.mutate()} className="btn-primary" style={{ height:26, padding:'0 8px', fontSize:11 }}>Add</button>
-              </div>
-            </div>
-          </div>
-          {/* Postcode rules */}
-          <div style={{ marginBottom:12 }}>
-            <span style={{ fontSize:11, fontWeight:700, color:'#AAAAAA', textTransform:'uppercase', letterSpacing:'0.05em' }}>Postcode Rules</span>
-            <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:8 }}>
-              {(zone.postcode_rules||[]).map(pr => (
-                <span key={pr.id} style={{ ...pill(pr.rule_type==='include'?'rgba(0,188,212,0.12)':'rgba(233,30,140,0.12)', pr.rule_type==='include'?'#00BCD4':'#E91E8C'), display:'inline-flex', alignItems:'center', gap:4, fontSize:11 }}>
-                  {pr.rule_type==='include'?'✓':'✗'} {pr.postcode_prefix}
-                  <button onClick={() => delPostcode.mutate(pr.id)} style={{ background:'none', border:'none', color:'inherit', cursor:'pointer', padding:0 }}><X size={9}/></button>
-                </span>
-              ))}
-              <div style={{ display:'flex', gap:6 }}>
-                <div className="pill-input-wrap" style={{ height:26, width:70 }}>
-                  <input value={postcodeInput} onChange={e => setPostcodeInput(e.target.value)} placeholder="BT" style={{ fontSize:11 }}/>
-                </div>
-                <div className="pill-input-wrap" style={{ height:26, width:90 }}>
-                  <select value={postcodeType} onChange={e => setPostcodeType(e.target.value)} style={{ fontSize:11, paddingLeft:8 }}>
-                    <option value="include">Include</option>
-                    <option value="exclude">Exclude</option>
-                  </select>
-                </div>
-                <button onClick={() => addPostcode.mutate()} className="btn-primary" style={{ height:26, padding:'0 8px', fontSize:11 }}>Add</button>
-              </div>
-            </div>
-          </div>
-          <WeightBandsTable zoneId={zone.id} bands={zone.weight_bands||[]} onRefresh={onRefresh}/>
+        <div style={{ display:'flex', gap:10, alignItems:'center', marginRight:10 }}>
+          <span style={{ fontSize:11, color:'#AAAAAA' }}>
+            {(zone.country_codes||[]).length} {(zone.country_codes||[]).length === 1 ? 'country' : 'countries'}
+          </span>
+          {inclRules.length > 0 && (
+            <span style={{ fontSize:11, color:'#00BCD4' }}>✓ {inclRules.length} incl</span>
+          )}
+          {exclRules.length > 0 && (
+            <span style={{ fontSize:11, color:'#E91E8C' }}>✗ {exclRules.length} excl</span>
+          )}
+          <span style={{ fontSize:11, color:'#555' }}>
+            {(zone.weight_bands||[]).length} bands
+          </span>
         </div>
+        <button onClick={e => { e.stopPropagation(); setConfirmDel(true); }}
+          style={{ background:'none', border:'none', color:'#444', cursor:'pointer' }}>
+          <Trash2 size={12}/>
+        </button>
+      </div>
+
+      {confirmDel && (
+        <div style={{ padding:'0 14px 10px' }}>
+          <Confirm message={`Delete zone "${zone.name}"? This removes all weight bands and rules.`}
+            onConfirm={() => delZone.mutate()} onCancel={() => setConfirmDel(false)}/>
+        </div>
+      )}
+
+      {open && (
+        <div style={{ borderTop:'1px solid rgba(255,255,255,0.06)', padding:'14px 14px 16px' }}>
+
+          {/* ── Countries section ── */}
+          <div style={{ marginBottom:18 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+              <span style={{ fontSize:11, fontWeight:700, color:'#AAAAAA', textTransform:'uppercase', letterSpacing:'0.06em' }}>Countries</span>
+              <button onClick={() => setShowCountryPicker(true)}
+                style={{ background:'rgba(0,200,83,0.1)', border:'1px solid rgba(0,200,83,0.25)',
+                  borderRadius:6, color:'#00C853', cursor:'pointer',
+                  fontSize:11, fontWeight:600, padding:'3px 10px',
+                  display:'inline-flex', alignItems:'center', gap:4 }}>
+                <Plus size={10}/> Add Country
+              </button>
+            </div>
+
+            {(zone.country_codes||[]).length === 0 ? (
+              <p style={{ color:'#555', fontSize:12, margin:0, fontStyle:'italic' }}>
+                No countries — click Add Country to assign coverage.
+              </p>
+            ) : (
+              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+                <thead>
+                  <tr style={{ background:'rgba(255,255,255,0.02)' }}>
+                    <th style={{ padding:'6px 10px', textAlign:'left', color:'#AAAAAA', fontWeight:600, fontSize:11, borderBottom:'1px solid rgba(255,255,255,0.06)' }}>Country</th>
+                    <th style={{ padding:'6px 10px', textAlign:'left', color:'#AAAAAA', fontWeight:600, fontSize:11, borderBottom:'1px solid rgba(255,255,255,0.06)', width:50 }}>ISO</th>
+                    <th style={{ padding:'6px 10px', borderBottom:'1px solid rgba(255,255,255,0.06)', width:36 }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(zone.country_codes||[]).map((cc, i) => (
+                    <tr key={cc.id} style={{ background: i%2===0?'transparent':'rgba(255,255,255,0.012)' }}>
+                      <td style={{ padding:'7px 10px', color:'#ddd' }}>{getCountryName(cc.country_iso)}</td>
+                      <td style={{ padding:'7px 10px', color:'#00C853', fontFamily:'monospace', fontWeight:700 }}>{cc.country_iso}</td>
+                      <td style={{ padding:'7px 10px', textAlign:'right' }}>
+                        <button onClick={() => delCountry.mutate(cc.id)}
+                          style={{ background:'none', border:'none', color:'#444', cursor:'pointer' }}>
+                          <X size={11}/>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* ── Postcode Rules section ── */}
+          <div style={{ marginBottom:18, paddingTop:14, borderTop:'1px solid rgba(255,255,255,0.05)' }}>
+            <span style={{ fontSize:11, fontWeight:700, color:'#AAAAAA', textTransform:'uppercase', letterSpacing:'0.06em', display:'block', marginBottom:12 }}>
+              Postcode Rules
+            </span>
+
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+              {/* Include column */}
+              <div>
+                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
+                  <span style={{ fontSize:11, fontWeight:700, color:'#00BCD4', textTransform:'uppercase' }}>✓ Included</span>
+                </div>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:5, minHeight:28, marginBottom:8 }}>
+                  {inclRules.length === 0
+                    ? <span style={{ fontSize:12, color:'#444', fontStyle:'italic' }}>None — all postcodes included</span>
+                    : inclRules.map(pr => (
+                        <span key={pr.id} style={{ display:'inline-flex', alignItems:'center', gap:3, padding:'3px 9px', borderRadius:9999, fontSize:11, fontWeight:700, background:'rgba(0,188,212,0.12)', color:'#00BCD4' }}>
+                          {pr.postcode_prefix}
+                          <button onClick={() => delPostcode.mutate(pr.id)} style={{ background:'none', border:'none', color:'#00BCD4', cursor:'pointer', padding:0 }}><X size={8}/></button>
+                        </span>
+                      ))
+                  }
+                </div>
+                <div style={{ display:'flex', gap:5 }}>
+                  <div className="pill-input-wrap" style={{ height:28, flex:1 }}>
+                    <input value={inclInput} onChange={e => setInclInput(e.target.value)}
+                      placeholder="AB, BT, SW…"
+                      onKeyDown={e => e.key==='Enter' && inclInput.trim() && addPostcode.mutate({ prefix: inclInput, type:'include' })}
+                      style={{ fontSize:11, textTransform:'uppercase' }}/>
+                  </div>
+                  <button onClick={() => inclInput.trim() && addPostcode.mutate({ prefix: inclInput, type:'include' })}
+                    style={{ background:'rgba(0,188,212,0.12)', border:'1px solid rgba(0,188,212,0.3)', borderRadius:6, color:'#00BCD4', cursor:'pointer', fontSize:11, fontWeight:600, padding:'0 10px', height:28 }}>
+                    + Add
+                  </button>
+                </div>
+              </div>
+
+              {/* Exclude column */}
+              <div>
+                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
+                  <span style={{ fontSize:11, fontWeight:700, color:'#E91E8C', textTransform:'uppercase' }}>✗ Excluded</span>
+                </div>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:5, minHeight:28, marginBottom:8 }}>
+                  {exclRules.length === 0
+                    ? <span style={{ fontSize:12, color:'#444', fontStyle:'italic' }}>None excluded</span>
+                    : exclRules.map(pr => (
+                        <span key={pr.id} style={{ display:'inline-flex', alignItems:'center', gap:3, padding:'3px 9px', borderRadius:9999, fontSize:11, fontWeight:700, background:'rgba(233,30,140,0.12)', color:'#E91E8C' }}>
+                          {pr.postcode_prefix}
+                          <button onClick={() => delPostcode.mutate(pr.id)} style={{ background:'none', border:'none', color:'#E91E8C', cursor:'pointer', padding:0 }}><X size={8}/></button>
+                        </span>
+                      ))
+                  }
+                </div>
+                <div style={{ display:'flex', gap:5 }}>
+                  <div className="pill-input-wrap" style={{ height:28, flex:1 }}>
+                    <input value={exclInput} onChange={e => setExclInput(e.target.value)}
+                      placeholder="FK17, IV1, HS…"
+                      onKeyDown={e => e.key==='Enter' && exclInput.trim() && addPostcode.mutate({ prefix: exclInput, type:'exclude' })}
+                      style={{ fontSize:11, textTransform:'uppercase' }}/>
+                  </div>
+                  <button onClick={() => exclInput.trim() && addPostcode.mutate({ prefix: exclInput, type:'exclude' })}
+                    style={{ background:'rgba(233,30,140,0.1)', border:'1px solid rgba(233,30,140,0.25)', borderRadius:6, color:'#E91E8C', cursor:'pointer', fontSize:11, fontWeight:600, padding:'0 10px', height:28 }}>
+                    + Add
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Weight Bands section ── */}
+          <div style={{ paddingTop:14, borderTop:'1px solid rgba(255,255,255,0.05)' }}>
+            <WeightBandsTable zoneId={zone.id} bands={zone.weight_bands||[]} onRefresh={onRefresh}/>
+          </div>
+        </div>
+      )}
+
+      {/* Country picker modal — rendered outside the card so it overlays everything */}
+      {showCountryPicker && (
+        <CountryPickerModal zone={zone} onClose={() => setShowCountryPicker(false)} onRefresh={onRefresh}/>
       )}
     </div>
   );
