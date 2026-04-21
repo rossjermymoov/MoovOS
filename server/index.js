@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 
 import customersRouter from './routes/customers.js';
 import staffRouter from './routes/staff.js';
+import { runMigrations } from './db/migrate.js';
 
 dotenv.config();
 
@@ -48,6 +49,14 @@ app.use((err, _req, res, _next) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`🟢 Moov OS server running on port ${PORT}`);
-});
+// Run migrations then start listening
+runMigrations()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`🟢 Moov OS server running on port ${PORT}`);
+    });
+  })
+  .catch(err => {
+    console.error('❌ Migration failed — server will not start:', err.message);
+    process.exit(1);
+  });

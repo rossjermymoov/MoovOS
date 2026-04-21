@@ -3,6 +3,7 @@ import AppShell from './components/layout/AppShell';
 import CustomerList from './pages/customers/CustomerList';
 import CustomerRecord from './pages/customers/CustomerRecord';
 import CustomerNew from './pages/customers/CustomerNew';
+import StaffSettings from './pages/settings/StaffSettings';
 
 // Placeholder pages for other sections (to be built)
 const Placeholder = ({ name }) => (
@@ -33,7 +34,10 @@ export default function App() {
         <Route path="carriers"  element={<Placeholder name="Carrier Management" />} />
         <Route path="reports"   element={<Placeholder name="Dashboards & Reporting" />} />
         <Route path="knowledge" element={<Placeholder name="Knowledge Base & AI" />} />
-        <Route path="settings"  element={<Placeholder name="Settings" />} />
+        <Route path="settings">
+          <Route index element={<StaffSettings />} />
+          <Route path="staff" element={<StaffSettings />} />
+        </Route>
         <Route path="*"         element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
