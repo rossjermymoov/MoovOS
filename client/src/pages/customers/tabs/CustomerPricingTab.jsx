@@ -293,16 +293,11 @@ function InternationalRateOverlay({ service, onClose, onRateUpdate, onRateDelete
 }
 
 // ─── Service block — horizontal zone layout ───────────────────
-const PREVIEW = 8; // zones shown before "+ N more"
-
 function ServiceBlock({ service, onRateUpdate, onRateDelete }) {
-  const [showAll, setShowAll]     = useState(false);
   const [overlayOpen, setOverlay] = useState(false);
 
   const isIntl      = service.service_type === 'international';
   const multiWeight = [...new Set(service.rates.map(r => r.weight_class_name))].length > 1;
-  const display     = showAll ? service.rates : service.rates.slice(0, PREVIEW);
-  const extra       = service.rates.length - PREVIEW;
 
   // ── International: collapsed row → fullscreen overlay ───────
   if (isIntl) {
@@ -348,9 +343,8 @@ function ServiceBlock({ service, onRateUpdate, onRateDelete }) {
         <div style={{ padding: '4px 18px 10px', fontSize: 12, color: '#444', fontStyle: 'italic' }}>No pricing found</div>
       ) : (
         <div style={{ padding: '4px 18px 10px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px 0' }}>
-          {display.map((rate, i) => (
+          {service.rates.map((rate, i) => (
             <span key={rate.id} style={{ display: 'inline-flex', alignItems: 'center' }}>
-              {/* Divider between items */}
               {i > 0 && <span style={{ color: 'rgba(255,255,255,0.08)', margin: '0 14px', fontSize: 14, userSelect: 'none' }}>|</span>}
               <span style={{ fontSize: 12, color: '#AAAAAA', marginRight: 10 }}>
                 {rate.zone_name}
@@ -359,29 +353,6 @@ function ServiceBlock({ service, onRateUpdate, onRateDelete }) {
               <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
             </span>
           ))}
-
-          {extra > 0 && !showAll && (
-            <>
-              <span style={{ color: 'rgba(255,255,255,0.08)', margin: '0 14px', fontSize: 14, userSelect: 'none' }}>|</span>
-              <button
-                onClick={() => setShowAll(true)}
-                style={{ background: 'none', border: 'none', color: '#00C853', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 }}
-              >
-                +{extra} more…
-              </button>
-            </>
-          )}
-          {showAll && extra > 0 && (
-            <>
-              <span style={{ color: 'rgba(255,255,255,0.08)', margin: '0 14px', fontSize: 14, userSelect: 'none' }}>|</span>
-              <button
-                onClick={() => setShowAll(false)}
-                style={{ background: 'none', border: 'none', color: '#AAAAAA', fontSize: 12, cursor: 'pointer', padding: 0 }}
-              >
-                show less
-              </button>
-            </>
-          )}
         </div>
       )}
     </div>
