@@ -77,7 +77,7 @@ router.get('/:customerId', async (req, res, next) => {
   try {
     const { customerId } = req.params;
 
-    // Service summary with rate counts + service_type from carrier_services
+    // Service summary with rate counts + service_type from courier_services
     const summaryRes = await query(`
       SELECT
         cr.courier_id, cr.courier_code, cr.courier_name,
@@ -85,7 +85,7 @@ router.get('/:customerId', async (req, res, next) => {
         COUNT(*) AS rate_count,
         COALESCE(cs.service_type::text, 'domestic') AS service_type
       FROM customer_rates cr
-      LEFT JOIN carrier_services cs ON cs.service_code = cr.service_code
+      LEFT JOIN courier_services cs ON cs.service_code = cr.service_code
       WHERE cr.customer_id = $1
       GROUP BY cr.courier_id, cr.courier_code, cr.courier_name, cr.service_id, cr.service_code, cr.service_name, cs.service_type
       ORDER BY cr.courier_name, cr.service_name
