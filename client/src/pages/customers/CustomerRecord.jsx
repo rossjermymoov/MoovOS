@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -29,15 +29,9 @@ export default function CustomerRecord() {
   const [onStopModal, setOnStopModal] = useState(null); // 'apply' | 'remove'
   const [onStopInput, setOnStopInput] = useState('');
 
-  // Guard: "new" is a reserved path, not a customer ID
-  useEffect(() => {
-    if (id === 'new') navigate('/customers/new', { replace: true });
-  }, [id, navigate]);
-
   const { data, isLoading } = useQuery({
     queryKey: ['customer', id],
     queryFn: () => customersApi.get(id),
-    enabled: id !== 'new', // never fire the API call for the reserved "new" path
   });
 
   const applyOnStop = useMutation({
@@ -49,9 +43,6 @@ export default function CustomerRecord() {
     mutationFn: ({ note }) => customersApi.removeOnStop(id, { note, staff_id: 'CURRENT_USER_ID' }),
     onSuccess: () => { queryClient.invalidateQueries(['customer', id]); setOnStopModal(null); setOnStopInput(''); },
   });
-
-  // While redirecting away from the reserved "new" path, render nothing
-  if (id === 'new') return null;
 
   if (isLoading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: '#AAAAAA' }}>

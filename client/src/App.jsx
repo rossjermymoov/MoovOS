@@ -17,19 +17,24 @@ export default function App() {
   return (
     <Routes>
       <Route element={<AppShell />}>
-        <Route path="/"             element={<Placeholder name="Dashboard" />} />
-        <Route path="/customers"      element={<CustomerList />} />
-        <Route path="/customers/new"  element={<CustomerNew />} />
-        <Route path="/customers/:id"  element={<CustomerRecord />} />
-        <Route path="/pricing"      element={<Placeholder name="Pricing & Rate Cards" />} />
-        <Route path="/tracking"     element={<Placeholder name="Tracking & Parcel Data" />} />
-        <Route path="/finance"      element={<Placeholder name="Finance & Billing" />} />
-        <Route path="/queries"      element={<Placeholder name="Queries & Claims" />} />
-        <Route path="/carriers"     element={<Placeholder name="Carrier Management" />} />
-        <Route path="/reports"      element={<Placeholder name="Dashboards & Reporting" />} />
-        <Route path="/knowledge"    element={<Placeholder name="Knowledge Base & AI" />} />
-        <Route path="/settings"     element={<Placeholder name="Settings" />} />
-        <Route path="*"             element={<Navigate to="/" replace />} />
+        <Route path="/" element={<Placeholder name="Dashboard" />} />
+
+        {/* Customers — nested so "new" is always resolved before ":id" */}
+        <Route path="customers">
+          <Route index element={<CustomerList />} />
+          <Route path="new" element={<CustomerNew />} />
+          <Route path=":id" element={<CustomerRecord />} />
+        </Route>
+
+        <Route path="pricing"   element={<Placeholder name="Pricing & Rate Cards" />} />
+        <Route path="tracking"  element={<Placeholder name="Tracking & Parcel Data" />} />
+        <Route path="finance"   element={<Placeholder name="Finance & Billing" />} />
+        <Route path="queries"   element={<Placeholder name="Queries & Claims" />} />
+        <Route path="carriers"  element={<Placeholder name="Carrier Management" />} />
+        <Route path="reports"   element={<Placeholder name="Dashboards & Reporting" />} />
+        <Route path="knowledge" element={<Placeholder name="Knowledge Base & AI" />} />
+        <Route path="settings"  element={<Placeholder name="Settings" />} />
+        <Route path="*"         element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
   );
