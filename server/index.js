@@ -14,7 +14,7 @@ import webhooksRouter from './routes/webhooks.js';
 import { runMigrations } from './db/migrate.js';
 import { seedCustomerRates } from './scripts/seedCustomerRates.js';
 import customerRatesRouter from './routes/customerRates.js';
-import trackingRouter from './routes/tracking.js';
+import trackingRouter, { catchUpVerified } from './routes/tracking.js';
 import billingRouter from './routes/billing.js';
 
 dotenv.config();
@@ -74,6 +74,7 @@ async function start() {
   try {
     await runMigrations();
     await seedCustomerRates();
+    await catchUpVerified();
   } catch (err) {
     console.error('❌ Migration failed — server will not start.');
     console.error('   Error code:   ', err.code    || 'unknown');

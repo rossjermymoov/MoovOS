@@ -247,6 +247,36 @@ router.post('/webhook', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── GET /api/billing/charges/aged-alerts ────────────────────────────────────
+// Verified, unbilled charges older than :days days, excluding manual-billing customers.
+
+router.get('/charges/aged-alerts', async (req, res, next) => {
+  try {
+    const days = parseInt(req.query.days || '14');
+    const r = await query(`
+      SELECT
+        c.id, c.created_at, c.order_id, c.parcel_qty, c.service_name,
+        c.price, c.vat_amount, c.verified,
+        cu.id   AS customer_id,
+        cu.name AS customer_name,
+        cu.account_number AS customer_account,
+        s.courier, s.ship_to_postcode, s.reference, s.tracking_codes,
+        EXTRACT(DAY FROM NOW() - c.created_at)::int AS age_days
+      FROM charges c
+      LEFT JOIN customers cu ON cu.id = c.customer_id
+      LEFT JOIN shipments  s  ON s.id  = c.shipment_id
+      WHERE c.verified  = true
+        AND c.billed    = false
+        AND c.cancelled = false
+        AND c.created_at < NOW() - ($1 || ' days')::INTERVAL
+        AND (cu.manual_billing IS NULL OR cu.manual_billing = false)
+      ORDER BY c.created_at ASC
+    `, [days]);
+
+    res.json({ alerts: r.rows, days, count: r.rows.length });
+  } catch (err) { next(err); }
+});
+
 // ─── GET /api/billing/charges/stats ──────────────────────────────────────────
 
 router.get('/charges/stats', async (req, res, next) => {
@@ -283,7 +313,7 @@ router.get('/charges', async (req, res, next) => {
     const {
       charge_type = 'courier',
       customer_id, search,
-      billed, cancelled,
+      billed, verified, cancelled,
       date_from, date_to,
       limit = 50, offset = 0,
     } = req.query;
@@ -293,7 +323,8 @@ router.get('/charges', async (req, res, next) => {
     let   idx   = 2;
 
     if (customer_id) { conds.push(`c.customer_id = $${idx++}`); vals.push(customer_id); }
-    if (billed  !== undefined) { conds.push(`c.billed = $${idx++}`); vals.push(billed === 'true'); }
+    if (billed   !== undefined) { conds.push(`c.billed    = $${idx++}`); vals.push(billed   === 'true'); }
+    if (verified !== undefined) { conds.push(`c.verified  = $${idx++}`); vals.push(verified === 'true'); }
     if (cancelled !== undefined) { conds.push(`c.cancelled = $${idx++}`); vals.push(cancelled === 'true'); }
     else { conds.push('c.cancelled = false'); }
     if (date_from) { conds.push(`c.created_at >= $${idx++}`); vals.push(date_from); }

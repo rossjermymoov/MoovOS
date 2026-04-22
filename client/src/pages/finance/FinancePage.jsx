@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Search, Filter, CheckCircle, XCircle, AlertCircle,
-  Edit2, Check, X, RefreshCw, Download, ChevronLeft, ChevronRight,
+  Search, CheckCircle, XCircle, AlertCircle,
+  Edit2, Check, X, RefreshCw, ChevronLeft, ChevronRight, Bell,
 } from 'lucide-react';
 import { billingApi } from '../../api/billing';
 import { customersApi } from '../../api/customers';
@@ -138,6 +138,11 @@ const BILLED_OPTS = [
   { value: 'false', label: 'Unbilled' },
   { value: 'true', label: 'Billed' },
 ];
+const VERIFIED_OPTS = [
+  { value: '', label: 'All' },
+  { value: 'true', label: 'Verified' },
+  { value: 'false', label: 'Unverified' },
+];
 
 export default function FinancePage() {
   const qc = useQueryClient();
@@ -146,9 +151,11 @@ export default function FinancePage() {
     search: '',
     customer_id: '',
     billed: '',
+    verified: '',
     date_from: '',
     date_to: '',
   });
+  const [showAlerts, setShowAlerts] = useState(true);
   const [showUnpriced, setShowUnpriced] = useState(false);
   const [limit, setLimit] = useState(50);
   const [offset, setOffset] = useState(0);
@@ -160,6 +167,14 @@ export default function FinancePage() {
     staleTime: 60_000,
   });
   const customers = custData?.data || [];
+
+  // Aged alerts
+  const { data: agedData } = useQuery({
+    queryKey: ['billing-aged-alerts'],
+    queryFn: () => billingApi.getAgedAlerts(14),
+    staleTime: 30_000,
+  });
+  const agedAlerts = agedData?.alerts || [];
 
   // Stats
   const statsParams = {
@@ -179,6 +194,7 @@ export default function FinancePage() {
     customer_id: filters.customer_id || undefined,
     search: filters.search || undefined,
     billed: filters.billed || undefined,
+    verified: filters.verified || undefined,
     cancelled: 'false',
     date_from: filters.date_from || undefined,
     date_to: filters.date_to || undefined,
@@ -208,6 +224,12 @@ export default function FinancePage() {
 
   function setFilter(key, value) {
     setFilters(f => ({ ...f, [key]: value }));
+    setOffset(0);
+  }
+
+  function clearAll() {
+    setFilters({ search: '', customer_id: '', billed: '', verified: '', date_from: '', date_to: '' });
+    setShowUnpriced(false);
     setOffset(0);
   }
 
@@ -249,6 +271,61 @@ export default function FinancePage() {
           </button>
         </div>
       </div>
+
+      {/* Aged unbilled alert banner */}
+      {showAlerts && agedAlerts.length > 0 && (
+        <div style={{
+          background: 'rgba(255,193,7,0.08)',
+          border: '1px solid rgba(255,193,7,0.35)',
+          borderRadius: 10,
+          padding: '12px 16px',
+          marginBottom: 16,
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 12,
+        }}>
+          <Bell size={18} style={{ color: '#FFC107', flexShrink: 0, marginTop: 2 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, color: '#FFC107', fontSize: 14, marginBottom: 4 }}>
+              {agedAlerts.length} verified charge{agedAlerts.length !== 1 ? 's' : ''} unbilled for over 14 days
+            </div>
+            <div style={{ fontSize: 12, color: '#AA8800', lineHeight: 1.5 }}>
+              {/* Group by customer */}
+              {Object.entries(
+                agedAlerts.reduce((acc, a) => {
+                  const key = a.customer_name || 'Unknown customer';
+                  if (!acc[key]) acc[key] = 0;
+                  acc[key]++;
+                  return acc;
+                }, {})
+              ).map(([name, count]) => (
+                <span key={name} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  background: 'rgba(255,193,7,0.12)', borderRadius: 20,
+                  padding: '2px 10px', marginRight: 6, marginBottom: 4,
+                  border: '1px solid rgba(255,193,7,0.25)', color: '#FFC107',
+                }}>
+                  {name} · {count}
+                </span>
+              ))}
+            </div>
+          </div>
+          <button
+            onClick={() => { setFilter('verified', 'true'); setFilter('billed', 'false'); }}
+            style={{
+              background: 'rgba(255,193,7,0.15)', border: '1px solid rgba(255,193,7,0.4)',
+              borderRadius: 6, color: '#FFC107', padding: '5px 12px',
+              cursor: 'pointer', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap',
+            }}
+          >
+            View all
+          </button>
+          <button onClick={() => setShowAlerts(false)}
+            style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', padding: 2 }}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Stats row */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
@@ -326,6 +403,27 @@ export default function FinancePage() {
             ))}
           </select>
 
+          {/* Verified filter */}
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <span style={{ fontSize: 11, color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Verified</span>
+            {VERIFIED_OPTS.map(o => (
+              <button
+                key={o.value}
+                onClick={() => setFilter('verified', o.value)}
+                style={{
+                  padding: '5px 11px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                  border: '1px solid',
+                  borderColor: filters.verified === o.value ? '#00BCD4' : 'rgba(255,255,255,0.12)',
+                  background: filters.verified === o.value ? 'rgba(0,188,212,0.12)' : 'transparent',
+                  color: filters.verified === o.value ? '#00BCD4' : '#888',
+                  cursor: 'pointer',
+                }}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+
           {/* Billed filter */}
           {BILLED_OPTS.map(o => (
             <button
@@ -380,9 +478,9 @@ export default function FinancePage() {
           />
 
           {/* Clear filters */}
-          {(filters.search || filters.customer_id || filters.billed || filters.date_from || filters.date_to || showUnpriced) && (
+          {(filters.search || filters.customer_id || filters.billed || filters.verified || filters.date_from || filters.date_to || showUnpriced) && (
             <button
-              onClick={() => { setFilters({ search: '', customer_id: '', billed: '', date_from: '', date_to: '' }); setShowUnpriced(false); setOffset(0); }}
+              onClick={clearAll}
               style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: 12 }}
             >
               Clear

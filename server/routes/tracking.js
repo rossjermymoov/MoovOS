@@ -12,6 +12,15 @@ import { query } from '../db/index.js';
 
 const router = express.Router();
 
+// ─── Statuses that confirm physical movement (trigger charge verification) ────
+// "above collected" — parcel has been scanned in transit or beyond
+
+const VERIFIED_STATUSES = new Set([
+  'in_transit', 'at_depot', 'out_for_delivery',
+  'delivered', 'failed_delivery', 'on_hold',
+  'customs_hold', 'exception', 'returned',
+]);
+
 // ─── Status normalisation ─────────────────────────────────────────────────────
 // Maps any courier-specific status string → our canonical parcel_status enum
 
@@ -248,7 +257,56 @@ async function upsertEvent(event, rawBody) {
   `, [parcelId, consignment, eventCode, status, description, location, eventAt,
       JSON.stringify(event._raw || event)]);
 
+  // Auto-verify: if this event confirms physical movement, mark the linked charge verified
+  if (VERIFIED_STATUSES.has(status)) {
+    await query(`
+      UPDATE charges
+      SET verified = true, updated_at = NOW()
+      WHERE verified = false
+        AND cancelled = false
+        AND shipment_id IN (
+          SELECT id FROM shipments
+          WHERE $1 = ANY(tracking_codes)
+        )
+    `, [consignment]);
+  }
+
   return { ok: true, consignment, status, parcel_id: parcelId };
+}
+
+// ─── Catch-up: verify charges that already have qualifying tracking events ────
+// Called at server startup to retroactively verify any charges missed before
+// this logic was deployed.
+
+export async function catchUpVerified() {
+  try {
+    const result = await query(`
+      UPDATE charges c
+      SET verified = true, updated_at = NOW()
+      FROM shipments s
+      WHERE c.shipment_id = s.id
+        AND c.verified    = false
+        AND c.cancelled   = false
+        AND s.tracking_codes IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM parcels p
+          JOIN tracking_events te ON te.parcel_id = p.id
+          WHERE p.consignment_number = ANY(s.tracking_codes)
+            AND te.status = ANY(ARRAY[
+              'in_transit','at_depot','out_for_delivery',
+              'delivered','failed_delivery','on_hold',
+              'customs_hold','exception','returned'
+            ]::parcel_status[])
+        )
+    `);
+    if (result.rowCount > 0) {
+      console.log(`✓ Catch-up: verified ${result.rowCount} existing charge(s)`);
+    }
+  } catch (err) {
+    // Non-fatal — log and continue
+    console.warn('⚠ catchUpVerified failed (non-fatal):', err.message);
+  }
 }
 
 // ─── POST /api/tracking/webhook ──────────────────────────────────────────────

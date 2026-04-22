@@ -93,6 +93,7 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
       credit_limit:       c.credit_limit ?? 0,
       bond_amount_held:   c.bond_amount_held ?? 0,
       tier:               c.tier || 'bronze',
+      manual_billing:     c.manual_billing ?? false,
     });
     setEdit(true);
   }
@@ -228,6 +229,21 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
                   <option value={28}>28 days</option>
                   <option value={30}>30 days</option>
                 </select>
+              } />
+            <Row label="Manual Billing" value={c.manual_billing ? (
+                <span style={{ color: '#FFC107', fontWeight: 600, fontSize: 12 }}>● Manual — no webhook expected</span>
+              ) : (
+                <span style={{ color: '#00C853', fontWeight: 600, fontSize: 12 }}>● Platform — webhooks active</span>
+              )} edit={edit}
+              editNode={
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={!!form.manual_billing}
+                    onChange={e => set('manual_billing', e.target.checked)}
+                    style={{ width: 16, height: 16, accentColor: '#FFC107' }} />
+                  <span style={{ fontSize: 13, color: form.manual_billing ? '#FFC107' : '#888' }}>
+                    {form.manual_billing ? 'Manual — suppress aged alerts' : 'Platform — expect webhooks'}
+                  </span>
+                </label>
               } />
             <Row label="Account Status"    value={<AccountStatusBadge status={c.account_status} />} />
             <Row label="Health Score"      value={<HealthBadge score={c.health_score} />} />
