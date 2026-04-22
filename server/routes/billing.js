@@ -113,6 +113,61 @@ function extractShipmentFields(payload) {
   return { accountNumber, customerDcId, dcServiceId, serviceName, totalWeightKg, parcelCount, reqShip };
 }
 
+/**
+ * Extract additional shipment fields (dimensions, values, hs_codes, ship_from)
+ * from the raw payload for surcharge rule evaluation and storage.
+ */
+function extractAdditionalShipmentFields(payload) {
+  const ship        = payload.shipment || {};
+  const reqShip     = extractReqShipment(payload);
+  const parcels     = reqShip.parcels || [];
+  const firstParcel = parcels[0] || {};
+  const clParcels   = ship.create_label_parcels || [];
+  const firstCl     = clParcels[0] || {};
+
+  // Ship from country
+  const shipFromCountryIso = (reqShip.ship_from || {}).country_iso || null;
+
+  // Dimensions — from request_shipment parcels (in cm)
+  const dimLength = parseFloat(firstParcel.dim_length) || null;
+  const dimWidth  = parseFloat(firstParcel.dim_width)  || null;
+  const dimHeight = parseFloat(firstParcel.dim_height) || null;
+
+  // Per-parcel weight (from create_label_parcels, already in kg)
+  const parcelWeightKg = parseFloat(firstCl.weight) || parseFloat(firstParcel._summed_item_weights) || null;
+
+  // Declared values and HS codes — from items across all parcels
+  let totalDeclaredValue  = 0;
+  let parcelDeclaredValue = 0;
+  const hsCodes = new Set();
+  for (const parcel of parcels) {
+    const items = parcel.items || [];
+    let parcelVal = 0;
+    for (const item of items) {
+      const itemVal = parseFloat(item.value) || 0;
+      const qty     = parseInt(item.quantity) || 1;
+      parcelVal += itemVal * qty;
+      if (item.hs_code) hsCodes.add(String(item.hs_code).trim());
+    }
+    totalDeclaredValue  += parcelVal;
+    if (!parcelDeclaredValue) parcelDeclaredValue = parcelVal; // first parcel
+  }
+  // Fallback: use create_label_parcels value field
+  if (!totalDeclaredValue && firstCl.value) {
+    totalDeclaredValue  = parseFloat(firstCl.value) || 0;
+    parcelDeclaredValue = totalDeclaredValue;
+  }
+
+  return {
+    shipFromCountryIso,
+    dimLength, dimWidth, dimHeight,
+    parcelWeightKg,
+    totalDeclaredValue:  totalDeclaredValue  || null,
+    parcelDeclaredValue: parcelDeclaredValue || null,
+    hsCodes: hsCodes.size ? [...hsCodes] : null,
+  };
+}
+
 // ─── Rate card lookup ─────────────────────────────────────────────────────────
 // Returns { rate: { price, cost_price?, zone_name, weight_class_name, rate_id }, reason: null }
 // on success, or { rate: null, reason: 'Human-readable string' } on failure.
@@ -492,6 +547,7 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData) 
   try {
     if (!shipmentId || !customerId || !shipmentData.courier) return;
 
+    // Only auto-apply surcharges marked as 'always' — 'reconciliation' ones are added manually
     const { rows: surcharges } = await query(`
       SELECT s.*,
              COALESCE((
@@ -501,7 +557,10 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData) 
              ), '[]'::json) AS rules
       FROM surcharges s
       JOIN couriers c ON c.id = s.courier_id
-      WHERE s.active = true AND LOWER(c.code) = LOWER($1)
+      WHERE s.active = true
+        AND LOWER(c.code) = LOWER($1)
+        AND (s.applies_when = 'always' OR s.applies_when IS NULL)
+        AND (s.effective_date IS NULL OR s.effective_date <= CURRENT_DATE)
     `, [shipmentData.courier]);
 
     for (const surcharge of surcharges) {
@@ -532,11 +591,16 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData) 
         ? parseFloat(overrides[0].override_value)
         : parseFloat(surcharge.default_value);
 
-      // Fuel-style: percentage of base rate. Everything else: flat amount.
+      // Calculate price based on calc_type and charge_per
       let price;
       if (surcharge.calc_type === 'percentage') {
+        // Percentage of base rate (fuel-style)
         price = parseFloat(((parseFloat(basePrice) || 0) * effectiveValue / 100).toFixed(4));
+      } else if (surcharge.charge_per === 'parcel') {
+        // Flat per parcel — multiply by parcel count
+        price = parseFloat((effectiveValue * (shipmentData.parcel_count || 1)).toFixed(4));
       } else {
+        // Flat per shipment
         price = effectiveValue;
       }
 
@@ -704,6 +768,9 @@ router.post('/webhook', async (req, res, next) => {
     // so the relink-customers endpoint can find unlinked shipments later.
     const effectiveAccount = accountNumber || customerDcId || null;
 
+    // Extract additional fields for dimension/value/hs_code surcharge rule filtering
+    const addl = extractAdditionalShipmentFields(payload);
+
     // Upsert shipment
     const shipRes = await query(`
       INSERT INTO shipments
@@ -714,15 +781,26 @@ router.post('/webhook', async (req, res, next) => {
          reference, reference_2,
          parcel_count, total_weight_kg, collection_date, tracking_codes,
          tracking_hash,
+         ship_from_country_iso,
+         dim_length_cm, dim_width_cm, dim_height_cm, parcel_weight_kg,
+         total_declared_value, parcel_declared_value, hs_codes,
          raw_payload)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
       ON CONFLICT (platform_shipment_id) DO UPDATE SET
-        customer_id        = COALESCE(EXCLUDED.customer_id, shipments.customer_id),
-        customer_account   = COALESCE(EXCLUDED.customer_account, shipments.customer_account),
-        service_name       = COALESCE(EXCLUDED.service_name, shipments.service_name),
-        tracking_codes     = COALESCE(EXCLUDED.tracking_codes, shipments.tracking_codes),
-        tracking_hash      = COALESCE(EXCLUDED.tracking_hash, shipments.tracking_hash),
-        updated_at         = NOW()
+        customer_id           = COALESCE(EXCLUDED.customer_id, shipments.customer_id),
+        customer_account      = COALESCE(EXCLUDED.customer_account, shipments.customer_account),
+        service_name          = COALESCE(EXCLUDED.service_name, shipments.service_name),
+        tracking_codes        = COALESCE(EXCLUDED.tracking_codes, shipments.tracking_codes),
+        tracking_hash         = COALESCE(EXCLUDED.tracking_hash, shipments.tracking_hash),
+        ship_from_country_iso = COALESCE(EXCLUDED.ship_from_country_iso, shipments.ship_from_country_iso),
+        dim_length_cm         = COALESCE(EXCLUDED.dim_length_cm, shipments.dim_length_cm),
+        dim_width_cm          = COALESCE(EXCLUDED.dim_width_cm, shipments.dim_width_cm),
+        dim_height_cm         = COALESCE(EXCLUDED.dim_height_cm, shipments.dim_height_cm),
+        parcel_weight_kg      = COALESCE(EXCLUDED.parcel_weight_kg, shipments.parcel_weight_kg),
+        total_declared_value  = COALESCE(EXCLUDED.total_declared_value, shipments.total_declared_value),
+        parcel_declared_value = COALESCE(EXCLUDED.parcel_declared_value, shipments.parcel_declared_value),
+        hs_codes              = COALESCE(EXCLUDED.hs_codes, shipments.hs_codes),
+        updated_at            = NOW()
       RETURNING id
     `, [
       platformId || null, eventType,
@@ -733,6 +811,10 @@ router.post('/webhook', async (req, res, next) => {
       parcelCount, totalWeightKg || null, collectionDate,
       trackingCodes.length ? trackingCodes : null,
       trackingHashVal,
+      addl.shipFromCountryIso,
+      addl.dimLength, addl.dimWidth, addl.dimHeight, addl.parcelWeightKg,
+      addl.totalDeclaredValue, addl.parcelDeclaredValue,
+      addl.hsCodes,
       JSON.stringify(payload),
     ]);
 
@@ -777,12 +859,19 @@ router.post('/webhook', async (req, res, next) => {
     // Apply surcharges (fuel, clearance, congestion, etc.) — non-blocking
     await applySurcharges(shipmentId, customerId, totalPrice, {
       courier,
-      dc_service_id:       dcServiceId,
-      service_name:        serviceName,
-      ship_to_country_iso: shipToCountry,
-      ship_to_postcode:    shipToPostcode,
-      parcel_count:        parcelCount,
-      total_weight_kg:     totalWeightKg,
+      dc_service_id:          dcServiceId,
+      service_name:           serviceName,
+      ship_from_country_iso:  addl.shipFromCountryIso,
+      ship_to_country_iso:    shipToCountry,
+      ship_to_postcode:       shipToPostcode,
+      parcel_count:           parcelCount,
+      total_weight_kg:        totalWeightKg,
+      parcel_weight_kg:       addl.parcelWeightKg,
+      dim_length_cm:          addl.dimLength,
+      dim_width_cm:           addl.dimWidth,
+      dim_height_cm:          addl.dimHeight,
+      total_declared_value:   addl.totalDeclaredValue,
+      parcel_declared_value:  addl.parcelDeclaredValue,
     });
 
     res.json({
