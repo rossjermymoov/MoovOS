@@ -45,6 +45,9 @@ app.use('/api/tracking',              trackingRouter);
 app.use('/api/billing',               billingRouter);
 app.use('/api/carrier-rate-cards',    carrierRateCardsRouter);
 app.use('/api/customer-rate-cards',   customerRateCardsRouter);
+// Webhook-safe alias — suppliers that block URLs containing "billing"
+// should send to /api/moov-charges/webhook instead
+app.use('/api/moov-charges',          billingRouter);
 
 // ─── Health check ────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'moov-os' }));
