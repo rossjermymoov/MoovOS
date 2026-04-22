@@ -68,10 +68,18 @@ function extractReqShipment(payload) {
 function extractShipmentFields(payload) {
   const ship     = payload.shipment || {};
   const reqShip  = extractReqShipment(payload);
+  const billing  = reqShip.billing || ship.billing || payload.billing || {};
 
   const accountNumber = ship.account_number
     || reqShip.account_number
     || payload.account_number
+    || null;
+
+  // customer_dc_id: set by API-connected customers (e.g. Europa) in the billing block
+  // This is their identifier within the DC platform, not a Moov account number.
+  const customerDcId = billing.customer_dc_id
+    || reqShip.customer_dc_id
+    || ship.customer_dc_id
     || null;
 
   const dcServiceId = reqShip.dc_service_id
@@ -101,12 +109,25 @@ function extractShipmentFields(payload) {
     || createParcels.length
     || 1;
 
-  return { accountNumber, dcServiceId, serviceName, totalWeightKg, parcelCount, reqShip };
+  return { accountNumber, customerDcId, dcServiceId, serviceName, totalWeightKg, parcelCount, reqShip };
 }
 
 // ─── Rate card lookup ─────────────────────────────────────────────────────────
 // Returns { rate: { price, zone_name, weight_class_name, rate_id }, reason: null }
 // on success, or { rate: null, reason: 'Human-readable string' } on failure.
+
+// rateCoversWeight — uses numeric bounds (from dc_weight_classes import) when
+// available, falls back to text-band parsing via coversWeight().
+function rateCoversWeight(rate, weightKg) {
+  const minKg = parseFloat(rate.min_weight_kg);
+  const maxKg = parseFloat(rate.max_weight_kg);
+  if (!isNaN(minKg) && !isNaN(maxKg)) {
+    // Numeric bounds: weight > min AND weight <= max (matching DC's own logic)
+    return weightKg > minKg && weightKg <= maxKg;
+  }
+  // Fall back to text parsing for legacy rate rows without numeric bounds
+  return coversWeight(rate.weight_class_name, weightKg);
+}
 
 async function lookupRateWithReason(customerId, serviceCode, serviceName, weightKg) {
   if (!customerId) return { rate: null, reason: 'No matching customer' };
@@ -114,7 +135,8 @@ async function lookupRateWithReason(customerId, serviceCode, serviceName, weight
   const rateRes = await query(`
     SELECT
       cr.id, cr.price, cr.zone_name, cr.weight_class_name,
-      cr.service_code, cr.service_name
+      cr.service_code, cr.service_name,
+      cr.min_weight_kg, cr.max_weight_kg
     FROM customer_rates cr
     WHERE cr.customer_id = $1
       AND (
@@ -122,7 +144,7 @@ async function lookupRateWithReason(customerId, serviceCode, serviceName, weight
         OR cr.service_name ILIKE $3
         OR cr.service_name ILIKE $4
       )
-    ORDER BY cr.zone_name, cr.weight_class_name
+    ORDER BY cr.zone_name, cr.min_weight_kg NULLS LAST, cr.weight_class_name
   `, [customerId, serviceCode || '', serviceName || '', `%${(serviceName||'').split(' ').slice(0,3).join(' ')}%`]);
 
   if (!rateRes.rows.length) {
@@ -139,20 +161,21 @@ async function lookupRateWithReason(customerId, serviceCode, serviceName, weight
   const rates = rateRes.rows;
 
   if (weightKg != null) {
-    const matching = rates.filter(r => coversWeight(r.weight_class_name, weightKg));
+    const matching = rates.filter(r => rateCoversWeight(r, weightKg));
     if (matching.length >= 1) {
       return { rate: { price: parseFloat(matching[0].price), zone_name: matching[0].zone_name,
                        weight_class_name: matching[0].weight_class_name, rate_id: matching[0].id }, reason: null };
     }
     // Diagnose why weight didn't match
-    const hasUnrecognised = rates.some(r => {
-      const s = (r.weight_class_name || '').toUpperCase().replace(/\s/g, '');
-      return s && !s.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)KG?$/)
-                && !s.match(/^(\d+(?:\.\d+)?)\+KG?$/)
-                && !s.match(/^OVER(\d+(?:\.\d+)?)KG?$/)
-                && !s.match(/^(?:UNDER|<)(\d+(?:\.\d+)?)KG?$/)
-                && !s.match(/^(?:UPTO|MAX)(\d+(?:\.\d+)?)KG?$/)
-                && !s.match(/^(\d+(?:\.\d+)?)KG?$/);
+    const hasNumericBounds = rates.some(r => r.min_weight_kg != null);
+    const hasUnrecognised = !hasNumericBounds && rates.some(r => {
+      const s = normaliseWeightBand(r.weight_class_name);
+      return s && !s.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/)
+                && !s.match(/^(\d+(?:\.\d+)?)\+$/)
+                && !s.match(/^OVER(\d+(?:\.\d+)?)$/)
+                && !s.match(/^(?:UNDER|<)(\d+(?:\.\d+)?)$/)
+                && !s.match(/^(?:UPTO|MAX)(\d+(?:\.\d+)?)$/)
+                && !s.match(/^(\d+(?:\.\d+)?)$/);
     });
     const reason = hasUnrecognised
       ? 'Unrecognised weight band format'
@@ -175,33 +198,45 @@ async function lookupRate(customerId, serviceCode, serviceName, weightKg) {
   return rate;
 }
 
+function normaliseWeightBand(rawName) {
+  // Uppercase + strip all whitespace, then strip the unit suffix in order from
+  // longest to shortest so "KILOGRAMS" doesn't leave a trailing "S" etc.
+  // Returns a pure-numeric / operator string, e.g. "UPTO30", "0-30", "30+"
+  let s = (rawName || '').toUpperCase().replace(/\s/g, '');
+  s = s.replace(/KILOGRAMS$/, '')
+       .replace(/KILOGRAM$/, '')
+       .replace(/KGS$/, '')
+       .replace(/KG$/, '')
+       .replace(/K$/, '');
+  return s;
+}
+
 function coversWeight(weightClassName, weightKg) {
   if (!weightClassName) return false;
-  const s = weightClassName.toUpperCase().replace(/\s/g, '');
+  const s = normaliseWeightBand(weightClassName);
 
-  // Range: "0-30KG", "1-2.5KG"
-  const range = s.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)KG?$/);
+  // Range: "0-30", "1-2.5"
+  const range = s.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/);
   if (range) {
     const lo = parseFloat(range[1]), hi = parseFloat(range[2]);
     return weightKg > lo && weightKg <= hi;
   }
 
-  // Minimum: "5+KG", "OVER5KG"
-  const plus = s.match(/^(\d+(?:\.\d+)?)\+KG?$/) || s.match(/^OVER(\d+(?:\.\d+)?)KG?$/);
+  // Minimum (open upper bound): "5+", "OVER5"
+  const plus = s.match(/^(\d+(?:\.\d+)?)\+$/) || s.match(/^OVER(\d+(?:\.\d+)?)$/);
   if (plus) return weightKg > parseFloat(plus[1]);
 
-  // Maximum exclusive: "UNDERXKG", "<XKG"
-  const under = s.match(/^(?:UNDER|<)(\d+(?:\.\d+)?)KG?$/);
+  // Maximum exclusive: "UNDER5", "<5"
+  const under = s.match(/^(?:UNDER|<)(\d+(?:\.\d+)?)$/);
   if (under) return weightKg < parseFloat(under[1]);
 
-  // Maximum inclusive: "UPTO30KG", "UP TO 30KG" (spaces stripped), "MAX30KG"
-  // Covers services like "DPD Next Day up to 30kg" where the band is a single max weight
-  const upto = s.match(/^(?:UPTO|MAX)(\d+(?:\.\d+)?)KG?$/);
+  // Maximum inclusive: "UPTO30", "MAX30"
+  // Covers "up to 30 kilograms", "upto30kg", "max 30 kg" etc.
+  const upto = s.match(/^(?:UPTO|MAX)(\d+(?:\.\d+)?)$/);
   if (upto) return weightKg <= parseFloat(upto[1]);
 
-  // Bare "30KG" — interpret as an upper bound (weight must be ≤ X)
-  // This handles cases where the rate card just stores the service max weight
-  const bare = s.match(/^(\d+(?:\.\d+)?)KG?$/);
+  // Bare number: "30" — interpret as an upper bound (weight must be ≤ X)
+  const bare = s.match(/^(\d+(?:\.\d+)?)$/);
   if (bare) return weightKg <= parseFloat(bare[1]);
 
   return false;
@@ -266,7 +301,7 @@ router.post('/webhook', async (req, res, next) => {
     const billingResp    = responseParsed.billing || {};
 
     // Use consolidated extractor — handles all known payload shapes
-    const { accountNumber, dcServiceId, serviceName, totalWeightKg, parcelCount, reqShip: reqShipment }
+    const { accountNumber, customerDcId, dcServiceId, serviceName, totalWeightKg, parcelCount, reqShip: reqShipment }
       = extractShipmentFields(payload);
 
     const platformId     = shipment.id;
@@ -296,18 +331,28 @@ router.post('/webhook', async (req, res, next) => {
     const courierCosts = billingResp.shipping || [];
     const totalCostPrice = courierCosts.reduce((s, c) => s + (parseFloat(c) || 0), 0);
 
-    // Resolve customer — try account_number first, fall back to dc_customer_id
+    // Resolve customer:
+    //  1. account_number → customers.account_number   (standard webhook customers)
+    //  2. account_number → customers.dc_customer_id   (if acct number happens to be a DC ID)
+    //  3. customerDcId  → customers.dc_customer_id    (API customers like Europa — from billing.customer_dc_id)
     let customerId = null;
     if (accountNumber) {
       const cr = await query('SELECT id FROM customers WHERE account_number = $1', [accountNumber]);
       if (cr.rows.length) {
         customerId = cr.rows[0].id;
       } else {
-        // API customers identify themselves with their DC customer ID (e.g. "Europa")
         const cr2 = await query('SELECT id FROM customers WHERE dc_customer_id = $1', [accountNumber]);
         if (cr2.rows.length) customerId = cr2.rows[0].id;
       }
     }
+    if (!customerId && customerDcId) {
+      const cr3 = await query('SELECT id FROM customers WHERE dc_customer_id = $1', [customerDcId]);
+      if (cr3.rows.length) customerId = cr3.rows[0].id;
+    }
+
+    // Effective account identifier to store — prefer accountNumber, fall back to customerDcId
+    // so the relink-customers endpoint can find unlinked shipments later.
+    const effectiveAccount = accountNumber || customerDcId || null;
 
     // Upsert shipment
     const shipRes = await query(`
@@ -331,7 +376,7 @@ router.post('/webhook', async (req, res, next) => {
       RETURNING id
     `, [
       platformId || null, eventType,
-      customerId, accountNumber, accountName,
+      customerId, effectiveAccount, accountName,
       courier, dcServiceId, serviceName,
       shipToName, shipToPostcode, shipToCountry,
       reference, reference2,
@@ -645,7 +690,7 @@ router.post('/batch-reprice', async (req, res, next) => {
         const innerPayload = unwrapPayload(rawPayload);
         const extracted = extractShipmentFields(innerPayload);
 
-        // Resolve customer — try account_number first, fall back to dc_customer_id
+        // Resolve customer: account_number → dc_customer_id → billing.customer_dc_id
         let customerId = row.customer_id;
         if (!customerId) {
           const acctNum = row.customer_account || extracted.accountNumber;
@@ -657,6 +702,11 @@ router.post('/batch-reprice', async (req, res, next) => {
               const cr2 = await query('SELECT id FROM customers WHERE dc_customer_id = $1', [acctNum]);
               if (cr2.rows.length) customerId = cr2.rows[0].id;
             }
+          }
+          // Also try the explicit customerDcId from billing block (Europa-style API customers)
+          if (!customerId && extracted.customerDcId) {
+            const cr3 = await query('SELECT id FROM customers WHERE dc_customer_id = $1', [extracted.customerDcId]);
+            if (cr3.rows.length) customerId = cr3.rows[0].id;
           }
         }
 
