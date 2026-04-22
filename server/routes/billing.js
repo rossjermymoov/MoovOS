@@ -425,46 +425,62 @@ function coversWeight(weightClassName, weightKg) {
 // ─── Surcharge engine ─────────────────────────────────────────────────────────
 
 /**
- * Evaluate a set of filter conditions against a shipment data object.
- * All conditions must pass (AND logic). Empty filters = always match.
+ * Test a single filter condition against shipment data.
  */
-function evaluateSurchargeFilters(filters, data) {
-  if (!Array.isArray(filters) || filters.length === 0) return true;
-  for (const f of filters) {
-    const raw = data[f.field];
-    const val = raw != null ? String(raw) : '';
-    switch (f.op) {
-      case 'eq':
-        if (val.toLowerCase() !== String(f.value || '').toLowerCase()) return false;
-        break;
-      case 'not_eq':
-        if (val.toLowerCase() === String(f.value || '').toLowerCase()) return false;
-        break;
-      case 'in': {
-        const arr = Array.isArray(f.value)
-          ? f.value.map(v => String(v).toLowerCase())
-          : String(f.value || '').split(',').map(s => s.trim().toLowerCase());
-        if (!arr.includes(val.toLowerCase())) return false;
-        break;
-      }
-      case 'not_in': {
-        const arr = Array.isArray(f.value)
-          ? f.value.map(v => String(v).toLowerCase())
-          : String(f.value || '').split(',').map(s => s.trim().toLowerCase());
-        if (arr.includes(val.toLowerCase())) return false;
-        break;
-      }
-      case 'gt':  if (!(parseFloat(val) > parseFloat(f.value)))  return false; break;
-      case 'lt':  if (!(parseFloat(val) < parseFloat(f.value)))  return false; break;
-      case 'gte': if (!(parseFloat(val) >= parseFloat(f.value))) return false; break;
-      case 'lte': if (!(parseFloat(val) <= parseFloat(f.value))) return false; break;
-      case 'contains':
-        if (!val.toLowerCase().includes(String(f.value || '').toLowerCase())) return false;
-        break;
-      default: break;
+function testCondition(f, data) {
+  const raw = data[f.field];
+  const val = raw != null ? String(raw) : '';
+  switch (f.op) {
+    case 'eq':      return val.toLowerCase() === String(f.value || '').toLowerCase();
+    case 'not_eq':  return val.toLowerCase() !== String(f.value || '').toLowerCase();
+    case 'in': {
+      const arr = Array.isArray(f.value)
+        ? f.value.map(v => String(v).toLowerCase())
+        : String(f.value || '').split(',').map(s => s.trim().toLowerCase());
+      return arr.includes(val.toLowerCase());
     }
+    case 'not_in': {
+      const arr = Array.isArray(f.value)
+        ? f.value.map(v => String(v).toLowerCase())
+        : String(f.value || '').split(',').map(s => s.trim().toLowerCase());
+      return !arr.includes(val.toLowerCase());
+    }
+    case 'gt':       return parseFloat(val) > parseFloat(f.value);
+    case 'lt':       return parseFloat(val) < parseFloat(f.value);
+    case 'gte':      return parseFloat(val) >= parseFloat(f.value);
+    case 'lte':      return parseFloat(val) <= parseFloat(f.value);
+    case 'contains': return val.toLowerCase().includes(String(f.value || '').toLowerCase());
+    default:         return true;
   }
-  return true;
+}
+
+/**
+ * Evaluate a rule against shipment data.
+ * Supports:
+ *   rule.logic         — 'AND' (all conditions) | 'OR' (any condition). Default AND.
+ *   rule.service_codes — restrict to specific service codes (empty = all services).
+ *   rule.filters       — array of { field, op, value } conditions.
+ */
+function evaluateSurchargeFilters(rule, data) {
+  const filters      = Array.isArray(rule.filters)       ? rule.filters       : [];
+  const serviceCodes = Array.isArray(rule.service_codes) ? rule.service_codes : [];
+  const logic        = (rule.logic || 'AND').toUpperCase();
+
+  // Service code gate: if rule is scoped to specific services, check it first
+  if (serviceCodes.length > 0) {
+    const dcSvc = (data.dc_service_id || '').toLowerCase();
+    const match = serviceCodes.some(sc => sc.toLowerCase() === dcSvc);
+    if (!match) return false;
+  }
+
+  // No conditions → always fires (for this service if scoped, or for all)
+  if (filters.length === 0) return true;
+
+  if (logic === 'OR') {
+    return filters.some(f => testCondition(f, data));
+  }
+  // Default AND
+  return filters.every(f => testCondition(f, data));
 }
 
 /**
@@ -494,7 +510,7 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData) 
       // Any rule match fires the surcharge (OR across rules)
       let matched = false;
       for (const rule of rules) {
-        if (evaluateSurchargeFilters(rule.filters || [], shipmentData)) { matched = true; break; }
+        if (evaluateSurchargeFilters(rule, shipmentData)) { matched = true; break; }
       }
       if (!matched) continue;
 

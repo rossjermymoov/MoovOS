@@ -107,13 +107,19 @@ router.delete('/:id', async (req, res, next) => {
 
 router.post('/:id/rules', async (req, res, next) => {
   try {
-    const { name, filters } = req.body;
+    const { name, filters, logic, service_codes } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required' });
     const { rows } = await query(
-      `INSERT INTO surcharge_rules (surcharge_id, name, filters)
-       VALUES ($1,$2,$3)
+      `INSERT INTO surcharge_rules (surcharge_id, name, filters, logic, service_codes)
+       VALUES ($1,$2,$3,$4,$5)
        RETURNING *`,
-      [req.params.id, name.trim(), JSON.stringify(Array.isArray(filters) ? filters : [])]
+      [
+        req.params.id,
+        name.trim(),
+        JSON.stringify(Array.isArray(filters) ? filters : []),
+        (logic || 'AND').toUpperCase(),
+        Array.isArray(service_codes) ? service_codes : [],
+      ]
     );
     res.status(201).json(rows[0]);
   } catch (e) { next(e); }
@@ -121,7 +127,7 @@ router.post('/:id/rules', async (req, res, next) => {
 
 router.patch('/:id/rules/:rid', async (req, res, next) => {
   try {
-    const allowed = ['name', 'filters', 'active'];
+    const allowed = ['name', 'filters', 'active', 'logic', 'service_codes'];
     const sets = []; const vals = [];
     for (const k of allowed) {
       if (req.body[k] !== undefined) {
