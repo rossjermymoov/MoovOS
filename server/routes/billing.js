@@ -133,15 +133,38 @@ function rateCoversWeight(rate, weightKg) {
   return coversWeight(rate.weight_class_name, weightKg);
 }
 
-// zoneForPostcode — given a postcode, find the zone name for this service
-// by checking postcode_rules (include rules first, then catch-all via exclude).
-// Returns zone name string or null.
+// zoneForPostcode — given a destination postcode, find the zone name for this service.
+//
+// UK postcode structure: outward code (e.g. "IV1", "FK17", "AB55") + space + incode.
+// Postcode rules store the full outward code as the prefix (e.g. "IV1", not just "IV").
+// Matching must be EXACT on outward code — "AB21" must NOT match prefix "AB55",
+// and "IV10" must NOT match prefix "IV1".
+//
+// Exception: purely letter prefixes (e.g. "IM" for Isle of Man) have no district
+// number and should prefix-match any outward starting with those letters.
+//
+// Strategy:
+//   1. Check include rules — if this postcode's outward code is in the include list,
+//      that's the zone (e.g. Highlands has explicit IV1, IV2, FK17 … in its include list)
+//   2. If not in any include list, find the catch-all zone — a zone that has exclude rules
+//      but doesn't exclude this postcode (e.g. Mainland excludes Highlands postcodes,
+//      so any non-Highlands postcode falls through to Mainland)
 async function zoneForPostcode(serviceCode, serviceName, postcode) {
   if (!postcode) return null;
-  const outward = postcode.trim().toUpperCase().split(/\s/)[0]; // e.g. "IV1"
-  const area    = outward.replace(/\d.*$/, '');                 // e.g. "IV"
 
-  // 1. Explicit include rule matches this postcode → that zone
+  // Extract outward code only: "IV1 1AA" → "IV1", "AB55 6QE" → "AB55", "IM1 1AA" → "IM1"
+  const outward = postcode.trim().toUpperCase().split(/\s+/)[0];
+
+  // Match helper embedded in SQL:
+  //   - Exact match:        pr.postcode_prefix = $outward  (covers "IV1" = "IV1")
+  //   - Area-only prefix:   outward LIKE prefix||'%' AND prefix is letters-only
+  //                         (covers "IM" matching "IM1", "IM2" etc.)
+  const MATCH_CLAUSE = `(
+    pr.postcode_prefix = $3
+    OR ($3 LIKE pr.postcode_prefix || '%' AND pr.postcode_prefix ~ '^[A-Z]+$')
+  )`;
+
+  // 1. Explicit include rule
   const inclRes = await query(`
     SELECT z.name AS zone_name
     FROM zones z
@@ -149,13 +172,14 @@ async function zoneForPostcode(serviceCode, serviceName, postcode) {
     JOIN postcode_rules   pr ON pr.zone_id = z.id
     WHERE (cs.service_code ILIKE $1 OR cs.name ILIKE $2)
       AND pr.rule_type = 'include'
-      AND ($3 ILIKE pr.postcode_prefix || '%' OR $4 ILIKE pr.postcode_prefix || '%')
+      AND ${MATCH_CLAUSE}
     LIMIT 1
-  `, [serviceCode || '', serviceName || '', outward, area]);
+  `, [serviceCode || '', serviceName || '', outward]);
   if (inclRes.rows.length) return inclRes.rows[0].zone_name;
 
-  // 2. Not explicitly included anywhere → find the zone that excludes other
-  //    postcodes but does NOT exclude this one (the Mainland catch-all zone).
+  // 2. Catch-all: zone whose exclude list does NOT contain this outward code
+  //    (i.e. Mainland — which excludes Highlands postcodes but not this one)
+  const EXCL_MATCH = MATCH_CLAUSE.replace(/pr\./g, 'pr3.');
   const catchRes = await query(`
     SELECT z.name AS zone_name
     FROM zones z
@@ -168,10 +192,10 @@ async function zoneForPostcode(serviceCode, serviceName, postcode) {
       AND NOT EXISTS (
         SELECT 1 FROM postcode_rules pr3
         WHERE pr3.zone_id = z.id AND pr3.rule_type = 'exclude'
-          AND ($3 ILIKE pr3.postcode_prefix || '%' OR $4 ILIKE pr3.postcode_prefix || '%')
+          AND ${EXCL_MATCH}
       )
     LIMIT 1
-  `, [serviceCode || '', serviceName || '', outward, area]);
+  `, [serviceCode || '', serviceName || '', outward]);
   if (catchRes.rows.length) return catchRes.rows[0].zone_name;
 
   return null;
