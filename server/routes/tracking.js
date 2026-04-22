@@ -92,12 +92,17 @@ const STATUS_MAP = {
   address_query: 'exception', undeliverable: 'exception',
 
   // Returned
+  '10': 'returned',
   returned: 'returned', return: 'returned', rts: 'returned',
   return_to_sender: 'returned', returning: 'returned',
 };
 
 function normaliseStatus(raw) {
   if (!raw) return 'unknown';
+  // Try exact string match first (handles numeric codes like '10', '13')
+  const exact = STATUS_MAP[String(raw)];
+  if (exact) return exact;
+  // Fall through to normalised string lookup
   const key = String(raw).toLowerCase().replace(/[\s\-]+/g, '_').replace(/[^a-z_]/g, '');
   return STATUS_MAP[key] || 'in_transit';
 }
