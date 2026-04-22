@@ -981,7 +981,8 @@ router.post('/batch-reprice', async (req, res, next) => {
 });
 
 // ─── GET /api/billing/charges/:id/debug ──────────────────────────────────────
-// Step-by-step trace of why a charge did or did not get a price.
+// Full step-by-step trace using the SAME functions as the live billing engine.
+// Every field extracted, every DB lookup attempted, every decision explained.
 
 router.get('/charges/:id/debug', async (req, res, next) => {
   try {
@@ -992,10 +993,12 @@ router.get('/charges/:id/debug', async (req, res, next) => {
         c.id, c.customer_id, c.service_name AS c_service_name,
         c.zone_name, c.weight_class_name,
         c.price, c.price_auto, c.rate_id, c.order_id, c.parcel_qty,
+        c.price_failure_reason,
         s.platform_shipment_id,
         s.customer_account, s.customer_name AS s_customer_name,
         s.courier, s.dc_service_id, s.service_name AS s_service_name,
         s.total_weight_kg, s.parcel_count,
+        s.ship_to_postcode, s.ship_to_country_iso,
         s.raw_payload
       FROM charges c
       LEFT JOIN shipments s ON s.id = c.shipment_id
@@ -1008,238 +1011,247 @@ router.get('/charges/:id/debug', async (req, res, next) => {
     const trace = {
       charge_id: id,
       order_id: row.order_id,
-      stored_price: row.price,
-      stored_price_auto: row.price_auto,
-      stored_zone: row.zone_name,
-      stored_weight_class: row.weight_class_name,
+      stored: {
+        price: row.price,
+        price_auto: row.price_auto,
+        zone: row.zone_name,
+        weight_class: row.weight_class_name,
+        failure_reason: row.price_failure_reason,
+        postcode: row.ship_to_postcode,
+        country_iso: row.ship_to_country_iso,
+        customer_account: row.customer_account,
+        customer_name: row.s_customer_name,
+      },
       steps: [],
     };
 
-    // Step 1: Payload extraction
-    const payload = (typeof row.raw_payload === 'string')
-      ? safeJson(row.raw_payload) || {}
-      : (row.raw_payload || {});
-    const shipment    = payload.shipment    || {};
-    const request     = payload.request     || {};
-    // request_shipment may arrive as a top-level stringified JSON field
-    const reqShipment = request.shipment || safeJson(payload.request_shipment) || {};
+    // ── Step 1: Extract fields from raw payload (same as live webhook) ────────
+    const rawPayload   = typeof row.raw_payload === 'string' ? safeJson(row.raw_payload) || {} : (row.raw_payload || {});
+    const innerPayload = unwrapPayload(rawPayload);
+    const extracted    = extractShipmentFields(innerPayload);
 
-    const accountNumber = shipment.account_number || reqShipment.account_number;
-    const dcServiceId   = reqShipment.dc_service_id || shipment.dc_service_id || row.dc_service_id;
-    const serviceName   = shipment.friendly_service_name || reqShipment.friendly_service_name || row.s_service_name;
-    const parcelCount   = shipment.parcel_count || (reqShipment.parcels || []).length || row.parcel_qty || 1;
-
-    const createParcels = shipment.create_label_parcels || [];
-    let totalWeightKg = createParcels.length
-      ? createParcels.reduce((sum, p) => sum + (parseFloat(p.weight) || 0), 0)
-      : parseFloat(reqShipment._summed_total_weight) || null;
-    if (!totalWeightKg && row.total_weight_kg) totalWeightKg = parseFloat(row.total_weight_kg);
-    const weightPerParcel = parcelCount > 0 && totalWeightKg ? totalWeightKg / parcelCount : totalWeightKg;
+    const dcServiceId     = row.dc_service_id   || extracted.dcServiceId;
+    const serviceName     = row.s_service_name  || extracted.serviceName;
+    const parcelQty       = row.parcel_count     || row.parcel_qty || extracted.parcelCount || 1;
+    const totalWeightKg   = parseFloat(row.total_weight_kg) || extracted.totalWeightKg || null;
+    const weightPerParcel = parcelQty > 0 && totalWeightKg ? totalWeightKg / parcelQty : totalWeightKg;
+    const postcode        = row.ship_to_postcode || null;
+    const outward         = postcode ? postcode.trim().toUpperCase().split(/\s+/)[0] : null;
 
     trace.steps.push({
       step: 1,
-      title: 'Webhook payload extraction',
-      account_number: accountNumber || null,
-      dc_service_id: dcServiceId || null,
-      service_name: serviceName || null,
-      parcel_count: parcelCount,
-      total_weight_kg: totalWeightKg,
-      weight_per_parcel_kg: weightPerParcel != null ? Math.round(weightPerParcel * 1000) / 1000 : null,
+      title: 'Field extraction',
+      account_number:    extracted.accountNumber,
+      customer_dc_id:    extracted.customerDcId,
+      dc_service_id:     dcServiceId,
+      service_name:      serviceName,
+      parcel_count:      parcelQty,
+      total_weight_kg:   totalWeightKg,
+      weight_per_parcel: weightPerParcel != null ? Math.round(weightPerParcel * 1000) / 1000 : null,
+      postcode:          postcode,
+      outward_code:      outward,
     });
 
-    // Step 2: Customer resolution — try account_number then dc_customer_id
-    let customerId = null;
+    // ── Step 2: Customer resolution (same 4-step logic as live webhook) ───────
+    const { accountNumber, customerDcId } = extracted;
+    let customerId   = row.customer_id || null;
     let customerName = null;
-    let resolvedVia = null;
-    if (accountNumber) {
-      const cr = await query(
-        'SELECT id, business_name FROM customers WHERE account_number = $1',
-        [accountNumber]
-      );
-      if (cr.rows.length) {
-        customerId   = cr.rows[0].id;
-        customerName = cr.rows[0].business_name;
-        resolvedVia  = 'account_number';
-      } else {
-        // API customers send their DC customer ID (e.g. "Europa") as the account identifier
-        const cr2 = await query(
-          'SELECT id, business_name FROM customers WHERE dc_customer_id = $1',
-          [accountNumber]
-        );
-        if (cr2.rows.length) {
-          customerId   = cr2.rows[0].id;
-          customerName = cr2.rows[0].business_name;
-          resolvedVia  = 'dc_customer_id';
-        }
-      }
+    let resolvedVia  = customerId ? 'stored_on_charge' : null;
+    const custSteps  = [];
+
+    if (!customerId && accountNumber) {
+      const c1 = await query('SELECT id, business_name, account_number, dc_customer_id FROM customers WHERE account_number = $1', [accountNumber]);
+      custSteps.push({ tried: `account_number = '${accountNumber}'`, found: c1.rows.length > 0, row: c1.rows[0] || null });
+      if (c1.rows.length) { customerId = c1.rows[0].id; customerName = c1.rows[0].business_name; resolvedVia = 'account_number'; }
     }
-    // Fall back to stored customer_id if payload resolution failed
-    if (!customerId && row.customer_id) customerId = row.customer_id;
+    if (!customerId && accountNumber) {
+      const c2 = await query('SELECT id, business_name, account_number, dc_customer_id FROM customers WHERE dc_customer_id = $1', [accountNumber]);
+      custSteps.push({ tried: `dc_customer_id = '${accountNumber}'`, found: c2.rows.length > 0, row: c2.rows[0] || null });
+      if (c2.rows.length) { customerId = c2.rows[0].id; customerName = c2.rows[0].business_name; resolvedVia = 'dc_customer_id_via_account_number'; }
+    }
+    if (!customerId && customerDcId) {
+      const c3 = await query('SELECT id, business_name, account_number, dc_customer_id FROM customers WHERE dc_customer_id = $1', [customerDcId]);
+      custSteps.push({ tried: `dc_customer_id = '${customerDcId}'  (from billing block)`, found: c3.rows.length > 0, row: c3.rows[0] || null });
+      if (c3.rows.length) { customerId = c3.rows[0].id; customerName = c3.rows[0].business_name; resolvedVia = 'customer_dc_id_billing_block'; }
+    }
+    if (!customerId && row.s_customer_name) {
+      const c4 = await query(`SELECT id, business_name, account_number, dc_customer_id FROM customers WHERE LOWER(business_name) = LOWER($1)`, [row.s_customer_name.trim()]);
+      custSteps.push({ tried: `business_name = '${row.s_customer_name}'`, found: c4.rows.length > 0, row: c4.rows[0] || null });
+      if (c4.rows.length) { customerId = c4.rows[0].id; customerName = c4.rows[0].business_name; resolvedVia = 'business_name_exact'; }
+    }
+    if (!customerId && row.s_customer_name) {
+      const c5 = await query(`SELECT id, business_name, account_number, dc_customer_id FROM customers WHERE LOWER(business_name) ILIKE $1 ORDER BY LENGTH(business_name) ASC LIMIT 1`, [`%${row.s_customer_name.trim()}%`]);
+      custSteps.push({ tried: `business_name ILIKE '%${row.s_customer_name}%'`, found: c5.rows.length > 0, row: c5.rows[0] || null });
+      if (c5.rows.length) { customerId = c5.rows[0].id; customerName = c5.rows[0].business_name; resolvedVia = 'business_name_partial'; }
+    }
+
+    if (customerId && !customerName) {
+      const cn = await query('SELECT business_name FROM customers WHERE id = $1', [customerId]);
+      if (cn.rows.length) customerName = cn.rows[0].business_name;
+    }
 
     trace.steps.push({
       step: 2,
       title: 'Customer resolution',
-      account_number_used: accountNumber || null,
-      customer_found: !!customerId,
+      resolved: !!customerId,
       customer_id: customerId,
       customer_name: customerName,
       resolved_via: resolvedVia,
-      note: !accountNumber
-        ? 'No account_number in webhook payload'
-        : !customerId
-          ? `No customer matched account_number or dc_customer_id "${accountNumber}"`
-          : null,
+      lookup_attempts: custSteps,
     });
 
     if (!customerId) {
       trace.conclusion = {
         priced: false,
-        reason: 'Customer not resolved — account_number missing from webhook payload or not matched in the customers table',
-        fix: 'Ensure the customer\'s Account Number field in Moov OS matches the account_number sent in the webhook',
+        reason: 'No customer matched',
+        what_was_tried: custSteps,
+        fix: 'Set account_number or dc_customer_id on the customer record to match what the webhook sends, OR ensure business_name exactly matches the account_name in the webhook.',
       };
       return res.json(trace);
     }
 
-    // Step 3: Service match in customer_rates
-    const partialName = `%${(serviceName || '').split(' ').slice(0, 3).join(' ')}%`;
-    const rateRes = await query(`
-      SELECT cr.id, cr.price, cr.zone_name, cr.weight_class_name,
-             cr.service_code, cr.service_name
-      FROM customer_rates cr
-      WHERE cr.customer_id = $1
-        AND (
-          cr.service_code ILIKE $2
-          OR cr.service_name ILIKE $3
-          OR cr.service_name ILIKE $4
-        )
-      ORDER BY cr.zone_name, cr.weight_class_name
-    `, [customerId, dcServiceId || '', serviceName || '', partialName]);
-
-    // Also count total rates for this customer (for context)
-    const totalRates = await query(
-      'SELECT COUNT(*)::int AS cnt FROM customer_rates WHERE customer_id = $1',
-      [customerId]
-    );
+    // ── Step 3: Service match — show both what the DB has and what we searched ─
+    const partialSvc = `%${(serviceName || '').split(' ').slice(0, 3).join(' ')}%`;
+    const [rateRes, allSvcRes] = await Promise.all([
+      query(`
+        SELECT cr.id, cr.price, cr.zone_name, cr.weight_class_name,
+               cr.service_code, cr.service_name, cr.min_weight_kg, cr.max_weight_kg
+        FROM customer_rates cr
+        WHERE cr.customer_id = $1
+          AND (cr.service_code ILIKE $2 OR cr.service_name ILIKE $3 OR cr.service_name ILIKE $4)
+        ORDER BY cr.zone_name, cr.min_weight_kg NULLS LAST, cr.weight_class_name
+      `, [customerId, dcServiceId || '', serviceName || '', partialSvc]),
+      query(`
+        SELECT DISTINCT service_code, service_name, COUNT(*) AS rate_count
+        FROM customer_rates WHERE customer_id = $1
+        GROUP BY service_code, service_name ORDER BY service_name
+      `, [customerId]),
+    ]);
 
     trace.steps.push({
       step: 3,
-      title: 'customer_rates service match',
-      query: {
-        customer_id: customerId,
-        service_code_ilike: dcServiceId || '',
-        service_name_ilike: serviceName || '',
-        service_name_partial_ilike: partialName,
-      },
-      total_rates_for_customer: totalRates.rows[0].cnt,
-      rows_matched: rateRes.rows.length,
-      rows: rateRes.rows.map(r => ({
-        id: r.id,
-        service_code: r.service_code,
-        service_name: r.service_name,
-        zone_name: r.zone_name,
-        weight_class_name: r.weight_class_name,
-        price: r.price,
+      title: 'Service match in customer_rates',
+      searched_for: { service_code: dcServiceId, service_name: serviceName, partial: partialSvc },
+      matched_rows: rateRes.rows.length,
+      matched_rates: rateRes.rows.map(r => ({
+        id: r.id, service_code: r.service_code, service_name: r.service_name,
+        zone_name: r.zone_name, weight_class_name: r.weight_class_name,
+        min_weight_kg: r.min_weight_kg, max_weight_kg: r.max_weight_kg, price: r.price,
       })),
+      all_services_on_customer: allSvcRes.rows,
     });
 
     if (!rateRes.rows.length) {
       trace.conclusion = {
         priced: false,
-        reason: `No customer_rates rows matched for this customer. Service code "${dcServiceId}", service name "${serviceName}".`,
-        fix: totalRates.rows[0].cnt === 0
-          ? 'No pricing set up at all for this customer — add rates in the customer\'s Pricing tab'
-          : `Rates exist but none match the service. Check that service_code or service_name in customer_rates matches "${dcServiceId}" / "${serviceName}"`,
+        reason: `No rates matched. Webhook sent service_code="${dcServiceId}", service_name="${serviceName}". None of the customer's services matched.`,
+        available_services: allSvcRes.rows,
+        fix: 'The service_code or service_name in customer_rates must match what the webhook sends. Check the customer Pricing tab.',
       };
       return res.json(trace);
     }
 
-    // Step 4: Weight band matching
-    const weightChecks = rateRes.rows.map(r => {
-      if (!r.weight_class_name) {
-        return { ...r, covers_weight: false, note: 'No weight class name on this rate row' };
-      }
-      if (weightPerParcel == null) {
-        return { ...r, covers_weight: false, note: 'No parcel weight available in webhook to match against' };
-      }
-
-      const s = r.weight_class_name.toUpperCase().replace(/\s/g, '');
-      const range = s.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)KG?$/);
-      const plus  = s.match(/^(\d+(?:\.\d+)?)\+KG?$/) || s.match(/^OVER(\d+(?:\.\d+)?)KG?$/);
-      const under = s.match(/^(?:UNDER|<)(\d+(?:\.\d+)?)KG?$/);
-
+    // ── Step 4: Weight band matching (mirrors rateCoversWeight + allNonNumeric) ─
+    const rates = rateRes.rows;
+    const bandChecks = rates.map(r => {
+      const minKg = parseFloat(r.min_weight_kg);
+      const maxKg = parseFloat(r.max_weight_kg);
+      const hasNumeric = !isNaN(minKg) && !isNaN(maxKg);
       let covers = false;
-      let note   = '';
+      let method = '';
+      let detail = '';
 
-      if (range) {
-        const lo = parseFloat(range[1]), hi = parseFloat(range[2]);
-        covers = weightPerParcel > lo && weightPerParcel <= hi;
-        note   = `Range ${lo}–${hi} kg, parcel is ${weightPerParcel} kg → ${covers ? '✓ MATCH' : '✗ no match'}`;
-      } else if (plus) {
-        const min = parseFloat(plus[1]);
-        covers = weightPerParcel > min;
-        note   = `Over ${min} kg, parcel is ${weightPerParcel} kg → ${covers ? '✓ MATCH' : '✗ no match'}`;
-      } else if (under) {
-        const max = parseFloat(under[1]);
-        covers = weightPerParcel < max;
-        note   = `Under ${max} kg, parcel is ${weightPerParcel} kg → ${covers ? '✓ MATCH' : '✗ no match'}`;
+      if (hasNumeric) {
+        covers = weightPerParcel != null && weightPerParcel > minKg && weightPerParcel <= maxKg;
+        method = 'numeric_bounds';
+        detail = `${minKg} < weight(${weightPerParcel}) ≤ ${maxKg} → ${covers ? '✓ MATCH' : '✗ no match'}`;
       } else {
-        note = `⚠ Unrecognised format "${r.weight_class_name}" — expected e.g. "0-1KG", "OVER5KG", "UNDER2KG"`;
+        const norm = normaliseWeightBand(r.weight_class_name);
+        const hasDigits = /\d/.test(norm);
+        if (!hasDigits) {
+          covers = false; // handled by allNonNumeric path below
+          method = 'non_numeric_name';
+          detail = `weight_class_name "${r.weight_class_name}" → normalised "${norm}" has no digits — handled by flat-rate catch-all`;
+        } else {
+          covers = weightPerParcel != null && coversWeight(r.weight_class_name, weightPerParcel);
+          method = 'text_pattern';
+          detail = `normalised="${norm}", weight=${weightPerParcel} → ${covers ? '✓ MATCH' : '✗ no match'}`;
+        }
       }
-
-      return {
-        rate_id: r.id,
-        zone_name: r.zone_name,
-        weight_class_name: r.weight_class_name,
-        price: r.price,
-        covers_weight: covers,
-        note,
-      };
+      return { id: r.id, zone_name: r.zone_name, weight_class_name: r.weight_class_name,
+               min_weight_kg: r.min_weight_kg, max_weight_kg: r.max_weight_kg,
+               price: r.price, covers, method, detail };
     });
 
-    const matching = weightChecks.filter(w => w.covers_weight);
+    const directMatch = bandChecks.filter(b => b.covers);
+
+    const allNonNumeric = rates.every(r => {
+      const s = normaliseWeightBand(r.weight_class_name);
+      return !s || !/\d/.test(s);
+    });
+
+    let zoneResolved = null;
+    let catchAllRate = null;
+
+    if (allNonNumeric) {
+      if (rates.length === 1) {
+        catchAllRate = rates[0];
+        zoneResolved = 'single_rate_no_zone_lookup_needed';
+      } else {
+        const zoneName = await zoneForPostcode(rates[0].service_code, rates[0].service_name, postcode);
+        zoneResolved = zoneName || null;
+        if (zoneName) {
+          const zl = zoneName.toLowerCase();
+          catchAllRate = rates.find(x => x.zone_name.toLowerCase().includes(zl) || zl.includes(x.zone_name.toLowerCase()));
+        }
+        if (!catchAllRate) {
+          catchAllRate = [...rates].sort((a, b) => parseFloat(a.price) - parseFloat(b.price))[0];
+          if (!zoneResolved) zoneResolved = 'postcode_lookup_failed_used_cheapest_rate';
+        }
+      }
+    }
 
     trace.steps.push({
       step: 4,
       title: 'Weight band matching',
       weight_per_parcel_kg: weightPerParcel,
-      checks: weightChecks,
-      matching_count: matching.length,
+      postcode_outward: outward,
+      all_non_numeric_names: allNonNumeric,
+      band_checks: bandChecks,
+      direct_matches: directMatch.length,
+      flat_rate_catch_all: allNonNumeric ? {
+        triggered: true,
+        zone_resolved_via_postcode: zoneResolved,
+        selected_rate: catchAllRate ? { zone: catchAllRate.zone_name, price: catchAllRate.price } : null,
+      } : { triggered: false },
     });
 
-    // Conclusion
-    if (matching.length >= 1) {
+    // ── Conclusion ────────────────────────────────────────────────────────────
+    let winner = null;
+    if (directMatch.length >= 1) {
+      winner = directMatch[0];
       trace.conclusion = {
-        priced: true,
-        price: parseFloat(matching[0].price),
-        zone_name: matching[0].zone_name,
-        weight_class_name: matching[0].weight_class_name,
-        note: matching.length > 1
-          ? `${matching.length} bands matched — used first (${matching[0].zone_name})`
-          : 'Single exact band match',
+        priced: true, price: parseFloat(winner.price),
+        zone_name: winner.zone_name, weight_class_name: winner.weight_class_name,
+        method: 'direct_weight_band_match',
       };
-    } else if (weightPerParcel == null && rateRes.rows.length === 1) {
+    } else if (allNonNumeric && catchAllRate) {
+      winner = catchAllRate;
       trace.conclusion = {
-        priced: true,
-        price: parseFloat(rateRes.rows[0].price),
-        zone_name: rateRes.rows[0].zone_name,
-        weight_class_name: rateRes.rows[0].weight_class_name,
-        note: 'No weight in webhook but only one rate row — used it directly',
+        priced: true, price: parseFloat(winner.price),
+        zone_name: winner.zone_name, weight_class_name: winner.weight_class_name,
+        method: `flat_rate_catch_all (zone resolved: ${zoneResolved})`,
       };
     } else {
-      const hasUnrecognised = weightChecks.some(c => c.note?.includes('Unrecognised'));
-      const noWeight        = weightPerParcel == null;
       trace.conclusion = {
         priced: false,
-        reason: hasUnrecognised
-          ? `Weight class name format not parseable — coversWeight() returned false for all rows`
-          : noWeight
-            ? `No parcel weight in webhook and ${rateRes.rows.length} rate rows — ambiguous, cannot auto-select`
-            : `No weight band covers ${weightPerParcel} kg`,
-        fix: hasUnrecognised
-          ? 'Update weight_class_name values in customer_rates to use format like "0-1KG", "1-2KG", "OVER5KG"'
-          : noWeight
-            ? 'Parcel weight not sent in webhook payload; set the price manually or check webhook parcel weight field'
-            : `Check that a rate band exists that covers ${weightPerParcel} kg`,
+        reason: weightPerParcel == null
+          ? 'No parcel weight in webhook — cannot match weight bands'
+          : `No band covers ${weightPerParcel} kg`,
+        band_details: bandChecks,
+        fix: allNonNumeric
+          ? 'All band names are non-numeric but postcode zone lookup also failed. Ensure postcode rules are configured on the zone.'
+          : 'Check that a rate row exists covering this weight. If bands have no numeric bounds, import DC weight classes or set min/max kg manually.',
       };
     }
 
