@@ -150,6 +150,7 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
       bond_amount_held:   c.bond_amount_held ?? 0,
       tier:               c.tier || 'bronze',
       manual_billing:     c.manual_billing ?? false,
+      dc_customer_id:     c.dc_customer_id || '',
     });
     setEdit(true);
   }
@@ -171,6 +172,7 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
       accounts_email:     form.accounts_email || null,
       eori_number:        form.eori_number || null,
       ioss_number:        form.ioss_number || null,
+      dc_customer_id:     form.dc_customer_id || null,
     }),
     onSuccess: (updated) => { onSaved(updated); setEdit(false); },
   });
@@ -247,6 +249,30 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
                 editNode={<input style={inp()} value={form.eori_number} onChange={e => set('eori_number', e.target.value)} placeholder="GB123456789000" />} />
               <Row label="IOSS Number" value={c.ioss_number} edit={edit}
                 editNode={<input style={inp()} value={form.ioss_number} onChange={e => set('ioss_number', e.target.value)} placeholder="IM1234567890" />} />
+            </InfoCard>
+          )}
+
+          {(c.dc_customer_id || edit) && (
+            <InfoCard title="API Integration">
+              <Row
+                label="DC Customer ID"
+                value={c.dc_customer_id}
+                edit={edit}
+                editNode={
+                  <input
+                    style={inp()}
+                    value={form.dc_customer_id}
+                    onChange={e => set('dc_customer_id', e.target.value)}
+                    placeholder="e.g. Europa"
+                  />
+                }
+              />
+              {edit && (
+                <div style={{ fontSize: 11, color: '#AAAAAA', marginTop: 4, paddingLeft: 2 }}>
+                  Set this to the identifier the customer sends as their account ID in API webhooks.
+                  Billing will fall back to this if no standard account number is matched.
+                </div>
+              )}
             </InfoCard>
           )}
 

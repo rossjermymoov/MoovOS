@@ -259,11 +259,17 @@ router.post('/webhook', async (req, res, next) => {
     const courierCosts = billingResp.shipping || [];
     const totalCostPrice = courierCosts.reduce((s, c) => s + (parseFloat(c) || 0), 0);
 
-    // Resolve customer
+    // Resolve customer — try account_number first, fall back to dc_customer_id
     let customerId = null;
     if (accountNumber) {
       const cr = await query('SELECT id FROM customers WHERE account_number = $1', [accountNumber]);
-      if (cr.rows.length) customerId = cr.rows[0].id;
+      if (cr.rows.length) {
+        customerId = cr.rows[0].id;
+      } else {
+        // API customers identify themselves with their DC customer ID (e.g. "Europa")
+        const cr2 = await query('SELECT id FROM customers WHERE dc_customer_id = $1', [accountNumber]);
+        if (cr2.rows.length) customerId = cr2.rows[0].id;
+      }
     }
 
     // Upsert shipment
@@ -546,16 +552,18 @@ router.post('/batch-reprice', async (req, res, next) => {
         const innerPayload = unwrapPayload(rawPayload);
         const extracted = extractShipmentFields(innerPayload);
 
-        // Resolve customer
+        // Resolve customer — try account_number first, fall back to dc_customer_id
         let customerId = row.customer_id;
         if (!customerId) {
           const acctNum = row.customer_account || extracted.accountNumber;
           if (acctNum) {
-            const cr = await query(
-              'SELECT id FROM customers WHERE account_number = $1',
-              [acctNum]
-            );
-            if (cr.rows.length) customerId = cr.rows[0].id;
+            const cr = await query('SELECT id FROM customers WHERE account_number = $1', [acctNum]);
+            if (cr.rows.length) {
+              customerId = cr.rows[0].id;
+            } else {
+              const cr2 = await query('SELECT id FROM customers WHERE dc_customer_id = $1', [acctNum]);
+              if (cr2.rows.length) customerId = cr2.rows[0].id;
+            }
           }
         }
 
@@ -690,17 +698,30 @@ router.get('/charges/:id/debug', async (req, res, next) => {
       weight_per_parcel_kg: weightPerParcel != null ? Math.round(weightPerParcel * 1000) / 1000 : null,
     });
 
-    // Step 2: Customer resolution
+    // Step 2: Customer resolution — try account_number then dc_customer_id
     let customerId = null;
     let customerName = null;
+    let resolvedVia = null;
     if (accountNumber) {
       const cr = await query(
         'SELECT id, business_name FROM customers WHERE account_number = $1',
         [accountNumber]
       );
       if (cr.rows.length) {
-        customerId  = cr.rows[0].id;
+        customerId   = cr.rows[0].id;
         customerName = cr.rows[0].business_name;
+        resolvedVia  = 'account_number';
+      } else {
+        // API customers send their DC customer ID (e.g. "Europa") as the account identifier
+        const cr2 = await query(
+          'SELECT id, business_name FROM customers WHERE dc_customer_id = $1',
+          [accountNumber]
+        );
+        if (cr2.rows.length) {
+          customerId   = cr2.rows[0].id;
+          customerName = cr2.rows[0].business_name;
+          resolvedVia  = 'dc_customer_id';
+        }
       }
     }
     // Fall back to stored customer_id if payload resolution failed
@@ -713,10 +734,11 @@ router.get('/charges/:id/debug', async (req, res, next) => {
       customer_found: !!customerId,
       customer_id: customerId,
       customer_name: customerName,
+      resolved_via: resolvedVia,
       note: !accountNumber
         ? 'No account_number in webhook payload'
         : !customerId
-          ? `No customer matched account_number "${accountNumber}"`
+          ? `No customer matched account_number or dc_customer_id "${accountNumber}"`
           : null,
     });
 
@@ -902,13 +924,18 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
     const innerPayload  = unwrapPayload(rawPayload);
     const extracted     = extractShipmentFields(innerPayload);
 
-    // Resolve customer — use stored id or re-derive from account_number in raw payload
+    // Resolve customer — use stored id or re-derive; try account_number then dc_customer_id
     let customerId = row.customer_id;
     if (!customerId) {
       const acctNum = row.customer_account || extracted.accountNumber;
       if (acctNum) {
         const cr = await query('SELECT id FROM customers WHERE account_number = $1', [acctNum]);
-        if (cr.rows.length) customerId = cr.rows[0].id;
+        if (cr.rows.length) {
+          customerId = cr.rows[0].id;
+        } else {
+          const cr2 = await query('SELECT id FROM customers WHERE dc_customer_id = $1', [acctNum]);
+          if (cr2.rows.length) customerId = cr2.rows[0].id;
+        }
       }
     }
 
