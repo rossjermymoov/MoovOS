@@ -13,6 +13,7 @@ import {
   User, Building2, Edit2, Zap, AlertTriangle, ArrowLeft, GripVertical,
 } from 'lucide-react';
 import { carriersApi } from '../../api/carriers';
+import { getCourierLogo } from '../../utils/courierLogos';
 import axios from 'axios';
 
 const api = axios.create({ baseURL: '/api' });
@@ -103,6 +104,45 @@ function ContactRow({ contact, onDelete, onUpdate, onMakePrimary }) {
   );
 }
 
+// ─── Courier logo component ───────────────────────────────────────────────────
+// Shows the carrier's logo on a white background; falls back to the coloured
+// letter badge if no logo is available in the Voila API map.
+
+function CourierLogo({ code, color, size = 46, radius = 10 }) {
+  const logo = getCourierLogo(code);
+  if (logo) {
+    return (
+      <div style={{
+        width: size, height: size, borderRadius: radius,
+        background: '#fff', border: `2px solid rgba(255,255,255,0.25)`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexShrink: 0, overflow: 'hidden',
+      }}>
+        <img
+          src={logo}
+          alt={code}
+          style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 4 }}
+          onError={e => {
+            // If the image fails to load, swap to a text badge
+            e.currentTarget.parentElement.innerHTML =
+              `<span style="font-size:${Math.round(size*0.22)}px;font-weight:900;color:${color};letter-spacing:0.03em">${code.slice(0,4)}</span>`;
+          }}
+        />
+      </div>
+    );
+  }
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: radius,
+      background: `${color}22`, border: `2px solid ${color}55`,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: Math.round(size * 0.22), fontWeight: 900, color, letterSpacing: '0.03em', flexShrink: 0,
+    }}>
+      {code.slice(0, 4)}
+    </div>
+  );
+}
+
 // ─── LEVEL 1 — Carrier card ───────────────────────────────────────────────────
 
 function CarrierCard({ carrier, onDrill, onRefresh }) {
@@ -151,10 +191,8 @@ function CarrierCard({ carrier, onDrill, onRefresh }) {
     <div className="moov-card" style={{ overflow:'hidden', marginBottom:0 }}>
       {/* Header strip */}
       <div style={{ background:`linear-gradient(135deg, ${color}18, transparent)`, borderBottom:`1px solid ${color}30`, padding:'16px 20px', display:'flex', alignItems:'center', gap:14 }}>
-        {/* Carrier badge */}
-        <div style={{ width:46, height:46, borderRadius:10, background:`${color}22`, border:`2px solid ${color}55`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:900, color, letterSpacing:'0.03em', flexShrink:0 }}>
-          {carrier.code.slice(0,4)}
-        </div>
+        {/* Carrier logo / badge */}
+        <CourierLogo code={carrier.code} color={color} size={46} radius={10} />
         <div style={{ flex:1 }}>
           <div style={{ fontSize:16, fontWeight:700, color:'#fff' }}>{carrier.name}</div>
           <div style={{ display:'flex', gap:8, marginTop:4 }}>

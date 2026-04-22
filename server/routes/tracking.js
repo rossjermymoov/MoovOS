@@ -28,12 +28,15 @@ const STATUS_MAP = {
   in_transit: 'in_transit', transit: 'in_transit', on_its_way: 'in_transit',
   forwarded: 'in_transit', processed: 'in_transit', departed_depot: 'in_transit',
   despatched: 'in_transit', dispatched: 'in_transit',
+  left_hub: 'in_transit', parcel_left_hub: 'in_transit', departed_hub: 'in_transit',
+  left_depot: 'in_transit', departed_facility: 'in_transit', left_facility: 'in_transit',
 
   // At depot (physically at a hub / sorting facility)
   at_hub: 'at_depot', hub: 'at_depot', in_depot: 'at_depot',
   arrived_at_depot: 'at_depot', at_depot: 'at_depot',
   sorting: 'at_depot', sorted: 'at_depot', at_facility: 'at_depot',
   arrived_at_hub: 'at_depot', held_at_hub: 'at_depot',
+  parcel_at_hub: 'at_depot', received_at_hub: 'at_depot',
 
   // Out for delivery
   out_for_delivery: 'out_for_delivery', out_for_del: 'out_for_delivery',

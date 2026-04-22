@@ -11,8 +11,30 @@ import {
   RefreshCw, Filter,
 } from 'lucide-react';
 import axios from 'axios';
+import { getCourierLogo } from '../../utils/courierLogos';
 
 const api = axios.create({ baseURL: '/api' });
+
+// Small inline logo for table rows / drawer
+function CourierBadge({ name, code }) {
+  const logo = getCourierLogo(code) || getCourierLogo(name);
+  if (logo) {
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <span style={{
+          width: 22, height: 22, borderRadius: 4, background: '#fff',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.15)',
+        }}>
+          <img src={logo} alt={name || code} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 2 }}
+            onError={e => { e.currentTarget.style.display = 'none'; }} />
+        </span>
+        <span>{name || code}</span>
+      </span>
+    );
+  }
+  return <span>{name || code || '—'}</span>;
+}
 
 // ─── Status config ────────────────────────────────────────────
 const STATUS = {
@@ -188,7 +210,8 @@ function ParcelDrawer({ consignment, onClose }) {
             {/* Parcel details */}
             <div style={{ marginBottom: 20 }}>
               {[
-                ['Courier',    [data.courier_name, data.service_name].filter(Boolean).join(' · ')],
+                ['Courier',    data.courier_name ? <CourierBadge name={data.courier_name} code={data.courier_code} /> : null],
+                ['Service',    data.service_name || null],
                 ['Customer',   data.customer_name || data.customer_account],
                 ['Recipient',  data.recipient_name],
                 ['Postcode',   data.recipient_postcode],
@@ -396,8 +419,10 @@ export default function TrackingPage() {
                     {p.customer_account && <div style={{ fontSize: 11, color: '#555' }}>{p.customer_account}</div>}
                   </td>
                   <td>
-                    <div style={{ fontSize: 13, color: '#DDD' }}>{p.courier_name || '—'}</div>
-                    {p.service_name && <div style={{ fontSize: 11, color: '#555' }}>{p.service_name}</div>}
+                    <div style={{ fontSize: 13, color: '#DDD' }}>
+                      <CourierBadge name={p.courier_name} code={p.courier_code} />
+                    </div>
+                    {p.service_name && <div style={{ fontSize: 11, color: '#555', marginTop: 2 }}>{p.service_name}</div>}
                   </td>
                   <td>
                     <div style={{ fontSize: 13, color: '#DDD' }}>{p.recipient_name || '—'}</div>
