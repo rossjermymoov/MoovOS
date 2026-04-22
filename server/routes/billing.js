@@ -113,8 +113,12 @@ function extractShipmentFields(payload) {
 }
 
 // ─── Rate card lookup ─────────────────────────────────────────────────────────
-// Returns { rate: { price, zone_name, weight_class_name, rate_id }, reason: null }
+// Returns { rate: { price, cost_price?, zone_name, weight_class_name, rate_id }, reason: null }
 // on success, or { rate: null, reason: 'Human-readable string' } on failure.
+//
+// Priority:
+//   1. customer_service_pricing (new model) — carrier cost price + markup % or fixed fee
+//   2. customer_rates (legacy) — explicit per-band sell prices
 
 // rateCoversWeight — uses numeric bounds (from dc_weight_classes import) when
 // available, falls back to text-band parsing via coversWeight().
@@ -129,9 +133,85 @@ function rateCoversWeight(rate, weightKg) {
   return coversWeight(rate.weight_class_name, weightKg);
 }
 
-async function lookupRateWithReason(customerId, serviceCode, serviceName, weightKg) {
-  if (!customerId) return { rate: null, reason: 'No matching customer' };
+// ── New model: customer_service_pricing ───────────────────────────────────────
+async function lookupViaServicePricing(customerId, serviceCode, serviceName, weightKg) {
+  // Join: customer_service_pricing → carrier_rate_cards → weight_bands (via zones → courier_services)
+  const res = await query(`
+    SELECT
+      csp.pricing_type, csp.markup_pct, csp.fixed_fee,
+      wb.price        AS cost_price,
+      wb.price_sub    AS cost_price_sub,
+      wb.min_weight_kg, wb.max_weight_kg,
+      wb.weight_class_name,
+      z.name          AS zone_name,
+      wb.id           AS band_id,
+      cs.service_code AS svc_code,
+      cs.name         AS svc_name
+    FROM customer_service_pricing csp
+    JOIN carrier_rate_cards crc ON crc.id = csp.carrier_rate_card_id
+    JOIN courier_services   cs  ON cs.id  = csp.service_id
+    JOIN zones              z   ON z.courier_service_id = cs.id
+    JOIN weight_bands       wb  ON wb.zone_id = z.id
+                                AND wb.carrier_rate_card_id = crc.id
+    WHERE csp.customer_id = $1
+      AND (
+        cs.service_code ILIKE $2
+        OR cs.name       ILIKE $3
+        OR cs.name       ILIKE $4
+      )
+    ORDER BY z.name, wb.min_weight_kg NULLS LAST, wb.weight_class_name
+  `, [customerId, serviceCode || '', serviceName || '', `%${(serviceName||'').split(' ').slice(0,3).join(' ')}%`]);
 
+  if (!res.rows.length) return null; // no new-model pricing → fall through to legacy
+
+  const rows = res.rows;
+
+  const applyPricing = (row) => {
+    const cost = parseFloat(row.cost_price || 0);
+    if (row.pricing_type === 'fixed_fee') return cost + parseFloat(row.fixed_fee || 0);
+    const pct  = parseFloat(row.markup_pct || 0);
+    return cost * (1 + pct / 100);
+  };
+
+  if (weightKg != null) {
+    const matching = rows.filter(r => rateCoversWeight(r, weightKg));
+    if (matching.length >= 1) {
+      const r = matching[0];
+      return { rate: {
+        price: Math.round(applyPricing(r) * 10000) / 10000,
+        cost_price: parseFloat(r.cost_price || 0),
+        zone_name: r.zone_name,
+        weight_class_name: r.weight_class_name,
+        rate_id: r.band_id,
+        pricing_type: r.pricing_type,
+        markup_pct: r.markup_pct,
+        fixed_fee: r.fixed_fee,
+      }, reason: null };
+    }
+    const hasNumericBounds = rows.some(r => r.min_weight_kg != null);
+    const reason = hasNumericBounds
+      ? `No weight band covers ${Math.round(weightKg * 1000) / 1000} kg`
+      : 'Unrecognised weight band format';
+    return { rate: null, reason };
+  }
+
+  if (rows.length === 1) {
+    const r = rows[0];
+    return { rate: {
+      price: Math.round(applyPricing(r) * 10000) / 10000,
+      cost_price: parseFloat(r.cost_price || 0),
+      zone_name: r.zone_name,
+      weight_class_name: r.weight_class_name,
+      rate_id: r.band_id,
+      pricing_type: r.pricing_type,
+    }, reason: null };
+  }
+
+  return { rate: null, reason: 'Multiple weight bands — no parcel weight to select one' };
+}
+
+// ── Legacy model: customer_rates ──────────────────────────────────────────────
+async function lookupViaCustomerRates(customerId, serviceCode, serviceName, weightKg) {
   const rateRes = await query(`
     SELECT
       cr.id, cr.price, cr.zone_name, cr.weight_class_name,
@@ -166,7 +246,6 @@ async function lookupRateWithReason(customerId, serviceCode, serviceName, weight
       return { rate: { price: parseFloat(matching[0].price), zone_name: matching[0].zone_name,
                        weight_class_name: matching[0].weight_class_name, rate_id: matching[0].id }, reason: null };
     }
-    // Diagnose why weight didn't match
     const hasNumericBounds = rates.some(r => r.min_weight_kg != null);
     const hasUnrecognised = !hasNumericBounds && rates.some(r => {
       const s = normaliseWeightBand(r.weight_class_name);
@@ -183,13 +262,24 @@ async function lookupRateWithReason(customerId, serviceCode, serviceName, weight
     return { rate: null, reason };
   }
 
-  // No weight available
   if (rates.length === 1) {
     return { rate: { price: parseFloat(rates[0].price), zone_name: rates[0].zone_name,
                      weight_class_name: rates[0].weight_class_name, rate_id: rates[0].id }, reason: null };
   }
 
   return { rate: null, reason: 'Multiple rates — no parcel weight to select band' };
+}
+
+// ── Main lookup — tries new model first, falls back to legacy ─────────────────
+async function lookupRateWithReason(customerId, serviceCode, serviceName, weightKg) {
+  if (!customerId) return { rate: null, reason: 'No matching customer' };
+
+  // 1. Try new markup/fee model
+  const newResult = await lookupViaServicePricing(customerId, serviceCode, serviceName, weightKg);
+  if (newResult !== null) return newResult;
+
+  // 2. Fall back to legacy per-band customer_rates
+  return lookupViaCustomerRates(customerId, serviceCode, serviceName, weightKg);
 }
 
 // Backwards-compat shim used by the debug endpoint
