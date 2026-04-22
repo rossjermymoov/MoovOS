@@ -182,6 +182,19 @@ const COURIER_LOGOS = {
   "YunExpress": "https://app.heyvoila.io/courier-service-logos/thumbnails/yunexpress.jpg",
   "YunExpressUSA": "https://app.heyvoila.io/courier-service-logos/thumbnails/yunexpress.jpg",
   "Zedify": "https://app.heyvoila.io/courier-service-logos/thumbnails/zedify.jpg",
+
+  // ── Manual aliases ───────────────────────────────────────────────────────────
+  // Evri / EvriCorporate — same logo, cover all spacing/casing variants
+  "evricorporate":   "https://app.heyvoila.io/courier-service-logos/thumbnails/evri.jpg",
+  "evri corporate":  "https://app.heyvoila.io/courier-service-logos/thumbnails/evri.jpg",
+  "Evri Corporate":  "https://app.heyvoila.io/courier-service-logos/thumbnails/evri.jpg",
+  "evri":            "https://app.heyvoila.io/courier-service-logos/thumbnails/evri.jpg",
+
+  // Yodel C2C — cover space-separated and lowercase variants
+  "yodel c2c":       "https://app.heyvoila.io/courier-service-logos/thumbnails/yodel.jpg",
+  "Yodel C2C":       "https://app.heyvoila.io/courier-service-logos/thumbnails/yodel.jpg",
+  "yodelc2c":        "https://app.heyvoila.io/courier-service-logos/thumbnails/yodel.jpg",
+  "yodel c 2 c":     "https://app.heyvoila.io/courier-service-logos/thumbnails/yodel.jpg",
 };
 
 export function getCourierLogo(courierCode) {
