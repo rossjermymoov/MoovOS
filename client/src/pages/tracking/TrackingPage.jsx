@@ -121,21 +121,32 @@ function StatCard({ label, value, color, icon: Icon, active, onClick }) {
 }
 
 // ─── Event timeline ───────────────────────────────────────────
+// Events arrive newest-first from the API (ORDER BY event_at DESC).
+// The vertical line runs downward from each dot to the next older event.
 function EventTimeline({ events }) {
   if (!events?.length) return <p style={{ color: '#555', fontSize: 13, fontStyle: 'italic' }}>No events yet</p>;
   return (
     <div style={{ position: 'relative' }}>
-      {/* Vertical line */}
-      <div style={{ position: 'absolute', left: 11, top: 0, bottom: 0, width: 2, background: 'rgba(255,255,255,0.06)' }} />
       {events.map((ev, i) => {
         const cfg = STATUS[ev.status] || STATUS.unknown;
+        const isLast = i === events.length - 1;
         return (
-          <div key={ev.id} style={{ display: 'flex', gap: 16, marginBottom: 18, position: 'relative' }}>
-            {/* Dot */}
-            <div style={{ width: 24, height: 24, borderRadius: '50%', background: cfg.bg, border: `2px solid ${cfg.color}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, zIndex: 1 }}>
-              <div style={{ width: 7, height: 7, borderRadius: '50%', background: cfg.color }} />
+          <div key={ev.id} style={{ display: 'flex', gap: 16, position: 'relative',
+            paddingBottom: isLast ? 0 : 20 }}>
+            {/* Dot + line downward to older event */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
+              <div style={{ width: 24, height: 24, borderRadius: '50%', background: cfg.bg,
+                border: `2px solid ${cfg.color}`, display: 'flex', alignItems: 'center',
+                justifyContent: 'center', zIndex: 1, flexShrink: 0 }}>
+                <div style={{ width: 7, height: 7, borderRadius: '50%', background: cfg.color }} />
+              </div>
+              {/* Line going down to next (older) event */}
+              {!isLast && (
+                <div style={{ width: 2, flex: 1, minHeight: 16,
+                  background: 'linear-gradient(to bottom, rgba(255,255,255,0.12), rgba(255,255,255,0.03))' }} />
+              )}
             </div>
-            <div style={{ flex: 1, paddingTop: 2 }}>
+            <div style={{ flex: 1, paddingTop: 2, paddingBottom: isLast ? 0 : 4 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 3 }}>
                 <StatusBadge status={ev.status} />
                 <span style={{ fontSize: 11, color: '#555' }}>{timeAgo(ev.event_at)}</span>
@@ -197,17 +208,6 @@ function ParcelDrawer({ consignment, onClose }) {
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#AAAAAA' }}>Loading…</div>
         ) : data ? (
           <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
-            {/* Current status + SLA */}
-            <div style={{ marginBottom: 20, padding: 16, background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)' }}>
-              <StatusBadge status={data.status} size="lg" />
-              {data.status_description && <p style={{ fontSize: 13, color: '#DDD', marginTop: 8, marginBottom: 0 }}>{data.status_description}</p>}
-              {data.last_location && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#AAAAAA', marginTop: 6 }}>
-                  <MapPin size={12} /> {data.last_location}
-                </div>
-              )}
-            </div>
-
             {/* Delivery address */}
             {(data.recipient_name || data.recipient_address || data.recipient_postcode) && (
               <div style={{ marginBottom: 20, padding: 14, background: 'rgba(0,188,212,0.05)', borderRadius: 10, border: '1px solid rgba(0,188,212,0.15)' }}>
@@ -238,8 +238,14 @@ function ParcelDrawer({ consignment, onClose }) {
               </div>
             )}
 
+            {/* Event timeline — newest first */}
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#AAAAAA', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
+              Event History ({data.events?.length || 0})
+            </div>
+            <EventTimeline events={data.events} />
+
             {/* Parcel details */}
-            <div style={{ marginBottom: 20 }}>
+            <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
               {[
                 ['Courier',    data.courier_name ? <CourierBadge name={data.courier_name} code={data.courier_code} /> : null],
                 ['Service',    data.service_name || null],
@@ -253,12 +259,6 @@ function ParcelDrawer({ consignment, onClose }) {
                 </div>
               ))}
             </div>
-
-            {/* Event timeline */}
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#AAAAAA', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
-              Event History ({data.events?.length || 0})
-            </div>
-            <EventTimeline events={data.events} />
           </div>
         ) : (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555' }}>Not found</div>
