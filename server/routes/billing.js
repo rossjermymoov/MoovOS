@@ -133,6 +133,50 @@ function rateCoversWeight(rate, weightKg) {
   return coversWeight(rate.weight_class_name, weightKg);
 }
 
+// zoneForPostcode — given a postcode, find the zone name for this service
+// by checking postcode_rules (include rules first, then catch-all via exclude).
+// Returns zone name string or null.
+async function zoneForPostcode(serviceCode, serviceName, postcode) {
+  if (!postcode) return null;
+  const outward = postcode.trim().toUpperCase().split(/\s/)[0]; // e.g. "IV1"
+  const area    = outward.replace(/\d.*$/, '');                 // e.g. "IV"
+
+  // 1. Explicit include rule matches this postcode → that zone
+  const inclRes = await query(`
+    SELECT z.name AS zone_name
+    FROM zones z
+    JOIN courier_services cs ON cs.id = z.courier_service_id
+    JOIN postcode_rules   pr ON pr.zone_id = z.id
+    WHERE (cs.service_code ILIKE $1 OR cs.name ILIKE $2)
+      AND pr.rule_type = 'include'
+      AND ($3 ILIKE pr.postcode_prefix || '%' OR $4 ILIKE pr.postcode_prefix || '%')
+    LIMIT 1
+  `, [serviceCode || '', serviceName || '', outward, area]);
+  if (inclRes.rows.length) return inclRes.rows[0].zone_name;
+
+  // 2. Not explicitly included anywhere → find the zone that excludes other
+  //    postcodes but does NOT exclude this one (the Mainland catch-all zone).
+  const catchRes = await query(`
+    SELECT z.name AS zone_name
+    FROM zones z
+    JOIN courier_services cs ON cs.id = z.courier_service_id
+    WHERE (cs.service_code ILIKE $1 OR cs.name ILIKE $2)
+      AND EXISTS (
+        SELECT 1 FROM postcode_rules pr2
+        WHERE pr2.zone_id = z.id AND pr2.rule_type = 'exclude'
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM postcode_rules pr3
+        WHERE pr3.zone_id = z.id AND pr3.rule_type = 'exclude'
+          AND ($3 ILIKE pr3.postcode_prefix || '%' OR $4 ILIKE pr3.postcode_prefix || '%')
+      )
+    LIMIT 1
+  `, [serviceCode || '', serviceName || '', outward, area]);
+  if (catchRes.rows.length) return catchRes.rows[0].zone_name;
+
+  return null;
+}
+
 // ── New model: customer_service_pricing ───────────────────────────────────────
 // weight_bands columns: id, zone_id, carrier_rate_card_id, min_weight_kg,
 //   max_weight_kg, price_first, price_sub  (no weight_class_name, no 'price')
@@ -209,7 +253,7 @@ async function lookupViaServicePricing(customerId, serviceCode, serviceName, wei
 }
 
 // ── Legacy model: customer_rates ──────────────────────────────────────────────
-async function lookupViaCustomerRates(customerId, serviceCode, serviceName, weightKg) {
+async function lookupViaCustomerRates(customerId, serviceCode, serviceName, weightKg, postcode) {
   const rateRes = await query(`
     SELECT
       cr.id, cr.price, cr.zone_name, cr.weight_class_name,
@@ -244,15 +288,25 @@ async function lookupViaCustomerRates(customerId, serviceCode, serviceName, weig
       return { rate: { price: parseFloat(matching[0].price), zone_name: matching[0].zone_name,
                        weight_class_name: matching[0].weight_class_name, rate_id: matching[0].id }, reason: null };
     }
-    // Last resort: if all bands have non-numeric names (e.g. "Parcel", "Standard")
-    // and there's exactly one row for the service, treat it as a catch-all — the
-    // carrier's weight limit is baked into the service itself, not the band name.
+    // If all bands have non-numeric names (e.g. "Parcel") — the service doesn't
+    // use weight-based bands. Zone is determined by destination postcode, not weight.
     const allNonNumeric = rates.every(r => {
       const s = normaliseWeightBand(r.weight_class_name);
-      return !s || !/\d/.test(s); // no digits → catch-all name like "Parcel"
+      return !s || !/\d/.test(s);
     });
-    if (allNonNumeric && rates.length === 1) {
-      const r = rates[0];
+    if (allNonNumeric) {
+      let r;
+      if (rates.length === 1) {
+        r = rates[0];
+      } else {
+        // Multiple zones — resolve by postcode. Fall back to cheapest (usually Mainland).
+        const zoneName = await zoneForPostcode(rates[0].service_code, rates[0].service_name, postcode);
+        if (zoneName) {
+          const zl = zoneName.toLowerCase();
+          r = rates.find(x => x.zone_name.toLowerCase().includes(zl) || zl.includes(x.zone_name.toLowerCase()));
+        }
+        if (!r) r = [...rates].sort((a, b) => parseFloat(a.price) - parseFloat(b.price))[0];
+      }
       return { rate: { price: parseFloat(r.price), zone_name: r.zone_name,
                        weight_class_name: r.weight_class_name, rate_id: r.id }, reason: null };
     }
@@ -283,7 +337,7 @@ async function lookupViaCustomerRates(customerId, serviceCode, serviceName, weig
 }
 
 // ── Main lookup — tries new model first, falls back to legacy ─────────────────
-async function lookupRateWithReason(customerId, serviceCode, serviceName, weightKg) {
+async function lookupRateWithReason(customerId, serviceCode, serviceName, weightKg, postcode) {
   if (!customerId) return { rate: null, reason: 'No matching customer' };
 
   // 1. Try new markup/fee model
@@ -291,12 +345,12 @@ async function lookupRateWithReason(customerId, serviceCode, serviceName, weight
   if (newResult !== null) return newResult;
 
   // 2. Fall back to legacy per-band customer_rates
-  return lookupViaCustomerRates(customerId, serviceCode, serviceName, weightKg);
+  return lookupViaCustomerRates(customerId, serviceCode, serviceName, weightKg, postcode);
 }
 
 // Backwards-compat shim used by the debug endpoint
-async function lookupRate(customerId, serviceCode, serviceName, weightKg) {
-  const { rate } = await lookupRateWithReason(customerId, serviceCode, serviceName, weightKg);
+async function lookupRate(customerId, serviceCode, serviceName, weightKg, postcode) {
+  const { rate } = await lookupRateWithReason(customerId, serviceCode, serviceName, weightKg, postcode);
   return rate;
 }
 
@@ -499,8 +553,8 @@ router.post('/webhook', async (req, res, next) => {
       return res.json({ ok: true, action: 'duplicate', shipment_id: shipmentId });
     }
 
-    // Look up rate card
-    const { rate, reason: priceFailReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel);
+    // Look up rate card — pass destination postcode for zone resolution on flat-rate services
+    const { rate, reason: priceFailReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, shipToPostcode);
     const unitPrice  = rate ? rate.price : null;
     const totalPrice = unitPrice != null ? parseFloat((unitPrice * parcelCount).toFixed(2)) : null;
 
@@ -581,13 +635,16 @@ router.post('/purge-tracking-events', async (req, res, next) => {
 
 router.post('/relink-customers', async (req, res, next) => {
   try {
+    // Include shipments where customer_account OR customer_name is set
+    // so that API-integrated customers (e.g. Europa) whose webhooks carry
+    // no account_number but DO carry account_name are also picked up.
     const unlinked = await query(`
-      SELECT s.id AS shipment_id, s.customer_account,
+      SELECT s.id AS shipment_id, s.customer_account, s.customer_name,
              c.id AS charge_id
       FROM shipments s
       LEFT JOIN charges c ON c.shipment_id = s.id
       WHERE s.customer_id IS NULL
-        AND s.customer_account IS NOT NULL
+        AND (s.customer_account IS NOT NULL OR s.customer_name IS NOT NULL)
       ORDER BY s.created_at ASC
     `);
 
@@ -596,15 +653,38 @@ router.post('/relink-customers', async (req, res, next) => {
 
     for (const row of unlinked.rows) {
       const acct = row.customer_account;
+      const name = row.customer_name;
+      let customerId = null;
 
-      // Try account_number first
-      let cr = await query('SELECT id FROM customers WHERE account_number = $1', [acct]);
-      let customerId = cr.rows[0]?.id || null;
+      // 1. account_number exact match
+      if (acct) {
+        const cr = await query('SELECT id FROM customers WHERE account_number = $1', [acct]);
+        customerId = cr.rows[0]?.id || null;
+      }
 
-      // Fall back to dc_customer_id
-      if (!customerId) {
+      // 2. dc_customer_id match (API customers like Europa send their DC ID as account)
+      if (!customerId && acct) {
         const cr2 = await query('SELECT id FROM customers WHERE dc_customer_id = $1', [acct]);
         customerId = cr2.rows[0]?.id || null;
+      }
+
+      // 3. Match by account_name against business_name (for customers whose webhook
+      //    carries no account number — Europa sends account_name but no account_number)
+      if (!customerId && name) {
+        const cr3 = await query(
+          `SELECT id FROM customers WHERE LOWER(business_name) = LOWER($1)`,
+          [name.trim()]
+        );
+        customerId = cr3.rows[0]?.id || null;
+      }
+
+      // 4. Partial name match as last resort (covers "Europa Worldwide" matching "Europa")
+      if (!customerId && name) {
+        const cr4 = await query(
+          `SELECT id FROM customers WHERE LOWER(business_name) ILIKE $1 ORDER BY LENGTH(business_name) ASC LIMIT 1`,
+          [`%${name.trim()}%`]
+        );
+        customerId = cr4.rows[0]?.id || null;
       }
 
       if (!customerId) { not_found++; continue; }
@@ -767,7 +847,7 @@ router.post('/batch-reprice', async (req, res, next) => {
              s.id AS shipment_id,
              s.dc_service_id, s.service_name AS s_service_name,
              s.total_weight_kg, s.parcel_count,
-             s.customer_account, s.raw_payload
+             s.customer_account, s.ship_to_postcode, s.raw_payload
       FROM charges c
       LEFT JOIN shipments s ON s.id = c.shipment_id
       WHERE c.price IS NULL
@@ -843,8 +923,8 @@ router.post('/batch-reprice', async (req, res, next) => {
           );
         }
 
-        // Look up rate with reason
-        const { rate, reason: failReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel);
+        // Look up rate with reason — pass postcode for zone resolution on flat-rate services
+        const { rate, reason: failReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, row.ship_to_postcode);
         if (!rate) {
           summary.no_rate++;
           await query(`UPDATE charges SET price_failure_reason = $1, updated_at = NOW() WHERE id = $2`,
@@ -1154,7 +1234,7 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
       SELECT c.customer_id, c.parcel_qty,
              s.dc_service_id, s.service_name AS s_service_name,
              s.total_weight_kg, s.parcel_count,
-             s.customer_account, s.raw_payload
+             s.customer_account, s.ship_to_postcode, s.raw_payload
       FROM charges c
       LEFT JOIN shipments s ON s.id = c.shipment_id
       WHERE c.id = $1
@@ -1197,7 +1277,7 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
       await query(`UPDATE charges SET customer_id = $1, updated_at = NOW() WHERE id = $2`, [customerId, id]);
     }
 
-    const { rate, reason: failReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel);
+    const { rate, reason: failReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, row.ship_to_postcode);
     if (!rate) {
       await query(`UPDATE charges SET price_failure_reason = $1, updated_at = NOW() WHERE id = $2`,
         [failReason, id]);
