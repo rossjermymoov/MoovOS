@@ -8,7 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Search, X, Truck, PackageCheck, Clock, AlertTriangle,
   ShieldAlert, RotateCcw, Package, ChevronRight, MapPin,
-  RefreshCw, Filter,
+  RefreshCw, Store,
 } from 'lucide-react';
 import axios from 'axios';
 import { getCourierLogo } from '../../utils/courierLogos';
@@ -45,7 +45,8 @@ const STATUS = {
   out_for_delivery: { label: 'Out for Delivery',  color: '#FFC107', bg: 'rgba(255,193,7,0.12)',    icon: Truck },
   delivered:        { label: 'Delivered',         color: '#00C853', bg: 'rgba(0,200,83,0.12)',     icon: PackageCheck },
   failed_delivery:  { label: 'Address Issue',     color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
-  on_hold:          { label: 'On Hold',           color: '#FF9800', bg: 'rgba(255,152,0,0.12)',    icon: Clock },
+  on_hold:              { label: 'On Hold',              color: '#FF9800', bg: 'rgba(255,152,0,0.12)',    icon: Clock },
+  awaiting_collection:  { label: 'Awaiting Collection', color: '#FF6F00', bg: 'rgba(255,111,0,0.12)',    icon: Store },
   customs_hold:     { label: 'Customs Hold',      color: '#E91E8C', bg: 'rgba(233,30,140,0.12)',   icon: ShieldAlert },
   exception:        { label: 'Address Issue',     color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
   returned:         { label: 'Returned',          color: '#607D8B', bg: 'rgba(96,125,139,0.12)',   icon: RotateCcw },
@@ -205,11 +206,6 @@ function ParcelDrawer({ consignment, onClose }) {
                   <MapPin size={12} /> {data.last_location}
                 </div>
               )}
-              <SlaIndicator
-                estimatedDelivery={data.estimated_delivery}
-                deliveredAt={data.delivered_at}
-                status={data.status}
-              />
             </div>
 
             {/* Delivery address */}
@@ -272,54 +268,6 @@ function ParcelDrawer({ consignment, onClose }) {
   );
 }
 
-// ─── SLA indicator ────────────────────────────────────────────
-function SlaIndicator({ estimatedDelivery, deliveredAt, status }) {
-  if (!estimatedDelivery) return null;
-  const eta = new Date(estimatedDelivery);
-  const now = new Date();
-
-  if (status === 'delivered' && deliveredAt) {
-    const actual = new Date(deliveredAt);
-    if (actual > eta) {
-      const late = Math.round((actual - eta) / 86400000);
-      return (
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6,
-          background: 'rgba(255,193,7,0.12)', border: '1px solid rgba(255,193,7,0.35)',
-          borderRadius: 7, padding: '6px 12px', marginTop: 10 }}>
-          <Clock size={13} color="#FFC107" />
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#FFC107' }}>
-            Delivered {late} day{late !== 1 ? 's' : ''} late
-          </span>
-        </div>
-      );
-    }
-    return (
-      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6,
-        background: 'rgba(0,200,83,0.1)', border: '1px solid rgba(0,200,83,0.3)',
-        borderRadius: 7, padding: '6px 12px', marginTop: 10 }}>
-        <PackageCheck size={13} color="#00C853" />
-        <span style={{ fontSize: 12, fontWeight: 700, color: '#00C853' }}>Delivered on time</span>
-      </div>
-    );
-  }
-
-  if (!['delivered', 'returned'].includes(status) && now > eta) {
-    const overdue = Math.round((now - eta) / 86400000);
-    return (
-      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6,
-        background: 'rgba(244,67,54,0.1)', border: '1px solid rgba(244,67,54,0.35)',
-        borderRadius: 7, padding: '6px 12px', marginTop: 10 }}>
-        <AlertTriangle size={13} color="#F44336" />
-        <span style={{ fontSize: 12, fontWeight: 700, color: '#F44336' }}>
-          SLA missed — {overdue} day{overdue !== 1 ? 's' : ''} overdue
-        </span>
-      </div>
-    );
-  }
-
-  return null;
-}
-
 // ─── Main tracking page ───────────────────────────────────────
 const STATUS_OPTS = [
   { value: '',                         label: 'All statuses' },
@@ -330,6 +278,7 @@ const STATUS_OPTS = [
   { value: 'out_for_delivery',         label: 'Out for Delivery' },
   { value: 'delivered',                label: 'Delivered' },
   { value: 'failed_delivery,exception',label: 'Address Issue' },
+  { value: 'awaiting_collection',       label: 'Awaiting Collection' },
   { value: 'on_hold',                  label: 'On Hold' },
   { value: 'customs_hold',             label: 'Customs Hold' },
   { value: 'returned',                 label: 'Returned' },
@@ -414,6 +363,7 @@ export default function TrackingPage() {
         <StatCard label="In Transit"       value={bs.in_transit}          color="#7B2FBE" icon={Truck}         active={statusFilter==='in_transit'}             onClick={() => toggleStatus('in_transit')} />
         <StatCard label="At Depot"         value={bs.at_depot}            color="#5C6BC0" icon={Package}       active={statusFilter==='at_depot'}              onClick={() => toggleStatus('at_depot')} />
         <StatCard label="Out for Delivery" value={bs.out_for_delivery}    color="#FFC107" icon={Truck}         active={statusFilter==='out_for_delivery'}       onClick={() => toggleStatus('out_for_delivery')} />
+        <StatCard label="Awaiting Collection" value={bs.awaiting_collection} color="#FF6F00" icon={Store}        active={statusFilter==='awaiting_collection'}    onClick={() => toggleStatus('awaiting_collection')} />
         <StatCard label="On Hold"          value={bs.on_hold}             color="#FF9800" icon={Clock}         active={statusFilter==='on_hold'}                onClick={() => toggleStatus('on_hold')} />
         <StatCard label="Address Issue"    value={(bs.failed_delivery||0)+(bs.exception||0)} color="#F44336" icon={AlertTriangle} active={statusFilter==='failed_delivery,exception'} onClick={() => toggleStatus('failed_delivery,exception')} />
         <StatCard label="Customs Hold"     value={bs.customs_hold}        color="#E91E8C" icon={ShieldAlert}   active={statusFilter==='customs_hold'}           onClick={() => toggleStatus('customs_hold')} />

@@ -18,7 +18,7 @@ const router = express.Router();
 const VERIFIED_STATUSES = new Set([
   'in_transit', 'at_depot', 'out_for_delivery',
   'delivered', 'failed_delivery', 'on_hold',
-  'customs_hold', 'exception', 'returned',
+  'awaiting_collection', 'customs_hold', 'exception', 'returned',
 ]);
 
 // ─── Status normalisation ─────────────────────────────────────────────────────
@@ -66,8 +66,20 @@ const STATUS_MAP = {
 
   // On hold
   on_hold: 'on_hold', held: 'on_hold', hold: 'on_hold',
-  awaiting_collection: 'on_hold', collection_point: 'on_hold',
   awaiting_instructions: 'on_hold',
+
+  // Awaiting collection — parcel at a drop shop / parcel shop waiting for recipient
+  '13': 'awaiting_collection',
+  awaiting_collection: 'awaiting_collection',
+  collection_point: 'awaiting_collection',
+  ready_for_collection: 'awaiting_collection',
+  available_for_collection: 'awaiting_collection',
+  at_collection_point: 'awaiting_collection',
+  held_at_parcelshop: 'awaiting_collection',
+  parcel_shop: 'awaiting_collection',
+  at_parcelshop: 'awaiting_collection',
+  held_for_collection: 'awaiting_collection',
+  collect_from_depot: 'awaiting_collection',
 
   // Customs hold
   customs_hold: 'customs_hold', customs: 'customs_hold',
@@ -296,7 +308,7 @@ export async function catchUpVerified() {
             AND te.status = ANY(ARRAY[
               'in_transit','at_depot','out_for_delivery',
               'delivered','failed_delivery','on_hold',
-              'customs_hold','exception','returned'
+              'awaiting_collection','customs_hold','exception','returned'
             ]::parcel_status[])
         )
     `);
