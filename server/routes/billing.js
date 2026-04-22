@@ -28,6 +28,69 @@ function safeJson(str) {
   try { return JSON.parse(str); } catch { return null; }
 }
 
+// Unwrap the platform envelope — handles body.json as object OR string
+function unwrapPayload(body) {
+  if (!body) return {};
+  if (body.json) {
+    if (typeof body.json === 'object') return body.json;
+    const parsed = safeJson(body.json);
+    if (parsed && typeof parsed === 'object') return parsed;
+  }
+  return body;
+}
+
+// Extract the request-shipment sub-document from any known payload shape.
+// Tries every path: request.shipment (object or string), request_shipment (string or object).
+function extractReqShipment(payload) {
+  const candidates = [
+    typeof payload.request?.shipment === 'object' ? payload.request.shipment : null,
+    safeJson(payload.request?.shipment),
+    safeJson(payload.request_shipment),
+    typeof payload.request_shipment === 'object' ? payload.request_shipment : null,
+  ];
+  return candidates.find(c => c && typeof c === 'object') || {};
+}
+
+// Pull dc_service_id + service name + weight + account from payload — checks all known locations
+function extractShipmentFields(payload) {
+  const ship     = payload.shipment || {};
+  const reqShip  = extractReqShipment(payload);
+
+  const accountNumber = ship.account_number
+    || reqShip.account_number
+    || payload.account_number
+    || null;
+
+  const dcServiceId = reqShip.dc_service_id
+    || ship.dc_service_id
+    || payload.dc_service_id
+    || null;
+
+  const serviceName = ship.friendly_service_name
+    || reqShip.friendly_service_name
+    || reqShip.courier?.friendly_service_name
+    || ship.service_name
+    || null;
+
+  const createParcels = ship.create_label_parcels || [];
+  let totalWeightKg = createParcels.length
+    ? createParcels.reduce((s, p) => s + (parseFloat(p.weight) || 0), 0)
+    : null;
+  if (!totalWeightKg) {
+    const reqParcels = reqShip.parcels || [];
+    totalWeightKg = reqParcels.length
+      ? reqParcels.reduce((s, p) => s + (parseFloat(p.weight) || 0), 0)
+      : parseFloat(reqShip._summed_total_weight) || null;
+  }
+
+  const parcelCount = ship.parcel_count
+    || (reqShip.parcels || []).length
+    || createParcels.length
+    || 1;
+
+  return { accountNumber, dcServiceId, serviceName, totalWeightKg, parcelCount, reqShip };
+}
+
 // ─── Rate card lookup ─────────────────────────────────────────────────────────
 // Returns { rate: { price, zone_name, weight_class_name, rate_id }, reason: null }
 // on success, or { rate: null, reason: 'Human-readable string' } on failure.
@@ -119,9 +182,28 @@ router.post('/webhook', async (req, res, next) => {
     const body = req.body;
     if (!body) return res.status(400).json({ error: 'Empty payload' });
 
-    // Unwrap platform wrapper
-    const payload = (body.json && typeof body.json === 'object') ? body.json : body;
-    const eventType = payload.event_type || 'shipment.created';
+    // Unwrap platform wrapper (handles body.json as object or string)
+    const payload = unwrapPayload(body);
+    const eventType = payload.event_type || payload.event || payload.type || '';
+
+    // ── Guard: only process shipment lifecycle events ─────────────────────────
+    // Tracking webhooks (event_type = 'tracking.update', 'parcel.tracking', etc.)
+    // must go to /api/tracking/webhook — not here.
+    const SHIPMENT_EVENTS = new Set([
+      'shipment.created', 'shipment.cancelled', 'shipment.deleted', 'shipment.updated',
+    ]);
+    const TRACKING_KEYWORDS = ['tracking', 'parcel.scan', 'delivery_update', 'status_update'];
+    const lowerEvent = eventType.toLowerCase();
+    const isTrackingEvent = TRACKING_KEYWORDS.some(k => lowerEvent.includes(k));
+
+    if (isTrackingEvent) {
+      return res.json({ ok: true, action: 'skipped', reason: `tracking event "${eventType}" ignored — use /api/tracking/webhook` });
+    }
+
+    // If there's an explicit event_type we don't recognise as a shipment event, skip it
+    if (eventType && !SHIPMENT_EVENTS.has(eventType)) {
+      return res.json({ ok: true, action: 'skipped', reason: `unrecognised event_type "${eventType}"` });
+    }
 
     // ── Cancellation ──────────────────────────────────────────────────────────
     if (eventType === 'shipment.cancelled' || eventType === 'shipment.deleted') {
@@ -147,35 +229,28 @@ router.post('/webhook', async (req, res, next) => {
     }
 
     // ── Created ───────────────────────────────────────────────────────────────
-    const shipment    = payload.shipment    || {};
-    const request     = payload.request     || {};
-    // request_shipment may arrive as a top-level stringified JSON field
-    const reqShipment = request.shipment || safeJson(payload.request_shipment) || {};
+    const shipment       = payload.shipment || {};
     const responseParsed = safeJson(payload.response) || {};
-    const billingResp = responseParsed.billing || {};
+    const billingResp    = responseParsed.billing || {};
+
+    // Use consolidated extractor — handles all known payload shapes
+    const { accountNumber, dcServiceId, serviceName, totalWeightKg, parcelCount, reqShip: reqShipment }
+      = extractShipmentFields(payload);
 
     const platformId     = shipment.id;
-    const accountNumber  = shipment.account_number || reqShipment.account_number;
     const accountName    = shipment.account_name   || reqShipment.account_name;
     const courier        = shipment.courier        || reqShipment.courier;
-    const serviceName    = shipment.friendly_service_name || reqShipment.friendly_service_name;
-    const dcServiceId    = reqShipment.dc_service_id || shipment.dc_service_id;
     const reference      = shipment.reference      || reqShipment.reference;
     const reference2     = shipment.reference_2    || reqShipment.reference_2;
-    const parcelCount    = shipment.parcel_count   || (reqShipment.parcels || []).length || 1;
     const shipToPostcode = shipment.ship_to_postcode;
     const shipToName     = shipment.ship_to_name;
     const shipToCountry  = shipment.ship_to_country_iso;
     const collectionDate = shipment.collection_date ? shipment.collection_date.split('T')[0] : null;
 
-    // Total weight across all parcels
-    const createParcels = shipment.create_label_parcels || [];
-    const totalWeightKg = createParcels.length
-      ? createParcels.reduce((sum, p) => sum + (parseFloat(p.weight) || 0), 0)
-      : parseFloat(reqShipment._summed_total_weight) || null;
     const weightPerParcel = parcelCount > 0 && totalWeightKg ? totalWeightKg / parcelCount : totalWeightKg;
 
     // Tracking codes
+    const createParcels = shipment.create_label_parcels || [];
     const trackingCodes = createParcels.length
       ? createParcels.map(p => p.tracking_code).filter(Boolean)
       : (responseParsed.tracking_codes || []);
@@ -267,6 +342,41 @@ router.post('/webhook', async (req, res, next) => {
       price_auto:  rate != null,
     });
 
+  } catch (err) { next(err); }
+});
+
+// ─── POST /api/billing/purge-tracking-events ─────────────────────────────────
+// Remove charges + shipments that were created by tracking webhooks
+// (not by shipment.created). Identified by event_type != 'shipment.created'
+// or by raw_payload containing no request_shipment / no dc_service_id signal.
+
+router.post('/purge-tracking-events', async (req, res, next) => {
+  try {
+    // Delete charges where the linked shipment has an event_type that is not a shipment lifecycle event
+    const result = await query(`
+      WITH bad_shipments AS (
+        SELECT s.id
+        FROM shipments s
+        WHERE s.event_type IS NOT NULL
+          AND s.event_type NOT IN ('shipment.created', 'shipment.updated', 'shipment.cancelled', 'shipment.deleted', '')
+      ),
+      deleted_charges AS (
+        DELETE FROM charges
+        WHERE shipment_id IN (SELECT id FROM bad_shipments)
+        RETURNING id
+      ),
+      deleted_shipments AS (
+        DELETE FROM shipments
+        WHERE id IN (SELECT id FROM bad_shipments)
+        RETURNING id
+      )
+      SELECT
+        (SELECT COUNT(*) FROM deleted_charges)  AS charges_deleted,
+        (SELECT COUNT(*) FROM deleted_shipments) AS shipments_deleted
+    `);
+
+    const { charges_deleted, shipments_deleted } = result.rows[0];
+    res.json({ ok: true, charges_deleted: parseInt(charges_deleted), shipments_deleted: parseInt(shipments_deleted) });
   } catch (err) { next(err); }
 });
 
@@ -429,20 +539,17 @@ router.post('/batch-reprice', async (req, res, next) => {
 
     for (const row of charges.rows) {
       try {
-        // Re-parse raw_payload for fields that may have been null on original ingest
+        // Re-parse raw_payload using consolidated extractor
         const rawPayload = typeof row.raw_payload === 'string'
           ? safeJson(row.raw_payload) || {}
           : (row.raw_payload || {});
-        const rShip  = rawPayload.request || {};
-        const reqShip = rShip.shipment || safeJson(rawPayload.request_shipment) || {};
-        const ship    = rawPayload.shipment || {};
+        const innerPayload = unwrapPayload(rawPayload);
+        const extracted = extractShipmentFields(innerPayload);
 
         // Resolve customer
         let customerId = row.customer_id;
         if (!customerId) {
-          const acctNum = row.customer_account
-            || reqShip.account_number
-            || ship.account_number;
+          const acctNum = row.customer_account || extracted.accountNumber;
           if (acctNum) {
             const cr = await query(
               'SELECT id FROM customers WHERE account_number = $1',
@@ -459,23 +566,13 @@ router.post('/batch-reprice', async (req, res, next) => {
           continue;
         }
 
-        const dcServiceId = row.dc_service_id || reqShip.dc_service_id;
-        const serviceName = row.s_service_name
-          || ship.friendly_service_name
-          || reqShip.friendly_service_name;
+        const dcServiceId = row.dc_service_id || extracted.dcServiceId;
+        const serviceName = row.s_service_name || extracted.serviceName;
 
-        // Weight
-        let totalWt = parseFloat(row.total_weight_kg) || null;
-        if (!totalWt) {
-          const parcels = ship.create_label_parcels || [];
-          totalWt = parcels.length
-            ? parcels.reduce((s, p) => s + (parseFloat(p.weight) || 0), 0)
-            : parseFloat(reqShip._summed_total_weight) || null;
-        }
-        const parcelQty = row.parcel_qty || row.parcel_count
-          || (reqShip.parcels || []).length || 1;
-        const weightPerParcel = parcelQty > 0 && totalWt
-          ? totalWt / parcelQty : totalWt;
+        // Weight — stored column first, then from payload
+        let totalWt = parseFloat(row.total_weight_kg) || extracted.totalWeightKg || null;
+        const parcelQty = row.parcel_qty || row.parcel_count || extracted.parcelCount || 1;
+        const weightPerParcel = parcelQty > 0 && totalWt ? totalWt / parcelQty : totalWt;
 
         // Back-fill customer + service fields on shipment/charge if missing
         if (!row.customer_id && customerId) {
@@ -801,33 +898,24 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
 
     // Re-parse raw_payload for fields that may have been null when the shipment was first ingested
     // (e.g. before the request_shipment parsing fix was deployed)
-    const rawPayload  = typeof row.raw_payload === 'string' ? safeJson(row.raw_payload) || {} : (row.raw_payload || {});
-    const rShip       = rawPayload.request || {};
-    const reqShip     = rShip.shipment || safeJson(rawPayload.request_shipment) || {};
+    const rawPayload    = typeof row.raw_payload === 'string' ? safeJson(row.raw_payload) || {} : (row.raw_payload || {});
+    const innerPayload  = unwrapPayload(rawPayload);
+    const extracted     = extractShipmentFields(innerPayload);
 
     // Resolve customer — use stored id or re-derive from account_number in raw payload
     let customerId = row.customer_id;
     if (!customerId) {
-      const acctNum = row.customer_account || reqShip.account_number || rawPayload.shipment?.account_number;
+      const acctNum = row.customer_account || extracted.accountNumber;
       if (acctNum) {
         const cr = await query('SELECT id FROM customers WHERE account_number = $1', [acctNum]);
         if (cr.rows.length) customerId = cr.rows[0].id;
       }
     }
 
-    const dcServiceId = row.dc_service_id || reqShip.dc_service_id;
-    const serviceName = row.s_service_name || rawPayload.shipment?.friendly_service_name || reqShip.friendly_service_name;
-
-    // Weight — stored column first, then re-derive from raw payload
-    let totalWt = parseFloat(row.total_weight_kg) || null;
-    if (!totalWt) {
-      const createParcels = rawPayload.shipment?.create_label_parcels || [];
-      totalWt = createParcels.length
-        ? createParcels.reduce((s, p) => s + (parseFloat(p.weight) || 0), 0)
-        : parseFloat(reqShip._summed_total_weight) || null;
-    }
-
-    const parcelQty = row.parcel_qty || row.parcel_count || (reqShip.parcels || []).length || 1;
+    const dcServiceId = row.dc_service_id || extracted.dcServiceId;
+    const serviceName = row.s_service_name || extracted.serviceName;
+    let totalWt       = parseFloat(row.total_weight_kg) || extracted.totalWeightKg || null;
+    const parcelQty   = row.parcel_qty || row.parcel_count || extracted.parcelCount || 1;
     const weightPerParcel = parcelQty > 0 && totalWt ? totalWt / parcelQty : totalWt;
 
     // If we derived a customer from raw payload but it wasn't stored, back-fill the shipment row

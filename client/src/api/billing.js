@@ -11,5 +11,6 @@ export const billingApi = {
   debugCharge:   (id)          => api.get(`/billing/charges/${id}/debug`).then(r => r.data),
   repriceCharge: (id)          => api.post(`/billing/charges/${id}/reprice`).then(r => r.data),
   getPayload:    (id)          => api.get(`/billing/charges/${id}/payload`).then(r => r.data),
-  batchReprice:  ()            => api.post('/billing/batch-reprice').then(r => r.data),
+  batchReprice:         ()     => api.post('/billing/batch-reprice').then(r => r.data),
+  purgeTrackingEvents:  ()     => api.post('/billing/purge-tracking-events').then(r => r.data),
 };

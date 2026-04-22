@@ -516,6 +516,7 @@ export default function FinancePage() {
   const [payloadCharge, setPayloadCharge] = useState(null);
   const [batchResult, setBatchResult] = useState(null);
   const [batchRunning, setBatchRunning] = useState(false);
+  const [purgeRunning, setPurgeRunning] = useState(false);
 
   // Customer dropdown data
   const { data: custData } = useQuery({
@@ -607,6 +608,21 @@ export default function FinancePage() {
     patch.mutate({ id: charge.id, data: { cancelled: true } });
   }
 
+  async function runPurgeTracking() {
+    if (!confirm('This will permanently delete all charges and shipments that were created by tracking webhooks (not shipment.created events). Continue?')) return;
+    setPurgeRunning(true);
+    try {
+      const result = await billingApi.purgeTrackingEvents();
+      setBatchResult({ purge: true, ...result });
+      qc.invalidateQueries(['billing-charges']);
+      qc.invalidateQueries(['billing-stats']);
+    } catch (err) {
+      setBatchResult({ error: err.message });
+    } finally {
+      setPurgeRunning(false);
+    }
+  }
+
   async function runBatchReprice() {
     if (!confirm('This will attempt to auto-price all unpriced charges by re-parsing their webhook payloads. Continue?')) return;
     setBatchRunning(true);
@@ -635,6 +651,21 @@ export default function FinancePage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, color: '#00C853' }}>Finance & Billing</h1>
         <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            onClick={runPurgeTracking}
+            disabled={purgeRunning}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: 'rgba(244,67,54,0.08)',
+              border: '1px solid rgba(244,67,54,0.3)',
+              borderRadius: 8, color: '#F44336',
+              padding: '7px 14px', cursor: purgeRunning ? 'not-allowed' : 'pointer',
+              fontSize: 13, fontWeight: 700,
+            }}
+          >
+            <XCircle size={14} />
+            {purgeRunning ? 'Purging…' : 'Remove tracking events'}
+          </button>
           {stats?.unpriced > 0 && (
             <button
               onClick={runBatchReprice}
@@ -672,6 +703,14 @@ export default function FinancePage() {
         }}>
           {batchResult.error ? (
             <span style={{ color: '#F44336', fontSize: 13 }}>Error: {batchResult.error}</span>
+          ) : batchResult.purge ? (
+            <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+              <span style={{ color: '#00C853', fontWeight: 700 }}>
+                ✓ Purge complete
+              </span>
+              <span style={{ color: '#F44336' }}>{batchResult.charges_deleted} charges removed</span>
+              <span style={{ color: '#888' }}>{batchResult.shipments_deleted} shipment records removed</span>
+            </div>
           ) : (
             <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
               <span style={{ color: '#00C853', fontWeight: 700 }}>
