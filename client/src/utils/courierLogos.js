@@ -195,6 +195,12 @@ const COURIER_LOGOS = {
   "Yodel C2C":       "https://app.heyvoila.io/courier-service-logos/thumbnails/yodel.jpg",
   "yodelc2c":        "https://app.heyvoila.io/courier-service-logos/thumbnails/yodel.jpg",
   "yodel c 2 c":     "https://app.heyvoila.io/courier-service-logos/thumbnails/yodel.jpg",
+
+  // DG International — Voila slug is ProCarrier
+  "DG International":  "https://app.heyvoila.io/courier-service-logos/thumbnails/procarrier.jpg",
+  "dg international":  "https://app.heyvoila.io/courier-service-logos/thumbnails/procarrier.jpg",
+  "DGInternational":   "https://app.heyvoila.io/courier-service-logos/thumbnails/procarrier.jpg",
+  "dginternational":   "https://app.heyvoila.io/courier-service-logos/thumbnails/procarrier.jpg",
 };
 
 export function getCourierLogo(courierCode) {
