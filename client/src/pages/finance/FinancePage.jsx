@@ -61,7 +61,7 @@ function FlagBadge({ value, trueLabel = 'Yes', falseLabel = 'No' }) {
 
 // ─── Inline price editor ──────────────────────────────────────────────────────
 
-function PriceCell({ charge, onSave }) {
+function PriceCell({ charge, onSave, onDebug }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState('');
   const inputRef = useRef(null);
@@ -109,13 +109,30 @@ function PriceCell({ charge, onSave }) {
 
   if (charge.price == null) {
     return (
-      <button onClick={startEdit} style={{
-        background: 'rgba(255,193,7,0.12)', border: '1px solid rgba(255,193,7,0.4)',
-        borderRadius: 5, color: '#FFC107', padding: '3px 10px', fontSize: 12, fontWeight: 700,
-        cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
-      }}>
-        <AlertCircle size={11} /> Set Price
-      </button>
+      <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+        <button onClick={startEdit} style={{
+          background: 'rgba(255,193,7,0.12)', border: '1px solid rgba(255,193,7,0.4)',
+          borderRadius: 5, color: '#FFC107', padding: '3px 10px', fontSize: 12, fontWeight: 700,
+          cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
+        }}>
+          <AlertCircle size={11} /> Set Price
+        </button>
+        {charge.price_failure_reason && (
+          <button
+            onClick={onDebug}
+            title="Click to run full diagnostic"
+            style={{
+              background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+              fontSize: 10, color: '#F44336', fontWeight: 600,
+              display: 'inline-flex', alignItems: 'center', gap: 3,
+              textAlign: 'left', lineHeight: 1.3,
+            }}
+          >
+            <Bug size={9} style={{ flexShrink: 0 }} />
+            {charge.price_failure_reason}
+          </button>
+        )}
+      </div>
     );
   }
 
@@ -1003,7 +1020,7 @@ export default function FinancePage() {
                         {gbp(charge.price)}
                       </span>
                     ) : (
-                      <PriceCell charge={charge} onSave={(price) => savePrice(charge, price)} />
+                      <PriceCell charge={charge} onSave={(price) => savePrice(charge, price)} onDebug={() => setDebugCharge(charge)} />
                     )}
                   </td>
 

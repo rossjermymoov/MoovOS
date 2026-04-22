@@ -29,13 +29,12 @@ function safeJson(str) {
 }
 
 // ─── Rate card lookup ─────────────────────────────────────────────────────────
-// Tries to find a matching customer rate for a given service + weight.
-// Returns { price, zone_name, weight_class_name, rate_id } or null.
+// Returns { rate: { price, zone_name, weight_class_name, rate_id }, reason: null }
+// on success, or { rate: null, reason: 'Human-readable string' } on failure.
 
-async function lookupRate(customerId, serviceCode, serviceName, weightKg) {
-  if (!customerId) return null;
+async function lookupRateWithReason(customerId, serviceCode, serviceName, weightKg) {
+  if (!customerId) return { rate: null, reason: 'No matching customer' };
 
-  // Find matching service in customer_rates — try by service_code first, then name
   const rateRes = await query(`
     SELECT
       cr.id, cr.price, cr.zone_name, cr.weight_class_name,
@@ -50,31 +49,52 @@ async function lookupRate(customerId, serviceCode, serviceName, weightKg) {
     ORDER BY cr.zone_name, cr.weight_class_name
   `, [customerId, serviceCode || '', serviceName || '', `%${(serviceName||'').split(' ').slice(0,3).join(' ')}%`]);
 
-  if (!rateRes.rows.length) return null;
+  if (!rateRes.rows.length) {
+    const any = await query(
+      'SELECT COUNT(*)::int AS cnt FROM customer_rates WHERE customer_id = $1',
+      [customerId]
+    );
+    const reason = any.rows[0].cnt === 0
+      ? 'No pricing set up for customer'
+      : `Service not matched (${serviceCode || serviceName || 'unknown'})`;
+    return { rate: null, reason };
+  }
 
   const rates = rateRes.rows;
 
-  // Filter by weight band if we have a weight
   if (weightKg != null) {
     const matching = rates.filter(r => coversWeight(r.weight_class_name, weightKg));
-    if (matching.length === 1) {
-      return { price: parseFloat(matching[0].price), zone_name: matching[0].zone_name,
-               weight_class_name: matching[0].weight_class_name, rate_id: matching[0].id };
+    if (matching.length >= 1) {
+      return { rate: { price: parseFloat(matching[0].price), zone_name: matching[0].zone_name,
+                       weight_class_name: matching[0].weight_class_name, rate_id: matching[0].id }, reason: null };
     }
-    if (matching.length > 1) {
-      // Multiple zone matches — use first, flag as auto
-      return { price: parseFloat(matching[0].price), zone_name: matching[0].zone_name,
-               weight_class_name: matching[0].weight_class_name, rate_id: matching[0].id };
-    }
+    // Diagnose why weight didn't match
+    const hasUnrecognised = rates.some(r => {
+      const s = (r.weight_class_name || '').toUpperCase().replace(/\s/g, '');
+      return s && !s.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)KG?$/)
+                && !s.match(/^(\d+(?:\.\d+)?)\+KG?$/)
+                && !s.match(/^OVER(\d+(?:\.\d+)?)KG?$/)
+                && !s.match(/^(?:UNDER|<)(\d+(?:\.\d+)?)KG?$/);
+    });
+    const reason = hasUnrecognised
+      ? 'Unrecognised weight band format'
+      : `No weight band covers ${Math.round(weightKg * 1000) / 1000} kg`;
+    return { rate: null, reason };
   }
 
-  // No weight match — if only one rate exists for this service, use it
+  // No weight available
   if (rates.length === 1) {
-    return { price: parseFloat(rates[0].price), zone_name: rates[0].zone_name,
-             weight_class_name: rates[0].weight_class_name, rate_id: rates[0].id };
+    return { rate: { price: parseFloat(rates[0].price), zone_name: rates[0].zone_name,
+                     weight_class_name: rates[0].weight_class_name, rate_id: rates[0].id }, reason: null };
   }
 
-  return null; // ambiguous — manual pricing needed
+  return { rate: null, reason: 'Multiple rates — no parcel weight to select band' };
+}
+
+// Backwards-compat shim used by the debug endpoint
+async function lookupRate(customerId, serviceCode, serviceName, weightKg) {
+  const { rate } = await lookupRateWithReason(customerId, serviceCode, serviceName, weightKg);
+  return rate;
 }
 
 function coversWeight(weightClassName, weightKg) {
@@ -212,7 +232,7 @@ router.post('/webhook', async (req, res, next) => {
     }
 
     // Look up rate card
-    const rate = await lookupRate(customerId, dcServiceId, serviceName, weightPerParcel);
+    const { rate, reason: priceFailReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel);
     const unitPrice  = rate ? rate.price : null;
     const totalPrice = unitPrice != null ? parseFloat((unitPrice * parcelCount).toFixed(2)) : null;
 
@@ -222,8 +242,9 @@ router.post('/webhook', async (req, res, next) => {
         (shipment_id, customer_id, charge_type,
          order_id, parcel_qty, service_name,
          price, cost_price,
-         zone_name, weight_class_name, rate_id, price_auto)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+         zone_name, weight_class_name, rate_id, price_auto,
+         price_failure_reason)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
       RETURNING id
     `, [
       shipmentId, customerId, 'courier',
@@ -234,6 +255,7 @@ router.post('/webhook', async (req, res, next) => {
       rate?.weight_class_name || null,
       rate?.rate_id || null,
       rate != null,
+      rate ? null : priceFailReason,
     ]);
 
     res.json({
@@ -347,6 +369,7 @@ router.get('/charges', async (req, res, next) => {
           c.id, c.created_at, c.order_id, c.parcel_qty, c.service_name,
           c.price, c.vat_amount, c.cost_price,
           c.zone_name, c.weight_class_name, c.price_auto,
+          c.price_failure_reason,
           c.billed, c.verified, c.cancelled, c.charge_type,
           cu.business_name  AS customer_name,
           cu.account_number AS customer_account,
@@ -429,7 +452,12 @@ router.post('/batch-reprice', async (req, res, next) => {
           }
         }
 
-        if (!customerId) { summary.no_customer++; continue; }
+        if (!customerId) {
+          summary.no_customer++;
+          await query(`UPDATE charges SET price_failure_reason = $1, updated_at = NOW() WHERE id = $2`,
+            ['No matching customer', row.charge_id]);
+          continue;
+        }
 
         const dcServiceId = row.dc_service_id || reqShip.dc_service_id;
         const serviceName = row.s_service_name
@@ -453,7 +481,7 @@ router.post('/batch-reprice', async (req, res, next) => {
         if (!row.customer_id && customerId) {
           await query(`
             UPDATE shipments
-            SET customer_id  = $1,
+            SET customer_id   = $1,
                 dc_service_id = COALESCE(dc_service_id, $2),
                 service_name  = COALESCE(service_name,  $3),
                 updated_at    = NOW()
@@ -465,20 +493,26 @@ router.post('/batch-reprice', async (req, res, next) => {
           );
         }
 
-        // Look up rate
-        const rate = await lookupRate(customerId, dcServiceId, serviceName, weightPerParcel);
-        if (!rate) { summary.no_rate++; continue; }
+        // Look up rate with reason
+        const { rate, reason: failReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel);
+        if (!rate) {
+          summary.no_rate++;
+          await query(`UPDATE charges SET price_failure_reason = $1, updated_at = NOW() WHERE id = $2`,
+            [failReason, row.charge_id]);
+          continue;
+        }
 
         const totalPrice = parseFloat((rate.price * parcelQty).toFixed(2));
 
         await query(`
           UPDATE charges
-          SET price             = $1,
-              zone_name         = $2,
-              weight_class_name = $3,
-              rate_id           = $4,
-              price_auto        = true,
-              updated_at        = NOW()
+          SET price                 = $1,
+              zone_name             = $2,
+              weight_class_name     = $3,
+              rate_id               = $4,
+              price_auto            = true,
+              price_failure_reason  = NULL,
+              updated_at            = NOW()
           WHERE id = $5
         `, [totalPrice, rate.zone_name, rate.weight_class_name, rate.rate_id, row.charge_id]);
 
@@ -803,17 +837,24 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
       await query(`UPDATE charges SET customer_id = $1, updated_at = NOW() WHERE id = $2`, [customerId, id]);
     }
 
-    const rate = await lookupRate(customerId, dcServiceId, serviceName, weightPerParcel);
+    const { rate, reason: failReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel);
     if (!rate) {
-      return res.json({ ok: false, message: 'No matching rate found — run debug to see why' });
+      await query(`UPDATE charges SET price_failure_reason = $1, updated_at = NOW() WHERE id = $2`,
+        [failReason, id]);
+      return res.json({ ok: false, message: failReason || 'No matching rate found' });
     }
 
     const totalPrice = parseFloat((rate.price * parcelQty).toFixed(2));
 
     await query(`
       UPDATE charges
-      SET price = $1, zone_name = $2, weight_class_name = $3,
-          rate_id = $4, price_auto = true, updated_at = NOW()
+      SET price                = $1,
+          zone_name            = $2,
+          weight_class_name    = $3,
+          rate_id              = $4,
+          price_auto           = true,
+          price_failure_reason = NULL,
+          updated_at           = NOW()
       WHERE id = $5
     `, [totalPrice, rate.zone_name, rate.weight_class_name, rate.rate_id, id]);
 
