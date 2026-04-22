@@ -258,7 +258,7 @@ router.get('/charges/aged-alerts', async (req, res, next) => {
         c.id, c.created_at, c.order_id, c.parcel_qty, c.service_name,
         c.price, c.vat_amount, c.verified,
         cu.id   AS customer_id,
-        cu.name AS customer_name,
+        cu.business_name AS customer_name,
         cu.account_number AS customer_account,
         s.courier, s.ship_to_postcode, s.reference, s.tracking_codes,
         EXTRACT(DAY FROM NOW() - c.created_at)::int AS age_days
@@ -331,7 +331,7 @@ router.get('/charges', async (req, res, next) => {
     if (date_to)   { conds.push(`c.created_at <  $${idx++}`); vals.push(date_to); }
     if (search) {
       conds.push(`(
-        cu.name ILIKE $${idx} OR cu.account_number ILIKE $${idx} OR
+        cu.business_name ILIKE $${idx} OR cu.account_number ILIKE $${idx} OR
         c.order_id ILIKE $${idx} OR c.service_name ILIKE $${idx}
       )`);
       vals.push(`%${search}%`);
@@ -347,7 +347,7 @@ router.get('/charges', async (req, res, next) => {
           c.price, c.vat_amount, c.cost_price,
           c.zone_name, c.weight_class_name, c.price_auto,
           c.billed, c.verified, c.cancelled, c.charge_type,
-          cu.name  AS customer_name,
+          cu.business_name  AS customer_name,
           cu.account_number AS customer_account,
           cu.id    AS customer_id,
           s.courier, s.ship_to_postcode, s.ship_to_name,
