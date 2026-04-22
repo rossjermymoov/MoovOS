@@ -548,7 +548,7 @@ router.post('/webhook', async (req, res, next) => {
     if (!customerId && accountName) {
       try {
         const cr5 = await query(
-          `SELECT id FROM customers WHERE $1 = ANY(billing_aliases) LIMIT 1`,
+          `SELECT id FROM customers WHERE EXISTS (SELECT 1 FROM unnest(billing_aliases) a WHERE LOWER(a) = LOWER($1)) LIMIT 1`,
           [accountName.trim().toLowerCase()]
         );
         if (cr5.rows.length) customerId = cr5.rows[0].id;
@@ -740,14 +740,14 @@ router.post('/relink-customers', async (req, res, next) => {
       try {
         if (!customerId && name) {
           const cr5 = await query(
-            `SELECT id FROM customers WHERE $1 = ANY(billing_aliases) LIMIT 1`,
+            `SELECT id FROM customers WHERE EXISTS (SELECT 1 FROM unnest(billing_aliases) a WHERE LOWER(a) = LOWER($1)) LIMIT 1`,
             [name.trim().toLowerCase()]
           );
           customerId = cr5.rows[0]?.id || null;
         }
         if (!customerId && acct) {
           const cr5b = await query(
-            `SELECT id FROM customers WHERE $1 = ANY(billing_aliases) LIMIT 1`,
+            `SELECT id FROM customers WHERE EXISTS (SELECT 1 FROM unnest(billing_aliases) a WHERE LOWER(a) = LOWER($1)) LIMIT 1`,
             [acct.trim().toLowerCase()]
           );
           customerId = cr5b.rows[0]?.id || null;
@@ -1129,7 +1129,7 @@ router.get('/charges/:id/debug', async (req, res, next) => {
     }
     if (!customerId && row.s_customer_name) {
       try {
-        const c6 = await query(`SELECT id, business_name FROM customers WHERE $1 = ANY(billing_aliases) LIMIT 1`, [row.s_customer_name.trim().toLowerCase()]);
+        const c6 = await query(`SELECT id, business_name FROM customers WHERE EXISTS (SELECT 1 FROM unnest(billing_aliases) a WHERE LOWER(a) = LOWER($1)) LIMIT 1`, [row.s_customer_name.trim().toLowerCase()]);
         custSteps.push({ tried: `billing_aliases @> ['${row.s_customer_name.toLowerCase()}']`, found: c6.rows.length > 0, row: c6.rows[0] || null });
         if (c6.rows.length) { customerId = c6.rows[0].id; customerName = c6.rows[0].business_name; resolvedVia = 'billing_alias'; }
       } catch (_) {
