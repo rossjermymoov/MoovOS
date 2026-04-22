@@ -134,19 +134,17 @@ function rateCoversWeight(rate, weightKg) {
 }
 
 // ── New model: customer_service_pricing ───────────────────────────────────────
+// weight_bands columns: id, zone_id, carrier_rate_card_id, min_weight_kg,
+//   max_weight_kg, price_first, price_sub  (no weight_class_name, no 'price')
 async function lookupViaServicePricing(customerId, serviceCode, serviceName, weightKg) {
-  // Join: customer_service_pricing → carrier_rate_cards → weight_bands (via zones → courier_services)
   const res = await query(`
     SELECT
       csp.pricing_type, csp.markup_pct, csp.fixed_fee,
-      wb.price        AS cost_price,
+      wb.price_first  AS cost_price,
       wb.price_sub    AS cost_price_sub,
       wb.min_weight_kg, wb.max_weight_kg,
-      wb.weight_class_name,
       z.name          AS zone_name,
-      wb.id           AS band_id,
-      cs.service_code AS svc_code,
-      cs.name         AS svc_name
+      wb.id           AS band_id
     FROM customer_service_pricing csp
     JOIN carrier_rate_cards crc ON crc.id = csp.carrier_rate_card_id
     JOIN courier_services   cs  ON cs.id  = csp.service_id
@@ -159,7 +157,7 @@ async function lookupViaServicePricing(customerId, serviceCode, serviceName, wei
         OR cs.name       ILIKE $3
         OR cs.name       ILIKE $4
       )
-    ORDER BY z.name, wb.min_weight_kg NULLS LAST, wb.weight_class_name
+    ORDER BY z.name, wb.min_weight_kg NULLS LAST
   `, [customerId, serviceCode || '', serviceName || '', `%${(serviceName||'').split(' ').slice(0,3).join(' ')}%`]);
 
   if (!res.rows.length) return null; // no new-model pricing → fall through to legacy
@@ -169,9 +167,12 @@ async function lookupViaServicePricing(customerId, serviceCode, serviceName, wei
   const applyPricing = (row) => {
     const cost = parseFloat(row.cost_price || 0);
     if (row.pricing_type === 'fixed_fee') return cost + parseFloat(row.fixed_fee || 0);
-    const pct  = parseFloat(row.markup_pct || 0);
-    return cost * (1 + pct / 100);
+    return cost * (1 + parseFloat(row.markup_pct || 0) / 100);
   };
+
+  const bandLabel = (r) => r.min_weight_kg != null
+    ? `${r.min_weight_kg}–${r.max_weight_kg} kg`
+    : 'All weights';
 
   if (weightKg != null) {
     const matching = rows.filter(r => rateCoversWeight(r, weightKg));
@@ -181,27 +182,24 @@ async function lookupViaServicePricing(customerId, serviceCode, serviceName, wei
         price: Math.round(applyPricing(r) * 10000) / 10000,
         cost_price: parseFloat(r.cost_price || 0),
         zone_name: r.zone_name,
-        weight_class_name: r.weight_class_name,
+        weight_class_name: bandLabel(r),
         rate_id: r.band_id,
         pricing_type: r.pricing_type,
         markup_pct: r.markup_pct,
         fixed_fee: r.fixed_fee,
       }, reason: null };
     }
-    const hasNumericBounds = rows.some(r => r.min_weight_kg != null);
-    const reason = hasNumericBounds
-      ? `No weight band covers ${Math.round(weightKg * 1000) / 1000} kg`
-      : 'Unrecognised weight band format';
-    return { rate: null, reason };
+    return { rate: null, reason: `No weight band covers ${Math.round(weightKg * 1000) / 1000} kg` };
   }
 
+  // No weight — if there's exactly one band (or one catch-all) use it
   if (rows.length === 1) {
     const r = rows[0];
     return { rate: {
       price: Math.round(applyPricing(r) * 10000) / 10000,
       cost_price: parseFloat(r.cost_price || 0),
       zone_name: r.zone_name,
-      weight_class_name: r.weight_class_name,
+      weight_class_name: bandLabel(r),
       rate_id: r.band_id,
       pricing_type: r.pricing_type,
     }, reason: null };
@@ -246,10 +244,24 @@ async function lookupViaCustomerRates(customerId, serviceCode, serviceName, weig
       return { rate: { price: parseFloat(matching[0].price), zone_name: matching[0].zone_name,
                        weight_class_name: matching[0].weight_class_name, rate_id: matching[0].id }, reason: null };
     }
-    const hasNumericBounds = rates.some(r => r.min_weight_kg != null);
-    const hasUnrecognised = !hasNumericBounds && rates.some(r => {
+    // Last resort: if all bands have non-numeric names (e.g. "Parcel", "Standard")
+    // and there's exactly one row for the service, treat it as a catch-all — the
+    // carrier's weight limit is baked into the service itself, not the band name.
+    const allNonNumeric = rates.every(r => {
       const s = normaliseWeightBand(r.weight_class_name);
-      return s && !s.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/)
+      return !s || !/\d/.test(s); // no digits → catch-all name like "Parcel"
+    });
+    if (allNonNumeric && rates.length === 1) {
+      const r = rates[0];
+      return { rate: { price: parseFloat(r.price), zone_name: r.zone_name,
+                       weight_class_name: r.weight_class_name, rate_id: r.id }, reason: null };
+    }
+    // Diagnose
+    const hasNumericBounds = rates.some(r => r.min_weight_kg != null);
+    const hasUnrecognised  = !hasNumericBounds && rates.some(r => {
+      const s = normaliseWeightBand(r.weight_class_name);
+      return s && /\d/.test(s)   // has digits but matches no known pattern
+                && !s.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/)
                 && !s.match(/^(\d+(?:\.\d+)?)\+$/)
                 && !s.match(/^OVER(\d+(?:\.\d+)?)$/)
                 && !s.match(/^(?:UNDER|<)(\d+(?:\.\d+)?)$/)
