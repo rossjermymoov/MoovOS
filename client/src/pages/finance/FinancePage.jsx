@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Search, CheckCircle, XCircle, AlertCircle,
   Edit2, Check, X, RefreshCw, ChevronLeft, ChevronRight, Bell,
+  Bug, FileJson, RotateCcw,
 } from 'lucide-react';
 import { billingApi } from '../../api/billing';
 import { customersApi } from '../../api/customers';
@@ -130,6 +131,341 @@ function PriceCell({ charge, onSave }) {
   );
 }
 
+// ─── Pricing Debug Modal ──────────────────────────────────────────────────────
+
+function PriceDebugModal({ charge, onClose, onRepriced }) {
+  const qc = useQueryClient();
+
+  const { data: trace, isLoading, error } = useQuery({
+    queryKey: ['charge-debug', charge.id],
+    queryFn: () => billingApi.debugCharge(charge.id),
+  });
+
+  const repriceMut = useMutation({
+    mutationFn: () => billingApi.repriceCharge(charge.id),
+    onSuccess: (result) => {
+      if (result.ok) {
+        qc.invalidateQueries(['billing-charges']);
+        qc.invalidateQueries(['billing-stats']);
+        onRepriced(result.price);
+      }
+    },
+  });
+
+  const stepColor = (step) => {
+    if (!trace) return '#555';
+    if (step.step === 3 && step.rows_matched === 0) return '#F44336';
+    if (step.step === 4 && step.matching_count === 0) return '#F44336';
+    return '#00C853';
+  };
+
+  const conclusionColor = trace?.conclusion?.priced ? '#00C853' : '#F44336';
+
+  const overlay = {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
+    zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    padding: 24,
+  };
+
+  const box = {
+    background: '#0D0E2A', border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: 14, width: '100%', maxWidth: 780,
+    maxHeight: '85vh', display: 'flex', flexDirection: 'column',
+    overflow: 'hidden',
+  };
+
+  return (
+    <div style={overlay} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={box}>
+        {/* Header */}
+        <div style={{
+          padding: '16px 20px',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <Bug size={16} style={{ color: '#FFC107' }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, color: '#fff', fontSize: 15 }}>
+              Pricing Diagnostic
+            </div>
+            <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
+              {charge.order_id || charge.id.slice(0, 8)} · {charge.customer_name || 'Unknown customer'}
+            </div>
+          </div>
+          <button onClick={onClose}
+            style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', padding: 4 }}>
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div style={{ overflowY: 'auto', flex: 1, padding: '16px 20px' }}>
+          {isLoading && (
+            <div style={{ color: '#888', fontSize: 13, padding: 20, textAlign: 'center' }}>
+              Running diagnostics…
+            </div>
+          )}
+          {error && (
+            <div style={{ color: '#F44336', fontSize: 13, padding: 20 }}>
+              Error loading diagnostics: {error.message}
+            </div>
+          )}
+          {trace && (
+            <>
+              {/* Steps */}
+              {trace.steps.map(step => (
+                <div key={step.step} style={{
+                  background: 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${stepColor(step)}22`,
+                  borderLeft: `3px solid ${stepColor(step)}`,
+                  borderRadius: 8,
+                  padding: '12px 14px',
+                  marginBottom: 10,
+                }}>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    marginBottom: 8,
+                  }}>
+                    <span style={{
+                      background: stepColor(step) + '22',
+                      border: `1px solid ${stepColor(step)}55`,
+                      color: stepColor(step),
+                      borderRadius: 20, padding: '1px 8px',
+                      fontSize: 11, fontWeight: 700,
+                    }}>
+                      Step {step.step}
+                    </span>
+                    <span style={{ color: '#ccc', fontWeight: 600, fontSize: 13 }}>{step.title}</span>
+                  </div>
+
+                  {/* Render key fields */}
+                  <div style={{ fontFamily: 'monospace', fontSize: 12, color: '#aaa', lineHeight: 1.7 }}>
+                    {step.step === 1 && <>
+                      <div><span style={{ color: '#888' }}>account_number:</span> <span style={{ color: step.account_number ? '#fff' : '#F44336' }}>{step.account_number || 'null — not in webhook payload'}</span></div>
+                      <div><span style={{ color: '#888' }}>dc_service_id:</span> <span style={{ color: '#fff' }}>{step.dc_service_id || 'null'}</span></div>
+                      <div><span style={{ color: '#888' }}>service_name:</span> <span style={{ color: '#fff' }}>{step.service_name || 'null'}</span></div>
+                      <div><span style={{ color: '#888' }}>parcel_count:</span> <span style={{ color: '#fff' }}>{step.parcel_count}</span></div>
+                      <div><span style={{ color: '#888' }}>total_weight_kg:</span> <span style={{ color: step.total_weight_kg != null ? '#fff' : '#FFC107' }}>{step.total_weight_kg != null ? `${step.total_weight_kg} kg` : 'null — not in webhook'}</span></div>
+                      <div><span style={{ color: '#888' }}>weight_per_parcel:</span> <span style={{ color: step.weight_per_parcel_kg != null ? '#fff' : '#FFC107' }}>{step.weight_per_parcel_kg != null ? `${step.weight_per_parcel_kg} kg` : 'null'}</span></div>
+                    </>}
+
+                    {step.step === 2 && <>
+                      <div><span style={{ color: '#888' }}>customer_found:</span> <span style={{ color: step.customer_found ? '#00C853' : '#F44336', fontWeight: 700 }}>{step.customer_found ? 'YES' : 'NO'}</span></div>
+                      {step.customer_found && <>
+                        <div><span style={{ color: '#888' }}>customer_name:</span> <span style={{ color: '#fff' }}>{step.customer_name}</span></div>
+                        <div><span style={{ color: '#888' }}>customer_id:</span> <span style={{ color: '#666' }}>{step.customer_id}</span></div>
+                      </>}
+                      {step.note && <div style={{ color: '#FFC107', marginTop: 4 }}>⚠ {step.note}</div>}
+                    </>}
+
+                    {step.step === 3 && <>
+                      <div><span style={{ color: '#888' }}>total_rates_for_customer:</span> <span style={{ color: '#fff' }}>{step.total_rates_for_customer}</span></div>
+                      <div><span style={{ color: '#888' }}>rows_matched:</span> <span style={{ color: step.rows_matched > 0 ? '#00C853' : '#F44336', fontWeight: 700 }}>{step.rows_matched}</span></div>
+                      {step.rows.length > 0 && (
+                        <div style={{ marginTop: 8 }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                            <thead>
+                              <tr>
+                                {['service_code','service_name','zone','weight_class','price'].map(h => (
+                                  <th key={h} style={{ color: '#555', fontWeight: 700, padding: '3px 8px', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {step.rows.map((r, i) => (
+                                <tr key={i}>
+                                  <td style={{ padding: '3px 8px', color: '#aaa' }}>{r.service_code || '—'}</td>
+                                  <td style={{ padding: '3px 8px', color: '#aaa' }}>{r.service_name || '—'}</td>
+                                  <td style={{ padding: '3px 8px', color: '#aaa' }}>{r.zone_name || '—'}</td>
+                                  <td style={{ padding: '3px 8px', color: '#aaa' }}>{r.weight_class_name || '—'}</td>
+                                  <td style={{ padding: '3px 8px', color: '#00C853' }}>£{parseFloat(r.price).toFixed(2)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </>}
+
+                    {step.step === 4 && <>
+                      <div><span style={{ color: '#888' }}>weight_per_parcel:</span> <span style={{ color: '#fff' }}>{step.weight_per_parcel_kg != null ? `${step.weight_per_parcel_kg} kg` : 'null'}</span></div>
+                      <div><span style={{ color: '#888' }}>matching_bands:</span> <span style={{ color: step.matching_count > 0 ? '#00C853' : '#F44336', fontWeight: 700 }}>{step.matching_count}</span></div>
+                      {step.checks.map((c, i) => (
+                        <div key={i} style={{
+                          marginTop: 4,
+                          padding: '4px 8px',
+                          background: c.covers_weight ? 'rgba(0,200,83,0.07)' : 'rgba(255,255,255,0.02)',
+                          borderRadius: 5,
+                          borderLeft: `2px solid ${c.covers_weight ? '#00C853' : 'rgba(255,255,255,0.1)'}`,
+                        }}>
+                          <span style={{ color: '#666' }}>{c.zone_name || '—'} · {c.weight_class_name || '—'}: </span>
+                          <span style={{ color: c.note?.includes('⚠') ? '#FFC107' : c.covers_weight ? '#00C853' : '#888' }}>
+                            {c.note}
+                          </span>
+                        </div>
+                      ))}
+                    </>}
+                  </div>
+                </div>
+              ))}
+
+              {/* Conclusion */}
+              {trace.conclusion && (
+                <div style={{
+                  background: trace.conclusion.priced ? 'rgba(0,200,83,0.07)' : 'rgba(244,67,54,0.07)',
+                  border: `1px solid ${conclusionColor}33`,
+                  borderRadius: 10, padding: '14px 16px',
+                }}>
+                  <div style={{ fontWeight: 700, color: conclusionColor, fontSize: 14, marginBottom: 6 }}>
+                    {trace.conclusion.priced ? '✓ Rate found' : '✗ No rate — manual price needed'}
+                  </div>
+                  {trace.conclusion.price != null && (
+                    <div style={{ color: '#fff', fontSize: 13, marginBottom: 4 }}>
+                      Price: <strong>£{trace.conclusion.price.toFixed(2)}</strong>
+                      {trace.conclusion.zone_name && ` · ${trace.conclusion.zone_name}`}
+                      {trace.conclusion.weight_class_name && ` · ${trace.conclusion.weight_class_name}`}
+                    </div>
+                  )}
+                  {trace.conclusion.note && (
+                    <div style={{ color: '#aaa', fontSize: 12 }}>{trace.conclusion.note}</div>
+                  )}
+                  {trace.conclusion.reason && (
+                    <div style={{ color: '#F44336', fontSize: 12, marginBottom: 6 }}>{trace.conclusion.reason}</div>
+                  )}
+                  {trace.conclusion.fix && (
+                    <div style={{
+                      background: 'rgba(255,193,7,0.08)', border: '1px solid rgba(255,193,7,0.25)',
+                      borderRadius: 6, padding: '8px 12px', fontSize: 12, color: '#FFC107', marginTop: 8,
+                    }}>
+                      <strong>Fix:</strong> {trace.conclusion.fix}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        {trace?.conclusion?.priced && charge.price == null && (
+          <div style={{
+            padding: '12px 20px',
+            borderTop: '1px solid rgba(255,255,255,0.08)',
+            display: 'flex', justifyContent: 'flex-end', gap: 10,
+          }}>
+            <button onClick={onClose}
+              style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: 8, color: '#888', padding: '8px 16px', cursor: 'pointer', fontSize: 13 }}>
+              Close
+            </button>
+            <button
+              onClick={() => repriceMut.mutate()}
+              disabled={repriceMut.isLoading}
+              style={{
+                background: 'rgba(0,200,83,0.15)', border: '1px solid rgba(0,200,83,0.4)',
+                borderRadius: 8, color: '#00C853', padding: '8px 18px',
+                cursor: 'pointer', fontSize: 13, fontWeight: 700,
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+              }}
+            >
+              <RotateCcw size={13} />
+              {repriceMut.isLoading ? 'Applying…' : `Apply £${trace.conclusion.price?.toFixed(2)}`}
+            </button>
+          </div>
+        )}
+        {!(trace?.conclusion?.priced && charge.price == null) && (
+          <div style={{ padding: '12px 20px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'flex-end' }}>
+            <button onClick={onClose}
+              style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: 8, color: '#888', padding: '8px 16px', cursor: 'pointer', fontSize: 13 }}>
+              Close
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Webhook Payload Modal ─────────────────────────────────────────────────────
+
+function WebhookPayloadModal({ charge, onClose }) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['charge-payload', charge.id],
+    queryFn: () => billingApi.getPayload(charge.id),
+  });
+
+  const overlay = {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
+    zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    padding: 24,
+  };
+
+  const box = {
+    background: '#0D0E2A', border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: 14, width: '100%', maxWidth: 860,
+    maxHeight: '85vh', display: 'flex', flexDirection: 'column',
+    overflow: 'hidden',
+  };
+
+  return (
+    <div style={overlay} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={box}>
+        {/* Header */}
+        <div style={{
+          padding: '16px 20px',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <FileJson size={16} style={{ color: '#00BCD4' }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, color: '#fff', fontSize: 15 }}>Webhook Payload</div>
+            <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
+              {charge.order_id || charge.id.slice(0, 8)} · {charge.customer_name || 'Unknown'}
+              {data?.received_at && ` · received ${format(parseISO(data.received_at), 'd MMM yyyy HH:mm')}`}
+            </div>
+          </div>
+          <button onClick={onClose}
+            style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', padding: 4 }}>
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div style={{ overflowY: 'auto', flex: 1, padding: '16px 20px' }}>
+          {isLoading && <div style={{ color: '#888', fontSize: 13, textAlign: 'center', padding: 20 }}>Loading payload…</div>}
+          {error && <div style={{ color: '#F44336', fontSize: 13 }}>Error: {error.message}</div>}
+          {data && (
+            <pre style={{
+              background: 'rgba(0,0,0,0.3)',
+              border: '1px solid rgba(255,255,255,0.06)',
+              borderRadius: 8,
+              padding: '14px 16px',
+              fontSize: 11,
+              color: '#aaa',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-all',
+              lineHeight: 1.6,
+              margin: 0,
+            }}>
+              {JSON.stringify(data.payload, null, 2)}
+            </pre>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '12px 20px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'flex-end' }}>
+          <button onClick={onClose}
+            style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: 8, color: '#888', padding: '8px 16px', cursor: 'pointer', fontSize: 13 }}>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 const PAGE_SIZES = [25, 50, 100];
@@ -159,6 +495,8 @@ export default function FinancePage() {
   const [showUnpriced, setShowUnpriced] = useState(false);
   const [limit, setLimit] = useState(50);
   const [offset, setOffset] = useState(0);
+  const [debugCharge, setDebugCharge] = useState(null);
+  const [payloadCharge, setPayloadCharge] = useState(null);
 
   // Customer dropdown data
   const { data: custData } = useQuery({
@@ -257,7 +595,7 @@ export default function FinancePage() {
     borderBottom: '1px solid rgba(255,255,255,0.04)' };
 
   return (
-    <div>
+    <div style={{ position: 'relative' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, color: '#00C853' }}>Finance & Billing</h1>
@@ -544,13 +882,18 @@ export default function FinancePage() {
                     )}
                   </td>
 
-                  {/* Order ID */}
+                  {/* Order ID + Tracking */}
                   <td style={td}>
                     <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#CCC' }}>
                       {charge.order_id || '—'}
                     </span>
-                    {charge.reference_2 && (
-                      <div style={{ fontSize: 11, color: '#666' }}>{charge.reference_2}</div>
+                    {charge.tracking_codes?.length > 0 && (
+                      <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#00BCD4', marginTop: 2 }}>
+                        {charge.tracking_codes[0]}
+                        {charge.tracking_codes.length > 1 && (
+                          <span style={{ color: '#555', marginLeft: 4 }}>+{charge.tracking_codes.length - 1}</span>
+                        )}
+                      </div>
                     )}
                   </td>
 
@@ -623,7 +966,7 @@ export default function FinancePage() {
                   {/* Actions */}
                   <td style={{ ...td, textAlign: 'center' }}>
                     {!charge.cancelled && (
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
                         {/* Mark billed quick-action */}
                         {!charge.billed && charge.price != null && (
                           <button
@@ -639,6 +982,34 @@ export default function FinancePage() {
                             <CheckCircle size={11} /> Bill
                           </button>
                         )}
+                        {/* Debug pricing — shown when no price */}
+                        {charge.price == null && (
+                          <button
+                            onClick={() => setDebugCharge(charge)}
+                            title="Diagnose why no price was set"
+                            style={{
+                              background: 'rgba(255,193,7,0.1)', border: '1px solid rgba(255,193,7,0.35)',
+                              borderRadius: 5, color: '#FFC107', padding: '4px 8px',
+                              cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                            }}
+                          >
+                            <Bug size={11} /> Debug
+                          </button>
+                        )}
+                        {/* Webhook payload viewer */}
+                        <button
+                          onClick={() => setPayloadCharge(charge)}
+                          title="View raw webhook payload"
+                          style={{
+                            background: 'rgba(0,188,212,0.08)', border: '1px solid rgba(0,188,212,0.25)',
+                            borderRadius: 5, color: '#00BCD4', padding: '4px 8px',
+                            cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                          }}
+                        >
+                          <FileJson size={11} />
+                        </button>
                         {/* Cancel */}
                         <button
                           onClick={() => cancelCharge(charge)}
@@ -709,6 +1080,27 @@ export default function FinancePage() {
           </div>
         )}
       </div>
+
+      {/* Pricing debug modal */}
+      {debugCharge && (
+        <PriceDebugModal
+          charge={debugCharge}
+          onClose={() => setDebugCharge(null)}
+          onRepriced={(price) => {
+            setDebugCharge(null);
+            qc.invalidateQueries(['billing-charges']);
+            qc.invalidateQueries(['billing-stats']);
+          }}
+        />
+      )}
+
+      {/* Webhook payload modal */}
+      {payloadCharge && (
+        <WebhookPayloadModal
+          charge={payloadCharge}
+          onClose={() => setPayloadCharge(null)}
+        />
+      )}
     </div>
   );
 }

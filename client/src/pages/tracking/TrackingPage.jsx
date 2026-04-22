@@ -409,8 +409,9 @@ export default function TrackingPage() {
         <StatCard label="Awaiting Collection" value={bs.awaiting_collection} color="#FF6F00" icon={Store}        active={statusFilter==='awaiting_collection'}    onClick={() => toggleStatus('awaiting_collection')} />
         <StatCard label="On Hold"          value={bs.on_hold}             color="#FF9800" icon={Clock}         active={statusFilter==='on_hold'}                onClick={() => toggleStatus('on_hold')} />
         <StatCard label="Address Issue"    value={(bs.failed_delivery||0)+(bs.exception||0)} color="#F44336" icon={AlertTriangle} active={statusFilter==='failed_delivery,exception'} onClick={() => toggleStatus('failed_delivery,exception')} />
-        <StatCard label="Customs Hold"     value={bs.customs_hold}        color="#E91E8C" icon={ShieldAlert}   active={statusFilter==='customs_hold'}           onClick={() => toggleStatus('customs_hold')} />
-        <StatCard label="Delivered Today"  value={stats?.delivered_today} color="#00C853" icon={PackageCheck}  active={statusFilter==='delivered'}              onClick={() => toggleStatus('delivered')} />
+        <StatCard label="Customs Hold"       value={bs.customs_hold}        color="#E91E8C" icon={ShieldAlert}   active={statusFilter==='customs_hold'}           onClick={() => toggleStatus('customs_hold')} />
+        <StatCard label="Returned to Sender" value={bs.returned}            color="#607D8B" icon={RotateCcw}     active={statusFilter==='returned'}               onClick={() => toggleStatus('returned')} />
+        <StatCard label="Delivered Today"    value={stats?.delivered_today} color="#00C853" icon={PackageCheck}  active={statusFilter==='delivered'}              onClick={() => toggleStatus('delivered')} />
       </div>
 
       {/* ── Date range ──────────────────────────────────────────── */}
