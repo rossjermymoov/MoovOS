@@ -1587,13 +1587,9 @@ function CountryPickerModal({ zone, onClose, onRefresh }) {
 function formatBandLabel(min, max) {
   const mn = parseFloat(min);
   const mx = parseFloat(max);
-  if (mn === 0) {
-    const mxFmt = mx % 1 === 0 ? mx : mx.toFixed(1);
-    return `Up to ${mxFmt}kg`;
-  }
-  const mnFmt = mn % 1 === 0 ? mn : mn.toFixed(1);
-  const mxFmt = mx % 1 === 0 ? mx : mx.toFixed(1);
-  return `${mnFmt} – ${mxFmt}kg`;
+  const fmt = v => v % 1 === 0 ? v.toFixed(0) : v.toFixed(2);
+  if (mn === 0) return `Up to ${fmt(mx)}kg`;
+  return `${fmt(mn)} – ${fmt(mx)}kg`;
 }
 
 function RateMatrix({ zones }) {
@@ -1748,6 +1744,59 @@ function RateMatrix({ zones }) {
 
 // ─── LEVEL 3 — Zone config (accordion per zone) ───────────────────────────────
 
+// Inline editable cell for a weight band field
+function BandCell({ bandId, field, value, colour, prefix, onSaved }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState('');
+  const inputRef = useRef(null);
+
+  function startEdit() {
+    setVal(value === null || value === undefined ? '' : String(parseFloat(value).toFixed(2)));
+    setEditing(true);
+    setTimeout(() => inputRef.current?.select(), 0);
+  }
+
+  function commit() {
+    const parsed = parseFloat(val);
+    if (!isNaN(parsed)) onSaved(bandId, field, parsed);
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        type="number"
+        step="0.01"
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
+        style={{ width:70, background:'rgba(255,255,255,0.06)', border:`1px solid ${colour}55`, borderRadius:5,
+          color: colour, fontSize:12, padding:'2px 6px', outline:'none', fontFamily:'monospace' }}
+      />
+    );
+  }
+
+  const display = value !== null && value !== undefined
+    ? `${prefix || ''}${parseFloat(value).toFixed(2)}`
+    : <span style={{ color:'#555' }}>—</span>;
+
+  return (
+    <span
+      onClick={startEdit}
+      title="Click to edit"
+      style={{ color: colour, fontFamily:'monospace', cursor:'pointer', padding:'2px 6px', borderRadius:4,
+        border:'1px solid transparent', display:'inline-block',
+        transition:'border-color 0.12s, background 0.12s' }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = `${colour}55`; e.currentTarget.style.background = `${colour}18`; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.background = 'transparent'; }}
+    >
+      {display}
+    </span>
+  );
+}
+
 function WeightBandsTable({ zoneId, bands, onRefresh }) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ min_weight_kg:'', max_weight_kg:'', price_first:'', price_sub:'' });
@@ -1757,10 +1806,18 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
     mutationFn: () => carriersApi.createWeightBand({ ...form, zone_id: zoneId }),
     onSuccess: () => { setAdding(false); setForm({ min_weight_kg:'', max_weight_kg:'', price_first:'', price_sub:'' }); onRefresh(); },
   });
+  const updateBand = useMutation({
+    mutationFn: ({ id, field, value }) => carriersApi.updateWeightBand(id, { [field]: value }),
+    onSuccess: onRefresh,
+  });
   const delBand = useMutation({
     mutationFn: (id) => carriersApi.deleteWeightBand(id),
     onSuccess: () => { setConfirmId(null); onRefresh(); },
   });
+
+  function handleSave(bandId, field, value) {
+    updateBand.mutate({ id: bandId, field, value });
+  }
 
   return (
     <div style={{ marginTop:8 }}>
@@ -1774,7 +1831,7 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr auto', gap:8, marginBottom:10 }}>
           {[['Min kg','min_weight_kg'],['Max kg','max_weight_kg'],['Cost 1st £','price_first'],['Cost Sub £','price_sub']].map(([ph,key]) => (
             <div key={key} className="pill-input-wrap" style={{ height:32 }}>
-              <input type="number" step="0.001" placeholder={ph} value={form[key]} onChange={e => setForm(f=>({...f,[key]:e.target.value}))} style={{ fontSize:12 }}/>
+              <input type="number" step="0.01" placeholder={ph} value={form[key]} onChange={e => setForm(f=>({...f,[key]:e.target.value}))} style={{ fontSize:12 }}/>
             </div>
           ))}
           <button onClick={() => addBand.mutate()} className="btn-primary" style={{ height:32 }}><Check size={12}/></button>
@@ -1782,15 +1839,19 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
       )}
       {confirmId && <div style={{ marginBottom:8 }}><Confirm message="Delete weight band?" onConfirm={() => delBand.mutate(confirmId)} onCancel={() => setConfirmId(null)}/></div>}
       <table className="moov-table" style={{ fontSize:12 }}>
-        <thead><tr><th>Min kg</th><th>Max kg</th><th>Cost 1st</th><th>Cost Sub</th><th></th></tr></thead>
+        <thead>
+          <tr>
+            <th>Min kg</th><th>Max kg</th><th>Cost 1st</th><th>Cost Sub</th><th></th>
+          </tr>
+        </thead>
         <tbody>
-          {bands.length === 0 && <tr><td colSpan={5} style={{ textAlign:'center', color:'#555' }}>No bands</td></tr>}
+          {bands.length === 0 && <tr><td colSpan={5} style={{ textAlign:'center', color:'#555' }}>No bands — click Add Band above</td></tr>}
           {bands.map(b => (
             <tr key={b.id}>
-              <td>{parseFloat(b.min_weight_kg).toFixed(3)}</td>
-              <td>{parseFloat(b.max_weight_kg).toFixed(3)}</td>
-              <td style={{ color:'#00C853' }}>£{parseFloat(b.price_first).toFixed(4)}</td>
-              <td style={{ color:'#FFC107' }}>{b.price_sub ? `£${parseFloat(b.price_sub).toFixed(4)}` : <span style={{ color:'#555' }}>—</span>}</td>
+              <td><BandCell bandId={b.id} field="min_weight_kg" value={b.min_weight_kg} colour="#AAAAAA" onSaved={handleSave}/></td>
+              <td><BandCell bandId={b.id} field="max_weight_kg" value={b.max_weight_kg} colour="#AAAAAA" onSaved={handleSave}/></td>
+              <td><BandCell bandId={b.id} field="price_first" value={b.price_first} colour="#00C853" prefix="£" onSaved={handleSave}/></td>
+              <td><BandCell bandId={b.id} field="price_sub" value={b.price_sub} colour="#FFC107" prefix="£" onSaved={handleSave}/></td>
               <td style={{ textAlign:'right' }}>
                 <button onClick={() => setConfirmId(b.id)} style={{ background:'none', border:'none', color:'#555', cursor:'pointer' }}><Trash2 size={11}/></button>
               </td>
@@ -1798,6 +1859,7 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
           ))}
         </tbody>
       </table>
+      <p style={{ fontSize:11, color:'#444', margin:'6px 0 0', fontStyle:'italic' }}>Click any value to edit it inline</p>
     </div>
   );
 }

@@ -1,381 +1,437 @@
 /**
- * CustomerPricingTab — Markup / Fixed Fee pricing model
- *
- * A customer is priced per service using either:
- *   markup    — sell price = carrier cost × (1 + markup%)
- *   fixed_fee — sell price = carrier cost + flat fee
- *
- * Zones and weight bands live on the carrier rate card and never appear here.
+ * CustomerPricingTab
+ * Shows all customer_rates grouped by courier → service.
+ * Prices are click-to-edit inline. International services open a full-screen
+ * search overlay so users can quickly find a zone/weight combo.
  */
 
-import { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Check, X, TrendingUp, DollarSign, ChevronDown } from 'lucide-react';
-import cspApi from '../../../api/customerServicePricing';
+import { useState, useRef, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Trash2, Globe, Search, X, ChevronDown, ChevronRight } from 'lucide-react';
+import axios from 'axios';
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+const api = axios.create({ baseURL: '/api' });
 
-const gbp = n => `£${parseFloat(n || 0).toFixed(2)}`;
+const gbp = (n) => `£${parseFloat(n || 0).toFixed(2)}`;
 
-function PricingTypePill({ type }) {
-  if (type === 'markup') {
+const inp = {
+  background: '#0D0E2A', border: '1px solid rgba(255,255,255,0.15)',
+  borderRadius: 9999, padding: '4px 12px', color: '#fff', fontSize: 12,
+  outline: 'none', boxSizing: 'border-box',
+};
+
+// ─── Inline editable price cell ───────────────────────────────
+function PriceCell({ rateId, initialPrice, onSaved, onDelete }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal]         = useState(String(parseFloat(initialPrice).toFixed(2)));
+  const [confirm, setConfirm] = useState(false);
+  const inputRef = useRef(null);
+
+  function startEdit() { setEditing(true); setTimeout(() => inputRef.current?.select(), 0); }
+
+  function commit() {
+    const parsed = parseFloat(val);
+    if (isNaN(parsed) || parsed < 0) { setVal(String(parseFloat(initialPrice).toFixed(2))); setEditing(false); return; }
+    onSaved(rateId, parsed);
+    setEditing(false);
+  }
+
+  if (editing) {
     return (
-      <span style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'2px 9px', borderRadius:9999,
-        fontSize:11, fontWeight:700, background:'rgba(0,200,83,0.10)', color:'#00C853' }}>
-        <TrendingUp size={10}/> Markup
-      </span>
+      <input
+        ref={inputRef}
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => {
+          if (e.key === 'Enter') commit();
+          if (e.key === 'Escape') { setVal(String(parseFloat(initialPrice).toFixed(2))); setEditing(false); }
+        }}
+        style={{ ...inp, width: 80, textAlign: 'right', color: '#00C853', fontWeight: 700,
+          fontFamily: 'monospace', border: '1px solid rgba(0,200,83,0.6)', background: 'rgba(0,200,83,0.08)' }}
+      />
     );
   }
+
   return (
-    <span style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'2px 9px', borderRadius:9999,
-      fontSize:11, fontWeight:700, background:'rgba(255,193,7,0.10)', color:'#FFC107' }}>
-      <DollarSign size={10}/> Fixed fee
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <span
+        onClick={startEdit}
+        title="Click to edit"
+        style={{
+          fontSize: 13, fontWeight: 700, color: '#00C853',
+          cursor: 'pointer', padding: '3px 10px', borderRadius: 5,
+          border: '1px solid rgba(0,200,83,0.35)',
+          background: 'rgba(0,200,83,0.08)',
+          fontFamily: 'monospace', display: 'inline-block',
+          transition: 'border-color 0.12s, background 0.12s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(0,200,83,0.7)'; e.currentTarget.style.background = 'rgba(0,200,83,0.15)'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,200,83,0.35)'; e.currentTarget.style.background = 'rgba(0,200,83,0.08)'; }}
+      >
+        {gbp(initialPrice)}
+      </span>
+      {confirm
+        ? <>
+            <button onClick={() => onDelete(rateId)} style={{ background: '#E91E8C', border: 'none', borderRadius: 4, color: '#fff', fontSize: 10, padding: '2px 6px', cursor: 'pointer' }}>Delete</button>
+            <button onClick={() => setConfirm(false)} style={{ background: 'none', border: 'none', color: '#AAAAAA', fontSize: 10, cursor: 'pointer' }}>✕</button>
+          </>
+        : <button onClick={() => setConfirm(true)} style={{ background: 'none', border: 'none', color: 'transparent', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
+            <Trash2 size={11} color="#333" />
+          </button>
+      }
     </span>
   );
 }
 
-// ─── Add / Edit row ───────────────────────────────────────────────────────────
+// ─── NL search parser ─────────────────────────────────────────
+function parseNLQuery(q) {
+  q = q.toLowerCase();
+  let weightKg = null;
+  const wm = q.match(/(\d+(?:\.\d+)?)\s*(?:kg|kgs|kilogram|kilograms|kilo|kilos)\b/);
+  if (wm) {
+    weightKg = parseFloat(wm[1]);
+  } else {
+    const gm = q.match(/(\d+(?:\.\d+)?)\s*(?:g|gram|grams)\b/);
+    if (gm) weightKg = parseFloat(gm[1]) / 1000;
+  }
+  let zoneTerm = q
+    .replace(/(\d+(?:\.\d+)?)\s*(?:kg|kgs|kilogram|kilograms|kilo|kilos|g|gram|grams)\b/g, '')
+    .replace(/\b(tell|me|the|price|for|to|from|a|an|find|get|what|is|how|much|does|it|cost|package|parcel|shipment|shipping|send|sending|weight)\b/g, '')
+    .replace(/\s+/g, ' ').trim() || null;
+  return { weightKg, zoneTerm };
+}
 
-function AddPricingRow({ customerId, availableCards, existingServiceIds, onDone }) {
-  const qc = useQueryClient();
+function weightClassCoversKg(name, kg) {
+  if (kg == null) return false;
+  const s = name.toUpperCase().replace(/\s/g, '');
+  const range = s.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)KG?$/);
+  if (range) return kg > parseFloat(range[1]) && kg <= parseFloat(range[2]);
+  const plus = s.match(/^(\d+(?:\.\d+)?)\+KG?$/) || s.match(/^OVER(\d+(?:\.\d+)?)KG?$/);
+  if (plus) return kg > parseFloat(plus[1]);
+  const under = s.match(/^(?:UNDER|<)(\d+(?:\.\d+)?)KG?$/);
+  if (under) return kg < parseFloat(under[1]);
+  return false;
+}
 
-  // Group available cards by courier for the picker
-  const couriers = useMemo(() => {
-    const map = {};
-    (availableCards || []).forEach(row => {
-      const key = `${row.courier_id}__${row.rate_card_id}`;
-      if (!map[key]) map[key] = { courierId: row.courier_id, courierName: row.courier_name, courierCode: row.courier_code, rateCardId: row.rate_card_id, rateCardName: row.rate_card_name, services: [] };
-      if (!map[key].services.find(s => s.service_id === row.service_id)) {
-        map[key].services.push({ service_id: row.service_id, service_name: row.service_name, service_code: row.service_code });
-      }
-    });
-    return Object.values(map);
-  }, [availableCards]);
+// ─── International rate overlay ───────────────────────────────
+function InternationalRateOverlay({ service, onClose, onRateUpdate, onRateDelete }) {
+  const [searchText, setSearchText] = useState('');
+  const [parsed, setParsed]         = useState({ weightKg: null, zoneTerm: null });
+  const searchRef = useRef(null);
 
-  const [selectedKey, setSelectedKey] = useState('');
-  const [selectedServiceId, setSelectedServiceId] = useState('');
-  const [pricingType, setPricingType] = useState('markup');
-  const [markupPct, setMarkupPct]     = useState('');
-  const [fixedFee, setFixedFee]       = useState('');
+  useEffect(() => { setTimeout(() => searchRef.current?.focus(), 50); }, []);
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape') onClose(); }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  useEffect(() => {
+    const t = setTimeout(() => setParsed(searchText.trim() ? parseNLQuery(searchText) : { weightKg: null, zoneTerm: null }), 200);
+    return () => clearTimeout(t);
+  }, [searchText]);
 
-  const selectedGroup = couriers.find(c => `${c.courierId}__${c.rateCardId}` === selectedKey);
-  const availableServices = (selectedGroup?.services || []).filter(s => !existingServiceIds.includes(s.service_id));
+  const rates = service.rates;
+  const hasSearch = searchText.trim().length > 0;
 
-  const save = useMutation({
-    mutationFn: () => cspApi.upsert(customerId, {
-      carrier_rate_card_id: selectedGroup?.rateCardId,
-      service_id:           parseInt(selectedServiceId),
-      pricing_type:         pricingType,
-      markup_pct:  pricingType === 'markup'    ? parseFloat(markupPct) : null,
-      fixed_fee:   pricingType === 'fixed_fee' ? parseFloat(fixedFee)  : null,
-    }),
-    onSuccess: () => {
-      qc.invalidateQueries(['customer-service-pricing', customerId]);
-      onDone();
-    },
-  });
+  function isMatch(rate) {
+    if (!hasSearch) return false;
+    const { weightKg, zoneTerm } = parsed;
+    const zoneOk   = zoneTerm ? rate.zone_name.toLowerCase().includes(zoneTerm) : true;
+    const weightOk = weightKg != null ? weightClassCoversKg(rate.weight_class_name, weightKg) : true;
+    if (zoneTerm && weightKg != null) return zoneOk && weightOk;
+    if (zoneTerm) return zoneOk;
+    if (weightKg != null) return weightOk;
+    return false;
+  }
 
-  const canSave = selectedKey && selectedServiceId
-    && (pricingType === 'markup' ? markupPct !== '' : fixedFee !== '');
+  const matchedRates  = hasSearch ? rates.filter(isMatch) : rates;
+  const matchCount    = hasSearch ? matchedRates.length : 0;
+  const exactMatch    = hasSearch && matchCount === 1 ? matchedRates[0] : null;
+  const multiWeight   = [...new Set(rates.map(r => r.weight_class_name))].length > 1;
+  const totalZones    = [...new Set(rates.map(r => r.zone_name))].length;
+  const weightClasses = [...new Set(matchedRates.map(r => r.weight_class_name))].sort();
+  const zones         = [...new Set(matchedRates.map(r => r.zone_name))].sort();
+  const rateMap       = {};
+  for (const r of matchedRates) {
+    if (!rateMap[r.zone_name]) rateMap[r.zone_name] = {};
+    rateMap[r.zone_name][r.weight_class_name] = r;
+  }
 
   return (
-    <div style={{ background:'rgba(0,200,83,0.04)', border:'1px solid rgba(0,200,83,0.2)',
-      borderRadius:10, padding:16, marginBottom:12 }}>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
-        {/* Rate card picker */}
-        <div>
-          <label style={{ fontSize:11, color:'#888', fontWeight:700, display:'block', marginBottom:5 }}>Carrier rate card</label>
-          <div style={{ position:'relative' }}>
-            <select
-              value={selectedKey}
-              onChange={e => { setSelectedKey(e.target.value); setSelectedServiceId(''); }}
-              style={{ width:'100%', background:'#0D0E2A', border:'1px solid rgba(255,255,255,0.15)',
-                borderRadius:8, padding:'7px 32px 7px 12px', color: selectedKey ? '#fff' : '#555',
-                fontSize:13, appearance:'none', cursor:'pointer', outline:'none' }}
-            >
-              <option value="">Select rate card…</option>
-              {couriers.map(c => (
-                <option key={`${c.courierId}__${c.rateCardId}`} value={`${c.courierId}__${c.rateCardId}`}>
-                  {c.courierName} — {c.rateCardName}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={13} style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', color:'#555', pointerEvents:'none' }}/>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(8,9,26,0.97)', display: 'flex', flexDirection: 'column' }}>
+      {/* Header */}
+      <div style={{ flexShrink: 0, padding: '20px 28px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: 16, background: '#0A0B1E' }}>
+        <Globe size={20} color="#00BCD4" style={{ flexShrink: 0 }} />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 17, fontWeight: 700, color: '#fff' }}>{service.service_name}</div>
+          <div style={{ fontSize: 12, color: '#AAAAAA', marginTop: 2 }}>
+            <span style={{ color: '#00BCD4', fontFamily: 'monospace', fontWeight: 700, marginRight: 10 }}>{service.service_code}</span>
+            {rates.length.toLocaleString()} rates · {totalZones} zones
+            {multiWeight && ` · ${[...new Set(rates.map(r => r.weight_class_name))].length} weight classes`}
           </div>
         </div>
-
-        {/* Service picker */}
-        <div>
-          <label style={{ fontSize:11, color:'#888', fontWeight:700, display:'block', marginBottom:5 }}>Service</label>
-          <div style={{ position:'relative' }}>
-            <select
-              value={selectedServiceId}
-              onChange={e => setSelectedServiceId(e.target.value)}
-              disabled={!selectedKey}
-              style={{ width:'100%', background:'#0D0E2A', border:'1px solid rgba(255,255,255,0.15)',
-                borderRadius:8, padding:'7px 32px 7px 12px', color: selectedServiceId ? '#fff' : '#555',
-                fontSize:13, appearance:'none', cursor: selectedKey ? 'pointer':'default', outline:'none',
-                opacity: selectedKey ? 1 : 0.4 }}
-            >
-              <option value="">Select service…</option>
-              {availableServices.map(s => (
-                <option key={s.service_id} value={s.service_id}>
-                  {s.service_name} ({s.service_code})
-                </option>
-              ))}
-              {selectedKey && availableServices.length === 0 && (
-                <option disabled>All services already priced</option>
-              )}
-            </select>
-            <ChevronDown size={13} style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', color:'#555', pointerEvents:'none' }}/>
-          </div>
+        <div style={{ position: 'relative', flex: '0 0 440px' }}>
+          <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#AAAAAA', pointerEvents: 'none' }} />
+          <input
+            ref={searchRef}
+            value={searchText}
+            onChange={e => setSearchText(e.target.value)}
+            placeholder='e.g. "Jamaica"  or  "1kg to France"'
+            style={{ width: '100%', boxSizing: 'border-box', background: '#0D0E2A', border: '1px solid rgba(0,188,212,0.5)', borderRadius: 8, padding: '10px 36px 10px 36px', color: '#fff', fontSize: 13, outline: 'none' }}
+          />
+          {searchText && (
+            <button onClick={() => setSearchText('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#AAAAAA', cursor: 'pointer', padding: 0, display: 'flex' }}>
+              <X size={14} />
+            </button>
+          )}
         </div>
+        <button onClick={onClose} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, color: '#AAAAAA', fontSize: 12, padding: '7px 14px', cursor: 'pointer', flexShrink: 0 }}>
+          Close <span style={{ opacity: 0.5, fontSize: 11 }}>esc</span>
+        </button>
       </div>
 
-      {/* Pricing type + value */}
-      <div style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
-        {/* Toggle */}
-        <div style={{ display:'flex', borderRadius:8, overflow:'hidden', border:'1px solid rgba(255,255,255,0.1)' }}>
-          {[['markup','Markup %'],['fixed_fee','Fixed fee']].map(([t, label]) => (
-            <button key={t} onClick={() => setPricingType(t)} style={{
-              padding:'7px 14px', fontSize:12, fontWeight:700, border:'none', cursor:'pointer',
-              background: pricingType === t ? '#7B2FBE' : 'transparent',
-              color: pricingType === t ? '#fff' : '#888',
-              transition:'all 0.15s',
-            }}>{label}</button>
+      {hasSearch && (
+        <div style={{ flexShrink: 0, padding: '7px 28px', background: 'rgba(0,188,212,0.05)', borderBottom: '1px solid rgba(0,188,212,0.10)', display: 'flex', alignItems: 'center', gap: 14, fontSize: 12 }}>
+          <span style={{ color: matchCount === 0 ? '#E91E8C' : '#00BCD4', fontWeight: 700 }}>
+            {matchCount === 0 ? 'No matches found' : matchCount === 1 ? '1 match' : `${matchCount} matches`}
+          </span>
+          {parsed.zoneTerm   && <span style={{ color: '#AAAAAA' }}>Zone: <span style={{ color: '#fff' }}>{parsed.zoneTerm}</span></span>}
+          {parsed.weightKg != null && <span style={{ color: '#AAAAAA' }}>Weight: <span style={{ color: '#fff' }}>{parsed.weightKg} kg</span></span>}
+          <button onClick={() => setSearchText('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 12 }}>Clear ✕</button>
+        </div>
+      )}
+
+      {exactMatch && (
+        <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 28px', gap: 16 }}>
+          <div style={{ fontSize: 13, color: '#AAAAAA', fontWeight: 600, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            {service.service_name} · {exactMatch.zone_name}
+            {multiWeight && <> · {exactMatch.weight_class_name}</>}
+          </div>
+          <div style={{ fontSize: 72, fontWeight: 900, color: '#00C853', fontFamily: 'monospace', lineHeight: 1, letterSpacing: '-0.02em' }}>
+            {gbp(exactMatch.price)}
+          </div>
+          <PriceCell rateId={exactMatch.id} initialPrice={exactMatch.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
+          <div style={{ fontSize: 12, color: '#444', marginTop: 4 }}>Click the price above to edit</div>
+        </div>
+      )}
+
+      {!exactMatch && (
+        <div style={{ flex: 1, overflow: 'auto', padding: '0 0 40px' }}>
+          {rates.length === 0 ? (
+            <div style={{ padding: 40, textAlign: 'center', color: '#555', fontSize: 14, fontStyle: 'italic' }}>No pricing found for this service</div>
+          ) : hasSearch && matchCount === 0 ? (
+            <div style={{ padding: 60, textAlign: 'center' }}>
+              <div style={{ fontSize: 40, marginBottom: 16 }}>🔍</div>
+              <div style={{ fontSize: 16, color: '#555', fontWeight: 600 }}>No rates match your search</div>
+              <div style={{ fontSize: 13, color: '#444', marginTop: 8 }}>Try a different zone name or weight</div>
+            </div>
+          ) : multiWeight ? (
+            <table style={{ borderCollapse: 'collapse', minWidth: '100%', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: '#0A0B1E', position: 'sticky', top: 0, zIndex: 10 }}>
+                  <th style={{ textAlign: 'left', padding: '12px 20px 12px 28px', color: '#AAAAAA', fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.08)', minWidth: 220 }}>Zone</th>
+                  {weightClasses.map(wc => (
+                    <th key={wc} style={{ textAlign: 'right', padding: '12px 20px', color: '#AAAAAA', fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.08)', minWidth: 120 }}>{wc}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {zones.map((zone, zi) => (
+                  <tr key={zone} style={{ background: zi % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                    <td style={{ padding: '8px 20px 8px 28px', color: '#DDD', whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>{zone}</td>
+                    {weightClasses.map(wc => {
+                      const rate = rateMap[zone]?.[wc];
+                      return (
+                        <td key={wc} style={{ textAlign: 'right', padding: '8px 20px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                          {rate
+                            ? <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
+                            : <span style={{ color: '#333', fontSize: 12 }}>—</span>}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: '#0A0B1E', position: 'sticky', top: 0, zIndex: 10 }}>
+                  <th style={{ textAlign: 'left', padding: '12px 20px 12px 28px', color: '#AAAAAA', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>Zone</th>
+                  <th style={{ textAlign: 'right', padding: '12px 28px 12px 20px', color: '#AAAAAA', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>Price</th>
+                </tr>
+              </thead>
+              <tbody>
+                {matchedRates.map((rate, ri) => (
+                  <tr key={rate.id} style={{ background: ri % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                    <td style={{ padding: '8px 20px 8px 28px', color: '#DDD', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>{rate.zone_name}</td>
+                    <td style={{ textAlign: 'right', padding: '8px 28px 8px 20px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                      <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Service block ────────────────────────────────────────────
+function ServiceBlock({ service, onRateUpdate, onRateDelete }) {
+  const [overlayOpen, setOverlay] = useState(false);
+  const isIntl      = service.service_type === 'international';
+  const multiWeight = [...new Set(service.rates.map(r => r.weight_class_name))].length > 1;
+
+  if (isIntl) {
+    return (
+      <>
+        <div
+          onClick={() => setOverlay(true)}
+          style={{ display: 'flex', alignItems: 'center', padding: '10px 18px', borderTop: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: 'rgba(0,188,212,0.03)' }}
+          onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,188,212,0.07)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,188,212,0.03)'}
+        >
+          <Globe size={12} color="#00BCD4" style={{ marginRight: 8, flexShrink: 0 }} />
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', flex: 1 }}>{service.service_name}</span>
+          <span style={{ fontSize: 11, color: '#AAAAAA', marginRight: 16 }}>{service.rate_count.toLocaleString()} rates</span>
+          <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#00BCD4', background: 'rgba(0,188,212,0.1)', padding: '2px 8px', borderRadius: 4, marginRight: 12 }}>{service.service_code}</span>
+          <span style={{ fontSize: 11, color: '#00BCD4', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}><Search size={11} /> Search →</span>
+        </div>
+        {overlayOpen && (
+          <InternationalRateOverlay
+            service={service}
+            onClose={() => setOverlay(false)}
+            onRateUpdate={onRateUpdate}
+            onRateDelete={onRateDelete}
+          />
+        )}
+      </>
+    );
+  }
+
+  return (
+    <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', padding: '10px 18px 14px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#AAAAAA', textTransform: 'uppercase', letterSpacing: '0.06em', flex: 1 }}>
+          {service.service_name}
+        </span>
+        <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#555', background: 'rgba(255,255,255,0.04)', padding: '1px 6px', borderRadius: 3, border: '1px solid rgba(255,255,255,0.07)' }}>
+          {service.service_code}
+        </span>
+      </div>
+      {service.rates.length === 0 ? (
+        <div style={{ fontSize: 12, color: '#444', fontStyle: 'italic' }}>No pricing found</div>
+      ) : (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {service.rates.map((rate) => (
+            <div key={rate.id} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              padding: '5px 8px 5px 10px',
+              background: 'rgba(255,255,255,0.02)',
+              border: '1px solid rgba(255,255,255,0.07)',
+              borderRadius: 7,
+            }}>
+              <span style={{ fontSize: 11, color: '#666', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                {rate.zone_name}
+                {multiWeight && <span style={{ color: '#444', marginLeft: 5 }}>· {rate.weight_class_name}</span>}
+              </span>
+              <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
+            </div>
           ))}
         </div>
-
-        {/* Value input */}
-        {pricingType === 'markup' ? (
-          <div className="pill-input-wrap" style={{ height:34, width:130 }}>
-            <input
-              type="number" step="0.01" min="0" max="9999"
-              value={markupPct} onChange={e => setMarkupPct(e.target.value)}
-              placeholder="30.00" style={{ fontSize:13 }} autoFocus
-            />
-            <div className="green-cap" style={{ fontSize:12 }}>%</div>
-          </div>
-        ) : (
-          <div className="pill-input-wrap" style={{ height:34, width:130 }}>
-            <div className="green-cap" style={{ fontSize:12, paddingLeft:10 }}>£</div>
-            <input
-              type="number" step="0.01" min="0"
-              value={fixedFee} onChange={e => setFixedFee(e.target.value)}
-              placeholder="2.50" style={{ fontSize:13 }} autoFocus
-            />
-          </div>
-        )}
-
-        <div style={{ marginLeft:'auto', display:'flex', gap:8 }}>
-          <button onClick={onDone} className="btn-ghost" style={{ height:34, padding:'0 14px', fontSize:12 }}>
-            <X size={12}/> Cancel
-          </button>
-          <button
-            onClick={() => save.mutate()}
-            disabled={!canSave || save.isPending}
-            className="btn-primary"
-            style={{ height:34, padding:'0 16px', fontSize:12 }}
-          >
-            <Check size={12}/> Add pricing
-          </button>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
 
-// ─── Pricing row (view + inline edit) ────────────────────────────────────────
-
-function PricingRow({ config, customerId }) {
-  const qc = useQueryClient();
-  const [editing, setEditing] = useState(false);
-  const [pricingType, setPricingType] = useState(config.pricing_type);
-  const [markupPct, setMarkupPct]     = useState(String(config.markup_pct ?? ''));
-  const [fixedFee, setFixedFee]       = useState(String(config.fixed_fee ?? ''));
-  const [confirmDel, setConfirmDel]   = useState(false);
-
-  const update = useMutation({
-    mutationFn: () => cspApi.update(customerId, config.id, {
-      pricing_type: pricingType,
-      markup_pct:  pricingType === 'markup'    ? parseFloat(markupPct) : null,
-      fixed_fee:   pricingType === 'fixed_fee' ? parseFloat(fixedFee)  : null,
-    }),
-    onSuccess: () => { qc.invalidateQueries(['customer-service-pricing', customerId]); setEditing(false); },
-  });
-
-  const remove = useMutation({
-    mutationFn: () => cspApi.remove(customerId, config.id),
-    onSuccess: () => qc.invalidateQueries(['customer-service-pricing', customerId]),
-  });
+// ─── Courier group ────────────────────────────────────────────
+function CourierGroup({ courierName, services, onRateUpdate, onRateDelete }) {
+  const [open, setOpen] = useState(true);
+  const totalRates = services.reduce((a, s) => a + s.rate_count, 0);
+  const hasIntl    = services.some(s => s.service_type === 'international');
 
   return (
-    <div style={{ background:'rgba(255,255,255,0.02)', border:'1px solid rgba(255,255,255,0.07)',
-      borderRadius:10, padding:'12px 16px', marginBottom:8 }}>
-
-      <div style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
-        {/* Courier + service */}
-        <div style={{ flex:1, minWidth:200 }}>
-          <div style={{ fontSize:13, fontWeight:700, color:'#fff', marginBottom:2 }}>
-            {config.courier_name}
-            <span style={{ fontSize:11, fontWeight:400, color:'#888', marginLeft:8 }}>via</span>
-            <span style={{ fontSize:13, fontWeight:700, color:'#7B2FBE', marginLeft:6 }}>{config.service_name}</span>
-          </div>
-          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-            <span style={{ fontSize:10, fontFamily:'monospace', color:'#00C853', background:'rgba(0,200,83,0.08)', padding:'1px 7px', borderRadius:9999 }}>
-              {config.service_code}
-            </span>
-            <span style={{ fontSize:10, color:'#555' }}>Rate card: {config.rate_card_name}</span>
-          </div>
-        </div>
-
-        {/* Pricing display / edit */}
-        {editing ? (
-          <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
-            <div style={{ display:'flex', borderRadius:8, overflow:'hidden', border:'1px solid rgba(255,255,255,0.1)' }}>
-              {[['markup','Markup %'],['fixed_fee','Fixed fee']].map(([t, label]) => (
-                <button key={t} onClick={() => setPricingType(t)} style={{
-                  padding:'5px 12px', fontSize:11, fontWeight:700, border:'none', cursor:'pointer',
-                  background: pricingType === t ? '#7B2FBE' : 'transparent',
-                  color: pricingType === t ? '#fff' : '#888',
-                }}>{label}</button>
-              ))}
-            </div>
-            {pricingType === 'markup' ? (
-              <div className="pill-input-wrap" style={{ height:30, width:110 }}>
-                <input type="number" step="0.01" min="0" value={markupPct}
-                  onChange={e => setMarkupPct(e.target.value)} placeholder="30.00" style={{ fontSize:12 }}/>
-                <div className="green-cap" style={{ fontSize:11 }}>%</div>
-              </div>
-            ) : (
-              <div className="pill-input-wrap" style={{ height:30, width:110 }}>
-                <div className="green-cap" style={{ fontSize:11, paddingLeft:10 }}>£</div>
-                <input type="number" step="0.01" min="0" value={fixedFee}
-                  onChange={e => setFixedFee(e.target.value)} placeholder="2.50" style={{ fontSize:12 }}/>
-              </div>
-            )}
-            <button onClick={() => update.mutate()} className="btn-primary" style={{ height:30, padding:'0 12px', fontSize:11 }}>
-              <Check size={11}/> Save
-            </button>
-            <button onClick={() => { setEditing(false); setPricingType(config.pricing_type); setMarkupPct(String(config.markup_pct??'')); setFixedFee(String(config.fixed_fee??'')); }}
-              className="btn-ghost" style={{ height:30, padding:'0 10px', fontSize:11 }}>Cancel</button>
-          </div>
-        ) : (
-          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-            <PricingTypePill type={config.pricing_type} />
-            <span style={{ fontSize:16, fontWeight:700, color:'#00C853', fontFamily:'monospace' }}>
-              {config.pricing_type === 'markup'
-                ? `+${parseFloat(config.markup_pct || 0).toFixed(2)}%`
-                : `+${gbp(config.fixed_fee)} per shipment`
-              }
-            </span>
-            <button onClick={() => setEditing(true)} className="btn-ghost"
-              style={{ height:28, padding:'0 10px', fontSize:11, marginLeft:4 }}>
-              Edit
-            </button>
-          </div>
-        )}
-
-        {/* Delete */}
-        {!editing && (
-          confirmDel ? (
-            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-              <span style={{ fontSize:11, color:'#E91E8C' }}>Remove?</span>
-              <button onClick={() => remove.mutate()} className="btn-ghost"
-                style={{ height:26, padding:'0 10px', fontSize:11, color:'#E91E8C', borderColor:'rgba(233,30,140,0.3)' }}>
-                Yes
-              </button>
-              <button onClick={() => setConfirmDel(false)} className="btn-ghost" style={{ height:26, padding:'0 8px', fontSize:11 }}>No</button>
-            </div>
-          ) : (
-            <button onClick={() => setConfirmDel(true)} style={{ background:'none', border:'none', cursor:'pointer', color:'#555', padding:4 }}>
-              <Trash2 size={14}/>
-            </button>
-          )
-        )}
+    <div className="moov-card" style={{ marginBottom: 16, overflow: 'hidden' }}>
+      <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', padding: '13px 18px', cursor: 'pointer', borderBottom: open ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
+        {open
+          ? <ChevronDown size={14} style={{ color: '#00C853', marginRight: 8 }} />
+          : <ChevronRight size={14} style={{ color: '#555', marginRight: 8 }} />}
+        <span style={{ fontSize: 14, fontWeight: 700, color: '#fff', flex: 1 }}>{courierName}</span>
+        {hasIntl && <span style={{ fontSize: 10, color: '#00BCD4', background: 'rgba(0,188,212,0.1)', border: '1px solid rgba(0,188,212,0.25)', borderRadius: 5, padding: '2px 7px', fontWeight: 700, marginRight: 10 }}>INTL</span>}
+        <span style={{ fontSize: 11, color: '#AAAAAA' }}>{services.length} service{services.length !== 1 ? 's' : ''} · {totalRates.toLocaleString()} rates</span>
       </div>
+      {open && services.map(svc => (
+        <ServiceBlock key={svc.service_id} service={svc} onRateUpdate={onRateUpdate} onRateDelete={onRateDelete} />
+      ))}
     </div>
   );
 }
 
-// ─── Main tab ─────────────────────────────────────────────────────────────────
+// ─── Main tab ─────────────────────────────────────────────────
+export default function CustomerPricingTab({ customer }) {
+  const queryClient = useQueryClient();
 
-export default function CustomerPricingTab({ customerId }) {
-  const qc = useQueryClient();
-  const [adding, setAdding] = useState(false);
-
-  const { data: configs = [], isLoading } = useQuery({
-    queryKey: ['customer-service-pricing', customerId],
-    queryFn: () => cspApi.list(customerId),
-    enabled: !!customerId,
+  const { data, isLoading } = useQuery({
+    queryKey: ['customer-rates', customer.id],
+    queryFn:  () => api.get(`/customer-rates/${customer.id}`).then(r => r.data),
   });
 
-  const { data: availableCards = [] } = useQuery({
-    queryKey: ['csp-available-rate-cards'],
-    queryFn: cspApi.availableRateCards,
-  });
+  const services   = data?.services   || [];
+  const totalRates = data?.total_rates || 0;
 
-  const existingServiceIds = configs.map(c => c.service_id);
+  function refresh() { queryClient.invalidateQueries(['customer-rates', customer.id]); }
 
-  // Group by courier for display
-  const byCourier = useMemo(() => {
-    const map = {};
-    configs.forEach(c => {
-      if (!map[c.courier_code]) map[c.courier_code] = { name: c.courier_name, code: c.courier_code, configs: [] };
-      map[c.courier_code].configs.push(c);
-    });
-    return Object.values(map);
-  }, [configs]);
+  async function handlePriceUpdate(rateId, price) {
+    await api.patch(`/customer-rates/rate/${rateId}`, { price });
+    refresh();
+  }
+  async function handlePriceDelete(rateId) {
+    await api.delete(`/customer-rates/rate/${rateId}`);
+    refresh();
+  }
 
-  if (isLoading) return <div style={{ padding:40, textAlign:'center', color:'#AAAAAA' }}>Loading…</div>;
+  const byCourier = {};
+  for (const s of services) {
+    if (!byCourier[s.courier_name]) byCourier[s.courier_name] = [];
+    byCourier[s.courier_name].push(s);
+  }
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
-        <div>
-          <h3 style={{ fontSize:15, fontWeight:700, color:'#fff', margin:0 }}>Service Pricing</h3>
-          <p style={{ fontSize:12, color:'#888', margin:'4px 0 0' }}>
-            Set a markup % or fixed fee per service. Zones and weight bands come from the carrier rate card.
-          </p>
-        </div>
-        {!adding && (
-          <button onClick={() => setAdding(true)} className="btn-primary" style={{ height:32, padding:'0 14px', fontSize:12 }}>
-            <Plus size={12}/> Add service
-          </button>
-        )}
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#fff', margin: 0, flex: 1 }}>
+          Rate Cards
+          {totalRates > 0 && (
+            <span style={{ fontSize: 13, color: '#AAAAAA', fontWeight: 400, marginLeft: 10 }}>
+              {services.length} services · {totalRates.toLocaleString()} rates
+            </span>
+          )}
+        </h3>
       </div>
 
-      {/* Add row */}
-      {adding && (
-        <AddPricingRow
-          customerId={customerId}
-          availableCards={availableCards}
-          existingServiceIds={existingServiceIds}
-          onDone={() => setAdding(false)}
-        />
+      {isLoading && (
+        <div className="moov-card" style={{ padding: 32, textAlign: 'center', color: '#AAAAAA' }}>Loading rates…</div>
       )}
 
-      {/* Existing configs */}
-      {configs.length === 0 && !adding ? (
-        <div className="moov-card" style={{ padding:32, textAlign:'center' }}>
-          <p style={{ color:'#555', fontSize:13, margin:'0 0 12px' }}>No services priced yet.</p>
-          <button onClick={() => setAdding(true)} className="btn-primary" style={{ height:32, padding:'0 16px', fontSize:12 }}>
-            <Plus size={12}/> Add first service
-          </button>
+      {!isLoading && services.length === 0 && (
+        <div className="moov-card" style={{ padding: 32, textAlign: 'center', color: '#555' }}>
+          No rates imported for this customer yet.
         </div>
-      ) : (
-        byCourier.map(courier => (
-          <div key={courier.code} style={{ marginBottom:20 }}>
-            <div style={{ fontSize:12, fontWeight:700, color:'#7B2FBE', marginBottom:8, textTransform:'uppercase', letterSpacing:'0.05em' }}>
-              {courier.name}
-            </div>
-            {courier.configs.map(cfg => (
-              <PricingRow key={cfg.id} config={cfg} customerId={customerId} />
-            ))}
-          </div>
-        ))
       )}
+
+      {Object.entries(byCourier).map(([courierName, svcs]) => (
+        <CourierGroup
+          key={courierName}
+          courierName={courierName}
+          services={svcs}
+          onRateUpdate={handlePriceUpdate}
+          onRateDelete={handlePriceDelete}
+        />
+      ))}
     </div>
   );
 }
