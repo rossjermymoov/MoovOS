@@ -2028,11 +2028,12 @@ function ZoneCard({ zone, onRefresh }) {
               </div>
             )}
 
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
-              {/* Include column */}
-              <div>
+            <div style={{ display:'flex', flexDirection:'column', gap:0 }}>
+
+              {/* ── Included ── */}
+              <div style={{ paddingBottom:14 }}>
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
-                  <span style={{ fontSize:11, fontWeight:700, color:'#00BCD4', textTransform:'uppercase' }}>✓ Included</span>
+                  <span style={{ fontSize:11, fontWeight:700, color:'#00BCD4', textTransform:'uppercase', letterSpacing:'0.05em' }}>✓ Included</span>
                   <div style={{ display:'flex', gap:0, border:'1px solid rgba(0,188,212,0.25)', borderRadius:6, overflow:'hidden' }}>
                     {['single','bulk'].map(m => (
                       <button key={m} onClick={() => setInclMode(m)}
@@ -2044,22 +2045,23 @@ function ZoneCard({ zone, onRefresh }) {
                     ))}
                   </div>
                 </div>
-                <div style={{ display:'flex', flexWrap:'wrap', gap:5, minHeight:28, marginBottom:8 }}>
-                  {inclRules.length === 0
-                    ? <span style={{ fontSize:12, color:'#444', fontStyle:'italic' }}>None — all postcodes included</span>
-                    : inclRules.map(pr => (
-                        <span key={pr.id} style={{ display:'inline-flex', alignItems:'center', gap:3, padding:'3px 9px', borderRadius:9999, fontSize:11, fontWeight:700, background:'rgba(0,188,212,0.12)', color:'#00BCD4' }}>
-                          {pr.postcode_prefix}
-                          <button onClick={() => delPostcode.mutate(pr.id)} style={{ background:'none', border:'none', color:'#00BCD4', cursor:'pointer', padding:0 }}><X size={8}/></button>
-                        </span>
-                      ))
-                  }
-                </div>
+
+                {inclRules.length > 0 && (
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:8 }}>
+                    {inclRules.map(pr => (
+                      <span key={pr.id} style={{ display:'inline-flex', alignItems:'center', gap:3, padding:'3px 9px', borderRadius:9999, fontSize:11, fontWeight:700, background:'rgba(0,188,212,0.12)', color:'#00BCD4' }}>
+                        {pr.postcode_prefix}
+                        <button onClick={() => delPostcode.mutate(pr.id)} style={{ background:'none', border:'none', color:'#00BCD4', cursor:'pointer', padding:0 }}><X size={8}/></button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
                 {inclMode === 'single' ? (
-                  <div style={{ display:'flex', gap:5 }}>
+                  <div style={{ display:'flex', gap:5, maxWidth:340 }}>
                     <div className="pill-input-wrap" style={{ height:28, flex:1 }}>
                       <input value={inclInput} onChange={e => setInclInput(e.target.value)}
-                        placeholder="AB, BT, SW…"
+                        placeholder={inclRules.length === 0 ? 'All postcodes included — add to restrict…' : 'AB, BT, SW…'}
                         onKeyDown={e => e.key==='Enter' && inclInput.trim() && addPostcode.mutate({ prefix: inclInput, type:'include' })}
                         style={{ fontSize:11, textTransform:'uppercase' }}/>
                     </div>
@@ -2092,10 +2094,10 @@ function ZoneCard({ zone, onRefresh }) {
                 )}
               </div>
 
-              {/* Exclude column */}
-              <div>
+              {/* ── Excluded ── */}
+              <div style={{ paddingTop:14, borderTop:'1px solid rgba(255,255,255,0.05)' }}>
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
-                  <span style={{ fontSize:11, fontWeight:700, color:'#E91E8C', textTransform:'uppercase' }}>✗ Excluded</span>
+                  <span style={{ fontSize:11, fontWeight:700, color:'#E91E8C', textTransform:'uppercase', letterSpacing:'0.05em' }}>✗ Excluded</span>
                   <div style={{ display:'flex', gap:0, border:'1px solid rgba(233,30,140,0.25)', borderRadius:6, overflow:'hidden' }}>
                     {['single','bulk'].map(m => (
                       <button key={m} onClick={() => setExclMode(m)}
@@ -2107,22 +2109,23 @@ function ZoneCard({ zone, onRefresh }) {
                     ))}
                   </div>
                 </div>
-                <div style={{ display:'flex', flexWrap:'wrap', gap:5, minHeight:28, marginBottom:8 }}>
-                  {exclRules.length === 0
-                    ? <span style={{ fontSize:12, color:'#444', fontStyle:'italic' }}>None excluded</span>
-                    : exclRules.map(pr => (
-                        <span key={pr.id} style={{ display:'inline-flex', alignItems:'center', gap:3, padding:'3px 9px', borderRadius:9999, fontSize:11, fontWeight:700, background:'rgba(233,30,140,0.12)', color:'#E91E8C' }}>
-                          {pr.postcode_prefix}
-                          <button onClick={() => delPostcode.mutate(pr.id)} style={{ background:'none', border:'none', color:'#E91E8C', cursor:'pointer', padding:0 }}><X size={8}/></button>
-                        </span>
-                      ))
-                  }
-                </div>
+
+                {exclRules.length > 0 && (
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:8 }}>
+                    {exclRules.map(pr => (
+                      <span key={pr.id} style={{ display:'inline-flex', alignItems:'center', gap:3, padding:'3px 9px', borderRadius:9999, fontSize:11, fontWeight:700, background:'rgba(233,30,140,0.12)', color:'#E91E8C' }}>
+                        {pr.postcode_prefix}
+                        <button onClick={() => delPostcode.mutate(pr.id)} style={{ background:'none', border:'none', color:'#E91E8C', cursor:'pointer', padding:0 }}><X size={8}/></button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
                 {exclMode === 'single' ? (
-                  <div style={{ display:'flex', gap:5 }}>
+                  <div style={{ display:'flex', gap:5, maxWidth:340 }}>
                     <div className="pill-input-wrap" style={{ height:28, flex:1 }}>
                       <input value={exclInput} onChange={e => setExclInput(e.target.value)}
-                        placeholder="FK17, IV1, HS…"
+                        placeholder={exclRules.length === 0 ? 'None excluded — add to exclude…' : 'FK17, IV1, HS…'}
                         onKeyDown={e => e.key==='Enter' && exclInput.trim() && addPostcode.mutate({ prefix: exclInput, type:'exclude' })}
                         style={{ fontSize:11, textTransform:'uppercase' }}/>
                     </div>
@@ -2154,6 +2157,7 @@ function ZoneCard({ zone, onRefresh }) {
                   </div>
                 )}
               </div>
+
             </div>
           </div>
 
