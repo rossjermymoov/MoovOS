@@ -169,7 +169,7 @@ async function zoneForPostcode(serviceCode, serviceName, postcode) {
     SELECT z.name AS zone_name
     FROM zones z
     JOIN courier_services cs ON cs.id = z.courier_service_id
-    JOIN postcode_rules   pr ON pr.zone_id = z.id
+    JOIN zone_postcode_rules   pr ON pr.zone_id = z.id
     WHERE (cs.service_code ILIKE $1 OR cs.name ILIKE $2)
       AND pr.rule_type = 'include'
       AND ${MATCH_CLAUSE}
@@ -186,11 +186,11 @@ async function zoneForPostcode(serviceCode, serviceName, postcode) {
     JOIN courier_services cs ON cs.id = z.courier_service_id
     WHERE (cs.service_code ILIKE $1 OR cs.name ILIKE $2)
       AND EXISTS (
-        SELECT 1 FROM postcode_rules pr2
+        SELECT 1 FROM zone_postcode_rules pr2
         WHERE pr2.zone_id = z.id AND pr2.rule_type = 'exclude'
       )
       AND NOT EXISTS (
-        SELECT 1 FROM postcode_rules pr3
+        SELECT 1 FROM zone_postcode_rules pr3
         WHERE pr3.zone_id = z.id AND pr3.rule_type = 'exclude'
           AND ${EXCL_MATCH}
       )
