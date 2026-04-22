@@ -8,7 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Search, X, Truck, PackageCheck, Clock, AlertTriangle,
   ShieldAlert, RotateCcw, Package, ChevronRight, MapPin,
-  RefreshCw, Store, Calendar,
+  RefreshCw, Store, Calendar, Plane,
 } from 'lucide-react';
 import axios from 'axios';
 import { startOfDay, endOfDay, startOfMonth, subDays, format } from 'date-fns';
@@ -116,6 +116,79 @@ function StatCard({ label, value, color, icon: Icon, active, onClick }) {
       </div>
       <div style={{ fontSize: 28, fontWeight: 900, color: active ? color : '#fff', lineHeight: 1 }}>
         {(value || 0).toLocaleString()}
+      </div>
+    </button>
+  );
+}
+
+// ─── Bold alert stat card (Awaiting Collection / Address Issue / Customs / RTS)
+function BoldStatCard({ label, value, color, icon: Icon, active, onClick }) {
+  const hasValue = (value || 0) > 0;
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        flex: 1, minWidth: 150,
+        padding: '18px 20px',
+        background: active
+          ? `linear-gradient(135deg, ${color}30 0%, ${color}14 100%)`
+          : hasValue
+            ? `linear-gradient(135deg, ${color}18 0%, ${color}08 100%)`
+            : 'rgba(255,255,255,0.02)',
+        border: `2px solid ${active ? color + 'AA' : hasValue ? color + '55' : color + '22'}`,
+        borderRadius: 12,
+        cursor: 'pointer',
+        textAlign: 'left',
+        transition: 'all 0.2s',
+        boxShadow: active
+          ? `0 0 28px ${color}44, inset 0 0 24px ${color}10`
+          : hasValue
+            ? `0 0 16px ${color}28`
+            : 'none',
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Background glow orb */}
+      <div style={{
+        position: 'absolute', right: -12, top: -12,
+        width: 90, height: 90, borderRadius: '50%',
+        background: `radial-gradient(circle, ${color}${hasValue ? '28' : '10'} 0%, transparent 70%)`,
+        pointerEvents: 'none',
+        transition: 'all 0.2s',
+      }} />
+
+      {/* Icon box */}
+      <div style={{
+        width: 46, height: 46, borderRadius: 11,
+        background: `${color}20`,
+        border: `1.5px solid ${color}${hasValue ? '66' : '33'}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        marginBottom: 14,
+        boxShadow: hasValue ? `0 0 14px ${color}44` : 'none',
+        transition: 'all 0.2s',
+      }}>
+        <Icon size={24} color={color} strokeWidth={2.2} />
+      </div>
+
+      {/* Number */}
+      <div style={{
+        fontSize: 34, fontWeight: 900, lineHeight: 1, marginBottom: 6,
+        color: hasValue ? color : '#444',
+        textShadow: hasValue && active ? `0 0 20px ${color}88` : 'none',
+        transition: 'all 0.2s',
+      }}>
+        {(value || 0).toLocaleString()}
+      </div>
+
+      {/* Label */}
+      <div style={{
+        fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+        letterSpacing: '0.07em',
+        color: hasValue ? color + 'CC' : '#444',
+        transition: 'all 0.2s',
+      }}>
+        {label}
       </div>
     </button>
   );
@@ -406,11 +479,11 @@ export default function TrackingPage() {
         <StatCard label="In Transit"       value={bs.in_transit}          color="#7B2FBE" icon={Truck}         active={statusFilter==='in_transit'}             onClick={() => toggleStatus('in_transit')} />
         <StatCard label="At Depot"         value={bs.at_depot}            color="#5C6BC0" icon={Package}       active={statusFilter==='at_depot'}              onClick={() => toggleStatus('at_depot')} />
         <StatCard label="Out for Delivery" value={bs.out_for_delivery}    color="#FFC107" icon={Truck}         active={statusFilter==='out_for_delivery'}       onClick={() => toggleStatus('out_for_delivery')} />
-        <StatCard label="Awaiting Collection" value={bs.awaiting_collection} color="#FF6F00" icon={Store}        active={statusFilter==='awaiting_collection'}    onClick={() => toggleStatus('awaiting_collection')} />
-        <StatCard label="On Hold"          value={bs.on_hold}             color="#FF9800" icon={Clock}         active={statusFilter==='on_hold'}                onClick={() => toggleStatus('on_hold')} />
-        <StatCard label="Address Issue"    value={(bs.failed_delivery||0)+(bs.exception||0)} color="#F44336" icon={AlertTriangle} active={statusFilter==='failed_delivery,exception'} onClick={() => toggleStatus('failed_delivery,exception')} />
-        <StatCard label="Customs Hold"       value={bs.customs_hold}        color="#E91E8C" icon={ShieldAlert}   active={statusFilter==='customs_hold'}           onClick={() => toggleStatus('customs_hold')} />
-        <StatCard label="Returned to Sender" value={bs.returned}            color="#607D8B" icon={RotateCcw}     active={statusFilter==='returned'}               onClick={() => toggleStatus('returned')} />
+        <BoldStatCard label="Awaiting Collection" value={bs.awaiting_collection}                   color="#FF6F00" icon={Store}         active={statusFilter==='awaiting_collection'}         onClick={() => toggleStatus('awaiting_collection')} />
+        <StatCard     label="On Hold"             value={bs.on_hold}                             color="#FF9800" icon={Clock}         active={statusFilter==='on_hold'}                     onClick={() => toggleStatus('on_hold')} />
+        <BoldStatCard label="Address Issue"       value={(bs.failed_delivery||0)+(bs.exception||0)} color="#F44336" icon={AlertTriangle} active={statusFilter==='failed_delivery,exception'} onClick={() => toggleStatus('failed_delivery,exception')} />
+        <BoldStatCard label="Customs Hold"        value={bs.customs_hold}                        color="#E91E8C" icon={Plane}         active={statusFilter==='customs_hold'}                onClick={() => toggleStatus('customs_hold')} />
+        <BoldStatCard label="Returned to Sender"  value={bs.returned}                            color="#FF3D00" icon={AlertTriangle} active={statusFilter==='returned'}                   onClick={() => toggleStatus('returned')} />
         <StatCard label="Delivered Today"    value={stats?.delivered_today} color="#00C853" icon={PackageCheck}  active={statusFilter==='delivered'}              onClick={() => toggleStatus('delivered')} />
       </div>
 
