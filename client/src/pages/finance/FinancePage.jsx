@@ -172,8 +172,9 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
 
   const stepColor = (step) => {
     if (!trace) return '#555';
-    if (step.step === 3 && step.rows_matched === 0) return '#F44336';
-    if (step.step === 4 && step.matching_count === 0) return '#F44336';
+    if (step.step === 3 && step.matched_rows === 0) return '#F44336';
+    if (step.step === 4 && step.direct_matches === 0 && !step.flat_rate_catch_all?.triggered) return '#F44336';
+    if (step.step === 2 && !step.resolved) return '#F44336';
     return '#00C853';
   };
 
@@ -264,22 +265,33 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                       <div><span style={{ color: '#888' }}>service_name:</span> <span style={{ color: '#fff' }}>{step.service_name || 'null'}</span></div>
                       <div><span style={{ color: '#888' }}>parcel_count:</span> <span style={{ color: '#fff' }}>{step.parcel_count}</span></div>
                       <div><span style={{ color: '#888' }}>total_weight_kg:</span> <span style={{ color: step.total_weight_kg != null ? '#fff' : '#FFC107' }}>{step.total_weight_kg != null ? `${step.total_weight_kg} kg` : 'null — not in webhook'}</span></div>
-                      <div><span style={{ color: '#888' }}>weight_per_parcel:</span> <span style={{ color: step.weight_per_parcel_kg != null ? '#fff' : '#FFC107' }}>{step.weight_per_parcel_kg != null ? `${step.weight_per_parcel_kg} kg` : 'null'}</span></div>
+                      <div><span style={{ color: '#888' }}>weight_per_parcel:</span> <span style={{ color: step.weight_per_parcel != null ? '#fff' : '#FFC107' }}>{step.weight_per_parcel != null ? `${step.weight_per_parcel} kg` : 'null'}</span></div>
+                      {step.postcode && <div><span style={{ color: '#888' }}>postcode:</span> <span style={{ color: '#fff' }}>{step.postcode}</span> <span style={{ color: '#666' }}>→ outward: {step.outward_code || '?'}</span></div>}
                     </>}
 
                     {step.step === 2 && <>
-                      <div><span style={{ color: '#888' }}>customer_found:</span> <span style={{ color: step.customer_found ? '#00C853' : '#F44336', fontWeight: 700 }}>{step.customer_found ? 'YES' : 'NO'}</span></div>
-                      {step.customer_found && <>
+                      <div><span style={{ color: '#888' }}>customer_found:</span> <span style={{ color: step.resolved ? '#00C853' : '#F44336', fontWeight: 700 }}>{step.resolved ? 'YES' : 'NO'}</span></div>
+                      {step.resolved && <>
                         <div><span style={{ color: '#888' }}>customer_name:</span> <span style={{ color: '#fff' }}>{step.customer_name}</span></div>
-                        <div><span style={{ color: '#888' }}>customer_id:</span> <span style={{ color: '#666' }}>{step.customer_id}</span></div>
+                        <div><span style={{ color: '#888' }}>resolved_via:</span> <span style={{ color: '#00BCD4' }}>{step.resolved_via}</span></div>
                       </>}
-                      {step.note && <div style={{ color: '#FFC107', marginTop: 4 }}>⚠ {step.note}</div>}
+                      {(step.lookup_attempts || []).length > 0 && (
+                        <div style={{ marginTop: 6 }}>
+                          {(step.lookup_attempts || []).map((a, i) => (
+                            <div key={i} style={{ padding: '2px 0' }}>
+                              <span style={{ color: a.found ? '#00C853' : '#555' }}>{a.found ? '✓' : '✗'}</span>
+                              <span style={{ color: '#666', marginLeft: 6 }}>{a.tried}</span>
+                              {a.found && a.row && <span style={{ color: '#aaa', marginLeft: 6 }}>→ {a.row.business_name}</span>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </>}
 
                     {step.step === 3 && <>
-                      <div><span style={{ color: '#888' }}>total_rates_for_customer:</span> <span style={{ color: '#fff' }}>{step.total_rates_for_customer}</span></div>
-                      <div><span style={{ color: '#888' }}>rows_matched:</span> <span style={{ color: step.rows_matched > 0 ? '#00C853' : '#F44336', fontWeight: 700 }}>{step.rows_matched}</span></div>
-                      {step.rows.length > 0 && (
+                      <div><span style={{ color: '#888' }}>searched_for:</span> <span style={{ color: '#fff' }}>{step.searched_for?.service_code || '—'} / {step.searched_for?.service_name || '—'}</span></div>
+                      <div><span style={{ color: '#888' }}>rows_matched:</span> <span style={{ color: step.matched_rows > 0 ? '#00C853' : '#F44336', fontWeight: 700 }}>{step.matched_rows ?? 0}</span></div>
+                      {(step.matched_rates || []).length > 0 && (
                         <div style={{ marginTop: 8 }}>
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                             <thead>
@@ -290,38 +302,53 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                               </tr>
                             </thead>
                             <tbody>
-                              {step.rows.map((r, i) => (
+                              {(step.matched_rates || []).map((r, i) => (
                                 <tr key={i}>
                                   <td style={{ padding: '3px 8px', color: '#aaa' }}>{r.service_code || '—'}</td>
                                   <td style={{ padding: '3px 8px', color: '#aaa' }}>{r.service_name || '—'}</td>
                                   <td style={{ padding: '3px 8px', color: '#aaa' }}>{r.zone_name || '—'}</td>
                                   <td style={{ padding: '3px 8px', color: '#aaa' }}>{r.weight_class_name || '—'}</td>
-                                  <td style={{ padding: '3px 8px', color: '#00C853' }}>£{parseFloat(r.price).toFixed(2)}</td>
+                                  <td style={{ padding: '3px 8px', color: '#00C853' }}>£{parseFloat(r.price || 0).toFixed(2)}</td>
                                 </tr>
                               ))}
                             </tbody>
                           </table>
                         </div>
                       )}
+                      {(step.all_services_on_customer || []).length > 0 && step.matched_rows === 0 && (
+                        <div style={{ marginTop: 8, color: '#666' }}>
+                          Customer has {step.all_services_on_customer.length} other service(s): {step.all_services_on_customer.map(s => s.service_name).join(', ')}
+                        </div>
+                      )}
                     </>}
 
                     {step.step === 4 && <>
                       <div><span style={{ color: '#888' }}>weight_per_parcel:</span> <span style={{ color: '#fff' }}>{step.weight_per_parcel_kg != null ? `${step.weight_per_parcel_kg} kg` : 'null'}</span></div>
-                      <div><span style={{ color: '#888' }}>matching_bands:</span> <span style={{ color: step.matching_count > 0 ? '#00C853' : '#F44336', fontWeight: 700 }}>{step.matching_count}</span></div>
-                      {step.checks.map((c, i) => (
+                      <div><span style={{ color: '#888' }}>direct_band_matches:</span> <span style={{ color: step.direct_matches > 0 ? '#00C853' : '#888', fontWeight: 700 }}>{step.direct_matches ?? 0}</span></div>
+                      {step.all_non_numeric_names && (
+                        <div style={{ color: '#FFC107', marginTop: 2 }}>⚡ Flat-rate service — all weight class names are non-numeric, using catch-all logic</div>
+                      )}
+                      {(step.band_checks || []).map((c, i) => (
                         <div key={i} style={{
                           marginTop: 4,
                           padding: '4px 8px',
-                          background: c.covers_weight ? 'rgba(0,200,83,0.07)' : 'rgba(255,255,255,0.02)',
+                          background: c.covers ? 'rgba(0,200,83,0.07)' : 'rgba(255,255,255,0.02)',
                           borderRadius: 5,
-                          borderLeft: `2px solid ${c.covers_weight ? '#00C853' : 'rgba(255,255,255,0.1)'}`,
+                          borderLeft: `2px solid ${c.covers ? '#00C853' : 'rgba(255,255,255,0.1)'}`,
                         }}>
                           <span style={{ color: '#666' }}>{c.zone_name || '—'} · {c.weight_class_name || '—'}: </span>
-                          <span style={{ color: c.note?.includes('⚠') ? '#FFC107' : c.covers_weight ? '#00C853' : '#888' }}>
-                            {c.note}
-                          </span>
+                          <span style={{ color: c.covers ? '#00C853' : '#888' }}>{c.detail}</span>
                         </div>
                       ))}
+                      {step.flat_rate_catch_all?.triggered && (
+                        <div style={{ marginTop: 6, padding: '6px 10px', background: 'rgba(0,188,212,0.07)', borderRadius: 5, borderLeft: '2px solid #00BCD4' }}>
+                          <span style={{ color: '#00BCD4' }}>Catch-all: zone resolved via postcode → </span>
+                          <span style={{ color: '#fff' }}>{step.flat_rate_catch_all.zone_resolved_via_postcode || 'n/a'}</span>
+                          {step.flat_rate_catch_all.selected_rate && (
+                            <span style={{ color: '#aaa' }}> · selected: {step.flat_rate_catch_all.selected_rate.zone} @ £{parseFloat(step.flat_rate_catch_all.selected_rate.price || 0).toFixed(2)}</span>
+                          )}
+                        </div>
+                      )}
                     </>}
                   </div>
                 </div>

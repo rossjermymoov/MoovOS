@@ -213,6 +213,7 @@ router.patch('/:id', async (req, res, next) => {
       'tier', 'account_status', 'payment_terms_days', 'billing_cycle', 'credit_limit', 'bond_amount_held',
       'accounts_email', 'eori_number', 'ioss_number',
       'salesperson_id', 'account_manager_id', 'onboarding_person_id',
+      'billing_aliases', 'dc_customer_id', 'account_number', 'manual_billing',
     ];
     const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));
     if (!updates.length) return res.status(400).json({ error: 'No valid fields to update' });
@@ -226,6 +227,48 @@ router.patch('/:id', async (req, res, next) => {
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Customer not found' });
     res.json(result.rows[0]);
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────
+// POST /api/customers/:id/billing-aliases  — add a billing alias
+// DELETE /api/customers/:id/billing-aliases/:alias  — remove an alias
+// ─────────────────────────────────────────────────────────────
+router.post('/:id/billing-aliases', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { alias } = req.body;
+    if (!alias || !alias.trim()) return res.status(400).json({ error: 'alias is required' });
+    const clean = alias.trim().toLowerCase();
+    const result = await query(
+      `UPDATE customers
+         SET billing_aliases = array_append(
+               array_remove(billing_aliases, $2::text),
+               $2::text
+             ),
+             updated_at = NOW()
+       WHERE id = $1
+       RETURNING billing_aliases`,
+      [id, clean]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Customer not found' });
+    res.json({ billing_aliases: result.rows[0].billing_aliases });
+  } catch (err) { next(err); }
+});
+
+router.delete('/:id/billing-aliases/:alias', async (req, res, next) => {
+  try {
+    const { id, alias } = req.params;
+    const result = await query(
+      `UPDATE customers
+         SET billing_aliases = array_remove(billing_aliases, $2::text),
+             updated_at = NOW()
+       WHERE id = $1
+       RETURNING billing_aliases`,
+      [id, alias.toLowerCase()]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Customer not found' });
+    res.json({ billing_aliases: result.rows[0].billing_aliases });
   } catch (err) { next(err); }
 });
 

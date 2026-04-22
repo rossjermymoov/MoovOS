@@ -512,9 +512,11 @@ router.post('/webhook', async (req, res, next) => {
     const totalCostPrice = courierCosts.reduce((s, c) => s + (parseFloat(c) || 0), 0);
 
     // Resolve customer:
-    //  1. account_number → customers.account_number   (standard webhook customers)
-    //  2. account_number → customers.dc_customer_id   (if acct number happens to be a DC ID)
-    //  3. customerDcId  → customers.dc_customer_id    (API customers like Europa — from billing.customer_dc_id)
+    //  1. account_number → customers.account_number
+    //  2. account_number → customers.dc_customer_id
+    //  3. customerDcId  → customers.dc_customer_id
+    //  4. accountName   → customers.business_name (exact, then partial)
+    //  5. accountName   → customers.billing_aliases (short-name aliases)
     let customerId = null;
     if (accountNumber) {
       const cr = await query('SELECT id FROM customers WHERE account_number = $1', [accountNumber]);
@@ -528,6 +530,27 @@ router.post('/webhook', async (req, res, next) => {
     if (!customerId && customerDcId) {
       const cr3 = await query('SELECT id FROM customers WHERE dc_customer_id = $1', [customerDcId]);
       if (cr3.rows.length) customerId = cr3.rows[0].id;
+    }
+    if (!customerId && accountName) {
+      const cr4 = await query(
+        `SELECT id FROM customers WHERE LOWER(business_name) = LOWER($1)`,
+        [accountName.trim()]
+      );
+      if (cr4.rows.length) customerId = cr4.rows[0].id;
+    }
+    if (!customerId && accountName) {
+      const cr4b = await query(
+        `SELECT id FROM customers WHERE LOWER(business_name) ILIKE $1 ORDER BY LENGTH(business_name) ASC LIMIT 1`,
+        [`%${accountName.trim()}%`]
+      );
+      if (cr4b.rows.length) customerId = cr4b.rows[0].id;
+    }
+    if (!customerId && accountName) {
+      const cr5 = await query(
+        `SELECT id FROM customers WHERE $1 = ANY(billing_aliases) LIMIT 1`,
+        [accountName.trim().toLowerCase()]
+      );
+      if (cr5.rows.length) customerId = cr5.rows[0].id;
     }
 
     // Effective account identifier to store — prefer accountNumber, fall back to customerDcId
@@ -702,13 +725,29 @@ router.post('/relink-customers', async (req, res, next) => {
         customerId = cr3.rows[0]?.id || null;
       }
 
-      // 4. Partial name match as last resort (covers "Europa Worldwide" matching "Europa")
+      // 4. Partial name match
       if (!customerId && name) {
         const cr4 = await query(
           `SELECT id FROM customers WHERE LOWER(business_name) ILIKE $1 ORDER BY LENGTH(business_name) ASC LIMIT 1`,
           [`%${name.trim()}%`]
         );
         customerId = cr4.rows[0]?.id || null;
+      }
+
+      // 5. Billing alias lookup (e.g. webhook sends "Europa" but customer is "Europa Worldwide Ltd")
+      if (!customerId && name) {
+        const cr5 = await query(
+          `SELECT id FROM customers WHERE $1 = ANY(billing_aliases) LIMIT 1`,
+          [name.trim().toLowerCase()]
+        );
+        customerId = cr5.rows[0]?.id || null;
+      }
+      if (!customerId && acct) {
+        const cr5b = await query(
+          `SELECT id FROM customers WHERE $1 = ANY(billing_aliases) LIMIT 1`,
+          [acct.trim().toLowerCase()]
+        );
+        customerId = cr5b.rows[0]?.id || null;
       }
 
       if (!customerId) { not_found++; continue; }
@@ -1083,6 +1122,11 @@ router.get('/charges/:id/debug', async (req, res, next) => {
       const c5 = await query(`SELECT id, business_name, account_number, dc_customer_id FROM customers WHERE LOWER(business_name) ILIKE $1 ORDER BY LENGTH(business_name) ASC LIMIT 1`, [`%${row.s_customer_name.trim()}%`]);
       custSteps.push({ tried: `business_name ILIKE '%${row.s_customer_name}%'`, found: c5.rows.length > 0, row: c5.rows[0] || null });
       if (c5.rows.length) { customerId = c5.rows[0].id; customerName = c5.rows[0].business_name; resolvedVia = 'business_name_partial'; }
+    }
+    if (!customerId && row.s_customer_name) {
+      const c6 = await query(`SELECT id, business_name FROM customers WHERE $1 = ANY(billing_aliases) LIMIT 1`, [row.s_customer_name.trim().toLowerCase()]);
+      custSteps.push({ tried: `billing_aliases @> ['${row.s_customer_name.toLowerCase()}']`, found: c6.rows.length > 0, row: c6.rows[0] || null });
+      if (c6.rows.length) { customerId = c6.rows[0].id; customerName = c6.rows[0].business_name; resolvedVia = 'billing_alias'; }
     }
 
     if (customerId && !customerName) {

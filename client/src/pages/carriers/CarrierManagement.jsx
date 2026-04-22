@@ -1870,6 +1870,12 @@ function ZoneCard({ zone, onRefresh }) {
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [inclInput, setInclInput]           = useState('');
   const [exclInput, setExclInput]           = useState('');
+  const [inclBulk, setInclBulk]             = useState('');
+  const [exclBulk, setExclBulk]             = useState('');
+  const [inclMode, setInclMode]             = useState('single'); // 'single' | 'bulk'
+  const [exclMode, setExclMode]             = useState('single');
+  const [bulkRunning, setBulkRunning]       = useState(false);
+  const [bulkResult, setBulkResult]         = useState(null);
 
   const delZone     = useMutation({ mutationFn: () => carriersApi.deleteZone(zone.id), onSuccess: onRefresh });
   const delCountry  = useMutation({ mutationFn: id => carriersApi.removeCountry(id), onSuccess: onRefresh });
@@ -1878,6 +1884,34 @@ function ZoneCard({ zone, onRefresh }) {
     onSuccess: (_, { type }) => { type === 'include' ? setInclInput('') : setExclInput(''); onRefresh(); },
   });
   const delPostcode = useMutation({ mutationFn: id => carriersApi.removePostcodeRule(id), onSuccess: onRefresh });
+
+  async function addBulkPostcodes(raw, type) {
+    const existing = new Set(
+      (zone.postcode_rules || [])
+        .filter(r => r.rule_type === type)
+        .map(r => r.postcode_prefix.toUpperCase())
+    );
+    const codes = raw
+      .split(/[\s,\n]+/)
+      .map(s => s.toUpperCase().trim())
+      .filter(s => s.length > 0 && !existing.has(s));
+    if (codes.length === 0) { setBulkResult({ type, added: 0, skipped: 0 }); return; }
+    setBulkRunning(true);
+    setBulkResult(null);
+    let added = 0;
+    let failed = 0;
+    for (const prefix of codes) {
+      try {
+        await carriersApi.addPostcodeRule(zone.id, { postcode_prefix: prefix, rule_type: type });
+        added++;
+      } catch { failed++; }
+    }
+    setBulkRunning(false);
+    if (type === 'include') setInclBulk('');
+    else setExclBulk('');
+    setBulkResult({ type, added, skipped: codes.length - added - failed, failed });
+    onRefresh();
+  }
 
   const inclRules = (zone.postcode_rules || []).filter(r => r.rule_type === 'include');
   const exclRules = (zone.postcode_rules || []).filter(r => r.rule_type === 'exclude');
@@ -1972,11 +2006,36 @@ function ZoneCard({ zone, onRefresh }) {
               Postcode Rules
             </span>
 
+            {bulkResult && (
+              <div style={{ marginBottom:10, padding:'8px 12px', borderRadius:7,
+                background: bulkResult.failed > 0 ? 'rgba(244,67,54,0.08)' : 'rgba(0,200,83,0.08)',
+                border: `1px solid ${bulkResult.failed > 0 ? 'rgba(244,67,54,0.3)' : 'rgba(0,200,83,0.3)'}`,
+                fontSize:12, color: bulkResult.failed > 0 ? '#F44336' : '#00C853',
+                display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <span>
+                  {bulkResult.added} added to {bulkResult.type}d list
+                  {bulkResult.skipped > 0 && ` · ${bulkResult.skipped} already existed`}
+                  {bulkResult.failed > 0 && ` · ${bulkResult.failed} failed`}
+                </span>
+                <button onClick={() => setBulkResult(null)} style={{ background:'none', border:'none', color:'inherit', cursor:'pointer', padding:0 }}><X size={11}/></button>
+              </div>
+            )}
+
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
               {/* Include column */}
               <div>
-                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
                   <span style={{ fontSize:11, fontWeight:700, color:'#00BCD4', textTransform:'uppercase' }}>✓ Included</span>
+                  <div style={{ display:'flex', gap:0, border:'1px solid rgba(0,188,212,0.25)', borderRadius:6, overflow:'hidden' }}>
+                    {['single','bulk'].map(m => (
+                      <button key={m} onClick={() => setInclMode(m)}
+                        style={{ fontSize:10, fontWeight:700, padding:'2px 8px', border:'none', cursor:'pointer',
+                          background: inclMode===m ? 'rgba(0,188,212,0.25)' : 'transparent',
+                          color: inclMode===m ? '#00BCD4' : '#666', textTransform:'capitalize' }}>
+                        {m}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div style={{ display:'flex', flexWrap:'wrap', gap:5, minHeight:28, marginBottom:8 }}>
                   {inclRules.length === 0
@@ -1989,24 +2048,57 @@ function ZoneCard({ zone, onRefresh }) {
                       ))
                   }
                 </div>
-                <div style={{ display:'flex', gap:5 }}>
-                  <div className="pill-input-wrap" style={{ height:28, flex:1 }}>
-                    <input value={inclInput} onChange={e => setInclInput(e.target.value)}
-                      placeholder="AB, BT, SW…"
-                      onKeyDown={e => e.key==='Enter' && inclInput.trim() && addPostcode.mutate({ prefix: inclInput, type:'include' })}
-                      style={{ fontSize:11, textTransform:'uppercase' }}/>
+                {inclMode === 'single' ? (
+                  <div style={{ display:'flex', gap:5 }}>
+                    <div className="pill-input-wrap" style={{ height:28, flex:1 }}>
+                      <input value={inclInput} onChange={e => setInclInput(e.target.value)}
+                        placeholder="AB, BT, SW…"
+                        onKeyDown={e => e.key==='Enter' && inclInput.trim() && addPostcode.mutate({ prefix: inclInput, type:'include' })}
+                        style={{ fontSize:11, textTransform:'uppercase' }}/>
+                    </div>
+                    <button onClick={() => inclInput.trim() && addPostcode.mutate({ prefix: inclInput, type:'include' })}
+                      style={{ background:'rgba(0,188,212,0.12)', border:'1px solid rgba(0,188,212,0.3)', borderRadius:6, color:'#00BCD4', cursor:'pointer', fontSize:11, fontWeight:600, padding:'0 10px', height:28 }}>
+                      + Add
+                    </button>
                   </div>
-                  <button onClick={() => inclInput.trim() && addPostcode.mutate({ prefix: inclInput, type:'include' })}
-                    style={{ background:'rgba(0,188,212,0.12)', border:'1px solid rgba(0,188,212,0.3)', borderRadius:6, color:'#00BCD4', cursor:'pointer', fontSize:11, fontWeight:600, padding:'0 10px', height:28 }}>
-                    + Add
-                  </button>
-                </div>
+                ) : (
+                  <div>
+                    <textarea
+                      value={inclBulk}
+                      onChange={e => setInclBulk(e.target.value)}
+                      placeholder={'Paste outcodes separated by commas or new lines\ne.g. IV1, IV2, FK17, AB31…'}
+                      style={{ width:'100%', minHeight:72, background:'rgba(255,255,255,0.04)',
+                        border:'1px solid rgba(0,188,212,0.25)', borderRadius:7, color:'#fff',
+                        fontSize:11, padding:'7px 10px', resize:'vertical', fontFamily:'monospace',
+                        textTransform:'uppercase', boxSizing:'border-box' }}
+                    />
+                    <button
+                      onClick={() => inclBulk.trim() && addBulkPostcodes(inclBulk, 'include')}
+                      disabled={bulkRunning || !inclBulk.trim()}
+                      style={{ marginTop:5, background:'rgba(0,188,212,0.15)', border:'1px solid rgba(0,188,212,0.35)',
+                        borderRadius:6, color:'#00BCD4', cursor: bulkRunning ? 'wait' : 'pointer',
+                        fontSize:11, fontWeight:700, padding:'5px 14px',
+                        display:'inline-flex', alignItems:'center', gap:5 }}>
+                      <Upload size={11}/> {bulkRunning ? 'Adding…' : 'Add All'}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Exclude column */}
               <div>
-                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
                   <span style={{ fontSize:11, fontWeight:700, color:'#E91E8C', textTransform:'uppercase' }}>✗ Excluded</span>
+                  <div style={{ display:'flex', gap:0, border:'1px solid rgba(233,30,140,0.25)', borderRadius:6, overflow:'hidden' }}>
+                    {['single','bulk'].map(m => (
+                      <button key={m} onClick={() => setExclMode(m)}
+                        style={{ fontSize:10, fontWeight:700, padding:'2px 8px', border:'none', cursor:'pointer',
+                          background: exclMode===m ? 'rgba(233,30,140,0.2)' : 'transparent',
+                          color: exclMode===m ? '#E91E8C' : '#666', textTransform:'capitalize' }}>
+                        {m}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div style={{ display:'flex', flexWrap:'wrap', gap:5, minHeight:28, marginBottom:8 }}>
                   {exclRules.length === 0
@@ -2019,18 +2111,41 @@ function ZoneCard({ zone, onRefresh }) {
                       ))
                   }
                 </div>
-                <div style={{ display:'flex', gap:5 }}>
-                  <div className="pill-input-wrap" style={{ height:28, flex:1 }}>
-                    <input value={exclInput} onChange={e => setExclInput(e.target.value)}
-                      placeholder="FK17, IV1, HS…"
-                      onKeyDown={e => e.key==='Enter' && exclInput.trim() && addPostcode.mutate({ prefix: exclInput, type:'exclude' })}
-                      style={{ fontSize:11, textTransform:'uppercase' }}/>
+                {exclMode === 'single' ? (
+                  <div style={{ display:'flex', gap:5 }}>
+                    <div className="pill-input-wrap" style={{ height:28, flex:1 }}>
+                      <input value={exclInput} onChange={e => setExclInput(e.target.value)}
+                        placeholder="FK17, IV1, HS…"
+                        onKeyDown={e => e.key==='Enter' && exclInput.trim() && addPostcode.mutate({ prefix: exclInput, type:'exclude' })}
+                        style={{ fontSize:11, textTransform:'uppercase' }}/>
+                    </div>
+                    <button onClick={() => exclInput.trim() && addPostcode.mutate({ prefix: exclInput, type:'exclude' })}
+                      style={{ background:'rgba(233,30,140,0.1)', border:'1px solid rgba(233,30,140,0.25)', borderRadius:6, color:'#E91E8C', cursor:'pointer', fontSize:11, fontWeight:600, padding:'0 10px', height:28 }}>
+                      + Add
+                    </button>
                   </div>
-                  <button onClick={() => exclInput.trim() && addPostcode.mutate({ prefix: exclInput, type:'exclude' })}
-                    style={{ background:'rgba(233,30,140,0.1)', border:'1px solid rgba(233,30,140,0.25)', borderRadius:6, color:'#E91E8C', cursor:'pointer', fontSize:11, fontWeight:600, padding:'0 10px', height:28 }}>
-                    + Add
-                  </button>
-                </div>
+                ) : (
+                  <div>
+                    <textarea
+                      value={exclBulk}
+                      onChange={e => setExclBulk(e.target.value)}
+                      placeholder={'Paste outcodes separated by commas or new lines\ne.g. FK17, IV1, AB55…'}
+                      style={{ width:'100%', minHeight:72, background:'rgba(255,255,255,0.04)',
+                        border:'1px solid rgba(233,30,140,0.25)', borderRadius:7, color:'#fff',
+                        fontSize:11, padding:'7px 10px', resize:'vertical', fontFamily:'monospace',
+                        textTransform:'uppercase', boxSizing:'border-box' }}
+                    />
+                    <button
+                      onClick={() => exclBulk.trim() && addBulkPostcodes(exclBulk, 'exclude')}
+                      disabled={bulkRunning || !exclBulk.trim()}
+                      style={{ marginTop:5, background:'rgba(233,30,140,0.12)', border:'1px solid rgba(233,30,140,0.3)',
+                        borderRadius:6, color:'#E91E8C', cursor: bulkRunning ? 'wait' : 'pointer',
+                        fontSize:11, fontWeight:700, padding:'5px 14px',
+                        display:'inline-flex', alignItems:'center', gap:5 }}>
+                      <Upload size={11}/> {bulkRunning ? 'Adding…' : 'Add All'}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>

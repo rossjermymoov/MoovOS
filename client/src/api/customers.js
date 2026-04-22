@@ -27,4 +27,9 @@ export const customersApi = {
   dismissVolumeAlert: (customerId, alertId, { note, staff_id }) =>
     api.post(`/customers/${customerId}/volume-alerts/${alertId}/dismiss`, { note, staff_id })
        .then(r => r.data),
+
+  addBillingAlias: (id, alias) =>
+    api.post(`/customers/${id}/billing-aliases`, { alias }).then(r => r.data),
+  removeBillingAlias: (id, alias) =>
+    api.delete(`/customers/${id}/billing-aliases/${encodeURIComponent(alias)}`).then(r => r.data),
 };

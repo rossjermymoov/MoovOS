@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, AlertTriangle, Phone, Mail, MapPin, Building2,
   Users, MessageSquare, TrendingUp, DollarSign, Zap, Info,
-  Pencil, X, Check, ShieldCheck, Trash2,
+  Pencil, X, Check, ShieldCheck, Trash2, Plus, Tag,
 } from 'lucide-react';
 import { customersApi } from '../../api/customers';
 import { customerRateCardsApi } from '../../api/customerRateCards';
@@ -67,6 +67,78 @@ function InfoCard({ title, children }) {
   );
 }
 
+// ─── Billing Aliases ─────────────────────────────────────────
+function BillingAliasesEditor({ customerId, aliases, onRefresh }) {
+  const [newAlias, setNewAlias] = useState('');
+
+  const addAlias = useMutation({
+    mutationFn: () => customersApi.addBillingAlias(customerId, newAlias),
+    onSuccess: () => { setNewAlias(''); onRefresh(); },
+  });
+
+  const removeAlias = useMutation({
+    mutationFn: (alias) => customersApi.removeBillingAlias(customerId, alias),
+    onSuccess: onRefresh,
+  });
+
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+        <Tag size={11} style={{ color: '#7B2FBE' }} />
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#AAAAAA', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          Billing Aliases
+        </span>
+      </div>
+      <div style={{ fontSize: 11, color: '#666', marginBottom: 8 }}>
+        Short names the billing engine will match as a last resort (e.g. "europa" for "Europa Worldwide Ltd")
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
+        {aliases.length === 0 && (
+          <span style={{ fontSize: 12, color: '#444', fontStyle: 'italic' }}>No aliases set</span>
+        )}
+        {aliases.map(alias => (
+          <span key={alias} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            padding: '3px 10px', borderRadius: 9999,
+            fontSize: 11, fontWeight: 700,
+            background: 'rgba(123,47,190,0.15)', color: '#B39DDB',
+            border: '1px solid rgba(123,47,190,0.3)',
+          }}>
+            {alias}
+            <button onClick={() => removeAlias.mutate(alias)}
+              style={{ background: 'none', border: 'none', color: '#B39DDB', cursor: 'pointer', padding: 0, lineHeight: 1 }}>
+              <X size={9} />
+            </button>
+          </span>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 5 }}>
+        <input
+          value={newAlias}
+          onChange={e => setNewAlias(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && newAlias.trim() && addAlias.mutate()}
+          placeholder="e.g. europa"
+          style={{
+            flex: 1, background: 'rgba(255,255,255,0.05)',
+            border: '1px solid rgba(123,47,190,0.3)', borderRadius: 6,
+            color: '#fff', padding: '4px 10px', fontSize: 12,
+          }}
+        />
+        <button onClick={() => newAlias.trim() && addAlias.mutate()}
+          disabled={addAlias.isPending || !newAlias.trim()}
+          style={{
+            background: 'rgba(123,47,190,0.2)', border: '1px solid rgba(123,47,190,0.35)',
+            borderRadius: 6, color: '#B39DDB', cursor: 'pointer',
+            fontSize: 11, fontWeight: 700, padding: '4px 12px',
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+          }}>
+          <Plus size={10} /> Add
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Rate Card Assignments per carrier ───────────────────────
 function CustomerRateCardAssignments({ customerId }) {
   const qc = useQueryClient();
@@ -124,6 +196,7 @@ function CustomerRateCardAssignments({ customerId }) {
 
 // ─── Overview Tab ────────────────────────────────────────────
 function OverviewTab({ c, onSaved, onDeleteRequest }) {
+  const qc = useQueryClient();
   const [edit, setEdit] = useState(false);
   const [form, setForm] = useState({});
 
@@ -252,8 +325,7 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
             </InfoCard>
           )}
 
-          {(c.dc_customer_id || edit) && (
-            <InfoCard title="API Integration">
+          <InfoCard title="API Integration">
               <Row
                 label="DC Customer ID"
                 value={c.dc_customer_id}
@@ -273,8 +345,8 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
                   Billing will fall back to this if no standard account number is matched.
                 </div>
               )}
-            </InfoCard>
-          )}
+              <BillingAliasesEditor customerId={c.id} aliases={c.billing_aliases || []} onRefresh={() => qc.invalidateQueries(['customer', c.id])} />
+          </InfoCard>
 
         </div>
 
