@@ -14,7 +14,7 @@ const gbp = (n) => `£${parseFloat(n || 0).toFixed(2)}`;
 
 const inp = {
   background: '#0D0E2A', border: '1px solid rgba(255,255,255,0.15)',
-  borderRadius: 5, padding: '4px 8px', color: '#fff', fontSize: 12,
+  borderRadius: 9999, padding: '4px 12px', color: '#fff', fontSize: 12,
   outline: 'none', boxSizing: 'border-box',
 };
 

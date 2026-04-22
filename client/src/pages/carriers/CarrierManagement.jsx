@@ -591,11 +591,11 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                         style={{
                           background: '#0D0E2A',
                           border: '1px solid rgba(255,193,7,0.25)',
-                          borderRadius: 6,
+                          borderRadius: 9999,
                           color: svc.fuel_group_id ? '#FFC107' : '#555',
                           fontSize: 12,
                           fontWeight: svc.fuel_group_id ? 700 : 400,
-                          padding: '3px 8px',
+                          padding: '3px 12px',
                           cursor: 'pointer',
                           outline: 'none',
                           width: '100%',

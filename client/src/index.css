@@ -155,3 +155,79 @@ body {
   cursor: pointer;
   min-height: 44px;
 }
+
+/* ─── Global dark form element theming ──────────────────────── */
+/* Applies to all inputs/selects that aren't in pill-input-wrap  */
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  background: #0D0E2A;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 9999px;
+  color: #fff;
+  outline: none;
+  font-family: inherit;
+  font-size: 13px;
+}
+input:not([type="checkbox"]):not([type="radio"]):focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent-green);
+}
+
+/* Multi-line textarea doesn't suit full-pill; use generous radius */
+textarea {
+  border-radius: 14px;
+}
+
+/* Inputs/selects inside pill-input-wrap — restore transparent style */
+.pill-input-wrap input,
+.pill-input-wrap select {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  outline: none;
+  flex: 1;
+  padding: 10px 16px;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+.pill-input-wrap input:focus,
+.pill-input-wrap select:focus {
+  border-color: transparent;
+}
+
+/* Option elements — dark background in dropdown list */
+option {
+  background: #0D0E2A;
+  color: #fff;
+}
+
+/* ─── Pill-select: standalone pill-shaped selects / date inputs ─ */
+.pill-select {
+  background: #0D0E2A !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  border-radius: 9999px !important;
+  color: #fff !important;
+  padding: 8px 20px !important;
+  height: 42px;
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-block;
+  vertical-align: middle;
+  font-family: inherit;
+}
+.pill-select:focus {
+  border-color: var(--accent-green) !important;
+}
+
+/* Calendar and time picker icons — invert to show on dark background */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.5;
+  cursor: pointer;
+}

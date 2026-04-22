@@ -37,7 +37,7 @@ const gbp = (n) => `£${parseFloat(n || 0).toLocaleString('en-GB', { minimumFrac
 // ─── Shared field components ─────────────────────────────────
 const inp = (extra = {}) => ({
   background: '#0D0E2A', border: '1px solid rgba(255,255,255,0.15)',
-  borderRadius: 5, padding: '5px 8px', color: '#fff', fontSize: 12,
+  borderRadius: 9999, padding: '5px 14px', color: '#fff', fontSize: 12,
   outline: 'none', width: '100%', boxSizing: 'border-box', ...extra,
 });
 const sel = () => inp({ cursor: 'pointer' });

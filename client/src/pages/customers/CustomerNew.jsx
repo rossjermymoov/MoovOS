@@ -114,13 +114,13 @@ function Field({ label, error, required, children }) {
 const inputStyle = (error) => ({
   width: '100%', boxSizing: 'border-box',
   background: '#0D0E2A', border: `1px solid ${error ? '#E91E8C' : 'rgba(255,255,255,0.1)'}`,
-  borderRadius: 6, padding: '10px 12px', color: '#fff', fontSize: 14, outline: 'none',
+  borderRadius: 9999, padding: '10px 18px', color: '#fff', fontSize: 14, outline: 'none',
 });
 
 const selectStyle = {
   width: '100%', boxSizing: 'border-box',
   background: '#0D0E2A', border: '1px solid rgba(255,255,255,0.1)',
-  borderRadius: 6, padding: '10px 12px', color: '#fff', fontSize: 14, outline: 'none',
+  borderRadius: 9999, padding: '10px 18px', color: '#fff', fontSize: 14, outline: 'none',
 };
 
 const grid2 = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 };

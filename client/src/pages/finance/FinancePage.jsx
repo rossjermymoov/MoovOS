@@ -93,7 +93,7 @@ function PriceCell({ charge, onSave }) {
           onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') cancel(); }}
           style={{
             width: 72, background: 'rgba(255,255,255,0.08)', border: '1px solid #00C853',
-            borderRadius: 5, color: '#fff', padding: '3px 6px', fontSize: 13, fontWeight: 700,
+            borderRadius: 9999, color: '#fff', padding: '3px 10px', fontSize: 13, fontWeight: 700,
           }}
         />
         <button onClick={commit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#00C853', padding: 2 }}>
