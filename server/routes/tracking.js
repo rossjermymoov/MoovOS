@@ -343,37 +343,44 @@ router.post('/webhook', async (req, res, next) => {
 
 router.get('/stats', async (req, res, next) => {
   try {
-    const counts = await query(`
-      SELECT status, COUNT(*)::int AS count
-      FROM parcels
-      GROUP BY status
-    `);
-
-    const delivered_today = await query(`
-      SELECT COUNT(*)::int AS count FROM parcels
-      WHERE status = 'delivered'
-        AND delivered_at >= CURRENT_DATE
-    `);
-
-    const by_courier = await query(`
-      SELECT courier_name, courier_code, COUNT(*)::int AS count
-      FROM parcels
-      WHERE status NOT IN ('delivered','returned')
-        AND courier_name IS NOT NULL
-      GROUP BY courier_name, courier_code
-      ORDER BY count DESC
-    `);
+    const [counts, delivered_today, by_courier, by_customer] = await Promise.all([
+      query(`
+        SELECT status, COUNT(*)::int AS count
+        FROM parcels GROUP BY status
+      `),
+      query(`
+        SELECT COUNT(*)::int AS count FROM parcels
+        WHERE status = 'delivered' AND delivered_at >= CURRENT_DATE
+      `),
+      query(`
+        SELECT courier_name, courier_code, COUNT(*)::int AS count
+        FROM parcels
+        WHERE courier_name IS NOT NULL
+        GROUP BY courier_name, courier_code
+        ORDER BY count DESC
+      `),
+      query(`
+        SELECT DISTINCT ON (p.customer_id)
+          p.customer_id AS id,
+          p.customer_name AS name,
+          p.customer_account AS account_number
+        FROM parcels p
+        WHERE p.customer_id IS NOT NULL AND p.customer_name IS NOT NULL
+        ORDER BY p.customer_id, p.customer_name
+      `),
+    ]);
 
     const statusMap = {};
     for (const r of counts.rows) statusMap[r.status] = r.count;
 
     res.json({
-      by_status:     statusMap,
+      by_status:      statusMap,
       delivered_today: delivered_today.rows[0].count,
-      total_active:  Object.entries(statusMap)
+      total_active:   Object.entries(statusMap)
         .filter(([s]) => !['delivered','returned'].includes(s))
         .reduce((a,[,c]) => a + c, 0),
-      by_courier:    by_courier.rows,
+      by_courier:     by_courier.rows,
+      by_customer:    by_customer.rows,
     });
   } catch (err) { next(err); }
 });
@@ -384,6 +391,7 @@ router.get('/', async (req, res, next) => {
   try {
     const {
       search, status, courier_code, customer_id,
+      date_from, date_to,
       limit = 50, offset = 0,
     } = req.query;
 
@@ -403,6 +411,14 @@ router.get('/', async (req, res, next) => {
     if (customer_id) {
       conditions.push(`p.customer_id = $${idx++}`);
       values.push(customer_id);
+    }
+    if (date_from) {
+      conditions.push(`p.created_at >= $${idx++}`);
+      values.push(date_from);
+    }
+    if (date_to) {
+      conditions.push(`p.created_at <= $${idx++}`);
+      values.push(date_to);
     }
     if (search) {
       conditions.push(`(
@@ -468,5 +484,23 @@ router.get('/:consignment', async (req, res, next) => {
     res.json({ ...parcelRes.rows[0], events: eventsRes.rows });
   } catch (err) { next(err); }
 });
+
+// ─── 30-day purge ─────────────────────────────────────────────────────────────
+// Tracking data is operational only — PII is no longer needed after 30 days.
+// tracking_events cascade-delete when their parcel is deleted.
+
+export async function purgeOldTrackingData() {
+  try {
+    const result = await query(`
+      DELETE FROM parcels
+      WHERE created_at < NOW() - INTERVAL '30 days'
+    `);
+    if (result.rowCount > 0) {
+      console.log(`🗑  Purged ${result.rowCount} parcel record(s) older than 30 days`);
+    }
+  } catch (err) {
+    console.warn('⚠ purgeOldTrackingData failed (non-fatal):', err.message);
+  }
+}
 
 export default router;

@@ -8,9 +8,10 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Search, X, Truck, PackageCheck, Clock, AlertTriangle,
   ShieldAlert, RotateCcw, Package, ChevronRight, MapPin,
-  RefreshCw, Store,
+  RefreshCw, Store, Calendar,
 } from 'lucide-react';
 import axios from 'axios';
+import { startOfDay, endOfDay, startOfMonth, subDays, format } from 'date-fns';
 import { getCourierLogo } from '../../utils/courierLogos';
 
 const api = axios.create({ baseURL: '/api' });
@@ -268,30 +269,48 @@ function ParcelDrawer({ consignment, onClose }) {
   );
 }
 
-// ─── Main tracking page ───────────────────────────────────────
-const STATUS_OPTS = [
-  { value: '',                         label: 'All statuses' },
-  { value: 'booked',                   label: 'Booked' },
-  { value: 'collected',                label: 'Collected' },
-  { value: 'in_transit',               label: 'In Transit' },
-  { value: 'at_depot',                 label: 'At Depot' },
-  { value: 'out_for_delivery',         label: 'Out for Delivery' },
-  { value: 'delivered',                label: 'Delivered' },
-  { value: 'failed_delivery,exception',label: 'Address Issue' },
-  { value: 'awaiting_collection',       label: 'Awaiting Collection' },
-  { value: 'on_hold',                  label: 'On Hold' },
-  { value: 'customs_hold',             label: 'Customs Hold' },
-  { value: 'returned',                 label: 'Returned' },
+// ─── Date range helpers ───────────────────────────────────────
+const isoDay = d => format(d, 'yyyy-MM-dd');
+const TODAY  = new Date();
+
+const DATE_PRESETS = [
+  { label: 'Today',        get: () => ({ from: isoDay(startOfDay(TODAY)), to: isoDay(endOfDay(TODAY)) }) },
+  { label: 'Last 7 days',  get: () => ({ from: isoDay(subDays(TODAY, 7)),  to: isoDay(endOfDay(TODAY)) }) },
+  { label: 'Last 30 days', get: () => ({ from: isoDay(subDays(TODAY, 30)), to: isoDay(endOfDay(TODAY)) }) },
+  { label: 'Month to date',get: () => ({ from: isoDay(startOfMonth(TODAY)),to: isoDay(endOfDay(TODAY)) }) },
+  { label: 'Custom',       get: null },
 ];
 
+// ─── Shared dark select style ─────────────────────────────────
+const darkSelect = {
+  background: '#0D0E2A',
+  border: '1px solid rgba(255,255,255,0.12)',
+  borderRadius: 8,
+  color: '#fff',
+  fontSize: 13,
+  padding: '8px 12px',
+  outline: 'none',
+  cursor: 'pointer',
+  height: 38,
+  appearance: 'none',
+  WebkitAppearance: 'none',
+  paddingRight: 28,
+};
+
+// ─── Main tracking page ───────────────────────────────────────
+
 export default function TrackingPage() {
-  const [search,          setSearch]       = useState('');
-  const [debouncedSearch, setDebounced]    = useState('');
-  const [statusFilter,    setStatusFilter] = useState('');
-  const [courierFilter,   setCourierFilter]= useState('');
-  const [customerFilter,  setCustomerFilter] = useState('');
-  const [page,            setPage]         = useState(0);
-  const [selected,        setSelected]     = useState(null);
+  const [search,          setSearch]        = useState('');
+  const [debouncedSearch, setDebounced]     = useState('');
+  const [statusFilter,    setStatusFilter]  = useState('');
+  const [courierFilter,   setCourierFilter] = useState('');
+  const [customerFilter,  setCustomerFilter]= useState('');
+  const [datePreset,      setDatePreset]    = useState('');   // label of active preset, '' = all time
+  const [dateFrom,        setDateFrom]      = useState('');
+  const [dateTo,          setDateTo]        = useState('');
+  const [showCustomDate,  setShowCustomDate]= useState(false);
+  const [page,            setPage]          = useState(0);
+  const [selected,        setSelected]      = useState(null);
   const searchRef = useRef(null);
   const LIMIT = 50;
 
@@ -302,7 +321,27 @@ export default function TrackingPage() {
   }, [search]);
 
   // Reset page when filters change
-  useEffect(() => { setPage(0); }, [debouncedSearch, statusFilter, courierFilter, customerFilter]);
+  useEffect(() => { setPage(0); }, [debouncedSearch, statusFilter, courierFilter, customerFilter, dateFrom, dateTo]);
+
+  function applyPreset(preset) {
+    if (!preset.get) {
+      setDatePreset('Custom');
+      setShowCustomDate(true);
+      return;
+    }
+    const { from, to } = preset.get();
+    setDatePreset(preset.label);
+    setDateFrom(from);
+    setDateTo(to);
+    setShowCustomDate(false);
+  }
+
+  function clearDateRange() {
+    setDatePreset('');
+    setDateFrom('');
+    setDateTo('');
+    setShowCustomDate(false);
+  }
 
   const { data: stats, refetch: refetchStats } = useQuery({
     queryKey: ['tracking-stats'],
@@ -310,21 +349,15 @@ export default function TrackingPage() {
     refetchInterval: 60000,
   });
 
-  // Customers list for the filter dropdown
-  const { data: custData } = useQuery({
-    queryKey: ['customers-all'],
-    queryFn:  () => api.get('/customers', { params: { limit: 500 } }).then(r => r.data),
-    staleTime: 60_000,
-  });
-  const customers = custData?.data || [];
-
   const { data: list, isLoading, refetch: refetchList } = useQuery({
-    queryKey: ['tracking-list', debouncedSearch, statusFilter, courierFilter, customerFilter, page],
+    queryKey: ['tracking-list', debouncedSearch, statusFilter, courierFilter, customerFilter, dateFrom, dateTo, page],
     queryFn:  () => api.get('/tracking', { params: {
       search:       debouncedSearch  || undefined,
       status:       statusFilter     || undefined,
       courier_code: courierFilter    || undefined,
       customer_id:  customerFilter   || undefined,
+      date_from:    dateFrom         || undefined,
+      date_to:      dateTo           || undefined,
       limit:  LIMIT,
       offset: page * LIMIT,
     }}).then(r => r.data),
@@ -332,13 +365,23 @@ export default function TrackingPage() {
   });
 
   function refresh() { refetchStats(); refetchList(); }
-  function clearAll() { setStatusFilter(''); setCourierFilter(''); setCustomerFilter(''); setSearch(''); }
+  function clearAll() {
+    setStatusFilter(''); setCourierFilter(''); setCustomerFilter(''); setSearch('');
+    clearDateRange();
+  }
+
+  // Data-driven filter options from stats
+  const customers    = stats?.by_customer || [];
+  const couriers     = stats?.by_courier  || [];
+  const activeStatuses = Object.entries(stats?.by_status || {})
+    .filter(([, count]) => count > 0)
+    .map(([status]) => status);
 
   const parcels = list?.parcels || [];
   const total   = list?.total   || 0;
   const pages   = Math.ceil(total / LIMIT);
   const bs = stats?.by_status || {};
-  const hasFilters = statusFilter || courierFilter || customerFilter || search;
+  const hasFilters = statusFilter || courierFilter || customerFilter || search || dateFrom || dateTo;
 
   function toggleStatus(s) { setStatusFilter(f => f === s ? '' : s); }
 
@@ -370,6 +413,38 @@ export default function TrackingPage() {
         <StatCard label="Delivered Today"  value={stats?.delivered_today} color="#00C853" icon={PackageCheck}  active={statusFilter==='delivered'}              onClick={() => toggleStatus('delivered')} />
       </div>
 
+      {/* ── Date range ──────────────────────────────────────────── */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <Calendar size={14} color="#AAAAAA" />
+        {DATE_PRESETS.map(p => (
+          <button key={p.label} onClick={() => applyPreset(p)} style={{
+            padding: '6px 13px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+            border: '1px solid',
+            borderColor: datePreset === p.label ? '#00C853' : 'rgba(255,255,255,0.1)',
+            background: datePreset === p.label ? 'rgba(0,200,83,0.12)' : 'transparent',
+            color: datePreset === p.label ? '#00C853' : '#888',
+            cursor: 'pointer',
+          }}>
+            {p.label}
+          </button>
+        ))}
+        {datePreset && (
+          <button onClick={clearDateRange} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 12, padding: '0 4px' }}>
+            <X size={12} />
+          </button>
+        )}
+        {/* Custom date inputs */}
+        {showCustomDate && (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+              style={{ ...darkSelect, width: 140 }} />
+            <span style={{ color: '#444', fontSize: 12 }}>–</span>
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+              style={{ ...darkSelect, width: 140 }} />
+          </div>
+        )}
+      </div>
+
       {/* ── Filters row ─────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
         {/* Search */}
@@ -389,54 +464,48 @@ export default function TrackingPage() {
           )}
         </div>
 
-        {/* Customer filter */}
+        {/* Customer — only shows customers who have parcels */}
         {customers.length > 0 && (
-          <select
-            value={customerFilter}
-            onChange={e => setCustomerFilter(e.target.value)}
-            className="pill-select"
-            style={{ minWidth: 180, height: 38, fontSize: 13, color: customerFilter ? '#fff' : '#AAAAAA' }}
-          >
-            <option value="">All customers</option>
-            {customers.map(c => (
-              <option key={c.id} value={c.id}>{c.name || c.business_name}</option>
-            ))}
-          </select>
+          <div style={{ position: 'relative' }}>
+            <select value={customerFilter} onChange={e => setCustomerFilter(e.target.value)} style={{ ...darkSelect, minWidth: 170 }}>
+              <option value="">All customers</option>
+              {customers.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#AAAAAA', pointerEvents: 'none', fontSize: 10 }}>▾</span>
+          </div>
         )}
 
-        {/* Status filter dropdown */}
-        <select
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
-          className="pill-select"
-          style={{ minWidth: 160, height: 38, fontSize: 13, color: statusFilter ? '#fff' : '#AAAAAA' }}
-        >
-          {STATUS_OPTS.map(o => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-
-        {/* Courier filter */}
-        {stats?.by_courier?.length > 0 && (
-          <select
-            value={courierFilter}
-            onChange={e => setCourierFilter(e.target.value)}
-            className="pill-select"
-            style={{ minWidth: 160, height: 38, fontSize: 13, color: courierFilter ? '#fff' : '#AAAAAA' }}
-          >
-            <option value="">All couriers</option>
-            {stats.by_courier.map(c => (
-              <option key={c.courier_code || c.courier_name} value={c.courier_code || c.courier_name}>
-                {c.courier_name} ({c.count})
-              </option>
+        {/* Status — only shows statuses that exist in the table */}
+        <div style={{ position: 'relative' }}>
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ ...darkSelect, minWidth: 160 }}>
+            <option value="">All statuses</option>
+            {activeStatuses.map(s => (
+              <option key={s} value={s}>{STATUS[s]?.label || s}</option>
             ))}
           </select>
+          <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#AAAAAA', pointerEvents: 'none', fontSize: 10 }}>▾</span>
+        </div>
+
+        {/* Courier — only shows couriers that exist in the table */}
+        {couriers.length > 0 && (
+          <div style={{ position: 'relative' }}>
+            <select value={courierFilter} onChange={e => setCourierFilter(e.target.value)} style={{ ...darkSelect, minWidth: 155 }}>
+              <option value="">All couriers</option>
+              {couriers.map(c => (
+                <option key={c.courier_code || c.courier_name} value={c.courier_code || c.courier_name}>
+                  {c.courier_name} ({c.count})
+                </option>
+              ))}
+            </select>
+            <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#AAAAAA', pointerEvents: 'none', fontSize: 10 }}>▾</span>
+          </div>
         )}
 
-        {/* Clear */}
+        {/* Clear all */}
         {hasFilters && (
-          <button onClick={clearAll}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(233,30,140,0.1)', border: '1px solid rgba(233,30,140,0.3)', borderRadius: 7, color: '#E91E8C', fontSize: 12, fontWeight: 700, padding: '7px 14px', cursor: 'pointer' }}>
+          <button onClick={clearAll} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(233,30,140,0.1)', border: '1px solid rgba(233,30,140,0.3)', borderRadius: 7, color: '#E91E8C', fontSize: 12, fontWeight: 700, padding: '7px 14px', cursor: 'pointer' }}>
             <X size={12} /> Clear
           </button>
         )}
