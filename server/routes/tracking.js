@@ -371,7 +371,7 @@ router.get('/stats', async (req, res, next) => {
 router.get('/', async (req, res, next) => {
   try {
     const {
-      search, status, courier_code,
+      search, status, courier_code, customer_id,
       limit = 50, offset = 0,
     } = req.query;
 
@@ -387,6 +387,10 @@ router.get('/', async (req, res, next) => {
     if (courier_code) {
       conditions.push(`p.courier_code ILIKE $${idx++}`);
       values.push(courier_code);
+    }
+    if (customer_id) {
+      conditions.push(`p.customer_id = $${idx++}`);
+      values.push(customer_id);
     }
     if (search) {
       conditions.push(`(

@@ -196,7 +196,7 @@ function ParcelDrawer({ consignment, onClose }) {
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#AAAAAA' }}>Loading…</div>
         ) : data ? (
           <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
-            {/* Current status */}
+            {/* Current status + SLA */}
             <div style={{ marginBottom: 20, padding: 16, background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)' }}>
               <StatusBadge status={data.status} size="lg" />
               {data.status_description && <p style={{ fontSize: 13, color: '#DDD', marginTop: 8, marginBottom: 0 }}>{data.status_description}</p>}
@@ -205,19 +205,51 @@ function ParcelDrawer({ consignment, onClose }) {
                   <MapPin size={12} /> {data.last_location}
                 </div>
               )}
+              <SlaIndicator
+                estimatedDelivery={data.estimated_delivery}
+                deliveredAt={data.delivered_at}
+                status={data.status}
+              />
             </div>
+
+            {/* Delivery address */}
+            {(data.recipient_name || data.recipient_address || data.recipient_postcode) && (
+              <div style={{ marginBottom: 20, padding: 14, background: 'rgba(0,188,212,0.05)', borderRadius: 10, border: '1px solid rgba(0,188,212,0.15)' }}>
+                <div style={{ fontSize: 11, color: '#00BCD4', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <MapPin size={11} /> Delivery Address
+                </div>
+                {data.recipient_name && (
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 4 }}>{data.recipient_name}</div>
+                )}
+                {data.recipient_address && (
+                  <div style={{ fontSize: 13, color: '#CCC', lineHeight: 1.6, whiteSpace: 'pre-line' }}>{data.recipient_address}</div>
+                )}
+                {data.recipient_postcode && (
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#CCC', marginTop: data.recipient_address ? 2 : 0 }}>{data.recipient_postcode}</div>
+                )}
+                {data.estimated_delivery && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 11, color: '#AAAAAA' }}>Estimated delivery</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#FFC107' }}>{fmtDate(data.estimated_delivery)}</span>
+                  </div>
+                )}
+                {data.delivered_at && (
+                  <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 11, color: '#AAAAAA' }}>Delivered</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#00C853' }}>{new Date(data.delivered_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Parcel details */}
             <div style={{ marginBottom: 20 }}>
               {[
                 ['Courier',    data.courier_name ? <CourierBadge name={data.courier_name} code={data.courier_code} /> : null],
                 ['Service',    data.service_name || null],
-                ['Customer',   data.customer_name || data.customer_account],
-                ['Recipient',  data.recipient_name],
-                ['Postcode',   data.recipient_postcode],
-                ['Weight',     data.weight_kg ? `${data.weight_kg} kg` : null],
-                ['Est. delivery', data.estimated_delivery ? fmtDate(data.estimated_delivery) : null],
-                ['Delivered',  data.delivered_at ? new Date(data.delivered_at).toLocaleString('en-GB') : null],
+                ['Customer',   data.customer_name || data.customer_account || null],
+                ['Account',    data.customer_account || null],
+                ['Weight',     data.weight_kg ? `${parseFloat(data.weight_kg).toFixed(2)} kg` : null],
               ].filter(([, v]) => v).map(([label, value]) => (
                 <div key={label} style={{ display: 'flex', padding: '7px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                   <span style={{ fontSize: 12, color: '#AAAAAA', width: 120, flexShrink: 0 }}>{label}</span>
@@ -240,16 +272,77 @@ function ParcelDrawer({ consignment, onClose }) {
   );
 }
 
+// ─── SLA indicator ────────────────────────────────────────────
+function SlaIndicator({ estimatedDelivery, deliveredAt, status }) {
+  if (!estimatedDelivery) return null;
+  const eta = new Date(estimatedDelivery);
+  const now = new Date();
+
+  if (status === 'delivered' && deliveredAt) {
+    const actual = new Date(deliveredAt);
+    if (actual > eta) {
+      const late = Math.round((actual - eta) / 86400000);
+      return (
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6,
+          background: 'rgba(255,193,7,0.12)', border: '1px solid rgba(255,193,7,0.35)',
+          borderRadius: 7, padding: '6px 12px', marginTop: 10 }}>
+          <Clock size={13} color="#FFC107" />
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#FFC107' }}>
+            Delivered {late} day{late !== 1 ? 's' : ''} late
+          </span>
+        </div>
+      );
+    }
+    return (
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6,
+        background: 'rgba(0,200,83,0.1)', border: '1px solid rgba(0,200,83,0.3)',
+        borderRadius: 7, padding: '6px 12px', marginTop: 10 }}>
+        <PackageCheck size={13} color="#00C853" />
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#00C853' }}>Delivered on time</span>
+      </div>
+    );
+  }
+
+  if (!['delivered', 'returned'].includes(status) && now > eta) {
+    const overdue = Math.round((now - eta) / 86400000);
+    return (
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6,
+        background: 'rgba(244,67,54,0.1)', border: '1px solid rgba(244,67,54,0.35)',
+        borderRadius: 7, padding: '6px 12px', marginTop: 10 }}>
+        <AlertTriangle size={13} color="#F44336" />
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#F44336' }}>
+          SLA missed — {overdue} day{overdue !== 1 ? 's' : ''} overdue
+        </span>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 // ─── Main tracking page ───────────────────────────────────────
-const ACTIVE_STATUSES = ['booked','collected','in_transit','out_for_delivery','failed_delivery','on_hold','customs_hold','exception'];
+const STATUS_OPTS = [
+  { value: '',                         label: 'All statuses' },
+  { value: 'booked',                   label: 'Booked' },
+  { value: 'collected',                label: 'Collected' },
+  { value: 'in_transit',               label: 'In Transit' },
+  { value: 'at_depot',                 label: 'At Depot' },
+  { value: 'out_for_delivery',         label: 'Out for Delivery' },
+  { value: 'delivered',                label: 'Delivered' },
+  { value: 'failed_delivery,exception',label: 'Address Issue' },
+  { value: 'on_hold',                  label: 'On Hold' },
+  { value: 'customs_hold',             label: 'Customs Hold' },
+  { value: 'returned',                 label: 'Returned' },
+];
 
 export default function TrackingPage() {
-  const [search,       setSearch]       = useState('');
-  const [debouncedSearch, setDebounced] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [courierFilter,setCourierFilter]= useState('');
-  const [page,         setPage]         = useState(0);
-  const [selected,     setSelected]     = useState(null);
+  const [search,          setSearch]       = useState('');
+  const [debouncedSearch, setDebounced]    = useState('');
+  const [statusFilter,    setStatusFilter] = useState('');
+  const [courierFilter,   setCourierFilter]= useState('');
+  const [customerFilter,  setCustomerFilter] = useState('');
+  const [page,            setPage]         = useState(0);
+  const [selected,        setSelected]     = useState(null);
   const searchRef = useRef(null);
   const LIMIT = 50;
 
@@ -260,35 +353,44 @@ export default function TrackingPage() {
   }, [search]);
 
   // Reset page when filters change
-  useEffect(() => { setPage(0); }, [debouncedSearch, statusFilter, courierFilter]);
+  useEffect(() => { setPage(0); }, [debouncedSearch, statusFilter, courierFilter, customerFilter]);
 
   const { data: stats, refetch: refetchStats } = useQuery({
     queryKey: ['tracking-stats'],
     queryFn:  () => api.get('/tracking/stats').then(r => r.data),
-    refetchInterval: 60000, // auto-refresh every minute
+    refetchInterval: 60000,
   });
 
+  // Customers list for the filter dropdown
+  const { data: custData } = useQuery({
+    queryKey: ['customers-all'],
+    queryFn:  () => api.get('/customers', { params: { limit: 500 } }).then(r => r.data),
+    staleTime: 60_000,
+  });
+  const customers = custData?.data || [];
+
   const { data: list, isLoading, refetch: refetchList } = useQuery({
-    queryKey: ['tracking-list', debouncedSearch, statusFilter, courierFilter, page],
+    queryKey: ['tracking-list', debouncedSearch, statusFilter, courierFilter, customerFilter, page],
     queryFn:  () => api.get('/tracking', { params: {
-      search: debouncedSearch || undefined,
-      status: statusFilter    || undefined,
-      courier_code: courierFilter || undefined,
-      limit: LIMIT,
+      search:       debouncedSearch  || undefined,
+      status:       statusFilter     || undefined,
+      courier_code: courierFilter    || undefined,
+      customer_id:  customerFilter   || undefined,
+      limit:  LIMIT,
       offset: page * LIMIT,
     }}).then(r => r.data),
     refetchInterval: 60000,
   });
 
   function refresh() { refetchStats(); refetchList(); }
+  function clearAll() { setStatusFilter(''); setCourierFilter(''); setCustomerFilter(''); setSearch(''); }
 
   const parcels = list?.parcels || [];
   const total   = list?.total   || 0;
   const pages   = Math.ceil(total / LIMIT);
-
   const bs = stats?.by_status || {};
+  const hasFilters = statusFilter || courierFilter || customerFilter || search;
 
-  // Stat card click toggles status filter
   function toggleStatus(s) { setStatusFilter(f => f === s ? '' : s); }
 
   return (
@@ -309,25 +411,25 @@ export default function TrackingPage() {
 
       {/* ── Stat cards ─────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 24 }}>
-        <StatCard label="In Transit"       value={bs.in_transit}          color="#7B2FBE" icon={Truck}         active={statusFilter==='in_transit'}            onClick={() => toggleStatus('in_transit')} />
-        <StatCard label="At Depot"         value={bs.at_depot}            color="#5C6BC0" icon={Package}       active={statusFilter==='at_depot'}             onClick={() => toggleStatus('at_depot')} />
-        <StatCard label="Out for Delivery" value={bs.out_for_delivery}    color="#FFC107" icon={Truck}         active={statusFilter==='out_for_delivery'}      onClick={() => toggleStatus('out_for_delivery')} />
-        <StatCard label="On Hold"          value={bs.on_hold}             color="#FF9800" icon={Clock}         active={statusFilter==='on_hold'}               onClick={() => toggleStatus('on_hold')} />
+        <StatCard label="In Transit"       value={bs.in_transit}          color="#7B2FBE" icon={Truck}         active={statusFilter==='in_transit'}             onClick={() => toggleStatus('in_transit')} />
+        <StatCard label="At Depot"         value={bs.at_depot}            color="#5C6BC0" icon={Package}       active={statusFilter==='at_depot'}              onClick={() => toggleStatus('at_depot')} />
+        <StatCard label="Out for Delivery" value={bs.out_for_delivery}    color="#FFC107" icon={Truck}         active={statusFilter==='out_for_delivery'}       onClick={() => toggleStatus('out_for_delivery')} />
+        <StatCard label="On Hold"          value={bs.on_hold}             color="#FF9800" icon={Clock}         active={statusFilter==='on_hold'}                onClick={() => toggleStatus('on_hold')} />
         <StatCard label="Address Issue"    value={(bs.failed_delivery||0)+(bs.exception||0)} color="#F44336" icon={AlertTriangle} active={statusFilter==='failed_delivery,exception'} onClick={() => toggleStatus('failed_delivery,exception')} />
-        <StatCard label="Customs Hold"     value={bs.customs_hold}        color="#E91E8C" icon={ShieldAlert}   active={statusFilter==='customs_hold'}          onClick={() => toggleStatus('customs_hold')} />
-        <StatCard label="Delivered Today"  value={stats?.delivered_today} color="#00C853" icon={PackageCheck}  active={statusFilter==='delivered'}             onClick={() => toggleStatus('delivered')} />
+        <StatCard label="Customs Hold"     value={bs.customs_hold}        color="#E91E8C" icon={ShieldAlert}   active={statusFilter==='customs_hold'}           onClick={() => toggleStatus('customs_hold')} />
+        <StatCard label="Delivered Today"  value={stats?.delivered_today} color="#00C853" icon={PackageCheck}  active={statusFilter==='delivered'}              onClick={() => toggleStatus('delivered')} />
       </div>
 
       {/* ── Filters row ─────────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
         {/* Search */}
-        <div style={{ position: 'relative', flex: 1, maxWidth: 400 }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: 240, maxWidth: 380 }}>
           <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#AAAAAA', pointerEvents: 'none' }} />
           <input
             ref={searchRef}
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search by consignment, postcode, customer or recipient…"
+            placeholder="Consignment, postcode, recipient…"
             style={{ width: '100%', boxSizing: 'border-box', background: '#0D0E2A', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '9px 36px', color: '#fff', fontSize: 13, outline: 'none' }}
           />
           {search && (
@@ -337,34 +439,58 @@ export default function TrackingPage() {
           )}
         </div>
 
-        {/* Courier filter */}
-        {stats?.by_courier?.length > 0 && (
-          <div className="pill-input-wrap" style={{ height: 38, width: 180 }}>
-            <select
-              value={courierFilter}
-              onChange={e => setCourierFilter(e.target.value)}
-              style={{ fontSize: 13, paddingLeft: 12, color: courierFilter ? '#fff' : '#AAAAAA' }}
-            >
-              <option value="">All couriers</option>
-              {stats.by_courier.map(c => (
-                <option key={c.courier_code || c.courier_name} value={c.courier_code || c.courier_name}>
-                  {c.courier_name} ({c.count})
-                </option>
-              ))}
-            </select>
-            <div className="green-cap">▾</div>
-          </div>
+        {/* Customer filter */}
+        {customers.length > 0 && (
+          <select
+            value={customerFilter}
+            onChange={e => setCustomerFilter(e.target.value)}
+            className="pill-select"
+            style={{ minWidth: 180, height: 38, fontSize: 13, color: customerFilter ? '#fff' : '#AAAAAA' }}
+          >
+            <option value="">All customers</option>
+            {customers.map(c => (
+              <option key={c.id} value={c.id}>{c.name || c.business_name}</option>
+            ))}
+          </select>
         )}
 
-        {/* Active filter chips */}
-        {(statusFilter || courierFilter || search) && (
-          <button onClick={() => { setStatusFilter(''); setCourierFilter(''); setSearch(''); }}
+        {/* Status filter dropdown */}
+        <select
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value)}
+          className="pill-select"
+          style={{ minWidth: 160, height: 38, fontSize: 13, color: statusFilter ? '#fff' : '#AAAAAA' }}
+        >
+          {STATUS_OPTS.map(o => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+
+        {/* Courier filter */}
+        {stats?.by_courier?.length > 0 && (
+          <select
+            value={courierFilter}
+            onChange={e => setCourierFilter(e.target.value)}
+            className="pill-select"
+            style={{ minWidth: 160, height: 38, fontSize: 13, color: courierFilter ? '#fff' : '#AAAAAA' }}
+          >
+            <option value="">All couriers</option>
+            {stats.by_courier.map(c => (
+              <option key={c.courier_code || c.courier_name} value={c.courier_code || c.courier_name}>
+                {c.courier_name} ({c.count})
+              </option>
+            ))}
+          </select>
+        )}
+
+        {/* Clear */}
+        {hasFilters && (
+          <button onClick={clearAll}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(233,30,140,0.1)', border: '1px solid rgba(233,30,140,0.3)', borderRadius: 7, color: '#E91E8C', fontSize: 12, fontWeight: 700, padding: '7px 14px', cursor: 'pointer' }}>
-            <X size={12} /> Clear filters
+            <X size={12} /> Clear
           </button>
         )}
 
-        {/* Count */}
         <span style={{ fontSize: 12, color: '#555', marginLeft: 'auto' }}>
           {total.toLocaleString()} parcel{total !== 1 ? 's' : ''}
         </span>
