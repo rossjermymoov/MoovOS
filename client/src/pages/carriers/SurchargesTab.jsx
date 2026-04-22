@@ -214,7 +214,7 @@ function RuleEditor({ surchargeId, courierId, rule, onSave, onCancel }) {
           <label style={{ fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', margin: 0 }}>Conditions</label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {['AND', 'OR'].map(l => (
-              <button key={l} onClick={() => setLogic(l)} style={{ padding: '3px 10px', borderRadius: 9999, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none', background: logic === l ? (l === 'AND' ? 'rgba(123,47,190,0.35)' : 'rgba(245,158,11,0.25)') : 'rgba(255,255,255,0.06)', color: logic === l ? (l === 'AND' ? '#C4B5FD' : '#F59E0B') : '#888' }}>
+              <button key={l} type="button" onClick={() => setLogic(l)} style={{ padding: '3px 10px', borderRadius: 9999, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none', background: logic === l ? (l === 'AND' ? 'rgba(123,47,190,0.35)' : 'rgba(245,158,11,0.25)') : 'rgba(255,255,255,0.06)', color: logic === l ? (l === 'AND' ? '#C4B5FD' : '#F59E0B') : '#888' }}>
                 {l}
               </button>
             ))}
@@ -229,9 +229,9 @@ function RuleEditor({ surchargeId, courierId, rule, onSave, onCancel }) {
       </div>
 
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button onClick={onCancel} style={{ background: 'none', border: 'none', color: '#AAAAAA', cursor: 'pointer', fontSize: 12 }}>Cancel</button>
-        <button onClick={() => save.mutate()} disabled={!name || save.isPending} style={{ background: '#00C853', border: 'none', borderRadius: 6, color: '#fff', fontSize: 12, fontWeight: 700, padding: '6px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Check size={12} /> {rule?.id ? 'Save rule' : 'Add rule'}
+        <button type="button" onClick={onCancel} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: 11 }}>Cancel</button>
+        <button type="button" onClick={() => save.mutate()} disabled={!name || save.isPending} style={{ background: '#00C853', border: 'none', borderRadius: 6, color: '#fff', fontSize: 11, fontWeight: 700, padding: '5px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+          <Check size={11} /> {rule?.id ? 'Save rule' : 'Add rule'}
         </button>
       </div>
     </div>
@@ -257,8 +257,8 @@ function RulesPanel({ surcharge, courierId }) {
         <span style={{ fontSize: 11, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
           Trigger Rules {surcharge.applies_when === 'always' ? '— controls when this auto-fires' : '— conditions for matching on invoice reconciliation'}
         </span>
-        <button onClick={() => { setAddingRule(true); setEditingRule(null); }} style={{ background: 'rgba(255,255,255,0.06)', border: 'none', borderRadius: 6, color: '#AAAAAA', cursor: 'pointer', fontSize: 12, padding: '4px 12px', display: 'flex', alignItems: 'center', gap: 4 }}>
-          <Plus size={11} /> Add rule
+        <button type="button" onClick={() => { setAddingRule(true); setEditingRule(null); }} style={{ background: 'rgba(255,255,255,0.06)', border: 'none', borderRadius: 6, color: '#AAAAAA', cursor: 'pointer', fontSize: 11, padding: '3px 10px', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Plus size={10} /> Add rule
         </button>
       </div>
 
@@ -361,11 +361,13 @@ function AddSurchargeForm({ courierId, onDone }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
         <div>
           <label style={{ fontSize: 11, color: '#888', fontWeight: 700, display: 'block', marginBottom: 6, textTransform: 'uppercase' }}>Applies when</label>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[['always', 'Always (auto-apply)', '#00C853'], ['reconciliation', 'Code-only (invoice)', '#888']].map(([val, label, col]) => (
-              <button key={val} onClick={() => f('applies_when', val)} style={{ flex: 1, padding: '8px 12px', borderRadius: 8, cursor: 'pointer', border: 'none', background: form.applies_when === val ? (val === 'always' ? 'rgba(0,200,83,0.2)' : 'rgba(255,255,255,0.08)') : 'rgba(255,255,255,0.04)', color: form.applies_when === val ? col : '#555', fontWeight: form.applies_when === val ? 700 : 400, fontSize: 12, outline: form.applies_when === val ? `1px solid ${col}44` : 'none' }}>
-                {val === 'always' ? '● Always' : '◎ Code-only'}
-                <div style={{ fontSize: 10, opacity: 0.7, marginTop: 2 }}>{label}</div>
+          <div style={{ display: 'inline-flex', background: 'rgba(255,255,255,0.05)', borderRadius: 7, padding: 3, gap: 2 }}>
+            {[['always', '● Always', '#00C853'], ['reconciliation', '◎ Code-only', '#888']].map(([val, label, clr]) => (
+              <button key={val} type="button" onClick={() => f('applies_when', val)}
+                style={{ padding: '4px 12px', borderRadius: 5, cursor: 'pointer', border: 'none', fontSize: 12, fontWeight: form.applies_when === val ? 700 : 400,
+                  background: form.applies_when === val ? (val === 'always' ? 'rgba(0,200,83,0.25)' : 'rgba(255,255,255,0.1)') : 'transparent',
+                  color: form.applies_when === val ? clr : '#555' }}>
+                {label}
               </button>
             ))}
           </div>
@@ -378,8 +380,8 @@ function AddSurchargeForm({ courierId, onDone }) {
       </div>
 
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button onClick={onDone} style={{ background: 'none', border: 'none', color: '#AAAAAA', cursor: 'pointer', fontSize: 12 }}>Cancel</button>
-        <button onClick={() => create.mutate()} disabled={!form.code || !form.name || !form.default_value || create.isPending} style={{ background: '#00C853', border: 'none', borderRadius: 6, color: '#fff', fontSize: 12, fontWeight: 700, padding: '8px 20px', cursor: 'pointer' }}>
+        <button type="button" onClick={onDone} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: 11 }}>Cancel</button>
+        <button type="button" onClick={() => create.mutate()} disabled={!form.code || !form.name || !form.default_value || create.isPending} style={{ background: '#00C853', border: 'none', borderRadius: 6, color: '#fff', fontSize: 11, fontWeight: 700, padding: '5px 14px', cursor: 'pointer' }}>
           Add surcharge
         </button>
       </div>
@@ -434,8 +436,8 @@ export default function SurchargesTab({ courierId, courierCode }) {
             <span style={{ color: '#888', fontWeight: 700, marginLeft: 8 }}>CODE-ONLY</span> are matched against invoices during reconciliation.
           </p>
         </div>
-        <button onClick={() => setAdding(a => !a)} style={{ background: '#00C853', border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700, padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Plus size={13} /> Add surcharge
+        <button onClick={() => setAdding(a => !a)} style={{ background: '#00C853', border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontSize: 11, fontWeight: 700, padding: '5px 12px', display: 'flex', alignItems: 'center', gap: 5 }}>
+          <Plus size={11} /> Add surcharge
         </button>
       </div>
 
@@ -520,8 +522,8 @@ export default function SurchargesTab({ courierId, courierCode }) {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
                       {editing === s.id ? (
                         <>
-                          <button onClick={() => update.mutate(s.id)} disabled={update.isPending} style={{ background: '#00C853', border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontSize: 11, fontWeight: 700, padding: '4px 12px' }}>Save</button>
-                          <button onClick={() => setEditing(null)} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: 11 }}>Cancel</button>
+                          <button type="button" onClick={() => update.mutate(s.id)} disabled={update.isPending} style={{ background: '#00C853', border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontSize: 11, fontWeight: 700, padding: '3px 10px' }}>Save</button>
+                          <button type="button" onClick={() => setEditing(null)} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: 11 }}>Cancel</button>
                         </>
                       ) : (
                         <>

@@ -55,13 +55,13 @@ router.get('/', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { courier_id, code, name, description, calc_type, calc_base, default_value } = req.body;
+    const { courier_id, code, name, description, calc_type, calc_base, default_value, applies_when, charge_per, effective_date } = req.body;
     if (!courier_id || !code || !name) {
       return res.status(400).json({ error: 'courier_id, code, and name are required' });
     }
     const { rows } = await query(
-      `INSERT INTO surcharges (courier_id, code, name, description, calc_type, calc_base, default_value)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)
+      `INSERT INTO surcharges (courier_id, code, name, description, calc_type, calc_base, default_value, applies_when, charge_per, effective_date)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        RETURNING *`,
       [
         courier_id, code.toUpperCase().trim(), name.trim(),
@@ -69,6 +69,9 @@ router.post('/', async (req, res, next) => {
         calc_type || 'flat',
         calc_base || 'fixed',
         parseFloat(default_value) || 0,
+        applies_when || 'reconciliation',
+        charge_per || 'shipment',
+        effective_date || null,
       ]
     );
     res.status(201).json(rows[0]);
@@ -77,7 +80,7 @@ router.post('/', async (req, res, next) => {
 
 router.patch('/:id', async (req, res, next) => {
   try {
-    const allowed = ['code', 'name', 'description', 'calc_type', 'calc_base', 'default_value', 'active'];
+    const allowed = ['code', 'name', 'description', 'calc_type', 'calc_base', 'default_value', 'active', 'applies_when', 'charge_per', 'effective_date'];
     const sets = []; const vals = [];
     for (const k of allowed) {
       if (req.body[k] !== undefined) {
