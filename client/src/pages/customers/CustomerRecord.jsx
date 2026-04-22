@@ -278,58 +278,138 @@ function SurchargeOverridesEditor({ customerId }) {
   );
 }
 
-// ─── Rate Card Assignments per carrier ───────────────────────
-function CustomerRateCardAssignments({ customerId }) {
-  const qc = useQueryClient();
+// ─── Customer Pricing Overview ────────────────────────────────
+// Shows carrier rate cards (always auto-populated from master cards),
+// fuel groups (cost vs customer %) and configured service pricing per carrier.
+function CustomerPricingOverview({ customerId }) {
+  const api = (path) => fetch(path).then(r => r.json());
 
   const { data: carriers = [], isLoading } = useQuery({
-    queryKey: ['customer-rate-card-assignments', customerId],
-    queryFn: () => customerRateCardsApi.forCustomer(customerId),
+    queryKey: ['customer-pricing-overview', customerId],
+    queryFn: () => api(`/api/customer-service-pricing/carrier-overview/${customerId}`),
     enabled: !!customerId,
   });
 
-  const setAssignment = useMutation({
-    mutationFn: ({ courierId, rateCardId }) =>
-      rateCardId === 'master'
-        ? customerRateCardsApi.clearAssignment(customerId, courierId)
-        : customerRateCardsApi.setAssignment(customerId, courierId, rateCardId),
-    onSuccess: () => qc.invalidateQueries(['customer-rate-card-assignments', customerId]),
-  });
-
   if (isLoading) return null;
+
   if (!carriers.length) return (
-    <InfoCard title="Rate Cards">
-      <span style={{ fontSize: 12, color: '#555', fontStyle: 'italic' }}>No rate cards configured yet — go to Carriers to create them.</span>
+    <InfoCard title="Rate Cards & Fuel">
+      <span style={{ fontSize: 12, color: '#555', fontStyle: 'italic' }}>No carrier rate cards found — set up carriers first.</span>
     </InfoCard>
   );
 
   return (
-    <InfoCard title="Rate Cards">
-      {carriers.map(row => {
-        const currentId = row.assigned_card_id ?? 'master';
+    <>
+      {carriers.map(carrier => {
+        const fuelGroups    = carrier.fuel_groups    || [];
+        const fuelSurcharges = carrier.fuel_surcharges || [];
+        const services      = carrier.customer_pricing || [];
+
         return (
-          <div key={row.courier_id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, minHeight:26 }}>
-            <span style={{ fontSize:12, color:'#AAAAAA', flexShrink:0, whiteSpace:'nowrap', minWidth:110 }}>
-              {row.courier_name}
-            </span>
-            <select
-              value={String(currentId)}
-              onChange={e => setAssignment.mutate({ courierId: row.courier_id, rateCardId: e.target.value === 'master' ? 'master' : parseInt(e.target.value) })}
-              style={inp({ width: 180, flexShrink: 0, fontSize: 11 })}
-            >
-              {(row.available_cards || []).map(card => (
-                <option key={card.id} value={card.id}>
-                  {card.name}{card.is_master ? ' (Master)' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
+          <InfoCard key={carrier.courier_id} title={`${carrier.courier_name} — Rate Card`}>
+
+            {/* ── Fuel groups ── */}
+            {(fuelGroups.length > 0 || fuelSurcharges.length > 0) && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#F59E0B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                  ⛽ Fuel Groups
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '4px 12px', alignItems: 'center', fontSize: 12 }}>
+                  <span style={{ fontSize: 10, color: '#444', fontWeight: 700 }}>Group</span>
+                  <span style={{ fontSize: 10, color: '#444', fontWeight: 700, textAlign: 'right' }}>Our Cost</span>
+                  <span style={{ fontSize: 10, color: '#444', fontWeight: 700, textAlign: 'right' }}>Customer</span>
+
+                  {fuelGroups.map(fg => {
+                    // Find a matching percentage surcharge for this carrier (by name similarity or first match)
+                    const matchedSurcharge = fuelSurcharges.find(s =>
+                      s.surcharge_name.toLowerCase().includes('fuel') ||
+                      s.surcharge_name.toLowerCase().includes('energy')
+                    ) || fuelSurcharges[0];
+                    const customerRate = matchedSurcharge?.customer_rate ?? matchedSurcharge?.standard_rate ?? null;
+                    const isMarkup = customerRate != null && customerRate > parseFloat(fg.fuel_surcharge_pct);
+
+                    return (
+                      <div key={fg.id} style={{ display: 'contents' }}>
+                        <span style={{ color: '#AAAAAA' }}>{fg.name}</span>
+                        <span style={{ color: '#888', textAlign: 'right', fontFamily: 'monospace' }}>
+                          {parseFloat(fg.fuel_surcharge_pct).toFixed(2)}%
+                        </span>
+                        <span style={{
+                          textAlign: 'right', fontFamily: 'monospace', fontWeight: 700,
+                          color: customerRate == null ? '#555' : isMarkup ? '#00C853' : '#F59E0B',
+                        }}>
+                          {customerRate != null ? `${parseFloat(customerRate).toFixed(2)}%` : '— not set'}
+                        </span>
+                      </div>
+                    );
+                  })}
+
+                  {/* Percentage surcharges that don't correspond to a fuel group */}
+                  {fuelSurcharges.filter(s =>
+                    !s.surcharge_name.toLowerCase().includes('fuel') &&
+                    !s.surcharge_name.toLowerCase().includes('energy')
+                  ).map(s => (
+                    <div key={s.surcharge_id} style={{ display: 'contents' }}>
+                      <span style={{ color: '#AAAAAA' }}>{s.surcharge_name}</span>
+                      <span style={{ color: '#888', textAlign: 'right', fontFamily: 'monospace' }}>
+                        {parseFloat(s.standard_rate).toFixed(2)}%
+                      </span>
+                      <span style={{
+                        textAlign: 'right', fontFamily: 'monospace', fontWeight: 700,
+                        color: s.customer_rate != null ? '#00C853' : '#555',
+                      }}>
+                        {s.customer_rate != null ? `${parseFloat(s.customer_rate).toFixed(2)}%` : '— not set'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── Configured services ── */}
+            <div style={{ borderTop: fuelGroups.length || fuelSurcharges.length ? '1px solid rgba(255,255,255,0.05)' : 'none', paddingTop: fuelGroups.length || fuelSurcharges.length ? 10 : 0 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#7B2FBE', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                📦 Services
+              </div>
+              {services.length === 0 ? (
+                <div style={{ fontSize: 11, color: '#555', fontStyle: 'italic' }}>
+                  No services configured — using master rate card pricing
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '4px 12px', alignItems: 'center', fontSize: 12 }}>
+                  <span style={{ fontSize: 10, color: '#444', fontWeight: 700 }}>Service</span>
+                  <span style={{ fontSize: 10, color: '#444', fontWeight: 700, textAlign: 'right' }}>Pricing</span>
+                  <span style={{ fontSize: 10, color: '#444', fontWeight: 700, textAlign: 'right' }}>Rate</span>
+                  {services.map((svc, i) => (
+                    <div key={svc.id ?? i} style={{ display: 'contents' }}>
+                      <span style={{ color: '#AAAAAA' }}>
+                        {svc.service_name}
+                        {svc.service_code && <span style={{ color: '#555', fontSize: 10, marginLeft: 5 }}>{svc.service_code}</span>}
+                      </span>
+                      <span style={{ color: '#888', textAlign: 'right', fontSize: 11 }}>
+                        {svc.pricing_type === 'markup' ? 'Markup' : 'Fixed fee'}
+                      </span>
+                      <span style={{ color: '#00C853', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, fontSize: 12 }}>
+                        {svc.pricing_type === 'markup'
+                          ? `+${parseFloat(svc.markup_pct).toFixed(1)}%`
+                          : `+£${parseFloat(svc.fixed_fee).toFixed(2)}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginTop: 8 }}>
+              <span style={{ fontSize: 10, color: '#444', fontStyle: 'italic' }}>
+                Rate card: {carrier.rate_card_name} · Configure services in Pricing tab
+              </span>
+            </div>
+
+          </InfoCard>
         );
       })}
-      <p style={{ fontSize:11, color:'#555', marginTop:6, fontStyle:'italic' }}>
-        Master is the default rate card. Select an alternative to use custom pricing for this customer.
-      </p>
-    </InfoCard>
+    </>
   );
 }
 
@@ -549,7 +629,7 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
             <Row label="Customer Since"    value={c.date_onboarded ? format(new Date(c.date_onboarded), 'dd MMM yyyy') : '—'} />
           </InfoCard>
 
-          <CustomerRateCardAssignments customerId={c.id} />
+          <CustomerPricingOverview customerId={c.id} />
 
           <SurchargeOverridesEditor customerId={c.id} />
 

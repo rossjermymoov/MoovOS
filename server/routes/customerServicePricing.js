@@ -122,6 +122,93 @@ router.delete('/:customerId/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── GET /carrier-overview/:customerId ───────────────────────────────────────
+// One endpoint for the customer pricing overview panel.
+// Returns every carrier that has a master carrier_rate_card, with:
+//   • customer_pricing  — customer_service_pricing entries for this customer
+//   • fuel_groups       — carrier's fuel groups (cost side: what Moov pays)
+//   • fuel_surcharges   — percentage surcharges for this carrier + customer override (sell side)
+//
+// NOTE: must be declared BEFORE /:customerId so Express doesn't match "carrier-overview" as an id.
+
+router.get('/carrier-overview/:customerId', async (req, res, next) => {
+  try {
+    const { customerId } = req.params;
+
+    // Main carrier + rate card rows, with customer pricing and fuel groups
+    const mainRes = await query(`
+      SELECT
+        c.id            AS courier_id,
+        c.name          AS courier_name,
+        c.code          AS courier_code,
+        crc.id          AS rate_card_id,
+        crc.name        AS rate_card_name,
+        COALESCE(
+          json_agg(DISTINCT jsonb_build_object(
+            'id',           csp.id,
+            'service_id',   csp.service_id,
+            'service_code', cs.service_code,
+            'service_name', cs.name,
+            'pricing_type', csp.pricing_type,
+            'markup_pct',   csp.markup_pct,
+            'fixed_fee',    csp.fixed_fee,
+            'notes',        csp.notes
+          )) FILTER (WHERE csp.id IS NOT NULL),
+          '[]'::json
+        ) AS customer_pricing,
+        COALESCE(
+          json_agg(DISTINCT jsonb_build_object(
+            'id',                fg.id,
+            'name',              fg.name,
+            'fuel_surcharge_pct', fg.fuel_surcharge_pct
+          )) FILTER (WHERE fg.id IS NOT NULL),
+          '[]'::json
+        ) AS fuel_groups
+      FROM carrier_rate_cards crc
+      JOIN couriers c ON c.id = crc.courier_id
+      LEFT JOIN customer_service_pricing csp
+             ON csp.carrier_rate_card_id = crc.id AND csp.customer_id = $1
+      LEFT JOIN courier_services cs ON cs.id = csp.service_id
+      LEFT JOIN fuel_groups fg ON fg.courier_id = c.id
+      WHERE crc.is_master = true
+      GROUP BY c.id, c.name, c.code, crc.id, crc.name
+      ORDER BY c.name
+    `, [customerId]);
+
+    // Percentage surcharges per carrier + customer override (the sell-side of fuel)
+    const surchargesRes = await query(`
+      SELECT
+        s.id            AS surcharge_id,
+        s.courier_id,
+        s.code          AS surcharge_code,
+        s.name          AS surcharge_name,
+        s.default_value AS standard_rate,
+        s.applies_when,
+        cso.id          AS override_id,
+        cso.override_value AS customer_rate
+      FROM surcharges s
+      LEFT JOIN customer_surcharge_overrides cso
+             ON cso.surcharge_id = s.id AND cso.customer_id = $1
+      WHERE s.calc_type = 'percentage' AND s.active = true
+      ORDER BY s.courier_id, s.name
+    `, [customerId]);
+
+    // Attach fuel_surcharges to each carrier row
+    const surchargesByCourier = {};
+    for (const row of surchargesRes.rows) {
+      if (!surchargesByCourier[row.courier_id]) surchargesByCourier[row.courier_id] = [];
+      surchargesByCourier[row.courier_id].push(row);
+    }
+
+    const result = mainRes.rows.map(row => ({
+      ...row,
+      fuel_surcharges: surchargesByCourier[row.courier_id] || [],
+    }));
+
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
 // ─── GET /available-rate-cards ────────────────────────────────────────────────
 // Returns all carrier rate cards with their services — used for the add-pricing picker.
 
