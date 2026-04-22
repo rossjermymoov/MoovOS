@@ -546,11 +546,13 @@ router.post('/webhook', async (req, res, next) => {
       if (cr4b.rows.length) customerId = cr4b.rows[0].id;
     }
     if (!customerId && accountName) {
-      const cr5 = await query(
-        `SELECT id FROM customers WHERE $1 = ANY(billing_aliases) LIMIT 1`,
-        [accountName.trim().toLowerCase()]
-      );
-      if (cr5.rows.length) customerId = cr5.rows[0].id;
+      try {
+        const cr5 = await query(
+          `SELECT id FROM customers WHERE $1 = ANY(billing_aliases) LIMIT 1`,
+          [accountName.trim().toLowerCase()]
+        );
+        if (cr5.rows.length) customerId = cr5.rows[0].id;
+      } catch (_) { /* billing_aliases column not yet migrated */ }
     }
 
     // Effective account identifier to store — prefer accountNumber, fall back to customerDcId
@@ -735,20 +737,22 @@ router.post('/relink-customers', async (req, res, next) => {
       }
 
       // 5. Billing alias lookup (e.g. webhook sends "Europa" but customer is "Europa Worldwide Ltd")
-      if (!customerId && name) {
-        const cr5 = await query(
-          `SELECT id FROM customers WHERE $1 = ANY(billing_aliases) LIMIT 1`,
-          [name.trim().toLowerCase()]
-        );
-        customerId = cr5.rows[0]?.id || null;
-      }
-      if (!customerId && acct) {
-        const cr5b = await query(
-          `SELECT id FROM customers WHERE $1 = ANY(billing_aliases) LIMIT 1`,
-          [acct.trim().toLowerCase()]
-        );
-        customerId = cr5b.rows[0]?.id || null;
-      }
+      try {
+        if (!customerId && name) {
+          const cr5 = await query(
+            `SELECT id FROM customers WHERE $1 = ANY(billing_aliases) LIMIT 1`,
+            [name.trim().toLowerCase()]
+          );
+          customerId = cr5.rows[0]?.id || null;
+        }
+        if (!customerId && acct) {
+          const cr5b = await query(
+            `SELECT id FROM customers WHERE $1 = ANY(billing_aliases) LIMIT 1`,
+            [acct.trim().toLowerCase()]
+          );
+          customerId = cr5b.rows[0]?.id || null;
+        }
+      } catch (_) { /* billing_aliases column not yet migrated */ }
 
       if (!customerId) { not_found++; continue; }
 
@@ -1124,9 +1128,13 @@ router.get('/charges/:id/debug', async (req, res, next) => {
       if (c5.rows.length) { customerId = c5.rows[0].id; customerName = c5.rows[0].business_name; resolvedVia = 'business_name_partial'; }
     }
     if (!customerId && row.s_customer_name) {
-      const c6 = await query(`SELECT id, business_name FROM customers WHERE $1 = ANY(billing_aliases) LIMIT 1`, [row.s_customer_name.trim().toLowerCase()]);
-      custSteps.push({ tried: `billing_aliases @> ['${row.s_customer_name.toLowerCase()}']`, found: c6.rows.length > 0, row: c6.rows[0] || null });
-      if (c6.rows.length) { customerId = c6.rows[0].id; customerName = c6.rows[0].business_name; resolvedVia = 'billing_alias'; }
+      try {
+        const c6 = await query(`SELECT id, business_name FROM customers WHERE $1 = ANY(billing_aliases) LIMIT 1`, [row.s_customer_name.trim().toLowerCase()]);
+        custSteps.push({ tried: `billing_aliases @> ['${row.s_customer_name.toLowerCase()}']`, found: c6.rows.length > 0, row: c6.rows[0] || null });
+        if (c6.rows.length) { customerId = c6.rows[0].id; customerName = c6.rows[0].business_name; resolvedVia = 'billing_alias'; }
+      } catch (_) {
+        custSteps.push({ tried: `billing_aliases (column not yet migrated)`, found: false, row: null });
+      }
     }
 
     if (customerId && !customerName) {
