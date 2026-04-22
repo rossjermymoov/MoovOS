@@ -184,7 +184,7 @@ router.post('/', async (req, res, next) => {
 // ─── PATCH /:id ───────────────────────────────────────────────
 router.patch('/:id', async (req, res, next) => {
   try {
-    const allowed = ['name', 'effective_date', 'notes'];
+    const allowed = ['name', 'effective_date', 'notes', 'customer_account_number'];
     const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));
     if (!updates.length) return res.status(400).json({ error: 'No valid fields' });
     const sets   = updates.map(([k], i) => `${k} = $${i + 2}`).join(', ');

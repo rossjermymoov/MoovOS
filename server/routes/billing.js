@@ -137,7 +137,9 @@ async function lookupRateWithReason(customerId, serviceCode, serviceName, weight
       return s && !s.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)KG?$/)
                 && !s.match(/^(\d+(?:\.\d+)?)\+KG?$/)
                 && !s.match(/^OVER(\d+(?:\.\d+)?)KG?$/)
-                && !s.match(/^(?:UNDER|<)(\d+(?:\.\d+)?)KG?$/);
+                && !s.match(/^(?:UNDER|<)(\d+(?:\.\d+)?)KG?$/)
+                && !s.match(/^(?:UPTO|MAX)(\d+(?:\.\d+)?)KG?$/)
+                && !s.match(/^(\d+(?:\.\d+)?)KG?$/);
     });
     const reason = hasUnrecognised
       ? 'Unrecognised weight band format'
@@ -163,15 +165,32 @@ async function lookupRate(customerId, serviceCode, serviceName, weightKg) {
 function coversWeight(weightClassName, weightKg) {
   if (!weightClassName) return false;
   const s = weightClassName.toUpperCase().replace(/\s/g, '');
+
+  // Range: "0-30KG", "1-2.5KG"
   const range = s.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)KG?$/);
   if (range) {
     const lo = parseFloat(range[1]), hi = parseFloat(range[2]);
     return weightKg > lo && weightKg <= hi;
   }
+
+  // Minimum: "5+KG", "OVER5KG"
   const plus = s.match(/^(\d+(?:\.\d+)?)\+KG?$/) || s.match(/^OVER(\d+(?:\.\d+)?)KG?$/);
   if (plus) return weightKg > parseFloat(plus[1]);
+
+  // Maximum exclusive: "UNDERXKG", "<XKG"
   const under = s.match(/^(?:UNDER|<)(\d+(?:\.\d+)?)KG?$/);
   if (under) return weightKg < parseFloat(under[1]);
+
+  // Maximum inclusive: "UPTO30KG", "UP TO 30KG" (spaces stripped), "MAX30KG"
+  // Covers services like "DPD Next Day up to 30kg" where the band is a single max weight
+  const upto = s.match(/^(?:UPTO|MAX)(\d+(?:\.\d+)?)KG?$/);
+  if (upto) return weightKg <= parseFloat(upto[1]);
+
+  // Bare "30KG" — interpret as an upper bound (weight must be ≤ X)
+  // This handles cases where the rate card just stores the service max weight
+  const bare = s.match(/^(\d+(?:\.\d+)?)KG?$/);
+  if (bare) return weightKg <= parseFloat(bare[1]);
+
   return false;
 }
 
@@ -383,6 +402,59 @@ router.post('/purge-tracking-events', async (req, res, next) => {
 
     const { charges_deleted, shipments_deleted } = result.rows[0];
     res.json({ ok: true, charges_deleted: parseInt(charges_deleted), shipments_deleted: parseInt(shipments_deleted) });
+  } catch (err) { next(err); }
+});
+
+// ─── POST /api/billing/relink-customers ──────────────────────────────────────
+// For every shipment where customer_id is NULL, re-attempt customer resolution
+// using the stored customer_account field — trying account_number first, then
+// dc_customer_id as a fallback (for API-connected customers like Europa).
+// Also back-fills the linked charges table.
+
+router.post('/relink-customers', async (req, res, next) => {
+  try {
+    const unlinked = await query(`
+      SELECT s.id AS shipment_id, s.customer_account,
+             c.id AS charge_id
+      FROM shipments s
+      LEFT JOIN charges c ON c.shipment_id = s.id
+      WHERE s.customer_id IS NULL
+        AND s.customer_account IS NOT NULL
+      ORDER BY s.created_at ASC
+    `);
+
+    let linked = 0;
+    let not_found = 0;
+
+    for (const row of unlinked.rows) {
+      const acct = row.customer_account;
+
+      // Try account_number first
+      let cr = await query('SELECT id FROM customers WHERE account_number = $1', [acct]);
+      let customerId = cr.rows[0]?.id || null;
+
+      // Fall back to dc_customer_id
+      if (!customerId) {
+        const cr2 = await query('SELECT id FROM customers WHERE dc_customer_id = $1', [acct]);
+        customerId = cr2.rows[0]?.id || null;
+      }
+
+      if (!customerId) { not_found++; continue; }
+
+      await query(
+        `UPDATE shipments SET customer_id = $1, updated_at = NOW() WHERE id = $2 AND customer_id IS NULL`,
+        [customerId, row.shipment_id]
+      );
+      if (row.charge_id) {
+        await query(
+          `UPDATE charges SET customer_id = $1, updated_at = NOW() WHERE id = $2 AND customer_id IS NULL`,
+          [customerId, row.charge_id]
+        );
+      }
+      linked++;
+    }
+
+    res.json({ ok: true, total_unlinked: unlinked.rows.length, linked, not_found });
   } catch (err) { next(err); }
 });
 

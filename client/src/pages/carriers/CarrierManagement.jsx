@@ -396,6 +396,8 @@ function CarrierRateCardsTab({ courierId, courierCode }) {
   const [importForm, setImportForm]   = useState({ name: '', effective_date: '', notes: '', csv: '' });
   const fileInputRef                  = useRef(null);
   const [importError, setImportError] = useState('');
+  const [editingAcct, setEditingAcct] = useState(null);  // card id being edited
+  const [acctDraft, setAcctDraft]     = useState('');
 
   const { data: cards = [], isLoading, refetch } = useQuery({
     queryKey: ['carrier-rate-cards', courierId],
@@ -441,6 +443,11 @@ function CarrierRateCardsTab({ courierId, courierCode }) {
   const updateBand = useMutation({
     mutationFn: ({ bandId, ...data }) => carrierRateCardsApi.updateBand(bandId, data),
     onSuccess: () => qc.invalidateQueries(['carrier-rate-card-bands', expandedId]),
+  });
+  const updateCardAcct = useMutation({
+    mutationFn: ({ id, customer_account_number }) =>
+      api.patch(`/carrier-rate-cards/${id}`, { customer_account_number }).then(r => r.data),
+    onSuccess: () => { setEditingAcct(null); refetch(); },
   });
 
   function handleFileUpload(e) {
@@ -603,11 +610,18 @@ function CarrierRateCardsTab({ courierId, courierCode }) {
               >
                 {isOpen ? <ChevronDown size={15} color="#AAAAAA"/> : <ChevronRight size={15} color="#AAAAAA"/>}
 
+                <CourierLogo code={courierCode} color={carrierColor(courierCode)} size={32} radius={7} />
+
                 <div style={{ flex:1 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
                     <span style={{ fontSize:15, fontWeight:700, color:'#fff' }}>{card.name}</span>
                     <span style={{ ...pill(badge.bg, badge.color), fontSize:11 }}>{badge.label}</span>
                     {card.is_master && <span style={{ ...pill('rgba(123,47,190,0.15)', '#7B2FBE'), fontSize:10 }}>MASTER</span>}
+                    {card.customer_account_number && (
+                      <span style={{ ...pill('rgba(0,188,212,0.12)', '#00BCD4'), fontSize:11, fontFamily:'monospace' }}>
+                        {card.customer_account_number}
+                      </span>
+                    )}
                   </div>
                   <div style={{ fontSize:12, color:'#555', marginTop:3 }}>
                     {card.band_count} bands
@@ -619,6 +633,43 @@ function CarrierRateCardsTab({ courierId, courierCode }) {
 
                 {/* Actions */}
                 <div style={{ display:'flex', gap:6, alignItems:'center' }} onClick={e => e.stopPropagation()}>
+                  {/* Customer account link */}
+                  {editingAcct === card.id ? (
+                    <div style={{ display:'flex', gap:4, alignItems:'center' }}>
+                      <div className="pill-input-wrap" style={{ height:28, width:130 }}>
+                        <input
+                          autoFocus
+                          value={acctDraft}
+                          onChange={e => setAcctDraft(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') updateCardAcct.mutate({ id: card.id, customer_account_number: acctDraft || null });
+                            if (e.key === 'Escape') setEditingAcct(null);
+                          }}
+                          placeholder="Account no."
+                          style={{ fontSize:11 }}
+                        />
+                      </div>
+                      <button onClick={() => updateCardAcct.mutate({ id: card.id, customer_account_number: acctDraft || null })}
+                        style={{ background:'none', border:'none', color:'#00C853', cursor:'pointer', padding:'2px 4px' }}>
+                        <Check size={12}/>
+                      </button>
+                      <button onClick={() => setEditingAcct(null)}
+                        style={{ background:'none', border:'none', color:'#555', cursor:'pointer', padding:'2px 4px' }}>
+                        <X size={12}/>
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => { setEditingAcct(card.id); setAcctDraft(card.customer_account_number || ''); }}
+                      title="Link to customer account number"
+                      style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'4px 10px', borderRadius:9999, fontSize:11, fontWeight:700,
+                        background: card.customer_account_number ? 'rgba(0,188,212,0.1)' : 'rgba(255,255,255,0.05)',
+                        color: card.customer_account_number ? '#00BCD4' : '#555',
+                        border: `1px solid ${card.customer_account_number ? 'rgba(0,188,212,0.3)' : 'rgba(255,255,255,0.1)'}`,
+                        cursor:'pointer', fontFamily: card.customer_account_number ? 'monospace' : 'inherit' }}>
+                      {card.customer_account_number || '+ Account'}
+                    </button>
+                  )}
                   {/* Export */}
                   <a href={carrierRateCardsApi.exportCsvUrl(card.id)} download
                     style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'4px 10px', borderRadius:9999, fontSize:11, fontWeight:700, background:'rgba(0,188,212,0.1)', color:'#00BCD4', border:'1px solid rgba(0,188,212,0.3)', textDecoration:'none', cursor:'pointer' }}>
@@ -969,9 +1020,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
         <button onClick={onBack} className="btn-ghost" style={{ padding:'6px 14px', fontSize:13 }}>
           <ArrowLeft size={13}/> All Carriers
         </button>
-        <div style={{ width:40, height:40, borderRadius:10, background:`${color}22`, border:`2px solid ${color}55`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:900, color }}>
-          {carrier.code.slice(0,4)}
-        </div>
+        <CourierLogo code={carrier.code} color={color} size={40} radius={10} />
         <div>
           <h1 style={{ fontSize:22, fontWeight:700, color:'#fff', margin:0 }}>{carrier.name}</h1>
           <div style={{ display:'flex', gap:10, marginTop:4, fontSize:12, color:'#AAAAAA' }}>

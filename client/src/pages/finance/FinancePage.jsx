@@ -8,6 +8,7 @@ import {
 import { billingApi } from '../../api/billing';
 import { customersApi } from '../../api/customers';
 import { format, parseISO } from 'date-fns';
+import { getCourierLogo } from '../../utils/courierLogos';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -517,6 +518,7 @@ export default function FinancePage() {
   const [batchResult, setBatchResult] = useState(null);
   const [batchRunning, setBatchRunning] = useState(false);
   const [purgeRunning, setPurgeRunning] = useState(false);
+  const [relinkRunning, setRelinkRunning] = useState(false);
 
   // Customer dropdown data
   const { data: custData } = useQuery({
@@ -623,6 +625,21 @@ export default function FinancePage() {
     }
   }
 
+  async function runRelink() {
+    setRelinkRunning(true);
+    setBatchResult(null);
+    try {
+      const result = await billingApi.relinkCustomers();
+      setBatchResult({ relink: true, ...result });
+      qc.invalidateQueries(['billing-charges']);
+      qc.invalidateQueries(['billing-stats']);
+    } catch (err) {
+      setBatchResult({ error: err.message });
+    } finally {
+      setRelinkRunning(false);
+    }
+  }
+
   async function runBatchReprice() {
     if (!confirm('This will attempt to auto-price all unpriced charges by re-parsing their webhook payloads. Continue?')) return;
     setBatchRunning(true);
@@ -651,6 +668,21 @@ export default function FinancePage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, color: '#00C853' }}>Finance & Billing</h1>
         <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            onClick={runRelink}
+            disabled={relinkRunning}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: 'rgba(0,188,212,0.08)',
+              border: '1px solid rgba(0,188,212,0.3)',
+              borderRadius: 8, color: '#00BCD4',
+              padding: '7px 14px', cursor: relinkRunning ? 'not-allowed' : 'pointer',
+              fontSize: 13, fontWeight: 700,
+            }}
+          >
+            <RotateCcw size={14} />
+            {relinkRunning ? 'Relinking…' : 'Relink customers'}
+          </button>
           <button
             onClick={runPurgeTracking}
             disabled={purgeRunning}
@@ -705,11 +737,17 @@ export default function FinancePage() {
             <span style={{ color: '#F44336', fontSize: 13 }}>Error: {batchResult.error}</span>
           ) : batchResult.purge ? (
             <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-              <span style={{ color: '#00C853', fontWeight: 700 }}>
-                ✓ Purge complete
-              </span>
+              <span style={{ color: '#00C853', fontWeight: 700 }}>✓ Purge complete</span>
               <span style={{ color: '#F44336' }}>{batchResult.charges_deleted} charges removed</span>
               <span style={{ color: '#888' }}>{batchResult.shipments_deleted} shipment records removed</span>
+            </div>
+          ) : batchResult.relink ? (
+            <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+              <span style={{ color: '#00C853', fontWeight: 700 }}>✓ {batchResult.linked} shipments relinked</span>
+              {batchResult.not_found > 0 && (
+                <span style={{ color: '#FFC107' }}>{batchResult.not_found} account IDs not matched</span>
+              )}
+              <span style={{ color: '#555' }}>of {batchResult.total_unlinked} unlinked total</span>
             </div>
           ) : (
             <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
@@ -1040,9 +1078,19 @@ export default function FinancePage() {
 
                   {/* Service */}
                   <td style={td}>
-                    <div style={{ fontSize: 12, color: '#CCC' }}>{charge.service_name || '—'}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                      {charge.courier && (() => {
+                        const logo = getCourierLogo(charge.courier);
+                        return logo ? (
+                          <div style={{ width: 20, height: 20, borderRadius: 4, background: '#fff', flexShrink: 0, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <img src={logo} alt={charge.courier} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 2 }} onError={e => { e.currentTarget.style.display='none'; }} />
+                          </div>
+                        ) : null;
+                      })()}
+                      <div style={{ fontSize: 12, color: '#CCC' }}>{charge.service_name || '—'}</div>
+                    </div>
                     {charge.courier && (
-                      <div style={{ fontSize: 11, color: '#666' }}>{charge.courier}</div>
+                      <div style={{ fontSize: 11, color: '#666', marginTop: 2 }}>{charge.courier}</div>
                     )}
                     {charge.zone_name && (
                       <div style={{ fontSize: 10, color: '#555', marginTop: 2 }}>
