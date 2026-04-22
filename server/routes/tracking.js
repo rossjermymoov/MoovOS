@@ -274,7 +274,10 @@ async function upsertEvent(event, rawBody) {
   `, [parcelId, consignment, eventCode, status, description, location, eventAt,
       JSON.stringify(event._raw || event)]);
 
-  // Auto-verify: if this event confirms physical movement, mark the linked charge verified
+  // Auto-verify: if this event confirms physical movement, mark the linked charge verified.
+  // The 400-day window is a belt-and-braces guard against tracking number recycling —
+  // couriers recycle numbers every 6–12 months, so a tracking event more than 400 days
+  // after a shipment's collection date almost certainly refers to a different parcel.
   if (VERIFIED_STATUSES.has(status)) {
     await query(`
       UPDATE charges
@@ -284,6 +287,10 @@ async function upsertEvent(event, rawBody) {
         AND shipment_id IN (
           SELECT id FROM shipments
           WHERE $1 = ANY(tracking_codes)
+            AND (
+              collection_date IS NULL
+              OR collection_date >= CURRENT_DATE - INTERVAL '400 days'
+            )
         )
     `, [consignment]);
   }
@@ -305,6 +312,10 @@ export async function catchUpVerified() {
         AND c.verified    = false
         AND c.cancelled   = false
         AND s.tracking_codes IS NOT NULL
+        AND (
+          s.collection_date IS NULL
+          OR s.collection_date >= CURRENT_DATE - INTERVAL '400 days'
+        )
         AND EXISTS (
           SELECT 1
           FROM parcels p

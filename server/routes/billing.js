@@ -9,6 +9,7 @@
  */
 
 import express from 'express';
+import { createHash } from 'crypto';
 import { query } from '../db/index.js';
 
 const router = express.Router();
@@ -26,6 +27,18 @@ function pick(obj, ...keys) {
 function safeJson(str) {
   if (!str || typeof str !== 'string') return null;
   try { return JSON.parse(str); } catch { return null; }
+}
+
+// ─── Tracking hash ────────────────────────────────────────────────────────────
+// Belt-and-braces guard against tracking number recycling (couriers recycle
+// numbers every 6–12 months).  We store a hash of (tracking_code + collection_date)
+// so that a future duplicate tracking number on a different date is distinguishable.
+// Format: SHA256(lower(code) + ':' + YYYY-MM-DD)  →  64-char hex string.
+function computeTrackingHash(trackingCode, collectionDate) {
+  if (!trackingCode) return null;
+  const code = String(trackingCode).toLowerCase();
+  const date = collectionDate ? String(collectionDate).slice(0, 10) : '';
+  return createHash('sha256').update(`${code}:${date}`).digest('hex');
 }
 
 // Unwrap the platform envelope — handles body.json as object OR string
@@ -274,6 +287,11 @@ router.post('/webhook', async (req, res, next) => {
       ? createParcels.map(p => p.tracking_code).filter(Boolean)
       : (responseParsed.tracking_codes || []);
 
+    // Tracking hash — primary tracking code + collection date
+    // Belt-and-braces guard against courier recycling tracking numbers (every 6–12 months)
+    const primaryTrackingCode = trackingCodes[0] || null;
+    const trackingHashVal = computeTrackingHash(primaryTrackingCode, collectionDate);
+
     // Courier costs (what Moov pays) per parcel
     const courierCosts = billingResp.shipping || [];
     const totalCostPrice = courierCosts.reduce((s, c) => s + (parseFloat(c) || 0), 0);
@@ -300,13 +318,15 @@ router.post('/webhook', async (req, res, next) => {
          ship_to_name, ship_to_postcode, ship_to_country_iso,
          reference, reference_2,
          parcel_count, total_weight_kg, collection_date, tracking_codes,
+         tracking_hash,
          raw_payload)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
       ON CONFLICT (platform_shipment_id) DO UPDATE SET
         customer_id        = COALESCE(EXCLUDED.customer_id, shipments.customer_id),
         customer_account   = COALESCE(EXCLUDED.customer_account, shipments.customer_account),
         service_name       = COALESCE(EXCLUDED.service_name, shipments.service_name),
         tracking_codes     = COALESCE(EXCLUDED.tracking_codes, shipments.tracking_codes),
+        tracking_hash      = COALESCE(EXCLUDED.tracking_hash, shipments.tracking_hash),
         updated_at         = NOW()
       RETURNING id
     `, [
@@ -317,6 +337,7 @@ router.post('/webhook', async (req, res, next) => {
       reference, reference2,
       parcelCount, totalWeightKg || null, collectionDate,
       trackingCodes.length ? trackingCodes : null,
+      trackingHashVal,
       JSON.stringify(payload),
     ]);
 
