@@ -19,9 +19,10 @@
  *   DELETE /api/surcharges/customer-overrides/:customerId/:oid — remove override
  */
 
-const express = require('express');
-const router  = express.Router();
-const { query } = require('../db');
+import express from 'express';
+import { query } from '../db/index.js';
+
+const router = express.Router();
 
 // ── Surcharge definitions ─────────────────────────────────────────────────────
 
@@ -201,4 +202,4 @@ router.delete('/customer-overrides/:customerId/:overrideId', async (req, res, ne
   } catch (e) { next(e); }
 });
 
-module.exports = router;
+export default router;
