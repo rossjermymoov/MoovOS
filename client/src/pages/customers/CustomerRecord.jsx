@@ -7,6 +7,7 @@ import {
   Pencil, X, Check, ShieldCheck, Trash2,
 } from 'lucide-react';
 import { customersApi } from '../../api/customers';
+import { customerRateCardsApi } from '../../api/customerRateCards';
 import { HealthBadge, AccountStatusBadge, TierBadge, CreditUtilisationBar } from '../../components/ui/StatusBadge';
 import CustomerPricingTab from './tabs/CustomerPricingTab';
 import { format } from 'date-fns';
@@ -63,6 +64,61 @@ function InfoCard({ title, children }) {
       <SectionTitle>{title}</SectionTitle>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{children}</div>
     </div>
+  );
+}
+
+// ─── Rate Card Assignments per carrier ───────────────────────
+function CustomerRateCardAssignments({ customerId }) {
+  const qc = useQueryClient();
+
+  const { data: carriers = [], isLoading } = useQuery({
+    queryKey: ['customer-rate-card-assignments', customerId],
+    queryFn: () => customerRateCardsApi.forCustomer(customerId),
+    enabled: !!customerId,
+  });
+
+  const setAssignment = useMutation({
+    mutationFn: ({ courierId, rateCardId }) =>
+      rateCardId === 'master'
+        ? customerRateCardsApi.clearAssignment(customerId, courierId)
+        : customerRateCardsApi.setAssignment(customerId, courierId, rateCardId),
+    onSuccess: () => qc.invalidateQueries(['customer-rate-card-assignments', customerId]),
+  });
+
+  if (isLoading) return null;
+  if (!carriers.length) return (
+    <InfoCard title="Rate Cards">
+      <span style={{ fontSize: 12, color: '#555', fontStyle: 'italic' }}>No rate cards configured yet — go to Carriers to create them.</span>
+    </InfoCard>
+  );
+
+  return (
+    <InfoCard title="Rate Cards">
+      {carriers.map(row => {
+        const currentId = row.assigned_card_id ?? 'master';
+        return (
+          <div key={row.courier_id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, minHeight:26 }}>
+            <span style={{ fontSize:12, color:'#AAAAAA', flexShrink:0, whiteSpace:'nowrap', minWidth:110 }}>
+              {row.courier_name}
+            </span>
+            <select
+              value={String(currentId)}
+              onChange={e => setAssignment.mutate({ courierId: row.courier_id, rateCardId: e.target.value === 'master' ? 'master' : parseInt(e.target.value) })}
+              style={inp({ width: 180, flexShrink: 0, fontSize: 11 })}
+            >
+              {(row.available_cards || []).map(card => (
+                <option key={card.id} value={card.id}>
+                  {card.name}{card.is_master ? ' (Master)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        );
+      })}
+      <p style={{ fontSize:11, color:'#555', marginTop:6, fontStyle:'italic' }}>
+        Master is the default rate card. Select an alternative to use custom pricing for this customer.
+      </p>
+    </InfoCard>
   );
 }
 
@@ -255,6 +311,8 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
             <Row label="Onboarding Person" value={c.onboarding_person_name || '—'} />
             <Row label="Customer Since"    value={c.date_onboarded ? format(new Date(c.date_onboarded), 'dd MMM yyyy') : '—'} />
           </InfoCard>
+
+          <CustomerRateCardAssignments customerId={c.id} />
 
           {c.health_score_summary && (
             <InfoCard title="Health Score Detail">

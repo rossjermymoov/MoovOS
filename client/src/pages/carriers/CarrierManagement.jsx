@@ -6,14 +6,16 @@
  * Level 3: Service detail — zones, weight bands, surcharges, dim weight
  */
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Plus, ChevronRight, Trash2, X, Check, Phone, Mail,
+  Plus, ChevronRight, ChevronDown, Trash2, X, Check, Phone, Mail,
   User, Building2, Edit2, Zap, AlertTriangle, ArrowLeft, GripVertical,
+  Upload, Download, Copy, TrendingUp, Calendar, FileText, CheckCircle,
 } from 'lucide-react';
 import { carriersApi } from '../../api/carriers';
 import { getCourierLogo } from '../../utils/courierLogos';
+import { carrierRateCardsApi } from '../../api/carrierRateCards';
 import axios from 'axios';
 
 const api = axios.create({ baseURL: '/api' });
@@ -379,6 +381,509 @@ function FuelGroupCard({ group, onRefresh }) {
   );
 }
 
+// ─── CARRIER RATE CARDS TAB ───────────────────────────────────────────────────
+
+function CarrierRateCardsTab({ courierId, courierCode }) {
+  const qc = useQueryClient();
+  const [expandedId, setExpandedId]   = useState(null);
+  const [showCreate, setShowCreate]   = useState(false);
+  const [showClone, setShowClone]     = useState(null);   // card to clone
+  const [showIncrease, setShowIncrease] = useState(null); // card to apply % to
+  const [showImport, setShowImport]   = useState(false);
+  const [createForm, setCreateForm]   = useState({ name: '', effective_date: '', notes: '' });
+  const [cloneForm, setCloneForm]     = useState({ name: '', effective_date: '', notes: '' });
+  const [incForm, setIncForm]         = useState({ name: '', pct: '', effective_date: '', notes: '' });
+  const [importForm, setImportForm]   = useState({ name: '', effective_date: '', notes: '', csv: '' });
+  const fileInputRef                  = useRef(null);
+  const [importError, setImportError] = useState('');
+
+  const { data: cards = [], isLoading, refetch } = useQuery({
+    queryKey: ['carrier-rate-cards', courierId],
+    queryFn: () => carrierRateCardsApi.list(courierId),
+    enabled: !!courierId,
+  });
+
+  const { data: bandsData, isLoading: bandsLoading } = useQuery({
+    queryKey: ['carrier-rate-card-bands', expandedId],
+    queryFn: () => carrierRateCardsApi.getBands(expandedId),
+    enabled: !!expandedId,
+  });
+
+  const createCard = useMutation({
+    mutationFn: (data) => carrierRateCardsApi.create({ ...data, courier_id: courierId }),
+    onSuccess: () => { setShowCreate(false); setCreateForm({ name:'', effective_date:'', notes:'' }); refetch(); },
+  });
+  const cloneCard = useMutation({
+    mutationFn: (data) => carrierRateCardsApi.clone(showClone?.id, data),
+    onSuccess: () => { setShowClone(null); setCloneForm({ name:'', effective_date:'', notes:'' }); refetch(); },
+  });
+  const applyIncrease = useMutation({
+    mutationFn: (data) => carrierRateCardsApi.applyIncrease(showIncrease?.id, data),
+    onSuccess: () => { setShowIncrease(null); setIncForm({ name:'', pct:'', effective_date:'', notes:'' }); refetch(); },
+  });
+  const importCsv = useMutation({
+    mutationFn: (data) => carrierRateCardsApi.importCsv({ ...data, courier_id: courierId }),
+    onSuccess: (res) => {
+      setShowImport(false); setImportForm({ name:'', effective_date:'', notes:'', csv:'' }); setImportError('');
+      refetch();
+      alert(`✅ Imported ${res.imported} bands${res.skipped ? `, ${res.skipped} rows skipped` : ''}.`);
+    },
+    onError: (err) => setImportError(err.response?.data?.error || 'Import failed'),
+  });
+  const activateCard = useMutation({
+    mutationFn: (id) => carrierRateCardsApi.activate(id),
+    onSuccess: () => refetch(),
+  });
+  const deleteCard = useMutation({
+    mutationFn: (id) => carrierRateCardsApi.delete(id),
+    onSuccess: () => { if (expandedId === deleteCard.variables) setExpandedId(null); refetch(); },
+  });
+  const updateBand = useMutation({
+    mutationFn: ({ bandId, ...data }) => carrierRateCardsApi.updateBand(bandId, data),
+    onSuccess: () => qc.invalidateQueries(['carrier-rate-card-bands', expandedId]),
+  });
+
+  function handleFileUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => setImportForm(f => ({ ...f, csv: ev.target.result, name: f.name || file.name.replace('.csv','') }));
+    reader.readAsText(file);
+  }
+
+  const statusBadge = (card) => {
+    if (card.is_master)  return { label: 'Master', color: '#00BCD4', bg: 'rgba(0,188,212,0.12)' };
+    if (card.is_active)  return { label: 'Active',  color: '#00C853', bg: 'rgba(0,200,83,0.12)' };
+    const eff = card.effective_date ? new Date(card.effective_date) : null;
+    if (eff && eff > new Date()) return { label: `Effective ${eff.toLocaleDateString('en-GB')}`, color: '#FFC107', bg: 'rgba(255,193,7,0.12)' };
+    return { label: 'Pending', color: '#AAAAAA', bg: 'rgba(255,255,255,0.07)' };
+  };
+
+  if (isLoading) return <div style={{ padding:40, textAlign:'center', color:'#555' }}>Loading rate cards…</div>;
+
+  const formRow = (label, node) => (
+    <div key={label}>
+      <label style={{ fontSize:11, color:'#AAAAAA', display:'block', marginBottom:4 }}>{label}</label>
+      {node}
+    </div>
+  );
+
+  return (
+    <div>
+      {/* ── Toolbar ── */}
+      <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:20 }}>
+        <button onClick={() => setShowCreate(c => !c)} className="btn-primary" style={{ fontSize:13 }}>
+          <Plus size={13}/> New Rate Card
+        </button>
+        <button onClick={() => setShowImport(c => !c)} className="btn-ghost" style={{ fontSize:13 }}>
+          <Upload size={13}/> Import CSV
+        </button>
+      </div>
+
+      {/* ── Create form ── */}
+      {showCreate && (
+        <div className="moov-card" style={{ padding:18, marginBottom:16, border:'1px solid rgba(0,200,83,0.3)' }}>
+          <h3 style={{ fontSize:14, fontWeight:700, color:'#00C853', marginBottom:14 }}>New Rate Card</h3>
+          <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr', gap:12, marginBottom:14 }}>
+            {formRow('Name *', <div className="pill-input-wrap" style={{ height:34 }}><input value={createForm.name} onChange={e => setCreateForm(f=>({...f,name:e.target.value}))} placeholder="e.g. 2026 Standard"/></div>)}
+            {formRow('Effective Date', <div className="pill-input-wrap" style={{ height:34 }}><input type="date" value={createForm.effective_date} onChange={e => setCreateForm(f=>({...f,effective_date:e.target.value}))}/></div>)}
+            {formRow('Notes', <div className="pill-input-wrap" style={{ height:34 }}><input value={createForm.notes} onChange={e => setCreateForm(f=>({...f,notes:e.target.value}))} placeholder="Optional"/></div>)}
+          </div>
+          <div style={{ display:'flex', gap:8 }}>
+            <button onClick={() => createCard.mutate(createForm)} disabled={!createForm.name.trim() || createCard.isPending} className="btn-primary" style={{ fontSize:13 }}>
+              <Check size={13}/> Create
+            </button>
+            <button onClick={() => setShowCreate(false)} className="btn-ghost" style={{ fontSize:13 }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Import CSV form ── */}
+      {showImport && (
+        <div className="moov-card" style={{ padding:18, marginBottom:16, border:'1px solid rgba(0,188,212,0.3)' }}>
+          <h3 style={{ fontSize:14, fontWeight:700, color:'#00BCD4', marginBottom:6 }}>Import Rate Card from CSV</h3>
+          <p style={{ fontSize:12, color:'#888', marginBottom:14 }}>
+            CSV columns: <code style={{ color:'#00BCD4' }}>service_code, zone_name, min_weight_kg, max_weight_kg, price_first[, price_sub]</code>
+          </p>
+          <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:12, marginBottom:12 }}>
+            {formRow('Rate Card Name *', <div className="pill-input-wrap" style={{ height:34 }}><input value={importForm.name} onChange={e => setImportForm(f=>({...f,name:e.target.value}))} placeholder="e.g. DPD 2026 Imported"/></div>)}
+            {formRow('Effective Date', <div className="pill-input-wrap" style={{ height:34 }}><input type="date" value={importForm.effective_date} onChange={e => setImportForm(f=>({...f,effective_date:e.target.value}))}/></div>)}
+          </div>
+          <div style={{ marginBottom:12 }}>
+            <label style={{ fontSize:11, color:'#AAAAAA', display:'block', marginBottom:4 }}>Upload CSV file</label>
+            <input ref={fileInputRef} type="file" accept=".csv,text/csv" onChange={handleFileUpload}
+              style={{ fontSize:12, color:'#fff', padding:'6px 0' }}/>
+          </div>
+          {importForm.csv && (
+            <div style={{ marginBottom:12, padding:10, background:'rgba(0,200,83,0.06)', border:'1px solid rgba(0,200,83,0.2)', borderRadius:8, fontSize:12, color:'#00C853' }}>
+              ✓ {importForm.csv.trim().split('\n').length} rows loaded
+            </div>
+          )}
+          {importError && <div style={{ marginBottom:12, color:'#E91E8C', fontSize:12 }}>{importError}</div>}
+          <div style={{ display:'flex', gap:8 }}>
+            <button onClick={() => importCsv.mutate(importForm)}
+              disabled={!importForm.name.trim() || !importForm.csv.trim() || importCsv.isPending}
+              className="btn-primary" style={{ fontSize:13, background:'#00BCD4', color:'#000' }}>
+              <Upload size={13}/> {importCsv.isPending ? 'Importing…' : 'Import'}
+            </button>
+            <button onClick={() => { setShowImport(false); setImportError(''); }} className="btn-ghost" style={{ fontSize:13 }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Clone dialog ── */}
+      {showClone && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:9000, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div className="moov-card" style={{ padding:24, width:420, border:'1px solid rgba(0,200,83,0.3)' }}>
+            <h3 style={{ fontSize:15, fontWeight:700, color:'#00C853', marginBottom:16 }}>Clone "{showClone.name}"</h3>
+            <div style={{ display:'flex', flexDirection:'column', gap:12, marginBottom:16 }}>
+              {formRow('New Name *', <div className="pill-input-wrap" style={{ height:38 }}><input value={cloneForm.name} onChange={e => setCloneForm(f=>({...f,name:e.target.value}))} placeholder="e.g. 2026 Revised" autoFocus/></div>)}
+              {formRow('Effective Date', <div className="pill-input-wrap" style={{ height:38 }}><input type="date" value={cloneForm.effective_date} onChange={e => setCloneForm(f=>({...f,effective_date:e.target.value}))}/></div>)}
+              {formRow('Notes', <div className="pill-input-wrap" style={{ height:38 }}><input value={cloneForm.notes} onChange={e => setCloneForm(f=>({...f,notes:e.target.value}))} placeholder="Optional"/></div>)}
+            </div>
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={() => cloneCard.mutate(cloneForm)} disabled={!cloneForm.name.trim() || cloneCard.isPending} className="btn-primary">
+                <Copy size={13}/> Clone
+              </button>
+              <button onClick={() => setShowClone(null)} className="btn-ghost">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Apply % increase dialog ── */}
+      {showIncrease && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:9000, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div className="moov-card" style={{ padding:24, width:440, border:'1px solid rgba(255,193,7,0.35)' }}>
+            <h3 style={{ fontSize:15, fontWeight:700, color:'#FFC107', marginBottom:6 }}>Apply Rate Increase</h3>
+            <p style={{ fontSize:12, color:'#888', marginBottom:16 }}>
+              Clones "{showIncrease.name}" and multiplies all prices by the uplift percentage.
+            </p>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
+              {formRow('New Card Name *', <div className="pill-input-wrap" style={{ height:38 }}><input value={incForm.name} onChange={e => setIncForm(f=>({...f,name:e.target.value}))} placeholder="e.g. 2026 Rate Increase" autoFocus/></div>)}
+              {formRow('Uplift % *', <div className="pill-input-wrap" style={{ height:38 }}>
+                <input type="number" step="0.1" value={incForm.pct} onChange={e => setIncForm(f=>({...f,pct:e.target.value}))} placeholder="4.0"/>
+                <span style={{ padding:'0 14px 0 4px', color:'#FFC107', fontSize:13, fontWeight:700 }}>%</span>
+              </div>)}
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
+              {formRow('Effective Date', <div className="pill-input-wrap" style={{ height:38 }}><input type="date" value={incForm.effective_date} onChange={e => setIncForm(f=>({...f,effective_date:e.target.value}))}/></div>)}
+              {formRow('Notes', <div className="pill-input-wrap" style={{ height:38 }}><input value={incForm.notes} onChange={e => setIncForm(f=>({...f,notes:e.target.value}))} placeholder="Optional"/></div>)}
+            </div>
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={() => applyIncrease.mutate(incForm)}
+                disabled={!incForm.name.trim() || !incForm.pct || applyIncrease.isPending}
+                className="btn-primary" style={{ background:'rgba(255,193,7,0.2)', border:'1px solid rgba(255,193,7,0.5)', color:'#FFC107' }}>
+                <TrendingUp size={13}/> Apply
+              </button>
+              <button onClick={() => setShowIncrease(null)} className="btn-ghost">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Rate card list ── */}
+      {cards.length === 0 && (
+        <div className="moov-card" style={{ padding:40, textAlign:'center', color:'#555', fontSize:13 }}>
+          No rate cards yet — create one or import a CSV
+        </div>
+      )}
+
+      <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+        {cards.map(card => {
+          const badge = statusBadge(card);
+          const isOpen = expandedId === card.id;
+
+          return (
+            <div key={card.id} className="moov-card" style={{ overflow:'hidden', border: card.is_active || card.is_master ? '1px solid rgba(0,200,83,0.2)' : '1px solid rgba(255,255,255,0.07)' }}>
+              {/* Card header */}
+              <div
+                onClick={() => setExpandedId(isOpen ? null : card.id)}
+                style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 18px', cursor:'pointer', background: isOpen ? 'rgba(255,255,255,0.03)' : 'transparent' }}
+              >
+                {isOpen ? <ChevronDown size={15} color="#AAAAAA"/> : <ChevronRight size={15} color="#AAAAAA"/>}
+
+                <div style={{ flex:1 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                    <span style={{ fontSize:15, fontWeight:700, color:'#fff' }}>{card.name}</span>
+                    <span style={{ ...pill(badge.bg, badge.color), fontSize:11 }}>{badge.label}</span>
+                    {card.is_master && <span style={{ ...pill('rgba(123,47,190,0.15)', '#7B2FBE'), fontSize:10 }}>MASTER</span>}
+                  </div>
+                  <div style={{ fontSize:12, color:'#555', marginTop:3 }}>
+                    {card.band_count} bands
+                    {card.effective_date && ` · Effective: ${new Date(card.effective_date).toLocaleDateString('en-GB')}`}
+                    {card.notes && ` · ${card.notes}`}
+                    {card.created_at && ` · Created: ${new Date(card.created_at).toLocaleDateString('en-GB')}`}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div style={{ display:'flex', gap:6, alignItems:'center' }} onClick={e => e.stopPropagation()}>
+                  {/* Export */}
+                  <a href={carrierRateCardsApi.exportCsvUrl(card.id)} download
+                    style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'4px 10px', borderRadius:9999, fontSize:11, fontWeight:700, background:'rgba(0,188,212,0.1)', color:'#00BCD4', border:'1px solid rgba(0,188,212,0.3)', textDecoration:'none', cursor:'pointer' }}>
+                    <Download size={11}/> Export
+                  </a>
+                  {/* Clone */}
+                  <button onClick={() => { setShowClone(card); setCloneForm({ name: card.name + ' (Copy)', effective_date:'', notes:'' }); }}
+                    style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'4px 10px', borderRadius:9999, fontSize:11, fontWeight:700, background:'rgba(255,255,255,0.06)', color:'#AAAAAA', border:'1px solid rgba(255,255,255,0.12)', cursor:'pointer' }}>
+                    <Copy size={11}/> Clone
+                  </button>
+                  {/* Apply % increase */}
+                  <button onClick={() => { setShowIncrease(card); setIncForm({ name:'', pct:'', effective_date:'', notes:'' }); }}
+                    style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'4px 10px', borderRadius:9999, fontSize:11, fontWeight:700, background:'rgba(255,193,7,0.1)', color:'#FFC107', border:'1px solid rgba(255,193,7,0.3)', cursor:'pointer' }}>
+                    <TrendingUp size={11}/> Rate Increase
+                  </button>
+                  {/* Activate (non-master, inactive) */}
+                  {!card.is_master && !card.is_active && (
+                    <button onClick={() => activateCard.mutate(card.id)}
+                      style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'4px 10px', borderRadius:9999, fontSize:11, fontWeight:700, background:'rgba(0,200,83,0.1)', color:'#00C853', border:'1px solid rgba(0,200,83,0.3)', cursor:'pointer' }}>
+                      <CheckCircle size={11}/> Activate Now
+                    </button>
+                  )}
+                  {/* Delete (non-master only) */}
+                  {!card.is_master && (
+                    <button onClick={() => { if (window.confirm(`Delete "${card.name}"?`)) deleteCard.mutate(card.id); }}
+                      style={{ background:'none', border:'none', color:'#555', cursor:'pointer', padding:'4px 6px' }}>
+                      <Trash2 size={12}/>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Expanded: service/band breakdown */}
+              {isOpen && (
+                <div style={{ borderTop:'1px solid rgba(255,255,255,0.06)', padding:'0 18px 18px' }}>
+                  {bandsLoading ? (
+                    <div style={{ padding:24, textAlign:'center', color:'#555', fontSize:13 }}>Loading bands…</div>
+                  ) : !bandsData?.services?.length ? (
+                    <div style={{ padding:24, textAlign:'center', color:'#555', fontSize:13, fontStyle:'italic' }}>
+                      No bands in this rate card yet. Clone an existing card or import a CSV to populate.
+                    </div>
+                  ) : (
+                    <div style={{ marginTop:16 }}>
+                      {/* Domestic services — inline */}
+                      {bandsData.services.filter(s => s.service_type === 'domestic').length > 0 && (
+                        <div style={{ marginBottom:24 }}>
+                          <div style={{ fontSize:11, fontWeight:700, color:'#00C853', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>
+                            Domestic Services
+                          </div>
+                          {bandsData.services.filter(s => s.service_type === 'domestic').map(svc => (
+                            <DomesticServiceBands key={svc.service_id} svc={svc} cardId={card.id}
+                              onUpdateBand={updateBand} />
+                          ))}
+                        </div>
+                      )}
+                      {/* International services — compact summary */}
+                      {bandsData.services.filter(s => s.service_type === 'international').length > 0 && (
+                        <div>
+                          <div style={{ fontSize:11, fontWeight:700, color:'#7B2FBE', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>
+                            International Services
+                          </div>
+                          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))', gap:8 }}>
+                            {bandsData.services.filter(s => s.service_type === 'international').map(svc => (
+                              <IntlServiceCard key={svc.service_id} svc={svc} cardId={card.id}
+                                onUpdateBand={updateBand} />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* Unclassified services */}
+                      {bandsData.services.filter(s => !s.service_type).length > 0 && (
+                        <div style={{ marginTop:16 }}>
+                          <div style={{ fontSize:11, fontWeight:700, color:'#AAAAAA', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>
+                            Other Services
+                          </div>
+                          {bandsData.services.filter(s => !s.service_type).map(svc => (
+                            <DomesticServiceBands key={svc.service_id} svc={svc} cardId={card.id}
+                              onUpdateBand={updateBand} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Domestic service with inline editable bands ─────────────────────────────
+
+function DomesticServiceBands({ svc, cardId, onUpdateBand }) {
+  const [open, setOpen] = useState(false);
+  const totalBands = svc.zones.reduce((a, z) => a + z.bands.length, 0);
+
+  return (
+    <div style={{ border:'1px solid rgba(255,255,255,0.06)', borderRadius:10, marginBottom:8, overflow:'hidden' }}>
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', cursor:'pointer', background: open ? 'rgba(255,255,255,0.03)' : 'transparent' }}
+      >
+        {open ? <ChevronDown size={13} color="#AAAAAA"/> : <ChevronRight size={13} color="#AAAAAA"/>}
+        <span style={{ fontWeight:600, fontSize:13, color:'#fff', flex:1 }}>{svc.service_name}</span>
+        <span style={{ fontFamily:'monospace', fontSize:11, color:'#00C853', background:'rgba(0,200,83,0.08)', padding:'1px 8px', borderRadius:9999 }}>{svc.service_code}</span>
+        <span style={{ fontSize:11, color:'#555' }}>{totalBands} band{totalBands!==1?'s':''}</span>
+      </div>
+
+      {open && (
+        <div style={{ borderTop:'1px solid rgba(255,255,255,0.06)', padding:12 }}>
+          {svc.zones.map(zone => (
+            <div key={zone.zone_id} style={{ marginBottom:12 }}>
+              {svc.zones.length > 1 && (
+                <div style={{ fontSize:11, color:'#7B2FBE', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:6 }}>
+                  {zone.zone_name}
+                </div>
+              )}
+              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+                <thead>
+                  <tr style={{ borderBottom:'1px solid rgba(255,255,255,0.06)' }}>
+                    <th style={{ textAlign:'left', padding:'4px 8px', color:'#555', fontWeight:600, fontSize:11 }}>Min kg</th>
+                    <th style={{ textAlign:'left', padding:'4px 8px', color:'#555', fontWeight:600, fontSize:11 }}>Max kg</th>
+                    <th style={{ textAlign:'right', padding:'4px 8px', color:'#00C853', fontWeight:600, fontSize:11 }}>1st Item</th>
+                    <th style={{ textAlign:'right', padding:'4px 8px', color:'#FFC107', fontWeight:600, fontSize:11 }}>Sub Items</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {zone.bands.sort((a,b) => a.min_weight_kg - b.min_weight_kg).map(band => (
+                    <BandRow key={band.band_id} band={band} onUpdate={(data) => onUpdateBand.mutate({ bandId: band.band_id, ...data })} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BandRow({ band, onUpdate }) {
+  const [editFirst, setEditFirst] = useState(false);
+  const [editSub,   setEditSub]   = useState(false);
+  const [valFirst,  setValFirst]  = useState(parseFloat(band.price_first).toFixed(4));
+  const [valSub,    setValSub]    = useState(band.price_sub ? parseFloat(band.price_sub).toFixed(4) : '');
+
+  function commitFirst() {
+    const v = parseFloat(valFirst);
+    if (!isNaN(v) && v >= 0) onUpdate({ price_first: v });
+    else setValFirst(parseFloat(band.price_first).toFixed(4));
+    setEditFirst(false);
+  }
+  function commitSub() {
+    const v = parseFloat(valSub);
+    if (!isNaN(v) && v >= 0) onUpdate({ price_sub: v });
+    else setValSub(band.price_sub ? parseFloat(band.price_sub).toFixed(4) : '');
+    setEditSub(false);
+  }
+
+  return (
+    <tr style={{ borderBottom:'1px solid rgba(255,255,255,0.03)' }}>
+      <td style={{ padding:'5px 8px', color:'#AAAAAA', fontFamily:'monospace' }}>{parseFloat(band.min_weight_kg).toFixed(3)}</td>
+      <td style={{ padding:'5px 8px', color:'#AAAAAA', fontFamily:'monospace' }}>{parseFloat(band.max_weight_kg).toFixed(3)}</td>
+      <td style={{ padding:'5px 8px', textAlign:'right' }}>
+        {editFirst ? (
+          <input value={valFirst} onChange={e => setValFirst(e.target.value)}
+            onBlur={commitFirst} onKeyDown={e => { if (e.key==='Enter') commitFirst(); if (e.key==='Escape') { setValFirst(parseFloat(band.price_first).toFixed(4)); setEditFirst(false); }}}
+            autoFocus style={{ width:80, textAlign:'right', fontFamily:'monospace', fontSize:12, color:'#00C853', fontWeight:700, background:'rgba(0,200,83,0.08)', border:'1px solid rgba(0,200,83,0.4)', borderRadius:9999, padding:'2px 8px' }}/>
+        ) : (
+          <span onClick={() => setEditFirst(true)} title="Click to edit"
+            style={{ fontFamily:'monospace', fontSize:12, fontWeight:700, color:'#00C853', cursor:'pointer', padding:'2px 8px', borderRadius:9999, border:'1px solid rgba(0,200,83,0.2)', background:'rgba(0,200,83,0.06)' }}>
+            £{parseFloat(band.price_first).toFixed(4)}
+          </span>
+        )}
+      </td>
+      <td style={{ padding:'5px 8px', textAlign:'right' }}>
+        {editSub ? (
+          <input value={valSub} onChange={e => setValSub(e.target.value)}
+            onBlur={commitSub} onKeyDown={e => { if (e.key==='Enter') commitSub(); if (e.key==='Escape') { setValSub(band.price_sub ? parseFloat(band.price_sub).toFixed(4):''); setEditSub(false); }}}
+            autoFocus style={{ width:80, textAlign:'right', fontFamily:'monospace', fontSize:12, color:'#FFC107', fontWeight:700, background:'rgba(255,193,7,0.08)', border:'1px solid rgba(255,193,7,0.4)', borderRadius:9999, padding:'2px 8px' }}/>
+        ) : (
+          <span onClick={() => setEditSub(true)} title="Click to edit"
+            style={{ fontFamily:'monospace', fontSize:12, color: band.price_sub ? '#FFC107' : '#333', cursor:'pointer', padding:'2px 8px', borderRadius:9999, border:'1px solid rgba(255,255,255,0.06)' }}>
+            {band.price_sub ? `£${parseFloat(band.price_sub).toFixed(4)}` : '—'}
+          </span>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+// ─── International service summary card ─────────────────────────────────────
+
+function IntlServiceCard({ svc, onUpdateBand }) {
+  const [showModal, setShowModal] = useState(false);
+  const totalBands = svc.zones.reduce((a, z) => a + z.bands.length, 0);
+
+  return (
+    <>
+      <div style={{ border:'1px solid rgba(123,47,190,0.2)', borderRadius:10, padding:'12px 14px', background:'rgba(123,47,190,0.04)' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+          <span style={{ fontWeight:600, fontSize:13, color:'#fff', flex:1 }}>{svc.service_name}</span>
+          <span style={{ fontFamily:'monospace', fontSize:10, color:'#7B2FBE', background:'rgba(123,47,190,0.12)', padding:'1px 7px', borderRadius:9999 }}>{svc.service_code}</span>
+        </div>
+        <div style={{ fontSize:12, color:'#555', marginBottom:10 }}>
+          {svc.zones.length} zone{svc.zones.length!==1?'s':''} · {totalBands} band{totalBands!==1?'s':''}
+        </div>
+        <button onClick={() => setShowModal(true)}
+          style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'4px 12px', borderRadius:9999, fontSize:11, fontWeight:700, background:'rgba(123,47,190,0.12)', color:'#7B2FBE', border:'1px solid rgba(123,47,190,0.3)', cursor:'pointer' }}>
+          <FileText size={11}/> View / Edit Rates
+        </button>
+      </div>
+
+      {showModal && (
+        <IntlRateCardModal svc={svc} onClose={() => setShowModal(false)} onUpdateBand={onUpdateBand} />
+      )}
+    </>
+  );
+}
+
+function IntlRateCardModal({ svc, onClose, onUpdateBand }) {
+  const totalBands = svc.zones.reduce((a, z) => a + z.bands.length, 0);
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:9100, background:'rgba(8,9,26,0.97)', display:'flex', flexDirection:'column' }}>
+      <div style={{ padding:'18px 24px', borderBottom:'1px solid rgba(255,255,255,0.08)', display:'flex', alignItems:'center', gap:16, background:'#0A0B1E', flexShrink:0 }}>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:17, fontWeight:700, color:'#fff' }}>{svc.service_name}</div>
+          <div style={{ fontSize:12, color:'#AAAAAA', marginTop:2 }}>
+            <span style={{ color:'#7B2FBE', fontFamily:'monospace', fontWeight:700, marginRight:10 }}>{svc.service_code}</span>
+            {svc.zones.length} zones · {totalBands} bands
+          </div>
+        </div>
+        <button onClick={onClose} style={{ background:'none', border:'none', color:'#AAAAAA', cursor:'pointer', fontSize:20 }}>×</button>
+      </div>
+
+      <div style={{ flex:1, overflowY:'auto', padding:24 }}>
+        {svc.zones.map(zone => (
+          <div key={zone.zone_id} style={{ marginBottom:24 }}>
+            <h3 style={{ fontSize:13, fontWeight:700, color:'#7B2FBE', marginBottom:10 }}>{zone.zone_name}</h3>
+            <table style={{ width:'100%', maxWidth:600, borderCollapse:'collapse', fontSize:12 }}>
+              <thead>
+                <tr style={{ borderBottom:'1px solid rgba(255,255,255,0.08)' }}>
+                  <th style={{ textAlign:'left', padding:'4px 10px', color:'#555', fontWeight:600, fontSize:11 }}>Min kg</th>
+                  <th style={{ textAlign:'left', padding:'4px 10px', color:'#555', fontWeight:600, fontSize:11 }}>Max kg</th>
+                  <th style={{ textAlign:'right', padding:'4px 10px', color:'#00C853', fontWeight:600, fontSize:11 }}>1st Item</th>
+                  <th style={{ textAlign:'right', padding:'4px 10px', color:'#FFC107', fontWeight:600, fontSize:11 }}>Sub Items</th>
+                </tr>
+              </thead>
+              <tbody>
+                {zone.bands.sort((a,b) => a.min_weight_kg - b.min_weight_kg).map(band => (
+                  <BandRow key={band.band_id} band={band} onUpdate={(data) => onUpdateBand.mutate({ bandId: band.band_id, ...data })} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── LEVEL 2 — Carrier detail (services list) ─────────────────────────────────
 
 function CarrierDetail({ carrierId, onBack, onDrillService }) {
@@ -386,6 +891,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
   const [serviceForm, setServiceForm] = useState({ service_code:'', name:'', fuel_surcharge_pct:'' });
   const [addingGroup, setAddingGroup]   = useState(false);
   const [groupForm, setGroupForm]       = useState({ name:'', fuel_surcharge_pct:'' });
+  const [carrierTab, setCarrierTab]     = useState('services'); // 'services' | 'rate-cards' | 'fuel'
 
   const { data: carrier, isLoading, refetch } = useQuery({
     queryKey: ['carrier-detail', carrierId],
@@ -477,9 +983,27 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
         </div>
       </div>
 
-      {/* Services */}
+      {/* Tab bar */}
+      <div style={{ display:'flex', gap:2, marginBottom:20, borderBottom:'1px solid rgba(255,255,255,0.08)' }}>
+        {[
+          { key:'services',   label:'Services' },
+          { key:'rate-cards', label:'Cost Rate Cards' },
+          { key:'fuel',       label:'Fuel Groups' },
+        ].map(t => (
+          <button key={t.key} onClick={() => setCarrierTab(t.key)} style={{
+            background:'none', border:'none', cursor:'pointer',
+            padding:'10px 20px', fontSize:13, fontWeight:600,
+            color: carrierTab===t.key ? '#00C853' : '#AAAAAA',
+            borderBottom: carrierTab===t.key ? '2px solid #00C853' : '2px solid transparent',
+            marginBottom:-1, transition:'all 0.15s',
+          }}>{t.label}</button>
+        ))}
+      </div>
+
+      {/* ── Tab: Services ── */}
+      {carrierTab === 'services' && <>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
-        <h2 style={{ fontSize:17, fontWeight:700, color:'#7B2FBE', margin:0 }}>Services & Rate Cards</h2>
+        <h2 style={{ fontSize:15, fontWeight:700, color:'#7B2FBE', margin:0 }}>Services</h2>
         <button onClick={() => setAddingService(a=>!a)} className="btn-primary"><Plus size={13}/> Add Service</button>
       </div>
 
@@ -627,8 +1151,15 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
         )}
       </div>
 
-      {/* ── Fuel Groups ────────────────────────────────────────── */}
-      <div>
+      </> /* end carrierTab === 'services' */ }
+
+      {/* ── Tab: Cost Rate Cards ── */}
+      {carrierTab === 'rate-cards' && carrier && (
+        <CarrierRateCardsTab courierId={carrier.id} courierCode={carrier.code} />
+      )}
+
+      {/* ── Tab: Fuel Groups ── */}
+      {carrierTab === 'fuel' && <div>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
           <h2 style={{ fontSize:17, fontWeight:700, color:'#FFC107', margin:0, display:'flex', alignItems:'center', gap:8 }}>
             <Zap size={16}/> Fuel Groups
@@ -697,7 +1228,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
             ))}
           </div>
         )}
-      </div>
+      </div>}  {/* end carrierTab === 'fuel' */}
     </div>
   );
 }

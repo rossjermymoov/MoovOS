@@ -16,6 +16,8 @@ import { seedCustomerRates } from './scripts/seedCustomerRates.js';
 import customerRatesRouter from './routes/customerRates.js';
 import trackingRouter, { catchUpVerified, purgeOldTrackingData } from './routes/tracking.js';
 import billingRouter from './routes/billing.js';
+import carrierRateCardsRouter, { activateDueCarrierRateCards } from './routes/carrierRateCards.js';
+import customerRateCardsRouter from './routes/customerRateCards.js';
 
 dotenv.config();
 
@@ -29,18 +31,20 @@ const isProd = process.env.NODE_ENV === 'production';
 // ─── Middleware ───────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:3000' }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // larger limit for CSV import payloads
 app.use(morgan(isProd ? 'combined' : 'dev'));
 
 // ─── API Routes ──────────────────────────────────────────────
-app.use('/api/customers',        customersRouter);
-app.use('/api/staff',            staffRouter);
-app.use('/api/carriers',         carriersRouter);
-app.use('/api/customer-pricing', customerPricingRouter);
-app.use('/api/customer-rates',   customerRatesRouter);
-app.use('/api/v1/webhooks',      webhooksRouter);
-app.use('/api/tracking',         trackingRouter);
-app.use('/api/billing',          billingRouter);
+app.use('/api/customers',             customersRouter);
+app.use('/api/staff',                 staffRouter);
+app.use('/api/carriers',              carriersRouter);
+app.use('/api/customer-pricing',      customerPricingRouter);
+app.use('/api/customer-rates',        customerRatesRouter);
+app.use('/api/v1/webhooks',           webhooksRouter);
+app.use('/api/tracking',              trackingRouter);
+app.use('/api/billing',               billingRouter);
+app.use('/api/carrier-rate-cards',    carrierRateCardsRouter);
+app.use('/api/customer-rate-cards',   customerRateCardsRouter);
 
 // ─── Health check ────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'moov-os' }));
@@ -76,8 +80,11 @@ async function start() {
     await seedCustomerRates();
     await catchUpVerified();
     await purgeOldTrackingData();
+    await activateDueCarrierRateCards();
     // Re-run purge every 24 hours
     setInterval(purgeOldTrackingData, 24 * 60 * 60 * 1000);
+    // Re-check rate card activation every 24 hours (catches date-boundary activations)
+    setInterval(activateDueCarrierRateCards, 24 * 60 * 60 * 1000);
   } catch (err) {
     console.error('❌ Migration failed — server will not start.');
     console.error('   Error code:   ', err.code    || 'unknown');
