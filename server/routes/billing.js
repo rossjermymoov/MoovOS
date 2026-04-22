@@ -377,6 +377,121 @@ router.get('/charges', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── POST /api/billing/batch-reprice ─────────────────────────────────────────
+// Re-price every unpriced charge by re-parsing its raw_payload.
+// Returns a summary: { total, priced, skipped, errors, no_customer, no_rate }
+
+router.post('/batch-reprice', async (req, res, next) => {
+  try {
+    const charges = await query(`
+      SELECT c.id AS charge_id, c.customer_id, c.parcel_qty,
+             s.id AS shipment_id,
+             s.dc_service_id, s.service_name AS s_service_name,
+             s.total_weight_kg, s.parcel_count,
+             s.customer_account, s.raw_payload
+      FROM charges c
+      LEFT JOIN shipments s ON s.id = c.shipment_id
+      WHERE c.price IS NULL
+        AND c.cancelled = false
+      ORDER BY c.created_at ASC
+    `);
+
+    const summary = {
+      total:       charges.rows.length,
+      priced:      0,
+      no_customer: 0,
+      no_rate:     0,
+      errors:      0,
+    };
+
+    for (const row of charges.rows) {
+      try {
+        // Re-parse raw_payload for fields that may have been null on original ingest
+        const rawPayload = typeof row.raw_payload === 'string'
+          ? safeJson(row.raw_payload) || {}
+          : (row.raw_payload || {});
+        const rShip  = rawPayload.request || {};
+        const reqShip = rShip.shipment || safeJson(rawPayload.request_shipment) || {};
+        const ship    = rawPayload.shipment || {};
+
+        // Resolve customer
+        let customerId = row.customer_id;
+        if (!customerId) {
+          const acctNum = row.customer_account
+            || reqShip.account_number
+            || ship.account_number;
+          if (acctNum) {
+            const cr = await query(
+              'SELECT id FROM customers WHERE account_number = $1',
+              [acctNum]
+            );
+            if (cr.rows.length) customerId = cr.rows[0].id;
+          }
+        }
+
+        if (!customerId) { summary.no_customer++; continue; }
+
+        const dcServiceId = row.dc_service_id || reqShip.dc_service_id;
+        const serviceName = row.s_service_name
+          || ship.friendly_service_name
+          || reqShip.friendly_service_name;
+
+        // Weight
+        let totalWt = parseFloat(row.total_weight_kg) || null;
+        if (!totalWt) {
+          const parcels = ship.create_label_parcels || [];
+          totalWt = parcels.length
+            ? parcels.reduce((s, p) => s + (parseFloat(p.weight) || 0), 0)
+            : parseFloat(reqShip._summed_total_weight) || null;
+        }
+        const parcelQty = row.parcel_qty || row.parcel_count
+          || (reqShip.parcels || []).length || 1;
+        const weightPerParcel = parcelQty > 0 && totalWt
+          ? totalWt / parcelQty : totalWt;
+
+        // Back-fill customer + service fields on shipment/charge if missing
+        if (!row.customer_id && customerId) {
+          await query(`
+            UPDATE shipments
+            SET customer_id  = $1,
+                dc_service_id = COALESCE(dc_service_id, $2),
+                service_name  = COALESCE(service_name,  $3),
+                updated_at    = NOW()
+            WHERE id = $4
+          `, [customerId, dcServiceId || null, serviceName || null, row.shipment_id]);
+          await query(
+            `UPDATE charges SET customer_id = $1, updated_at = NOW() WHERE id = $2`,
+            [customerId, row.charge_id]
+          );
+        }
+
+        // Look up rate
+        const rate = await lookupRate(customerId, dcServiceId, serviceName, weightPerParcel);
+        if (!rate) { summary.no_rate++; continue; }
+
+        const totalPrice = parseFloat((rate.price * parcelQty).toFixed(2));
+
+        await query(`
+          UPDATE charges
+          SET price             = $1,
+              zone_name         = $2,
+              weight_class_name = $3,
+              rate_id           = $4,
+              price_auto        = true,
+              updated_at        = NOW()
+          WHERE id = $5
+        `, [totalPrice, rate.zone_name, rate.weight_class_name, rate.rate_id, row.charge_id]);
+
+        summary.priced++;
+      } catch (err) {
+        summary.errors++;
+      }
+    }
+
+    res.json(summary);
+  } catch (err) { next(err); }
+});
+
 // ─── GET /api/billing/charges/:id/debug ──────────────────────────────────────
 // Step-by-step trace of why a charge did or did not get a price.
 

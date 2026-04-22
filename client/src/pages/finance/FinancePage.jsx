@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Search, CheckCircle, XCircle, AlertCircle,
   Edit2, Check, X, RefreshCw, ChevronLeft, ChevronRight, Bell,
-  Bug, FileJson, RotateCcw,
+  Bug, FileJson, RotateCcw, Zap,
 } from 'lucide-react';
 import { billingApi } from '../../api/billing';
 import { customersApi } from '../../api/customers';
@@ -497,6 +497,8 @@ export default function FinancePage() {
   const [offset, setOffset] = useState(0);
   const [debugCharge, setDebugCharge] = useState(null);
   const [payloadCharge, setPayloadCharge] = useState(null);
+  const [batchResult, setBatchResult] = useState(null);
+  const [batchRunning, setBatchRunning] = useState(false);
 
   // Customer dropdown data
   const { data: custData } = useQuery({
@@ -588,6 +590,22 @@ export default function FinancePage() {
     patch.mutate({ id: charge.id, data: { cancelled: true } });
   }
 
+  async function runBatchReprice() {
+    if (!confirm('This will attempt to auto-price all unpriced charges by re-parsing their webhook payloads. Continue?')) return;
+    setBatchRunning(true);
+    setBatchResult(null);
+    try {
+      const result = await billingApi.batchReprice();
+      setBatchResult(result);
+      qc.invalidateQueries(['billing-charges']);
+      qc.invalidateQueries(['billing-stats']);
+    } catch (err) {
+      setBatchResult({ error: err.message });
+    } finally {
+      setBatchRunning(false);
+    }
+  }
+
   const th = { fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase',
     letterSpacing: '0.06em', padding: '10px 12px', whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.06)' };
 
@@ -600,6 +618,23 @@ export default function FinancePage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, color: '#00C853' }}>Finance & Billing</h1>
         <div style={{ display: 'flex', gap: 10 }}>
+          {stats?.unpriced > 0 && (
+            <button
+              onClick={runBatchReprice}
+              disabled={batchRunning}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                background: batchRunning ? 'rgba(255,193,7,0.08)' : 'rgba(255,193,7,0.12)',
+                border: '1px solid rgba(255,193,7,0.4)',
+                borderRadius: 8, color: '#FFC107',
+                padding: '7px 14px', cursor: batchRunning ? 'not-allowed' : 'pointer',
+                fontSize: 13, fontWeight: 700,
+              }}
+            >
+              <Zap size={14} />
+              {batchRunning ? 'Pricing…' : `Auto-price ${stats.unpriced} charges`}
+            </button>
+          )}
           <button
             className="btn-ghost"
             onClick={() => refetch()}
@@ -609,6 +644,46 @@ export default function FinancePage() {
           </button>
         </div>
       </div>
+
+      {/* Batch reprice result banner */}
+      {batchResult && (
+        <div style={{
+          background: batchResult.error ? 'rgba(244,67,54,0.08)' : 'rgba(0,200,83,0.08)',
+          border: `1px solid ${batchResult.error ? 'rgba(244,67,54,0.3)' : 'rgba(0,200,83,0.3)'}`,
+          borderRadius: 10, padding: '12px 16px', marginBottom: 16,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        }}>
+          {batchResult.error ? (
+            <span style={{ color: '#F44336', fontSize: 13 }}>Error: {batchResult.error}</span>
+          ) : (
+            <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+              <span style={{ color: '#00C853', fontWeight: 700 }}>
+                ✓ {batchResult.priced} charges priced
+              </span>
+              {batchResult.no_customer > 0 && (
+                <span style={{ color: '#FFC107' }}>
+                  {batchResult.no_customer} customer not matched
+                </span>
+              )}
+              {batchResult.no_rate > 0 && (
+                <span style={{ color: '#FFC107' }}>
+                  {batchResult.no_rate} no rate found
+                </span>
+              )}
+              {batchResult.errors > 0 && (
+                <span style={{ color: '#F44336' }}>
+                  {batchResult.errors} errors
+                </span>
+              )}
+              <span style={{ color: '#555' }}>of {batchResult.total} total</span>
+            </div>
+          )}
+          <button onClick={() => setBatchResult(null)}
+            style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', padding: 2 }}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Aged unbilled alert banner */}
       {showAlerts && agedAlerts.length > 0 && (
