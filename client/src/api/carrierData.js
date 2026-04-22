@@ -1,4 +1,6 @@
-import api from './api';
+import axios from 'axios';
+
+const api = axios.create({ baseURL: '/api' });
 
 const carrierDataApi = {
   // Import weight classes from parsed CSV rows
