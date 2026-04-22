@@ -422,6 +422,118 @@ function coversWeight(weightClassName, weightKg) {
   return false;
 }
 
+// ─── Surcharge engine ─────────────────────────────────────────────────────────
+
+/**
+ * Evaluate a set of filter conditions against a shipment data object.
+ * All conditions must pass (AND logic). Empty filters = always match.
+ */
+function evaluateSurchargeFilters(filters, data) {
+  if (!Array.isArray(filters) || filters.length === 0) return true;
+  for (const f of filters) {
+    const raw = data[f.field];
+    const val = raw != null ? String(raw) : '';
+    switch (f.op) {
+      case 'eq':
+        if (val.toLowerCase() !== String(f.value || '').toLowerCase()) return false;
+        break;
+      case 'not_eq':
+        if (val.toLowerCase() === String(f.value || '').toLowerCase()) return false;
+        break;
+      case 'in': {
+        const arr = Array.isArray(f.value)
+          ? f.value.map(v => String(v).toLowerCase())
+          : String(f.value || '').split(',').map(s => s.trim().toLowerCase());
+        if (!arr.includes(val.toLowerCase())) return false;
+        break;
+      }
+      case 'not_in': {
+        const arr = Array.isArray(f.value)
+          ? f.value.map(v => String(v).toLowerCase())
+          : String(f.value || '').split(',').map(s => s.trim().toLowerCase());
+        if (arr.includes(val.toLowerCase())) return false;
+        break;
+      }
+      case 'gt':  if (!(parseFloat(val) > parseFloat(f.value)))  return false; break;
+      case 'lt':  if (!(parseFloat(val) < parseFloat(f.value)))  return false; break;
+      case 'gte': if (!(parseFloat(val) >= parseFloat(f.value))) return false; break;
+      case 'lte': if (!(parseFloat(val) <= parseFloat(f.value))) return false; break;
+      case 'contains':
+        if (!val.toLowerCase().includes(String(f.value || '').toLowerCase())) return false;
+        break;
+      default: break;
+    }
+  }
+  return true;
+}
+
+/**
+ * Evaluate all active surcharge rules for the courier and create
+ * surcharge charge rows for any that match the shipment.
+ */
+async function applySurcharges(shipmentId, customerId, basePrice, shipmentData) {
+  try {
+    if (!shipmentId || !customerId || !shipmentData.courier) return;
+
+    const { rows: surcharges } = await query(`
+      SELECT s.*,
+             COALESCE((
+               SELECT json_agg(r ORDER BY r.created_at)
+               FROM surcharge_rules r
+               WHERE r.surcharge_id = s.id AND r.active = true
+             ), '[]'::json) AS rules
+      FROM surcharges s
+      JOIN couriers c ON c.id = s.courier_id
+      WHERE s.active = true AND LOWER(c.code) = LOWER($1)
+    `, [shipmentData.courier]);
+
+    for (const surcharge of surcharges) {
+      const rules = Array.isArray(surcharge.rules) ? surcharge.rules : [];
+      if (!rules.length) continue;
+
+      // Any rule match fires the surcharge (OR across rules)
+      let matched = false;
+      for (const rule of rules) {
+        if (evaluateSurchargeFilters(rule.filters || [], shipmentData)) { matched = true; break; }
+      }
+      if (!matched) continue;
+
+      // Idempotency: skip if surcharge charge already exists
+      const { rows: existing } = await query(
+        'SELECT id FROM charges WHERE shipment_id=$1 AND surcharge_id=$2',
+        [shipmentId, surcharge.id]
+      );
+      if (existing.length) continue;
+
+      // Customer override takes precedence over default
+      const { rows: overrides } = await query(
+        `SELECT override_value FROM customer_surcharge_overrides
+         WHERE customer_id=$1 AND surcharge_id=$2 AND active=true`,
+        [customerId, surcharge.id]
+      );
+      const effectiveValue = overrides.length
+        ? parseFloat(overrides[0].override_value)
+        : parseFloat(surcharge.default_value);
+
+      // Fuel-style: percentage of base rate. Everything else: flat amount.
+      let price;
+      if (surcharge.calc_type === 'percentage') {
+        price = parseFloat(((parseFloat(basePrice) || 0) * effectiveValue / 100).toFixed(4));
+      } else {
+        price = effectiveValue;
+      }
+
+      await query(`
+        INSERT INTO charges
+          (shipment_id, customer_id, charge_type, service_name, price, price_auto, surcharge_id, parcel_qty)
+        VALUES ($1, $2, 'surcharge', $3, $4, true, $5, 1)
+      `, [shipmentId, customerId, surcharge.name, price, surcharge.id]);
+    }
+  } catch (err) {
+    console.error('[applySurcharges] error:', err.message);
+  }
+}
+
 // ─── POST /api/billing/webhook ────────────────────────────────────────────────
 
 router.post('/webhook', async (req, res, next) => {
@@ -628,6 +740,17 @@ router.post('/webhook', async (req, res, next) => {
       rate != null,
       rate ? null : priceFailReason,
     ]);
+
+    // Apply surcharges (fuel, clearance, congestion, etc.) — non-blocking
+    await applySurcharges(shipmentId, customerId, totalPrice, {
+      courier,
+      dc_service_id:       dcServiceId,
+      service_name:        serviceName,
+      ship_to_country_iso: shipToCountry,
+      ship_to_postcode:    shipToPostcode,
+      parcel_count:        parcelCount,
+      total_weight_kg:     totalWeightKg,
+    });
 
     res.json({
       ok: true,

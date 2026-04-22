@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { customersApi } from '../../api/customers';
 import { customerRateCardsApi } from '../../api/customerRateCards';
+import { surchargesApi } from '../../api/surcharges';
 import { HealthBadge, AccountStatusBadge, TierBadge, CreditUtilisationBar } from '../../components/ui/StatusBadge';
 import CustomerPricingTab from './tabs/CustomerPricingTab';
 import { format } from 'date-fns';
@@ -136,6 +137,144 @@ function BillingAliasesEditor({ customerId, aliases, onRefresh }) {
         </button>
       </div>
     </div>
+  );
+}
+
+// ─── Surcharge Overrides per customer ────────────────────────
+function SurchargeOverridesEditor({ customerId }) {
+  const qc = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const [newForm, setNewForm] = useState({ surcharge_id: '', override_value: '' });
+
+  const { data: overrides = [], isLoading: loadingOverrides } = useQuery({
+    queryKey: ['customer-surcharge-overrides', customerId],
+    queryFn: () => surchargesApi.getCustomerOverrides(customerId),
+    enabled: !!customerId,
+  });
+
+  // Fetch all surcharges so we can pick which one to override
+  const { data: allSurcharges = [] } = useQuery({
+    queryKey: ['surcharges'],
+    queryFn: () => surchargesApi.list(),
+  });
+
+  const upsert = useMutation({
+    mutationFn: () => surchargesApi.upsertCustomerOverride(customerId, {
+      surcharge_id: newForm.surcharge_id,
+      override_value: parseFloat(newForm.override_value),
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries(['customer-surcharge-overrides', customerId]);
+      setAdding(false);
+      setNewForm({ surcharge_id: '', override_value: '' });
+    },
+  });
+
+  const remove = useMutation({
+    mutationFn: (id) => surchargesApi.deleteCustomerOverride(customerId, id),
+    onSuccess: () => qc.invalidateQueries(['customer-surcharge-overrides', customerId]),
+  });
+
+  // Surcharges not yet overridden
+  const overriddenIds = overrides.map(o => o.surcharge_id);
+  const available = allSurcharges.filter(s => !overriddenIds.includes(s.id));
+
+  const selectedSurcharge = allSurcharges.find(s => s.id === newForm.surcharge_id);
+
+  return (
+    <InfoCard title="Surcharge Overrides">
+      {loadingOverrides && <span style={{ fontSize: 12, color: '#888' }}>Loading…</span>}
+
+      {overrides.length === 0 && !loadingOverrides && (
+        <p style={{ fontSize: 12, color: '#666', fontStyle: 'italic', margin: '0 0 8px' }}>
+          No overrides — all standard surcharge rates apply.
+        </p>
+      )}
+
+      {overrides.map(o => {
+        const isPercent = o.calc_type === 'percentage';
+        return (
+          <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ flex: 1 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{o.surcharge_name}</span>
+              <span style={{ fontSize: 11, color: '#888', marginLeft: 6 }}>{o.courier_name} · {o.code}</span>
+            </div>
+            <span style={{ fontSize: 11, color: '#888' }}>
+              Standard: {isPercent ? `${parseFloat(o.default_value).toFixed(2)}%` : `£${parseFloat(o.default_value).toFixed(2)}`}
+            </span>
+            <span style={{
+              fontSize: 12, fontWeight: 700,
+              color: parseFloat(o.override_value) > parseFloat(o.default_value) ? '#F59E0B' : '#00C853',
+            }}>
+              → {isPercent ? `${parseFloat(o.override_value).toFixed(2)}%` : `£${parseFloat(o.override_value).toFixed(2)}`}
+            </span>
+            <button
+              onClick={() => remove.mutate(o.id)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#E91E8C', padding: 4 }}
+              title="Remove override"
+            >
+              <X size={13} />
+            </button>
+          </div>
+        );
+      })}
+
+      {adding ? (
+        <div style={{ background: 'rgba(0,200,83,0.05)', border: '1px solid rgba(0,200,83,0.2)', borderRadius: 8, padding: 12, marginTop: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 8, marginBottom: 8 }}>
+            <div>
+              <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 3 }}>Surcharge</label>
+              <select
+                value={newForm.surcharge_id}
+                onChange={e => setNewForm(f => ({ ...f, surcharge_id: e.target.value }))}
+                style={{ background: 'rgba(30,30,40,0.95)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, color: '#fff', fontSize: 13, padding: '6px 10px', width: '100%' }}
+              >
+                <option value="">— Select surcharge —</option>
+                {available.map(s => (
+                  <option key={s.id} value={s.id}>{s.courier_name} · {s.code} — {s.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 3 }}>
+                Override {selectedSurcharge?.calc_type === 'percentage' ? '(%)' : '(£)'}
+              </label>
+              <input
+                type="number" step="0.01"
+                value={newForm.override_value}
+                onChange={e => setNewForm(f => ({ ...f, override_value: e.target.value }))}
+                placeholder={selectedSurcharge?.calc_type === 'percentage' ? '12.00' : '5.50'}
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, color: '#fff', fontSize: 13, padding: '6px 10px', width: '100%', boxSizing: 'border-box' }}
+              />
+            </div>
+          </div>
+          {selectedSurcharge && (
+            <p style={{ fontSize: 11, color: '#888', margin: '0 0 8px' }}>
+              Standard: {selectedSurcharge.calc_type === 'percentage'
+                ? `${parseFloat(selectedSurcharge.default_value).toFixed(2)}%${selectedSurcharge.calc_base === 'base_rate' ? ' of base rate' : ' of total'}`
+                : `£${parseFloat(selectedSurcharge.default_value).toFixed(2)} flat`}
+            </p>
+          )}
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button onClick={() => setAdding(false)} style={{ background: 'none', border: 'none', color: '#AAAAAA', cursor: 'pointer', fontSize: 12 }}>Cancel</button>
+            <button
+              onClick={() => upsert.mutate()}
+              disabled={!newForm.surcharge_id || !newForm.override_value || upsert.isPending}
+              style={{ background: '#00C853', border: 'none', borderRadius: 6, color: '#fff', fontSize: 12, fontWeight: 700, padding: '6px 14px', cursor: 'pointer' }}
+            >
+              <Check size={12} style={{ marginRight: 4 }} /> Save override
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setAdding(true)}
+          style={{ background: 'none', border: '1px dashed rgba(255,255,255,0.15)', borderRadius: 6, color: '#AAAAAA', cursor: 'pointer', fontSize: 12, padding: '6px 14px', marginTop: 4 }}
+        >
+          <Plus size={11} style={{ marginRight: 4 }} /> Add override
+        </button>
+      )}
+    </InfoCard>
   );
 }
 
@@ -411,6 +550,8 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
           </InfoCard>
 
           <CustomerRateCardAssignments customerId={c.id} />
+
+          <SurchargeOverridesEditor customerId={c.id} />
 
           {c.health_score_summary && (
             <InfoCard title="Health Score Detail">

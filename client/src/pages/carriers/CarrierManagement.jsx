@@ -17,6 +17,7 @@ import { carriersApi } from '../../api/carriers';
 import { getCourierLogo } from '../../utils/courierLogos';
 import { carrierRateCardsApi } from '../../api/carrierRateCards';
 import carrierDataApi from '../../api/carrierData';
+import SurchargesTab from './SurchargesTab';
 import axios from 'axios';
 
 const api = axios.create({ baseURL: '/api' });
@@ -1039,6 +1040,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
           { key:'services',   label:'Services' },
           { key:'rate-cards', label:'Cost Rate Cards' },
           { key:'fuel',       label:'Fuel Groups' },
+          { key:'surcharges', label:'Surcharges' },
         ].map(t => (
           <button key={t.key} onClick={() => setCarrierTab(t.key)} style={{
             background:'none', border:'none', cursor:'pointer',
@@ -1279,6 +1281,11 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
           </div>
         )}
       </div>}  {/* end carrierTab === 'fuel' */}
+
+      {/* ── Tab: Surcharges ── */}
+      {carrierTab === 'surcharges' && carrier && (
+        <SurchargesTab courierId={carrier.id} courierCode={carrier.code} />
+      )}
     </div>
   );
 }

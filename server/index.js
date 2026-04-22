@@ -20,6 +20,7 @@ import carrierRateCardsRouter, { activateDueCarrierRateCards } from './routes/ca
 import customerRateCardsRouter from './routes/customerRateCards.js';
 import carrierDataRouter from './routes/carrierData.js';
 import customerServicePricingRouter from './routes/customerServicePricing.js';
+import surchargesRouter from './routes/surcharges.js';
 
 dotenv.config();
 
@@ -49,6 +50,7 @@ app.use('/api/carrier-rate-cards',    carrierRateCardsRouter);
 app.use('/api/customer-rate-cards',   customerRateCardsRouter);
 app.use('/api/carrier-data',          carrierDataRouter);
 app.use('/api/customer-service-pricing', customerServicePricingRouter);
+app.use('/api/surcharges',              surchargesRouter);
 // Webhook-safe alias — suppliers that block URLs containing "billing"
 // should send to /api/moov-charges/webhook instead
 app.use('/api/moov-charges',          billingRouter);
