@@ -129,7 +129,8 @@ router.post('/webhook', async (req, res, next) => {
     // ── Created ───────────────────────────────────────────────────────────────
     const shipment    = payload.shipment    || {};
     const request     = payload.request     || {};
-    const reqShipment = request.shipment    || {};
+    // request_shipment may arrive as a top-level stringified JSON field
+    const reqShipment = request.shipment || safeJson(payload.request_shipment) || {};
     const responseParsed = safeJson(payload.response) || {};
     const billingResp = responseParsed.billing || {};
 
@@ -417,7 +418,8 @@ router.get('/charges/:id/debug', async (req, res, next) => {
       : (row.raw_payload || {});
     const shipment    = payload.shipment    || {};
     const request     = payload.request     || {};
-    const reqShipment = request.shipment    || {};
+    // request_shipment may arrive as a top-level stringified JSON field
+    const reqShipment = request.shipment || safeJson(payload.request_shipment) || {};
 
     const accountNumber = shipment.account_number || reqShipment.account_number;
     const dcServiceId   = reqShipment.dc_service_id || shipment.dc_service_id || row.dc_service_id;
@@ -638,7 +640,8 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
     const r = await query(`
       SELECT c.customer_id, c.parcel_qty,
              s.dc_service_id, s.service_name AS s_service_name,
-             s.total_weight_kg, s.parcel_count
+             s.total_weight_kg, s.parcel_count,
+             s.customer_account, s.raw_payload
       FROM charges c
       LEFT JOIN shipments s ON s.id = c.shipment_id
       WHERE c.id = $1
@@ -647,12 +650,43 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
     if (!r.rows.length) return res.status(404).json({ error: 'Charge not found' });
     const row = r.rows[0];
 
-    const customerId  = row.customer_id;
-    const dcServiceId = row.dc_service_id;
-    const serviceName = row.s_service_name;
-    const parcelQty   = row.parcel_qty || row.parcel_count || 1;
-    const totalWt     = parseFloat(row.total_weight_kg) || null;
+    // Re-parse raw_payload for fields that may have been null when the shipment was first ingested
+    // (e.g. before the request_shipment parsing fix was deployed)
+    const rawPayload  = typeof row.raw_payload === 'string' ? safeJson(row.raw_payload) || {} : (row.raw_payload || {});
+    const rShip       = rawPayload.request || {};
+    const reqShip     = rShip.shipment || safeJson(rawPayload.request_shipment) || {};
+
+    // Resolve customer — use stored id or re-derive from account_number in raw payload
+    let customerId = row.customer_id;
+    if (!customerId) {
+      const acctNum = row.customer_account || reqShip.account_number || rawPayload.shipment?.account_number;
+      if (acctNum) {
+        const cr = await query('SELECT id FROM customers WHERE account_number = $1', [acctNum]);
+        if (cr.rows.length) customerId = cr.rows[0].id;
+      }
+    }
+
+    const dcServiceId = row.dc_service_id || reqShip.dc_service_id;
+    const serviceName = row.s_service_name || rawPayload.shipment?.friendly_service_name || reqShip.friendly_service_name;
+
+    // Weight — stored column first, then re-derive from raw payload
+    let totalWt = parseFloat(row.total_weight_kg) || null;
+    if (!totalWt) {
+      const createParcels = rawPayload.shipment?.create_label_parcels || [];
+      totalWt = createParcels.length
+        ? createParcels.reduce((s, p) => s + (parseFloat(p.weight) || 0), 0)
+        : parseFloat(reqShip._summed_total_weight) || null;
+    }
+
+    const parcelQty = row.parcel_qty || row.parcel_count || (reqShip.parcels || []).length || 1;
     const weightPerParcel = parcelQty > 0 && totalWt ? totalWt / parcelQty : totalWt;
+
+    // If we derived a customer from raw payload but it wasn't stored, back-fill the shipment row
+    if (!row.customer_id && customerId) {
+      await query(`UPDATE shipments SET customer_id = $1, updated_at = NOW()
+                   WHERE id = (SELECT shipment_id FROM charges WHERE id = $2)`, [customerId, id]);
+      await query(`UPDATE charges SET customer_id = $1, updated_at = NOW() WHERE id = $2`, [customerId, id]);
+    }
 
     const rate = await lookupRate(customerId, dcServiceId, serviceName, weightPerParcel);
     if (!rate) {
