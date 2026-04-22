@@ -11,6 +11,7 @@
 import express from 'express';
 import { createHash } from 'crypto';
 import { query } from '../db/index.js';
+import { normalisePayload as normaliseTrackingPayload, upsertEvent as upsertTrackingEvent } from './tracking.js';
 
 const router = express.Router();
 
@@ -561,21 +562,37 @@ router.post('/webhook', async (req, res, next) => {
     const payload = unwrapPayload(body);
     const eventType = payload.event_type || payload.event || payload.type || '';
 
-    // ── Guard: only process shipment lifecycle events ─────────────────────────
-    // Tracking webhooks (event_type = 'tracking.update', 'parcel.tracking', etc.)
-    // must go to /api/tracking/webhook — not here.
+    // ── shipment.tracked — process as a tracking update ──────────────────────
+    // Parcel Master sends ALL event types to this URL, including tracking updates.
+    // Route them through the same tracking logic used by /api/tracking/webhook.
+    if (eventType === 'shipment.tracked') {
+      const events  = normaliseTrackingPayload(body);
+      const results = [];
+      for (const event of events) {
+        results.push(await upsertTrackingEvent(event, body));
+      }
+      return res.json({ ok: true, action: 'tracking_processed', count: results.length, results });
+    }
+
+    // ── Guard: only process recognised shipment lifecycle events ──────────────
     const SHIPMENT_EVENTS = new Set([
       'shipment.created', 'shipment.cancelled', 'shipment.deleted', 'shipment.updated',
     ]);
     const TRACKING_KEYWORDS = ['tracking', 'parcel.scan', 'delivery_update', 'status_update'];
     const lowerEvent = eventType.toLowerCase();
-    const isTrackingEvent = TRACKING_KEYWORDS.some(k => lowerEvent.includes(k));
+    const isOtherTrackingEvent = TRACKING_KEYWORDS.some(k => lowerEvent.includes(k));
 
-    if (isTrackingEvent) {
-      return res.json({ ok: true, action: 'skipped', reason: `tracking event "${eventType}" ignored — use /api/tracking/webhook` });
+    if (isOtherTrackingEvent) {
+      // Other tracking-style events — process as tracking, not billing
+      const events  = normaliseTrackingPayload(body);
+      const results = [];
+      for (const event of events) {
+        results.push(await upsertTrackingEvent(event, body));
+      }
+      return res.json({ ok: true, action: 'tracking_processed', count: results.length });
     }
 
-    // If there's an explicit event_type we don't recognise as a shipment event, skip it
+    // Anything else unrecognised — skip cleanly
     if (eventType && !SHIPMENT_EVENTS.has(eventType)) {
       return res.json({ ok: true, action: 'skipped', reason: `unrecognised event_type "${eventType}"` });
     }
