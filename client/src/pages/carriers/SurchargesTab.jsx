@@ -269,37 +269,58 @@ function RulesPanel({ surcharge, courierId }) {
         </div>
       )}
 
-      {rules.map(rule => (
-        <div key={rule.id}>
-          {editingRule === rule.id
-            ? <RuleEditor surchargeId={surcharge.id} courierId={courierId} rule={rule} onSave={() => setEditingRule(null)} onCancel={() => setEditingRule(null)} />
-            : (
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 7, padding: '8px 12px', marginBottom: 6 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{rule.name}</span>
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 9999, background: rule.logic === 'OR' ? 'rgba(245,158,11,0.2)' : 'rgba(123,47,190,0.2)', color: rule.logic === 'OR' ? '#F59E0B' : '#C4B5FD' }}>{rule.logic || 'AND'}</span>
-                    {(rule.service_codes || []).length > 0 && rule.service_codes.map(sc => <span key={sc} style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 9999, background: 'rgba(0,188,212,0.15)', color: '#00BCD4' }}>{sc}</span>)}
+      {rules.map(rule => {
+        const svcCodes = rule.service_codes || [];
+        const filters  = rule.filters || [];
+        return (
+          <div key={rule.id}>
+            {editingRule === rule.id
+              ? <RuleEditor surchargeId={surcharge.id} courierId={courierId} rule={rule} onSave={() => setEditingRule(null)} onCancel={() => setEditingRule(null)} />
+              : (
+                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 7, padding: '9px 12px', marginBottom: 6 }}>
+
+                  {/* Row 1 — name + logic + actions */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: svcCodes.length || filters.length ? 7 : 0 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', flex: 1 }}>{rule.name}</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: rule.logic === 'OR' ? 'rgba(245,158,11,0.18)' : 'rgba(123,47,190,0.18)', color: rule.logic === 'OR' ? '#F59E0B' : '#C4B5FD', flexShrink: 0 }}>{rule.logic || 'AND'}</span>
+                    <button type="button" onClick={() => setEditingRule(rule.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#555', padding: '2px 4px', fontSize: 12, flexShrink: 0 }}>✏️</button>
+                    <button type="button" onClick={() => deleteRule.mutate(rule.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#E91E8C', padding: '2px 4px', display: 'flex', flexShrink: 0 }}><Trash2 size={12} /></button>
                   </div>
-                  {(rule.filters || []).length > 0
+
+                  {/* Row 2 — services (wrapping, compact) */}
+                  {svcCodes.length > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, flexWrap: 'wrap', marginBottom: filters.length ? 6 : 0 }}>
+                      <span style={{ fontSize: 10, color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>Services</span>
+                      {svcCodes.map(sc => (
+                        <span key={sc} style={{ fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 4, background: 'rgba(0,188,212,0.12)', color: '#00BCD4', border: '1px solid rgba(0,188,212,0.2)' }}>{sc}</span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Row 3 — conditions */}
+                  {filters.length > 0
                     ? <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                        {rule.filters.map((f, i) => {
-                          const fl = FILTER_FIELDS.find(x => x.value === f.field)?.label || f.field;
-                          const op = [...TEXT_OPS, ...NUM_OPS].find(o => o.value === f.op)?.label || f.op;
+                        {filters.map((f, i) => {
+                          const fl  = FILTER_FIELDS.find(x => x.value === f.field)?.label || f.field;
+                          const op  = [...TEXT_OPS, ...NUM_OPS].find(o => o.value === f.op)?.label || f.op;
                           const val = Array.isArray(f.value) ? f.value.join(', ') : f.value;
-                          return <span key={i} style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 9999, background: 'rgba(123,47,190,0.2)', color: '#C4B5FD' }}>{i > 0 && <span style={{ opacity: 0.5, marginRight: 4 }}>{rule.logic}</span>}{fl} {op} <strong>{val}</strong></span>;
+                          return (
+                            <span key={i} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: 'rgba(123,47,190,0.15)', color: '#C4B5FD', border: '1px solid rgba(123,47,190,0.2)' }}>
+                              {i > 0 && <span style={{ opacity: 0.45, marginRight: 4, fontSize: 10, fontWeight: 700 }}>{rule.logic}</span>}
+                              {fl} <span style={{ opacity: 0.6 }}>{op}</span> <strong>{val}</strong>
+                            </span>
+                          );
                         })}
                       </div>
-                    : <span style={{ fontSize: 11, color: '#00C853' }}>Always fires{(rule.service_codes || []).length ? ' for selected services' : ''}</span>
+                    : !svcCodes.length && <span style={{ fontSize: 11, color: '#00C853' }}>Fires for all shipments</span>
                   }
+
                 </div>
-                <button onClick={() => setEditingRule(rule.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#888', padding: 4, fontSize: 13 }}>✏️</button>
-                <button onClick={() => deleteRule.mutate(rule.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#E91E8C', padding: 4, display: 'flex' }}><Trash2 size={13} /></button>
-              </div>
-            )
-          }
-        </div>
-      ))}
+              )
+            }
+          </div>
+        );
+      })}
 
       {addingRule && <RuleEditor surchargeId={surcharge.id} courierId={courierId} rule={null} onSave={() => setAddingRule(false)} onCancel={() => setAddingRule(false)} />}
     </div>
