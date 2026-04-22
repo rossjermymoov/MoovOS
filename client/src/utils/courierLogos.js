@@ -203,8 +203,13 @@ const COURIER_LOGOS = {
   "dginternational":   "https://app.heyvoila.io/courier-service-logos/thumbnails/procarrier.jpg",
 };
 
+// Build a lowercase index once for case-insensitive fallback
+const COURIER_LOGOS_LOWER = Object.fromEntries(
+  Object.entries(COURIER_LOGOS).map(([k, v]) => [k.toLowerCase(), v])
+);
+
 export function getCourierLogo(courierCode) {
   if (!courierCode) return null;
   const code = String(courierCode).trim();
-  return COURIER_LOGOS[code] || COURIER_LOGOS[code.toLowerCase()] || null;
+  return COURIER_LOGOS[code] || COURIER_LOGOS_LOWER[code.toLowerCase()] || null;
 }
