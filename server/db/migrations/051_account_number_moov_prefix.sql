@@ -6,19 +6,13 @@
 -- 3. Replace the trigger to generate MOOV-XXXX (4 digits, no leading zeros
 --    for high numbers) instead of MOS-XXXXX
 
--- ── Step 1: Rename MOS-00001 → MOOV-0144 as specified ────────────────────────
-UPDATE customers SET account_number = 'MOOV-0144' WHERE account_number = 'MOS-00001';
-
--- ── Step 2: Renumber remaining MOS- accounts sequentially ────────────────────
--- Assigns MOOV-(max_existing + 1), MOOV-(max_existing + 2), ... to each
--- MOS- account ordered by their current sequence number.
+-- ── Step 1+2: Renumber all MOS- accounts sequentially after current max ───────
 DO $$
 DECLARE
   v_max    INTEGER;
   v_offset INTEGER := 1;
   r        RECORD;
 BEGIN
-  -- Current highest MOOV-XXXX number (after step 1 above)
   SELECT COALESCE(
     MAX(CAST(REGEXP_REPLACE(account_number, '[^0-9]', '', 'g') AS INTEGER)), 0
   )
@@ -26,7 +20,6 @@ BEGIN
   FROM customers
   WHERE account_number ~ '^MOOV-[0-9]+$';
 
-  -- Renumber each remaining MOS- account in order
   FOR r IN
     SELECT id FROM customers
     WHERE account_number ~ '^MOS-[0-9]+$'
