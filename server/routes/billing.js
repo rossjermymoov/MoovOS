@@ -261,20 +261,24 @@ async function zoneForPostcode(serviceCode, serviceName, postcode) {
   return null;
 }
 
-// ── New model: customer_service_pricing ───────────────────────────────────────
-// weight_bands columns: id, zone_id, carrier_rate_card_id, min_weight_kg,
-//   max_weight_kg, price_first, price_sub  (no weight_class_name, no 'price')
-//
-// Zone selection: when multiple zones exist for a service, we MUST use the
-// destination postcode to pick the right one — exactly the same as the legacy
-// model does via zoneForPostcode().  Without this, alphabetical ordering picks
-// the wrong zone (e.g. "Highlands" before "Mainland").
+// ─── Shared zone-match helper ─────────────────────────────────────────────────
+// Given a resolved zone name and an array of rows (each with zone_name),
+// returns the subset whose zone_name matches (case-insensitive substring).
+function filterByZoneName(rows, zoneName) {
+  const zl = zoneName.toLowerCase();
+  return rows.filter(r =>
+    r.zone_name.toLowerCase().includes(zl) || zl.includes(r.zone_name.toLowerCase())
+  );
+}
+
+// ── New model: customer_service_pricing → carrier rate card weight bands ──────
+// Logic: zone first (postcode), then weight band within that zone.
+// Two and only two failure modes: no matching zone, no matching weight band.
 async function lookupViaServicePricing(customerId, serviceCode, serviceName, weightKg, postcode) {
   const res = await query(`
     SELECT
       csp.pricing_type, csp.markup_pct, csp.fixed_fee,
       wb.price_first  AS cost_price,
-      wb.price_sub    AS cost_price_sub,
       wb.min_weight_kg, wb.max_weight_kg,
       z.name          AS zone_name,
       cs.service_code AS svc_code,
@@ -287,17 +291,15 @@ async function lookupViaServicePricing(customerId, serviceCode, serviceName, wei
     JOIN weight_bands       wb  ON wb.zone_id = z.id
                                 AND wb.carrier_rate_card_id = crc.id
     WHERE csp.customer_id = $1
-      AND (
-        cs.service_code ILIKE $2
-        OR cs.name       ILIKE $3
-        OR cs.name       ILIKE $4
-      )
+      AND (cs.service_code ILIKE $2 OR cs.name ILIKE $3 OR cs.name ILIKE $4)
     ORDER BY z.name, wb.min_weight_kg NULLS LAST
   `, [customerId, serviceCode || '', serviceName || '', `%${(serviceName||'').split(' ').slice(0,3).join(' ')}%`]);
 
-  if (!res.rows.length) return null; // no new-model pricing → fall through to legacy
+  if (!res.rows.length) return null; // no entry → fall through to legacy
 
-  const rows = res.rows;
+  const rows   = res.rows;
+  const svcCode = rows[0].svc_code || serviceCode || '';
+  const svcName = rows[0].svc_name || serviceName || '';
 
   const applyPricing = (row) => {
     const cost = parseFloat(row.cost_price || 0);
@@ -305,61 +307,48 @@ async function lookupViaServicePricing(customerId, serviceCode, serviceName, wei
     return cost * (1 + parseFloat(row.markup_pct || 0) / 100);
   };
 
-  const bandLabel = (r) => r.min_weight_kg != null
-    ? `${r.min_weight_kg}–${r.max_weight_kg} kg`
-    : 'All weights';
-
   const buildRate = (r) => ({
-    price: Math.round(applyPricing(r) * 10000) / 10000,
-    cost_price: parseFloat(r.cost_price || 0),
-    zone_name: r.zone_name,
-    weight_class_name: bandLabel(r),
-    rate_id: r.band_id,
-    pricing_type: r.pricing_type,
-    markup_pct: r.markup_pct,
-    fixed_fee: r.fixed_fee,
+    price:             Math.round(applyPricing(r) * 10000) / 10000,
+    cost_price:        parseFloat(r.cost_price || 0),
+    zone_name:         r.zone_name,
+    weight_class_name: r.min_weight_kg != null ? `${r.min_weight_kg}–${r.max_weight_kg} kg` : 'All weights',
+    rate_id:           r.band_id,
+    pricing_type:      r.pricing_type,
+    markup_pct:        r.markup_pct,
+    fixed_fee:         r.fixed_fee,
   });
 
-  // Helper: given a candidate list, pick the one matching the postcode zone.
-  // Falls back to first candidate if zone lookup fails or no match.
-  const pickByZone = async (candidates) => {
-    if (candidates.length === 1) return candidates[0];
-    const distinctZones = [...new Set(candidates.map(r => r.zone_name))];
-    if (distinctZones.length === 1) return candidates[0];
-    if (postcode) {
-      // Use the service code/name from the first row (all belong to same service)
-      const svcCode = candidates[0].svc_code || serviceCode || '';
-      const svcName = candidates[0].svc_name || serviceName || '';
-      const zoneName = await zoneForPostcode(svcCode, svcName, postcode);
-      if (zoneName) {
-        const zl = zoneName.toLowerCase();
-        const hit = candidates.find(r =>
-          r.zone_name.toLowerCase().includes(zl) || zl.includes(r.zone_name.toLowerCase())
-        );
-        if (hit) return hit;
-      }
-    }
-    // Fallback: cheapest (same behaviour as legacy model fallback)
-    return candidates.sort((a, b) => applyPricing(a) - applyPricing(b))[0];
-  };
+  // ── Step 1: resolve zone from postcode ────────────────────────────────────
+  const distinctZones = [...new Set(rows.map(r => r.zone_name))];
+  let zoneRows;
 
-  if (weightKg != null) {
-    const matching = rows.filter(r => rateCoversWeight(r, weightKg));
-    if (matching.length >= 1) {
-      // pickByZone handles the case where multiple zones all cover this weight
-      // (e.g. flat-rate "Parcel" bands — NULL/NULL matches any weight, zone = postcode)
-      const r = await pickByZone(matching);
-      return { rate: buildRate(r), reason: null };
+  if (distinctZones.length === 1) {
+    zoneRows = rows; // single zone — postcode lookup not needed
+  } else {
+    const zoneName = await zoneForPostcode(svcCode, svcName, postcode);
+    if (!zoneName) {
+      return { rate: null, reason: `No matching zone for postcode "${postcode || 'none'}"` };
     }
-    return { rate: null, reason: `No weight band covers ${Math.round(weightKg * 1000) / 1000} kg` };
+    zoneRows = filterByZoneName(rows, zoneName);
+    if (!zoneRows.length) {
+      return { rate: null, reason: `No matching zone for postcode "${postcode}"` };
+    }
   }
 
-  // No weight — resolve by zone, or use single row
-  const r = await pickByZone(rows);
-  return { rate: buildRate(r), reason: null };
+  // ── Step 2: match weight band within the zone ─────────────────────────────
+  if (weightKg != null) {
+    const band = zoneRows.find(r => rateCoversWeight(r, weightKg));
+    if (!band) {
+      return { rate: null, reason: `No weight band covers ${weightKg} kg in zone "${zoneRows[0].zone_name}"` };
+    }
+    return { rate: buildRate(band), reason: null };
+  }
+
+  return { rate: buildRate(zoneRows[0]), reason: null };
 }
 
 // ── Legacy model: customer_rates ──────────────────────────────────────────────
+// Same two-step logic: zone first (postcode), then weight band.
 async function lookupViaCustomerRates(customerId, serviceCode, serviceName, weightKg, postcode) {
   const rateRes = await query(`
     SELECT
@@ -368,11 +357,7 @@ async function lookupViaCustomerRates(customerId, serviceCode, serviceName, weig
       cr.min_weight_kg, cr.max_weight_kg
     FROM customer_rates cr
     WHERE cr.customer_id = $1
-      AND (
-        cr.service_code ILIKE $2
-        OR cr.service_name ILIKE $3
-        OR cr.service_name ILIKE $4
-      )
+      AND (cr.service_code ILIKE $2 OR cr.service_name ILIKE $3 OR cr.service_name ILIKE $4)
     ORDER BY cr.zone_name, cr.min_weight_kg NULLS LAST, cr.weight_class_name
   `, [customerId, serviceCode || '', serviceName || '', `%${(serviceName||'').split(' ').slice(0,3).join(' ')}%`]);
 
@@ -389,53 +374,35 @@ async function lookupViaCustomerRates(customerId, serviceCode, serviceName, weig
 
   const rates = rateRes.rows;
 
-  if (weightKg != null) {
-    const matching = rates.filter(r => rateCoversWeight(r, weightKg));
-    if (matching.length >= 1) {
-      // When multiple zones all cover this weight (common for flat-rate services where
-      // NULL/NULL bands match any weight), pick the correct zone via postcode lookup.
-      const distinctZones = [...new Set(matching.map(r => r.zone_name))];
-      let selected = matching[0];
-      if (distinctZones.length > 1) {
-        const zoneName = await zoneForPostcode(selected.service_code, selected.service_name, postcode);
-        if (zoneName) {
-          const zl = zoneName.toLowerCase();
-          const hit = matching.find(r =>
-            r.zone_name.toLowerCase().includes(zl) || zl.includes(r.zone_name.toLowerCase())
-          );
-          if (hit) selected = hit;
-        } else {
-          // No postcode → cheapest (belt-and-braces fallback)
-          selected = [...matching].sort((a, b) => parseFloat(a.price) - parseFloat(b.price))[0];
-        }
-      }
-      return { rate: { price: parseFloat(selected.price), zone_name: selected.zone_name,
-                       weight_class_name: selected.weight_class_name, rate_id: selected.id }, reason: null };
+  // ── Step 1: resolve zone from postcode ────────────────────────────────────
+  const distinctZones = [...new Set(rates.map(r => r.zone_name))];
+  let zoneRows;
+
+  if (distinctZones.length === 1) {
+    zoneRows = rates;
+  } else {
+    const zoneName = await zoneForPostcode(rates[0].service_code, rates[0].service_name, postcode);
+    if (!zoneName) {
+      return { rate: null, reason: `No matching zone for postcode "${postcode || 'none'}"` };
     }
-    // Diagnose
-    const hasNumericBounds = rates.some(r => r.min_weight_kg != null);
-    const hasUnrecognised  = !hasNumericBounds && rates.some(r => {
-      const s = normaliseWeightBand(r.weight_class_name);
-      return s && /\d/.test(s)   // has digits but matches no known pattern
-                && !s.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/)
-                && !s.match(/^(\d+(?:\.\d+)?)\+$/)
-                && !s.match(/^OVER(\d+(?:\.\d+)?)$/)
-                && !s.match(/^(?:UNDER|<)(\d+(?:\.\d+)?)$/)
-                && !s.match(/^(?:UPTO|MAX)(\d+(?:\.\d+)?)$/)
-                && !s.match(/^(\d+(?:\.\d+)?)$/);
-    });
-    const reason = hasUnrecognised
-      ? 'Unrecognised weight band format'
-      : `No weight band covers ${Math.round(weightKg * 1000) / 1000} kg`;
-    return { rate: null, reason };
+    zoneRows = filterByZoneName(rates, zoneName);
+    if (!zoneRows.length) {
+      return { rate: null, reason: `No matching zone for postcode "${postcode}"` };
+    }
   }
 
-  if (rates.length === 1) {
-    return { rate: { price: parseFloat(rates[0].price), zone_name: rates[0].zone_name,
-                     weight_class_name: rates[0].weight_class_name, rate_id: rates[0].id }, reason: null };
+  // ── Step 2: match weight band within the zone ─────────────────────────────
+  if (weightKg != null) {
+    const band = zoneRows.find(r => rateCoversWeight(r, weightKg));
+    if (!band) {
+      return { rate: null, reason: `No weight band covers ${weightKg} kg in zone "${zoneRows[0].zone_name}"` };
+    }
+    return { rate: { price: parseFloat(band.price), zone_name: band.zone_name,
+                     weight_class_name: band.weight_class_name, rate_id: band.id }, reason: null };
   }
 
-  return { rate: null, reason: 'Multiple rates — no parcel weight to select band' };
+  return { rate: { price: parseFloat(zoneRows[0].price), zone_name: zoneRows[0].zone_name,
+                   weight_class_name: zoneRows[0].weight_class_name, rate_id: zoneRows[0].id }, reason: null };
 }
 
 // ── Main lookup — tries new model first, falls back to legacy ─────────────────
