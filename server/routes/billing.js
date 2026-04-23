@@ -1486,117 +1486,88 @@ router.get('/charges/:id/debug', async (req, res, next) => {
       return res.json(trace);
     }
 
-    // ── Step 4: Weight band matching (mirrors rateCoversWeight + allNonNumeric) ─
-    const rates = rateRes.rows;
-    const bandChecks = rates.map(r => {
-      const minKg = parseFloat(r.min_weight_kg);
-      const maxKg = parseFloat(r.max_weight_kg);
-      const hasNumeric = !isNaN(minKg) && !isNaN(maxKg);
-      let covers = false;
-      let method = '';
-      let detail = '';
+    // ── Step 4: Zone → Weight (mirrors the live engine exactly) ──────────────
+    // Step 1 of engine: resolve zone from postcode.
+    // Step 2 of engine: find weight band within that zone.
+    // Only two failure modes: no matching zone, no matching weight band.
+    const legacyRates = rateRes.rows;
+    let legacyZone = null;
+    let legacyZoneRows = [];
+    let legacyBand = null;
+    let legacyError = null;
 
-      if (hasNumeric) {
-        covers = weightPerParcel != null && weightPerParcel > minKg && weightPerParcel <= maxKg;
-        method = 'numeric_bounds';
-        detail = `${minKg} < weight(${weightPerParcel}) ≤ ${maxKg} → ${covers ? '✓ MATCH' : '✗ no match'}`;
+    if (!newModelWinner && legacyRates.length > 0) {
+      const distinctLegacyZones = [...new Set(legacyRates.map(r => r.zone_name))];
+      if (distinctLegacyZones.length === 1) {
+        legacyZone = distinctLegacyZones[0];
+        legacyZoneRows = legacyRates;
       } else {
-        const norm = normaliseWeightBand(r.weight_class_name);
-        const hasDigits = /\d/.test(norm);
-        if (!hasDigits) {
-          covers = false; // handled by allNonNumeric path below
-          method = 'non_numeric_name';
-          detail = `weight_class_name "${r.weight_class_name}" → normalised "${norm}" has no digits — handled by flat-rate catch-all`;
+        legacyZone = await zoneForPostcode(legacyRates[0].service_code, legacyRates[0].service_name, postcode);
+        if (!legacyZone) {
+          legacyError = `No matching zone for postcode "${postcode || 'none'}"`;
         } else {
-          covers = weightPerParcel != null && coversWeight(r.weight_class_name, weightPerParcel);
-          method = 'text_pattern';
-          detail = `normalised="${norm}", weight=${weightPerParcel} → ${covers ? '✓ MATCH' : '✗ no match'}`;
+          const zl = legacyZone.toLowerCase();
+          legacyZoneRows = legacyRates.filter(r =>
+            r.zone_name.toLowerCase().includes(zl) || zl.includes(r.zone_name.toLowerCase())
+          );
+          if (!legacyZoneRows.length) legacyError = `No matching zone for postcode "${postcode}"`;
         }
       }
-      return { id: r.id, zone_name: r.zone_name, weight_class_name: r.weight_class_name,
-               min_weight_kg: r.min_weight_kg, max_weight_kg: r.max_weight_kg,
-               price: r.price, covers, method, detail };
-    });
-
-    const directMatch = bandChecks.filter(b => b.covers);
-
-    const allNonNumeric = rates.every(r => {
-      const s = normaliseWeightBand(r.weight_class_name);
-      return !s || !/\d/.test(s);
-    });
-
-    let zoneResolved = null;
-    let catchAllRate = null;
-
-    if (allNonNumeric) {
-      if (rates.length === 1) {
-        catchAllRate = rates[0];
-        zoneResolved = 'single_rate_no_zone_lookup_needed';
-      } else {
-        const zoneName = await zoneForPostcode(rates[0].service_code, rates[0].service_name, postcode);
-        zoneResolved = zoneName || null;
-        if (zoneName) {
-          const zl = zoneName.toLowerCase();
-          catchAllRate = rates.find(x => x.zone_name.toLowerCase().includes(zl) || zl.includes(x.zone_name.toLowerCase()));
-        }
-        if (!catchAllRate) {
-          catchAllRate = [...rates].sort((a, b) => parseFloat(a.price) - parseFloat(b.price))[0];
-          if (!zoneResolved) zoneResolved = 'postcode_lookup_failed_used_cheapest_rate';
-        }
+      if (!legacyError && legacyZoneRows.length > 0) {
+        legacyBand = legacyZoneRows.find(r => rateCoversWeight(r, weightPerParcel));
+        if (!legacyBand) legacyError = `No weight band covers ${weightPerParcel} kg in zone "${legacyZone}"`;
       }
     }
 
     trace.steps.push({
       step: 4,
-      title: 'Weight band matching',
+      title: 'Zone → Weight resolution (legacy)',
+      skipped: !!newModelWinner,
       weight_per_parcel_kg: weightPerParcel,
-      postcode_outward: outward,
-      all_non_numeric_names: allNonNumeric,
-      band_checks: bandChecks,
-      direct_matches: directMatch.length,
-      flat_rate_catch_all: allNonNumeric ? {
-        triggered: true,
-        zone_resolved_via_postcode: zoneResolved,
-        selected_rate: catchAllRate ? { zone: catchAllRate.zone_name, price: catchAllRate.price } : null,
-      } : { triggered: false },
+      zone_resolved: legacyZone,
+      zone_rows: legacyZoneRows.map(r => ({
+        zone_name: r.zone_name,
+        weight_class_name: r.weight_class_name,
+        min_weight_kg: r.min_weight_kg,
+        max_weight_kg: r.max_weight_kg,
+        price: r.price,
+        covers: rateCoversWeight(r, weightPerParcel),
+      })),
+      selected_band: legacyBand ? {
+        zone: legacyBand.zone_name,
+        weight_class: legacyBand.weight_class_name,
+        price: legacyBand.price,
+      } : null,
+      error: legacyError || null,
     });
 
     // ── Conclusion ────────────────────────────────────────────────────────────
-    // New model wins if it produced a result (steps 3a). Legacy only used as fallback.
-    let winner = null;
     if (newModelWinner) {
       trace.conclusion = {
         priced: true,
         price: newModelWinner.price,
         zone_name: newModelWinner.zone_name,
         weight_class_name: newModelWinner.weight_class_name,
-        method: 'new_model (customer_service_pricing → weight_bands)',
+        method: 'new_model (customer_service_pricing → carrier rate card)',
         pricing_type: newModelWinner.pricing_type,
       };
-    } else if (directMatch.length >= 1) {
-      winner = directMatch[0];
+    } else if (legacyBand) {
       trace.conclusion = {
-        priced: true, price: parseFloat(winner.price),
-        zone_name: winner.zone_name, weight_class_name: winner.weight_class_name,
-        method: 'legacy direct_weight_band_match (customer_rates)',
-      };
-    } else if (allNonNumeric && catchAllRate) {
-      winner = catchAllRate;
-      trace.conclusion = {
-        priced: true, price: parseFloat(winner.price),
-        zone_name: winner.zone_name, weight_class_name: winner.weight_class_name,
-        method: `legacy flat_rate_catch_all — zone resolved via postcode: ${zoneResolved}`,
+        priced: true,
+        price: parseFloat(legacyBand.price),
+        zone_name: legacyBand.zone_name,
+        weight_class_name: legacyBand.weight_class_name,
+        method: 'legacy (customer_rates)',
       };
     } else {
       trace.conclusion = {
         priced: false,
-        reason: weightPerParcel == null
-          ? 'No parcel weight available — cannot match weight bands'
-          : `No band covers ${weightPerParcel} kg`,
-        band_details: bandChecks,
-        fix: allNonNumeric
-          ? 'All band names are non-numeric but postcode zone lookup also failed. Ensure postcode rules are configured on the zone.'
-          : 'Check that a rate row exists covering this weight. If bands have no numeric bounds, set min/max kg on the weight class.',
+        reason: legacyError || (legacyRates.length === 0
+          ? `Service "${dcServiceId}" not found in customer_rates`
+          : 'No rate resolved'),
+        fix: legacyError?.includes('zone')
+          ? 'Check postcode rules are configured on the zone for this service.'
+          : 'Check weight bands cover the parcel weight (min_weight_kg / max_weight_kg).',
       };
     }
 

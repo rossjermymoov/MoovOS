@@ -181,7 +181,10 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
       if (step.will_skip_legacy) return '#555';                // new model won — show as inactive
       return step.matched_rows > 0 ? '#00C853' : '#F44336';
     }
-    if (step.step === 4 && step.direct_matches === 0 && !step.flat_rate_catch_all?.triggered) return '#F44336';
+    if (step.step === 4) {
+      if (step.skipped) return '#555';
+      return step.selected_band ? '#00C853' : '#F44336';
+    }
     if (step.step === 2 && !step.resolved) return '#F44336';
     return '#00C853';
   };
@@ -384,32 +387,56 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                     </>}
 
                     {step.step === 4 && <>
-                      <div><span style={{ color: '#888' }}>weight_per_parcel:</span> <span style={{ color: '#fff' }}>{step.weight_per_parcel_kg != null ? `${step.weight_per_parcel_kg} kg` : 'null'}</span></div>
-                      <div><span style={{ color: '#888' }}>direct_band_matches:</span> <span style={{ color: step.direct_matches > 0 ? '#00C853' : '#888', fontWeight: 700 }}>{step.direct_matches ?? 0}</span></div>
-                      {step.all_non_numeric_names && (
-                        <div style={{ color: '#FFC107', marginTop: 2 }}>⚡ Flat-rate service — all weight class names are non-numeric, using catch-all logic</div>
+                      {step.skipped && (
+                        <div style={{ color: '#555', fontStyle: 'italic' }}>⚡ New model resolved a price — legacy not used.</div>
                       )}
-                      {(step.band_checks || []).map((c, i) => (
-                        <div key={i} style={{
-                          marginTop: 4,
-                          padding: '4px 8px',
-                          background: c.covers ? 'rgba(0,200,83,0.07)' : 'rgba(255,255,255,0.02)',
-                          borderRadius: 5,
-                          borderLeft: `2px solid ${c.covers ? '#00C853' : 'rgba(255,255,255,0.1)'}`,
-                        }}>
-                          <span style={{ color: '#666' }}>{c.zone_name || '—'} · {c.weight_class_name || '—'}: </span>
-                          <span style={{ color: c.covers ? '#00C853' : '#888' }}>{c.detail}</span>
+                      {!step.skipped && <>
+                        <div>
+                          <span style={{ color: '#888' }}>weight_per_parcel:</span>{' '}
+                          <span style={{ color: '#fff' }}>{step.weight_per_parcel_kg != null ? `${step.weight_per_parcel_kg} kg` : 'null'}</span>
                         </div>
-                      ))}
-                      {step.flat_rate_catch_all?.triggered && (
-                        <div style={{ marginTop: 6, padding: '6px 10px', background: 'rgba(0,188,212,0.07)', borderRadius: 5, borderLeft: '2px solid #00BCD4' }}>
-                          <span style={{ color: '#00BCD4' }}>Catch-all: zone resolved via postcode → </span>
-                          <span style={{ color: '#fff' }}>{step.flat_rate_catch_all.zone_resolved_via_postcode || 'n/a'}</span>
-                          {step.flat_rate_catch_all.selected_rate && (
-                            <span style={{ color: '#aaa' }}> · selected: {step.flat_rate_catch_all.selected_rate.zone} @ £{parseFloat(step.flat_rate_catch_all.selected_rate.price || 0).toFixed(2)}</span>
-                          )}
+                        <div>
+                          <span style={{ color: '#888' }}>zone_resolved:</span>{' '}
+                          <span style={{ color: step.zone_resolved ? '#00C853' : '#F44336', fontWeight: 700 }}>
+                            {step.zone_resolved || 'none'}
+                          </span>
                         </div>
-                      )}
+                        {step.error && (
+                          <div style={{ color: '#F44336', marginTop: 4 }}>✗ {step.error}</div>
+                        )}
+                        {(step.zone_rows || []).length > 0 && (
+                          <div style={{ marginTop: 8 }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                              <thead>
+                                <tr>
+                                  {['zone','weight class','min kg','max kg','price','covers weight?'].map(h => (
+                                    <th key={h} style={{ color: '#555', fontWeight: 700, padding: '3px 8px', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>{h}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {step.zone_rows.map((r, i) => (
+                                  <tr key={i} style={{ background: r.covers ? 'rgba(0,200,83,0.06)' : 'transparent' }}>
+                                    <td style={{ padding: '3px 8px', color: '#aaa' }}>{r.zone_name}</td>
+                                    <td style={{ padding: '3px 8px', color: '#aaa' }}>{r.weight_class_name}</td>
+                                    <td style={{ padding: '3px 8px', color: '#666' }}>{r.min_weight_kg ?? 'any'}</td>
+                                    <td style={{ padding: '3px 8px', color: '#666' }}>{r.max_weight_kg ?? 'any'}</td>
+                                    <td style={{ padding: '3px 8px', color: '#00C853' }}>£{parseFloat(r.price || 0).toFixed(2)}</td>
+                                    <td style={{ padding: '3px 8px', color: r.covers ? '#00C853' : '#555', fontWeight: 700 }}>{r.covers ? '✓ yes' : '—'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                        {step.selected_band && (
+                          <div style={{ marginTop: 6, padding: '6px 10px', background: 'rgba(0,200,83,0.07)', borderRadius: 5, borderLeft: '2px solid #00C853' }}>
+                            <span style={{ color: '#00C853' }}>✓ Selected: </span>
+                            <span style={{ color: '#fff' }}>{step.selected_band.zone} · {step.selected_band.weight_class}</span>
+                            <span style={{ color: '#aaa' }}> @ £{parseFloat(step.selected_band.price || 0).toFixed(2)}</span>
+                          </div>
+                        )}
+                      </>}
                     </>}
                   </div>
                 </div>
