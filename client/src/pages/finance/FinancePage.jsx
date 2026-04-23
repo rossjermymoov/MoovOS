@@ -10,6 +10,110 @@ import { customersApi } from '../../api/customers';
 import { format, parseISO } from 'date-fns';
 import { getCourierLogo } from '../../utils/courierLogos';
 
+// ─── CustomerPicker ───────────────────────────────────────────────────────────
+// Custom dark-themed dropdown — native <select> uses OS chrome which ignores
+// CSS colour on macOS, making options invisible on the light system dropdown.
+
+function CustomerPicker({ customers, value, onChange }) {
+  const [open, setOpen]       = useState(false);
+  const [search, setSearch]   = useState('');
+  const ref                   = useRef(null);
+
+  // Close on outside click
+  useEffect(() => {
+    function handler(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const FIXED = [
+    { value: '',            label: 'All Customers' },
+    { value: 'unassigned',  label: '⚠ Unassigned' },
+  ];
+  const filtered = search
+    ? customers.filter(c => c.name?.toLowerCase().includes(search.toLowerCase()))
+    : customers;
+
+  const selectedLabel =
+    value === ''           ? 'All Customers' :
+    value === 'unassigned' ? '⚠ Unassigned'  :
+    customers.find(c => c.id === value)?.name || 'All Customers';
+
+  function pick(v) { onChange(v); setOpen(false); setSearch(''); }
+
+  return (
+    <div ref={ref} style={{ position: 'relative', minWidth: 180 }}>
+      {/* Trigger */}
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: '#0D0E2A', border: '1px solid rgba(255,255,255,0.15)',
+          borderRadius: 9999, padding: '5px 14px', color: '#fff', fontSize: 12,
+          cursor: 'pointer', fontFamily: 'inherit',
+        }}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedLabel}</span>
+        <span style={{ marginLeft: 6, color: '#555', flexShrink: 0 }}>▾</span>
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 200,
+          background: '#1A1D35', border: '1px solid rgba(255,255,255,0.12)',
+          borderRadius: 10, boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+          minWidth: 220, maxHeight: 320, display: 'flex', flexDirection: 'column',
+          overflow: 'hidden',
+        }}>
+          {/* Search */}
+          <div style={{ padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+            <input
+              autoFocus
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search customers…"
+              style={{
+                width: '100%', background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6,
+                color: '#fff', fontSize: 12, padding: '5px 10px', outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
+          {/* Options */}
+          <div style={{ overflowY: 'auto', flex: 1 }}>
+            {!search && FIXED.map(o => (
+              <button key={o.value} type="button" onClick={() => pick(o.value)} style={{
+                width: '100%', textAlign: 'left', background: value === o.value ? 'rgba(0,200,83,0.12)' : 'none',
+                border: 'none', borderBottom: '1px solid rgba(255,255,255,0.04)',
+                color: value === o.value ? '#00C853' : o.value === 'unassigned' ? '#FFC107' : '#AAAAAA',
+                padding: '8px 14px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+              }}>
+                {o.label}
+              </button>
+            ))}
+            {filtered.map(c => (
+              <button key={c.id} type="button" onClick={() => pick(c.id)} style={{
+                width: '100%', textAlign: 'left', background: value === c.id ? 'rgba(0,200,83,0.12)' : 'none',
+                border: 'none', borderBottom: '1px solid rgba(255,255,255,0.04)',
+                color: value === c.id ? '#00C853' : '#fff',
+                padding: '8px 14px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+              }}>
+                {c.name}
+              </button>
+            ))}
+            {search && filtered.length === 0 && (
+              <div style={{ padding: '12px 14px', fontSize: 12, color: '#555', fontStyle: 'italic' }}>No match</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const gbp = (n) =>
@@ -1128,19 +1232,12 @@ export default function FinancePage() {
             )}
           </div>
 
-          {/* Customer */}
-          <select
+          {/* Customer — custom dropdown (native select unusable on macOS) */}
+          <CustomerPicker
+            customers={customers}
             value={filters.customer_id}
-            onChange={e => setFilter('customer_id', e.target.value)}
-            className="pill-select"
-            style={{ minWidth: 180, color: '#fff' }}
-          >
-            <option value="">All Customers</option>
-            <option value="unassigned">⚠ Unassigned</option>
-            {customers.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+            onChange={v => setFilter('customer_id', v)}
+          />
 
           {/* Parcel type */}
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
