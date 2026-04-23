@@ -13,6 +13,7 @@ export const billingApi = {
   getPayload:    (id)          => api.get(`/billing/charges/${id}/payload`).then(r => r.data),
   batchReprice:         ()     => api.post('/billing/batch-reprice').then(r => r.data),
   batchApplySurcharges: (customerId) => api.post(`/billing/batch-apply-surcharges${customerId ? `?customer_id=${customerId}` : ''}`).then(r => r.data),
+  getShipmentCharges: (shipmentId) => api.get(`/billing/shipments/${shipmentId}/charges`).then(r => r.data),
   purgeTrackingEvents:  ()     => api.post('/billing/purge-tracking-events').then(r => r.data),
   relinkCustomers:      ()     => api.post('/billing/relink-customers').then(r => r.data),
 };

@@ -1138,29 +1138,9 @@ router.get('/charges', async (req, res, next) => {
           cu.business_name  AS customer_name,
           cu.account_number AS customer_account,
           cu.id    AS customer_id,
+          s.id     AS shipment_id,
           s.courier, s.ship_to_postcode, s.ship_to_name,
-          s.reference, s.reference_2, s.tracking_codes, s.parcel_count,
-          -- Surcharges + fuel charges applied to this shipment
-          COALESCE((
-            SELECT json_agg(jsonb_build_object(
-              'id',    sc.id,
-              'name',  sc.service_name,
-              'price', sc.price,
-              'type',  sc.charge_type
-            ) ORDER BY sc.charge_type, sc.created_at)
-            FROM charges sc
-            WHERE sc.shipment_id = c.shipment_id
-              AND sc.charge_type IN ('surcharge', 'fuel')
-              AND sc.cancelled   = false
-          ), '[]'::json) AS applied_surcharges,
-          -- Surcharge + fuel total
-          COALESCE((
-            SELECT SUM(sc.price)
-            FROM charges sc
-            WHERE sc.shipment_id = c.shipment_id
-              AND sc.charge_type IN ('surcharge', 'fuel')
-              AND sc.cancelled   = false
-          ), 0) AS surcharge_total
+          s.reference, s.reference_2, s.tracking_codes, s.parcel_count
         FROM charges c
         LEFT JOIN customers cu ON cu.id = c.customer_id
         LEFT JOIN shipments  s  ON s.id  = c.shipment_id
@@ -1301,6 +1281,24 @@ router.post('/batch-reprice', async (req, res, next) => {
     }
 
     res.json(summary);
+  } catch (err) { next(err); }
+});
+
+// ─── GET /api/billing/shipments/:shipmentId/charges ──────────────────────────
+// Returns surcharge + fuel charges for one shipment. Used by Finance page hover tooltip.
+
+router.get('/shipments/:shipmentId/charges', async (req, res, next) => {
+  try {
+    const { shipmentId } = req.params;
+    const { rows } = await query(`
+      SELECT id, charge_type, service_name AS name, price
+      FROM charges
+      WHERE shipment_id = $1
+        AND charge_type IN ('surcharge', 'fuel')
+        AND cancelled = false
+      ORDER BY charge_type, created_at
+    `, [shipmentId]);
+    res.json(rows);
   } catch (err) { next(err); }
 });
 

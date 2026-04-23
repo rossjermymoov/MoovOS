@@ -60,86 +60,48 @@ function FlagBadge({ value, trueLabel = 'Yes', falseLabel = 'No' }) {
   );
 }
 
-// ─── Surcharge tooltip ────────────────────────────────────────────────────────
-
-function SurchargeTooltip({ surcharges, basePrice, total }) {
-  return (
-    <div style={{
-      position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 50,
-      background: '#1A1D35', border: '1px solid rgba(255,255,255,0.12)',
-      borderRadius: 8, padding: '10px 14px', minWidth: 220, boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-      pointerEvents: 'none',
-    }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Charge breakdown</div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#AAAAAA', marginBottom: 4 }}>
-        <span>Base charge</span>
-        <span style={{ fontFamily: 'monospace', color: '#ccc' }}>{gbp(basePrice)}</span>
-      </div>
-      {(surcharges || []).map((s, i) => (
-        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#888', marginBottom: 3 }}>
-          <span>+ {s.name || 'Surcharge'}</span>
-          <span style={{ fontFamily: 'monospace', color: '#FFC107' }}>{gbp(s.price)}</span>
-        </div>
-      ))}
-      <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: 6, paddingTop: 6, display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700 }}>
-        <span style={{ color: '#fff' }}>Total</span>
-        <span style={{ fontFamily: 'monospace', color: '#00C853' }}>{gbp(total)}</span>
-      </div>
-    </div>
-  );
-}
-
-// ─── Inline price editor ──────────────────────────────────────────────────────
+// ─── Inline price editor + surcharge hover ───────────────────────────────────
 
 function PriceCell({ charge, onSave, onDebug }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState('');
   const [hovering, setHovering] = useState(false);
+  const [surcharges, setSurcharges] = useState(null); // null = not yet loaded
   const inputRef = useRef(null);
 
   useEffect(() => {
     if (editing && inputRef.current) inputRef.current.focus();
   }, [editing]);
 
+  // Lazy-load surcharges when hovering a priced charge that has a shipment
+  useEffect(() => {
+    if (!hovering || !charge.shipment_id || charge.price == null || surcharges !== null) return;
+    billingApi.getShipmentCharges(charge.shipment_id)
+      .then(rows => setSurcharges(rows))
+      .catch(() => setSurcharges([]));
+  }, [hovering, charge.shipment_id, charge.price, surcharges]);
+
   function startEdit() {
     setVal(charge.price != null ? String(charge.price) : '');
     setEditing(true);
   }
-
   function commit() {
     const n = parseFloat(val);
     if (!isNaN(n) && n >= 0) onSave(n);
     setEditing(false);
   }
-
   function cancel() { setEditing(false); }
-
-  const surcharges    = charge.applied_surcharges || [];
-  const surchargeTotal = parseFloat(charge.surcharge_total || 0);
-  const basePrice     = parseFloat(charge.price || 0);
-  const totalCharge   = basePrice + surchargeTotal;
-  const hasSurcharges = surcharges.length > 0;
 
   if (editing) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <span style={{ color: '#AAAAAA', fontSize: 13 }}>£</span>
-        <input
-          ref={inputRef}
-          value={val}
-          onChange={e => setVal(e.target.value)}
+        <input ref={inputRef} value={val} onChange={e => setVal(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') cancel(); }}
-          style={{
-            width: 72, background: 'rgba(255,255,255,0.08)', border: '1px solid #00C853',
-            borderRadius: 9999, color: '#fff', padding: '3px 10px', fontSize: 13, fontWeight: 700,
-          }}
-        />
-        <button onClick={commit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#00C853', padding: 2 }}>
-          <Check size={13} />
-        </button>
-        <button onClick={cancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#888', padding: 2 }}>
-          <X size={13} />
-        </button>
+          style={{ width: 72, background: 'rgba(255,255,255,0.08)', border: '1px solid #00C853',
+            borderRadius: 9999, color: '#fff', padding: '3px 10px', fontSize: 13, fontWeight: 700 }} />
+        <button onClick={commit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#00C853', padding: 2 }}><Check size={13} /></button>
+        <button onClick={cancel}  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#888',    padding: 2 }}><X size={13} /></button>
       </div>
     );
   }
@@ -158,45 +120,70 @@ function PriceCell({ charge, onSave, onDebug }) {
           <button onClick={onDebug} title="Click to run full diagnostic" style={{
             background: 'none', border: 'none', padding: 0, cursor: 'pointer',
             fontSize: 10, color: '#F44336', fontWeight: 600,
-            display: 'inline-flex', alignItems: 'center', gap: 3,
-            textAlign: 'right', lineHeight: 1.3,
+            display: 'inline-flex', alignItems: 'center', gap: 3, textAlign: 'right', lineHeight: 1.3,
           }}>
-            <Bug size={9} style={{ flexShrink: 0 }} />
-            {charge.price_failure_reason}
+            <Bug size={9} style={{ flexShrink: 0 }} />{charge.price_failure_reason}
           </button>
         )}
       </div>
     );
   }
 
+  // Priced — show base + optional surcharge summary, hover reveals breakdown
+  const loaded        = Array.isArray(surcharges);
+  const hasSurcharges = loaded && surcharges.length > 0;
+  const surchargeTotal = hasSurcharges ? surcharges.reduce((s, r) => s + parseFloat(r.price || 0), 0) : 0;
+  const basePrice     = parseFloat(charge.price);
+  const totalCharge   = basePrice + surchargeTotal;
+
   return (
     <div style={{ position: 'relative', display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
     >
-      {/* Base charge */}
-      <div style={{ fontSize: 11, color: '#666' }}>
-        Base: <span style={{ fontFamily: 'monospace', color: '#888' }}>{gbp(basePrice)}</span>
-      </div>
-      {/* Surcharge line — only if any */}
       {hasSurcharges && (
         <div style={{ fontSize: 11, color: '#FFC107' }}>
-          + {surcharges.length} surcharge{surcharges.length > 1 ? 's' : ''}: <span style={{ fontFamily: 'monospace' }}>{gbp(surchargeTotal)}</span>
+          +{surcharges.length} surcharge{surcharges.length > 1 ? 's' : ''}: {gbp(surchargeTotal)}
         </div>
       )}
-      {/* Total — clickable to edit */}
       <button onClick={startEdit} style={{
-        background: hasSurcharges ? 'rgba(0,200,83,0.1)' : 'rgba(0,200,83,0.08)',
-        border: '1px solid rgba(0,200,83,0.25)',
+        background: 'rgba(0,200,83,0.08)', border: '1px solid rgba(0,200,83,0.25)',
         borderRadius: 5, color: '#00C853', padding: '3px 10px', fontSize: 13, fontWeight: 700,
         cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
       }}>
         {hasSurcharges ? gbp(totalCharge) : gbp(basePrice)}
         <Edit2 size={10} style={{ opacity: 0.6 }} />
       </button>
-      {/* Surcharge tooltip on hover */}
-      {hovering && hasSurcharges && (
-        <SurchargeTooltip surcharges={surcharges} basePrice={basePrice} total={totalCharge} />
+
+      {/* Hover tooltip — loads on first hover */}
+      {hovering && loaded && (
+        <div style={{
+          position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 50,
+          background: '#1A1D35', border: '1px solid rgba(255,255,255,0.12)',
+          borderRadius: 8, padding: '10px 14px', minWidth: 220,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.5)', pointerEvents: 'none',
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Charge breakdown</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#AAAAAA', marginBottom: 4 }}>
+            <span>Base charge</span>
+            <span style={{ fontFamily: 'monospace', color: '#ccc' }}>{gbp(basePrice)}</span>
+          </div>
+          {surcharges.map((s, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#888', marginBottom: 3 }}>
+              <span>+ {s.name || 'Surcharge'}</span>
+              <span style={{ fontFamily: 'monospace', color: '#FFC107' }}>{gbp(s.price)}</span>
+            </div>
+          ))}
+          {hasSurcharges && (
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: 6, paddingTop: 6, display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700 }}>
+              <span style={{ color: '#fff' }}>Total</span>
+              <span style={{ fontFamily: 'monospace', color: '#00C853' }}>{gbp(totalCharge)}</span>
+            </div>
+          )}
+          {!hasSurcharges && (
+            <div style={{ fontSize: 11, color: '#555', fontStyle: 'italic' }}>No surcharges applied</div>
+          )}
+        </div>
       )}
     </div>
   );
