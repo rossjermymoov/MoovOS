@@ -1109,11 +1109,12 @@ router.get('/charges/aged-alerts', async (req, res, next) => {
 
 router.get('/charges/stats', async (req, res, next) => {
   try {
-    const { customer_id, date_from, date_to } = req.query;
+    const { customer_id, unassigned, date_from, date_to } = req.query;
     const conds = ["c.charge_type = 'courier'", 'c.cancelled = false'];
     const vals  = [];
     let   idx   = 1;
-    if (customer_id) { conds.push(`c.customer_id = $${idx++}`); vals.push(customer_id); }
+    if (unassigned === 'true') { conds.push(`c.customer_id IS NULL`); }
+    else if (customer_id) { conds.push(`c.customer_id = $${idx++}`); vals.push(customer_id); }
     if (date_from)   { conds.push(`c.created_at >= $${idx++}`); vals.push(date_from); }
     if (date_to)     { conds.push(`c.created_at <  $${idx++}`); vals.push(date_to); }
     const where = `WHERE ${conds.join(' AND ')}`;
@@ -1140,7 +1141,7 @@ router.get('/charges', async (req, res, next) => {
   try {
     const {
       charge_type = 'courier',
-      customer_id, search,
+      customer_id, unassigned, search,
       billed, verified, cancelled,
       date_from, date_to,
       parcel_type,   // 'single' | 'multi' | '' (all)
@@ -1151,7 +1152,8 @@ router.get('/charges', async (req, res, next) => {
     const vals  = [charge_type];
     let   idx   = 2;
 
-    if (customer_id) { conds.push(`c.customer_id = $${idx++}`); vals.push(customer_id); }
+    if (unassigned === 'true') { conds.push(`c.customer_id IS NULL`); }
+    else if (customer_id) { conds.push(`c.customer_id = $${idx++}`); vals.push(customer_id); }
     if (billed   !== undefined) { conds.push(`c.billed    = $${idx++}`); vals.push(billed   === 'true'); }
     if (verified !== undefined) { conds.push(`c.verified  = $${idx++}`); vals.push(verified === 'true'); }
     if (cancelled !== undefined) { conds.push(`c.cancelled = $${idx++}`); vals.push(cancelled === 'true'); }

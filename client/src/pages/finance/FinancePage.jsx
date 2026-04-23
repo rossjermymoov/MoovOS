@@ -719,7 +719,8 @@ export default function FinancePage() {
 
   // Stats
   const statsParams = {
-    customer_id: filters.customer_id || undefined,
+    customer_id: filters.customer_id === 'unassigned' ? undefined : (filters.customer_id || undefined),
+    unassigned: filters.customer_id === 'unassigned' ? 'true' : undefined,
     date_from: filters.date_from || undefined,
     date_to: filters.date_to || undefined,
   };
@@ -732,7 +733,8 @@ export default function FinancePage() {
   // Charges list
   const chargesParams = {
     charge_type: 'courier',
-    customer_id: filters.customer_id || undefined,
+    customer_id: filters.customer_id === 'unassigned' ? undefined : (filters.customer_id || undefined),
+    unassigned: filters.customer_id === 'unassigned' ? 'true' : undefined,
     search: filters.search || undefined,
     billed: filters.billed || undefined,
     verified: filters.verified || undefined,
@@ -1131,9 +1133,10 @@ export default function FinancePage() {
             value={filters.customer_id}
             onChange={e => setFilter('customer_id', e.target.value)}
             className="pill-select"
-            style={{ minWidth: 180 }}
+            style={{ minWidth: 180, color: '#fff' }}
           >
             <option value="">All Customers</option>
+            <option value="unassigned">⚠ Unassigned</option>
             {customers.map(c => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
