@@ -777,9 +777,10 @@ router.post('/webhook', async (req, res, next) => {
     // Resolve customer:
     //  1. account_number → customers.account_number
     //  2. account_number → customers.dc_customer_id
-    //  3. customerDcId  → customers.dc_customer_id
-    //  4. accountName   → customers.business_name (exact, then partial)
-    //  5. accountName   → customers.billing_aliases (short-name aliases)
+    //  3. account_number → customers.billing_aliases  (e.g. HOF-0012 stored as alias)
+    //  4. customerDcId  → customers.dc_customer_id
+    //  5. accountName   → customers.business_name (exact, then partial)
+    //  6. accountName   → customers.billing_aliases
     let customerId = null;
     if (accountNumber) {
       const cr = await query('SELECT id FROM customers WHERE account_number = $1', [accountNumber]);
@@ -789,6 +790,16 @@ router.post('/webhook', async (req, res, next) => {
         const cr2 = await query('SELECT id FROM customers WHERE dc_customer_id = $1', [accountNumber]);
         if (cr2.rows.length) customerId = cr2.rows[0].id;
       }
+    }
+    // Check billing_aliases against account_number (e.g. legacy HOF- codes stored as aliases)
+    if (!customerId && accountNumber) {
+      try {
+        const crA = await query(
+          `SELECT id FROM customers WHERE EXISTS (SELECT 1 FROM unnest(billing_aliases) a WHERE LOWER(a) = LOWER($1)) LIMIT 1`,
+          [accountNumber.trim().toLowerCase()]
+        );
+        if (crA.rows.length) customerId = crA.rows[0].id;
+      } catch (_) {}
     }
     if (!customerId && customerDcId) {
       const cr3 = await query('SELECT id FROM customers WHERE dc_customer_id = $1', [customerDcId]);
@@ -815,7 +826,7 @@ router.post('/webhook', async (req, res, next) => {
           [accountName.trim().toLowerCase()]
         );
         if (cr5.rows.length) customerId = cr5.rows[0].id;
-      } catch (_) { /* billing_aliases column not yet migrated */ }
+      } catch (_) {}
     }
 
     // Effective account identifier to store — prefer accountNumber, fall back to customerDcId
