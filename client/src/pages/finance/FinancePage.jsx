@@ -842,7 +842,9 @@ export default function FinancePage() {
     search: filters.search || undefined,
     billed: filters.billed || undefined,
     verified: filters.verified || undefined,
-    cancelled: 'false',
+    // Unassigned charges may be cancelled — don't hard-filter when looking for them
+    cancelled: filters.customer_id === 'unassigned' ? undefined : 'false',
+    unpriced: showUnpriced ? 'true' : undefined,
     date_from: filters.date_from || undefined,
     date_to: filters.date_to || undefined,
     parcel_type: filters.parcel_type || undefined,
@@ -861,8 +863,8 @@ export default function FinancePage() {
   const totalPages  = Math.ceil(total / limit);
   const currentPage = Math.floor(offset / limit) + 1;
 
-  // Filter to unpriced locally if toggle is on
-  const displayCharges = showUnpriced ? charges.filter(c => c.price == null) : charges;
+  // Unpriced is now server-side — displayCharges is just the API result
+  const displayCharges = charges;
 
   // Mutations
   const patch = useMutation({

@@ -1156,6 +1156,7 @@ router.get('/charges', async (req, res, next) => {
       billed, verified, cancelled,
       date_from, date_to,
       parcel_type,   // 'single' | 'multi' | '' (all)
+      unpriced,      // 'true' = price IS NULL
       limit = 50, offset = 0,
     } = req.query;
 
@@ -1168,11 +1169,12 @@ router.get('/charges', async (req, res, next) => {
     if (billed   !== undefined) { conds.push(`c.billed    = $${idx++}`); vals.push(billed   === 'true'); }
     if (verified !== undefined) { conds.push(`c.verified  = $${idx++}`); vals.push(verified === 'true'); }
     if (cancelled !== undefined) { conds.push(`c.cancelled = $${idx++}`); vals.push(cancelled === 'true'); }
-    else { conds.push('c.cancelled = false'); }
+    else if (unassigned !== 'true') { conds.push('c.cancelled = false'); } // unassigned view shows all
     if (date_from) { conds.push(`c.created_at >= $${idx++}`); vals.push(date_from); }
     if (date_to)   { conds.push(`c.created_at <  $${idx++}`); vals.push(date_to); }
     if (parcel_type === 'single') { conds.push(`c.parcel_qty = 1`); }
     if (parcel_type === 'multi')  { conds.push(`c.parcel_qty > 1`); }
+    if (unpriced === 'true')      { conds.push(`c.price IS NULL`); }
     if (search) {
       conds.push(`(
         cu.business_name ILIKE $${idx} OR cu.account_number ILIKE $${idx} OR
