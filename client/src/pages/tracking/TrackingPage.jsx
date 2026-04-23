@@ -9,6 +9,7 @@ import {
   Search, X, Truck, PackageCheck, Clock, AlertTriangle,
   ShieldAlert, RotateCcw, Package, ChevronRight, MapPin,
   RefreshCw, Store, Calendar, Plane, PackageX,
+  Warehouse, OctagonX, Navigation,
 } from 'lucide-react';
 import axios from 'axios';
 import { startOfDay, endOfDay, startOfMonth, subDays, format } from 'date-fns';
@@ -50,7 +51,7 @@ const STATUS = {
   exception:           { label: 'Address Issue',               color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
   returned:            { label: 'Return to Sender',            color: '#607D8B', bg: 'rgba(96,125,139,0.12)',   icon: RotateCcw },
   tracking_expired:    { label: 'Tracking Expired',            color: '#757575', bg: 'rgba(117,117,117,0.12)',  icon: Clock },
-  cancelled:           { label: 'Cancelled',                   color: '#B00020', bg: 'rgba(176,0,32,0.12)',     icon: AlertTriangle },
+  cancelled:           { label: 'Cancelled',                   color: '#757575', bg: 'rgba(117,117,117,0.12)',  icon: AlertTriangle },
   awaiting_collection: { label: 'Awaiting Customer Collection',color: '#FF6F00', bg: 'rgba(255,111,0,0.12)',    icon: Store },
   damaged:             { label: 'Damaged',                     color: '#E91E8C', bg: 'rgba(233,30,140,0.12)',   icon: PackageX },
   customs_hold:        { label: 'Customs Hold',                color: '#9C27B0', bg: 'rgba(156,39,176,0.12)',   icon: ShieldAlert },
@@ -101,104 +102,76 @@ function fmtDate(d) {
 }
 
 // ─── Stat card ────────────────────────────────────────────────
-function StatCard({ label, value, color, icon: Icon, active, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        flex: 1, minWidth: 120,
-        padding: '14px 18px',
-        background: active ? `${color}18` : 'rgba(255,255,255,0.03)',
-        border: `1px solid ${active ? color + '55' : 'rgba(255,255,255,0.07)'}`,
-        borderRadius: 10,
-        cursor: 'pointer',
-        textAlign: 'left',
-        transition: 'all 0.15s',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <Icon size={14} color={color} />
-        <span style={{ fontSize: 11, color: active ? color : '#AAAAAA', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
-      </div>
-      <div style={{ fontSize: 28, fontWeight: 900, color: active ? color : '#fff', lineHeight: 1 }}>
-        {(value || 0).toLocaleString()}
-      </div>
-    </button>
-  );
-}
-
-// ─── Bold alert stat card (Awaiting Collection / Address Issue / Customs / RTS)
-function BoldStatCard({ label, value, color, icon: Icon, active, onClick }) {
+function KpiCard({ label, value, color, icon: Icon, active, onClick }) {
   const hasValue = (value || 0) > 0;
   return (
     <button
       onClick={onClick}
       style={{
-        flex: 1, minWidth: 150,
-        padding: '18px 20px',
+        padding: '16px 18px',
         background: active
           ? `linear-gradient(135deg, ${color}30 0%, ${color}14 100%)`
           : hasValue
             ? `linear-gradient(135deg, ${color}18 0%, ${color}08 100%)`
             : 'rgba(255,255,255,0.02)',
-        border: `2px solid ${active ? color + 'AA' : hasValue ? color + '55' : color + '22'}`,
+        border: `2px solid ${active ? color + 'AA' : hasValue ? color + '44' : color + '1A'}`,
         borderRadius: 12,
         cursor: 'pointer',
         textAlign: 'left',
         transition: 'all 0.2s',
         boxShadow: active
-          ? `0 0 28px ${color}44, inset 0 0 24px ${color}10`
-          : hasValue
-            ? `0 0 16px ${color}28`
-            : 'none',
+          ? `0 0 24px ${color}44, inset 0 0 20px ${color}10`
+          : hasValue ? `0 0 12px ${color}22` : 'none',
         position: 'relative',
         overflow: 'hidden',
+        width: '100%',
       }}
     >
       {/* Background glow orb */}
       <div style={{
-        position: 'absolute', right: -12, top: -12,
-        width: 90, height: 90, borderRadius: '50%',
-        background: `radial-gradient(circle, ${color}${hasValue ? '28' : '10'} 0%, transparent 70%)`,
+        position: 'absolute', right: -10, top: -10,
+        width: 80, height: 80, borderRadius: '50%',
+        background: `radial-gradient(circle, ${color}${hasValue ? '22' : '0A'} 0%, transparent 70%)`,
         pointerEvents: 'none',
-        transition: 'all 0.2s',
       }} />
 
       {/* Icon box */}
       <div style={{
-        width: 46, height: 46, borderRadius: 11,
-        background: `${color}20`,
-        border: `1.5px solid ${color}${hasValue ? '66' : '33'}`,
+        width: 40, height: 40, borderRadius: 10,
+        background: `${color}22`,
+        border: `1.5px solid ${color}${hasValue ? '55' : '22'}`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        marginBottom: 14,
-        boxShadow: hasValue ? `0 0 14px ${color}44` : 'none',
-        transition: 'all 0.2s',
+        marginBottom: 12,
+        boxShadow: hasValue ? `0 0 12px ${color}33` : 'none',
       }}>
-        <Icon size={24} color={color} strokeWidth={2.2} />
+        <Icon size={20} color={color} strokeWidth={2.2} />
       </div>
 
       {/* Number */}
       <div style={{
-        fontSize: 34, fontWeight: 900, lineHeight: 1, marginBottom: 6,
-        color: hasValue ? color : '#444',
-        textShadow: hasValue && active ? `0 0 20px ${color}88` : 'none',
-        transition: 'all 0.2s',
+        fontSize: 30, fontWeight: 900, lineHeight: 1, marginBottom: 5,
+        color: hasValue ? color : '#333',
+        textShadow: hasValue && active ? `0 0 16px ${color}88` : 'none',
       }}>
         {(value || 0).toLocaleString()}
       </div>
 
       {/* Label */}
       <div style={{
-        fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
-        letterSpacing: '0.07em',
-        color: hasValue ? color + 'CC' : '#444',
-        transition: 'all 0.2s',
+        fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+        letterSpacing: '0.06em',
+        color: hasValue ? color + 'CC' : '#333',
+        lineHeight: 1.3,
       }}>
         {label}
       </div>
     </button>
   );
 }
+
+// Keep these aliases so nothing else breaks
+const StatCard     = KpiCard;
+const BoldStatCard = KpiCard;
 
 // ─── Event timeline ───────────────────────────────────────────
 // Events arrive newest-first from the API (ORDER BY event_at DESC).
@@ -480,19 +453,19 @@ export default function TrackingPage() {
         </button>
       </div>
 
-      {/* ── Stat cards ─────────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 24 }}>
-        <StatCard label="In Transit"                  value={bs.in_transit}                                                                    color="#7B2FBE" icon={Truck}         active={statusFilter==='in_transit'}                                onClick={() => toggleStatus('in_transit')} />
-        <StatCard label="At Hub"                      value={bs.at_depot}                                                                      color="#5C6BC0" icon={Package}       active={statusFilter==='at_depot'}                                  onClick={() => toggleStatus('at_depot')} />
-        <StatCard label="Out for Delivery"            value={bs.out_for_delivery}                                                              color="#FFC107" icon={Truck}         active={statusFilter==='out_for_delivery'}                          onClick={() => toggleStatus('out_for_delivery')} />
-        <StatCard label="On Hold"                     value={bs.on_hold}                                                                        color="#FF9800" icon={Clock}         active={statusFilter==='on_hold'}                                   onClick={() => toggleStatus('on_hold')} />
-        <BoldStatCard label="Awaiting Customer Collection" value={bs.awaiting_collection}                                                       color="#FF6F00" icon={Store}         active={statusFilter==='awaiting_collection'}                       onClick={() => toggleStatus('awaiting_collection')} />
-        <BoldStatCard label="Address Issue"           value={(bs.exception||0)}                                                                  color="#F44336" icon={AlertTriangle} active={statusFilter==='exception'}                                onClick={() => toggleStatus('exception')} />
-        <BoldStatCard label="Failed Attempt"          value={(bs.failed_delivery||0)}                                                            color="#F44336" icon={AlertTriangle} active={statusFilter==='failed_delivery'}                          onClick={() => toggleStatus('failed_delivery')} />
-        <BoldStatCard label="Customs Hold"            value={bs.customs_hold}                                                                    color="#9C27B0" icon={Plane}         active={statusFilter==='customs_hold'}                             onClick={() => toggleStatus('customs_hold')} />
-        <BoldStatCard label="Return to Sender"        value={bs.returned}                                                                        color="#607D8B" icon={RotateCcw}     active={statusFilter==='returned'}                                 onClick={() => toggleStatus('returned')} />
-        <BoldStatCard label="Damaged"                 value={(bs.damaged||0)}                                                                    color="#E91E8C" icon={PackageX}      active={statusFilter==='damaged'}                                  onClick={() => toggleStatus('damaged')} />
-        <StatCard label="Delivered Today"             value={stats?.delivered_today}                                                             color="#00C853" icon={PackageCheck}  active={statusFilter==='delivered'}                                onClick={() => toggleStatus('delivered')} />
+      {/* ── KPI cards ──────────────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10, marginBottom: 24 }}>
+        <KpiCard label="In Transit"                  value={bs.in_transit}           color="#FF9800" icon={Truck}         active={statusFilter==='in_transit'}          onClick={() => toggleStatus('in_transit')} />
+        <KpiCard label="At Hub"                      value={bs.at_depot}             color="#1976D2" icon={Warehouse}     active={statusFilter==='at_depot'}            onClick={() => toggleStatus('at_depot')} />
+        <KpiCard label="Out for Delivery"            value={bs.out_for_delivery}     color="#FFC107" icon={Navigation}    active={statusFilter==='out_for_delivery'}    onClick={() => toggleStatus('out_for_delivery')} />
+        <KpiCard label="On Hold"                     value={bs.on_hold}              color="#F44336" icon={OctagonX}      active={statusFilter==='on_hold'}             onClick={() => toggleStatus('on_hold')} />
+        <KpiCard label="Awaiting Collection"         value={bs.awaiting_collection}  color="#FF9800" icon={Store}         active={statusFilter==='awaiting_collection'} onClick={() => toggleStatus('awaiting_collection')} />
+        <KpiCard label="Delivered Today"             value={stats?.delivered_today}  color="#00C853" icon={PackageCheck}  active={statusFilter==='delivered'}           onClick={() => toggleStatus('delivered')} />
+        <KpiCard label="Address Issue"               value={(bs.exception||0)}       color="#F44336" icon={AlertTriangle} active={statusFilter==='exception'}           onClick={() => toggleStatus('exception')} />
+        <KpiCard label="Failed Attempt"              value={(bs.failed_delivery||0)} color="#F44336" icon={AlertTriangle} active={statusFilter==='failed_delivery'}     onClick={() => toggleStatus('failed_delivery')} />
+        <KpiCard label="Customs Hold"                value={bs.customs_hold}         color="#9C27B0" icon={Plane}         active={statusFilter==='customs_hold'}        onClick={() => toggleStatus('customs_hold')} />
+        <KpiCard label="Return to Sender"            value={bs.returned}             color="#F44336" icon={RotateCcw}     active={statusFilter==='returned'}            onClick={() => toggleStatus('returned')} />
+        <KpiCard label="Damaged"                     value={(bs.damaged||0)}         color="#9C27B0" icon={PackageX}      active={statusFilter==='damaged'}             onClick={() => toggleStatus('damaged')} />
       </div>
 
       {/* ── Date range ──────────────────────────────────────────── */}
