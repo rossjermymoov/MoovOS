@@ -1254,6 +1254,89 @@ router.post('/batch-reprice', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── POST /api/billing/batch-apply-surcharges ────────────────────────────────
+// Re-run applySurcharges on all existing courier charges.
+// Safe to call multiple times — applySurcharges is idempotent (skips if
+// the surcharge charge already exists for that shipment).
+// Optional query param: ?customer_id=UUID to scope to one customer.
+
+router.post('/batch-apply-surcharges', async (req, res, next) => {
+  try {
+    const { customer_id } = req.query;
+
+    // Fetch all non-cancelled courier charges with their shipment data
+    const conds = [`c.charge_type = 'courier'`, `c.cancelled = false`, `c.price IS NOT NULL`, `s.courier IS NOT NULL`];
+    const vals  = [];
+    if (customer_id) { conds.push(`c.customer_id = $1`); vals.push(customer_id); }
+
+    const { rows } = await query(`
+      SELECT
+        c.id AS charge_id,
+        c.shipment_id,
+        c.customer_id,
+        c.price AS base_price,
+        s.courier,
+        s.dc_service_id,
+        s.service_name,
+        s.ship_from_country_iso,
+        s.ship_to_country_iso,
+        s.ship_to_postcode,
+        s.parcel_count,
+        s.total_weight_kg,
+        s.parcel_weight_kg,
+        s.dim_length_cm,
+        s.dim_width_cm,
+        s.dim_height_cm,
+        s.total_declared_value,
+        s.parcel_declared_value
+      FROM charges c
+      JOIN shipments s ON s.id = c.shipment_id
+      WHERE ${conds.join(' AND ')}
+      ORDER BY c.created_at ASC
+    `, vals);
+
+    let applied = 0;
+    let skipped = 0;
+    let errors  = 0;
+
+    for (const row of rows) {
+      try {
+        const before = await query(
+          `SELECT COUNT(*)::int AS cnt FROM charges WHERE shipment_id = $1 AND charge_type = 'surcharge' AND cancelled = false`,
+          [row.shipment_id]
+        );
+        await applySurcharges(row.shipment_id, row.customer_id, parseFloat(row.base_price || 0), {
+          courier:               row.courier,
+          dc_service_id:         row.dc_service_id,
+          service_name:          row.service_name,
+          ship_from_country_iso: row.ship_from_country_iso,
+          ship_to_country_iso:   row.ship_to_country_iso,
+          ship_to_postcode:      row.ship_to_postcode,
+          parcel_count:          row.parcel_count || 1,
+          total_weight_kg:       row.total_weight_kg,
+          parcel_weight_kg:      row.parcel_weight_kg,
+          dim_length_cm:         row.dim_length_cm,
+          dim_width_cm:          row.dim_width_cm,
+          dim_height_cm:         row.dim_height_cm,
+          total_declared_value:  row.total_declared_value,
+          parcel_declared_value: row.parcel_declared_value,
+        });
+        const after = await query(
+          `SELECT COUNT(*)::int AS cnt FROM charges WHERE shipment_id = $1 AND charge_type = 'surcharge' AND cancelled = false`,
+          [row.shipment_id]
+        );
+        if (after.rows[0].cnt > before.rows[0].cnt) applied++;
+        else skipped++;
+      } catch (err) {
+        errors++;
+        console.error(`[batch-apply-surcharges] shipment ${row.shipment_id}:`, err.message);
+      }
+    }
+
+    res.json({ ok: true, total_charges: rows.length, surcharges_applied: applied, already_had_surcharges: skipped, errors });
+  } catch (err) { next(err); }
+});
+
 // ─── GET /api/billing/charges/:id/debug ──────────────────────────────────────
 // Full step-by-step trace using the SAME functions as the live billing engine.
 // Every field extracted, every DB lookup attempted, every decision explained.

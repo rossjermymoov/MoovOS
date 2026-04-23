@@ -702,6 +702,7 @@ export default function FinancePage() {
   const [payloadCharge, setPayloadCharge] = useState(null);
   const [batchResult, setBatchResult] = useState(null);
   const [batchRunning, setBatchRunning] = useState(false);
+  const [surchargeRunning, setSurchargeRunning] = useState(false);
   const [purgeRunning, setPurgeRunning] = useState(false);
   const [relinkRunning, setRelinkRunning] = useState(false);
 
@@ -841,6 +842,24 @@ export default function FinancePage() {
     }
   }
 
+  async function runBatchSurcharges() {
+    const customerId = filters.customer_id || null;
+    const scope = customerId ? 'the selected customer' : 'all customers';
+    if (!confirm(`Apply surcharges to all priced charges for ${scope}? This is safe to re-run — existing surcharges are skipped.`)) return;
+    setSurchargeRunning(true);
+    setBatchResult(null);
+    try {
+      const result = await billingApi.batchApplySurcharges(customerId);
+      setBatchResult({ surcharge: true, ...result });
+      qc.invalidateQueries(['billing-charges']);
+      qc.invalidateQueries(['billing-stats']);
+    } catch (err) {
+      setBatchResult({ error: err.message });
+    } finally {
+      setSurchargeRunning(false);
+    }
+  }
+
   const th = { fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase',
     letterSpacing: '0.06em', padding: '10px 12px', whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.06)' };
 
@@ -882,6 +901,21 @@ export default function FinancePage() {
           >
             <XCircle size={14} />
             {purgeRunning ? 'Purging…' : 'Remove tracking events'}
+          </button>
+          <button
+            onClick={runBatchSurcharges}
+            disabled={surchargeRunning}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: surchargeRunning ? 'rgba(245,158,11,0.06)' : 'rgba(245,158,11,0.12)',
+              border: '1px solid rgba(245,158,11,0.4)',
+              borderRadius: 8, color: '#F59E0B',
+              padding: '7px 14px', cursor: surchargeRunning ? 'not-allowed' : 'pointer',
+              fontSize: 13, fontWeight: 700,
+            }}
+          >
+            <Zap size={14} />
+            {surchargeRunning ? 'Applying…' : filters.customer_id ? 'Apply surcharges (customer)' : 'Apply surcharges (all)'}
           </button>
           {stats?.unpriced > 0 && (
             <button
@@ -933,6 +967,13 @@ export default function FinancePage() {
                 <span style={{ color: '#FFC107' }}>{batchResult.not_found} account IDs not matched</span>
               )}
               <span style={{ color: '#555' }}>of {batchResult.total_unlinked} unlinked total</span>
+            </div>
+          ) : batchResult.surcharge ? (
+            <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+              <span style={{ color: '#00C853', fontWeight: 700 }}>⛽ {batchResult.surcharges_applied} surcharge rows added</span>
+              {batchResult.already_had_surcharges > 0 && <span style={{ color: '#555' }}>{batchResult.already_had_surcharges} already had surcharges</span>}
+              {batchResult.errors > 0 && <span style={{ color: '#F44336' }}>{batchResult.errors} errors</span>}
+              <span style={{ color: '#555' }}>of {batchResult.total_charges} charges processed</span>
             </div>
           ) : (
             <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
