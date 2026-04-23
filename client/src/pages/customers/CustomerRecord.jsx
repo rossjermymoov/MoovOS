@@ -9,6 +9,7 @@ import {
 import { customersApi } from '../../api/customers';
 import { customerRateCardsApi } from '../../api/customerRateCards';
 import { surchargesApi } from '../../api/surcharges';
+import { getCourierLogo } from '../../utils/courierLogos';
 import { HealthBadge, AccountStatusBadge, TierBadge, CreditUtilisationBar } from '../../components/ui/StatusBadge';
 import CustomerPricingTab from './tabs/CustomerPricingTab';
 import { format } from 'date-fns';
@@ -479,12 +480,15 @@ function CustomerPricingOverview({ customerId }) {
     <InfoCard title="Carriers">
 
       {/* ── Carrier toggle grid ── */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: activeCarriers.length ? 0 : 4 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: activeCarriers.length ? 0 : 4 }}>
         {carriers.length === 0 && (
           <span style={{ fontSize: 12, color: '#555', fontStyle: 'italic' }}>No carriers configured — set up carriers first.</span>
         )}
         {carriers.map(carrier => {
-          const busy = (activate.isPending || deactivate.isPending);
+          const busy = activate.isPending || deactivate.isPending;
+          const logo = getCourierLogo(carrier.courier_code) || getCourierLogo(carrier.courier_name);
+          const letter = (carrier.courier_name || carrier.courier_code || '?').charAt(0).toUpperCase();
+
           return (
             <button
               key={carrier.courier_id}
@@ -496,16 +500,48 @@ function CustomerPricingOverview({ customerId }) {
               }}
               title={carrier.active ? `Deactivate ${carrier.courier_name}` : `Activate ${carrier.courier_name}`}
               style={{
-                display: 'inline-flex', alignItems: 'center', gap: 5,
-                padding: '6px 14px', borderRadius: 8, cursor: busy ? 'wait' : 'pointer',
-                fontWeight: 700, fontSize: 12, transition: 'all 0.15s',
+                position: 'relative',
+                width: 80, height: 52,
+                padding: 0, borderRadius: 10,
+                cursor: busy ? 'wait' : 'pointer',
                 border: carrier.active ? '2px solid #00C853' : '2px solid rgba(255,255,255,0.08)',
-                background: carrier.active ? 'rgba(0,200,83,0.12)' : 'rgba(255,255,255,0.03)',
-                color: carrier.active ? '#00C853' : 'rgba(255,255,255,0.25)',
+                background: '#fff',
+                overflow: 'hidden',
+                transition: 'border-color 0.15s, box-shadow 0.15s',
+                boxShadow: carrier.active ? '0 0 0 3px rgba(0,200,83,0.18)' : 'none',
+                filter: carrier.active ? 'none' : 'grayscale(100%) opacity(0.35)',
+                flexShrink: 0,
               }}
             >
-              {carrier.courier_code || carrier.courier_name}
-              {carrier.active && <Check size={10} strokeWidth={3} />}
+              {logo ? (
+                <img
+                  src={logo}
+                  alt={carrier.courier_name}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', padding: '6px 4px', boxSizing: 'border-box' }}
+                  onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                />
+              ) : null}
+              {/* Fallback letter badge — shown if no logo or image fails to load */}
+              <div style={{
+                display: logo ? 'none' : 'flex',
+                width: '100%', height: '100%',
+                alignItems: 'center', justifyContent: 'center',
+                background: '#1A1D35',
+                fontSize: 18, fontWeight: 700, color: '#7B2FBE',
+              }}>
+                {letter}
+              </div>
+              {/* Active tick */}
+              {carrier.active && (
+                <div style={{
+                  position: 'absolute', top: 3, right: 3,
+                  width: 14, height: 14, borderRadius: '50%',
+                  background: '#00C853',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Check size={8} strokeWidth={3} color="#000" />
+                </div>
+              )}
             </button>
           );
         })}
