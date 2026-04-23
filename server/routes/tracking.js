@@ -466,11 +466,11 @@ router.get('/', async (req, res, next) => {
       values.push(customer_id);
     }
     if (date_from) {
-      conditions.push(`p.created_at >= $${idx++}`);
+      conditions.push(`p.last_event_at >= $${idx++}`);
       values.push(date_from);
     }
     if (date_to) {
-      conditions.push(`p.created_at <= $${idx++}`);
+      conditions.push(`p.last_event_at <= $${idx++}`);
       values.push(date_to);
     }
     if (search) {
