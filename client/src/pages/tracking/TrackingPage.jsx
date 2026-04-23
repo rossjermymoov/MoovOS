@@ -54,10 +54,13 @@ const STATUS = {
   unknown:          { label: 'Unknown',           color: '#555555', bg: 'rgba(255,255,255,0.05)',  icon: Package },
 };
 
-function StatusBadge({ status, size = 'sm' }) {
+function StatusBadge({ status, label, size = 'sm' }) {
   const cfg = STATUS[status] || STATUS.unknown;
   const Icon = cfg.icon;
   const isLg = size === 'lg';
+  // Use the label passed in (from Dispatch Cloud's own status description) if provided,
+  // otherwise fall back to our internal display label.
+  const displayLabel = label || cfg.label;
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: isLg ? 7 : 5,
@@ -71,7 +74,7 @@ function StatusBadge({ status, size = 'sm' }) {
       whiteSpace: 'nowrap',
     }}>
       <Icon size={isLg ? 13 : 10} strokeWidth={2.5} />
-      {cfg.label}
+      {displayLabel}
     </span>
   );
 }
@@ -222,7 +225,7 @@ function EventTimeline({ events }) {
             </div>
             <div style={{ flex: 1, paddingTop: 2, paddingBottom: isLast ? 0 : 4 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 3 }}>
-                <StatusBadge status={ev.status} />
+                <StatusBadge status={ev.status} label={ev.description} />
                 <span style={{ fontSize: 11, color: '#555' }}>{timeAgo(ev.event_at)}</span>
               </div>
               {ev.description && <p style={{ fontSize: 13, color: '#DDD', margin: '3px 0' }}>{ev.description}</p>}
@@ -651,7 +654,7 @@ export default function TrackingPage() {
                       </span>
                     )}
                   </td>
-                  <td><StatusBadge status={p.status} /></td>
+                  <td><StatusBadge status={p.status} label={p.status_description} /></td>
                   <td>
                     <div style={{ fontSize: 12, color: '#DDD' }}>{p.status_description?.slice(0, 40) || p.last_location || '—'}</div>
                     <div style={{ fontSize: 11, color: '#555' }}>{timeAgo(p.last_event_at)}</div>
