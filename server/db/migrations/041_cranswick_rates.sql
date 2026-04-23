@@ -55,8 +55,7 @@ BEGIN
   DO UPDATE SET
     price        = EXCLUDED.price,
     service_name = EXCLUDED.service_name,
-    zone_name    = EXCLUDED.zone_name,
-    updated_at   = NOW();
+    zone_name    = EXCLUDED.zone_name;
 
   RAISE NOTICE 'Cranswick rates inserted/updated for customer %', v_customer_id;
 END $$;
