@@ -185,7 +185,11 @@ function rateCoversWeight(rate, weightKg) {
     // Numeric bounds: weight > min AND weight <= max (matching DC's own logic)
     return weightKg > minKg && weightKg <= maxKg;
   }
-  // Fall back to text parsing for legacy rate rows without numeric bounds
+  // NULL/NULL bounds = no weight constraint on this band.
+  // The band name (e.g. "Parcel") is just a label — it means any weight qualifies
+  // and the zone (resolved from postcode) is the only differentiator.
+  if (rate.min_weight_kg == null && rate.max_weight_kg == null) return true;
+  // Fall back to text parsing for legacy rate rows that have a name-encoded range
   return coversWeight(rate.weight_class_name, weightKg);
 }
 
@@ -342,26 +346,11 @@ async function lookupViaServicePricing(customerId, serviceCode, serviceName, wei
   if (weightKg != null) {
     const matching = rows.filter(r => rateCoversWeight(r, weightKg));
     if (matching.length >= 1) {
+      // pickByZone handles the case where multiple zones all cover this weight
+      // (e.g. flat-rate "Parcel" bands — NULL/NULL matches any weight, zone = postcode)
       const r = await pickByZone(matching);
       return { rate: buildRate(r), reason: null };
     }
-
-    // Flat-rate service: all bands have non-numeric weight class names (e.g. "Parcel")
-    // and no numeric min/max bounds — zone is the only differentiator (Mainland/Highlands/NI).
-    // Mirrors the exact same allNonNumeric logic in lookupViaCustomerRates.
-    const allNonNumeric = rows.every(r => {
-      const minKg = parseFloat(r.min_weight_kg);
-      const maxKg = parseFloat(r.max_weight_kg);
-      if (!isNaN(minKg) && !isNaN(maxKg)) return false; // has numeric bounds → not flat-rate
-      const norm = normaliseWeightBand(r.weight_class_name);
-      return !norm || !/\d/.test(norm);
-    });
-    if (allNonNumeric) {
-      // Use all rows — pickByZone resolves the correct zone via destination postcode
-      const r = await pickByZone(rows);
-      return { rate: buildRate(r), reason: null };
-    }
-
     return { rate: null, reason: `No weight band covers ${Math.round(weightKg * 1000) / 1000} kg` };
   }
 
@@ -403,30 +392,25 @@ async function lookupViaCustomerRates(customerId, serviceCode, serviceName, weig
   if (weightKg != null) {
     const matching = rates.filter(r => rateCoversWeight(r, weightKg));
     if (matching.length >= 1) {
-      return { rate: { price: parseFloat(matching[0].price), zone_name: matching[0].zone_name,
-                       weight_class_name: matching[0].weight_class_name, rate_id: matching[0].id }, reason: null };
-    }
-    // If all bands have non-numeric names (e.g. "Parcel") — the service doesn't
-    // use weight-based bands. Zone is determined by destination postcode, not weight.
-    const allNonNumeric = rates.every(r => {
-      const s = normaliseWeightBand(r.weight_class_name);
-      return !s || !/\d/.test(s);
-    });
-    if (allNonNumeric) {
-      let r;
-      if (rates.length === 1) {
-        r = rates[0];
-      } else {
-        // Multiple zones — resolve by postcode. Fall back to cheapest (usually Mainland).
-        const zoneName = await zoneForPostcode(rates[0].service_code, rates[0].service_name, postcode);
+      // When multiple zones all cover this weight (common for flat-rate services where
+      // NULL/NULL bands match any weight), pick the correct zone via postcode lookup.
+      const distinctZones = [...new Set(matching.map(r => r.zone_name))];
+      let selected = matching[0];
+      if (distinctZones.length > 1) {
+        const zoneName = await zoneForPostcode(selected.service_code, selected.service_name, postcode);
         if (zoneName) {
           const zl = zoneName.toLowerCase();
-          r = rates.find(x => x.zone_name.toLowerCase().includes(zl) || zl.includes(x.zone_name.toLowerCase()));
+          const hit = matching.find(r =>
+            r.zone_name.toLowerCase().includes(zl) || zl.includes(r.zone_name.toLowerCase())
+          );
+          if (hit) selected = hit;
+        } else {
+          // No postcode → cheapest (belt-and-braces fallback)
+          selected = [...matching].sort((a, b) => parseFloat(a.price) - parseFloat(b.price))[0];
         }
-        if (!r) r = [...rates].sort((a, b) => parseFloat(a.price) - parseFloat(b.price))[0];
       }
-      return { rate: { price: parseFloat(r.price), zone_name: r.zone_name,
-                       weight_class_name: r.weight_class_name, rate_id: r.id }, reason: null };
+      return { rate: { price: parseFloat(selected.price), zone_name: selected.zone_name,
+                       weight_class_name: selected.weight_class_name, rate_id: selected.id }, reason: null };
     }
     // Diagnose
     const hasNumericBounds = rates.some(r => r.min_weight_kg != null);
