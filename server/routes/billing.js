@@ -1140,7 +1140,19 @@ router.get('/charges', async (req, res, next) => {
           cu.id    AS customer_id,
           s.id     AS shipment_id,
           s.courier, s.ship_to_postcode, s.ship_to_name,
-          s.reference, s.reference_2, s.tracking_codes, s.parcel_count
+          s.reference, s.reference_2, s.tracking_codes, s.parcel_count,
+          COALESCE((
+            SELECT SUM(sc.price) FROM charges sc
+            WHERE sc.shipment_id = c.shipment_id
+              AND sc.charge_type IN ('surcharge','fuel')
+              AND sc.cancelled = false
+          ), 0)::numeric(10,4) AS surcharge_total,
+          COALESCE((
+            SELECT COUNT(*)::int FROM charges sc
+            WHERE sc.shipment_id = c.shipment_id
+              AND sc.charge_type IN ('surcharge','fuel')
+              AND sc.cancelled = false
+          ), 0) AS surcharge_count
         FROM charges c
         LEFT JOIN customers cu ON cu.id = c.customer_id
         LEFT JOIN shipments  s  ON s.id  = c.shipment_id

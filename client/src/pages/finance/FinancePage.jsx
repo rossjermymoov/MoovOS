@@ -129,34 +129,38 @@ function PriceCell({ charge, onSave, onDebug }) {
     );
   }
 
-  // Priced — show base + optional surcharge summary, hover reveals breakdown
-  const loaded        = Array.isArray(surcharges);
-  const hasSurcharges = loaded && surcharges.length > 0;
-  const surchargeTotal = hasSurcharges ? surcharges.reduce((s, r) => s + parseFloat(r.price || 0), 0) : 0;
-  const basePrice     = parseFloat(charge.price);
-  const totalCharge   = basePrice + surchargeTotal;
+  // Priced — surcharge total comes from the API immediately; hover loads line-item names
+  const basePrice      = parseFloat(charge.price);
+  const surchargeTotal = parseFloat(charge.surcharge_total || 0);
+  const surchargeCount = parseInt(charge.surcharge_count || 0);
+  const totalCharge    = basePrice + surchargeTotal;
+  const hasSurcharges  = surchargeCount > 0;
+  const detailLoaded   = Array.isArray(surcharges);
 
   return (
     <div style={{ position: 'relative', display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
     >
+      {/* Surcharge summary — always visible when surcharges exist */}
       {hasSurcharges && (
         <div style={{ fontSize: 11, color: '#FFC107' }}>
-          +{surcharges.length} surcharge{surcharges.length > 1 ? 's' : ''}: {gbp(surchargeTotal)}
+          +{surchargeCount} surcharge{surchargeCount > 1 ? 's' : ''}: {gbp(surchargeTotal)}
         </div>
       )}
+
+      {/* Total (base + surcharges) — always shows correct total */}
       <button onClick={startEdit} style={{
         background: 'rgba(0,200,83,0.08)', border: '1px solid rgba(0,200,83,0.25)',
         borderRadius: 5, color: '#00C853', padding: '3px 10px', fontSize: 13, fontWeight: 700,
         cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
       }}>
-        {hasSurcharges ? gbp(totalCharge) : gbp(basePrice)}
+        {gbp(totalCharge)}
         <Edit2 size={10} style={{ opacity: 0.6 }} />
       </button>
 
-      {/* Hover tooltip — loads on first hover */}
-      {hovering && loaded && (
+      {/* Hover tooltip — lazy-loads surcharge line items for detail */}
+      {hovering && (
         <div style={{
           position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 50,
           background: '#1A1D35', border: '1px solid rgba(255,255,255,0.12)',
@@ -168,7 +172,10 @@ function PriceCell({ charge, onSave, onDebug }) {
             <span>Base charge</span>
             <span style={{ fontFamily: 'monospace', color: '#ccc' }}>{gbp(basePrice)}</span>
           </div>
-          {surcharges.map((s, i) => (
+          {!detailLoaded && hasSurcharges && (
+            <div style={{ fontSize: 11, color: '#555', fontStyle: 'italic' }}>Loading…</div>
+          )}
+          {detailLoaded && surcharges.map((s, i) => (
             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#888', marginBottom: 3 }}>
               <span>+ {s.name || 'Surcharge'}</span>
               <span style={{ fontFamily: 'monospace', color: '#FFC107' }}>{gbp(s.price)}</span>
