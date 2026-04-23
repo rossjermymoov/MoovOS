@@ -823,15 +823,16 @@ router.post('/webhook', async (req, res, next) => {
     const unitPrice  = rate ? rate.price : null;
     const totalPrice = unitPrice != null ? parseFloat((unitPrice * parcelCount).toFixed(2)) : null;
 
-    // Insert charge
+    // Insert charge — rate_id is UUID on the charges table so we leave it null;
+    // zone_name + weight_class_name carry the human-readable pricing reference.
     const chargeRes = await query(`
       INSERT INTO charges
         (shipment_id, customer_id, charge_type,
          order_id, parcel_qty, service_name,
          price, cost_price,
-         zone_name, weight_class_name, rate_id, price_auto,
+         zone_name, weight_class_name, price_auto,
          price_failure_reason)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
       RETURNING id
     `, [
       shipmentId, customerId, 'courier',
@@ -840,7 +841,6 @@ router.post('/webhook', async (req, res, next) => {
       totalCostPrice > 0 ? parseFloat(totalCostPrice.toFixed(2)) : null,
       rate?.zone_name || null,
       rate?.weight_class_name || null,
-      rate?.rate_id || null,
       rate != null,
       rate ? null : priceFailReason,
     ]);
@@ -1240,12 +1240,11 @@ router.post('/batch-reprice', async (req, res, next) => {
           SET price                 = $1,
               zone_name             = $2,
               weight_class_name     = $3,
-              rate_id               = $4,
               price_auto            = true,
               price_failure_reason  = NULL,
               updated_at            = NOW()
-          WHERE id = $5
-        `, [totalPrice, rate.zone_name, rate.weight_class_name, rate.rate_id, row.charge_id]);
+          WHERE id = $4
+        `, [totalPrice, rate.zone_name, rate.weight_class_name, row.charge_id]);
 
         summary.priced++;
       } catch (err) {
@@ -1640,17 +1639,18 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
 
     const totalPrice = parseFloat((rate.price * parcelQty).toFixed(2));
 
+    // rate_id on charges is UUID — we don't store the raw row id (integer).
+    // zone_name + weight_class_name are the human-readable references that matter.
     await query(`
       UPDATE charges
       SET price                = $1,
           zone_name            = $2,
           weight_class_name    = $3,
-          rate_id              = $4,
           price_auto           = true,
           price_failure_reason = NULL,
           updated_at           = NOW()
-      WHERE id = $5
-    `, [totalPrice, rate.zone_name, rate.weight_class_name, rate.rate_id, id]);
+      WHERE id = $4
+    `, [totalPrice, rate.zone_name, rate.weight_class_name, id]);
 
     res.json({
       ok: true,
