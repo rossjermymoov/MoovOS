@@ -201,7 +201,7 @@ function EventTimeline({ events }) {
             </div>
             <div style={{ flex: 1, paddingTop: 2, paddingBottom: isLast ? 0 : 4 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 3 }}>
-                <StatusBadge status={ev.status} label={ev.description} />
+                <StatusBadge status={ev.status} />
                 <span style={{ fontSize: 11, color: '#555' }}>{timeAgo(ev.event_at)}</span>
               </div>
               {ev.description && <p style={{ fontSize: 13, color: '#DDD', margin: '3px 0' }}>{ev.description}</p>}
