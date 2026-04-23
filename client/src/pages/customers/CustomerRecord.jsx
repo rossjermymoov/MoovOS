@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -51,6 +51,16 @@ function Row({ label, value, edit, editNode }) {
       {edit
         ? <div style={{ width: 180, flexShrink: 0 }}>{editNode}</div>
         : <span style={{ fontSize: 12, color: '#fff', textAlign: 'right', wordBreak: 'break-word' }}>{value || '—'}</span>}
+    </div>
+  );
+}
+
+// Simple read-only label/value row used in Financial tab
+function ERow({ label, value }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, minHeight: 24 }}>
+      <span style={{ fontSize: 12, color: '#AAAAAA', flexShrink: 0 }}>{label}</span>
+      <span style={{ fontSize: 12, color: '#fff', textAlign: 'right' }}>{value || '—'}</span>
     </div>
   );
 }
@@ -278,138 +288,247 @@ function SurchargeOverridesEditor({ customerId }) {
   );
 }
 
+// ─── Active Carrier Panel ────────────────────────────────────
+// Rate card picker + fuel groups table for one active carrier.
+function ActiveCarrierPanel({ carrier, customerId, onChangeCard, onSetFuel }) {
+  const [selectedCardId, setSelectedCardId] = useState(carrier.active_card_id);
+  const [fuelEdits, setFuelEdits] = useState({});
+
+  // Keep picker in sync if parent data refreshes
+  useEffect(() => { setSelectedCardId(carrier.active_card_id); }, [carrier.active_card_id]);
+
+  const hasCardChange = Number(selectedCardId) !== Number(carrier.active_card_id);
+
+  const thStyle = { fontSize: 10, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '4px 8px', textAlign: 'right' };
+  const tdStyle = { fontSize: 12, color: '#AAAAAA', padding: '5px 8px', verticalAlign: 'middle' };
+
+  return (
+    <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+
+      {/* ── Carrier name + rate card picker ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#fff', minWidth: 60 }}>
+          {carrier.courier_name}
+        </span>
+        <select
+          value={selectedCardId ?? ''}
+          onChange={e => setSelectedCardId(e.target.value)}
+          style={{
+            flex: 1, background: '#0D0E2A', border: '1px solid rgba(255,255,255,0.12)',
+            borderRadius: 6, color: '#AAAAAA', fontSize: 11, padding: '4px 8px', outline: 'none',
+          }}
+        >
+          {carrier.available_cards.map(card => (
+            <option key={card.id} value={card.id}>
+              {card.name}{card.is_master ? ' (master)' : ''}
+            </option>
+          ))}
+        </select>
+        {hasCardChange && (
+          <button
+            type="button"
+            onClick={() => onChangeCard(selectedCardId)}
+            style={{
+              background: '#00C853', border: 'none', borderRadius: 6,
+              color: '#000', fontSize: 11, fontWeight: 700, padding: '4px 12px', cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+            }}
+          >
+            <Check size={10} /> Confirm
+          </button>
+        )}
+      </div>
+
+      {/* ── Fuel groups table ── */}
+      {carrier.fuel_groups.length > 0 && (
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#F59E0B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>
+            ⛽ Fuel
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                <th style={{ ...thStyle, textAlign: 'left' }}>Group</th>
+                <th style={thStyle}>Our Cost</th>
+                <th style={thStyle}>Standard Sell</th>
+                <th style={{ ...thStyle, textAlign: 'left', paddingLeft: 4 }}>Customer %</th>
+              </tr>
+            </thead>
+            <tbody>
+              {carrier.fuel_groups.map(fg => {
+                const editVal = fuelEdits[fg.id];
+                // Default display: customer override → standard sell → blank
+                const currentSaved = fg.customer_pct != null ? String(fg.customer_pct) : '';
+                const displayVal   = editVal !== undefined ? editVal : currentSaved;
+                const defaultVal   = fg.standard_sell_pct != null ? String(fg.standard_sell_pct) : '';
+                const savedNum     = fg.customer_pct != null ? parseFloat(fg.customer_pct) : null;
+                const editNum      = editVal !== undefined && editVal !== '' ? parseFloat(editVal) : null;
+                const isDirty      = editVal !== undefined && editNum !== savedNum;
+                const isCustom     = fg.customer_pct != null;
+
+                return (
+                  <tr key={fg.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                    <td style={{ ...tdStyle, textAlign: 'left', color: '#ccc' }}>{fg.name}</td>
+                    <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'monospace', color: '#888' }}>
+                      {parseFloat(fg.cost_pct).toFixed(2)}%
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'monospace', color: '#666' }}>
+                      {fg.standard_sell_pct != null ? `${parseFloat(fg.standard_sell_pct).toFixed(2)}%` : '—'}
+                    </td>
+                    <td style={{ ...tdStyle, paddingLeft: 4 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder={defaultVal || '0.00'}
+                          value={displayVal}
+                          onChange={e => setFuelEdits(prev => ({ ...prev, [fg.id]: e.target.value }))}
+                          style={{
+                            width: 58, background: 'rgba(255,255,255,0.06)',
+                            border: isDirty ? '1px solid #00C853' : isCustom ? '1px solid rgba(0,200,83,0.35)' : '1px solid rgba(255,255,255,0.1)',
+                            borderRadius: 5, color: isCustom ? '#00C853' : '#888',
+                            fontSize: 11, padding: '3px 6px', outline: 'none', fontFamily: 'monospace',
+                          }}
+                        />
+                        <span style={{ fontSize: 11, color: '#555' }}>%</span>
+                        {isDirty && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onSetFuel(fg.id, parseFloat(editVal));
+                              setFuelEdits(prev => { const n = { ...prev }; delete n[fg.id]; return n; });
+                            }}
+                            style={{
+                              background: '#00C853', border: 'none', borderRadius: 4,
+                              color: '#000', fontSize: 10, fontWeight: 700, padding: '3px 8px', cursor: 'pointer',
+                            }}
+                          >
+                            ✓
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div style={{ fontSize: 10, color: '#444', fontStyle: 'italic', marginTop: 5 }}>
+            Green = custom override · grey = standard sell default
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Customer Pricing Overview ────────────────────────────────
-// Shows carrier rate cards (always auto-populated from master cards),
-// fuel groups (cost vs customer %) and configured service pricing per carrier.
+// Carrier logo grid (dim = inactive, bright = active) + per-carrier
+// rate card picker and fuel group pricing.
 function CustomerPricingOverview({ customerId }) {
-  const api = (path) => fetch(path).then(r => r.json());
+  const qc = useQueryClient();
 
   const { data: carriers = [], isLoading } = useQuery({
-    queryKey: ['customer-pricing-overview', customerId],
-    queryFn: () => api(`/api/customer-service-pricing/carrier-overview/${customerId}`),
-    enabled: !!customerId,
+    queryKey: ['customer-carrier-links', customerId],
+    queryFn:  () => fetch(`/api/customer-carrier-links/${customerId}`).then(r => r.json()),
+    enabled:  !!customerId,
+  });
+
+  const activate = useMutation({
+    mutationFn: (courierId) =>
+      fetch(`/api/customer-carrier-links/${customerId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courier_id: courierId }),
+      }).then(r => r.json()),
+    onSuccess: () => qc.invalidateQueries(['customer-carrier-links', customerId]),
+  });
+
+  const deactivate = useMutation({
+    mutationFn: (courierId) =>
+      fetch(`/api/customer-carrier-links/${customerId}/${courierId}`, { method: 'DELETE' }).then(r => r.json()),
+    onSuccess: () => qc.invalidateQueries(['customer-carrier-links', customerId]),
+  });
+
+  const changeCard = useMutation({
+    mutationFn: ({ courierId, cardId }) =>
+      fetch(`/api/customer-carrier-links/${customerId}/${courierId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ carrier_rate_card_id: parseInt(cardId) }),
+      }).then(r => r.json()),
+    onSuccess: () => qc.invalidateQueries(['customer-carrier-links', customerId]),
+  });
+
+  const setFuel = useMutation({
+    mutationFn: ({ fuelGroupId, sell_pct }) =>
+      fetch(`/api/customer-carrier-links/${customerId}/fuel/${fuelGroupId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sell_pct }),
+      }).then(r => r.json()),
+    onSuccess: () => qc.invalidateQueries(['customer-carrier-links', customerId]),
   });
 
   if (isLoading) return null;
 
-  if (!carriers.length) return (
-    <InfoCard title="Rate Cards & Fuel">
-      <span style={{ fontSize: 12, color: '#555', fontStyle: 'italic' }}>No carrier rate cards found — set up carriers first.</span>
-    </InfoCard>
-  );
+  const activeCarriers = carriers.filter(c => c.active);
 
   return (
-    <>
-      {carriers.map(carrier => {
-        const fuelGroups    = carrier.fuel_groups    || [];
-        const fuelSurcharges = carrier.fuel_surcharges || [];
-        const services      = carrier.customer_pricing || [];
+    <InfoCard title="Carriers">
 
-        return (
-          <InfoCard key={carrier.courier_id} title={`${carrier.courier_name} — Rate Card`}>
+      {/* ── Carrier toggle grid ── */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: activeCarriers.length ? 0 : 4 }}>
+        {carriers.length === 0 && (
+          <span style={{ fontSize: 12, color: '#555', fontStyle: 'italic' }}>No carriers configured — set up carriers first.</span>
+        )}
+        {carriers.map(carrier => {
+          const busy = (activate.isPending || deactivate.isPending);
+          return (
+            <button
+              key={carrier.courier_id}
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                if (carrier.active) deactivate.mutate(carrier.courier_id);
+                else activate.mutate(carrier.courier_id);
+              }}
+              title={carrier.active ? `Deactivate ${carrier.courier_name}` : `Activate ${carrier.courier_name}`}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '6px 14px', borderRadius: 8, cursor: busy ? 'wait' : 'pointer',
+                fontWeight: 700, fontSize: 12, transition: 'all 0.15s',
+                border: carrier.active ? '2px solid #00C853' : '2px solid rgba(255,255,255,0.08)',
+                background: carrier.active ? 'rgba(0,200,83,0.12)' : 'rgba(255,255,255,0.03)',
+                color: carrier.active ? '#00C853' : 'rgba(255,255,255,0.25)',
+              }}
+            >
+              {carrier.courier_code || carrier.courier_name}
+              {carrier.active && <Check size={10} strokeWidth={3} />}
+            </button>
+          );
+        })}
+      </div>
 
-            {/* ── Fuel groups ── */}
-            {(fuelGroups.length > 0 || fuelSurcharges.length > 0) && (
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#F59E0B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-                  ⛽ Fuel Groups
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '4px 12px', alignItems: 'center', fontSize: 12 }}>
-                  <span style={{ fontSize: 10, color: '#444', fontWeight: 700 }}>Group</span>
-                  <span style={{ fontSize: 10, color: '#444', fontWeight: 700, textAlign: 'right' }}>Our Cost</span>
-                  <span style={{ fontSize: 10, color: '#444', fontWeight: 700, textAlign: 'right' }}>Customer</span>
+      {/* ── Per-active-carrier panels ── */}
+      {activeCarriers.map(carrier => (
+        <ActiveCarrierPanel
+          key={carrier.courier_id}
+          carrier={carrier}
+          customerId={customerId}
+          onChangeCard={(cardId) => changeCard.mutate({ courierId: carrier.courier_id, cardId })}
+          onSetFuel={(fuelGroupId, sell_pct) => setFuel.mutate({ fuelGroupId, sell_pct })}
+        />
+      ))}
 
-                  {fuelGroups.map(fg => {
-                    // Find a matching percentage surcharge for this carrier (by name similarity or first match)
-                    const matchedSurcharge = fuelSurcharges.find(s =>
-                      s.surcharge_name.toLowerCase().includes('fuel') ||
-                      s.surcharge_name.toLowerCase().includes('energy')
-                    ) || fuelSurcharges[0];
-                    const customerRate = matchedSurcharge?.customer_rate ?? matchedSurcharge?.standard_rate ?? null;
-                    const isMarkup = customerRate != null && customerRate > parseFloat(fg.fuel_surcharge_pct);
+      {activeCarriers.length === 0 && carriers.length > 0 && (
+        <p style={{ fontSize: 11, color: '#444', fontStyle: 'italic', marginTop: 10 }}>
+          Click a carrier above to activate it for this customer.
+        </p>
+      )}
 
-                    return (
-                      <div key={fg.id} style={{ display: 'contents' }}>
-                        <span style={{ color: '#AAAAAA' }}>{fg.name}</span>
-                        <span style={{ color: '#888', textAlign: 'right', fontFamily: 'monospace' }}>
-                          {parseFloat(fg.fuel_surcharge_pct).toFixed(2)}%
-                        </span>
-                        <span style={{
-                          textAlign: 'right', fontFamily: 'monospace', fontWeight: 700,
-                          color: customerRate == null ? '#555' : isMarkup ? '#00C853' : '#F59E0B',
-                        }}>
-                          {customerRate != null ? `${parseFloat(customerRate).toFixed(2)}%` : '— not set'}
-                        </span>
-                      </div>
-                    );
-                  })}
-
-                  {/* Percentage surcharges that don't correspond to a fuel group */}
-                  {fuelSurcharges.filter(s =>
-                    !s.surcharge_name.toLowerCase().includes('fuel') &&
-                    !s.surcharge_name.toLowerCase().includes('energy')
-                  ).map(s => (
-                    <div key={s.surcharge_id} style={{ display: 'contents' }}>
-                      <span style={{ color: '#AAAAAA' }}>{s.surcharge_name}</span>
-                      <span style={{ color: '#888', textAlign: 'right', fontFamily: 'monospace' }}>
-                        {parseFloat(s.standard_rate).toFixed(2)}%
-                      </span>
-                      <span style={{
-                        textAlign: 'right', fontFamily: 'monospace', fontWeight: 700,
-                        color: s.customer_rate != null ? '#00C853' : '#555',
-                      }}>
-                        {s.customer_rate != null ? `${parseFloat(s.customer_rate).toFixed(2)}%` : '— not set'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* ── Configured services ── */}
-            <div style={{ borderTop: fuelGroups.length || fuelSurcharges.length ? '1px solid rgba(255,255,255,0.05)' : 'none', paddingTop: fuelGroups.length || fuelSurcharges.length ? 10 : 0 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#7B2FBE', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-                📦 Services
-              </div>
-              {services.length === 0 ? (
-                <div style={{ fontSize: 11, color: '#555', fontStyle: 'italic' }}>
-                  No services configured — using master rate card pricing
-                </div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '4px 12px', alignItems: 'center', fontSize: 12 }}>
-                  <span style={{ fontSize: 10, color: '#444', fontWeight: 700 }}>Service</span>
-                  <span style={{ fontSize: 10, color: '#444', fontWeight: 700, textAlign: 'right' }}>Pricing</span>
-                  <span style={{ fontSize: 10, color: '#444', fontWeight: 700, textAlign: 'right' }}>Rate</span>
-                  {services.map((svc, i) => (
-                    <div key={svc.id ?? i} style={{ display: 'contents' }}>
-                      <span style={{ color: '#AAAAAA' }}>
-                        {svc.service_name}
-                        {svc.service_code && <span style={{ color: '#555', fontSize: 10, marginLeft: 5 }}>{svc.service_code}</span>}
-                      </span>
-                      <span style={{ color: '#888', textAlign: 'right', fontSize: 11 }}>
-                        {svc.pricing_type === 'markup' ? 'Markup' : 'Fixed fee'}
-                      </span>
-                      <span style={{ color: '#00C853', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, fontSize: 12 }}>
-                        {svc.pricing_type === 'markup'
-                          ? `+${parseFloat(svc.markup_pct).toFixed(1)}%`
-                          : `+£${parseFloat(svc.fixed_fee).toFixed(2)}`}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div style={{ marginTop: 8 }}>
-              <span style={{ fontSize: 10, color: '#444', fontStyle: 'italic' }}>
-                Rate card: {carrier.rate_card_name} · Configure services in Pricing tab
-              </span>
-            </div>
-
-          </InfoCard>
-        );
-      })}
-    </>
+    </InfoCard>
   );
 }
 
