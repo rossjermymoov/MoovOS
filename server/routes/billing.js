@@ -731,6 +731,26 @@ router.post('/webhook', async (req, res, next) => {
       return res.json({ ok: true, action: 'skipped', reason: `unrecognised event_type "${eventType}"` });
     }
 
+    // ── Intercept: DC tracking payloads with no event_type ───────────────────
+    // Dispatch Cloud sends tracking webhooks without an event_type field. They
+    // are identified by the tracking_update.parcels structure in the payload.
+    // Without this guard they fall through to shipment creation, creating bogus
+    // charges and returning action:created instead of updating parcel status.
+    const unwrapped = (body.json && typeof body.json === 'object') ? body.json : body;
+    const isTrackingPayload =
+      (unwrapped.tracking_update && Array.isArray(unwrapped.tracking_update.parcels)) ||
+      (payload.tracking_update   && Array.isArray(payload.tracking_update.parcels));
+
+    if (isTrackingPayload) {
+      console.log('[billing/webhook] DC tracking payload (no event_type) — forwarding to tracking handler');
+      const events  = normaliseTrackingPayload(body);
+      const results = [];
+      for (const event of events) {
+        results.push(await upsertTrackingEvent(event, body));
+      }
+      return res.json({ ok: true, action: 'tracking_forwarded', processed: results.length, results });
+    }
+
     // ── Cancellation ──────────────────────────────────────────────────────────
     if (eventType === 'shipment.cancelled' || eventType === 'shipment.deleted') {
       const shipment = payload.shipment || {};
