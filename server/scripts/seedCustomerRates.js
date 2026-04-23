@@ -42,6 +42,10 @@ const CSV_TO_MOOV = {
   '2714': 'MOOV-0157', '2717': 'MOOV-0158', '2737': 'MOOV-0160', '2745': 'MOOV-0161',
   '2752': 'MOOV-0162', '2769': 'MOOV-0164', '2770': 'MOOV-0165', '2772': 'MOOV-0166',
   '2786': 'MOOV-0169', '2823': 'MOOV-0171',
+  // Additional mappings identified from gap analysis
+  '2121': 'MOOV-0099',  // Hairways (Hair & Beauty) Ltd Site B → Harlow
+  '2445': 'MOOV-0133',  // Bill's Tool Store Ltd
+  '2587': 'MOOV-0138',  // Westcare Ltd
 };
 
 const BATCH_SIZE = 500;
@@ -53,10 +57,14 @@ export async function seedCustomerRates() {
 
   console.log('📦 Seeding customer_rates from prices.csv…');
 
-  // Load customer UUID lookup: account_number → uuid
-  const { rows: customers } = await query('SELECT id, account_number FROM customers');
+  // Load customer UUID lookup: account_number → uuid AND business_name → uuid
+  const { rows: customers } = await query('SELECT id, account_number, business_name FROM customers');
   const accountToUuid = {};
-  for (const c of customers) accountToUuid[c.account_number] = c.id;
+  const nameToUuid    = {};
+  for (const c of customers) {
+    if (c.account_number) accountToUuid[c.account_number] = c.id;
+    if (c.business_name)  nameToUuid[c.business_name.toLowerCase().trim()] = c.id;
+  }
 
   // Read CSV line by line into buckets per customer
   const csvPath = path.join(__dirname, '..', 'data', 'prices.csv');
@@ -73,12 +81,20 @@ export async function seedCustomerRates() {
       const fields = parseCSVLine(line);
       if (fields.length < 13) return;
 
-      const [csvCustId, , courierId, courierCode, courierName, serviceId, serviceCode, serviceName, zoneId, zoneName, weightClassId, weightClassName, price] = fields;
+      const [csvCustId, csvCustName, courierId, courierCode, courierName, serviceId, serviceCode, serviceName, zoneId, zoneName, weightClassId, weightClassName, price] = fields;
 
+      let uuid;
       const moovAcct = CSV_TO_MOOV[csvCustId];
-      if (!moovAcct) return; // not a MOOV customer
-      const uuid = accountToUuid[moovAcct];
-      if (!uuid) return; // customer not in DB yet
+      if (moovAcct) {
+        uuid = accountToUuid[moovAcct];
+      } else {
+        // Fallback: match by business_name for customers added after the static map was built
+        // Skip HOF- / WXM- prefixed entries (legacy courier hub accounts, not direct Moov customers)
+        const nameClean = csvCustName.trim().replace(/^["']|["']$/g, '');
+        if (!nameClean || nameClean.match(/^(HOF|WXM)\s*[-–]/i)) return;
+        uuid = nameToUuid[nameClean.toLowerCase()];
+      }
+      if (!uuid) return; // customer not in DB
 
       if (!rowsByCustomer[uuid]) rowsByCustomer[uuid] = [];
       rowsByCustomer[uuid].push([
