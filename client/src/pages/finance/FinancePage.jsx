@@ -956,11 +956,18 @@ export default function FinancePage() {
               <span style={{ color: '#555' }}>of {batchResult.total_unlinked} unlinked total</span>
             </div>
           ) : batchResult.surcharge ? (
-            <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-              <span style={{ color: '#00C853', fontWeight: 700 }}>⛽ {batchResult.surcharges_applied} surcharge rows added</span>
-              {batchResult.already_had_surcharges > 0 && <span style={{ color: '#555' }}>{batchResult.already_had_surcharges} already had surcharges</span>}
-              {batchResult.errors > 0 && <span style={{ color: '#F44336' }}>{batchResult.errors} errors</span>}
-              <span style={{ color: '#555' }}>of {batchResult.total_charges} charges processed</span>
+            <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+                <span style={{ color: '#00C853', fontWeight: 700 }}>⛽ {batchResult.surcharges_applied} surcharge rows added</span>
+                {batchResult.already_had_surcharges > 0 && <span style={{ color: '#555' }}>{batchResult.already_had_surcharges} already had surcharges</span>}
+                {batchResult.errors > 0 && <span style={{ color: '#F44336', fontWeight: 700 }}>{batchResult.errors} errors</span>}
+                <span style={{ color: '#555' }}>of {batchResult.total_charges} charges processed</span>
+              </div>
+              {batchResult.first_error && (
+                <div style={{ fontSize: 11, color: '#F44336', fontFamily: 'monospace' }}>
+                  First error: {batchResult.first_error}
+                </div>
+              )}
             </div>
           ) : (
             <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap' }}>

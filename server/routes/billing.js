@@ -1343,9 +1343,10 @@ router.post('/batch-apply-surcharges', async (req, res, next) => {
       ORDER BY c.created_at ASC
     `, vals);
 
-    let applied = 0;
-    let skipped = 0;
-    let errors  = 0;
+    let applied    = 0;
+    let skipped    = 0;
+    let errors     = 0;
+    let firstError = null;
 
     for (const row of rows) {
       try {
@@ -1353,6 +1354,7 @@ router.post('/batch-apply-surcharges', async (req, res, next) => {
           `SELECT COUNT(*)::int AS cnt FROM charges WHERE shipment_id = $1 AND charge_type IN ('surcharge','fuel') AND cancelled = false`,
           [row.shipment_id]
         );
+
         await applySurcharges(row.shipment_id, row.customer_id, parseFloat(row.base_price || 0), {
           courier:               row.courier,
           dc_service_id:         row.dc_service_id,
@@ -1369,19 +1371,23 @@ router.post('/batch-apply-surcharges', async (req, res, next) => {
           total_declared_value:  row.total_declared_value,
           parcel_declared_value: row.parcel_declared_value,
         });
+
         const after = await query(
-          `SELECT COUNT(*)::int AS cnt FROM charges WHERE shipment_id = $1 AND charge_type = 'surcharge' AND cancelled = false`,
+          `SELECT COUNT(*)::int AS cnt FROM charges WHERE shipment_id = $1 AND charge_type IN ('surcharge','fuel') AND cancelled = false`,
           [row.shipment_id]
         );
+
         if (after.rows[0].cnt > before.rows[0].cnt) applied++;
         else skipped++;
+
       } catch (err) {
         errors++;
+        if (!firstError) firstError = err.message;
         console.error(`[batch-apply-surcharges] shipment ${row.shipment_id}:`, err.message);
       }
     }
 
-    res.json({ ok: true, total_charges: rows.length, surcharges_applied: applied, already_had_surcharges: skipped, errors });
+    res.json({ ok: true, total_charges: rows.length, surcharges_applied: applied, already_had_surcharges: skipped, errors, first_error: firstError });
   } catch (err) { next(err); }
 });
 

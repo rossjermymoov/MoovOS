@@ -494,7 +494,30 @@ export default function SurchargesTab({ courierId, courierCode }) {
                     {editing === s.id ? (
                       <input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} onClick={e => e.stopPropagation()} style={{ ...inp(), width: 220 }} />
                     ) : (
-                      <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{s.name}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{s.name}</span>
+                        {(s.rules || []).length > 0 && (
+                          <span title={`${s.rules.length} rule${s.rules.length > 1 ? 's' : ''} — click to view`} style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 3,
+                            padding: '2px 7px', borderRadius: 9999, fontSize: 10, fontWeight: 700,
+                            background: 'rgba(0,188,212,0.15)', color: '#00BCD4',
+                            border: '1px solid rgba(0,188,212,0.35)', letterSpacing: '0.04em',
+                            cursor: 'pointer',
+                          }}>
+                            ⚡ {s.rules.length} RULE{s.rules.length > 1 ? 'S' : ''}
+                          </span>
+                        )}
+                        {(s.rules || []).length === 0 && s.applies_when === 'always' && (
+                          <span title="No rules — fires on every shipment for this courier" style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 3,
+                            padding: '2px 7px', borderRadius: 9999, fontSize: 10, fontWeight: 700,
+                            background: 'rgba(0,200,83,0.1)', color: '#00C853',
+                            border: '1px solid rgba(0,200,83,0.25)', letterSpacing: '0.04em',
+                          }}>
+                            ● ALL
+                          </span>
+                        )}
+                      </div>
                     )}
                   </td>
 
