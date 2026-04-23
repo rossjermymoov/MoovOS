@@ -532,12 +532,19 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData) 
 
     for (const surcharge of surcharges) {
       const rules = Array.isArray(surcharge.rules) ? surcharge.rules : [];
-      if (!rules.length) continue;
 
-      // Any rule match fires the surcharge (OR across rules)
+      // No rules + applies_when='always' → fires on every shipment for this courier.
+      // Rules with no filter conditions also fire unconditionally (evaluateSurchargeFilters returns true).
+      // Only skip if there are rules and NONE of them match.
       let matched = false;
-      for (const rule of rules) {
-        if (evaluateSurchargeFilters(rule, shipmentData)) { matched = true; break; }
+      if (!rules.length) {
+        // No rules configured → applies to all shipments for this courier
+        matched = true;
+      } else {
+        // Any rule match fires the surcharge (OR across rules)
+        for (const rule of rules) {
+          if (evaluateSurchargeFilters(rule, shipmentData)) { matched = true; break; }
+        }
       }
       if (!matched) continue;
 
