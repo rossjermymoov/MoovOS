@@ -30,7 +30,7 @@ BEGIN
       ('DPD-16','Mainland', 7.51),
       ('DPD-01','Mainland', 8.08)
     ) AS s(service_code,zone_name,price_sub)
-    WHERE customer_id=v_id AND service_code=s.service_code AND zone_name=s.zone_name;
+    WHERE customer_id=v_id AND customer_rates.service_code=s.service_code AND customer_rates.zone_name=s.zone_name;
     RAISE NOTICE 'Aegean Sea Ltd: sub rates applied (customer_id=%)', v_id;
   ELSE
     RAISE NOTICE 'Aegean Sea Ltd: not found — skipped';
@@ -49,7 +49,7 @@ BEGIN
       ('DPD-16','Mainland', 5.52),
       ('DPD-01','Mainland', 6.05)
     ) AS s(service_code,zone_name,price_sub)
-    WHERE customer_id=v_id AND service_code=s.service_code AND zone_name=s.zone_name;
+    WHERE customer_id=v_id AND customer_rates.service_code=s.service_code AND customer_rates.zone_name=s.zone_name;
     RAISE NOTICE 'Bakers Street: sub rates applied (customer_id=%)', v_id;
   ELSE
     RAISE NOTICE 'Bakers Street: not found — skipped';
@@ -68,7 +68,7 @@ BEGIN
       ('DPD-16','Mainland', 7.59),
       ('DPD-01','Mainland', 8.15)
     ) AS s(service_code,zone_name,price_sub)
-    WHERE customer_id=v_id AND service_code=s.service_code AND zone_name=s.zone_name;
+    WHERE customer_id=v_id AND customer_rates.service_code=s.service_code AND customer_rates.zone_name=s.zone_name;
     RAISE NOTICE 'Beacons and Lightbars: sub rates applied (customer_id=%)', v_id;
   ELSE
     RAISE NOTICE 'Beacons and Lightbars: not found — skipped';
@@ -87,7 +87,7 @@ BEGIN
       ('DPD-16','Mainland', 7.14),
       ('DPD-01','Mainland', 7.67)
     ) AS s(service_code,zone_name,price_sub)
-    WHERE customer_id=v_id AND service_code=s.service_code AND zone_name=s.zone_name;
+    WHERE customer_id=v_id AND customer_rates.service_code=s.service_code AND customer_rates.zone_name=s.zone_name;
     RAISE NOTICE 'Capatex Limited: sub rates applied (customer_id=%)', v_id;
   ELSE
     RAISE NOTICE 'Capatex Limited: not found — skipped';
@@ -106,7 +106,7 @@ BEGIN
       ('DPD-16','Mainland', 5.75),
       ('DPD-01','Mainland', 5.75)
     ) AS s(service_code,zone_name,price_sub)
-    WHERE customer_id=v_id AND service_code=s.service_code AND zone_name=s.zone_name;
+    WHERE customer_id=v_id AND customer_rates.service_code=s.service_code AND customer_rates.zone_name=s.zone_name;
     RAISE NOTICE 'Empire Printing: sub rates applied (customer_id=%)', v_id;
   ELSE
     RAISE NOTICE 'Empire Printing: not found — skipped';
@@ -125,7 +125,7 @@ BEGIN
       ('DPD-16','Mainland', 5.75),
       ('DPD-01','Mainland', 5.75)
     ) AS s(service_code,zone_name,price_sub)
-    WHERE customer_id=v_id AND service_code=s.service_code AND zone_name=s.zone_name;
+    WHERE customer_id=v_id AND customer_rates.service_code=s.service_code AND customer_rates.zone_name=s.zone_name;
     RAISE NOTICE 'Fortec: sub rates applied (customer_id=%)', v_id;
   ELSE
     RAISE NOTICE 'Fortec: not found — skipped';

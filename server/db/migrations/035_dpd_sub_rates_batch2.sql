@@ -35,7 +35,7 @@ BEGIN
       ('DPD-16','Mainland', 5.75),
       ('DPD-01','Mainland', 5.75)
     ) AS s(service_code,zone_name,price_sub)
-    WHERE customer_id=v_id AND service_code=s.service_code AND zone_name=s.zone_name;
+    WHERE customer_id=v_id AND customer_rates.service_code=s.service_code AND customer_rates.zone_name=s.zone_name;
     RAISE NOTICE 'Fosseway Parcels Ltd: sub rates applied (customer_id=%)', v_id;
   ELSE
     RAISE NOTICE 'Fosseway Parcels Ltd: not found — skipped';
@@ -54,7 +54,7 @@ BEGIN
       ('DPD-16','Mainland', 5.25),
       ('DPD-01','Mainland', 5.75)
     ) AS s(service_code,zone_name,price_sub)
-    WHERE customer_id=v_id AND service_code=s.service_code AND zone_name=s.zone_name;
+    WHERE customer_id=v_id AND customer_rates.service_code=s.service_code AND customer_rates.zone_name=s.zone_name;
     RAISE NOTICE 'Impoxer LTD T/A Makrom: sub rates applied (customer_id=%)', v_id;
   ELSE
     RAISE NOTICE 'Impoxer LTD T/A Makrom: not found — skipped';
@@ -73,7 +73,7 @@ BEGIN
       ('DPD-16','Mainland', 7.59),
       ('DPD-01','Mainland', 8.15)
     ) AS s(service_code,zone_name,price_sub)
-    WHERE customer_id=v_id AND service_code=s.service_code AND zone_name=s.zone_name;
+    WHERE customer_id=v_id AND customer_rates.service_code=s.service_code AND customer_rates.zone_name=s.zone_name;
     RAISE NOTICE 'Norfolk Saw Services: sub rates applied (customer_id=%)', v_id;
   ELSE
     RAISE NOTICE 'Norfolk Saw Services: not found — skipped';
@@ -92,7 +92,7 @@ BEGIN
       ('DPD-16','Mainland', 7.63),
       ('DPD-01','Mainland', 6.05)
     ) AS s(service_code,zone_name,price_sub)
-    WHERE customer_id=v_id AND service_code=s.service_code AND zone_name=s.zone_name;
+    WHERE customer_id=v_id AND customer_rates.service_code=s.service_code AND customer_rates.zone_name=s.zone_name;
     RAISE NOTICE 'P&S Products & Refreshening Ltd: sub rates applied (customer_id=%)', v_id;
   ELSE
     RAISE NOTICE 'P&S Products & Refreshening Ltd: not found — skipped';
@@ -111,7 +111,7 @@ BEGIN
       ('DPD-16','Mainland', 7.48),
       ('DPD-01','Mainland', 8.02)
     ) AS s(service_code,zone_name,price_sub)
-    WHERE customer_id=v_id AND service_code=s.service_code AND zone_name=s.zone_name;
+    WHERE customer_id=v_id AND customer_rates.service_code=s.service_code AND customer_rates.zone_name=s.zone_name;
     RAISE NOTICE 'Passion Accessories Ltd: sub rates applied (customer_id=%)', v_id;
   ELSE
     RAISE NOTICE 'Passion Accessories Ltd: not found — skipped';
@@ -130,7 +130,7 @@ BEGIN
       ('DPD-16','Mainland', 7.15),
       ('DPD-01','Mainland', 7.48)
     ) AS s(service_code,zone_name,price_sub)
-    WHERE customer_id=v_id AND service_code=s.service_code AND zone_name=s.zone_name;
+    WHERE customer_id=v_id AND customer_rates.service_code=s.service_code AND customer_rates.zone_name=s.zone_name;
     RAISE NOTICE 'Pet & Grooming Supplies Ltd: sub rates applied (customer_id=%)', v_id;
   ELSE
     RAISE NOTICE 'Pet & Grooming Supplies Ltd: not found — skipped';
@@ -149,7 +149,7 @@ BEGIN
       ('DPD-16','Mainland', 5.25),
       ('DPD-01','Mainland', 5.75)
     ) AS s(service_code,zone_name,price_sub)
-    WHERE customer_id=v_id AND service_code=s.service_code AND zone_name=s.zone_name;
+    WHERE customer_id=v_id AND customer_rates.service_code=s.service_code AND customer_rates.zone_name=s.zone_name;
     RAISE NOTICE 'Pex Ltd: sub rates applied (customer_id=%)', v_id;
   ELSE
     RAISE NOTICE 'Pex Ltd: not found — skipped';
@@ -168,7 +168,7 @@ BEGIN
       ('DPD-16','Mainland', 5.25),
       ('DPD-01','Mainland', 5.75)
     ) AS s(service_code,zone_name,price_sub)
-    WHERE customer_id=v_id AND service_code=s.service_code AND zone_name=s.zone_name;
+    WHERE customer_id=v_id AND customer_rates.service_code=s.service_code AND customer_rates.zone_name=s.zone_name;
     RAISE NOTICE 'Railway Shop: sub rates applied (customer_id=%)', v_id;
   ELSE
     RAISE NOTICE 'Railway Shop: not found — skipped';
@@ -187,7 +187,7 @@ BEGIN
       ('DPD-16','Mainland', 7.59),
       ('DPD-01','Mainland', 8.15)
     ) AS s(service_code,zone_name,price_sub)
-    WHERE customer_id=v_id AND service_code=s.service_code AND zone_name=s.zone_name;
+    WHERE customer_id=v_id AND customer_rates.service_code=s.service_code AND customer_rates.zone_name=s.zone_name;
     RAISE NOTICE 'Seedball Limited: sub rates applied (customer_id=%)', v_id;
   ELSE
     RAISE NOTICE 'Seedball Limited: not found — skipped';
@@ -206,7 +206,7 @@ BEGIN
       ('DPD-16','Mainland', 5.52),
       ('DPD-01','Mainland', 6.05)
     ) AS s(service_code,zone_name,price_sub)
-    WHERE customer_id=v_id AND service_code=s.service_code AND zone_name=s.zone_name;
+    WHERE customer_id=v_id AND customer_rates.service_code=s.service_code AND customer_rates.zone_name=s.zone_name;
     RAISE NOTICE 'Techworknetwork LTD: sub rates applied (customer_id=%)', v_id;
   ELSE
     RAISE NOTICE 'Techworknetwork LTD: not found — skipped';
@@ -225,7 +225,7 @@ BEGIN
       ('DPD-16','Mainland', 5.75),
       ('DPD-01','Mainland', 5.75)
     ) AS s(service_code,zone_name,price_sub)
-    WHERE customer_id=v_id AND service_code=s.service_code AND zone_name=s.zone_name;
+    WHERE customer_id=v_id AND customer_rates.service_code=s.service_code AND customer_rates.zone_name=s.zone_name;
     RAISE NOTICE 'TMK Trading Ltd t/a Nexus Modelling Supplies: sub rates applied (customer_id=%)', v_id;
   ELSE
     RAISE NOTICE 'TMK Trading Ltd t/a Nexus Modelling Supplies: not found — skipped';
@@ -244,7 +244,7 @@ BEGIN
       ('DPD-16','Mainland', 5.75),
       ('DPD-01','Mainland', 5.75)
     ) AS s(service_code,zone_name,price_sub)
-    WHERE customer_id=v_id AND service_code=s.service_code AND zone_name=s.zone_name;
+    WHERE customer_id=v_id AND customer_rates.service_code=s.service_code AND customer_rates.zone_name=s.zone_name;
     RAISE NOTICE 'Wedcova Uk Ltd: sub rates applied (customer_id=%)', v_id;
   ELSE
     RAISE NOTICE 'Wedcova Uk Ltd: not found — skipped';
@@ -263,7 +263,7 @@ BEGIN
       ('DPD-16','Mainland', 5.75),
       ('DPD-01','Mainland', 5.75)
     ) AS s(service_code,zone_name,price_sub)
-    WHERE customer_id=v_id AND service_code=s.service_code AND zone_name=s.zone_name;
+    WHERE customer_id=v_id AND customer_rates.service_code=s.service_code AND customer_rates.zone_name=s.zone_name;
     RAISE NOTICE 'Xylo Ltd: sub rates applied (customer_id=%)', v_id;
   ELSE
     RAISE NOTICE 'Xylo Ltd: not found — skipped';
