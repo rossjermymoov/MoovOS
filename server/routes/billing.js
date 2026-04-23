@@ -280,6 +280,7 @@ async function lookupViaServicePricing(customerId, serviceCode, weightKg, postco
     SELECT
       csp.pricing_type, csp.markup_pct, csp.fixed_fee,
       wb.price_first  AS cost_price,
+      wb.price_sub    AS cost_price_sub,
       wb.min_weight_kg, wb.max_weight_kg,
       z.name          AS zone_name,
       cs.service_code AS svc_code,
@@ -299,14 +300,17 @@ async function lookupViaServicePricing(customerId, serviceCode, weightKg, postco
 
   const rows = res.rows;
 
-  const applyPricing = (row) => {
-    const cost = parseFloat(row.cost_price || 0);
-    if (row.pricing_type === 'fixed_fee') return cost + parseFloat(row.fixed_fee || 0);
-    return cost * (1 + parseFloat(row.markup_pct || 0) / 100);
+  const applyMarkup = (cost, row) => {
+    if (row.pricing_type === 'fixed_fee') return parseFloat(cost || 0) + parseFloat(row.fixed_fee || 0);
+    return parseFloat(cost || 0) * (1 + parseFloat(row.markup_pct || 0) / 100);
   };
 
   const buildRate = (r) => ({
-    price:             Math.round(applyPricing(r) * 10000) / 10000,
+    price:             Math.round(applyMarkup(r.cost_price, r) * 10000) / 10000,
+    // price_sub: sell price for each subsequent parcel (same markup applied to cost_price_sub)
+    price_sub:         r.cost_price_sub != null
+                         ? Math.round(applyMarkup(r.cost_price_sub, r) * 10000) / 10000
+                         : null,
     cost_price:        parseFloat(r.cost_price || 0),
     zone_name:         r.zone_name,
     weight_class_name: r.min_weight_kg != null ? `${r.min_weight_kg}–${r.max_weight_kg} kg` : 'All weights',
