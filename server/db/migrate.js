@@ -40,7 +40,20 @@ export async function runMigrations() {
     const sql = await readFile(join(migrationsDir, file), 'utf8');
 
     try {
-      await query(sql);
+      // Split on statement boundaries and run each statement individually.
+      // This is required for migrations that contain ALTER TYPE ADD VALUE —
+      // PostgreSQL does not allow a newly-added enum value to be used in the
+      // same transaction in which it was created, so each statement must be
+      // committed separately.
+      const statements = sql
+        .split(/;\s*$/m)
+        .map(s => s.trim())
+        .filter(s => s.length > 0 && !s.startsWith('--'));
+
+      for (const stmt of statements) {
+        await query(stmt);
+      }
+
       await query('INSERT INTO _migrations (filename) VALUES ($1)', [file]);
       console.log(`  ✓ ${file}`);
       ran++;

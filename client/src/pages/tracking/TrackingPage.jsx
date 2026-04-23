@@ -8,7 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Search, X, Truck, PackageCheck, Clock, AlertTriangle,
   ShieldAlert, RotateCcw, Package, ChevronRight, MapPin,
-  RefreshCw, Store, Calendar, Plane,
+  RefreshCw, Store, Calendar, Plane, PackageX,
 } from 'lucide-react';
 import axios from 'axios';
 import { startOfDay, endOfDay, startOfMonth, subDays, format } from 'date-fns';
@@ -52,7 +52,7 @@ const STATUS = {
   tracking_expired:    { label: 'Tracking Expired',            color: '#757575', bg: 'rgba(117,117,117,0.12)',  icon: Clock },
   cancelled:           { label: 'Cancelled',                   color: '#B00020', bg: 'rgba(176,0,32,0.12)',     icon: AlertTriangle },
   awaiting_collection: { label: 'Awaiting Customer Collection',color: '#FF6F00', bg: 'rgba(255,111,0,0.12)',    icon: Store },
-  damaged:             { label: 'Damaged',                     color: '#E91E8C', bg: 'rgba(233,30,140,0.12)',   icon: AlertTriangle },
+  damaged:             { label: 'Damaged',                     color: '#E91E8C', bg: 'rgba(233,30,140,0.12)',   icon: PackageX },
   customs_hold:        { label: 'Customs Hold',                color: '#9C27B0', bg: 'rgba(156,39,176,0.12)',   icon: ShieldAlert },
   unknown:             { label: 'Unknown',                     color: '#555555', bg: 'rgba(255,255,255,0.05)',  icon: Package },
 };
@@ -491,9 +491,7 @@ export default function TrackingPage() {
         <BoldStatCard label="Failed Attempt"          value={(bs.failed_delivery||0)}                                                            color="#F44336" icon={AlertTriangle} active={statusFilter==='failed_delivery'}                          onClick={() => toggleStatus('failed_delivery')} />
         <BoldStatCard label="Customs Hold"            value={bs.customs_hold}                                                                    color="#9C27B0" icon={Plane}         active={statusFilter==='customs_hold'}                             onClick={() => toggleStatus('customs_hold')} />
         <BoldStatCard label="Return to Sender"        value={bs.returned}                                                                        color="#607D8B" icon={RotateCcw}     active={statusFilter==='returned'}                                 onClick={() => toggleStatus('returned')} />
-        <BoldStatCard label="Cancelled"               value={(bs.cancelled||0)}                                                                  color="#B00020" icon={AlertTriangle} active={statusFilter==='cancelled'}                                onClick={() => toggleStatus('cancelled')} />
-        <BoldStatCard label="Damaged"                 value={(bs.damaged||0)}                                                                    color="#E91E8C" icon={AlertTriangle} active={statusFilter==='damaged'}                                  onClick={() => toggleStatus('damaged')} />
-        <BoldStatCard label="Tracking Expired"        value={(bs.tracking_expired||0)}                                                           color="#757575" icon={Clock}         active={statusFilter==='tracking_expired'}                         onClick={() => toggleStatus('tracking_expired')} />
+        <BoldStatCard label="Damaged"                 value={(bs.damaged||0)}                                                                    color="#E91E8C" icon={PackageX}      active={statusFilter==='damaged'}                                  onClick={() => toggleStatus('damaged')} />
         <StatCard label="Delivered Today"             value={stats?.delivered_today}                                                             color="#00C853" icon={PackageCheck}  active={statusFilter==='delivered'}                                onClick={() => toggleStatus('delivered')} />
       </div>
 
