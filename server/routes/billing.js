@@ -182,15 +182,19 @@ function rateCoversWeight(rate, weightKg) {
   const minKg = parseFloat(rate.min_weight_kg);
   const maxKg = parseFloat(rate.max_weight_kg);
   if (!isNaN(minKg) && !isNaN(maxKg)) {
-    // Numeric bounds: weight > min AND weight <= max (matching DC's own logic)
     return weightKg > minKg && weightKg <= maxKg;
   }
-  // NULL/NULL bounds = no weight constraint on this band.
-  // The band name (e.g. "Parcel") is just a label — it means any weight qualifies
-  // and the zone (resolved from postcode) is the only differentiator.
+  // NULL/NULL = flat-rate band (e.g. "Parcel") — any weight qualifies
   if (rate.min_weight_kg == null && rate.max_weight_kg == null) return true;
-  // Fall back to text parsing for legacy rate rows that have a name-encoded range
   return coversWeight(rate.weight_class_name, weightKg);
+}
+
+// Return the effective upper-weight-bound of a band.
+// Used when multiple bands match to pick the tightest fit.
+// Relies on numeric bounds being set (migration 047 backfills any that were missed).
+function bandMaxKg(rate) {
+  const maxKg = parseFloat(rate.max_weight_kg);
+  return !isNaN(maxKg) ? maxKg : Infinity;
 }
 
 // zoneForPostcode — resolve zone name from service code + destination postcode.
@@ -326,7 +330,7 @@ async function lookupViaServicePricing(customerId, serviceCode, weightKg, postco
 
   // ── Step 2: weight band within zone ──────────────────────────────────────
   if (weightKg != null) {
-    const band = zoneRows.find(r => rateCoversWeight(r, weightKg));
+    const band = zoneRows.filter(r => rateCoversWeight(r, weightKg)).sort((a, b) => bandMaxKg(a) - bandMaxKg(b))[0];
     if (!band) return { rate: null, reason: `No weight band covers ${weightKg} kg in zone "${zoneRows[0].zone_name}"` };
     return { rate: buildRate(band), reason: null };
   }
@@ -379,7 +383,7 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
 
   // ── Step 2: weight band within zone ──────────────────────────────────────
   if (weightKg != null) {
-    const band = zoneRows.find(r => rateCoversWeight(r, weightKg));
+    const band = zoneRows.filter(r => rateCoversWeight(r, weightKg)).sort((a, b) => bandMaxKg(a) - bandMaxKg(b))[0];
     if (!band) return { rate: null, reason: `No weight band covers ${weightKg} kg in zone "${zoneRows[0].zone_name}"` };
     return { rate: { price:     parseFloat(band.price),
                      price_sub: band.price_sub != null ? parseFloat(band.price_sub) : null,
