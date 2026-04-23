@@ -608,19 +608,19 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData) 
         const sellPct = parseFloat(fg.customer_sell_pct ?? fg.standard_sell_pct ?? 0);
 
         if (sellPct > 0) {
-          // Idempotency: skip if we've already added a fuel charge for this shipment + fuel group
+          // Idempotency: one fuel charge per shipment — check by charge_type='fuel'
           const { rows: existingFuel } = await query(
-            'SELECT id FROM charges WHERE shipment_id=$1 AND fuel_group_id=$2',
-            [shipmentId, fg.fuel_group_id]
+            `SELECT id FROM charges WHERE shipment_id=$1 AND charge_type='fuel'`,
+            [shipmentId]
           );
 
           if (!existingFuel.length) {
             const fuelPrice = parseFloat(((parseFloat(basePrice) || 0) * sellPct / 100).toFixed(4));
             await query(`
               INSERT INTO charges
-                (shipment_id, customer_id, charge_type, service_name, price, price_auto, fuel_group_id, parcel_qty)
-              VALUES ($1, $2, 'fuel', $3, $4, true, $5, 1)
-            `, [shipmentId, customerId, `${fg.fuel_group_name} Fuel`, fuelPrice, fg.fuel_group_id]);
+                (shipment_id, customer_id, charge_type, service_name, price, price_auto, parcel_qty)
+              VALUES ($1, $2, 'fuel', $3, $4, true, 1)
+            `, [shipmentId, customerId, `${fg.fuel_group_name} Fuel`, fuelPrice]);
           }
         }
       }
