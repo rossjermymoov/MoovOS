@@ -140,7 +140,7 @@ function pick(obj, ...keys) {
 //   A) Shipment-platform format: { json: { tracking_update: { parcels: [...] }, shipment: {...} } }
 //   B) Simple flat object or array of flat objects
 
-function normalisePayload(body) {
+export function normalisePayload(body) {
   // Unwrap platform wrapper — some services POST { json: {...}, verify: false, ... }
   const payload = (body.json && typeof body.json === 'object') ? body.json : body;
 
@@ -194,7 +194,7 @@ function normalisePayload(body) {
 
 // ─── Shared upsert logic ─────────────────────────────────────────────────────
 
-async function upsertEvent(event, rawBody) {
+export async function upsertEvent(event, rawBody) {
   const consignment = event._consignment || pick(event,
     'consignment_number', 'consignmentNumber', 'tracking_number', 'trackingNumber',
     'tracking_code', 'trackingCode', 'reference', 'barcode', 'parcel_id', 'shipment_id', 'id'
