@@ -222,6 +222,48 @@ router.get('/unmatched', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/queries/sender-suggestions
+// Suggest customer matches for an unknown email address
+// IMPORTANT: must be defined BEFORE /:id to avoid being swallowed by the param route
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/sender-suggestions', async (req, res, next) => {
+  try {
+    const { email, domain } = req.query;
+    if (!email && !domain) return res.status(400).json({ error: 'email or domain required' });
+
+    const emailDomain = domain || email?.split('@')[1];
+
+    const result = await query(`
+      SELECT c.id, c.business_name, c.account_number, c.primary_email,
+             CASE
+               WHEN c.primary_email = $1 THEN 3
+               WHEN c.primary_email ILIKE '%' || $2 || '%' THEN 2
+               WHEN EXISTS (
+                 SELECT 1 FROM customer_contacts cc
+                 WHERE cc.customer_id = c.id AND cc.email ILIKE '%' || $2 || '%'
+               ) THEN 1
+               ELSE 0
+             END AS match_score
+      FROM customers c
+      WHERE c.account_status = 'active'
+        AND (
+          c.primary_email = $1
+          OR c.primary_email ILIKE '%' || $2 || '%'
+          OR EXISTS (
+            SELECT 1 FROM customer_contacts cc
+            WHERE cc.customer_id = c.id AND cc.email ILIKE '%' || $2 || '%'
+          )
+        )
+      ORDER BY match_score DESC, c.business_name ASC
+      LIMIT 10
+    `, [email || '', emailDomain || '']);
+
+    res.json({ suggestions: result.rows });
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/queries/:id
 // Single query with full email thread, evidence, and notifications
 // ─────────────────────────────────────────────────────────────────────────────
@@ -508,48 +550,6 @@ router.post('/map-sender', async (req, res, next) => {
     `, [customer_id, email_address]);
 
     res.json({ ok: true, domain });
-  } catch (err) { next(err); }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GET /api/queries/sender-suggestions
-// Suggest customer matches for an unknown email address
-// ─────────────────────────────────────────────────────────────────────────────
-
-router.get('/sender-suggestions', async (req, res, next) => {
-  try {
-    const { email, domain } = req.query;
-    if (!email && !domain) return res.status(400).json({ error: 'email or domain required' });
-
-    const emailDomain = domain || email?.split('@')[1];
-
-    const result = await query(`
-      SELECT c.id, c.business_name, c.account_number, c.primary_email,
-             -- Score: exact email match ranks highest, then domain match
-             CASE
-               WHEN c.primary_email = $1 THEN 3
-               WHEN c.primary_email ILIKE '%' || $2 || '%' THEN 2
-               WHEN EXISTS (
-                 SELECT 1 FROM customer_contacts cc
-                 WHERE cc.customer_id = c.id AND cc.email ILIKE '%' || $2 || '%'
-               ) THEN 1
-               ELSE 0
-             END AS match_score
-      FROM customers c
-      WHERE c.account_status = 'active'
-        AND (
-          c.primary_email = $1
-          OR c.primary_email ILIKE '%' || $2 || '%'
-          OR EXISTS (
-            SELECT 1 FROM customer_contacts cc
-            WHERE cc.customer_id = c.id AND cc.email ILIKE '%' || $2 || '%'
-          )
-        )
-      ORDER BY match_score DESC, c.business_name ASC
-      LIMIT 10
-    `, [email || '', emailDomain || '']);
-
-    res.json({ suggestions: result.rows });
   } catch (err) { next(err); }
 });
 

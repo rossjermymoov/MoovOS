@@ -177,8 +177,11 @@ export function normalisePayload(body) {
           _weight_kg:          parcel.weight || null,
           _estimated_delivery: tu.expected_delivery || shipment.tracking_expected_delivery_date || null,
           _raw:                ev,
-          status:              ev.status || null,
-          status_description:  ev.status_description || null,
+          // Dispatch Cloud sends the numeric code in status_code (1-18)
+          // and the verbatim courier description in status / status_description.
+          // Use status_code for normalisation; fall back to status text if absent.
+          status:              ev.status_code != null ? String(ev.status_code) : (ev.status || null),
+          status_description:  ev.status_description || ev.status || null,
           location:            null,
           timestamp:           ev.update_date || null,
           event_code:          ev.update_id != null ? String(ev.update_id) : null,
