@@ -20,11 +20,12 @@ const inp = {
   outline: 'none', boxSizing: 'border-box',
 };
 
-// ─── Inline editable price cell ───────────────────────────────
-function PriceCell({ rateId, initialPrice, onSaved, onDelete }) {
-  const [editing, setEditing] = useState(false);
-  const [val, setVal]         = useState(String(parseFloat(initialPrice).toFixed(2)));
-  const [confirm, setConfirm] = useState(false);
+// ─── Inline editable price cell (with optional sub-parcel price) ──────────────
+function PriceCell({ rateId, initialPrice, initialPriceSub, onSaved, onDelete }) {
+  const [editing, setEditing]   = useState(false);
+  const [val, setVal]           = useState(String(parseFloat(initialPrice).toFixed(2)));
+  const [subVal, setSubVal]     = useState(initialPriceSub != null ? String(parseFloat(initialPriceSub).toFixed(2)) : '');
+  const [confirm, setConfirm]   = useState(false);
   const inputRef = useRef(null);
 
   function startEdit() { setEditing(true); setTimeout(() => inputRef.current?.select(), 0); }
@@ -32,44 +33,56 @@ function PriceCell({ rateId, initialPrice, onSaved, onDelete }) {
   function commit() {
     const parsed = parseFloat(val);
     if (isNaN(parsed) || parsed < 0) { setVal(String(parseFloat(initialPrice).toFixed(2))); setEditing(false); return; }
-    onSaved(rateId, parsed);
+    const parsedSub = subVal.trim() === '' ? null : parseFloat(subVal);
+    onSaved(rateId, parsed, isNaN(parsedSub) ? null : parsedSub);
     setEditing(false);
   }
 
+  const priceStyle = {
+    ...inp, width: 74, textAlign: 'right', color: '#00C853', fontWeight: 700,
+    fontFamily: 'monospace', border: '1px solid rgba(0,200,83,0.6)', background: 'rgba(0,200,83,0.08)',
+  };
+
   if (editing) {
     return (
-      <input
-        ref={inputRef}
-        value={val}
-        onChange={e => setVal(e.target.value)}
-        onBlur={commit}
-        onKeyDown={e => {
-          if (e.key === 'Enter') commit();
-          if (e.key === 'Escape') { setVal(String(parseFloat(initialPrice).toFixed(2))); setEditing(false); }
-        }}
-        style={{ ...inp, width: 80, textAlign: 'right', color: '#00C853', fontWeight: 700,
-          fontFamily: 'monospace', border: '1px solid rgba(0,200,83,0.6)', background: 'rgba(0,200,83,0.08)' }}
-      />
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <input ref={inputRef} value={val} onChange={e => setVal(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setEditing(false); } }}
+          style={priceStyle} />
+        <span style={{ fontSize: 10, color: '#555' }}>+sub</span>
+        <input value={subVal} onChange={e => setSubVal(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setEditing(false); } }}
+          placeholder="—"
+          style={{ ...priceStyle, color: '#00BCD4', border: '1px solid rgba(0,188,212,0.5)', background: 'rgba(0,188,212,0.06)', width: 66 }} />
+      </span>
     );
   }
 
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-      <span
-        onClick={startEdit}
-        title="Click to edit"
-        style={{
-          fontSize: 13, fontWeight: 700, color: '#00C853',
-          cursor: 'pointer', padding: '3px 10px', borderRadius: 5,
-          border: '1px solid rgba(0,200,83,0.35)',
-          background: 'rgba(0,200,83,0.08)',
-          fontFamily: 'monospace', display: 'inline-block',
-          transition: 'border-color 0.12s, background 0.12s',
-        }}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(0,200,83,0.7)'; e.currentTarget.style.background = 'rgba(0,200,83,0.15)'; }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,200,83,0.35)'; e.currentTarget.style.background = 'rgba(0,200,83,0.08)'; }}
-      >
-        {gbp(initialPrice)}
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <span onClick={startEdit} title="Click to edit first-parcel price"
+          style={{ fontSize: 13, fontWeight: 700, color: '#00C853', cursor: 'pointer', padding: '3px 10px',
+            borderRadius: 5, border: '1px solid rgba(0,200,83,0.35)', background: 'rgba(0,200,83,0.08)',
+            fontFamily: 'monospace' }}>
+          {gbp(initialPrice)}
+        </span>
+        {initialPriceSub != null ? (
+          <span onClick={startEdit} title="Sub-parcel price — click to edit"
+            style={{ fontSize: 12, fontWeight: 700, color: '#00BCD4', cursor: 'pointer', padding: '3px 8px',
+              borderRadius: 5, border: '1px solid rgba(0,188,212,0.3)', background: 'rgba(0,188,212,0.06)',
+              fontFamily: 'monospace' }}>
+            +{gbp(initialPriceSub)}
+          </span>
+        ) : (
+          <span onClick={startEdit} title="No sub-parcel rate — click to add"
+            style={{ fontSize: 11, color: '#333', cursor: 'pointer', padding: '3px 8px',
+              borderRadius: 5, border: '1px dashed rgba(255,255,255,0.08)' }}>
+            +sub
+          </span>
+        )}
       </span>
       {confirm
         ? <>
@@ -211,7 +224,7 @@ function InternationalRateOverlay({ service, onClose, onRateUpdate, onRateDelete
           <div style={{ fontSize: 72, fontWeight: 900, color: '#00C853', fontFamily: 'monospace', lineHeight: 1, letterSpacing: '-0.02em' }}>
             {gbp(exactMatch.price)}
           </div>
-          <PriceCell rateId={exactMatch.id} initialPrice={exactMatch.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
+          <PriceCell rateId={exactMatch.id} initialPrice={exactMatch.price} initialPriceSub={exactMatch.price_sub} onSaved={onRateUpdate} onDelete={onRateDelete} />
           <div style={{ fontSize: 12, color: '#444', marginTop: 4 }}>Click the price above to edit</div>
         </div>
       )}
@@ -245,7 +258,7 @@ function InternationalRateOverlay({ service, onClose, onRateUpdate, onRateDelete
                       return (
                         <td key={wc} style={{ textAlign: 'right', padding: '8px 20px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
                           {rate
-                            ? <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
+                            ? <PriceCell rateId={rate.id} initialPrice={rate.price} initialPriceSub={rate.price_sub} onSaved={onRateUpdate} onDelete={onRateDelete} />
                             : <span style={{ color: '#333', fontSize: 12 }}>—</span>}
                         </td>
                       );
@@ -267,7 +280,7 @@ function InternationalRateOverlay({ service, onClose, onRateUpdate, onRateDelete
                   <tr key={rate.id} style={{ background: ri % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
                     <td style={{ padding: '8px 20px 8px 28px', color: '#DDD', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>{rate.zone_name}</td>
                     <td style={{ textAlign: 'right', padding: '8px 28px 8px 20px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                      <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
+                      <PriceCell rateId={rate.id} initialPrice={rate.price} initialPriceSub={rate.price_sub} onSaved={onRateUpdate} onDelete={onRateDelete} />
                     </td>
                   </tr>
                 ))}
@@ -339,7 +352,7 @@ function ServiceBlock({ service, onRateUpdate, onRateDelete }) {
                 {rate.zone_name}
                 {multiWeight && <span style={{ color: '#444', marginLeft: 5 }}>· {rate.weight_class_name}</span>}
               </span>
-              <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
+              <PriceCell rateId={rate.id} initialPrice={rate.price} initialPriceSub={rate.price_sub} onSaved={onRateUpdate} onDelete={onRateDelete} />
             </div>
           ))}
         </div>
@@ -385,8 +398,8 @@ export default function CustomerPricingTab({ customer }) {
 
   function refresh() { queryClient.invalidateQueries(['customer-rates', customer.id]); }
 
-  async function handlePriceUpdate(rateId, price) {
-    await api.patch(`/customer-rates/rate/${rateId}`, { price });
+  async function handlePriceUpdate(rateId, price, priceSub) {
+    await api.patch(`/customer-rates/rate/${rateId}`, { price, price_sub: priceSub });
     refresh();
   }
   async function handlePriceDelete(rateId) {

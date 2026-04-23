@@ -341,7 +341,7 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
 
   const rateRes = await query(`
     SELECT
-      cr.id, cr.price, cr.zone_name, cr.weight_class_name,
+      cr.id, cr.price, cr.price_sub, cr.zone_name, cr.weight_class_name,
       cr.service_code, cr.min_weight_kg, cr.max_weight_kg
     FROM customer_rates cr
     WHERE cr.customer_id = $1
@@ -381,11 +381,15 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
   if (weightKg != null) {
     const band = zoneRows.find(r => rateCoversWeight(r, weightKg));
     if (!band) return { rate: null, reason: `No weight band covers ${weightKg} kg in zone "${zoneRows[0].zone_name}"` };
-    return { rate: { price: parseFloat(band.price), zone_name: band.zone_name,
+    return { rate: { price:     parseFloat(band.price),
+                     price_sub: band.price_sub != null ? parseFloat(band.price_sub) : null,
+                     zone_name: band.zone_name,
                      weight_class_name: band.weight_class_name }, reason: null };
   }
 
-  return { rate: { price: parseFloat(zoneRows[0].price), zone_name: zoneRows[0].zone_name,
+  return { rate: { price:     parseFloat(zoneRows[0].price),
+                   price_sub: zoneRows[0].price_sub != null ? parseFloat(zoneRows[0].price_sub) : null,
+                   zone_name: zoneRows[0].zone_name,
                    weight_class_name: zoneRows[0].weight_class_name }, reason: null };
 }
 
@@ -631,6 +635,17 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData) 
   }
 }
 
+// ─── calcTotal — applies sub-parcel pricing ───────────────────────────────────
+// If price_sub is set and qty > 1: first + (qty-1) × sub
+// Otherwise: price × qty
+function calcTotal(rate, qty) {
+  const qty1 = Math.max(1, parseInt(qty) || 1);
+  if (rate.price_sub != null && qty1 > 1) {
+    return rate.price + (qty1 - 1) * rate.price_sub;
+  }
+  return rate.price * qty1;
+}
+
 // ─── POST /api/billing/webhook ────────────────────────────────────────────────
 
 router.post('/webhook', async (req, res, next) => {
@@ -848,7 +863,9 @@ router.post('/webhook', async (req, res, next) => {
     // Look up rate card — pass destination postcode for zone resolution on flat-rate services
     const { rate, reason: priceFailReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, shipToPostcode);
     const unitPrice  = rate ? rate.price : null;
-    const totalPrice = unitPrice != null ? parseFloat((unitPrice * parcelCount).toFixed(2)) : null;
+    const totalPrice = unitPrice != null
+      ? parseFloat(calcTotal(rate, parcelCount).toFixed(2))
+      : null;
 
     // Insert charge — rate_id is UUID on the charges table so we leave it null;
     // zone_name + weight_class_name carry the human-readable pricing reference.
@@ -1273,7 +1290,7 @@ router.post('/batch-reprice', async (req, res, next) => {
           continue;
         }
 
-        const totalPrice = parseFloat((rate.price * parcelQty).toFixed(2));
+        const totalPrice = parseFloat(calcTotal(rate, parcelQty).toFixed(2));
 
         await query(`
           UPDATE charges
@@ -1808,7 +1825,7 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
       return res.json({ ok: false, message: failReason || 'No matching rate found' });
     }
 
-    const totalPrice = parseFloat((rate.price * parcelQty).toFixed(2));
+    const totalPrice = parseFloat(calcTotal(rate, parcelQty).toFixed(2));
 
     // rate_id on charges is UUID — we don't store the raw row id (integer).
     // zone_name + weight_class_name are the human-readable references that matter.

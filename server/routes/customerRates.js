@@ -16,12 +16,21 @@ const router = express.Router();
 router.patch('/rate/:rateId', async (req, res, next) => {
   try {
     const { rateId } = req.params;
-    const { price } = req.body;
-    if (price == null) return res.status(400).json({ error: 'price is required' });
+    const { price, price_sub } = req.body;
+    if (price == null && price_sub === undefined) return res.status(400).json({ error: 'price or price_sub required' });
+
+    const sets = [];
+    const vals = [];
+    if (price != null)        { sets.push(`price     = $${sets.length + 1}`); vals.push(parseFloat(price)); }
+    if (price_sub !== undefined) {
+      sets.push(`price_sub = $${sets.length + 1}`);
+      vals.push(price_sub === null || price_sub === '' ? null : parseFloat(price_sub));
+    }
+    vals.push(rateId);
 
     const result = await query(
-      `UPDATE customer_rates SET price = $1 WHERE id = $2 RETURNING *`,
-      [parseFloat(price), rateId]
+      `UPDATE customer_rates SET ${sets.join(', ')} WHERE id = $${vals.length} RETURNING *`,
+      vals
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Rate not found' });
     res.json(result.rows[0]);
