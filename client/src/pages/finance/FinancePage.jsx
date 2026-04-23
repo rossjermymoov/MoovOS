@@ -1387,21 +1387,21 @@ export default function FinancePage() {
                             <CheckCircle size={11} /> Bill
                           </button>
                         )}
-                        {/* Debug pricing — shown when no price */}
-                        {charge.price == null && (
-                          <button
-                            onClick={() => setDebugCharge(charge)}
-                            title="Diagnose why no price was set"
-                            style={{
-                              background: 'rgba(255,193,7,0.1)', border: '1px solid rgba(255,193,7,0.35)',
-                              borderRadius: 5, color: '#FFC107', padding: '4px 8px',
-                              cursor: 'pointer', fontSize: 11, fontWeight: 600,
-                              display: 'inline-flex', alignItems: 'center', gap: 4,
-                            }}
-                          >
-                            <Bug size={11} /> Debug
-                          </button>
-                        )}
+                        {/* Debug / Reprice — always available */}
+                        <button
+                          onClick={() => setDebugCharge(charge)}
+                          title={charge.price == null ? 'Diagnose why no price was set' : 'Debug / Reprice this charge'}
+                          style={{
+                            background: charge.price == null ? 'rgba(255,193,7,0.1)' : 'rgba(123,47,190,0.1)',
+                            border: `1px solid ${charge.price == null ? 'rgba(255,193,7,0.35)' : 'rgba(123,47,190,0.35)'}`,
+                            borderRadius: 5,
+                            color: charge.price == null ? '#FFC107' : '#B39DDB',
+                            padding: '4px 8px', cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                          }}
+                        >
+                          <Bug size={11} /> {charge.price == null ? 'Debug' : 'Reprice'}
+                        </button>
                         {/* Webhook payload viewer */}
                         <button
                           onClick={() => setPayloadCharge(charge)}
