@@ -363,6 +363,8 @@ export default function TrackingPage() {
   const [showCustomDate,  setShowCustomDate]= useState(false);
   const [page,            setPage]          = useState(0);
   const [selected,        setSelected]      = useState(null);
+  const [fixingStale,     setFixingStale]   = useState(false);
+  const [fixResult,       setFixResult]     = useState(null);
   const searchRef = useRef(null);
   const LIMIT = 50;
 
@@ -416,6 +418,21 @@ export default function TrackingPage() {
     refetchInterval: 60000,
   });
 
+  async function fixStale() {
+    setFixingStale(true);
+    setFixResult(null);
+    try {
+      const r = await api.post('/tracking/fix-stale');
+      setFixResult(r.data);
+      refetchStats();
+      refetchList();
+    } catch {
+      setFixResult({ error: 'Request failed' });
+    } finally {
+      setFixingStale(false);
+    }
+  }
+
   function refresh() { refetchStats(); refetchList(); }
   function clearAll() {
     setStatusFilter(''); setCourierFilter(''); setCustomerFilter(''); setSearch('');
@@ -448,6 +465,27 @@ export default function TrackingPage() {
             {stats ? `${(stats.total_active || 0).toLocaleString()} active parcels` : 'Loading…'}
           </p>
         </div>
+        {(bs.out_for_delivery || 0) > 0 && (
+          <button
+            onClick={fixStale}
+            disabled={fixingStale}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: fixingStale ? 'rgba(255,152,0,0.08)' : 'rgba(255,152,0,0.12)', border: '1px solid rgba(255,152,0,0.4)', borderRadius: 7, color: '#FF9800', fontSize: 12, fontWeight: 700, padding: '7px 14px', cursor: fixingStale ? 'not-allowed' : 'pointer' }}
+            title="Fixes parcels stuck as Out for Delivery — corrects overwritten delivered statuses and polls DC for fresh data"
+          >
+            <RefreshCw size={13} style={{ animation: fixingStale ? 'spin 1s linear infinite' : 'none' }} />
+            {fixingStale ? 'Fixing…' : 'Fix Stale Tracking'}
+          </button>
+        )}
+        {fixResult && !fixResult.error && (
+          <span style={{ fontSize: 12, color: '#00C853', fontWeight: 600 }}>
+            ✓ {fixResult.overwrite_fixed} overwrite{fixResult.overwrite_fixed !== 1 ? 's' : ''} fixed
+            {fixResult.dc_refreshed > 0 ? `, ${fixResult.dc_refreshed} refreshed from DC` : ''}
+            {fixResult.genuinely_stuck > 0 ? `, ${fixResult.genuinely_stuck} pending DC update` : ''}
+          </span>
+        )}
+        {fixResult?.error && (
+          <span style={{ fontSize: 12, color: '#F44336', fontWeight: 600 }}>⚠ {fixResult.error}</span>
+        )}
         <button onClick={refresh} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 7, color: '#AAAAAA', fontSize: 12, padding: '7px 14px', cursor: 'pointer' }}>
           <RefreshCw size={13} /> Refresh
         </button>

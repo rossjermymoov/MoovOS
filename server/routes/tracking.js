@@ -378,6 +378,109 @@ export async function catchUpVerified() {
   }
 }
 
+// ─── POST /api/tracking/fix-stale ────────────────────────────────────────────
+// Manual trigger: fixes parcels stuck as out_for_delivery.
+//
+// Step 1 — overwrite fix: finds parcels that have a delivered event in
+//   tracking_events but a non-delivered status on the parcels row (caused by DC
+//   sending a stale OFD scan after the delivered scan). Resets them to delivered.
+//
+// Step 2 — DC API pull: for remaining stuck OFD parcels with no delivered event,
+//   calls the DC get-tracking API (requires DC_API_USER + DC_API_TOKEN env vars)
+//   and processes the response as if it were a fresh webhook.
+
+router.post('/fix-stale', async (req, res, next) => {
+  try {
+    const results = { overwrite_fixed: 0, dc_refreshed: 0, dc_errors: [], genuinely_stuck: 0 };
+
+    // ── Step 1: overwrite fix ─────────────────────────────────────────────────
+    const overwriteRes = await query(`
+      UPDATE parcels p
+      SET
+        status             = 'delivered',
+        status_description = d.description,
+        last_event_at      = d.event_at,
+        delivered_at       = COALESCE(p.delivered_at, d.event_at),
+        updated_at         = NOW()
+      FROM (
+        SELECT DISTINCT ON (parcel_id)
+          parcel_id, description, event_at
+        FROM tracking_events
+        WHERE status = 'delivered'
+        ORDER BY parcel_id, event_at DESC
+      ) d
+      WHERE p.id = d.parcel_id
+        AND p.status != 'delivered'
+      RETURNING p.id
+    `);
+    results.overwrite_fixed = overwriteRes.rowCount;
+
+    // ── Step 2: DC API pull for parcels with no delivered event at all ─────────
+    const { rows: stuck } = await query(`
+      SELECT DISTINCT ON (p.id)
+        p.id, p.consignment_number, p.last_event_at,
+        s.platform_shipment_id,
+        (s.raw_payload->'shipment'->>'request_log_id')::bigint AS dc_request_log_id
+      FROM parcels p
+      LEFT JOIN shipments s ON s.tracking_codes @> ARRAY[p.consignment_number]::text[]
+      WHERE p.status = 'out_for_delivery'
+        AND p.last_event_at < NOW() - INTERVAL '6 hours'
+        AND NOT EXISTS (
+          SELECT 1 FROM tracking_events te
+          WHERE te.parcel_id = p.id AND te.status = 'delivered'
+        )
+      ORDER BY p.id, s.updated_at DESC NULLS LAST
+    `);
+
+    const DC_USER  = process.env.DC_API_USER;
+    const DC_TOKEN = process.env.DC_API_TOKEN;
+
+    for (const parcel of stuck) {
+      if (!DC_USER || !DC_TOKEN) { results.genuinely_stuck++; continue; }
+      if (!parcel.dc_request_log_id) { results.genuinely_stuck++; continue; }
+
+      try {
+        const dcRes = await fetch('https://app.heyvoila.io/api/couriers/v1/get-tracking', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'api-user': DC_USER,
+            'api-token': DC_TOKEN,
+          },
+          body: JSON.stringify({
+            tracking_request_id:   parcel.dc_request_log_id,
+            tracking_request_hash: parcel.platform_shipment_id,
+          }),
+          signal: AbortSignal.timeout(10000),
+        });
+
+        if (!dcRes.ok) {
+          results.dc_errors.push({ consignment: parcel.consignment_number, status: dcRes.status });
+          continue;
+        }
+
+        const dcData = await dcRes.json();
+        const body   = dcData?.json ? dcData : { json: dcData };
+        const events = normalisePayload(body);
+
+        if (events.length) {
+          for (const ev of events) await upsertEvent(ev, body);
+          results.dc_refreshed++;
+        } else {
+          results.genuinely_stuck++;
+        }
+      } catch (err) {
+        results.dc_errors.push({ consignment: parcel.consignment_number, error: err.message });
+      }
+
+      // Polite rate-limit — don't hammer the DC API
+      await new Promise(r => setTimeout(r, 150));
+    }
+
+    res.json({ ok: true, stuck_found: stuck.length, ...results });
+  } catch (err) { next(err); }
+});
+
 // ─── POST /api/tracking/webhook ──────────────────────────────────────────────
 
 router.post('/webhook', async (req, res, next) => {
