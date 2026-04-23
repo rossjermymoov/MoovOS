@@ -11,7 +11,7 @@
 import express from 'express';
 import { createHash } from 'crypto';
 import { query } from '../db/index.js';
-import { normalisePayload, upsertEvent } from './tracking.js';
+import { normalisePayload as normaliseTrackingPayload, upsertEvent as upsertTrackingEvent } from './tracking.js';
 
 const router = express.Router();
 
@@ -113,9 +113,68 @@ function extractShipmentFields(payload) {
   return { accountNumber, customerDcId, dcServiceId, serviceName, totalWeightKg, parcelCount, reqShip };
 }
 
+/**
+ * Extract additional shipment fields (dimensions, values, hs_codes, ship_from)
+ * from the raw payload for surcharge rule evaluation and storage.
+ */
+function extractAdditionalShipmentFields(payload) {
+  const ship        = payload.shipment || {};
+  const reqShip     = extractReqShipment(payload);
+  const parcels     = reqShip.parcels || [];
+  const firstParcel = parcels[0] || {};
+  const clParcels   = ship.create_label_parcels || [];
+  const firstCl     = clParcels[0] || {};
+
+  // Ship from country
+  const shipFromCountryIso = (reqShip.ship_from || {}).country_iso || null;
+
+  // Dimensions — from request_shipment parcels (in cm)
+  const dimLength = parseFloat(firstParcel.dim_length) || null;
+  const dimWidth  = parseFloat(firstParcel.dim_width)  || null;
+  const dimHeight = parseFloat(firstParcel.dim_height) || null;
+
+  // Per-parcel weight (from create_label_parcels, already in kg)
+  const parcelWeightKg = parseFloat(firstCl.weight) || parseFloat(firstParcel._summed_item_weights) || null;
+
+  // Declared values and HS codes — from items across all parcels
+  let totalDeclaredValue  = 0;
+  let parcelDeclaredValue = 0;
+  const hsCodes = new Set();
+  for (const parcel of parcels) {
+    const items = parcel.items || [];
+    let parcelVal = 0;
+    for (const item of items) {
+      const itemVal = parseFloat(item.value) || 0;
+      const qty     = parseInt(item.quantity) || 1;
+      parcelVal += itemVal * qty;
+      if (item.hs_code) hsCodes.add(String(item.hs_code).trim());
+    }
+    totalDeclaredValue  += parcelVal;
+    if (!parcelDeclaredValue) parcelDeclaredValue = parcelVal; // first parcel
+  }
+  // Fallback: use create_label_parcels value field
+  if (!totalDeclaredValue && firstCl.value) {
+    totalDeclaredValue  = parseFloat(firstCl.value) || 0;
+    parcelDeclaredValue = totalDeclaredValue;
+  }
+
+  return {
+    shipFromCountryIso,
+    dimLength, dimWidth, dimHeight,
+    parcelWeightKg,
+    totalDeclaredValue:  totalDeclaredValue  || null,
+    parcelDeclaredValue: parcelDeclaredValue || null,
+    hsCodes: hsCodes.size ? [...hsCodes] : null,
+  };
+}
+
 // ─── Rate card lookup ─────────────────────────────────────────────────────────
-// Returns { rate: { price, zone_name, weight_class_name, rate_id }, reason: null }
+// Returns { rate: { price, cost_price?, zone_name, weight_class_name, rate_id }, reason: null }
 // on success, or { rate: null, reason: 'Human-readable string' } on failure.
+//
+// Priority:
+//   1. customer_service_pricing (new model) — carrier cost price + markup % or fixed fee
+//   2. customer_rates (legacy) — explicit per-band sell prices
 
 // rateCoversWeight — uses numeric bounds (from dc_weight_classes import) when
 // available, falls back to text-band parsing via coversWeight().
@@ -123,80 +182,251 @@ function rateCoversWeight(rate, weightKg) {
   const minKg = parseFloat(rate.min_weight_kg);
   const maxKg = parseFloat(rate.max_weight_kg);
   if (!isNaN(minKg) && !isNaN(maxKg)) {
-    // Numeric bounds: weight > min AND weight <= max (matching DC's own logic)
     return weightKg > minKg && weightKg <= maxKg;
   }
-  // Fall back to text parsing for legacy rate rows without numeric bounds
+  // NULL/NULL = flat-rate band (e.g. "Parcel") — any weight qualifies
+  if (rate.min_weight_kg == null && rate.max_weight_kg == null) return true;
   return coversWeight(rate.weight_class_name, weightKg);
 }
 
-async function lookupRateWithReason(customerId, serviceCode, serviceName, weightKg) {
-  if (!customerId) return { rate: null, reason: 'No matching customer' };
+// Return the effective upper-weight-bound of a band.
+// Used when multiple bands match to pick the tightest fit.
+// Relies on numeric bounds being set (migration 047 backfills any that were missed).
+function bandMaxKg(rate) {
+  const maxKg = parseFloat(rate.max_weight_kg);
+  return !isNaN(maxKg) ? maxKg : Infinity;
+}
+
+// zoneForPostcode — resolve zone name from service code + destination postcode.
+//
+// Match is on service_code ONLY. Never looks at service name.
+//
+// Outward code matching:
+//   - Exact:      pr.postcode_prefix = outward  (e.g. "IV1" = "IV1")
+//   - Letter-only prefix: outward LIKE prefix||'%' where prefix is [A-Z]+ only
+//     (e.g. "IM" matches "IM1", "IM2" etc. — Isle of Man)
+//
+// Zone resolution order:
+//   1. Include rule matches this outward code → that zone
+//   2. No include match → catch-all: a zone that does NOT exclude this postcode.
+//      Covers two cases:
+//        a) Zone has exclude rules but this code isn't in them (classic Mainland)
+//        b) Zone has no postcode rules at all (implicit catch-all)
+//      Zones with any rules are preferred over bare zones.
+async function zoneForPostcode(serviceCode, postcode) {
+  if (!postcode || !serviceCode) return null;
+
+  const outward = postcode.trim().toUpperCase().split(/\s+/)[0];
+
+  const MATCH_CLAUSE = `(
+    pr.postcode_prefix = $2
+    OR ($2 LIKE pr.postcode_prefix || '%' AND pr.postcode_prefix ~ '^[A-Z]+$')
+  )`;
+
+  // 1. Explicit include rule
+  const inclRes = await query(`
+    SELECT z.name AS zone_name
+    FROM zones z
+    JOIN courier_services cs ON cs.id = z.courier_service_id
+    JOIN zone_postcode_rules pr ON pr.zone_id = z.id
+    WHERE cs.service_code ILIKE $1
+      AND pr.rule_type = 'include'
+      AND ${MATCH_CLAUSE}
+    LIMIT 1
+  `, [serviceCode, outward]);
+  if (inclRes.rows.length) return inclRes.rows[0].zone_name;
+
+  // 2. Catch-all zone — has exclude rules but this postcode isn't excluded
+  const EXCL_MATCH = MATCH_CLAUSE.replace(/pr\./g, 'pr3.');
+  const catchRes = await query(`
+    SELECT z.name AS zone_name
+    FROM zones z
+    JOIN courier_services cs ON cs.id = z.courier_service_id
+    WHERE cs.service_code ILIKE $1
+      AND EXISTS (
+        SELECT 1 FROM zone_postcode_rules pr2
+        WHERE pr2.zone_id = z.id AND pr2.rule_type = 'exclude'
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM zone_postcode_rules pr3
+        WHERE pr3.zone_id = z.id AND pr3.rule_type = 'exclude'
+          AND ${EXCL_MATCH}
+      )
+    LIMIT 1
+  `, [serviceCode, outward]);
+  if (catchRes.rows.length) return catchRes.rows[0].zone_name;
+
+  // 3. Universal zone — no postcode rules at all.
+  //    No include list, no exclude list = matches every shipment.
+  //    e.g. a simple "Zone A / Zone B" split with no geographic restriction.
+  //    When multiple such zones exist, return the first alphabetically.
+  const univRes = await query(`
+    SELECT z.name AS zone_name
+    FROM zones z
+    JOIN courier_services cs ON cs.id = z.courier_service_id
+    WHERE cs.service_code ILIKE $1
+      AND NOT EXISTS (
+        SELECT 1 FROM zone_postcode_rules pr
+        WHERE pr.zone_id = z.id
+      )
+    ORDER BY z.name
+    LIMIT 1
+  `, [serviceCode]);
+  if (univRes.rows.length) return univRes.rows[0].zone_name;
+
+  return null;
+}
+
+// ─── Shared zone-match helper ─────────────────────────────────────────────────
+// Given a resolved zone name and an array of rows (each with zone_name),
+// returns the subset whose zone_name matches (case-insensitive substring).
+function filterByZoneName(rows, zoneName) {
+  const zl = zoneName.toLowerCase();
+  return rows.filter(r =>
+    r.zone_name.toLowerCase().includes(zl) || zl.includes(r.zone_name.toLowerCase())
+  );
+}
+
+// ── New model: customer_service_pricing → carrier rate card weight bands ──────
+// Match: customer + service_code only. No service name.
+async function lookupViaServicePricing(customerId, serviceCode, weightKg, postcode) {
+  if (!serviceCode) return null;
+
+  const res = await query(`
+    SELECT
+      csp.pricing_type, csp.markup_pct, csp.fixed_fee,
+      wb.price_first  AS cost_price,
+      wb.price_sub    AS cost_price_sub,
+      wb.min_weight_kg, wb.max_weight_kg,
+      z.name          AS zone_name,
+      cs.service_code AS svc_code,
+      wb.id           AS band_id
+    FROM customer_service_pricing csp
+    JOIN carrier_rate_cards crc ON crc.id = csp.carrier_rate_card_id
+    JOIN courier_services   cs  ON cs.id  = csp.service_id
+    JOIN zones              z   ON z.courier_service_id = cs.id
+    JOIN weight_bands       wb  ON wb.zone_id = z.id
+                                AND wb.carrier_rate_card_id = crc.id
+    WHERE csp.customer_id = $1
+      AND cs.service_code ILIKE $2
+    ORDER BY z.name, wb.min_weight_kg NULLS LAST
+  `, [customerId, serviceCode]);
+
+  if (!res.rows.length) return null;
+
+  const rows = res.rows;
+
+  const applyMarkup = (cost, row) => {
+    if (row.pricing_type === 'fixed_fee') return parseFloat(cost || 0) + parseFloat(row.fixed_fee || 0);
+    return parseFloat(cost || 0) * (1 + parseFloat(row.markup_pct || 0) / 100);
+  };
+
+  const buildRate = (r) => ({
+    price:             Math.round(applyMarkup(r.cost_price, r) * 10000) / 10000,
+    // price_sub: sell price for each subsequent parcel (same markup applied to cost_price_sub)
+    price_sub:         r.cost_price_sub != null
+                         ? Math.round(applyMarkup(r.cost_price_sub, r) * 10000) / 10000
+                         : null,
+    cost_price:        parseFloat(r.cost_price || 0),
+    zone_name:         r.zone_name,
+    weight_class_name: r.min_weight_kg != null ? `${r.min_weight_kg}–${r.max_weight_kg} kg` : 'All weights',
+    pricing_type:      r.pricing_type,
+    markup_pct:        r.markup_pct,
+    fixed_fee:         r.fixed_fee,
+  });
+
+  // ── Step 1: zone from postcode ────────────────────────────────────────────
+  const distinctZones = [...new Set(rows.map(r => r.zone_name))];
+  let zoneRows;
+
+  if (distinctZones.length === 1) {
+    zoneRows = rows;
+  } else {
+    const zoneName = await zoneForPostcode(serviceCode, postcode);
+    if (!zoneName) return { rate: null, reason: `No matching zone for postcode "${postcode || 'none'}"` };
+    zoneRows = filterByZoneName(rows, zoneName);
+    if (!zoneRows.length) return { rate: null, reason: `No matching zone for postcode "${postcode}"` };
+  }
+
+  // ── Step 2: weight band within zone ──────────────────────────────────────
+  if (weightKg != null) {
+    const band = zoneRows.filter(r => rateCoversWeight(r, weightKg)).sort((a, b) => bandMaxKg(a) - bandMaxKg(b))[0];
+    if (!band) return { rate: null, reason: `No weight band covers ${weightKg} kg in zone "${zoneRows[0].zone_name}"` };
+    return { rate: buildRate(band), reason: null };
+  }
+
+  return { rate: buildRate(zoneRows[0]), reason: null };
+}
+
+// ── Legacy model: customer_rates ──────────────────────────────────────────────
+// Match: customer + service_code only. No service name.
+async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcode) {
+  if (!serviceCode) return { rate: null, reason: 'No service code — cannot price' };
 
   const rateRes = await query(`
     SELECT
-      cr.id, cr.price, cr.zone_name, cr.weight_class_name,
-      cr.service_code, cr.service_name,
-      cr.min_weight_kg, cr.max_weight_kg
+      cr.id, cr.price, cr.price_sub, cr.zone_name, cr.weight_class_name,
+      cr.service_code, cr.min_weight_kg, cr.max_weight_kg
     FROM customer_rates cr
     WHERE cr.customer_id = $1
-      AND (
-        cr.service_code ILIKE $2
-        OR cr.service_name ILIKE $3
-        OR cr.service_name ILIKE $4
-      )
+      AND cr.service_code ILIKE $2
     ORDER BY cr.zone_name, cr.min_weight_kg NULLS LAST, cr.weight_class_name
-  `, [customerId, serviceCode || '', serviceName || '', `%${(serviceName||'').split(' ').slice(0,3).join(' ')}%`]);
+  `, [customerId, serviceCode]);
 
   if (!rateRes.rows.length) {
     const any = await query(
       'SELECT COUNT(*)::int AS cnt FROM customer_rates WHERE customer_id = $1',
       [customerId]
     );
-    const reason = any.rows[0].cnt === 0
-      ? 'No pricing set up for customer'
-      : `Service not matched (${serviceCode || serviceName || 'unknown'})`;
-    return { rate: null, reason };
+    return {
+      rate: null,
+      reason: any.rows[0].cnt === 0
+        ? 'No pricing set up for this customer'
+        : `Service code "${serviceCode}" not found in customer rates`,
+    };
   }
 
   const rates = rateRes.rows;
 
+  // ── Step 1: zone from postcode ────────────────────────────────────────────
+  const distinctZones = [...new Set(rates.map(r => r.zone_name))];
+  let zoneRows;
+
+  if (distinctZones.length === 1) {
+    zoneRows = rates;
+  } else {
+    const zoneName = await zoneForPostcode(serviceCode, postcode);
+    if (!zoneName) return { rate: null, reason: `No matching zone for postcode "${postcode || 'none'}"` };
+    zoneRows = filterByZoneName(rates, zoneName);
+    if (!zoneRows.length) return { rate: null, reason: `No matching zone for postcode "${postcode}"` };
+  }
+
+  // ── Step 2: weight band within zone ──────────────────────────────────────
   if (weightKg != null) {
-    const matching = rates.filter(r => rateCoversWeight(r, weightKg));
-    if (matching.length >= 1) {
-      return { rate: { price: parseFloat(matching[0].price), zone_name: matching[0].zone_name,
-                       weight_class_name: matching[0].weight_class_name, rate_id: matching[0].id }, reason: null };
-    }
-    // Diagnose why weight didn't match
-    const hasNumericBounds = rates.some(r => r.min_weight_kg != null);
-    const hasUnrecognised = !hasNumericBounds && rates.some(r => {
-      const s = normaliseWeightBand(r.weight_class_name);
-      return s && !s.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/)
-                && !s.match(/^(\d+(?:\.\d+)?)\+$/)
-                && !s.match(/^OVER(\d+(?:\.\d+)?)$/)
-                && !s.match(/^(?:UNDER|<)(\d+(?:\.\d+)?)$/)
-                && !s.match(/^(?:UPTO|MAX)(\d+(?:\.\d+)?)$/)
-                && !s.match(/^(\d+(?:\.\d+)?)$/);
-    });
-    const reason = hasUnrecognised
-      ? 'Unrecognised weight band format'
-      : `No weight band covers ${Math.round(weightKg * 1000) / 1000} kg`;
-    return { rate: null, reason };
+    const band = zoneRows.filter(r => rateCoversWeight(r, weightKg)).sort((a, b) => bandMaxKg(a) - bandMaxKg(b))[0];
+    if (!band) return { rate: null, reason: `No weight band covers ${weightKg} kg in zone "${zoneRows[0].zone_name}"` };
+    return { rate: { price:     parseFloat(band.price),
+                     price_sub: band.price_sub != null ? parseFloat(band.price_sub) : null,
+                     zone_name: band.zone_name,
+                     weight_class_name: band.weight_class_name }, reason: null };
   }
 
-  // No weight available
-  if (rates.length === 1) {
-    return { rate: { price: parseFloat(rates[0].price), zone_name: rates[0].zone_name,
-                     weight_class_name: rates[0].weight_class_name, rate_id: rates[0].id }, reason: null };
-  }
-
-  return { rate: null, reason: 'Multiple rates — no parcel weight to select band' };
+  return { rate: { price:     parseFloat(zoneRows[0].price),
+                   price_sub: zoneRows[0].price_sub != null ? parseFloat(zoneRows[0].price_sub) : null,
+                   zone_name: zoneRows[0].zone_name,
+                   weight_class_name: zoneRows[0].weight_class_name }, reason: null };
 }
 
-// Backwards-compat shim used by the debug endpoint
-async function lookupRate(customerId, serviceCode, serviceName, weightKg) {
-  const { rate } = await lookupRateWithReason(customerId, serviceCode, serviceName, weightKg);
-  return rate;
+// ── Main lookup — tries new model first, falls back to legacy ─────────────────
+// serviceName is accepted for backwards-compat but NEVER used for matching.
+async function lookupRateWithReason(customerId, serviceCode, _serviceName, weightKg, postcode) {
+  if (!customerId) return { rate: null, reason: 'No matching customer' };
+  if (!serviceCode) return { rate: null, reason: 'No service code' };
+
+  const newResult = await lookupViaServicePricing(customerId, serviceCode, weightKg, postcode);
+  if (newResult !== null) return newResult;
+
+  return lookupViaCustomerRates(customerId, serviceCode, weightKg, postcode);
 }
 
 function normaliseWeightBand(rawName) {
@@ -243,6 +473,218 @@ function coversWeight(weightClassName, weightKg) {
   return false;
 }
 
+// ─── Surcharge engine ─────────────────────────────────────────────────────────
+
+/**
+ * Test a single filter condition against shipment data.
+ */
+function testCondition(f, data) {
+  const raw = data[f.field];
+  const val = raw != null ? String(raw) : '';
+  switch (f.op) {
+    case 'eq':      return val.toLowerCase() === String(f.value || '').toLowerCase();
+    case 'not_eq':  return val.toLowerCase() !== String(f.value || '').toLowerCase();
+    case 'in': {
+      const arr = Array.isArray(f.value)
+        ? f.value.map(v => String(v).toLowerCase())
+        : String(f.value || '').split(',').map(s => s.trim().toLowerCase());
+      return arr.includes(val.toLowerCase());
+    }
+    case 'not_in': {
+      const arr = Array.isArray(f.value)
+        ? f.value.map(v => String(v).toLowerCase())
+        : String(f.value || '').split(',').map(s => s.trim().toLowerCase());
+      return !arr.includes(val.toLowerCase());
+    }
+    case 'gt':       return parseFloat(val) > parseFloat(f.value);
+    case 'lt':       return parseFloat(val) < parseFloat(f.value);
+    case 'gte':      return parseFloat(val) >= parseFloat(f.value);
+    case 'lte':      return parseFloat(val) <= parseFloat(f.value);
+    case 'contains': return val.toLowerCase().includes(String(f.value || '').toLowerCase());
+    default:         return true;
+  }
+}
+
+/**
+ * Evaluate a rule against shipment data.
+ * Supports:
+ *   rule.logic         — 'AND' (all conditions) | 'OR' (any condition). Default AND.
+ *   rule.service_codes — restrict to specific service codes (empty = all services).
+ *   rule.filters       — array of { field, op, value } conditions.
+ */
+function evaluateSurchargeFilters(rule, data) {
+  const filters      = Array.isArray(rule.filters)       ? rule.filters       : [];
+  const serviceCodes = Array.isArray(rule.service_codes) ? rule.service_codes : [];
+  const logic        = (rule.logic || 'AND').toUpperCase();
+
+  // Service code gate: if rule is scoped to specific services, check it first
+  if (serviceCodes.length > 0) {
+    const dcSvc = (data.dc_service_id || '').toLowerCase();
+    const match = serviceCodes.some(sc => sc.toLowerCase() === dcSvc);
+    if (!match) return false;
+  }
+
+  // No conditions → always fires (for this service if scoped, or for all)
+  if (filters.length === 0) return true;
+
+  if (logic === 'OR') {
+    return filters.some(f => testCondition(f, data));
+  }
+  // Default AND
+  return filters.every(f => testCondition(f, data));
+}
+
+/**
+ * Evaluate all active surcharge rules for the courier and create
+ * surcharge charge rows for any that match the shipment.
+ */
+async function applySurcharges(shipmentId, customerId, basePrice, shipmentData) {
+  try {
+    if (!shipmentId || !customerId || !shipmentData.courier) return;
+
+    // Only auto-apply surcharges marked as 'always' — 'reconciliation' ones are added manually
+    const { rows: surcharges } = await query(`
+      SELECT s.*,
+             COALESCE((
+               SELECT json_agg(r ORDER BY r.created_at)
+               FROM surcharge_rules r
+               WHERE r.surcharge_id = s.id AND r.active = true
+             ), '[]'::json) AS rules
+      FROM surcharges s
+      JOIN couriers c ON c.id = s.courier_id
+      WHERE s.active = true
+        AND LOWER(c.code) = LOWER($1)
+        AND (s.applies_when = 'always' OR s.applies_when IS NULL)
+        AND (s.effective_date IS NULL OR s.effective_date <= CURRENT_DATE)
+    `, [shipmentData.courier]);
+
+    for (const surcharge of surcharges) {
+      const rules = Array.isArray(surcharge.rules) ? surcharge.rules : [];
+
+      // No rules + applies_when='always' → fires on every shipment for this courier.
+      // Rules with no filter conditions also fire unconditionally (evaluateSurchargeFilters returns true).
+      // Only skip if there are rules and NONE of them match.
+      let matched = false;
+      if (!rules.length) {
+        // No rules configured → applies to all shipments for this courier
+        matched = true;
+      } else {
+        // Any rule match fires the surcharge (OR across rules)
+        for (const rule of rules) {
+          if (evaluateSurchargeFilters(rule, shipmentData)) { matched = true; break; }
+        }
+      }
+      if (!matched) continue;
+
+      // Idempotency: skip if surcharge charge already exists
+      const { rows: existing } = await query(
+        'SELECT id FROM charges WHERE shipment_id=$1 AND surcharge_id=$2',
+        [shipmentId, surcharge.id]
+      );
+      if (existing.length) continue;
+
+      // Customer override takes precedence over default
+      const { rows: overrides } = await query(
+        `SELECT override_value FROM customer_surcharge_overrides
+         WHERE customer_id=$1 AND surcharge_id=$2 AND active=true`,
+        [customerId, surcharge.id]
+      );
+      const effectiveValue = overrides.length
+        ? parseFloat(overrides[0].override_value)
+        : parseFloat(surcharge.default_value);
+
+      // Calculate price based on calc_type and charge_per
+      let price;
+      if (surcharge.calc_type === 'percentage') {
+        // Percentage of base rate (fuel-style)
+        price = parseFloat(((parseFloat(basePrice) || 0) * effectiveValue / 100).toFixed(4));
+      } else if (surcharge.charge_per === 'parcel') {
+        // Flat per parcel — multiply by parcel count
+        price = parseFloat((effectiveValue * (shipmentData.parcel_count || 1)).toFixed(4));
+      } else {
+        // Flat per shipment
+        price = effectiveValue;
+      }
+
+      await query(`
+        INSERT INTO charges
+          (shipment_id, customer_id, charge_type, service_name, price, price_auto, surcharge_id, parcel_qty)
+        VALUES ($1, $2, 'surcharge', $3, $4, true, $5, 1)
+      `, [shipmentId, customerId, surcharge.name, price, surcharge.id]);
+    }
+
+    // ── Fuel group charge ─────────────────────────────────────────────────────
+    // If the service has a fuel_group_id set, apply the customer's fuel sell %
+    // (from customer_fuel_group_pricing, falling back to standard_sell_pct).
+    if (shipmentData.dc_service_id) {
+      const fuelRes = await query(`
+        SELECT
+          fg.id          AS fuel_group_id,
+          fg.name        AS fuel_group_name,
+          fg.standard_sell_pct,
+          cfgp.sell_pct  AS customer_sell_pct
+        FROM courier_services cs
+        JOIN fuel_groups fg ON fg.id = cs.fuel_group_id
+        LEFT JOIN customer_fuel_group_pricing cfgp
+               ON cfgp.fuel_group_id = fg.id AND cfgp.customer_id = $2
+        WHERE cs.service_code ILIKE $1
+        LIMIT 1
+      `, [shipmentData.dc_service_id, customerId]);
+
+      if (fuelRes.rows.length) {
+        const fg = fuelRes.rows[0];
+        const sellPct = parseFloat(fg.customer_sell_pct ?? fg.standard_sell_pct ?? 0);
+
+        if (sellPct > 0) {
+          // Idempotency: one fuel charge per shipment — check by charge_type='fuel'
+          const { rows: existingFuel } = await query(
+            `SELECT id FROM charges WHERE shipment_id=$1 AND charge_type='fuel'`,
+            [shipmentId]
+          );
+
+          if (!existingFuel.length) {
+            const fuelPrice = parseFloat(((parseFloat(basePrice) || 0) * sellPct / 100).toFixed(4));
+            await query(`
+              INSERT INTO charges
+                (shipment_id, customer_id, charge_type, service_name, price, price_auto, parcel_qty)
+              VALUES ($1, $2, 'fuel', $3, $4, true, 1)
+            `, [shipmentId, customerId, `${fg.fuel_group_name} Fuel`, fuelPrice]);
+          }
+        }
+      }
+    }
+
+  } catch (err) {
+    console.error('[applySurcharges] error:', err.message);
+  }
+}
+
+// ─── calcTotal — applies sub-parcel or multi-parcel pricing ──────────────────
+// mode 'sub'   (default): price + (qty-1) × price_sub
+// mode 'multi':           qty × price_sub  (all boxes at the cheaper rate)
+// No price_sub or qty=1:  price × qty  (unchanged)
+function calcTotal(rate, qty, mode = 'sub') {
+  const n = Math.max(1, parseInt(qty) || 1);
+  if (rate.price_sub != null && n > 1) {
+    return mode === 'multi'
+      ? n * rate.price_sub
+      : rate.price + (n - 1) * rate.price_sub;
+  }
+  return rate.price * n;
+}
+
+// Fetch a customer's parcel pricing mode ('sub' | 'multi')
+async function getParcelPricingMode(customerId) {
+  if (!customerId) return 'sub';
+  try {
+    const { rows } = await query(
+      `SELECT parcel_pricing_mode FROM customers WHERE id = $1`,
+      [customerId]
+    );
+    return rows[0]?.parcel_pricing_mode || 'sub';
+  } catch { return 'sub'; }
+}
+
 // ─── POST /api/billing/webhook ────────────────────────────────────────────────
 
 router.post('/webhook', async (req, res, next) => {
@@ -254,43 +696,37 @@ router.post('/webhook', async (req, res, next) => {
     const payload = unwrapPayload(body);
     const eventType = payload.event_type || payload.event || payload.type || '';
 
-    // ── Intercept: DC tracking payloads arriving at the wrong endpoint ────────
-    // Dispatch Cloud sends ALL webhooks to a single configured URL. If this is a
-    // tracking update (identified by the presence of tracking_update.parcels, or
-    // a status_code / status field at root level), process it through the tracking
-    // handler and return — do NOT fall through to shipment/charge creation.
-    const unwrapped = (body.json && typeof body.json === 'object') ? body.json : body;
-    const isTrackingPayload =
-      (unwrapped.tracking_update && Array.isArray(unwrapped.tracking_update?.parcels)) ||
-      (payload.tracking_update   && Array.isArray(payload.tracking_update?.parcels))   ||
-      payload.status_code != null ||
-      (Array.isArray(payload) && payload[0]?.status_code != null);
-
-    if (isTrackingPayload) {
-      console.log('[billing/webhook] DC tracking payload detected — forwarding to tracking handler');
-      const events = normalisePayload(body);
+    // ── shipment.tracked — process as a tracking update ──────────────────────
+    // Parcel Master sends ALL event types to this URL, including tracking updates.
+    // Route them through the same tracking logic used by /api/tracking/webhook.
+    if (eventType === 'shipment.tracked') {
+      const events  = normaliseTrackingPayload(body);
       const results = [];
-      for (const ev of events) {
-        results.push(await upsertEvent(ev, body));
+      for (const event of events) {
+        results.push(await upsertTrackingEvent(event, body));
       }
-      return res.json({ ok: true, action: 'tracking_forwarded', processed: results.length, results });
+      return res.json({ ok: true, action: 'tracking_processed', count: results.length, results });
     }
 
-    // ── Guard: only process shipment lifecycle events ─────────────────────────
-    // Tracking webhooks (event_type = 'tracking.update', 'parcel.tracking', etc.)
-    // must go to /api/tracking/webhook — not here.
+    // ── Guard: only process recognised shipment lifecycle events ──────────────
     const SHIPMENT_EVENTS = new Set([
       'shipment.created', 'shipment.cancelled', 'shipment.deleted', 'shipment.updated',
     ]);
     const TRACKING_KEYWORDS = ['tracking', 'parcel.scan', 'delivery_update', 'status_update'];
     const lowerEvent = eventType.toLowerCase();
-    const isTrackingEvent = TRACKING_KEYWORDS.some(k => lowerEvent.includes(k));
+    const isOtherTrackingEvent = TRACKING_KEYWORDS.some(k => lowerEvent.includes(k));
 
-    if (isTrackingEvent) {
-      return res.json({ ok: true, action: 'skipped', reason: `tracking event "${eventType}" ignored — use /api/tracking/webhook` });
+    if (isOtherTrackingEvent) {
+      // Other tracking-style events — process as tracking, not billing
+      const events  = normaliseTrackingPayload(body);
+      const results = [];
+      for (const event of events) {
+        results.push(await upsertTrackingEvent(event, body));
+      }
+      return res.json({ ok: true, action: 'tracking_processed', count: results.length });
     }
 
-    // If there's an explicit event_type we don't recognise as a shipment event, skip it
+    // Anything else unrecognised — skip cleanly
     if (eventType && !SHIPMENT_EVENTS.has(eventType)) {
       return res.json({ ok: true, action: 'skipped', reason: `unrecognised event_type "${eventType}"` });
     }
@@ -355,9 +791,12 @@ router.post('/webhook', async (req, res, next) => {
     const totalCostPrice = courierCosts.reduce((s, c) => s + (parseFloat(c) || 0), 0);
 
     // Resolve customer:
-    //  1. account_number → customers.account_number   (standard webhook customers)
-    //  2. account_number → customers.dc_customer_id   (if acct number happens to be a DC ID)
-    //  3. customerDcId  → customers.dc_customer_id    (API customers like Europa — from billing.customer_dc_id)
+    //  1. account_number → customers.account_number
+    //  2. account_number → customers.dc_customer_id
+    //  3. account_number → customers.billing_aliases  (e.g. HOF-0012 stored as alias)
+    //  4. customerDcId  → customers.dc_customer_id
+    //  5. accountName   → customers.business_name (exact, then partial)
+    //  6. accountName   → customers.billing_aliases
     let customerId = null;
     if (accountNumber) {
       const cr = await query('SELECT id FROM customers WHERE account_number = $1', [accountNumber]);
@@ -368,14 +807,50 @@ router.post('/webhook', async (req, res, next) => {
         if (cr2.rows.length) customerId = cr2.rows[0].id;
       }
     }
+    // Check billing_aliases against account_number (e.g. legacy HOF- codes stored as aliases)
+    if (!customerId && accountNumber) {
+      try {
+        const crA = await query(
+          `SELECT id FROM customers WHERE EXISTS (SELECT 1 FROM unnest(billing_aliases) a WHERE LOWER(a) = LOWER($1)) LIMIT 1`,
+          [accountNumber.trim().toLowerCase()]
+        );
+        if (crA.rows.length) customerId = crA.rows[0].id;
+      } catch (_) {}
+    }
     if (!customerId && customerDcId) {
       const cr3 = await query('SELECT id FROM customers WHERE dc_customer_id = $1', [customerDcId]);
       if (cr3.rows.length) customerId = cr3.rows[0].id;
+    }
+    if (!customerId && accountName) {
+      const cr4 = await query(
+        `SELECT id FROM customers WHERE LOWER(business_name) = LOWER($1)`,
+        [accountName.trim()]
+      );
+      if (cr4.rows.length) customerId = cr4.rows[0].id;
+    }
+    if (!customerId && accountName) {
+      const cr4b = await query(
+        `SELECT id FROM customers WHERE LOWER(business_name) ILIKE $1 ORDER BY LENGTH(business_name) ASC LIMIT 1`,
+        [`%${accountName.trim()}%`]
+      );
+      if (cr4b.rows.length) customerId = cr4b.rows[0].id;
+    }
+    if (!customerId && accountName) {
+      try {
+        const cr5 = await query(
+          `SELECT id FROM customers WHERE EXISTS (SELECT 1 FROM unnest(billing_aliases) a WHERE LOWER(a) = LOWER($1)) LIMIT 1`,
+          [accountName.trim().toLowerCase()]
+        );
+        if (cr5.rows.length) customerId = cr5.rows[0].id;
+      } catch (_) {}
     }
 
     // Effective account identifier to store — prefer accountNumber, fall back to customerDcId
     // so the relink-customers endpoint can find unlinked shipments later.
     const effectiveAccount = accountNumber || customerDcId || null;
+
+    // Extract additional fields for dimension/value/hs_code surcharge rule filtering
+    const addl = extractAdditionalShipmentFields(payload);
 
     // Upsert shipment
     const shipRes = await query(`
@@ -387,15 +862,26 @@ router.post('/webhook', async (req, res, next) => {
          reference, reference_2,
          parcel_count, total_weight_kg, collection_date, tracking_codes,
          tracking_hash,
+         ship_from_country_iso,
+         dim_length_cm, dim_width_cm, dim_height_cm, parcel_weight_kg,
+         total_declared_value, parcel_declared_value, hs_codes,
          raw_payload)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
       ON CONFLICT (platform_shipment_id) DO UPDATE SET
-        customer_id        = COALESCE(EXCLUDED.customer_id, shipments.customer_id),
-        customer_account   = COALESCE(EXCLUDED.customer_account, shipments.customer_account),
-        service_name       = COALESCE(EXCLUDED.service_name, shipments.service_name),
-        tracking_codes     = COALESCE(EXCLUDED.tracking_codes, shipments.tracking_codes),
-        tracking_hash      = COALESCE(EXCLUDED.tracking_hash, shipments.tracking_hash),
-        updated_at         = NOW()
+        customer_id           = COALESCE(EXCLUDED.customer_id, shipments.customer_id),
+        customer_account      = COALESCE(EXCLUDED.customer_account, shipments.customer_account),
+        service_name          = COALESCE(EXCLUDED.service_name, shipments.service_name),
+        tracking_codes        = COALESCE(EXCLUDED.tracking_codes, shipments.tracking_codes),
+        tracking_hash         = COALESCE(EXCLUDED.tracking_hash, shipments.tracking_hash),
+        ship_from_country_iso = COALESCE(EXCLUDED.ship_from_country_iso, shipments.ship_from_country_iso),
+        dim_length_cm         = COALESCE(EXCLUDED.dim_length_cm, shipments.dim_length_cm),
+        dim_width_cm          = COALESCE(EXCLUDED.dim_width_cm, shipments.dim_width_cm),
+        dim_height_cm         = COALESCE(EXCLUDED.dim_height_cm, shipments.dim_height_cm),
+        parcel_weight_kg      = COALESCE(EXCLUDED.parcel_weight_kg, shipments.parcel_weight_kg),
+        total_declared_value  = COALESCE(EXCLUDED.total_declared_value, shipments.total_declared_value),
+        parcel_declared_value = COALESCE(EXCLUDED.parcel_declared_value, shipments.parcel_declared_value),
+        hs_codes              = COALESCE(EXCLUDED.hs_codes, shipments.hs_codes),
+        updated_at            = NOW()
       RETURNING id
     `, [
       platformId || null, eventType,
@@ -406,6 +892,10 @@ router.post('/webhook', async (req, res, next) => {
       parcelCount, totalWeightKg || null, collectionDate,
       trackingCodes.length ? trackingCodes : null,
       trackingHashVal,
+      addl.shipFromCountryIso,
+      addl.dimLength, addl.dimWidth, addl.dimHeight, addl.parcelWeightKg,
+      addl.totalDeclaredValue, addl.parcelDeclaredValue,
+      addl.hsCodes,
       JSON.stringify(payload),
     ]);
 
@@ -420,20 +910,24 @@ router.post('/webhook', async (req, res, next) => {
       return res.json({ ok: true, action: 'duplicate', shipment_id: shipmentId });
     }
 
-    // Look up rate card
-    const { rate, reason: priceFailReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel);
-    const unitPrice  = rate ? rate.price : null;
-    const totalPrice = unitPrice != null ? parseFloat((unitPrice * parcelCount).toFixed(2)) : null;
+    // Look up rate card — pass destination postcode for zone resolution on flat-rate services
+    const { rate, reason: priceFailReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, shipToPostcode);
+    const pricingMode = rate ? await getParcelPricingMode(customerId) : 'sub';
+    const unitPrice   = rate ? rate.price : null;
+    const totalPrice  = unitPrice != null
+      ? parseFloat(calcTotal(rate, parcelCount, pricingMode).toFixed(2))
+      : null;
 
-    // Insert charge
+    // Insert charge — rate_id is UUID on the charges table so we leave it null;
+    // zone_name + weight_class_name carry the human-readable pricing reference.
     const chargeRes = await query(`
       INSERT INTO charges
         (shipment_id, customer_id, charge_type,
          order_id, parcel_qty, service_name,
          price, cost_price,
-         zone_name, weight_class_name, rate_id, price_auto,
+         zone_name, weight_class_name, price_auto,
          price_failure_reason)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
       RETURNING id
     `, [
       shipmentId, customerId, 'courier',
@@ -442,10 +936,27 @@ router.post('/webhook', async (req, res, next) => {
       totalCostPrice > 0 ? parseFloat(totalCostPrice.toFixed(2)) : null,
       rate?.zone_name || null,
       rate?.weight_class_name || null,
-      rate?.rate_id || null,
       rate != null,
       rate ? null : priceFailReason,
     ]);
+
+    // Apply surcharges (fuel, clearance, congestion, etc.) — non-blocking
+    await applySurcharges(shipmentId, customerId, totalPrice, {
+      courier,
+      dc_service_id:          dcServiceId,
+      service_name:           serviceName,
+      ship_from_country_iso:  addl.shipFromCountryIso,
+      ship_to_country_iso:    shipToCountry,
+      ship_to_postcode:       shipToPostcode,
+      parcel_count:           parcelCount,
+      total_weight_kg:        totalWeightKg,
+      parcel_weight_kg:       addl.parcelWeightKg,
+      dim_length_cm:          addl.dimLength,
+      dim_width_cm:           addl.dimWidth,
+      dim_height_cm:          addl.dimHeight,
+      total_declared_value:   addl.totalDeclaredValue,
+      parcel_declared_value:  addl.parcelDeclaredValue,
+    });
 
     res.json({
       ok: true,
@@ -502,13 +1013,16 @@ router.post('/purge-tracking-events', async (req, res, next) => {
 
 router.post('/relink-customers', async (req, res, next) => {
   try {
+    // Include shipments where customer_account OR customer_name is set
+    // so that API-integrated customers (e.g. Europa) whose webhooks carry
+    // no account_number but DO carry account_name are also picked up.
     const unlinked = await query(`
-      SELECT s.id AS shipment_id, s.customer_account,
+      SELECT s.id AS shipment_id, s.customer_account, s.customer_name,
              c.id AS charge_id
       FROM shipments s
       LEFT JOIN charges c ON c.shipment_id = s.id
       WHERE s.customer_id IS NULL
-        AND s.customer_account IS NOT NULL
+        AND (s.customer_account IS NOT NULL OR s.customer_name IS NOT NULL)
       ORDER BY s.created_at ASC
     `);
 
@@ -517,16 +1031,57 @@ router.post('/relink-customers', async (req, res, next) => {
 
     for (const row of unlinked.rows) {
       const acct = row.customer_account;
+      const name = row.customer_name;
+      let customerId = null;
 
-      // Try account_number first
-      let cr = await query('SELECT id FROM customers WHERE account_number = $1', [acct]);
-      let customerId = cr.rows[0]?.id || null;
+      // 1. account_number exact match
+      if (acct) {
+        const cr = await query('SELECT id FROM customers WHERE account_number = $1', [acct]);
+        customerId = cr.rows[0]?.id || null;
+      }
 
-      // Fall back to dc_customer_id
-      if (!customerId) {
+      // 2. dc_customer_id match (API customers like Europa send their DC ID as account)
+      if (!customerId && acct) {
         const cr2 = await query('SELECT id FROM customers WHERE dc_customer_id = $1', [acct]);
         customerId = cr2.rows[0]?.id || null;
       }
+
+      // 3. Match by account_name against business_name (for customers whose webhook
+      //    carries no account number — Europa sends account_name but no account_number)
+      if (!customerId && name) {
+        const cr3 = await query(
+          `SELECT id FROM customers WHERE LOWER(business_name) = LOWER($1)`,
+          [name.trim()]
+        );
+        customerId = cr3.rows[0]?.id || null;
+      }
+
+      // 4. Partial name match
+      if (!customerId && name) {
+        const cr4 = await query(
+          `SELECT id FROM customers WHERE LOWER(business_name) ILIKE $1 ORDER BY LENGTH(business_name) ASC LIMIT 1`,
+          [`%${name.trim()}%`]
+        );
+        customerId = cr4.rows[0]?.id || null;
+      }
+
+      // 5. Billing alias lookup (e.g. webhook sends "Europa" but customer is "Europa Worldwide Ltd")
+      try {
+        if (!customerId && name) {
+          const cr5 = await query(
+            `SELECT id FROM customers WHERE EXISTS (SELECT 1 FROM unnest(billing_aliases) a WHERE LOWER(a) = LOWER($1)) LIMIT 1`,
+            [name.trim().toLowerCase()]
+          );
+          customerId = cr5.rows[0]?.id || null;
+        }
+        if (!customerId && acct) {
+          const cr5b = await query(
+            `SELECT id FROM customers WHERE EXISTS (SELECT 1 FROM unnest(billing_aliases) a WHERE LOWER(a) = LOWER($1)) LIMIT 1`,
+            [acct.trim().toLowerCase()]
+          );
+          customerId = cr5b.rows[0]?.id || null;
+        }
+      } catch (_) { /* billing_aliases column not yet migrated */ }
 
       if (!customerId) { not_found++; continue; }
 
@@ -581,11 +1136,12 @@ router.get('/charges/aged-alerts', async (req, res, next) => {
 
 router.get('/charges/stats', async (req, res, next) => {
   try {
-    const { customer_id, date_from, date_to } = req.query;
+    const { customer_id, unassigned, date_from, date_to } = req.query;
     const conds = ["c.charge_type = 'courier'", 'c.cancelled = false'];
     const vals  = [];
     let   idx   = 1;
-    if (customer_id) { conds.push(`c.customer_id = $${idx++}`); vals.push(customer_id); }
+    if (unassigned === 'true') { conds.push(`c.customer_id IS NULL`); }
+    else if (customer_id) { conds.push(`c.customer_id = $${idx++}`); vals.push(customer_id); }
     if (date_from)   { conds.push(`c.created_at >= $${idx++}`); vals.push(date_from); }
     if (date_to)     { conds.push(`c.created_at <  $${idx++}`); vals.push(date_to); }
     const where = `WHERE ${conds.join(' AND ')}`;
@@ -612,9 +1168,11 @@ router.get('/charges', async (req, res, next) => {
   try {
     const {
       charge_type = 'courier',
-      customer_id, search,
+      customer_id, unassigned, search,
       billed, verified, cancelled,
       date_from, date_to,
+      parcel_type,   // 'single' | 'multi' | '' (all)
+      unpriced,      // 'true' = price IS NULL
       limit = 50, offset = 0,
     } = req.query;
 
@@ -622,13 +1180,17 @@ router.get('/charges', async (req, res, next) => {
     const vals  = [charge_type];
     let   idx   = 2;
 
-    if (customer_id) { conds.push(`c.customer_id = $${idx++}`); vals.push(customer_id); }
+    if (unassigned === 'true') { conds.push(`c.customer_id IS NULL`); }
+    else if (customer_id) { conds.push(`c.customer_id = $${idx++}`); vals.push(customer_id); }
     if (billed   !== undefined) { conds.push(`c.billed    = $${idx++}`); vals.push(billed   === 'true'); }
     if (verified !== undefined) { conds.push(`c.verified  = $${idx++}`); vals.push(verified === 'true'); }
     if (cancelled !== undefined) { conds.push(`c.cancelled = $${idx++}`); vals.push(cancelled === 'true'); }
-    else { conds.push('c.cancelled = false'); }
+    else if (unassigned !== 'true') { conds.push('c.cancelled = false'); } // unassigned view shows all
     if (date_from) { conds.push(`c.created_at >= $${idx++}`); vals.push(date_from); }
     if (date_to)   { conds.push(`c.created_at <  $${idx++}`); vals.push(date_to); }
+    if (parcel_type === 'single') { conds.push(`c.parcel_qty = 1`); }
+    if (parcel_type === 'multi')  { conds.push(`c.parcel_qty > 1`); }
+    if (unpriced === 'true')      { conds.push(`c.price IS NULL`); }
     if (search) {
       conds.push(`(
         cu.business_name ILIKE $${idx} OR cu.account_number ILIKE $${idx} OR
@@ -651,8 +1213,21 @@ router.get('/charges', async (req, res, next) => {
           cu.business_name  AS customer_name,
           cu.account_number AS customer_account,
           cu.id    AS customer_id,
+          s.id     AS shipment_id,
           s.courier, s.ship_to_postcode, s.ship_to_name,
-          s.reference, s.reference_2, s.tracking_codes, s.parcel_count
+          s.reference, s.reference_2, s.tracking_codes, s.parcel_count,
+          COALESCE((
+            SELECT SUM(sc.price) FROM charges sc
+            WHERE sc.shipment_id = c.shipment_id
+              AND sc.charge_type IN ('surcharge','fuel')
+              AND sc.cancelled = false
+          ), 0)::numeric(10,4) AS surcharge_total,
+          COALESCE((
+            SELECT COUNT(*)::int FROM charges sc
+            WHERE sc.shipment_id = c.shipment_id
+              AND sc.charge_type IN ('surcharge','fuel')
+              AND sc.cancelled = false
+          ), 0) AS surcharge_count
         FROM charges c
         LEFT JOIN customers cu ON cu.id = c.customer_id
         LEFT JOIN shipments  s  ON s.id  = c.shipment_id
@@ -688,7 +1263,7 @@ router.post('/batch-reprice', async (req, res, next) => {
              s.id AS shipment_id,
              s.dc_service_id, s.service_name AS s_service_name,
              s.total_weight_kg, s.parcel_count,
-             s.customer_account, s.raw_payload
+             s.customer_account, s.ship_to_postcode, s.raw_payload
       FROM charges c
       LEFT JOIN shipments s ON s.id = c.shipment_id
       WHERE c.price IS NULL
@@ -764,8 +1339,8 @@ router.post('/batch-reprice', async (req, res, next) => {
           );
         }
 
-        // Look up rate with reason
-        const { rate, reason: failReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel);
+        // Look up rate with reason — pass postcode for zone resolution on flat-rate services
+        const { rate, reason: failReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, row.ship_to_postcode);
         if (!rate) {
           summary.no_rate++;
           await query(`UPDATE charges SET price_failure_reason = $1, updated_at = NOW() WHERE id = $2`,
@@ -773,19 +1348,19 @@ router.post('/batch-reprice', async (req, res, next) => {
           continue;
         }
 
-        const totalPrice = parseFloat((rate.price * parcelQty).toFixed(2));
+        const pricingMode = await getParcelPricingMode(customerId);
+        const totalPrice  = parseFloat(calcTotal(rate, parcelQty, pricingMode).toFixed(2));
 
         await query(`
           UPDATE charges
           SET price                 = $1,
               zone_name             = $2,
               weight_class_name     = $3,
-              rate_id               = $4,
               price_auto            = true,
               price_failure_reason  = NULL,
               updated_at            = NOW()
-          WHERE id = $5
-        `, [totalPrice, rate.zone_name, rate.weight_class_name, rate.rate_id, row.charge_id]);
+          WHERE id = $4
+        `, [totalPrice, rate.zone_name, rate.weight_class_name, row.charge_id]);
 
         summary.priced++;
       } catch (err) {
@@ -797,8 +1372,144 @@ router.post('/batch-reprice', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── POST /api/billing/remove-surcharge-by-name ──────────────────────────────
+// Removes surcharge charge rows whose service_name matches a pattern.
+// Used to clean up incorrectly-applied surcharges (e.g. cost-side fuel
+// surcharges that were auto-applied when they should be reconciliation-only).
+// Body: { name_contains: 'Fuel and Energy' }   — case-insensitive substring match
+// Optional: { customer_id: UUID }              — scope to one customer
+
+router.post('/remove-surcharge-by-name', async (req, res, next) => {
+  try {
+    const { name_contains, customer_id } = req.body;
+    if (!name_contains) return res.status(400).json({ error: 'name_contains required' });
+
+    const conds = [`charge_type = 'surcharge'`, `service_name ILIKE $1`, `cancelled = false`];
+    const vals  = [`%${name_contains}%`];
+    if (customer_id) { conds.push(`customer_id = $2`); vals.push(customer_id); }
+
+    // Soft-cancel rather than hard delete so history is preserved
+    const r = await query(`
+      UPDATE charges
+      SET cancelled = true, updated_at = NOW()
+      WHERE ${conds.join(' AND ')}
+      RETURNING id
+    `, vals);
+
+    res.json({ ok: true, cancelled: r.rows.length, name_contains });
+  } catch (err) { next(err); }
+});
+
+// ─── GET /api/billing/shipments/:shipmentId/charges ──────────────────────────
+// Returns surcharge + fuel charges for one shipment. Used by Finance page hover tooltip.
+
+router.get('/shipments/:shipmentId/charges', async (req, res, next) => {
+  try {
+    const { shipmentId } = req.params;
+    const { rows } = await query(`
+      SELECT id, charge_type, service_name AS name, price
+      FROM charges
+      WHERE shipment_id = $1
+        AND charge_type IN ('surcharge', 'fuel')
+        AND cancelled = false
+      ORDER BY charge_type, created_at
+    `, [shipmentId]);
+    res.json(rows);
+  } catch (err) { next(err); }
+});
+
+// ─── POST /api/billing/batch-apply-surcharges ────────────────────────────────
+// Re-run applySurcharges on all existing courier charges.
+// Safe to call multiple times — applySurcharges is idempotent (skips if
+// the surcharge charge already exists for that shipment).
+// Optional query param: ?customer_id=UUID to scope to one customer.
+
+router.post('/batch-apply-surcharges', async (req, res, next) => {
+  try {
+    const { customer_id } = req.query;
+
+    // Fetch all non-cancelled courier charges with their shipment data
+    const conds = [`c.charge_type = 'courier'`, `c.cancelled = false`, `c.price IS NOT NULL`, `s.courier IS NOT NULL`];
+    const vals  = [];
+    if (customer_id) { conds.push(`c.customer_id = $1`); vals.push(customer_id); }
+
+    const { rows } = await query(`
+      SELECT
+        c.id AS charge_id,
+        c.shipment_id,
+        c.customer_id,
+        c.price AS base_price,
+        s.courier,
+        s.dc_service_id,
+        s.service_name,
+        s.ship_from_country_iso,
+        s.ship_to_country_iso,
+        s.ship_to_postcode,
+        s.parcel_count,
+        s.total_weight_kg,
+        s.parcel_weight_kg,
+        s.dim_length_cm,
+        s.dim_width_cm,
+        s.dim_height_cm,
+        s.total_declared_value,
+        s.parcel_declared_value
+      FROM charges c
+      JOIN shipments s ON s.id = c.shipment_id
+      WHERE ${conds.join(' AND ')}
+      ORDER BY c.created_at ASC
+    `, vals);
+
+    let applied    = 0;
+    let skipped    = 0;
+    let errors     = 0;
+    let firstError = null;
+
+    for (const row of rows) {
+      try {
+        const before = await query(
+          `SELECT COUNT(*)::int AS cnt FROM charges WHERE shipment_id = $1 AND charge_type IN ('surcharge','fuel') AND cancelled = false`,
+          [row.shipment_id]
+        );
+
+        await applySurcharges(row.shipment_id, row.customer_id, parseFloat(row.base_price || 0), {
+          courier:               row.courier,
+          dc_service_id:         row.dc_service_id,
+          service_name:          row.service_name,
+          ship_from_country_iso: row.ship_from_country_iso,
+          ship_to_country_iso:   row.ship_to_country_iso,
+          ship_to_postcode:      row.ship_to_postcode,
+          parcel_count:          row.parcel_count || 1,
+          total_weight_kg:       row.total_weight_kg,
+          parcel_weight_kg:      row.parcel_weight_kg,
+          dim_length_cm:         row.dim_length_cm,
+          dim_width_cm:          row.dim_width_cm,
+          dim_height_cm:         row.dim_height_cm,
+          total_declared_value:  row.total_declared_value,
+          parcel_declared_value: row.parcel_declared_value,
+        });
+
+        const after = await query(
+          `SELECT COUNT(*)::int AS cnt FROM charges WHERE shipment_id = $1 AND charge_type IN ('surcharge','fuel') AND cancelled = false`,
+          [row.shipment_id]
+        );
+
+        if (after.rows[0].cnt > before.rows[0].cnt) applied++;
+        else skipped++;
+
+      } catch (err) {
+        errors++;
+        if (!firstError) firstError = err.message;
+        console.error(`[batch-apply-surcharges] shipment ${row.shipment_id}:`, err.message);
+      }
+    }
+
+    res.json({ ok: true, total_charges: rows.length, surcharges_applied: applied, already_had_surcharges: skipped, errors, first_error: firstError });
+  } catch (err) { next(err); }
+});
+
 // ─── GET /api/billing/charges/:id/debug ──────────────────────────────────────
-// Step-by-step trace of why a charge did or did not get a price.
+// Full step-by-step trace using the SAME functions as the live billing engine.
+// Every field extracted, every DB lookup attempted, every decision explained.
 
 router.get('/charges/:id/debug', async (req, res, next) => {
   try {
@@ -809,10 +1520,12 @@ router.get('/charges/:id/debug', async (req, res, next) => {
         c.id, c.customer_id, c.service_name AS c_service_name,
         c.zone_name, c.weight_class_name,
         c.price, c.price_auto, c.rate_id, c.order_id, c.parcel_qty,
+        c.price_failure_reason,
         s.platform_shipment_id,
         s.customer_account, s.customer_name AS s_customer_name,
         s.courier, s.dc_service_id, s.service_name AS s_service_name,
-        s.total_weight_kg, s.parcel_count,
+        s.total_weight_kg, s.parcel_count, s.parcel_weight_kg,
+        s.ship_to_postcode, s.ship_to_country_iso,
         s.raw_payload
       FROM charges c
       LEFT JOIN shipments s ON s.id = c.shipment_id
@@ -825,238 +1538,282 @@ router.get('/charges/:id/debug', async (req, res, next) => {
     const trace = {
       charge_id: id,
       order_id: row.order_id,
-      stored_price: row.price,
-      stored_price_auto: row.price_auto,
-      stored_zone: row.zone_name,
-      stored_weight_class: row.weight_class_name,
+      stored: {
+        price: row.price,
+        price_auto: row.price_auto,
+        zone: row.zone_name,
+        weight_class: row.weight_class_name,
+        failure_reason: row.price_failure_reason,
+        postcode: row.ship_to_postcode,
+        country_iso: row.ship_to_country_iso,
+        customer_account: row.customer_account,
+        customer_name: row.s_customer_name,
+      },
       steps: [],
     };
 
-    // Step 1: Payload extraction
-    const payload = (typeof row.raw_payload === 'string')
-      ? safeJson(row.raw_payload) || {}
-      : (row.raw_payload || {});
-    const shipment    = payload.shipment    || {};
-    const request     = payload.request     || {};
-    // request_shipment may arrive as a top-level stringified JSON field
-    const reqShipment = request.shipment || safeJson(payload.request_shipment) || {};
+    // ── Step 1: Extract fields from raw payload (same as live webhook) ────────
+    const rawPayload   = typeof row.raw_payload === 'string' ? safeJson(row.raw_payload) || {} : (row.raw_payload || {});
+    const innerPayload = unwrapPayload(rawPayload);
+    const extracted    = extractShipmentFields(innerPayload);
 
-    const accountNumber = shipment.account_number || reqShipment.account_number;
-    const dcServiceId   = reqShipment.dc_service_id || shipment.dc_service_id || row.dc_service_id;
-    const serviceName   = shipment.friendly_service_name || reqShipment.friendly_service_name || row.s_service_name;
-    const parcelCount   = shipment.parcel_count || (reqShipment.parcels || []).length || row.parcel_qty || 1;
-
-    const createParcels = shipment.create_label_parcels || [];
-    let totalWeightKg = createParcels.length
-      ? createParcels.reduce((sum, p) => sum + (parseFloat(p.weight) || 0), 0)
-      : parseFloat(reqShipment._summed_total_weight) || null;
-    if (!totalWeightKg && row.total_weight_kg) totalWeightKg = parseFloat(row.total_weight_kg);
-    const weightPerParcel = parcelCount > 0 && totalWeightKg ? totalWeightKg / parcelCount : totalWeightKg;
+    const dcServiceId     = row.dc_service_id   || extracted.dcServiceId;
+    const serviceName     = row.s_service_name  || extracted.serviceName;
+    const parcelQty       = row.parcel_count     || row.parcel_qty || extracted.parcelCount || 1;
+    const totalWeightKg   = parseFloat(row.total_weight_kg) || extracted.totalWeightKg || null;
+    // Use stored parcel_weight_kg (migration 039) if available, else derive from total
+    const weightPerParcel = parseFloat(row.parcel_weight_kg) ||
+      (parcelQty > 0 && totalWeightKg ? totalWeightKg / parcelQty : totalWeightKg) || null;
+    const postcode        = row.ship_to_postcode || null;
+    const outward         = postcode ? postcode.trim().toUpperCase().split(/\s+/)[0] : null;
 
     trace.steps.push({
       step: 1,
-      title: 'Webhook payload extraction',
-      account_number: accountNumber || null,
-      dc_service_id: dcServiceId || null,
-      service_name: serviceName || null,
-      parcel_count: parcelCount,
-      total_weight_kg: totalWeightKg,
-      weight_per_parcel_kg: weightPerParcel != null ? Math.round(weightPerParcel * 1000) / 1000 : null,
+      title: 'Field extraction',
+      account_number:    extracted.accountNumber,
+      customer_dc_id:    extracted.customerDcId,
+      dc_service_id:     dcServiceId,
+      service_name:      serviceName,
+      parcel_count:      parcelQty,
+      total_weight_kg:   totalWeightKg,
+      weight_per_parcel: weightPerParcel != null ? Math.round(weightPerParcel * 1000) / 1000 : null,
+      postcode:          postcode,
+      outward_code:      outward,
     });
 
-    // Step 2: Customer resolution — try account_number then dc_customer_id
-    let customerId = null;
+    // ── Step 2: Customer resolution (same 4-step logic as live webhook) ───────
+    const { accountNumber, customerDcId } = extracted;
+    let customerId   = row.customer_id || null;
     let customerName = null;
-    let resolvedVia = null;
-    if (accountNumber) {
-      const cr = await query(
-        'SELECT id, business_name FROM customers WHERE account_number = $1',
-        [accountNumber]
-      );
-      if (cr.rows.length) {
-        customerId   = cr.rows[0].id;
-        customerName = cr.rows[0].business_name;
-        resolvedVia  = 'account_number';
-      } else {
-        // API customers send their DC customer ID (e.g. "Europa") as the account identifier
-        const cr2 = await query(
-          'SELECT id, business_name FROM customers WHERE dc_customer_id = $1',
-          [accountNumber]
-        );
-        if (cr2.rows.length) {
-          customerId   = cr2.rows[0].id;
-          customerName = cr2.rows[0].business_name;
-          resolvedVia  = 'dc_customer_id';
-        }
+    let resolvedVia  = customerId ? 'stored_on_charge' : null;
+    const custSteps  = [];
+
+    if (!customerId && accountNumber) {
+      const c1 = await query('SELECT id, business_name, account_number, dc_customer_id FROM customers WHERE account_number = $1', [accountNumber]);
+      custSteps.push({ tried: `account_number = '${accountNumber}'`, found: c1.rows.length > 0, row: c1.rows[0] || null });
+      if (c1.rows.length) { customerId = c1.rows[0].id; customerName = c1.rows[0].business_name; resolvedVia = 'account_number'; }
+    }
+    if (!customerId && accountNumber) {
+      const c2 = await query('SELECT id, business_name, account_number, dc_customer_id FROM customers WHERE dc_customer_id = $1', [accountNumber]);
+      custSteps.push({ tried: `dc_customer_id = '${accountNumber}'`, found: c2.rows.length > 0, row: c2.rows[0] || null });
+      if (c2.rows.length) { customerId = c2.rows[0].id; customerName = c2.rows[0].business_name; resolvedVia = 'dc_customer_id_via_account_number'; }
+    }
+    if (!customerId && customerDcId) {
+      const c3 = await query('SELECT id, business_name, account_number, dc_customer_id FROM customers WHERE dc_customer_id = $1', [customerDcId]);
+      custSteps.push({ tried: `dc_customer_id = '${customerDcId}'  (from billing block)`, found: c3.rows.length > 0, row: c3.rows[0] || null });
+      if (c3.rows.length) { customerId = c3.rows[0].id; customerName = c3.rows[0].business_name; resolvedVia = 'customer_dc_id_billing_block'; }
+    }
+    if (!customerId && row.s_customer_name) {
+      const c4 = await query(`SELECT id, business_name, account_number, dc_customer_id FROM customers WHERE LOWER(business_name) = LOWER($1)`, [row.s_customer_name.trim()]);
+      custSteps.push({ tried: `business_name = '${row.s_customer_name}'`, found: c4.rows.length > 0, row: c4.rows[0] || null });
+      if (c4.rows.length) { customerId = c4.rows[0].id; customerName = c4.rows[0].business_name; resolvedVia = 'business_name_exact'; }
+    }
+    if (!customerId && row.s_customer_name) {
+      const c5 = await query(`SELECT id, business_name, account_number, dc_customer_id FROM customers WHERE LOWER(business_name) ILIKE $1 ORDER BY LENGTH(business_name) ASC LIMIT 1`, [`%${row.s_customer_name.trim()}%`]);
+      custSteps.push({ tried: `business_name ILIKE '%${row.s_customer_name}%'`, found: c5.rows.length > 0, row: c5.rows[0] || null });
+      if (c5.rows.length) { customerId = c5.rows[0].id; customerName = c5.rows[0].business_name; resolvedVia = 'business_name_partial'; }
+    }
+    if (!customerId && row.s_customer_name) {
+      try {
+        const c6 = await query(`SELECT id, business_name FROM customers WHERE EXISTS (SELECT 1 FROM unnest(billing_aliases) a WHERE LOWER(a) = LOWER($1)) LIMIT 1`, [row.s_customer_name.trim().toLowerCase()]);
+        custSteps.push({ tried: `billing_aliases @> ['${row.s_customer_name.toLowerCase()}']`, found: c6.rows.length > 0, row: c6.rows[0] || null });
+        if (c6.rows.length) { customerId = c6.rows[0].id; customerName = c6.rows[0].business_name; resolvedVia = 'billing_alias'; }
+      } catch (_) {
+        custSteps.push({ tried: `billing_aliases (column not yet migrated)`, found: false, row: null });
       }
     }
-    // Fall back to stored customer_id if payload resolution failed
-    if (!customerId && row.customer_id) customerId = row.customer_id;
+
+    if (customerId && !customerName) {
+      const cn = await query('SELECT business_name FROM customers WHERE id = $1', [customerId]);
+      if (cn.rows.length) customerName = cn.rows[0].business_name;
+    }
 
     trace.steps.push({
       step: 2,
       title: 'Customer resolution',
-      account_number_used: accountNumber || null,
-      customer_found: !!customerId,
+      resolved: !!customerId,
       customer_id: customerId,
       customer_name: customerName,
       resolved_via: resolvedVia,
-      note: !accountNumber
-        ? 'No account_number in webhook payload'
-        : !customerId
-          ? `No customer matched account_number or dc_customer_id "${accountNumber}"`
-          : null,
+      lookup_attempts: custSteps,
     });
 
     if (!customerId) {
       trace.conclusion = {
         priced: false,
-        reason: 'Customer not resolved — account_number missing from webhook payload or not matched in the customers table',
-        fix: 'Ensure the customer\'s Account Number field in Moov OS matches the account_number sent in the webhook',
+        reason: 'No customer matched',
+        what_was_tried: custSteps,
+        fix: 'Set account_number or dc_customer_id on the customer record to match what the webhook sends, OR ensure business_name exactly matches the account_name in the webhook.',
       };
       return res.json(trace);
     }
 
-    // Step 3: Service match in customer_rates
-    const partialName = `%${(serviceName || '').split(' ').slice(0, 3).join(' ')}%`;
-    const rateRes = await query(`
-      SELECT cr.id, cr.price, cr.zone_name, cr.weight_class_name,
-             cr.service_code, cr.service_name
-      FROM customer_rates cr
-      WHERE cr.customer_id = $1
-        AND (
-          cr.service_code ILIKE $2
-          OR cr.service_name ILIKE $3
-          OR cr.service_name ILIKE $4
-        )
-      ORDER BY cr.zone_name, cr.weight_class_name
-    `, [customerId, dcServiceId || '', serviceName || '', partialName]);
+    // ── Step 3a: New-model pricing (customer_service_pricing → weight_bands) ─────
+    // This is the FIRST path the live engine tries — if it finds a result here,
+    // the legacy customer_rates path never runs.
+    const newModelRes = await lookupViaServicePricing(customerId, dcServiceId, weightPerParcel, postcode);
+    const newModelRows = await query(`
+      SELECT
+        csp.pricing_type, csp.markup_pct, csp.fixed_fee,
+        wb.price_first AS cost_price, wb.min_weight_kg, wb.max_weight_kg,
+        z.name AS zone_name, cs.service_code AS svc_code
+      FROM customer_service_pricing csp
+      JOIN carrier_rate_cards crc ON crc.id = csp.carrier_rate_card_id
+      JOIN courier_services   cs  ON cs.id  = csp.service_id
+      JOIN zones              z   ON z.courier_service_id = cs.id
+      JOIN weight_bands       wb  ON wb.zone_id = z.id AND wb.carrier_rate_card_id = crc.id
+      WHERE csp.customer_id = $1
+        AND cs.service_code ILIKE $2
+      ORDER BY z.name, wb.min_weight_kg NULLS LAST
+    `, [customerId, dcServiceId || '']);
 
-    // Also count total rates for this customer (for context)
-    const totalRates = await query(
-      'SELECT COUNT(*)::int AS cnt FROM customer_rates WHERE customer_id = $1',
-      [customerId]
-    );
+    trace.steps.push({
+      step: '3a',
+      title: 'New-model pricing (customer_service_pricing)',
+      pricing_model_found: newModelRows.rows.length > 0,
+      bands_in_db: newModelRows.rows.map(r => ({
+        zone: r.zone_name, range: `${r.min_weight_kg ?? '—'}–${r.max_weight_kg ?? '—'} kg`,
+        cost_price: r.cost_price, pricing_type: r.pricing_type,
+        markup_pct: r.markup_pct, fixed_fee: r.fixed_fee,
+      })),
+      result: newModelRes === null ? 'NOT_USED — no new-model pricing found, will check legacy customer_rates'
+        : newModelRes.rate ? `MATCH — £${newModelRes.rate.price} (${newModelRes.rate.zone_name}, ${newModelRes.rate.weight_class_name})`
+        : `NO_MATCH — ${newModelRes.reason}`,
+      will_use_new_model: newModelRes !== null,
+    });
+
+    // If the new model resolved a price, we can project the conclusion now.
+    // The legacy steps below still run for diagnostic visibility.
+    const newModelWinner = newModelRes?.rate || null;
+
+    // ── Step 3: Legacy service match (customer_rates — service code only) ────
+    const [rateRes, allSvcRes] = await Promise.all([
+      query(`
+        SELECT cr.id, cr.price, cr.zone_name, cr.weight_class_name,
+               cr.service_code, cr.min_weight_kg, cr.max_weight_kg
+        FROM customer_rates cr
+        WHERE cr.customer_id = $1
+          AND cr.service_code ILIKE $2
+        ORDER BY cr.zone_name, cr.min_weight_kg NULLS LAST, cr.weight_class_name
+      `, [customerId, dcServiceId || '']),
+      query(`
+        SELECT DISTINCT service_code, COUNT(*) AS rate_count
+        FROM customer_rates WHERE customer_id = $1
+        GROUP BY service_code ORDER BY service_code
+      `, [customerId]),
+    ]);
 
     trace.steps.push({
       step: 3,
-      title: 'customer_rates service match',
-      query: {
-        customer_id: customerId,
-        service_code_ilike: dcServiceId || '',
-        service_name_ilike: serviceName || '',
-        service_name_partial_ilike: partialName,
-      },
-      total_rates_for_customer: totalRates.rows[0].cnt,
-      rows_matched: rateRes.rows.length,
-      rows: rateRes.rows.map(r => ({
-        id: r.id,
-        service_code: r.service_code,
-        service_name: r.service_name,
-        zone_name: r.zone_name,
-        weight_class_name: r.weight_class_name,
-        price: r.price,
+      title: 'Legacy fallback — customer_rates',
+      will_skip_legacy: !!newModelWinner,
+      note: newModelWinner ? '⚠ New model resolved — legacy shown for reference only.' : 'New model found nothing — legacy used.',
+      searched_for: { service_code: dcServiceId },
+      // field names matched to what the debug UI reads (matched_rows / matched_rates)
+      matched_rows:   rateRes.rows.length,
+      matched_rates:  rateRes.rows.map(r => ({
+        id: r.id, service_code: r.service_code, service_name: r.service_name,
+        zone_name: r.zone_name, weight_class_name: r.weight_class_name,
+        min_weight_kg: r.min_weight_kg, max_weight_kg: r.max_weight_kg, price: r.price,
       })),
+      all_services_on_customer: allSvcRes.rows,
     });
 
-    if (!rateRes.rows.length) {
+    // Only bail out early if NEITHER model found anything — the new-model winner bypasses legacy entirely.
+    if (!rateRes.rows.length && !newModelWinner) {
       trace.conclusion = {
         priced: false,
-        reason: `No customer_rates rows matched for this customer. Service code "${dcServiceId}", service name "${serviceName}".`,
-        fix: totalRates.rows[0].cnt === 0
-          ? 'No pricing set up at all for this customer — add rates in the customer\'s Pricing tab'
-          : `Rates exist but none match the service. Check that service_code or service_name in customer_rates matches "${dcServiceId}" / "${serviceName}"`,
+        reason: `No rates matched. Webhook sent service_code="${dcServiceId}", service_name="${serviceName}". Neither new-model (customer_service_pricing) nor legacy (customer_rates) has an entry for this service.`,
+        available_services: allSvcRes.rows,
+        fix: newModelRows.rows.length > 0
+          ? 'New-model pricing exists but weight band matching failed — check band min/max_weight_kg values match expected weights.'
+          : 'Add a pricing entry for this service: either configure customer_service_pricing (recommended) or add a row to customer_rates.',
       };
       return res.json(trace);
     }
 
-    // Step 4: Weight band matching
-    const weightChecks = rateRes.rows.map(r => {
-      if (!r.weight_class_name) {
-        return { ...r, covers_weight: false, note: 'No weight class name on this rate row' };
-      }
-      if (weightPerParcel == null) {
-        return { ...r, covers_weight: false, note: 'No parcel weight available in webhook to match against' };
-      }
+    // ── Step 4: Zone → Weight (mirrors the live engine exactly) ──────────────
+    // Step 1 of engine: resolve zone from postcode.
+    // Step 2 of engine: find weight band within that zone.
+    // Only two failure modes: no matching zone, no matching weight band.
+    const legacyRates = rateRes.rows;
+    let legacyZone = null;
+    let legacyZoneRows = [];
+    let legacyBand = null;
+    let legacyError = null;
 
-      const s = r.weight_class_name.toUpperCase().replace(/\s/g, '');
-      const range = s.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)KG?$/);
-      const plus  = s.match(/^(\d+(?:\.\d+)?)\+KG?$/) || s.match(/^OVER(\d+(?:\.\d+)?)KG?$/);
-      const under = s.match(/^(?:UNDER|<)(\d+(?:\.\d+)?)KG?$/);
-
-      let covers = false;
-      let note   = '';
-
-      if (range) {
-        const lo = parseFloat(range[1]), hi = parseFloat(range[2]);
-        covers = weightPerParcel > lo && weightPerParcel <= hi;
-        note   = `Range ${lo}–${hi} kg, parcel is ${weightPerParcel} kg → ${covers ? '✓ MATCH' : '✗ no match'}`;
-      } else if (plus) {
-        const min = parseFloat(plus[1]);
-        covers = weightPerParcel > min;
-        note   = `Over ${min} kg, parcel is ${weightPerParcel} kg → ${covers ? '✓ MATCH' : '✗ no match'}`;
-      } else if (under) {
-        const max = parseFloat(under[1]);
-        covers = weightPerParcel < max;
-        note   = `Under ${max} kg, parcel is ${weightPerParcel} kg → ${covers ? '✓ MATCH' : '✗ no match'}`;
+    if (!newModelWinner && legacyRates.length > 0) {
+      const distinctLegacyZones = [...new Set(legacyRates.map(r => r.zone_name))];
+      if (distinctLegacyZones.length === 1) {
+        legacyZone = distinctLegacyZones[0];
+        legacyZoneRows = legacyRates;
       } else {
-        note = `⚠ Unrecognised format "${r.weight_class_name}" — expected e.g. "0-1KG", "OVER5KG", "UNDER2KG"`;
+        legacyZone = await zoneForPostcode(legacyRates[0].service_code, postcode);
+        if (!legacyZone) {
+          legacyError = `No matching zone for postcode "${postcode || 'none'}"`;
+        } else {
+          const zl = legacyZone.toLowerCase();
+          legacyZoneRows = legacyRates.filter(r =>
+            r.zone_name.toLowerCase().includes(zl) || zl.includes(r.zone_name.toLowerCase())
+          );
+          if (!legacyZoneRows.length) legacyError = `No matching zone for postcode "${postcode}"`;
+        }
       }
-
-      return {
-        rate_id: r.id,
-        zone_name: r.zone_name,
-        weight_class_name: r.weight_class_name,
-        price: r.price,
-        covers_weight: covers,
-        note,
-      };
-    });
-
-    const matching = weightChecks.filter(w => w.covers_weight);
+      if (!legacyError && legacyZoneRows.length > 0) {
+        legacyBand = legacyZoneRows.find(r => rateCoversWeight(r, weightPerParcel));
+        if (!legacyBand) legacyError = `No weight band covers ${weightPerParcel} kg in zone "${legacyZone}"`;
+      }
+    }
 
     trace.steps.push({
       step: 4,
-      title: 'Weight band matching',
+      title: 'Zone → Weight resolution (legacy)',
+      skipped: !!newModelWinner,
       weight_per_parcel_kg: weightPerParcel,
-      checks: weightChecks,
-      matching_count: matching.length,
+      zone_resolved: legacyZone,
+      zone_rows: legacyZoneRows.map(r => ({
+        zone_name: r.zone_name,
+        weight_class_name: r.weight_class_name,
+        min_weight_kg: r.min_weight_kg,
+        max_weight_kg: r.max_weight_kg,
+        price: r.price,
+        covers: rateCoversWeight(r, weightPerParcel),
+      })),
+      selected_band: legacyBand ? {
+        zone: legacyBand.zone_name,
+        weight_class: legacyBand.weight_class_name,
+        price: legacyBand.price,
+      } : null,
+      error: legacyError || null,
     });
 
-    // Conclusion
-    if (matching.length >= 1) {
+    // ── Conclusion ────────────────────────────────────────────────────────────
+    if (newModelWinner) {
       trace.conclusion = {
         priced: true,
-        price: parseFloat(matching[0].price),
-        zone_name: matching[0].zone_name,
-        weight_class_name: matching[0].weight_class_name,
-        note: matching.length > 1
-          ? `${matching.length} bands matched — used first (${matching[0].zone_name})`
-          : 'Single exact band match',
+        price: newModelWinner.price,
+        zone_name: newModelWinner.zone_name,
+        weight_class_name: newModelWinner.weight_class_name,
+        method: 'new_model (customer_service_pricing → carrier rate card)',
+        pricing_type: newModelWinner.pricing_type,
       };
-    } else if (weightPerParcel == null && rateRes.rows.length === 1) {
+    } else if (legacyBand) {
       trace.conclusion = {
         priced: true,
-        price: parseFloat(rateRes.rows[0].price),
-        zone_name: rateRes.rows[0].zone_name,
-        weight_class_name: rateRes.rows[0].weight_class_name,
-        note: 'No weight in webhook but only one rate row — used it directly',
+        price: parseFloat(legacyBand.price),
+        zone_name: legacyBand.zone_name,
+        weight_class_name: legacyBand.weight_class_name,
+        method: 'legacy (customer_rates)',
       };
     } else {
-      const hasUnrecognised = weightChecks.some(c => c.note?.includes('Unrecognised'));
-      const noWeight        = weightPerParcel == null;
       trace.conclusion = {
         priced: false,
-        reason: hasUnrecognised
-          ? `Weight class name format not parseable — coversWeight() returned false for all rows`
-          : noWeight
-            ? `No parcel weight in webhook and ${rateRes.rows.length} rate rows — ambiguous, cannot auto-select`
-            : `No weight band covers ${weightPerParcel} kg`,
-        fix: hasUnrecognised
-          ? 'Update weight_class_name values in customer_rates to use format like "0-1KG", "1-2KG", "OVER5KG"'
-          : noWeight
-            ? 'Parcel weight not sent in webhook payload; set the price manually or check webhook parcel weight field'
-            : `Check that a rate band exists that covers ${weightPerParcel} kg`,
+        reason: legacyError || (legacyRates.length === 0
+          ? `Service "${dcServiceId}" not found in customer_rates`
+          : 'No rate resolved'),
+        fix: legacyError?.includes('zone')
+          ? 'Check postcode rules are configured on the zone for this service.'
+          : 'Check weight bands cover the parcel weight (min_weight_kg / max_weight_kg).',
       };
     }
 
@@ -1074,8 +1831,8 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
     const r = await query(`
       SELECT c.customer_id, c.parcel_qty,
              s.dc_service_id, s.service_name AS s_service_name,
-             s.total_weight_kg, s.parcel_count,
-             s.customer_account, s.raw_payload
+             s.total_weight_kg, s.parcel_count, s.parcel_weight_kg,
+             s.customer_account, s.ship_to_postcode, s.raw_payload
       FROM charges c
       LEFT JOIN shipments s ON s.id = c.shipment_id
       WHERE c.id = $1
@@ -1107,9 +1864,11 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
 
     const dcServiceId = row.dc_service_id || extracted.dcServiceId;
     const serviceName = row.s_service_name || extracted.serviceName;
-    let totalWt       = parseFloat(row.total_weight_kg) || extracted.totalWeightKg || null;
+    const totalWt     = parseFloat(row.total_weight_kg) || extracted.totalWeightKg || null;
     const parcelQty   = row.parcel_qty || row.parcel_count || extracted.parcelCount || 1;
-    const weightPerParcel = parcelQty > 0 && totalWt ? totalWt / parcelQty : totalWt;
+    // Use dedicated parcel_weight_kg column (migration 039) if available, else derive from total
+    const weightPerParcel = parseFloat(row.parcel_weight_kg) ||
+      (parcelQty > 0 && totalWt ? totalWt / parcelQty : totalWt) || null;
 
     // If we derived a customer from raw payload but it wasn't stored, back-fill the shipment row
     if (!row.customer_id && customerId) {
@@ -1118,26 +1877,28 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
       await query(`UPDATE charges SET customer_id = $1, updated_at = NOW() WHERE id = $2`, [customerId, id]);
     }
 
-    const { rate, reason: failReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel);
+    const { rate, reason: failReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, row.ship_to_postcode);
     if (!rate) {
       await query(`UPDATE charges SET price_failure_reason = $1, updated_at = NOW() WHERE id = $2`,
         [failReason, id]);
       return res.json({ ok: false, message: failReason || 'No matching rate found' });
     }
 
-    const totalPrice = parseFloat((rate.price * parcelQty).toFixed(2));
+    const pricingMode = await getParcelPricingMode(row.customer_id);
+    const totalPrice  = parseFloat(calcTotal(rate, parcelQty, pricingMode).toFixed(2));
 
+    // rate_id on charges is UUID — we don't store the raw row id (integer).
+    // zone_name + weight_class_name are the human-readable references that matter.
     await query(`
       UPDATE charges
       SET price                = $1,
           zone_name            = $2,
           weight_class_name    = $3,
-          rate_id              = $4,
           price_auto           = true,
           price_failure_reason = NULL,
           updated_at           = NOW()
-      WHERE id = $5
-    `, [totalPrice, rate.zone_name, rate.weight_class_name, rate.rate_id, id]);
+      WHERE id = $4
+    `, [totalPrice, rate.zone_name, rate.weight_class_name, id]);
 
     res.json({
       ok: true,
