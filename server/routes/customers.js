@@ -213,7 +213,7 @@ router.patch('/:id', async (req, res, next) => {
       'tier', 'account_status', 'payment_terms_days', 'billing_cycle', 'credit_limit', 'bond_amount_held',
       'accounts_email', 'eori_number', 'ioss_number',
       'salesperson_id', 'account_manager_id', 'onboarding_person_id',
-      'billing_aliases', 'dc_customer_id', 'account_number', 'manual_billing',
+      'billing_aliases', 'dc_customer_id', 'account_number', 'manual_billing', 'parcel_pricing_mode',
     ];
     const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));
     if (!updates.length) return res.status(400).json({ error: 'No valid fields to update' });

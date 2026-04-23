@@ -635,15 +635,30 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData) 
   }
 }
 
-// ─── calcTotal — applies sub-parcel pricing ───────────────────────────────────
-// If price_sub is set and qty > 1: first + (qty-1) × sub
-// Otherwise: price × qty
-function calcTotal(rate, qty) {
-  const qty1 = Math.max(1, parseInt(qty) || 1);
-  if (rate.price_sub != null && qty1 > 1) {
-    return rate.price + (qty1 - 1) * rate.price_sub;
+// ─── calcTotal — applies sub-parcel or multi-parcel pricing ──────────────────
+// mode 'sub'   (default): price + (qty-1) × price_sub
+// mode 'multi':           qty × price_sub  (all boxes at the cheaper rate)
+// No price_sub or qty=1:  price × qty  (unchanged)
+function calcTotal(rate, qty, mode = 'sub') {
+  const n = Math.max(1, parseInt(qty) || 1);
+  if (rate.price_sub != null && n > 1) {
+    return mode === 'multi'
+      ? n * rate.price_sub
+      : rate.price + (n - 1) * rate.price_sub;
   }
-  return rate.price * qty1;
+  return rate.price * n;
+}
+
+// Fetch a customer's parcel pricing mode ('sub' | 'multi')
+async function getParcelPricingMode(customerId) {
+  if (!customerId) return 'sub';
+  try {
+    const { rows } = await query(
+      `SELECT parcel_pricing_mode FROM customers WHERE id = $1`,
+      [customerId]
+    );
+    return rows[0]?.parcel_pricing_mode || 'sub';
+  } catch { return 'sub'; }
 }
 
 // ─── POST /api/billing/webhook ────────────────────────────────────────────────
@@ -862,9 +877,10 @@ router.post('/webhook', async (req, res, next) => {
 
     // Look up rate card — pass destination postcode for zone resolution on flat-rate services
     const { rate, reason: priceFailReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, shipToPostcode);
-    const unitPrice  = rate ? rate.price : null;
-    const totalPrice = unitPrice != null
-      ? parseFloat(calcTotal(rate, parcelCount).toFixed(2))
+    const pricingMode = rate ? await getParcelPricingMode(customerId) : 'sub';
+    const unitPrice   = rate ? rate.price : null;
+    const totalPrice  = unitPrice != null
+      ? parseFloat(calcTotal(rate, parcelCount, pricingMode).toFixed(2))
       : null;
 
     // Insert charge — rate_id is UUID on the charges table so we leave it null;
@@ -1290,7 +1306,8 @@ router.post('/batch-reprice', async (req, res, next) => {
           continue;
         }
 
-        const totalPrice = parseFloat(calcTotal(rate, parcelQty).toFixed(2));
+        const pricingMode = await getParcelPricingMode(customerId);
+        const totalPrice  = parseFloat(calcTotal(rate, parcelQty, pricingMode).toFixed(2));
 
         await query(`
           UPDATE charges
@@ -1825,7 +1842,8 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
       return res.json({ ok: false, message: failReason || 'No matching rate found' });
     }
 
-    const totalPrice = parseFloat(calcTotal(rate, parcelQty).toFixed(2));
+    const pricingMode = await getParcelPricingMode(row.customer_id);
+    const totalPrice  = parseFloat(calcTotal(rate, parcelQty, pricingMode).toFixed(2));
 
     // rate_id on charges is UUID — we don't store the raw row id (integer).
     // zone_name + weight_class_name are the human-readable references that matter.

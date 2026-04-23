@@ -596,8 +596,9 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
       credit_limit:       c.credit_limit ?? 0,
       bond_amount_held:   c.bond_amount_held ?? 0,
       tier:               c.tier || 'bronze',
-      manual_billing:     c.manual_billing ?? false,
-      dc_customer_id:     c.dc_customer_id || '',
+      manual_billing:        c.manual_billing ?? false,
+      parcel_pricing_mode:   c.parcel_pricing_mode || 'sub',
+      dc_customer_id:        c.dc_customer_id || '',
     });
     setEdit(true);
   }
@@ -775,6 +776,34 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
               } />
             <Row label="Account Status"    value={<AccountStatusBadge status={c.account_status} />} />
             <Row label="Health Score"      value={<HealthBadge score={c.health_score} />} />
+            <Row
+              label="Multi-Box Pricing"
+              value={
+                <span style={{ fontSize: 12, color: c.parcel_pricing_mode === 'multi' ? '#00BCD4' : '#888', fontWeight: 600 }}>
+                  {c.parcel_pricing_mode === 'multi' ? '● Multi-parcel (all at sub rate)' : '● Sub-parcel (first higher, rest lower)'}
+                </span>
+              }
+              edit={edit}
+              editNode={
+                <div style={{ display: 'inline-flex', background: 'rgba(255,255,255,0.05)', borderRadius: 7, padding: 3, gap: 2 }}>
+                  {[['sub', 'Sub-parcel'], ['multi', 'Multi-parcel']].map(([val, label]) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => set('parcel_pricing_mode', val)}
+                      style={{
+                        padding: '4px 12px', borderRadius: 5, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700,
+                        background: form.parcel_pricing_mode === val ? (val === 'multi' ? '#00BCD4' : '#7B2FBE') : 'transparent',
+                        color: form.parcel_pricing_mode === val ? '#fff' : '#666',
+                        transition: 'all 0.12s',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              }
+            />
           </InfoCard>
 
           <InfoCard title="Team">

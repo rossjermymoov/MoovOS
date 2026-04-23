@@ -22,40 +22,101 @@ const inp = {
 
 // ─── Inline editable price cell (with optional sub-parcel price) ──────────────
 function PriceCell({ rateId, initialPrice, initialPriceSub, onSaved, onDelete }) {
-  const [editing, setEditing]   = useState(false);
-  const [val, setVal]           = useState(String(parseFloat(initialPrice).toFixed(2)));
-  const [subVal, setSubVal]     = useState(initialPriceSub != null ? String(parseFloat(initialPriceSub).toFixed(2)) : '');
-  const [confirm, setConfirm]   = useState(false);
-  const inputRef = useRef(null);
+  const [editing, setEditing] = useState(false);
+  const [val,     setVal]     = useState(String(parseFloat(initialPrice).toFixed(2)));
+  const [subVal,  setSubVal]  = useState(initialPriceSub != null ? String(parseFloat(initialPriceSub).toFixed(2)) : '');
+  const [confirm, setConfirm] = useState(false);
+  const priceRef = useRef(null);
+  const subRef   = useRef(null);
+  const blurTimer = useRef(null);
 
-  function startEdit() { setEditing(true); setTimeout(() => inputRef.current?.select(), 0); }
+  function startEdit(focusSub = false) {
+    setEditing(true);
+    setTimeout(() => {
+      if (focusSub && subRef.current) {
+        subRef.current.focus();
+        subRef.current.select();
+      } else if (priceRef.current) {
+        priceRef.current.focus();
+        priceRef.current.select();
+      }
+    }, 0);
+  }
 
   function commit() {
     const parsed = parseFloat(val);
-    if (isNaN(parsed) || parsed < 0) { setVal(String(parseFloat(initialPrice).toFixed(2))); setEditing(false); return; }
+    if (isNaN(parsed) || parsed < 0) {
+      setVal(String(parseFloat(initialPrice).toFixed(2)));
+      setEditing(false);
+      return;
+    }
     const parsedSub = subVal.trim() === '' ? null : parseFloat(subVal);
     onSaved(rateId, parsed, isNaN(parsedSub) ? null : parsedSub);
     setEditing(false);
   }
 
-  const priceStyle = {
-    ...inp, width: 74, textAlign: 'right', color: '#00C853', fontWeight: 700,
-    fontFamily: 'monospace', border: '1px solid rgba(0,200,83,0.6)', background: 'rgba(0,200,83,0.08)',
+  // Only commit when focus leaves BOTH inputs (not just when moving between them)
+  function handleBlur() {
+    blurTimer.current = setTimeout(() => {
+      const active = document.activeElement;
+      if (active !== priceRef.current && active !== subRef.current) {
+        commit();
+      }
+    }, 100);
+  }
+
+  function handleFocus() {
+    clearTimeout(blurTimer.current);
+  }
+
+  const baseStyle = {
+    ...inp, textAlign: 'right', fontWeight: 700, fontFamily: 'monospace', outline: 'none',
   };
 
   if (editing) {
     return (
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-        <input ref={inputRef} value={val} onChange={e => setVal(e.target.value)}
-          onBlur={commit}
-          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setEditing(false); } }}
-          style={priceStyle} />
+        <input
+          ref={priceRef}
+          value={val}
+          onChange={e => setVal(e.target.value)}
+          onBlur={handleBlur}
+          onFocus={handleFocus}
+          onKeyDown={e => {
+            if (e.key === 'Enter') { e.preventDefault(); commit(); }
+            if (e.key === 'Escape') { setEditing(false); }
+            if (e.key === 'Tab') { e.preventDefault(); subRef.current?.focus(); subRef.current?.select(); }
+          }}
+          style={{ ...baseStyle, width: 74, color: '#00C853', border: '1px solid rgba(0,200,83,0.6)', background: 'rgba(0,200,83,0.08)' }}
+        />
         <span style={{ fontSize: 10, color: '#555' }}>+sub</span>
-        <input value={subVal} onChange={e => setSubVal(e.target.value)}
-          onBlur={commit}
-          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setEditing(false); } }}
-          placeholder="—"
-          style={{ ...priceStyle, color: '#00BCD4', border: '1px solid rgba(0,188,212,0.5)', background: 'rgba(0,188,212,0.06)', width: 66 }} />
+        <input
+          ref={subRef}
+          value={subVal}
+          onChange={e => setSubVal(e.target.value)}
+          onBlur={handleBlur}
+          onFocus={handleFocus}
+          onKeyDown={e => {
+            if (e.key === 'Enter') { e.preventDefault(); commit(); }
+            if (e.key === 'Escape') { setEditing(false); }
+          }}
+          placeholder="optional"
+          style={{ ...baseStyle, width: 74, color: '#00BCD4', border: '1px solid rgba(0,188,212,0.5)', background: 'rgba(0,188,212,0.06)' }}
+        />
+        <button
+          type="button"
+          onMouseDown={e => { e.preventDefault(); commit(); }}
+          style={{ background: '#00C853', border: 'none', borderRadius: 4, color: '#000', fontSize: 10, fontWeight: 700, padding: '3px 8px', cursor: 'pointer' }}
+        >
+          ✓
+        </button>
+        <button
+          type="button"
+          onMouseDown={e => { e.preventDefault(); setEditing(false); }}
+          style={{ background: 'none', border: 'none', color: '#666', fontSize: 10, cursor: 'pointer' }}
+        >
+          ✕
+        </button>
       </span>
     );
   }
@@ -63,23 +124,33 @@ function PriceCell({ rateId, initialPrice, initialPriceSub, onSaved, onDelete })
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-        <span onClick={startEdit} title="Click to edit first-parcel price"
-          style={{ fontSize: 13, fontWeight: 700, color: '#00C853', cursor: 'pointer', padding: '3px 10px',
-            borderRadius: 5, border: '1px solid rgba(0,200,83,0.35)', background: 'rgba(0,200,83,0.08)',
-            fontFamily: 'monospace' }}>
+        <span
+          onClick={() => startEdit(false)}
+          title="Click to edit first-parcel price"
+          style={{ fontSize: 13, fontWeight: 700, color: '#00C853', cursor: 'pointer',
+            padding: '3px 10px', borderRadius: 5, fontFamily: 'monospace',
+            border: '1px solid rgba(0,200,83,0.35)', background: 'rgba(0,200,83,0.08)' }}
+        >
           {gbp(initialPrice)}
         </span>
         {initialPriceSub != null ? (
-          <span onClick={startEdit} title="Sub-parcel price — click to edit"
-            style={{ fontSize: 12, fontWeight: 700, color: '#00BCD4', cursor: 'pointer', padding: '3px 8px',
-              borderRadius: 5, border: '1px solid rgba(0,188,212,0.3)', background: 'rgba(0,188,212,0.06)',
-              fontFamily: 'monospace' }}>
+          <span
+            onClick={() => startEdit(true)}
+            title="Sub-parcel price — click to edit"
+            style={{ fontSize: 12, fontWeight: 700, color: '#00BCD4', cursor: 'pointer',
+              padding: '3px 8px', borderRadius: 5, fontFamily: 'monospace',
+              border: '1px solid rgba(0,188,212,0.3)', background: 'rgba(0,188,212,0.06)' }}
+          >
             +{gbp(initialPriceSub)}
           </span>
         ) : (
-          <span onClick={startEdit} title="No sub-parcel rate — click to add"
-            style={{ fontSize: 11, color: '#333', cursor: 'pointer', padding: '3px 8px',
-              borderRadius: 5, border: '1px dashed rgba(255,255,255,0.08)' }}>
+          <span
+            onClick={() => startEdit(true)}
+            title="Click to add a sub-parcel rate"
+            style={{ fontSize: 11, color: '#444', cursor: 'pointer', padding: '3px 8px',
+              borderRadius: 5, border: '1px dashed rgba(0,188,212,0.25)',
+              background: 'rgba(0,188,212,0.03)' }}
+          >
             +sub
           </span>
         )}
