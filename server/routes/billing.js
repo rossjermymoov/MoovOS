@@ -1296,6 +1296,34 @@ router.post('/batch-reprice', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── POST /api/billing/remove-surcharge-by-name ──────────────────────────────
+// Removes surcharge charge rows whose service_name matches a pattern.
+// Used to clean up incorrectly-applied surcharges (e.g. cost-side fuel
+// surcharges that were auto-applied when they should be reconciliation-only).
+// Body: { name_contains: 'Fuel and Energy' }   — case-insensitive substring match
+// Optional: { customer_id: UUID }              — scope to one customer
+
+router.post('/remove-surcharge-by-name', async (req, res, next) => {
+  try {
+    const { name_contains, customer_id } = req.body;
+    if (!name_contains) return res.status(400).json({ error: 'name_contains required' });
+
+    const conds = [`charge_type = 'surcharge'`, `service_name ILIKE $1`, `cancelled = false`];
+    const vals  = [`%${name_contains}%`];
+    if (customer_id) { conds.push(`customer_id = $2`); vals.push(customer_id); }
+
+    // Soft-cancel rather than hard delete so history is preserved
+    const r = await query(`
+      UPDATE charges
+      SET cancelled = true, updated_at = NOW()
+      WHERE ${conds.join(' AND ')}
+      RETURNING id
+    `, vals);
+
+    res.json({ ok: true, cancelled: r.rows.length, name_contains });
+  } catch (err) { next(err); }
+});
+
 // ─── GET /api/billing/shipments/:shipmentId/charges ──────────────────────────
 // Returns surcharge + fuel charges for one shipment. Used by Finance page hover tooltip.
 
