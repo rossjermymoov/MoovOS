@@ -654,7 +654,7 @@ export default function TrackingPage() {
                       </span>
                     )}
                   </td>
-                  <td><StatusBadge status={p.status} label={p.status_description} /></td>
+                  <td><StatusBadge status={p.status} /></td>
                   <td>
                     <div style={{ fontSize: 12, color: '#DDD' }}>{p.status_description?.slice(0, 40) || p.last_location || '—'}</div>
                     <div style={{ fontSize: 11, color: '#555' }}>{timeAgo(p.last_event_at)}</div>
