@@ -237,23 +237,33 @@ async function zoneForPostcode(serviceCode, serviceName, postcode) {
   `, [serviceCode || '', serviceName || '', outward]);
   if (inclRes.rows.length) return inclRes.rows[0].zone_name;
 
-  // 2. Catch-all: zone whose exclude list does NOT contain this outward code
-  //    (i.e. Mainland — which excludes Highlands postcodes but not this one)
+  // 2. Catch-all: zone that does NOT exclude this postcode.
+  //    Two sub-cases:
+  //    a) Zone has exclude rules but this postcode is not in them (classic Mainland)
+  //    b) Zone has NO postcode rules at all — it's implicitly a catch-all for everything
+  //
+  //    User rule: if a postcode is not in any zone's include list AND not in any zone's
+  //    exclude list → it belongs to the catch-all (Mainland) zone.
   const EXCL_MATCH = MATCH_CLAUSE.replace(/pr\./g, 'pr3.');
   const catchRes = await query(`
     SELECT z.name AS zone_name
     FROM zones z
     JOIN courier_services cs ON cs.id = z.courier_service_id
     WHERE (cs.service_code ILIKE $1 OR cs.name ILIKE $2)
-      AND EXISTS (
-        SELECT 1 FROM zone_postcode_rules pr2
-        WHERE pr2.zone_id = z.id AND pr2.rule_type = 'exclude'
+      AND NOT EXISTS (
+        -- zone does not have an include rule for this postcode
+        SELECT 1 FROM zone_postcode_rules pr4
+        WHERE pr4.zone_id = z.id AND pr4.rule_type = 'include'
       )
       AND NOT EXISTS (
+        -- zone does not exclude this postcode
         SELECT 1 FROM zone_postcode_rules pr3
         WHERE pr3.zone_id = z.id AND pr3.rule_type = 'exclude'
           AND ${EXCL_MATCH}
       )
+    ORDER BY
+      -- prefer zones with exclude rules (explicit catch-all) over bare zones
+      (EXISTS (SELECT 1 FROM zone_postcode_rules prx WHERE prx.zone_id = z.id)) DESC
     LIMIT 1
   `, [serviceCode || '', serviceName || '', outward]);
   if (catchRes.rows.length) return catchRes.rows[0].zone_name;
@@ -372,13 +382,21 @@ async function lookupViaCustomerRates(customerId, serviceCode, serviceName, weig
     return { rate: null, reason };
   }
 
-  const rates = rateRes.rows;
+  // Exact service_code match wins over name-matched rows.
+  // Without this, a partial name like "DPD Drop Off" pulls in DPD12-DROP AND
+  // DPD11-DROP rows together, making it look like there are multiple zones when
+  // the actual service (DPD12-DROP) is single-zone Mainland only.
+  const exactRows = serviceCode
+    ? rateRes.rows.filter(r => r.service_code?.toLowerCase() === serviceCode.toLowerCase())
+    : [];
+  const rates = exactRows.length > 0 ? exactRows : rateRes.rows;
 
   // ── Step 1: resolve zone from postcode ────────────────────────────────────
   const distinctZones = [...new Set(rates.map(r => r.zone_name))];
   let zoneRows;
 
   if (distinctZones.length === 1) {
+    // Single zone — no postcode lookup needed
     zoneRows = rates;
   } else {
     const zoneName = await zoneForPostcode(rates[0].service_code, rates[0].service_name, postcode);
