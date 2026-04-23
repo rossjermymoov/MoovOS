@@ -687,6 +687,7 @@ export default function FinancePage() {
     verified: '',
     date_from: '',
     date_to: '',
+    parcel_type: '',
   });
   const [showAlerts, setShowAlerts] = useState(true);
   const [showUnpriced, setShowUnpriced] = useState(false);
@@ -738,6 +739,7 @@ export default function FinancePage() {
     cancelled: 'false',
     date_from: filters.date_from || undefined,
     date_to: filters.date_to || undefined,
+    parcel_type: filters.parcel_type || undefined,
     limit,
     offset,
   };
@@ -768,7 +770,7 @@ export default function FinancePage() {
   }
 
   function clearAll() {
-    setFilters({ search: '', customer_id: '', billed: '', verified: '', date_from: '', date_to: '' });
+    setFilters({ search: '', customer_id: '', billed: '', verified: '', date_from: '', date_to: '', parcel_type: '' });
     setShowUnpriced(false);
     setOffset(0);
   }
@@ -1137,6 +1139,27 @@ export default function FinancePage() {
             ))}
           </select>
 
+          {/* Parcel type */}
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <span style={{ fontSize: 11, color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Parcels</span>
+            {[['', 'All'], ['single', 'Single'], ['multi', 'Multi']].map(([val, label]) => (
+              <button
+                key={val}
+                onClick={() => setFilter('parcel_type', val)}
+                style={{
+                  padding: '5px 11px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                  border: '1px solid',
+                  borderColor: filters.parcel_type === val ? '#F59E0B' : 'rgba(255,255,255,0.12)',
+                  background: filters.parcel_type === val ? 'rgba(245,158,11,0.12)' : 'transparent',
+                  color: filters.parcel_type === val ? '#F59E0B' : '#888',
+                  cursor: 'pointer',
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           {/* Verified filter */}
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
             <span style={{ fontSize: 11, color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Verified</span>
@@ -1212,7 +1235,7 @@ export default function FinancePage() {
           />
 
           {/* Clear filters */}
-          {(filters.search || filters.customer_id || filters.billed || filters.verified || filters.date_from || filters.date_to || showUnpriced) && (
+          {(filters.search || filters.customer_id || filters.billed || filters.verified || filters.date_from || filters.date_to || filters.parcel_type || showUnpriced) && (
             <button
               onClick={clearAll}
               style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: 12 }}
