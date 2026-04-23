@@ -7,10 +7,11 @@ BEGIN
     INSERT INTO customers (
       business_name, company_type, tier, account_status,
       billing_cycle, payment_terms_days, credit_limit,
-      country, postcode
+      country, postcode, registered_address, phone_number, primary_email
     ) VALUES (
       'Fight Outlet', 'limited_company', 'bronze', 'active',
-      'monthly', 30, 5000, 'United Kingdom', 'TBC'
+      'monthly', 30, 5000,
+      'United Kingdom', 'TBC', 'TBC', 'TBC', 'accounts@moovparcel.com'
     );
     RAISE NOTICE 'Created: Fight Outlet';
   ELSE

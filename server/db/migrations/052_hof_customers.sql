@@ -1,7 +1,6 @@
 -- 052_hof_customers.sql
 -- Creates 25 new customer records from HOF- pricing CSV entries.
--- HOF- prefix stripped for business_name; original stored as billing alias.
--- Postcode set to 'TBC' — update once addresses are confirmed.
+-- Placeholder values used for required fields — update addresses once confirmed.
 
 DO $$
 DECLARE
@@ -39,11 +38,13 @@ BEGIN
       INSERT INTO customers (
         business_name, company_type, tier, account_status,
         billing_cycle, payment_terms_days, credit_limit,
-        country, postcode, billing_aliases
+        country, postcode, registered_address, phone_number, primary_email,
+        billing_aliases
       ) VALUES (
         r.biz_name, 'limited_company', 'bronze', 'active',
         'monthly', 30, 5000,
-        'United Kingdom', 'TBC', ARRAY[r.alias]
+        'United Kingdom', 'TBC', 'TBC', 'TBC', 'accounts@moovparcel.com',
+        ARRAY[r.alias]
       );
       RAISE NOTICE 'Created: %', r.biz_name;
     ELSE
