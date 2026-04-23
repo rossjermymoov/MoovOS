@@ -33,13 +33,13 @@ const STATUS_MAP = {
   '5':  'out_for_delivery',    // Out for Delivery
   '6':  'failed_delivery',     // Failed Attempt
   '7':  'delivered',           // Delivered
-  '8':  'on_hold',             // On Hold (incl. dispatch guide)
+  '8':  'on_hold',             // On Hold
   '9':  'exception',           // Address Issue
   '10': 'returned',            // Return to Sender
-  '11': 'exception',           // Tracking Expired
-  '12': 'exception',           // Cancelled
+  '11': 'tracking_expired',    // Tracking Expired
+  '12': 'cancelled',           // Cancelled
   '13': 'awaiting_collection', // Awaiting Customer Collection
-  '16': 'exception',           // Damaged
+  '16': 'damaged',             // Damaged
   '18': 'customs_hold',        // Customs Hold
 
   // ── Booked / label created ────────────────────────────────────────────────
@@ -430,7 +430,7 @@ router.get('/stats', async (req, res, next) => {
       by_status:      statusMap,
       delivered_today: delivered_today.rows[0].count,
       total_active:   Object.entries(statusMap)
-        .filter(([s]) => !['delivered','returned'].includes(s))
+        .filter(([s]) => !['delivered','returned','cancelled','tracking_expired'].includes(s))
         .reduce((a,[,c]) => a + c, 0),
       by_courier:     by_courier.rows,
       by_customer:    by_customer.rows,
