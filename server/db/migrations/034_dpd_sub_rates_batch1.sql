@@ -18,7 +18,7 @@ DECLARE
 BEGIN
 
   -- ── Aegean Sea Ltd ────────────────────────────────────────────
-  SELECT id INTO v_id FROM companies WHERE name ILIKE 'Aegean Sea%' LIMIT 1;
+  SELECT id INTO v_id FROM customers WHERE business_name ILIKE 'Aegean Sea%' LIMIT 1;
   IF v_id IS NOT NULL THEN
     UPDATE customer_rates SET price_sub = s.price_sub
     FROM (VALUES
@@ -37,7 +37,7 @@ BEGIN
   END IF;
 
   -- ── Bakers Street ─────────────────────────────────────────────
-  SELECT id INTO v_id FROM companies WHERE name ILIKE 'Bakers Street%' LIMIT 1;
+  SELECT id INTO v_id FROM customers WHERE business_name ILIKE 'Bakers Street%' LIMIT 1;
   IF v_id IS NOT NULL THEN
     UPDATE customer_rates SET price_sub = s.price_sub
     FROM (VALUES
@@ -56,7 +56,7 @@ BEGIN
   END IF;
 
   -- ── Beacons and Lightbars ─────────────────────────────────────
-  SELECT id INTO v_id FROM companies WHERE name ILIKE 'Beacons and Lightbars%' LIMIT 1;
+  SELECT id INTO v_id FROM customers WHERE business_name ILIKE 'Beacons and Lightbars%' LIMIT 1;
   IF v_id IS NOT NULL THEN
     UPDATE customer_rates SET price_sub = s.price_sub
     FROM (VALUES
@@ -75,7 +75,7 @@ BEGIN
   END IF;
 
   -- ── Capatex Limited ───────────────────────────────────────────
-  SELECT id INTO v_id FROM companies WHERE name ILIKE 'Capatex%' LIMIT 1;
+  SELECT id INTO v_id FROM customers WHERE business_name ILIKE 'Capatex%' LIMIT 1;
   IF v_id IS NOT NULL THEN
     UPDATE customer_rates SET price_sub = s.price_sub
     FROM (VALUES
@@ -94,7 +94,7 @@ BEGIN
   END IF;
 
   -- ── Empire Printing ───────────────────────────────────────────
-  SELECT id INTO v_id FROM companies WHERE name ILIKE 'Empire Printing%' LIMIT 1;
+  SELECT id INTO v_id FROM customers WHERE business_name ILIKE 'Empire Printing%' LIMIT 1;
   IF v_id IS NOT NULL THEN
     UPDATE customer_rates SET price_sub = s.price_sub
     FROM (VALUES
@@ -113,7 +113,7 @@ BEGIN
   END IF;
 
   -- ── Fortec ────────────────────────────────────────────────────
-  SELECT id INTO v_id FROM companies WHERE name ILIKE 'Fortec%' LIMIT 1;
+  SELECT id INTO v_id FROM customers WHERE business_name ILIKE 'Fortec%' LIMIT 1;
   IF v_id IS NOT NULL THEN
     UPDATE customer_rates SET price_sub = s.price_sub
     FROM (VALUES

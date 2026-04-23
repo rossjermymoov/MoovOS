@@ -23,7 +23,7 @@ DECLARE
 BEGIN
 
   -- ── Fosseway Parcels Ltd ──────────────────────────────────────────
-  SELECT id INTO v_id FROM companies WHERE name ILIKE 'Fosseway Parcels%' LIMIT 1;
+  SELECT id INTO v_id FROM customers WHERE business_name ILIKE 'Fosseway Parcels%' LIMIT 1;
   IF v_id IS NOT NULL THEN
     UPDATE customer_rates SET price_sub = s.price_sub
     FROM (VALUES
@@ -42,7 +42,7 @@ BEGIN
   END IF;
 
   -- ── Impoxer LTD T/A Makrom ────────────────────────────────────────
-  SELECT id INTO v_id FROM companies WHERE name ILIKE 'Impoxer%' LIMIT 1;
+  SELECT id INTO v_id FROM customers WHERE business_name ILIKE 'Impoxer%' LIMIT 1;
   IF v_id IS NOT NULL THEN
     UPDATE customer_rates SET price_sub = s.price_sub
     FROM (VALUES
@@ -61,7 +61,7 @@ BEGIN
   END IF;
 
   -- ── Norfolk Saw Services ──────────────────────────────────────────
-  SELECT id INTO v_id FROM companies WHERE name ILIKE 'Norfolk Saw%' LIMIT 1;
+  SELECT id INTO v_id FROM customers WHERE business_name ILIKE 'Norfolk Saw%' LIMIT 1;
   IF v_id IS NOT NULL THEN
     UPDATE customer_rates SET price_sub = s.price_sub
     FROM (VALUES
@@ -80,7 +80,7 @@ BEGIN
   END IF;
 
   -- ── P&S Products & Refreshening Ltd ──────────────────────────────
-  SELECT id INTO v_id FROM companies WHERE name ILIKE 'P&S Products%' OR name ILIKE 'P & S Products%' LIMIT 1;
+  SELECT id INTO v_id FROM customers WHERE business_name ILIKE 'P&S Products%' OR name ILIKE 'P & S Products%' LIMIT 1;
   IF v_id IS NOT NULL THEN
     UPDATE customer_rates SET price_sub = s.price_sub
     FROM (VALUES
@@ -99,7 +99,7 @@ BEGIN
   END IF;
 
   -- ── Passion Accessories Ltd ───────────────────────────────────────
-  SELECT id INTO v_id FROM companies WHERE name ILIKE 'Passion Accessories%' LIMIT 1;
+  SELECT id INTO v_id FROM customers WHERE business_name ILIKE 'Passion Accessories%' LIMIT 1;
   IF v_id IS NOT NULL THEN
     UPDATE customer_rates SET price_sub = s.price_sub
     FROM (VALUES
@@ -118,7 +118,7 @@ BEGIN
   END IF;
 
   -- ── Pet & Grooming Supplies Ltd ───────────────────────────────────
-  SELECT id INTO v_id FROM companies WHERE name ILIKE 'Pet & Grooming%' OR name ILIKE 'Pet and Grooming%' LIMIT 1;
+  SELECT id INTO v_id FROM customers WHERE business_name ILIKE 'Pet & Grooming%' OR name ILIKE 'Pet and Grooming%' LIMIT 1;
   IF v_id IS NOT NULL THEN
     UPDATE customer_rates SET price_sub = s.price_sub
     FROM (VALUES
@@ -137,7 +137,7 @@ BEGIN
   END IF;
 
   -- ── Pex Ltd ───────────────────────────────────────────────────────
-  SELECT id INTO v_id FROM companies WHERE name ILIKE 'Pex Ltd%' LIMIT 1;
+  SELECT id INTO v_id FROM customers WHERE business_name ILIKE 'Pex Ltd%' LIMIT 1;
   IF v_id IS NOT NULL THEN
     UPDATE customer_rates SET price_sub = s.price_sub
     FROM (VALUES
@@ -156,7 +156,7 @@ BEGIN
   END IF;
 
   -- ── Railway Shop ──────────────────────────────────────────────────
-  SELECT id INTO v_id FROM companies WHERE name ILIKE 'Railway Shop%' LIMIT 1;
+  SELECT id INTO v_id FROM customers WHERE business_name ILIKE 'Railway Shop%' LIMIT 1;
   IF v_id IS NOT NULL THEN
     UPDATE customer_rates SET price_sub = s.price_sub
     FROM (VALUES
@@ -175,7 +175,7 @@ BEGIN
   END IF;
 
   -- ── Seedball Limited ──────────────────────────────────────────────
-  SELECT id INTO v_id FROM companies WHERE name ILIKE 'Seedball%' LIMIT 1;
+  SELECT id INTO v_id FROM customers WHERE business_name ILIKE 'Seedball%' LIMIT 1;
   IF v_id IS NOT NULL THEN
     UPDATE customer_rates SET price_sub = s.price_sub
     FROM (VALUES
@@ -194,7 +194,7 @@ BEGIN
   END IF;
 
   -- ── Techworknetwork LTD ───────────────────────────────────────────
-  SELECT id INTO v_id FROM companies WHERE name ILIKE 'Techworknetwork%' LIMIT 1;
+  SELECT id INTO v_id FROM customers WHERE business_name ILIKE 'Techworknetwork%' LIMIT 1;
   IF v_id IS NOT NULL THEN
     UPDATE customer_rates SET price_sub = s.price_sub
     FROM (VALUES
@@ -213,7 +213,7 @@ BEGIN
   END IF;
 
   -- ── TMK Trading Ltd t/a Nexus Modelling Supplies ──────────────────
-  SELECT id INTO v_id FROM companies WHERE name ILIKE 'TMK Trading%' OR name ILIKE 'Nexus Modelling%' LIMIT 1;
+  SELECT id INTO v_id FROM customers WHERE business_name ILIKE 'TMK Trading%' OR name ILIKE 'Nexus Modelling%' LIMIT 1;
   IF v_id IS NOT NULL THEN
     UPDATE customer_rates SET price_sub = s.price_sub
     FROM (VALUES
@@ -232,7 +232,7 @@ BEGIN
   END IF;
 
   -- ── Wedcova Uk Ltd ────────────────────────────────────────────────
-  SELECT id INTO v_id FROM companies WHERE name ILIKE 'Wedcova%' LIMIT 1;
+  SELECT id INTO v_id FROM customers WHERE business_name ILIKE 'Wedcova%' LIMIT 1;
   IF v_id IS NOT NULL THEN
     UPDATE customer_rates SET price_sub = s.price_sub
     FROM (VALUES
@@ -251,7 +251,7 @@ BEGIN
   END IF;
 
   -- ── Xylo Ltd ──────────────────────────────────────────────────────
-  SELECT id INTO v_id FROM companies WHERE name ILIKE 'Xylo%' LIMIT 1;
+  SELECT id INTO v_id FROM customers WHERE business_name ILIKE 'Xylo%' LIMIT 1;
   IF v_id IS NOT NULL THEN
     UPDATE customer_rates SET price_sub = s.price_sub
     FROM (VALUES
