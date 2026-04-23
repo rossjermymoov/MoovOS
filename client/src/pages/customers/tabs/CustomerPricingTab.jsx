@@ -45,8 +45,20 @@ function PriceCell({ rateId, initialPrice, initialPriceSub, onSaved, onDelete })
       setEditing(false);
       return;
     }
-    const parsedSub = subVal.trim() === '' ? null : parseFloat(subVal);
-    await onSaved(rateId, parsed, isNaN(parsedSub) ? null : parsedSub);
+
+    // Only send price_sub if the user actually touched it:
+    //   - typed a number  → send that number
+    //   - cleared a field that HAD a value → send null (explicit clear)
+    //   - left blank when it was always blank → send undefined (don't touch DB)
+    let priceSub;
+    if (subVal.trim() === '') {
+      priceSub = initialPriceSub != null ? null : undefined; // explicit clear vs untouched
+    } else {
+      const n = parseFloat(subVal);
+      priceSub = isNaN(n) ? undefined : n;
+    }
+
+    await onSaved(rateId, parsed, priceSub);
     setEditing(false);
   }
 
@@ -443,7 +455,9 @@ export default function CustomerPricingTab({ customer }) {
 
   async function handlePriceUpdate(rateId, price, priceSub) {
     try {
-      await api.patch(`/customer-rates/rate/${rateId}`, { price, price_sub: priceSub });
+      const payload = { price };
+      if (priceSub !== undefined) payload.price_sub = priceSub; // undefined = don't touch existing value
+      await api.patch(`/customer-rates/rate/${rateId}`, payload);
       // Update the cache directly — avoids browser 304 cache returning stale data
       queryClient.setQueryData(['customer-rates', customer.id], (old) => {
         if (!old) return old;
