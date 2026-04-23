@@ -45,11 +45,11 @@ const STATUS = {
   at_depot:         { label: 'At Depot',          color: '#5C6BC0', bg: 'rgba(92,107,192,0.12)',   icon: Package },
   out_for_delivery: { label: 'Out for Delivery',  color: '#FFC107', bg: 'rgba(255,193,7,0.12)',    icon: Truck },
   delivered:        { label: 'Delivered',         color: '#00C853', bg: 'rgba(0,200,83,0.12)',     icon: PackageCheck },
-  failed_delivery:  { label: 'Address Issue',     color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
+  failed_delivery:  { label: 'Failed Delivery',   color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
   on_hold:              { label: 'On Hold',              color: '#FF9800', bg: 'rgba(255,152,0,0.12)',    icon: Clock },
   awaiting_collection:  { label: 'Awaiting Collection', color: '#FF6F00', bg: 'rgba(255,111,0,0.12)',    icon: Store },
   customs_hold:     { label: 'Customs Hold',      color: '#E91E8C', bg: 'rgba(233,30,140,0.12)',   icon: ShieldAlert },
-  exception:        { label: 'Address Issue',     color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
+  exception:        { label: 'Exception',         color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
   returned:         { label: 'Returned',          color: '#607D8B', bg: 'rgba(96,125,139,0.12)',   icon: RotateCcw },
   unknown:          { label: 'Unknown',           color: '#555555', bg: 'rgba(255,255,255,0.05)',  icon: Package },
 };
@@ -481,7 +481,7 @@ export default function TrackingPage() {
         <StatCard label="Out for Delivery" value={bs.out_for_delivery}    color="#FFC107" icon={Truck}         active={statusFilter==='out_for_delivery'}       onClick={() => toggleStatus('out_for_delivery')} />
         <StatCard     label="On Hold"             value={bs.on_hold}                             color="#FF9800" icon={Clock}         active={statusFilter==='on_hold'}                     onClick={() => toggleStatus('on_hold')} />
         <BoldStatCard label="Awaiting Collection" value={bs.awaiting_collection}                   color="#FF6F00" icon={Store}         active={statusFilter==='awaiting_collection'}         onClick={() => toggleStatus('awaiting_collection')} />
-        <BoldStatCard label="Address Issue"       value={(bs.failed_delivery||0)+(bs.exception||0)} color="#F44336" icon={AlertTriangle} active={statusFilter==='failed_delivery,exception'} onClick={() => toggleStatus('failed_delivery,exception')} />
+        <BoldStatCard label="Failed / Exception"  value={(bs.failed_delivery||0)+(bs.exception||0)} color="#F44336" icon={AlertTriangle} active={statusFilter==='failed_delivery,exception'} onClick={() => toggleStatus('failed_delivery,exception')} />
         <BoldStatCard label="Customs Hold"        value={bs.customs_hold}                        color="#E91E8C" icon={Plane}         active={statusFilter==='customs_hold'}                onClick={() => toggleStatus('customs_hold')} />
         <BoldStatCard label="Returned to Sender"  value={bs.returned}                            color="#FF3D00" icon={AlertTriangle} active={statusFilter==='returned'}                   onClick={() => toggleStatus('returned')} />
         <StatCard label="Delivered Today"    value={stats?.delivered_today} color="#00C853" icon={PackageCheck}  active={statusFilter==='delivered'}              onClick={() => toggleStatus('delivered')} />
