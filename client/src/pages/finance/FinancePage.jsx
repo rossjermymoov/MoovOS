@@ -172,7 +172,15 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
 
   const stepColor = (step) => {
     if (!trace) return '#555';
-    if (step.step === 3 && step.matched_rows === 0) return '#F44336';
+    if (step.step === '3a') {
+      if (!step.pricing_model_found) return '#555';            // no new-model rows — neutral
+      if (!step.will_use_new_model) return '#FFC107';          // rows exist but match failed — amber
+      return step.result?.startsWith('MATCH') ? '#00C853' : '#FFC107';
+    }
+    if (step.step === 3) {
+      if (step.will_skip_legacy) return '#555';                // new model won — show as inactive
+      return step.matched_rows > 0 ? '#00C853' : '#F44336';
+    }
     if (step.step === 4 && step.direct_matches === 0 && !step.flat_rate_catch_all?.triggered) return '#F44336';
     if (step.step === 2 && !step.resolved) return '#F44336';
     return '#00C853';
@@ -288,9 +296,62 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                       )}
                     </>}
 
+                    {step.step === '3a' && <>
+                      <div>
+                        <span style={{ color: '#888' }}>pricing_model_found:</span>{' '}
+                        <span style={{ color: step.pricing_model_found ? '#00C853' : '#555', fontWeight: 700 }}>
+                          {step.pricing_model_found ? 'YES' : 'NO — customer has no customer_service_pricing entry for this service'}
+                        </span>
+                      </div>
+                      {step.pricing_model_found && <>
+                        <div style={{ marginTop: 4 }}>
+                          <span style={{ color: '#888' }}>result:</span>{' '}
+                          <span style={{ color: step.result?.startsWith('MATCH') ? '#00C853' : '#FFC107', fontWeight: 700 }}>
+                            {step.result}
+                          </span>
+                        </div>
+                        <div>
+                          <span style={{ color: '#888' }}>will_use_new_model:</span>{' '}
+                          <span style={{ color: step.will_use_new_model ? '#00C853' : '#F44336', fontWeight: 700 }}>
+                            {step.will_use_new_model ? 'YES — legacy customer_rates will NOT be used' : 'NO — legacy fallback will run'}
+                          </span>
+                        </div>
+                        {(step.bands_in_db || []).length > 0 && (
+                          <div style={{ marginTop: 8 }}>
+                            <div style={{ color: '#555', fontSize: 11, marginBottom: 4 }}>Rate bands in carrier rate card:</div>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                              <thead>
+                                <tr>
+                                  {['zone','weight range','cost price','pricing type','markup / fee'].map(h => (
+                                    <th key={h} style={{ color: '#555', fontWeight: 700, padding: '3px 8px', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>{h}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {step.bands_in_db.map((b, i) => (
+                                  <tr key={i}>
+                                    <td style={{ padding: '3px 8px', color: '#aaa' }}>{b.zone}</td>
+                                    <td style={{ padding: '3px 8px', color: '#aaa' }}>{b.range}</td>
+                                    <td style={{ padding: '3px 8px', color: '#888' }}>£{parseFloat(b.cost_price || 0).toFixed(2)}</td>
+                                    <td style={{ padding: '3px 8px', color: '#888' }}>{b.pricing_type || '—'}</td>
+                                    <td style={{ padding: '3px 8px', color: '#00C853' }}>
+                                      {b.pricing_type === 'markup' ? `+${b.markup_pct}%` : b.pricing_type === 'fixed_fee' ? `+£${parseFloat(b.fixed_fee || 0).toFixed(2)}` : '—'}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </>}
+                    </>}
+
                     {step.step === 3 && <>
+                      {step.will_skip_legacy && (
+                        <div style={{ color: '#555', fontStyle: 'italic' }}>⚡ New model resolved a price — legacy customer_rates not used by live engine.</div>
+                      )}
                       <div><span style={{ color: '#888' }}>searched_for:</span> <span style={{ color: '#fff' }}>{step.searched_for?.service_code || '—'} / {step.searched_for?.service_name || '—'}</span></div>
-                      <div><span style={{ color: '#888' }}>rows_matched:</span> <span style={{ color: step.matched_rows > 0 ? '#00C853' : '#F44336', fontWeight: 700 }}>{step.matched_rows ?? 0}</span></div>
+                      <div><span style={{ color: '#888' }}>rows_matched:</span> <span style={{ color: step.matched_rows > 0 ? '#00C853' : step.will_skip_legacy ? '#555' : '#F44336', fontWeight: 700 }}>{step.matched_rows ?? 0}</span></div>
                       {(step.matched_rates || []).length > 0 && (
                         <div style={{ marginTop: 8 }}>
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>

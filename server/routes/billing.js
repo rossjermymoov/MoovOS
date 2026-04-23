@@ -345,6 +345,23 @@ async function lookupViaServicePricing(customerId, serviceCode, serviceName, wei
       const r = await pickByZone(matching);
       return { rate: buildRate(r), reason: null };
     }
+
+    // Flat-rate service: all bands have non-numeric weight class names (e.g. "Parcel")
+    // and no numeric min/max bounds — zone is the only differentiator (Mainland/Highlands/NI).
+    // Mirrors the exact same allNonNumeric logic in lookupViaCustomerRates.
+    const allNonNumeric = rows.every(r => {
+      const minKg = parseFloat(r.min_weight_kg);
+      const maxKg = parseFloat(r.max_weight_kg);
+      if (!isNaN(minKg) && !isNaN(maxKg)) return false; // has numeric bounds → not flat-rate
+      const norm = normaliseWeightBand(r.weight_class_name);
+      return !norm || !/\d/.test(norm);
+    });
+    if (allNonNumeric) {
+      // Use all rows — pickByZone resolves the correct zone via destination postcode
+      const r = await pickByZone(rows);
+      return { rate: buildRate(r), reason: null };
+    }
+
     return { rate: null, reason: `No weight band covers ${Math.round(weightKg * 1000) / 1000} kg` };
   }
 
@@ -1489,14 +1506,15 @@ router.get('/charges/:id/debug', async (req, res, next) => {
 
     trace.steps.push({
       step: 3,
-      title: 'Legacy fallback — service rows in customer_rates',
+      title: 'Legacy fallback — customer_rates',
+      will_skip_legacy: !!newModelWinner,
       note: newModelWinner
         ? '⚠ New model resolved a price — these rows are shown for reference only, they will NOT be used by the live engine.'
         : 'New model found nothing — live engine will use these rows.',
       searched_for: { service_code: dcServiceId, service_name: serviceName, partial: partialSvc },
-      rate_rows_found: rateRes.rows.length,
-      note2: 'All zone rows for this service are listed here. Zone selection happens in step 4 via postcode lookup.',
-      rate_rows: rateRes.rows.map(r => ({
+      // field names matched to what the debug UI reads (matched_rows / matched_rates)
+      matched_rows:   rateRes.rows.length,
+      matched_rates:  rateRes.rows.map(r => ({
         id: r.id, service_code: r.service_code, service_name: r.service_name,
         zone_name: r.zone_name, weight_class_name: r.weight_class_name,
         min_weight_kg: r.min_weight_kg, max_weight_kg: r.max_weight_kg, price: r.price,
@@ -1504,12 +1522,15 @@ router.get('/charges/:id/debug', async (req, res, next) => {
       all_services_on_customer: allSvcRes.rows,
     });
 
-    if (!rateRes.rows.length) {
+    // Only bail out early if NEITHER model found anything — the new-model winner bypasses legacy entirely.
+    if (!rateRes.rows.length && !newModelWinner) {
       trace.conclusion = {
         priced: false,
-        reason: `No rates matched. Webhook sent service_code="${dcServiceId}", service_name="${serviceName}". None of the customer's services matched.`,
+        reason: `No rates matched. Webhook sent service_code="${dcServiceId}", service_name="${serviceName}". Neither new-model (customer_service_pricing) nor legacy (customer_rates) has an entry for this service.`,
         available_services: allSvcRes.rows,
-        fix: 'The service_code or service_name in customer_rates must match what the webhook sends. Check the customer Pricing tab.',
+        fix: newModelRows.rows.length > 0
+          ? 'New-model pricing exists but weight band matching failed — check band min/max_weight_kg values match expected weights.'
+          : 'Add a pricing entry for this service: either configure customer_service_pricing (recommended) or add a row to customer_rates.',
       };
       return res.json(trace);
     }
