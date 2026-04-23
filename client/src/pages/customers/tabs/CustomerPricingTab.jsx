@@ -28,18 +28,13 @@ function PriceCell({ rateId, initialPrice, initialPriceSub, onSaved, onDelete })
   const [confirm, setConfirm] = useState(false);
   const priceRef = useRef(null);
   const subRef   = useRef(null);
-  const blurTimer = useRef(null);
 
   function startEdit(focusSub = false) {
     setEditing(true);
     setTimeout(() => {
-      if (focusSub && subRef.current) {
-        subRef.current.focus();
-        subRef.current.select();
-      } else if (priceRef.current) {
-        priceRef.current.focus();
-        priceRef.current.select();
-      }
+      const target = focusSub ? subRef.current : priceRef.current;
+      target?.focus();
+      target?.select();
     }, 0);
   }
 
@@ -55,22 +50,17 @@ function PriceCell({ rateId, initialPrice, initialPriceSub, onSaved, onDelete })
     setEditing(false);
   }
 
-  // Only commit when focus leaves BOTH inputs (not just when moving between them)
-  function handleBlur() {
-    blurTimer.current = setTimeout(() => {
-      const active = document.activeElement;
-      if (active !== priceRef.current && active !== subRef.current) {
-        commit();
-      }
-    }, 100);
+  function cancel() {
+    setVal(String(parseFloat(initialPrice).toFixed(2)));
+    setSubVal(initialPriceSub != null ? String(parseFloat(initialPriceSub).toFixed(2)) : '');
+    setEditing(false);
   }
 
-  function handleFocus() {
-    clearTimeout(blurTimer.current);
-  }
-
-  const baseStyle = {
-    ...inp, textAlign: 'right', fontWeight: 700, fontFamily: 'monospace', outline: 'none',
+  const baseStyle = { ...inp, textAlign: 'right', fontWeight: 700, fontFamily: 'monospace', outline: 'none' };
+  const keyDown = (e) => {
+    if (e.key === 'Enter')  { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+    if (e.key === 'Tab' && e.target === priceRef.current) { e.preventDefault(); subRef.current?.focus(); subRef.current?.select(); }
   };
 
   if (editing) {
@@ -80,13 +70,7 @@ function PriceCell({ rateId, initialPrice, initialPriceSub, onSaved, onDelete })
           ref={priceRef}
           value={val}
           onChange={e => setVal(e.target.value)}
-          onBlur={handleBlur}
-          onFocus={handleFocus}
-          onKeyDown={e => {
-            if (e.key === 'Enter') { e.preventDefault(); commit(); }
-            if (e.key === 'Escape') { setEditing(false); }
-            if (e.key === 'Tab') { e.preventDefault(); subRef.current?.focus(); subRef.current?.select(); }
-          }}
+          onKeyDown={keyDown}
           style={{ ...baseStyle, width: 74, color: '#00C853', border: '1px solid rgba(0,200,83,0.6)', background: 'rgba(0,200,83,0.08)' }}
         />
         <span style={{ fontSize: 10, color: '#555' }}>+sub</span>
@@ -94,27 +78,15 @@ function PriceCell({ rateId, initialPrice, initialPriceSub, onSaved, onDelete })
           ref={subRef}
           value={subVal}
           onChange={e => setSubVal(e.target.value)}
-          onBlur={handleBlur}
-          onFocus={handleFocus}
-          onKeyDown={e => {
-            if (e.key === 'Enter') { e.preventDefault(); commit(); }
-            if (e.key === 'Escape') { setEditing(false); }
-          }}
-          placeholder="optional"
+          onKeyDown={keyDown}
           style={{ ...baseStyle, width: 74, color: '#00BCD4', border: '1px solid rgba(0,188,212,0.5)', background: 'rgba(0,188,212,0.06)' }}
         />
-        <button
-          type="button"
-          onMouseDown={e => { e.preventDefault(); commit(); }}
-          style={{ background: '#00C853', border: 'none', borderRadius: 4, color: '#000', fontSize: 10, fontWeight: 700, padding: '3px 8px', cursor: 'pointer' }}
-        >
-          ✓
+        <button type="button" onClick={commit}
+          style={{ background: '#00C853', border: 'none', borderRadius: 4, color: '#000', fontSize: 11, fontWeight: 700, padding: '3px 10px', cursor: 'pointer' }}>
+          Save
         </button>
-        <button
-          type="button"
-          onMouseDown={e => { e.preventDefault(); setEditing(false); }}
-          style={{ background: 'none', border: 'none', color: '#666', fontSize: 10, cursor: 'pointer' }}
-        >
+        <button type="button" onClick={cancel}
+          style={{ background: 'none', border: 'none', color: '#666', fontSize: 11, cursor: 'pointer' }}>
           ✕
         </button>
       </span>
