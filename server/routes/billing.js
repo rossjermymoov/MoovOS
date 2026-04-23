@@ -584,6 +584,48 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData) 
         VALUES ($1, $2, 'surcharge', $3, $4, true, $5, 1)
       `, [shipmentId, customerId, surcharge.name, price, surcharge.id]);
     }
+
+    // ── Fuel group charge ─────────────────────────────────────────────────────
+    // If the service has a fuel_group_id set, apply the customer's fuel sell %
+    // (from customer_fuel_group_pricing, falling back to standard_sell_pct).
+    if (shipmentData.dc_service_id) {
+      const fuelRes = await query(`
+        SELECT
+          fg.id          AS fuel_group_id,
+          fg.name        AS fuel_group_name,
+          fg.standard_sell_pct,
+          cfgp.sell_pct  AS customer_sell_pct
+        FROM courier_services cs
+        JOIN fuel_groups fg ON fg.id = cs.fuel_group_id
+        LEFT JOIN customer_fuel_group_pricing cfgp
+               ON cfgp.fuel_group_id = fg.id AND cfgp.customer_id = $2
+        WHERE cs.service_code ILIKE $1
+        LIMIT 1
+      `, [shipmentData.dc_service_id, customerId]);
+
+      if (fuelRes.rows.length) {
+        const fg = fuelRes.rows[0];
+        const sellPct = parseFloat(fg.customer_sell_pct ?? fg.standard_sell_pct ?? 0);
+
+        if (sellPct > 0) {
+          // Idempotency: skip if we've already added a fuel charge for this shipment + fuel group
+          const { rows: existingFuel } = await query(
+            'SELECT id FROM charges WHERE shipment_id=$1 AND fuel_group_id=$2',
+            [shipmentId, fg.fuel_group_id]
+          );
+
+          if (!existingFuel.length) {
+            const fuelPrice = parseFloat(((parseFloat(basePrice) || 0) * sellPct / 100).toFixed(4));
+            await query(`
+              INSERT INTO charges
+                (shipment_id, customer_id, charge_type, service_name, price, price_auto, fuel_group_id, parcel_qty)
+              VALUES ($1, $2, 'fuel', $3, $4, true, $5, 1)
+            `, [shipmentId, customerId, `${fg.fuel_group_name} Fuel`, fuelPrice, fg.fuel_group_id]);
+          }
+        }
+      }
+    }
+
   } catch (err) {
     console.error('[applySurcharges] error:', err.message);
   }
@@ -1098,24 +1140,25 @@ router.get('/charges', async (req, res, next) => {
           cu.id    AS customer_id,
           s.courier, s.ship_to_postcode, s.ship_to_name,
           s.reference, s.reference_2, s.tracking_codes, s.parcel_count,
-          -- Surcharges applied to this shipment
+          -- Surcharges + fuel charges applied to this shipment
           COALESCE((
             SELECT json_agg(jsonb_build_object(
               'id',    sc.id,
               'name',  sc.service_name,
-              'price', sc.price
-            ) ORDER BY sc.created_at)
+              'price', sc.price,
+              'type',  sc.charge_type
+            ) ORDER BY sc.charge_type, sc.created_at)
             FROM charges sc
             WHERE sc.shipment_id = c.shipment_id
-              AND sc.charge_type = 'surcharge'
+              AND sc.charge_type IN ('surcharge', 'fuel')
               AND sc.cancelled   = false
           ), '[]'::json) AS applied_surcharges,
-          -- Surcharge total
+          -- Surcharge + fuel total
           COALESCE((
             SELECT SUM(sc.price)
             FROM charges sc
             WHERE sc.shipment_id = c.shipment_id
-              AND sc.charge_type = 'surcharge'
+              AND sc.charge_type IN ('surcharge', 'fuel')
               AND sc.cancelled   = false
           ), 0) AS surcharge_total
         FROM charges c
@@ -1309,7 +1352,7 @@ router.post('/batch-apply-surcharges', async (req, res, next) => {
     for (const row of rows) {
       try {
         const before = await query(
-          `SELECT COUNT(*)::int AS cnt FROM charges WHERE shipment_id = $1 AND charge_type = 'surcharge' AND cancelled = false`,
+          `SELECT COUNT(*)::int AS cnt FROM charges WHERE shipment_id = $1 AND charge_type IN ('surcharge','fuel') AND cancelled = false`,
           [row.shipment_id]
         );
         await applySurcharges(row.shipment_id, row.customer_id, parseFloat(row.base_price || 0), {
