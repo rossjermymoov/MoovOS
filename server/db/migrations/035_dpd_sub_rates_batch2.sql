@@ -80,7 +80,7 @@ BEGIN
   END IF;
 
   -- ── P&S Products & Refreshening Ltd ──────────────────────────────
-  SELECT id INTO v_id FROM customers WHERE business_name ILIKE 'P&S Products%' OR name ILIKE 'P & S Products%' LIMIT 1;
+  SELECT id INTO v_id FROM customers WHERE business_name ILIKE 'P&S Products%' OR business_name ILIKE 'P & S Products%' LIMIT 1;
   IF v_id IS NOT NULL THEN
     UPDATE customer_rates SET price_sub = s.price_sub
     FROM (VALUES
@@ -118,7 +118,7 @@ BEGIN
   END IF;
 
   -- ── Pet & Grooming Supplies Ltd ───────────────────────────────────
-  SELECT id INTO v_id FROM customers WHERE business_name ILIKE 'Pet & Grooming%' OR name ILIKE 'Pet and Grooming%' LIMIT 1;
+  SELECT id INTO v_id FROM customers WHERE business_name ILIKE 'Pet & Grooming%' OR business_name ILIKE 'Pet and Grooming%' LIMIT 1;
   IF v_id IS NOT NULL THEN
     UPDATE customer_rates SET price_sub = s.price_sub
     FROM (VALUES
@@ -213,7 +213,7 @@ BEGIN
   END IF;
 
   -- ── TMK Trading Ltd t/a Nexus Modelling Supplies ──────────────────
-  SELECT id INTO v_id FROM customers WHERE business_name ILIKE 'TMK Trading%' OR name ILIKE 'Nexus Modelling%' LIMIT 1;
+  SELECT id INTO v_id FROM customers WHERE business_name ILIKE 'TMK Trading%' OR business_name ILIKE 'Nexus Modelling%' LIMIT 1;
   IF v_id IS NOT NULL THEN
     UPDATE customer_rates SET price_sub = s.price_sub
     FROM (VALUES
