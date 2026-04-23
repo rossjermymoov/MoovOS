@@ -1,13 +1,11 @@
 /**
  * CustomerPricingTab
- * Shows all customer_rates grouped by courier → service.
- * Prices are click-to-edit inline. International services open a full-screen
- * search overlay so users can quickly find a zone/weight combo.
+ * Service selector (which services the customer has) + rate card view
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Trash2, Globe, Search, X, ChevronDown, ChevronRight } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Trash2, Globe, Search, X, ChevronDown, ChevronRight, Package, Check } from 'lucide-react';
 import axios from 'axios';
 
 const api = axios.create({ baseURL: '/api' });
@@ -20,124 +18,52 @@ const inp = {
   outline: 'none', boxSizing: 'border-box',
 };
 
-// ─── Inline editable price cell (with optional sub-parcel price) ──────────────
-function PriceCell({ rateId, initialPrice, initialPriceSub, onSaved, onDelete }) {
+// ─── Inline editable price cell (first parcel — green) ────────
+function PriceCell({ rateId, initialPrice, onSaved, onDelete }) {
   const [editing, setEditing] = useState(false);
-  const [val,     setVal]     = useState(String(parseFloat(initialPrice).toFixed(2)));
-  const [subVal,  setSubVal]  = useState(initialPriceSub != null ? String(parseFloat(initialPriceSub).toFixed(2)) : '');
+  const [val, setVal]         = useState(String(parseFloat(initialPrice).toFixed(2)));
   const [confirm, setConfirm] = useState(false);
-  const priceRef = useRef(null);
-  const subRef   = useRef(null);
+  const inputRef = useRef(null);
 
-  function startEdit(focusSub = false) {
-    setEditing(true);
-    setTimeout(() => {
-      const target = focusSub ? subRef.current : priceRef.current;
-      target?.focus();
-      target?.select();
-    }, 0);
-  }
+  function startEdit() { setEditing(true); setTimeout(() => inputRef.current?.select(), 0); }
 
-  async function commit() {
+  function commit() {
     const parsed = parseFloat(val);
-    if (isNaN(parsed) || parsed < 0) {
-      setVal(String(parseFloat(initialPrice).toFixed(2)));
-      setEditing(false);
-      return;
-    }
-
-    // Only send price_sub if the user actually touched it:
-    //   - typed a number  → send that number
-    //   - cleared a field that HAD a value → send null (explicit clear)
-    //   - left blank when it was always blank → send undefined (don't touch DB)
-    let priceSub;
-    if (subVal.trim() === '') {
-      priceSub = initialPriceSub != null ? null : undefined; // explicit clear vs untouched
-    } else {
-      const n = parseFloat(subVal);
-      priceSub = isNaN(n) ? undefined : n;
-    }
-
-    await onSaved(rateId, parsed, priceSub);
+    if (isNaN(parsed) || parsed < 0) { setVal(String(parseFloat(initialPrice).toFixed(2))); setEditing(false); return; }
+    onSaved(rateId, parsed);
     setEditing(false);
   }
-
-  function cancel() {
-    setVal(String(parseFloat(initialPrice).toFixed(2)));
-    setSubVal(initialPriceSub != null ? String(parseFloat(initialPriceSub).toFixed(2)) : '');
-    setEditing(false);
-  }
-
-  const baseStyle = { ...inp, textAlign: 'right', fontWeight: 700, fontFamily: 'monospace', outline: 'none' };
-  const keyDown = (e) => {
-    if (e.key === 'Enter')  { e.preventDefault(); commit(); }
-    if (e.key === 'Escape') { e.preventDefault(); cancel(); }
-    if (e.key === 'Tab' && e.target === priceRef.current) { e.preventDefault(); subRef.current?.focus(); subRef.current?.select(); }
-  };
 
   if (editing) {
     return (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-        <input
-          ref={priceRef}
-          value={val}
-          onChange={e => setVal(e.target.value)}
-          onKeyDown={keyDown}
-          style={{ ...baseStyle, width: 74, color: '#00C853', border: '1px solid rgba(0,200,83,0.6)', background: 'rgba(0,200,83,0.08)' }}
-        />
-        <span style={{ fontSize: 10, color: '#555' }}>+sub</span>
-        <input
-          ref={subRef}
-          value={subVal}
-          onChange={e => setSubVal(e.target.value)}
-          onKeyDown={keyDown}
-          style={{ ...baseStyle, width: 74, color: '#00BCD4', border: '1px solid rgba(0,188,212,0.5)', background: 'rgba(0,188,212,0.06)' }}
-        />
-        <button type="button" onClick={commit}
-          style={{ background: '#00C853', border: 'none', borderRadius: 4, color: '#000', fontSize: 11, fontWeight: 700, padding: '3px 10px', cursor: 'pointer' }}>
-          Save
-        </button>
-        <button type="button" onClick={cancel}
-          style={{ background: 'none', border: 'none', color: '#666', fontSize: 11, cursor: 'pointer' }}>
-          ✕
-        </button>
-      </span>
+      <input
+        ref={inputRef}
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setVal(String(parseFloat(initialPrice).toFixed(2))); setEditing(false); } }}
+        style={{ ...inp, width: 80, textAlign: 'right', color: '#00C853', fontWeight: 700, fontFamily: 'monospace', border: '1px solid rgba(0,200,83,0.6)', background: 'rgba(0,200,83,0.08)' }}
+      />
     );
   }
 
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-        <span
-          onClick={() => startEdit(false)}
-          title="Click to edit first-parcel price"
-          style={{ fontSize: 13, fontWeight: 700, color: '#00C853', cursor: 'pointer',
-            padding: '3px 10px', borderRadius: 5, fontFamily: 'monospace',
-            border: '1px solid rgba(0,200,83,0.35)', background: 'rgba(0,200,83,0.08)' }}
-        >
-          {gbp(initialPrice)}
-        </span>
-        {initialPriceSub != null ? (
-          <span
-            onClick={() => startEdit(true)}
-            title="Sub-parcel price — click to edit"
-            style={{ fontSize: 12, fontWeight: 700, color: '#00BCD4', cursor: 'pointer',
-              padding: '3px 8px', borderRadius: 5, fontFamily: 'monospace',
-              border: '1px solid rgba(0,188,212,0.3)', background: 'rgba(0,188,212,0.06)' }}
-          >
-            +{gbp(initialPriceSub)}
-          </span>
-        ) : (
-          <span
-            onClick={() => startEdit(true)}
-            title="Click to add a sub-parcel rate"
-            style={{ fontSize: 11, color: '#444', cursor: 'pointer', padding: '3px 8px',
-              borderRadius: 5, border: '1px dashed rgba(0,188,212,0.25)',
-              background: 'rgba(0,188,212,0.03)' }}
-          >
-            +sub
-          </span>
-        )}
+      <span
+        onClick={startEdit}
+        title="Click to edit"
+        style={{
+          fontSize: 13, fontWeight: 700, color: '#00C853',
+          cursor: 'pointer', padding: '3px 10px', borderRadius: 5,
+          border: '1px solid rgba(0,200,83,0.35)',
+          background: 'rgba(0,200,83,0.08)',
+          fontFamily: 'monospace', display: 'inline-block',
+          transition: 'border-color 0.12s, background 0.12s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(0,200,83,0.7)'; e.currentTarget.style.background = 'rgba(0,200,83,0.15)'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,200,83,0.35)'; e.currentTarget.style.background = 'rgba(0,200,83,0.08)'; }}
+      >
+        {gbp(initialPrice)}
       </span>
       {confirm
         ? <>
@@ -152,33 +78,123 @@ function PriceCell({ rateId, initialPrice, initialPriceSub, onSaved, onDelete })
   );
 }
 
+// ─── Inline editable sub-price cell (2nd+ parcels — amber) ────
+function SubPriceCell({ rateId, initialSubPrice, onSaved }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal]         = useState(initialSubPrice != null ? String(parseFloat(initialSubPrice).toFixed(2)) : '');
+  const inputRef = useRef(null);
+
+  const hasValue = initialSubPrice != null;
+
+  function startEdit() { setEditing(true); setTimeout(() => inputRef.current?.select(), 0); }
+
+  function commit() {
+    const trimmed = val.trim();
+    if (trimmed === '' || trimmed === '-') {
+      // Clear sub price
+      onSaved(rateId, null, true);
+      setEditing(false);
+      return;
+    }
+    const parsed = parseFloat(trimmed);
+    if (isNaN(parsed) || parsed < 0) {
+      setVal(hasValue ? String(parseFloat(initialSubPrice).toFixed(2)) : '');
+      setEditing(false);
+      return;
+    }
+    onSaved(rateId, parsed, true);
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        onBlur={commit}
+        placeholder="sub £"
+        onKeyDown={e => {
+          if (e.key === 'Enter') commit();
+          if (e.key === 'Escape') { setVal(hasValue ? String(parseFloat(initialSubPrice).toFixed(2)) : ''); setEditing(false); }
+        }}
+        style={{ ...inp, width: 72, textAlign: 'right', color: '#FFC107', fontWeight: 700, fontFamily: 'monospace', border: '1px solid rgba(255,193,7,0.6)', background: 'rgba(255,193,7,0.08)' }}
+      />
+    );
+  }
+
+  if (hasValue) {
+    return (
+      <span
+        onClick={startEdit}
+        title="Sub-parcel rate — click to edit, clear to remove"
+        style={{
+          fontSize: 12, fontWeight: 700, color: '#FFC107',
+          cursor: 'pointer', padding: '2px 8px', borderRadius: 5,
+          border: '1px solid rgba(255,193,7,0.35)',
+          background: 'rgba(255,193,7,0.08)',
+          fontFamily: 'monospace', display: 'inline-block',
+          transition: 'border-color 0.12s, background 0.12s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,193,7,0.7)'; e.currentTarget.style.background = 'rgba(255,193,7,0.15)'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,193,7,0.35)'; e.currentTarget.style.background = 'rgba(255,193,7,0.08)'; }}
+      >
+        {gbp(initialSubPrice)}
+      </span>
+    );
+  }
+
+  // No sub price set — show a faint add button
+  return (
+    <span
+      onClick={startEdit}
+      title="Add sub-parcel rate (2nd+ boxes)"
+      style={{
+        fontSize: 11, color: '#444', cursor: 'pointer',
+        padding: '2px 7px', borderRadius: 5,
+        border: '1px dashed rgba(255,193,7,0.2)',
+        fontFamily: 'monospace',
+        transition: 'color 0.12s, border-color 0.12s',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.color = '#FFC107'; e.currentTarget.style.borderColor = 'rgba(255,193,7,0.5)'; }}
+      onMouseLeave={e => { e.currentTarget.style.color = '#444'; e.currentTarget.style.borderColor = 'rgba(255,193,7,0.2)'; }}
+    >
+      + sub
+    </span>
+  );
+}
+
 // ─── NL search parser ─────────────────────────────────────────
-function parseNLQuery(q) {
-  q = q.toLowerCase();
+function parseNLQuery(query) {
+  const q = query.toLowerCase();
   let weightKg = null;
-  const wm = q.match(/(\d+(?:\.\d+)?)\s*(?:kg|kgs|kilogram|kilograms|kilo|kilos)\b/);
-  if (wm) {
-    weightKg = parseFloat(wm[1]);
+  const weightMatch = q.match(/(\d+(?:\.\d+)?)\s*(?:kg|kgs|kilogram|kilograms|kilo|kilos)\b/);
+  if (weightMatch) {
+    weightKg = parseFloat(weightMatch[1]);
   } else {
-    const gm = q.match(/(\d+(?:\.\d+)?)\s*(?:g|gram|grams)\b/);
-    if (gm) weightKg = parseFloat(gm[1]) / 1000;
+    const gramsMatch = q.match(/(\d+(?:\.\d+)?)\s*(?:g|gram|grams)\b/);
+    if (gramsMatch) weightKg = parseFloat(gramsMatch[1]) / 1000;
   }
   let zoneTerm = q
     .replace(/(\d+(?:\.\d+)?)\s*(?:kg|kgs|kilogram|kilograms|kilo|kilos|g|gram|grams)\b/g, '')
     .replace(/\b(tell|me|the|price|for|to|from|a|an|find|get|what|is|how|much|does|it|cost|package|parcel|shipment|shipping|send|sending|weight)\b/g, '')
-    .replace(/\s+/g, ' ').trim() || null;
+    .replace(/\s+/g, ' ').trim();
+  if (!zoneTerm) zoneTerm = null;
   return { weightKg, zoneTerm };
 }
 
-function weightClassCoversKg(name, kg) {
-  if (kg == null) return false;
-  const s = name.toUpperCase().replace(/\s/g, '');
-  const range = s.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)KG?$/);
-  if (range) return kg > parseFloat(range[1]) && kg <= parseFloat(range[2]);
-  const plus = s.match(/^(\d+(?:\.\d+)?)\+KG?$/) || s.match(/^OVER(\d+(?:\.\d+)?)KG?$/);
-  if (plus) return kg > parseFloat(plus[1]);
-  const under = s.match(/^(?:UNDER|<)(\d+(?:\.\d+)?)KG?$/);
-  if (under) return kg < parseFloat(under[1]);
+function weightClassCoversKg(weightClassName, weightKg) {
+  if (weightKg == null) return false;
+  const s = weightClassName.toUpperCase().replace(/\s/g, '');
+  const rangeMatch = s.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)KG?$/);
+  if (rangeMatch) {
+    const lo = parseFloat(rangeMatch[1]), hi = parseFloat(rangeMatch[2]);
+    return weightKg > lo && weightKg <= hi;
+  }
+  const plusMatch = s.match(/^(\d+(?:\.\d+)?)\+KG?$/) || s.match(/^OVER(\d+(?:\.\d+)?)KG?$/);
+  if (plusMatch) return weightKg > parseFloat(plusMatch[1]);
+  const underMatch = s.match(/^(?:UNDER|<)(\d+(?:\.\d+)?)KG?$/);
+  if (underMatch) return weightKg < parseFloat(underMatch[1]);
   return false;
 }
 
@@ -186,7 +202,7 @@ function weightClassCoversKg(name, kg) {
 function InternationalRateOverlay({ service, onClose, onRateUpdate, onRateDelete }) {
   const [searchText, setSearchText] = useState('');
   const [parsed, setParsed]         = useState({ weightKg: null, zoneTerm: null });
-  const searchRef = useRef(null);
+  const searchRef                   = useRef(null);
 
   useEffect(() => { setTimeout(() => searchRef.current?.focus(), 50); }, []);
   useEffect(() => {
@@ -195,15 +211,17 @@ function InternationalRateOverlay({ service, onClose, onRateUpdate, onRateDelete
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   useEffect(() => {
-    const t = setTimeout(() => setParsed(searchText.trim() ? parseNLQuery(searchText) : { weightKg: null, zoneTerm: null }), 200);
+    const t = setTimeout(() => {
+      if (searchText.trim()) setParsed(parseNLQuery(searchText));
+      else setParsed({ weightKg: null, zoneTerm: null });
+    }, 200);
     return () => clearTimeout(t);
   }, [searchText]);
 
   const rates = service.rates;
-  const hasSearch = searchText.trim().length > 0;
 
   function isMatch(rate) {
-    if (!hasSearch) return false;
+    if (!searchText.trim()) return false;
     const { weightKg, zoneTerm } = parsed;
     const zoneOk   = zoneTerm ? rate.zone_name.toLowerCase().includes(zoneTerm) : true;
     const weightOk = weightKg != null ? weightClassCoversKg(rate.weight_class_name, weightKg) : true;
@@ -213,21 +231,30 @@ function InternationalRateOverlay({ service, onClose, onRateUpdate, onRateDelete
     return false;
   }
 
-  const matchedRates  = hasSearch ? rates.filter(isMatch) : rates;
-  const matchCount    = hasSearch ? matchedRates.length : 0;
-  const exactMatch    = hasSearch && matchCount === 1 ? matchedRates[0] : null;
-  const multiWeight   = [...new Set(rates.map(r => r.weight_class_name))].length > 1;
-  const totalZones    = [...new Set(rates.map(r => r.zone_name))].length;
-  const weightClasses = [...new Set(matchedRates.map(r => r.weight_class_name))].sort();
-  const zones         = [...new Set(matchedRates.map(r => r.zone_name))].sort();
-  const rateMap       = {};
-  for (const r of matchedRates) {
+  const hasSearch   = searchText.trim().length > 0;
+  const matchedRates = hasSearch ? rates.filter(isMatch) : rates;
+  const matchCount   = hasSearch ? matchedRates.length : 0;
+
+  // Rows to display: filtered when searching, all when not
+  const displayRates = matchedRates;
+
+  // Build matrix from displayRates
+  const weightClasses = [...new Set(displayRates.map(r => r.weight_class_name))].sort();
+  const zones         = [...new Set(displayRates.map(r => r.zone_name))].sort();
+  const rateMap = {};
+  for (const r of displayRates) {
     if (!rateMap[r.zone_name]) rateMap[r.zone_name] = {};
     rateMap[r.zone_name][r.weight_class_name] = r;
   }
+  const multiWeight = [...new Set(rates.map(r => r.weight_class_name))].length > 1;
+  const totalZones  = [...new Set(rates.map(r => r.zone_name))].length;
+
+  // Single exact match: show big price card
+  const exactMatch = hasSearch && matchCount === 1 ? matchedRates[0] : null;
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(8,9,26,0.97)', display: 'flex', flexDirection: 'column' }}>
+
       {/* Header */}
       <div style={{ flexShrink: 0, padding: '20px 28px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: 16, background: '#0A0B1E' }}>
         <Globe size={20} color="#00BCD4" style={{ flexShrink: 0 }} />
@@ -239,6 +266,8 @@ function InternationalRateOverlay({ service, onClose, onRateUpdate, onRateDelete
             {multiWeight && ` · ${[...new Set(rates.map(r => r.weight_class_name))].length} weight classes`}
           </div>
         </div>
+
+        {/* Search */}
         <div style={{ position: 'relative', flex: '0 0 440px' }}>
           <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#AAAAAA', pointerEvents: 'none' }} />
           <input
@@ -254,11 +283,13 @@ function InternationalRateOverlay({ service, onClose, onRateUpdate, onRateDelete
             </button>
           )}
         </div>
+
         <button onClick={onClose} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, color: '#AAAAAA', fontSize: 12, padding: '7px 14px', cursor: 'pointer', flexShrink: 0 }}>
-          Close <span style={{ opacity: 0.5, fontSize: 11 }}>esc</span>
+          Close  <span style={{ opacity: 0.5, fontSize: 11 }}>esc</span>
         </button>
       </div>
 
+      {/* Search status bar */}
       {hasSearch && (
         <div style={{ flexShrink: 0, padding: '7px 28px', background: 'rgba(0,188,212,0.05)', borderBottom: '1px solid rgba(0,188,212,0.10)', display: 'flex', alignItems: 'center', gap: 14, fontSize: 12 }}>
           <span style={{ color: matchCount === 0 ? '#E91E8C' : '#00BCD4', fontWeight: 700 }}>
@@ -270,6 +301,7 @@ function InternationalRateOverlay({ service, onClose, onRateUpdate, onRateDelete
         </div>
       )}
 
+      {/* ── Exact match: big price display ───────────────────── */}
       {exactMatch && (
         <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 28px', gap: 16 }}>
           <div style={{ fontSize: 13, color: '#AAAAAA', fontWeight: 600, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -279,11 +311,15 @@ function InternationalRateOverlay({ service, onClose, onRateUpdate, onRateDelete
           <div style={{ fontSize: 72, fontWeight: 900, color: '#00C853', fontFamily: 'monospace', lineHeight: 1, letterSpacing: '-0.02em' }}>
             {gbp(exactMatch.price)}
           </div>
-          <PriceCell rateId={exactMatch.id} initialPrice={exactMatch.price} initialPriceSub={exactMatch.price_sub} onSaved={onRateUpdate} onDelete={onRateDelete} />
-          <div style={{ fontSize: 12, color: '#444', marginTop: 4 }}>Click the price above to edit</div>
+          <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <PriceCell rateId={exactMatch.id} initialPrice={exactMatch.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
+            <SubPriceCell rateId={exactMatch.id} initialSubPrice={exactMatch.price_sub} onSaved={onRateUpdate} />
+          </div>
+          <div style={{ fontSize: 12, color: '#444', marginTop: 4 }}>Click a price to edit · amber = 2nd+ parcels</div>
         </div>
       )}
 
+      {/* ── Multiple matches or no search: table ─────────────── */}
       {!exactMatch && (
         <div style={{ flex: 1, overflow: 'auto', padding: '0 0 40px' }}>
           {rates.length === 0 ? (
@@ -295,6 +331,7 @@ function InternationalRateOverlay({ service, onClose, onRateUpdate, onRateDelete
               <div style={{ fontSize: 13, color: '#444', marginTop: 8 }}>Try a different zone name or weight</div>
             </div>
           ) : multiWeight ? (
+            /* Matrix: zones × weight classes */
             <table style={{ borderCollapse: 'collapse', minWidth: '100%', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: '#0A0B1E', position: 'sticky', top: 0, zIndex: 10 }}>
@@ -313,7 +350,10 @@ function InternationalRateOverlay({ service, onClose, onRateUpdate, onRateDelete
                       return (
                         <td key={wc} style={{ textAlign: 'right', padding: '8px 20px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
                           {rate
-                            ? <PriceCell rateId={rate.id} initialPrice={rate.price} initialPriceSub={rate.price_sub} onSaved={onRateUpdate} onDelete={onRateDelete} />
+                            ? <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
+                                <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
+                                <SubPriceCell rateId={rate.id} initialSubPrice={rate.price_sub} onSaved={onRateUpdate} />
+                              </div>
                             : <span style={{ color: '#333', fontSize: 12 }}>—</span>}
                         </td>
                       );
@@ -323,19 +363,24 @@ function InternationalRateOverlay({ service, onClose, onRateUpdate, onRateDelete
               </tbody>
             </table>
           ) : (
+            /* Simple list */
             <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: '#0A0B1E', position: 'sticky', top: 0, zIndex: 10 }}>
                   <th style={{ textAlign: 'left', padding: '12px 20px 12px 28px', color: '#AAAAAA', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>Zone</th>
-                  <th style={{ textAlign: 'right', padding: '12px 28px 12px 20px', color: '#AAAAAA', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>Price</th>
+                  <th style={{ textAlign: 'right', padding: '12px 20px', color: '#00C853', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>1st parcel</th>
+                  <th style={{ textAlign: 'right', padding: '12px 28px 12px 20px', color: '#FFC107', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>2nd+</th>
                 </tr>
               </thead>
               <tbody>
-                {matchedRates.map((rate, ri) => (
+                {displayRates.map((rate, ri) => (
                   <tr key={rate.id} style={{ background: ri % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
                     <td style={{ padding: '8px 20px 8px 28px', color: '#DDD', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>{rate.zone_name}</td>
+                    <td style={{ textAlign: 'right', padding: '8px 20px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                      <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
+                    </td>
                     <td style={{ textAlign: 'right', padding: '8px 28px 8px 20px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                      <PriceCell rateId={rate.id} initialPrice={rate.price} initialPriceSub={rate.price_sub} onSaved={onRateUpdate} onDelete={onRateDelete} />
+                      <SubPriceCell rateId={rate.id} initialSubPrice={rate.price_sub} onSaved={onRateUpdate} />
                     </td>
                   </tr>
                 ))}
@@ -348,12 +393,14 @@ function InternationalRateOverlay({ service, onClose, onRateUpdate, onRateDelete
   );
 }
 
-// ─── Service block ────────────────────────────────────────────
+// ─── Service block — horizontal zone layout ───────────────────
 function ServiceBlock({ service, onRateUpdate, onRateDelete }) {
   const [overlayOpen, setOverlay] = useState(false);
+
   const isIntl      = service.service_type === 'international';
   const multiWeight = [...new Set(service.rates.map(r => r.weight_class_name))].length > 1;
 
+  // ── International: collapsed row → fullscreen overlay ───────
   if (isIntl) {
     return (
       <>
@@ -381,8 +428,10 @@ function ServiceBlock({ service, onRateUpdate, onRateDelete }) {
     );
   }
 
+  // ── Domestic: zone chips ─────────────────────────────────────
   return (
     <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', padding: '10px 18px 14px' }}>
+      {/* Service name header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: '#AAAAAA', textTransform: 'uppercase', letterSpacing: '0.06em', flex: 1 }}>
           {service.service_name}
@@ -391,6 +440,8 @@ function ServiceBlock({ service, onRateUpdate, onRateDelete }) {
           {service.service_code}
         </span>
       </div>
+
+      {/* Zone chips */}
       {service.rates.length === 0 ? (
         <div style={{ fontSize: 12, color: '#444', fontStyle: 'italic' }}>No pricing found</div>
       ) : (
@@ -407,7 +458,8 @@ function ServiceBlock({ service, onRateUpdate, onRateDelete }) {
                 {rate.zone_name}
                 {multiWeight && <span style={{ color: '#444', marginLeft: 5 }}>· {rate.weight_class_name}</span>}
               </span>
-              <PriceCell rateId={rate.id} initialPrice={rate.price} initialPriceSub={rate.price_sub} onSaved={onRateUpdate} onDelete={onRateDelete} />
+              <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
+              <SubPriceCell rateId={rate.id} initialSubPrice={rate.price_sub} onSaved={onRateUpdate} />
             </div>
           ))}
         </div>
@@ -425,9 +477,7 @@ function CourierGroup({ courierName, services, onRateUpdate, onRateDelete }) {
   return (
     <div className="moov-card" style={{ marginBottom: 16, overflow: 'hidden' }}>
       <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', padding: '13px 18px', cursor: 'pointer', borderBottom: open ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
-        {open
-          ? <ChevronDown size={14} style={{ color: '#00C853', marginRight: 8 }} />
-          : <ChevronRight size={14} style={{ color: '#555', marginRight: 8 }} />}
+        {open ? <ChevronDown size={14} style={{ color: '#00C853', marginRight: 8 }} /> : <ChevronRight size={14} style={{ color: '#555', marginRight: 8 }} />}
         <span style={{ fontSize: 14, fontWeight: 700, color: '#fff', flex: 1 }}>{courierName}</span>
         {hasIntl && <span style={{ fontSize: 10, color: '#00BCD4', background: 'rgba(0,188,212,0.1)', border: '1px solid rgba(0,188,212,0.25)', borderRadius: 5, padding: '2px 7px', fontWeight: 700, marginRight: 10 }}>INTL</span>}
         <span style={{ fontSize: 11, color: '#AAAAAA' }}>{services.length} service{services.length !== 1 ? 's' : ''} · {totalRates.toLocaleString()} rates</span>
@@ -435,6 +485,125 @@ function CourierGroup({ courierName, services, onRateUpdate, onRateDelete }) {
       {open && services.map(svc => (
         <ServiceBlock key={svc.service_id} service={svc} onRateUpdate={onRateUpdate} onRateDelete={onRateDelete} />
       ))}
+    </div>
+  );
+}
+
+// ─── Service selector ─────────────────────────────────────────
+function ServiceSelector({ customerId }) {
+  const queryClient = useQueryClient();
+
+  // All carrier services grouped by courier
+  const { data: allServices = [] } = useQuery({
+    queryKey: ['all-carrier-services'],
+    queryFn:  () => api.get('/carriers/services').then(r => r.data),
+  });
+
+  // This customer's selections
+  const { data: selected = [] } = useQuery({
+    queryKey: ['customer-services', customerId],
+    queryFn:  () => api.get(`/customers/${customerId}/services`).then(r => r.data),
+  });
+
+  const selectedIds = new Set(selected.map(s => s.courier_service_id));
+
+  const addSvc = useMutation({
+    mutationFn: (id) => api.post(`/customers/${customerId}/services`, { courier_service_id: id }),
+    onSuccess:  () => queryClient.invalidateQueries(['customer-services', customerId]),
+  });
+  const delSvc = useMutation({
+    mutationFn: (id) => api.delete(`/customers/${customerId}/services/${id}`),
+    onSuccess:  () => queryClient.invalidateQueries(['customer-services', customerId]),
+  });
+
+  function toggle(serviceId) {
+    if (selectedIds.has(serviceId)) delSvc.mutate(serviceId);
+    else addSvc.mutate(serviceId);
+  }
+
+  // Group all services by courier
+  const byCourier = {};
+  for (const svc of allServices) {
+    const cn = svc.courier_name || 'Unknown';
+    if (!byCourier[cn]) byCourier[cn] = { courier_id: svc.courier_id, services: [] };
+    byCourier[cn].services.push(svc);
+  }
+
+  const [openCouriers, setOpenCouriers] = useState({});
+  // default: all collapsed — only open when explicitly toggled
+  function toggleCourier(name) { setOpenCouriers(o => ({ ...o, [name]: !o[name] })); }
+
+  const totalSelected = selectedIds.size;
+
+  return (
+    <div className="moov-card" style={{ marginBottom: 20, overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ padding: '14px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <Package size={15} color="#7B2FBE" />
+        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#7B2FBE', margin: 0, flex: 1 }}>Service Selection</h3>
+        {totalSelected > 0
+          ? <span style={{ fontSize: 12, color: '#00C853', fontWeight: 700 }}>{totalSelected} service{totalSelected !== 1 ? 's' : ''} active</span>
+          : <span style={{ fontSize: 12, color: '#AAAAAA', fontStyle: 'italic' }}>No services selected — showing all rates</span>
+        }
+      </div>
+
+      {/* Courier groups */}
+      {Object.entries(byCourier).map(([courierName, { services }]) => {
+        const isOpen       = openCouriers[courierName] === true; // default collapsed
+        const countInGroup = services.filter(s => selectedIds.has(s.id)).length;
+        return (
+          <div key={courierName} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+            {/* Courier row */}
+            <div
+              onClick={() => toggleCourier(courierName)}
+              style={{ display: 'flex', alignItems: 'center', padding: '10px 20px', cursor: 'pointer', background: 'rgba(255,255,255,0.01)' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.01)'}
+            >
+              {isOpen
+                ? <ChevronDown size={13} style={{ color: '#555', marginRight: 8 }} />
+                : <ChevronRight size={13} style={{ color: '#555', marginRight: 8 }} />}
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', flex: 1 }}>{courierName}</span>
+              {countInGroup > 0 && (
+                <span style={{ fontSize: 11, color: '#00C853', fontWeight: 700, marginRight: 8 }}>{countInGroup}/{services.length}</span>
+              )}
+              {/* Select all / clear all for this courier */}
+              <button
+                onClick={e => { e.stopPropagation(); services.forEach(s => { if (!selectedIds.has(s.id)) addSvc.mutate(s.id); }); }}
+                style={{ background: 'none', border: '1px solid rgba(0,200,83,0.3)', borderRadius: 5, color: '#00C853', fontSize: 11, fontWeight: 700, padding: '2px 8px', cursor: 'pointer', marginRight: 6 }}
+              >All</button>
+              <button
+                onClick={e => { e.stopPropagation(); services.forEach(s => { if (selectedIds.has(s.id)) delSvc.mutate(s.id); }); }}
+                style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 5, color: '#AAAAAA', fontSize: 11, fontWeight: 700, padding: '2px 8px', cursor: 'pointer' }}
+              >None</button>
+            </div>
+
+            {/* Service rows */}
+            {isOpen && services.map(svc => {
+              const active = selectedIds.has(svc.id);
+              return (
+                <div
+                  key={svc.id}
+                  onClick={() => toggle(svc.id)}
+                  style={{ display: 'flex', alignItems: 'center', padding: '8px 20px 8px 42px', cursor: 'pointer', borderTop: '1px solid rgba(255,255,255,0.03)', background: active ? 'rgba(0,200,83,0.04)' : 'transparent' }}
+                  onMouseEnter={e => e.currentTarget.style.background = active ? 'rgba(0,200,83,0.07)' : 'rgba(255,255,255,0.02)'}
+                  onMouseLeave={e => e.currentTarget.style.background = active ? 'rgba(0,200,83,0.04)' : 'transparent'}
+                >
+                  {/* Checkbox */}
+                  <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${active ? '#00C853' : 'rgba(255,255,255,0.2)'}`, background: active ? '#00C853' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 12, flexShrink: 0, transition: 'all 0.15s' }}>
+                    {active && <Check size={10} color="#000" strokeWidth={3} />}
+                  </div>
+                  <span style={{ fontSize: 13, color: active ? '#fff' : '#AAAAAA', fontWeight: active ? 600 : 400, flex: 1 }}>{svc.name}</span>
+                  <span style={{ fontSize: 11, fontFamily: 'monospace', color: active ? '#00C853' : '#444', background: active ? 'rgba(0,200,83,0.08)' : 'transparent', padding: '1px 6px', borderRadius: 3 }}>{svc.service_code}</span>
+                  {svc.service_type === 'international' && (
+                    <span style={{ fontSize: 10, color: '#00BCD4', fontWeight: 700, marginLeft: 8 }}>INTL</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -448,53 +617,54 @@ export default function CustomerPricingTab({ customer }) {
     queryFn:  () => api.get(`/customer-rates/${customer.id}`).then(r => r.data),
   });
 
+  const { data: selectedServices = [] } = useQuery({
+    queryKey: ['customer-services', customer.id],
+    queryFn:  () => api.get(`/customers/${customer.id}/services`).then(r => r.data),
+  });
+
   const services   = data?.services   || [];
   const totalRates = data?.total_rates || 0;
 
   function refresh() { queryClient.invalidateQueries(['customer-rates', customer.id]); }
 
-  async function handlePriceUpdate(rateId, price, priceSub) {
-    try {
-      const payload = { price };
-      if (priceSub !== undefined) payload.price_sub = priceSub; // undefined = don't touch existing value
-      await api.patch(`/customer-rates/rate/${rateId}`, payload);
-      // Update the cache directly — avoids browser 304 cache returning stale data
-      queryClient.setQueryData(['customer-rates', customer.id], (old) => {
-        if (!old) return old;
-        return {
-          ...old,
-          services: old.services.map(svc => ({
-            ...svc,
-            rates: svc.rates.map(r =>
-              r.id === rateId ? { ...r, price, price_sub: priceSub } : r
-            ),
-          })),
-        };
-      });
-    } catch (err) {
-      const msg = err?.response?.data?.error || err.message || 'Unknown error';
-      alert(`Failed to save rate: ${msg}`);
+  async function handlePriceUpdate(rateId, price, isSub = false) {
+    if (isSub) {
+      await api.patch(`/customer-rates/rate/${rateId}`, { price_sub: price });
+    } else {
+      await api.patch(`/customer-rates/rate/${rateId}`, { price });
     }
+    refresh();
   }
   async function handlePriceDelete(rateId) {
     await api.delete(`/customer-rates/rate/${rateId}`);
     refresh();
   }
 
+  // Filter: if customer has explicit service selections, only show those services
+  const selectedIds = new Set(selectedServices.map(s => s.courier_service_id));
+  const visibleServices = selectedIds.size > 0
+    ? services.filter(s => selectedIds.has(s.service_id))
+    : services; // no selections yet → show all (backwards compat for imported customers)
+
+  // Group visible services by courier
   const byCourier = {};
-  for (const s of services) {
+  for (const s of visibleServices) {
     if (!byCourier[s.courier_name]) byCourier[s.courier_name] = [];
     byCourier[s.courier_name].push(s);
   }
 
+  const visibleRates = visibleServices.reduce((a, s) => a + s.rate_count, 0);
+
   return (
     <div>
+      <ServiceSelector customerId={customer.id} />
+
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
         <h3 style={{ fontSize: 16, fontWeight: 700, color: '#fff', margin: 0, flex: 1 }}>
           Rate Cards
-          {totalRates > 0 && (
+          {visibleRates > 0 && (
             <span style={{ fontSize: 13, color: '#AAAAAA', fontWeight: 400, marginLeft: 10 }}>
-              {services.length} services · {totalRates.toLocaleString()} rates
+              {visibleServices.length} services · {visibleRates.toLocaleString()} rates
             </span>
           )}
         </h3>
@@ -504,9 +674,11 @@ export default function CustomerPricingTab({ customer }) {
         <div className="moov-card" style={{ padding: 32, textAlign: 'center', color: '#AAAAAA' }}>Loading rates…</div>
       )}
 
-      {!isLoading && services.length === 0 && (
+      {!isLoading && visibleServices.length === 0 && (
         <div className="moov-card" style={{ padding: 32, textAlign: 'center', color: '#555' }}>
-          No rates imported for this customer yet.
+          {selectedIds.size > 0
+            ? 'No rate data found for the selected services yet.'
+            : 'No rates imported for this customer yet.'}
         </div>
       )}
 
