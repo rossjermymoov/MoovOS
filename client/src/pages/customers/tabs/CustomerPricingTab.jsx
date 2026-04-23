@@ -38,7 +38,7 @@ function PriceCell({ rateId, initialPrice, initialPriceSub, onSaved, onDelete })
     }, 0);
   }
 
-  function commit() {
+  async function commit() {
     const parsed = parseFloat(val);
     if (isNaN(parsed) || parsed < 0) {
       setVal(String(parseFloat(initialPrice).toFixed(2)));
@@ -46,7 +46,7 @@ function PriceCell({ rateId, initialPrice, initialPriceSub, onSaved, onDelete })
       return;
     }
     const parsedSub = subVal.trim() === '' ? null : parseFloat(subVal);
-    onSaved(rateId, parsed, isNaN(parsedSub) ? null : parsedSub);
+    await onSaved(rateId, parsed, isNaN(parsedSub) ? null : parsedSub);
     setEditing(false);
   }
 
@@ -442,8 +442,13 @@ export default function CustomerPricingTab({ customer }) {
   function refresh() { queryClient.invalidateQueries(['customer-rates', customer.id]); }
 
   async function handlePriceUpdate(rateId, price, priceSub) {
-    await api.patch(`/customer-rates/rate/${rateId}`, { price, price_sub: priceSub });
-    refresh();
+    try {
+      await api.patch(`/customer-rates/rate/${rateId}`, { price, price_sub: priceSub });
+      refresh();
+    } catch (err) {
+      const msg = err?.response?.data?.error || err.message || 'Unknown error';
+      alert(`Failed to save rate: ${msg}`);
+    }
   }
   async function handlePriceDelete(rateId) {
     await api.delete(`/customer-rates/rate/${rateId}`);
