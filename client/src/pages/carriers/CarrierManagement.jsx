@@ -1418,13 +1418,16 @@ function CountryPickerModal({ zone, onClose, onRefresh }) {
   const [search, setSearch] = useState('');
 
   const addCountry = useMutation({
-    mutationFn: iso => carriersApi.addCountry(zone.id, { country_iso: iso }),
+    mutationFn: iso => carriersApi.addCountry(zone?.id, { country_iso: iso }),
     onSuccess: onRefresh,
   });
   const delCountry = useMutation({
     mutationFn: id => carriersApi.removeCountry(id),
     onSuccess: onRefresh,
   });
+
+  // Guard after hooks — zone may be briefly undefined during parent refetch
+  if (!zone) return null;
 
   const addedSet  = new Set((zone.country_codes || []).map(cc => cc.country_iso));
   const addedList = COUNTRIES.filter(c => addedSet.has(c.iso));
