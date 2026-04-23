@@ -444,7 +444,19 @@ export default function CustomerPricingTab({ customer }) {
   async function handlePriceUpdate(rateId, price, priceSub) {
     try {
       await api.patch(`/customer-rates/rate/${rateId}`, { price, price_sub: priceSub });
-      refresh();
+      // Update the cache directly — avoids browser 304 cache returning stale data
+      queryClient.setQueryData(['customer-rates', customer.id], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          services: old.services.map(svc => ({
+            ...svc,
+            rates: svc.rates.map(r =>
+              r.id === rateId ? { ...r, price, price_sub: priceSub } : r
+            ),
+          })),
+        };
+      });
     } catch (err) {
       const msg = err?.response?.data?.error || err.message || 'Unknown error';
       alert(`Failed to save rate: ${msg}`);

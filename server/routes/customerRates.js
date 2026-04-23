@@ -132,6 +132,7 @@ router.get('/:customerId', async (req, res, next) => {
       rates:        ratesByService[s.service_id] || [],
     }));
 
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.json({
       services,
       total_rates: services.reduce((a, s) => a + s.rate_count, 0),
