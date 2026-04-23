@@ -42,10 +42,18 @@ const CSV_TO_MOOV = {
   '2714': 'MOOV-0157', '2717': 'MOOV-0158', '2737': 'MOOV-0160', '2745': 'MOOV-0161',
   '2752': 'MOOV-0162', '2769': 'MOOV-0164', '2770': 'MOOV-0165', '2772': 'MOOV-0166',
   '2786': 'MOOV-0169', '2823': 'MOOV-0171',
-  // Additional mappings identified from gap analysis
+  // Gap analysis additions
   '2121': 'MOOV-0099',  // Hairways (Hair & Beauty) Ltd Site B → Harlow
   '2445': 'MOOV-0133',  // Bill's Tool Store Ltd
   '2587': 'MOOV-0138',  // Westcare Ltd
+  // HOF- entries that map to existing MOOV accounts
+  '1286': 'MOOV-0023',  // HOF - Beacons and Lightbars
+  '1356': 'MOOV-0032',  // HOF - ecom group uk limited
+  '1394': 'MOOV-0013',  // HOF - Code Nine Uk Ltd
+  '1449': 'MOOV-0035',  // HOF - Aegean Sea Ltd
+  '1526': 'MOOV-0022',  // HOF - M AND J BROTHERS LTD
+  '1561': 'MOOV-0015',  // HOF - Green Footprint Services ltd
+  '1624': 'MOOV-0004',  // HOF - I Luv Designer
 };
 
 const BATCH_SIZE = 500;
@@ -88,11 +96,14 @@ export async function seedCustomerRates() {
       if (moovAcct) {
         uuid = accountToUuid[moovAcct];
       } else {
-        // Fallback: match by business_name for customers added after the static map was built
-        // Skip HOF- / WXM- prefixed entries (legacy courier hub accounts, not direct Moov customers)
         const nameClean = csvCustName.trim().replace(/^["']|["']$/g, '');
-        if (!nameClean || nameClean.match(/^(HOF|WXM)\s*[-–]/i)) return;
-        uuid = nameToUuid[nameClean.toLowerCase()];
+        if (!nameClean) return;
+        // For HOF- prefixed entries, strip the prefix and match by the actual business name
+        const stripped = nameClean.replace(/^HOF\s*[-–]\s*/i, '').trim();
+        // WXM- entries are not direct Moov customers
+        if (nameClean.match(/^WXM\s*[-–]/i)) return;
+        // Try direct name match first, then stripped name
+        uuid = nameToUuid[nameClean.toLowerCase()] || nameToUuid[stripped.toLowerCase()];
       }
       if (!uuid) return; // customer not in DB
 
