@@ -25,51 +25,68 @@ const VERIFIED_STATUSES = new Set([
 // Maps any courier-specific status string → our canonical parcel_status enum
 
 const STATUS_MAP = {
-  // Booked / label created
+  // ── DPD numeric status codes (authoritative — map these first) ────────────
+  '1':  'booked',              // Booked
+  '2':  'collected',           // Collected
+  '3':  'at_depot',            // At Hub
+  '4':  'in_transit',          // In Transit
+  '5':  'out_for_delivery',    // Out for Delivery
+  '6':  'failed_delivery',     // Failed Attempt
+  '7':  'delivered',           // Delivered
+  '8':  'on_hold',             // On Hold (incl. dispatch guide)
+  '9':  'exception',           // Address Issue
+  '10': 'returned',            // Return to Sender
+  '11': 'exception',           // Tracking Expired
+  '12': 'exception',           // Cancelled
+  '13': 'awaiting_collection', // Awaiting Customer Collection
+  '16': 'exception',           // Damaged
+  '18': 'customs_hold',        // Customs Hold
+
+  // ── Booked / label created ────────────────────────────────────────────────
   booked: 'booked', created: 'booked', label_created: 'booked',
   label_printed: 'booked', manifested: 'booked', registered: 'booked',
 
-  // Collected
+  // ── Collected ─────────────────────────────────────────────────────────────
   collected: 'collected', collection: 'collected', picked_up: 'collected',
   collection_made: 'collected', collected_from_sender: 'collected',
 
-  // In transit (on the road between facilities)
+  // ── In transit ────────────────────────────────────────────────────────────
   in_transit: 'in_transit', transit: 'in_transit', on_its_way: 'in_transit',
   forwarded: 'in_transit', processed: 'in_transit', departed_depot: 'in_transit',
   despatched: 'in_transit', dispatched: 'in_transit',
   left_hub: 'in_transit', parcel_left_hub: 'in_transit', departed_hub: 'in_transit',
   left_depot: 'in_transit', departed_facility: 'in_transit', left_facility: 'in_transit',
 
-  // At depot (physically at a hub / sorting facility)
+  // ── At depot ──────────────────────────────────────────────────────────────
   at_hub: 'at_depot', hub: 'at_depot', in_depot: 'at_depot',
   arrived_at_depot: 'at_depot', at_depot: 'at_depot',
   sorting: 'at_depot', sorted: 'at_depot', at_facility: 'at_depot',
   arrived_at_hub: 'at_depot', held_at_hub: 'at_depot',
   parcel_at_hub: 'at_depot', received_at_hub: 'at_depot',
 
-  // Out for delivery
+  // ── Out for delivery ──────────────────────────────────────────────────────
   out_for_delivery: 'out_for_delivery', out_for_del: 'out_for_delivery',
   on_vehicle: 'out_for_delivery', with_driver: 'out_for_delivery',
   loaded_on_van: 'out_for_delivery', with_courier: 'out_for_delivery',
   on_delivery_run: 'out_for_delivery',
 
-  // Delivered
+  // ── Delivered ─────────────────────────────────────────────────────────────
   delivered: 'delivered', delivery_complete: 'delivered',
   signed_for: 'delivered', parcel_delivered: 'delivered',
   delivered_to_neighbour: 'delivered', delivered_to_safe_place: 'delivered',
 
-  // Failed delivery
+  // ── Failed delivery ───────────────────────────────────────────────────────
   failed_delivery: 'failed_delivery', delivery_failed: 'failed_delivery',
   missed: 'failed_delivery', attempted: 'failed_delivery',
   not_home: 'failed_delivery', carded: 'failed_delivery',
   delivery_attempted: 'failed_delivery', unable_to_deliver: 'failed_delivery',
 
-  // On hold
+  // ── On hold ───────────────────────────────────────────────────────────────
   on_hold: 'on_hold', held: 'on_hold', hold: 'on_hold',
-  awaiting_instructions: 'on_hold',
+  awaiting_instructions: 'on_hold', dispatch_guide: 'on_hold',
+  in_dispatch_guide: 'on_hold',
 
-  // Awaiting collection — parcel at a drop shop / parcel shop waiting for recipient
-  '13': 'awaiting_collection',
+  // ── Awaiting collection ───────────────────────────────────────────────────
   awaiting_collection: 'awaiting_collection',
   collection_point: 'awaiting_collection',
   ready_for_collection: 'awaiting_collection',
@@ -81,30 +98,30 @@ const STATUS_MAP = {
   held_for_collection: 'awaiting_collection',
   collect_from_depot: 'awaiting_collection',
 
-  // Customs hold
+  // ── Customs hold ──────────────────────────────────────────────────────────
   customs_hold: 'customs_hold', customs: 'customs_hold',
   customs_clearance: 'customs_hold', held_at_customs: 'customs_hold',
   customs_delay: 'customs_hold', import_customs: 'customs_hold',
 
-  // Exception
+  // ── Exception ─────────────────────────────────────────────────────────────
   exception: 'exception', damaged: 'exception', lost: 'exception',
   missing: 'exception', problem: 'exception', delay: 'exception',
-  address_query: 'exception', undeliverable: 'exception',
+  address_query: 'exception', address_issue: 'exception', undeliverable: 'exception',
+  tracking_expired: 'exception', cancelled: 'exception',
 
-  // Returned
-  '10': 'returned',
+  // ── Returned ──────────────────────────────────────────────────────────────
   returned: 'returned', return: 'returned', rts: 'returned',
   return_to_sender: 'returned', returning: 'returned',
 };
 
 function normaliseStatus(raw) {
   if (!raw) return 'unknown';
-  // Try exact string match first (handles numeric codes like '10', '13')
+  // Numeric DPD codes arrive as integers or strings — try exact match first
   const exact = STATUS_MAP[String(raw)];
   if (exact) return exact;
-  // Fall through to normalised string lookup
+  // Normalise text-based status strings
   const key = String(raw).toLowerCase().replace(/[\s\-]+/g, '_').replace(/[^a-z_]/g, '');
-  return STATUS_MAP[key] || 'in_transit';
+  return STATUS_MAP[key] || 'unknown';
 }
 
 // ─── Flexible payload field extraction ───────────────────────────────────────
@@ -123,7 +140,7 @@ function pick(obj, ...keys) {
 //   A) Shipment-platform format: { json: { tracking_update: { parcels: [...] }, shipment: {...} } }
 //   B) Simple flat object or array of flat objects
 
-export function normalisePayload(body) {
+function normalisePayload(body) {
   // Unwrap platform wrapper — some services POST { json: {...}, verify: false, ... }
   const payload = (body.json && typeof body.json === 'object') ? body.json : body;
 
@@ -177,7 +194,7 @@ export function normalisePayload(body) {
 
 // ─── Shared upsert logic ─────────────────────────────────────────────────────
 
-export async function upsertEvent(event, rawBody) {
+async function upsertEvent(event, rawBody) {
   const consignment = event._consignment || pick(event,
     'consignment_number', 'consignmentNumber', 'tracking_number', 'trackingNumber',
     'tracking_code', 'trackingCode', 'reference', 'barcode', 'parcel_id', 'shipment_id', 'id'
