@@ -1090,7 +1090,27 @@ router.get('/charges', async (req, res, next) => {
           cu.account_number AS customer_account,
           cu.id    AS customer_id,
           s.courier, s.ship_to_postcode, s.ship_to_name,
-          s.reference, s.reference_2, s.tracking_codes, s.parcel_count
+          s.reference, s.reference_2, s.tracking_codes, s.parcel_count,
+          -- Surcharges applied to this shipment
+          COALESCE((
+            SELECT json_agg(jsonb_build_object(
+              'id',    sc.id,
+              'name',  sc.service_name,
+              'price', sc.price
+            ) ORDER BY sc.created_at)
+            FROM charges sc
+            WHERE sc.shipment_id = c.shipment_id
+              AND sc.charge_type = 'surcharge'
+              AND sc.cancelled   = false
+          ), '[]'::json) AS applied_surcharges,
+          -- Surcharge total
+          COALESCE((
+            SELECT SUM(sc.price)
+            FROM charges sc
+            WHERE sc.shipment_id = c.shipment_id
+              AND sc.charge_type = 'surcharge'
+              AND sc.cancelled   = false
+          ), 0) AS surcharge_total
         FROM charges c
         LEFT JOIN customers cu ON cu.id = c.customer_id
         LEFT JOIN shipments  s  ON s.id  = c.shipment_id

@@ -60,11 +60,41 @@ function FlagBadge({ value, trueLabel = 'Yes', falseLabel = 'No' }) {
   );
 }
 
+// ─── Surcharge tooltip ────────────────────────────────────────────────────────
+
+function SurchargeTooltip({ surcharges, basePrice, total }) {
+  return (
+    <div style={{
+      position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 50,
+      background: '#1A1D35', border: '1px solid rgba(255,255,255,0.12)',
+      borderRadius: 8, padding: '10px 14px', minWidth: 220, boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+      pointerEvents: 'none',
+    }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Charge breakdown</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#AAAAAA', marginBottom: 4 }}>
+        <span>Base charge</span>
+        <span style={{ fontFamily: 'monospace', color: '#ccc' }}>{gbp(basePrice)}</span>
+      </div>
+      {(surcharges || []).map((s, i) => (
+        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#888', marginBottom: 3 }}>
+          <span>+ {s.name || 'Surcharge'}</span>
+          <span style={{ fontFamily: 'monospace', color: '#FFC107' }}>{gbp(s.price)}</span>
+        </div>
+      ))}
+      <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: 6, paddingTop: 6, display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700 }}>
+        <span style={{ color: '#fff' }}>Total</span>
+        <span style={{ fontFamily: 'monospace', color: '#00C853' }}>{gbp(total)}</span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Inline price editor ──────────────────────────────────────────────────────
 
 function PriceCell({ charge, onSave, onDebug }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState('');
+  const [hovering, setHovering] = useState(false);
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -83,6 +113,12 @@ function PriceCell({ charge, onSave, onDebug }) {
   }
 
   function cancel() { setEditing(false); }
+
+  const surcharges    = charge.applied_surcharges || [];
+  const surchargeTotal = parseFloat(charge.surcharge_total || 0);
+  const basePrice     = parseFloat(charge.price || 0);
+  const totalCharge   = basePrice + surchargeTotal;
+  const hasSurcharges = surcharges.length > 0;
 
   if (editing) {
     return (
@@ -110,7 +146,7 @@ function PriceCell({ charge, onSave, onDebug }) {
 
   if (charge.price == null) {
     return (
-      <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+      <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
         <button onClick={startEdit} style={{
           background: 'rgba(255,193,7,0.12)', border: '1px solid rgba(255,193,7,0.4)',
           borderRadius: 5, color: '#FFC107', padding: '3px 10px', fontSize: 12, fontWeight: 700,
@@ -119,16 +155,12 @@ function PriceCell({ charge, onSave, onDebug }) {
           <AlertCircle size={11} /> Set Price
         </button>
         {charge.price_failure_reason && (
-          <button
-            onClick={onDebug}
-            title="Click to run full diagnostic"
-            style={{
-              background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-              fontSize: 10, color: '#F44336', fontWeight: 600,
-              display: 'inline-flex', alignItems: 'center', gap: 3,
-              textAlign: 'left', lineHeight: 1.3,
-            }}
-          >
+          <button onClick={onDebug} title="Click to run full diagnostic" style={{
+            background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+            fontSize: 10, color: '#F44336', fontWeight: 600,
+            display: 'inline-flex', alignItems: 'center', gap: 3,
+            textAlign: 'right', lineHeight: 1.3,
+          }}>
             <Bug size={9} style={{ flexShrink: 0 }} />
             {charge.price_failure_reason}
           </button>
@@ -138,14 +170,35 @@ function PriceCell({ charge, onSave, onDebug }) {
   }
 
   return (
-    <button onClick={startEdit} style={{
-      background: 'rgba(0,200,83,0.08)', border: '1px solid rgba(0,200,83,0.25)',
-      borderRadius: 5, color: '#00C853', padding: '3px 10px', fontSize: 13, fontWeight: 700,
-      cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
-    }}>
-      {gbp(charge.price)}
-      <Edit2 size={10} style={{ opacity: 0.6 }} />
-    </button>
+    <div style={{ position: 'relative', display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+    >
+      {/* Base charge */}
+      <div style={{ fontSize: 11, color: '#666' }}>
+        Base: <span style={{ fontFamily: 'monospace', color: '#888' }}>{gbp(basePrice)}</span>
+      </div>
+      {/* Surcharge line — only if any */}
+      {hasSurcharges && (
+        <div style={{ fontSize: 11, color: '#FFC107' }}>
+          + {surcharges.length} surcharge{surcharges.length > 1 ? 's' : ''}: <span style={{ fontFamily: 'monospace' }}>{gbp(surchargeTotal)}</span>
+        </div>
+      )}
+      {/* Total — clickable to edit */}
+      <button onClick={startEdit} style={{
+        background: hasSurcharges ? 'rgba(0,200,83,0.1)' : 'rgba(0,200,83,0.08)',
+        border: '1px solid rgba(0,200,83,0.25)',
+        borderRadius: 5, color: '#00C853', padding: '3px 10px', fontSize: 13, fontWeight: 700,
+        cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
+      }}>
+        {hasSurcharges ? gbp(totalCharge) : gbp(basePrice)}
+        <Edit2 size={10} style={{ opacity: 0.6 }} />
+      </button>
+      {/* Surcharge tooltip on hover */}
+      {hovering && hasSurcharges && (
+        <SurchargeTooltip surcharges={surcharges} basePrice={basePrice} total={totalCharge} />
+      )}
+    </div>
   );
 }
 
@@ -1139,9 +1192,8 @@ export default function FinancePage() {
                 <th style={th}>Customer</th>
                 <th style={th}>Order ID</th>
                 <th style={{ ...th, textAlign: 'center' }}>Qty</th>
-                <th style={th}>Service</th>
-                <th style={{ ...th, textAlign: 'right' }}>Price (ex. VAT)</th>
-                <th style={{ ...th, textAlign: 'right' }}>VAT</th>
+                <th style={th}>Service · Zone · Band</th>
+                <th style={{ ...th, textAlign: 'right' }}>Charges (ex. VAT)</th>
                 <th style={{ ...th, textAlign: 'center' }}>Billed</th>
                 <th style={{ ...th, textAlign: 'center' }}>Verified</th>
                 <th style={{ ...th, textAlign: 'center' }}>Actions</th>
@@ -1150,14 +1202,14 @@ export default function FinancePage() {
             <tbody>
               {isLoading && (
                 <tr>
-                  <td colSpan={10} style={{ ...td, textAlign: 'center', padding: 40, color: '#555' }}>
+                  <td colSpan={9} style={{ ...td, textAlign: 'center', padding: 40, color: '#555' }}>
                     Loading charges…
                   </td>
                 </tr>
               )}
               {!isLoading && displayCharges.length === 0 && (
                 <tr>
-                  <td colSpan={10} style={{ ...td, textAlign: 'center', padding: 40, color: '#555' }}>
+                  <td colSpan={9} style={{ ...td, textAlign: 'center', padding: 40, color: '#555' }}>
                     No charges found
                   </td>
                 </tr>
@@ -1232,7 +1284,7 @@ export default function FinancePage() {
                     )}
                   </td>
 
-                  {/* Price */}
+                  {/* Charges: base + surcharges + total */}
                   <td style={{ ...td, textAlign: 'right' }}>
                     {charge.cancelled ? (
                       <span style={{ color: '#555', textDecoration: 'line-through', fontSize: 12 }}>
@@ -1241,11 +1293,11 @@ export default function FinancePage() {
                     ) : (
                       <PriceCell charge={charge} onSave={(price) => savePrice(charge, price)} onDebug={() => setDebugCharge(charge)} />
                     )}
-                  </td>
-
-                  {/* VAT */}
-                  <td style={{ ...td, textAlign: 'right', color: '#666', fontSize: 12 }}>
-                    {charge.price != null ? gbp(charge.vat_amount) : '—'}
+                    {charge.price != null && (
+                      <div style={{ fontSize: 10, color: '#555', marginTop: 2, textAlign: 'right' }}>
+                        VAT {gbp(charge.vat_amount)}
+                      </div>
+                    )}
                   </td>
 
                   {/* Billed */}
