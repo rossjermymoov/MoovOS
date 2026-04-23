@@ -31,13 +31,13 @@ function CustomerPicker({ customers, value, onChange }) {
     { value: 'unassigned',  label: '⚠ Unassigned' },
   ];
   const filtered = search
-    ? customers.filter(c => c.name?.toLowerCase().includes(search.toLowerCase()))
+    ? customers.filter(c => c.business_name?.toLowerCase().includes(search.toLowerCase()))
     : customers;
 
   const selectedLabel =
     value === ''           ? 'All Customers' :
     value === 'unassigned' ? '⚠ Unassigned'  :
-    customers.find(c => c.id === value)?.name || 'All Customers';
+    customers.find(c => c.id === value)?.business_name || 'All Customers';
 
   function pick(v) { onChange(v); setOpen(false); setSearch(''); }
 
@@ -101,7 +101,7 @@ function CustomerPicker({ customers, value, onChange }) {
                 color: value === c.id ? '#00C853' : '#fff',
                 padding: '8px 14px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
               }}>
-                {c.name}
+                {c.business_name}
               </button>
             ))}
             {search && filtered.length === 0 && (
