@@ -45,7 +45,7 @@ const STATUS = {
   at_depot:         { label: 'At Depot',          color: '#5C6BC0', bg: 'rgba(92,107,192,0.12)',   icon: Package },
   out_for_delivery: { label: 'Out for Delivery',  color: '#FFC107', bg: 'rgba(255,193,7,0.12)',    icon: Truck },
   delivered:        { label: 'Delivered',         color: '#00C853', bg: 'rgba(0,200,83,0.12)',     icon: PackageCheck },
-  failed_delivery:  { label: 'Attempted Delivery', color: '#F44336', bg: 'rgba(244,67,54,0.12)',   icon: AlertTriangle },
+  failed_delivery:  { label: 'Failed Attempt',       color: '#F44336', bg: 'rgba(244,67,54,0.12)',   icon: AlertTriangle },
   on_hold:              { label: 'On Hold',              color: '#FF9800', bg: 'rgba(255,152,0,0.12)',    icon: Clock },
   awaiting_collection:  { label: 'Awaiting Collection', color: '#FF6F00', bg: 'rgba(255,111,0,0.12)',    icon: Store },
   customs_hold:     { label: 'Customs Hold',      color: '#E91E8C', bg: 'rgba(233,30,140,0.12)',   icon: ShieldAlert },
