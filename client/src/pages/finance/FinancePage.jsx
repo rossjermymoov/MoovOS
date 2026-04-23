@@ -480,41 +480,58 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
         </div>
 
         {/* Footer */}
-        {trace?.conclusion?.priced && charge.price == null && (
-          <div style={{
-            padding: '12px 20px',
-            borderTop: '1px solid rgba(255,255,255,0.08)',
-            display: 'flex', justifyContent: 'flex-end', gap: 10,
-          }}>
+        <div style={{
+          padding: '12px 20px',
+          borderTop: '1px solid rgba(255,255,255,0.08)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
+        }}>
+          {/* Left: error or current price context */}
+          <div style={{ fontSize: 12 }}>
+            {repriceMut.isError && (
+              <span style={{ color: '#F44336' }}>
+                ✗ Reprice failed — {repriceMut.error?.message || 'unknown error'}
+              </span>
+            )}
+            {repriceMut.isSuccess && !repriceMut.data?.ok && (
+              <span style={{ color: '#F44336' }}>
+                ✗ {repriceMut.data?.message || 'No rate found'}
+              </span>
+            )}
+            {repriceMut.isSuccess && repriceMut.data?.ok && (
+              <span style={{ color: '#00C853' }}>✓ Price updated</span>
+            )}
+            {!repriceMut.isError && !repriceMut.isSuccess && charge.price != null && (
+              <span style={{ color: '#555' }}>
+                Current stored price: £{parseFloat(charge.price).toFixed(2)}
+              </span>
+            )}
+          </div>
+          {/* Right: buttons */}
+          <div style={{ display: 'flex', gap: 10 }}>
             <button onClick={onClose}
               style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)',
                 borderRadius: 8, color: '#888', padding: '8px 16px', cursor: 'pointer', fontSize: 13 }}>
               Close
             </button>
-            <button
-              onClick={() => repriceMut.mutate()}
-              disabled={repriceMut.isLoading}
-              style={{
-                background: 'rgba(0,200,83,0.15)', border: '1px solid rgba(0,200,83,0.4)',
-                borderRadius: 8, color: '#00C853', padding: '8px 18px',
-                cursor: 'pointer', fontSize: 13, fontWeight: 700,
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-              }}
-            >
-              <RotateCcw size={13} />
-              {repriceMut.isLoading ? 'Applying…' : `Apply £${trace.conclusion.price?.toFixed(2)}`}
-            </button>
+            {trace?.conclusion?.priced && (
+              <button
+                onClick={() => repriceMut.mutate()}
+                disabled={repriceMut.isPending}
+                style={{
+                  background: 'rgba(0,200,83,0.15)', border: '1px solid rgba(0,200,83,0.4)',
+                  borderRadius: 8, color: '#00C853', padding: '8px 18px',
+                  cursor: repriceMut.isPending ? 'wait' : 'pointer',
+                  fontSize: 13, fontWeight: 700,
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  opacity: repriceMut.isPending ? 0.6 : 1,
+                }}
+              >
+                <RotateCcw size={13} />
+                {repriceMut.isPending ? 'Applying…' : `Apply £${trace.conclusion.price?.toFixed(2)}`}
+              </button>
+            )}
           </div>
-        )}
-        {!(trace?.conclusion?.priced && charge.price == null) && (
-          <div style={{ padding: '12px 20px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'flex-end' }}>
-            <button onClick={onClose}
-              style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)',
-                borderRadius: 8, color: '#888', padding: '8px 16px', cursor: 'pointer', fontSize: 13 }}>
-              Close
-            </button>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
