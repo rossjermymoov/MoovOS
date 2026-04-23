@@ -253,14 +253,18 @@ export async function upsertEvent(event, rawBody) {
       weight_kg          = COALESCE(EXCLUDED.weight_kg,          parcels.weight_kg),
       estimated_delivery = COALESCE(EXCLUDED.estimated_delivery, parcels.estimated_delivery),
       -- Only advance status/location if this event is newer than what we already have.
-      -- This prevents out-of-order or replayed webhooks from regressing a delivered parcel.
+      -- delivered is terminal — once a parcel is delivered it cannot regress to any
+      -- other status regardless of subsequent events (DC sometimes sends a stale
+      -- out_for_delivery scan after the delivered scan for multi-parcel shipments).
       status             = CASE
+                             WHEN parcels.status = 'delivered'   THEN parcels.status
                              WHEN EXCLUDED.last_event_at IS NULL THEN parcels.status
                              WHEN parcels.last_event_at IS NULL  THEN EXCLUDED.status
                              WHEN EXCLUDED.last_event_at >= parcels.last_event_at THEN EXCLUDED.status
                              ELSE parcels.status
                            END,
       status_description = CASE
+                             WHEN parcels.status = 'delivered'   THEN parcels.status_description
                              WHEN EXCLUDED.last_event_at IS NULL THEN parcels.status_description
                              WHEN parcels.last_event_at IS NULL  THEN EXCLUDED.status_description
                              WHEN EXCLUDED.last_event_at >= parcels.last_event_at THEN EXCLUDED.status_description
