@@ -252,11 +252,28 @@ export async function upsertEvent(event, rawBody) {
       recipient_address  = COALESCE(EXCLUDED.recipient_address,  parcels.recipient_address),
       weight_kg          = COALESCE(EXCLUDED.weight_kg,          parcels.weight_kg),
       estimated_delivery = COALESCE(EXCLUDED.estimated_delivery, parcels.estimated_delivery),
-      status             = EXCLUDED.status,
-      status_description = EXCLUDED.status_description,
-      last_location      = EXCLUDED.last_location,
-      last_event_at      = EXCLUDED.last_event_at,
-      delivered_at       = CASE WHEN EXCLUDED.status = 'delivered' THEN EXCLUDED.last_event_at ELSE parcels.delivered_at END,
+      -- Only advance status/location if this event is newer than what we already have.
+      -- This prevents out-of-order or replayed webhooks from regressing a delivered parcel.
+      status             = CASE
+                             WHEN EXCLUDED.last_event_at IS NULL THEN parcels.status
+                             WHEN parcels.last_event_at IS NULL  THEN EXCLUDED.status
+                             WHEN EXCLUDED.last_event_at >= parcels.last_event_at THEN EXCLUDED.status
+                             ELSE parcels.status
+                           END,
+      status_description = CASE
+                             WHEN EXCLUDED.last_event_at IS NULL THEN parcels.status_description
+                             WHEN parcels.last_event_at IS NULL  THEN EXCLUDED.status_description
+                             WHEN EXCLUDED.last_event_at >= parcels.last_event_at THEN EXCLUDED.status_description
+                             ELSE parcels.status_description
+                           END,
+      last_location      = CASE
+                             WHEN EXCLUDED.last_event_at IS NULL THEN parcels.last_location
+                             WHEN parcels.last_event_at IS NULL  THEN EXCLUDED.last_location
+                             WHEN EXCLUDED.last_event_at >= parcels.last_event_at THEN EXCLUDED.last_location
+                             ELSE parcels.last_location
+                           END,
+      last_event_at      = GREATEST(EXCLUDED.last_event_at, parcels.last_event_at),
+      delivered_at       = CASE WHEN EXCLUDED.status = 'delivered' AND EXCLUDED.last_event_at >= COALESCE(parcels.last_event_at, '-infinity') THEN EXCLUDED.last_event_at ELSE parcels.delivered_at END,
       updated_at         = NOW()
     RETURNING id
   `, [
