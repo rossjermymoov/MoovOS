@@ -236,27 +236,43 @@ async function zoneForPostcode(serviceCode, postcode) {
   `, [serviceCode, outward]);
   if (inclRes.rows.length) return inclRes.rows[0].zone_name;
 
-  // 2. Catch-all zone — not explicitly excluded, no include-list (so not a named zone)
+  // 2. Catch-all zone — has exclude rules but this postcode isn't excluded
   const EXCL_MATCH = MATCH_CLAUSE.replace(/pr\./g, 'pr3.');
   const catchRes = await query(`
     SELECT z.name AS zone_name
     FROM zones z
     JOIN courier_services cs ON cs.id = z.courier_service_id
     WHERE cs.service_code ILIKE $1
-      AND NOT EXISTS (
-        SELECT 1 FROM zone_postcode_rules pr4
-        WHERE pr4.zone_id = z.id AND pr4.rule_type = 'include'
+      AND EXISTS (
+        SELECT 1 FROM zone_postcode_rules pr2
+        WHERE pr2.zone_id = z.id AND pr2.rule_type = 'exclude'
       )
       AND NOT EXISTS (
         SELECT 1 FROM zone_postcode_rules pr3
         WHERE pr3.zone_id = z.id AND pr3.rule_type = 'exclude'
           AND ${EXCL_MATCH}
       )
-    ORDER BY
-      (EXISTS (SELECT 1 FROM zone_postcode_rules prx WHERE prx.zone_id = z.id)) DESC
     LIMIT 1
   `, [serviceCode, outward]);
   if (catchRes.rows.length) return catchRes.rows[0].zone_name;
+
+  // 3. Universal zone — no postcode rules at all.
+  //    No include list, no exclude list = matches every shipment.
+  //    e.g. a simple "Zone A / Zone B" split with no geographic restriction.
+  //    When multiple such zones exist, return the first alphabetically.
+  const univRes = await query(`
+    SELECT z.name AS zone_name
+    FROM zones z
+    JOIN courier_services cs ON cs.id = z.courier_service_id
+    WHERE cs.service_code ILIKE $1
+      AND NOT EXISTS (
+        SELECT 1 FROM zone_postcode_rules pr
+        WHERE pr.zone_id = z.id
+      )
+    ORDER BY z.name
+    LIMIT 1
+  `, [serviceCode]);
+  if (univRes.rows.length) return univRes.rows[0].zone_name;
 
   return null;
 }
