@@ -283,8 +283,8 @@ async function seedNowHandler(req, res, next) {
       },
     ];
 
-    // Wipe ALL queries (this is a dev seed — start fresh every time)
-    await query(`DELETE FROM queries`);
+    // Wipe ALL queries and every dependent row via CASCADE
+    await query(`TRUNCATE queries CASCADE`);
 
     const inserted = [];
     for (const s of SEEDS) {
