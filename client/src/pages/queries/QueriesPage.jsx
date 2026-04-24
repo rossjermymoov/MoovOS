@@ -139,22 +139,23 @@ function KpiCard({ label, value, color, sub, onClick, active, icon: Icon, warn }
 
 // ─── Inbox list row ───────────────────────────────────────────────────────────
 
+const CLAIM_STATUSES = new Set(['claim_raised','awaiting_claim_docs','claim_submitted','resolved_claim_approved','resolved_claim_rejected']);
+
 function InboxRow({ q, selected, onClick }) {
   const hasAttention   = q.requires_attention;
   const hasSlaBreached = q.sla_breached;
-  const hasDrafts      = q.pending_drafts > 0;
+  const isClaim        = CLAIM_STATUSES.has(q.status);
 
   const accentColor = hasAttention   ? C.red
                     : hasSlaBreached ? C.amber
-                    : hasDrafts      ? C.green
                     : 'transparent';
 
   return (
     <div
       onClick={onClick}
       style={{
-        display: 'flex', flexDirection: 'column', gap: 4,
-        padding: '11px 14px 11px 12px',
+        display: 'flex', flexDirection: 'column', gap: 5,
+        padding: '12px 14px 12px 12px',
         cursor: 'pointer',
         borderBottom: `1px solid ${C.border}`,
         borderLeft: `3px solid ${selected ? C.blue : accentColor}`,
@@ -164,49 +165,55 @@ function InboxRow({ q, selected, onClick }) {
       onMouseEnter={e => { if (!selected) e.currentTarget.style.background = C.hover; }}
       onMouseLeave={e => { if (!selected) e.currentTarget.style.background = 'transparent'; }}
     >
-      {/* Subject line */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+      {/* Customer name — large and prominent */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span style={{
-          flex: 1, fontSize: 13, fontWeight: selected ? 700 : 600, color: C.text,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.4,
+          flex: 1, fontSize: 15, fontWeight: 700, color: C.text,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
-          {q.subject || q.consignment_number || 'No subject'}
+          {q.customer_name || 'Unknown Customer'}
         </span>
-        <span style={{ fontSize: 10, color: C.muted, flexShrink: 0, paddingTop: 1 }}>
+        <span style={{ fontSize: 10, color: C.muted, flexShrink: 0 }}>
           {timeAgo(q.latest_email_at || q.created_at)}
         </span>
       </div>
 
-      {/* Customer + consignment */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ fontSize: 11, color: C.sub, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {q.customer_name}
-          {q.consignment_number && (
-            <span style={{ color: C.muted, marginLeft: 5 }}>· {q.consignment_number}</span>
-          )}
-        </span>
+      {/* Subject */}
+      <div style={{
+        fontSize: 12, color: C.sub,
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      }}>
+        {q.subject || q.consignment_number || 'No subject'}
       </div>
 
-      {/* Badges + preview */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-        <TypeBadge type={q.query_type} small />
+      {/* Status badge + attention/SLA flag + query/claim icon */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <StatusBadge status={q.status} small />
         {hasAttention && (
-          <span style={{ fontSize: 9, fontWeight: 700, color: C.red, background: C.redDim, padding: '1px 5px', borderRadius: 3, border: `1px solid ${C.red}33` }}>
-            ATTENTION
+          <span style={{ fontSize: 9, fontWeight: 700, color: C.red, background: C.redDim,
+            padding: '1px 6px', borderRadius: 3, border: `1px solid ${C.red}33` }}>
+            ⚠ ATTENTION
           </span>
         )}
-        {hasDrafts && (
-          <span style={{ fontSize: 9, fontWeight: 700, color: C.green, background: C.greenDim, padding: '1px 5px', borderRadius: 3, border: `1px solid ${C.green}33` }}>
-            {q.pending_drafts} DRAFT
+        {!hasAttention && hasSlaBreached && (
+          <span style={{ fontSize: 9, fontWeight: 700, color: C.amber, background: C.amberDim,
+            padding: '1px 6px', borderRadius: 3, border: `1px solid ${C.amber}33` }}>
+            ⏱ SLA
           </span>
+        )}
+        <div style={{ flex: 1 }} />
+        {/* Query (orange triangle) or Claim (red receipt) indicator */}
+        {isClaim ? (
+          <span title="Claim" style={{ fontSize: 14, lineHeight: 1 }}>🧾</span>
+        ) : (
+          <span title="Query" style={{ fontSize: 13, color: '#D29922', lineHeight: 1 }}>▲</span>
         )}
       </div>
 
-      {/* Preview text */}
+      {/* Email preview */}
       {q.latest_email_preview && (
         <div style={{ fontSize: 11, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {q.latest_email_preview.substring(0, 90)}
+          {q.latest_email_preview.substring(0, 85)}
         </div>
       )}
     </div>
@@ -478,16 +485,19 @@ function QueryDetail({ queryId, onUpdated }) {
       <div style={{ padding: '14px 18px', borderBottom: `1px solid ${C.border}`, background: C.surface, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            {/* Subject */}
-            <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 5, lineHeight: 1.3 }}>
-              {q.subject || q.consignment_number}
+            {/* Customer name — large */}
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 2, lineHeight: 1.2 }}>
+              {q.customer_name}
             </div>
-            {/* Meta row */}
+            {/* Subject */}
+            <div style={{ fontSize: 13, color: C.sub, marginBottom: 6, lineHeight: 1.3 }}>
+              {q.subject}
+            </div>
+            {/* Meta row: courier logo, consignment link, type badge */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               {logoUrl && (
                 <img src={logoUrl} alt="" style={{ width: 24, height: 16, objectFit: 'contain', flexShrink: 0 }} />
               )}
-              <span style={{ fontSize: 11, color: C.muted }}>{q.customer_name}</span>
               {q.consignment_number && (
                 <button
                   onClick={() => navigate(`/tracking?q=${encodeURIComponent(q.consignment_number)}`)}
@@ -510,16 +520,29 @@ function QueryDetail({ queryId, onUpdated }) {
           </select>
         </div>
 
-        {/* Live parcel status */}
+        {/* Parcel info bar: live status + delivery address */}
         {parcel && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 11px', borderRadius: 6,
-            background: C.card, border: `1px solid ${C.border}`, fontSize: 11, marginBottom: 6 }}>
-            <Package size={12} style={{ color: PARCEL_STATUS_COLOR[parcel.status] || C.muted, flexShrink: 0 }} />
-            <span style={{ color: PARCEL_STATUS_COLOR[parcel.status] || C.muted, fontWeight: 600, textTransform: 'capitalize' }}>
-              {parcel.status?.replace(/_/g, ' ')}
-            </span>
-            {parcel.last_location && <span style={{ color: C.muted }}>· {parcel.last_location}</span>}
-            {parcel.last_event_at && <span style={{ color: C.muted, marginLeft: 'auto' }}>{fmtDate(parcel.last_event_at)}</span>}
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, marginBottom: 6, overflow: 'hidden' }}>
+            {/* Status row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 11px', borderBottom: parcel.recipient_address || parcel.recipient_name || parcel.recipient_postcode ? `1px solid ${C.border}` : 'none' }}>
+              <Package size={12} style={{ color: PARCEL_STATUS_COLOR[parcel.status] || C.muted, flexShrink: 0 }} />
+              <span style={{ color: PARCEL_STATUS_COLOR[parcel.status] || C.muted, fontWeight: 600, textTransform: 'capitalize' }}>
+                {parcel.status?.replace(/_/g, ' ')}
+              </span>
+              {parcel.last_location && <span style={{ color: C.muted }}>· {parcel.last_location}</span>}
+              {parcel.last_event_at && <span style={{ color: C.muted, marginLeft: 'auto', fontSize: 10 }}>{fmtDate(parcel.last_event_at)}</span>}
+            </div>
+            {/* Delivery address row */}
+            {(parcel.recipient_name || parcel.recipient_address || parcel.recipient_postcode) && (
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '7px 11px', fontSize: 11 }}>
+                <span style={{ color: C.muted, fontWeight: 600, flexShrink: 0, paddingTop: 1 }}>Delivering to</span>
+                <div style={{ color: C.sub, lineHeight: 1.5 }}>
+                  {parcel.recipient_name && <span style={{ fontWeight: 600, color: C.text }}>{parcel.recipient_name}</span>}
+                  {parcel.recipient_address && <span style={{ color: C.muted }}>{parcel.recipient_name ? ' · ' : ''}{parcel.recipient_address}</span>}
+                  {parcel.recipient_postcode && <span style={{ color: C.sub, fontWeight: 600 }}>{parcel.recipient_address || parcel.recipient_name ? ' · ' : ''}{parcel.recipient_postcode}</span>}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
