@@ -492,7 +492,8 @@ router.get('/', async (req, res, next) => {
       values.push(date_from);
     }
     if (date_to) {
-      conditions.push(`p.last_event_at <= $${idx++}`);
+      // Cast to date then add 1 day so 'YYYY-MM-DD' is treated as end-of-day inclusive
+      conditions.push(`p.last_event_at < ($${idx++}::date + INTERVAL '1 day')`);
       values.push(date_to);
     }
     if (search) {
