@@ -1,20 +1,21 @@
 import { NavLink } from 'react-router-dom';
 import {
   Users, Tag, Truck, BarChart2, FileText,
-  AlertTriangle, BookOpen, Settings, LayoutDashboard,
+  AlertTriangle, BookOpen, Settings, LayoutDashboard, UserCheck,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { to: '/',           icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/customers',  icon: Users,           label: 'Customers' },
-  { to: '/pricing',    icon: Tag,             label: 'Pricing' },
-  { to: '/tracking',   icon: Truck,           label: 'Tracking' },
-  { to: '/finance',    icon: FileText,        label: 'Finance' },
-  { to: '/queries',    icon: AlertTriangle,   label: 'Queries' },
-  { to: '/carriers',   icon: Truck,           label: 'Carriers' },
-  { to: '/reports',    icon: BarChart2,       label: 'Reports' },
-  { to: '/knowledge',  icon: BookOpen,        label: 'Knowledge' },
-  { to: '/settings',   icon: Settings,        label: 'Settings' },
+  { to: '/',             icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/customers',    icon: Users,           label: 'Customers' },
+  { to: '/pricing',      icon: Tag,             label: 'Pricing' },
+  { to: '/tracking',     icon: Truck,           label: 'Tracking' },
+  { to: '/finance',      icon: FileText,        label: 'Finance' },
+  { to: '/queries',      icon: AlertTriangle,   label: 'Queries' },
+  { to: '/customer-sim', icon: UserCheck,       label: 'Cust. Sim' },
+  { to: '/carriers',     icon: Truck,           label: 'Carriers' },
+  { to: '/reports',      icon: BarChart2,       label: 'Reports' },
+  { to: '/knowledge',    icon: BookOpen,        label: 'Knowledge' },
+  { to: '/settings',     icon: Settings,        label: 'Settings' },
 ];
 
 export default function Sidebar() {

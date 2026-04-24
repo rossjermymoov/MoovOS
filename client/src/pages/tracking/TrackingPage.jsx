@@ -437,6 +437,22 @@ export default function TrackingPage() {
 
   function toggleStatus(s) { setStatusFilter(f => f === s ? '' : s); }
 
+  // "Delivered Today" is a special combined filter — status + today's date range.
+  // Toggling it off must also clear the date range so it doesn't linger.
+  function toggleDeliveredToday() {
+    if (statusFilter === 'delivered') {
+      setStatusFilter('');
+      setDateFrom('');
+      setDateTo('');
+      setDatePreset('');
+    } else {
+      setStatusFilter('delivered');
+      setDateFrom(isoDay(startOfDay(TODAY)));
+      setDateTo(isoDay(endOfDay(TODAY)));
+      setDatePreset('Today');
+    }
+  }
+
   return (
     <div style={{ padding: '24px 28px' }}>
 
@@ -460,7 +476,7 @@ export default function TrackingPage() {
         <KpiCard label="Out for Delivery"            value={bs.out_for_delivery}     color="#FFC107" icon={Navigation}    active={statusFilter==='out_for_delivery'}    onClick={() => toggleStatus('out_for_delivery')} />
         <KpiCard label="On Hold"                     value={bs.on_hold}              color="#F44336" icon={OctagonX}      active={statusFilter==='on_hold'}             onClick={() => toggleStatus('on_hold')} />
         <KpiCard label="Awaiting Collection"         value={bs.awaiting_collection}  color="#FF9800" icon={Store}         active={statusFilter==='awaiting_collection'} onClick={() => toggleStatus('awaiting_collection')} />
-        <KpiCard label="Delivered Today"             value={stats?.delivered_today}  color="#00C853" icon={PackageCheck}  active={statusFilter==='delivered'}           onClick={() => toggleStatus('delivered')} />
+        <KpiCard label="Delivered Today"             value={stats?.delivered_today}  color="#00C853" icon={PackageCheck}  active={statusFilter==='delivered'}           onClick={toggleDeliveredToday} />
         <KpiCard label="Address Issue"               value={(bs.exception||0)}       color="#F44336" icon={AlertTriangle} active={statusFilter==='exception'}           onClick={() => toggleStatus('exception')} />
         <KpiCard label="Failed Attempt"              value={(bs.failed_delivery||0)} color="#F44336" icon={AlertTriangle} active={statusFilter==='failed_delivery'}     onClick={() => toggleStatus('failed_delivery')} />
         <KpiCard label="Customs Hold"                value={bs.customs_hold}         color="#9C27B0" icon={Plane}         active={statusFilter==='customs_hold'}        onClick={() => toggleStatus('customs_hold')} />

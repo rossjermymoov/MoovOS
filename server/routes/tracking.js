@@ -294,17 +294,33 @@ export async function upsertEvent(event, rawBody) {
   // Deduplicate: skip event if the last recorded status for this parcel is the same.
   // This prevents flooding the timeline with repeated scans at the same stage
   // (e.g. five "collected" pings seconds apart from the same courier hub).
+  //
+  // Exception — at_depot (status 3): a parcel passes through multiple physical hubs
+  // (collection depot → national hub → delivery depot) and each leg produces a status-3
+  // scan. If two at_depot events are more than 1 hour apart they are almost certainly
+  // different hubs, so we let them both through to give a meaningful journey view.
   const lastEvt = await query(
-    `SELECT status FROM tracking_events
+    `SELECT status, event_at FROM tracking_events
      WHERE parcel_id = $1
      ORDER BY event_at DESC, id DESC
      LIMIT 1`,
     [parcelId]
   );
-  const lastStatus = lastEvt.rows[0]?.status;
+  const lastStatus  = lastEvt.rows[0]?.status;
+  const lastEventAt = lastEvt.rows[0]?.event_at;
 
   if (lastStatus && lastStatus === status) {
-    return { ok: true, consignment, status, parcel_id: parcelId, deduped: true };
+    // For at_depot allow through if the gap to the previous at_depot is > 1 hour
+    if (status === 'at_depot' && lastEventAt) {
+      const gapMs = new Date(eventAt) - new Date(lastEventAt);
+      if (Math.abs(gapMs) > 60 * 60 * 1000) {
+        // Different hub leg — fall through and insert
+      } else {
+        return { ok: true, consignment, status, parcel_id: parcelId, deduped: true };
+      }
+    } else {
+      return { ok: true, consignment, status, parcel_id: parcelId, deduped: true };
+    }
   }
 
   await query(`
@@ -407,7 +423,9 @@ router.get('/stats', async (req, res, next) => {
       `),
       query(`
         SELECT COUNT(*)::int AS count FROM parcels
-        WHERE status = 'delivered' AND delivered_at >= CURRENT_DATE
+        WHERE status = 'delivered'
+          AND last_event_at >= CURRENT_DATE
+          AND last_event_at <  CURRENT_DATE + INTERVAL '1 day'
       `),
       query(`
         SELECT courier_name, courier_code, COUNT(*)::int AS count
