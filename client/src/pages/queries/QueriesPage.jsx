@@ -6,6 +6,7 @@ import {
   Send, Edit2, Flag, Link2,
   AlertCircle, Package, Filter, Search, X, ExternalLink, Receipt,
   Phone, MapPin, Truck, Sparkles, ChevronDown, ChevronUp,
+  PackageCheck, PackageX, RotateCcw, ShieldAlert, Store,
 } from 'lucide-react';
 import {
   fetchInbox, fetchStats, fetchQuery, updateQuery,
@@ -111,26 +112,47 @@ function fmtDate(ts) {
   return new Date(ts).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-// ─── Tracking timeline ────────────────────────────────────────────────────────
+// ─── Tracking timeline — carbon copy of TrackingPage STATUS + EventTimeline ───
 
 const TRACK_STATUS = {
-  booked:              { color: '#00BCD4' },
-  collected:           { color: '#2196F3' },
-  at_depot:            { color: '#5C6BC0' },
-  in_transit:          { color: '#7B2FBE' },
-  out_for_delivery:    { color: '#FFC107' },
-  failed_delivery:     { color: '#F44336' },
-  delivered:           { color: '#00C853' },
-  on_hold:             { color: '#FF9800' },
-  exception:           { color: '#F44336' },
-  returned:            { color: '#607D8B' },
-  tracking_expired:    { color: '#757575' },
-  cancelled:           { color: '#757575' },
-  awaiting_collection: { color: '#FF6F00' },
-  damaged:             { color: '#E91E8C' },
-  customs_hold:        { color: '#9C27B0' },
-  unknown:             { color: '#555555' },
+  booked:              { label: 'Booked',                       color: '#00BCD4', bg: 'rgba(0,188,212,0.12)',    icon: Package },
+  collected:           { label: 'Collected',                    color: '#2196F3', bg: 'rgba(33,150,243,0.12)',   icon: Package },
+  at_depot:            { label: 'At Hub',                       color: '#5C6BC0', bg: 'rgba(92,107,192,0.12)',   icon: Package },
+  in_transit:          { label: 'In Transit',                   color: '#7B2FBE', bg: 'rgba(123,47,190,0.12)',   icon: Truck },
+  out_for_delivery:    { label: 'Out for Delivery',             color: '#FFC107', bg: 'rgba(255,193,7,0.12)',    icon: Truck },
+  failed_delivery:     { label: 'Failed Attempt',               color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
+  delivered:           { label: 'Delivered',                    color: '#00C853', bg: 'rgba(0,200,83,0.12)',     icon: PackageCheck },
+  on_hold:             { label: 'On Hold',                      color: '#FF9800', bg: 'rgba(255,152,0,0.12)',    icon: Clock },
+  exception:           { label: 'Address Issue',                color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
+  returned:            { label: 'Return to Sender',             color: '#607D8B', bg: 'rgba(96,125,139,0.12)',   icon: RotateCcw },
+  tracking_expired:    { label: 'Tracking Expired',             color: '#757575', bg: 'rgba(117,117,117,0.12)',  icon: Clock },
+  cancelled:           { label: 'Cancelled',                    color: '#757575', bg: 'rgba(117,117,117,0.12)',  icon: AlertTriangle },
+  awaiting_collection: { label: 'Awaiting Customer Collection', color: '#FF6F00', bg: 'rgba(255,111,0,0.12)',    icon: Store },
+  damaged:             { label: 'Damaged',                      color: '#E91E8C', bg: 'rgba(233,30,140,0.12)',   icon: PackageX },
+  customs_hold:        { label: 'Customs Hold',                 color: '#9C27B0', bg: 'rgba(156,39,176,0.12)',   icon: ShieldAlert },
+  unknown:             { label: 'Unknown',                      color: '#555555', bg: 'rgba(255,255,255,0.05)',  icon: Package },
 };
+
+function TrackingStatusBadge({ status }) {
+  const cfg = TRACK_STATUS[status] || TRACK_STATUS.unknown;
+  const Icon = cfg.icon;
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      padding: '3px 9px',
+      borderRadius: 9999,
+      background: cfg.bg,
+      border: `1px solid ${cfg.color}44`,
+      color: cfg.color,
+      fontSize: 11,
+      fontWeight: 700,
+      whiteSpace: 'nowrap',
+    }}>
+      <Icon size={10} strokeWidth={2.5} />
+      {cfg.label}
+    </span>
+  );
+}
 
 function TrackingTimeline({ events }) {
   if (!events?.length) return (
@@ -141,39 +163,35 @@ function TrackingTimeline({ events }) {
   return (
     <div style={{ position: 'relative' }}>
       {events.map((ev, i) => {
-        const col    = TRACK_STATUS[ev.status]?.color || '#555';
+        const cfg    = TRACK_STATUS[ev.status] || TRACK_STATUS.unknown;
         const isLast = i === events.length - 1;
         return (
-          <div key={ev.id || i} style={{ display: 'flex', gap: 14, position: 'relative', paddingBottom: isLast ? 0 : 18 }}>
+          <div key={ev.id || i} style={{ display: 'flex', gap: 16, position: 'relative', paddingBottom: isLast ? 0 : 20 }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
-              <div style={{ width: 22, height: 22, borderRadius: '50%', background: `${col}22`,
-                border: `2px solid ${col}`, display: 'flex', alignItems: 'center',
-                justifyContent: 'center', zIndex: 1 }}>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: col }} />
+              <div style={{ width: 24, height: 24, borderRadius: '50%', background: cfg.bg,
+                border: `2px solid ${cfg.color}`, display: 'flex', alignItems: 'center',
+                justifyContent: 'center', zIndex: 1, flexShrink: 0 }}>
+                <div style={{ width: 7, height: 7, borderRadius: '50%', background: cfg.color }} />
               </div>
               {!isLast && (
-                <div style={{ width: 2, flex: 1, minHeight: 14,
-                  background: 'linear-gradient(to bottom, rgba(255,255,255,0.1), rgba(255,255,255,0.02))' }} />
+                <div style={{ width: 2, flex: 1, minHeight: 16,
+                  background: 'linear-gradient(to bottom, rgba(255,255,255,0.12), rgba(255,255,255,0.03))' }} />
               )}
             </div>
             <div style={{ flex: 1, paddingTop: 2, paddingBottom: isLast ? 0 : 4 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: col,
-                  background: `${col}15`, padding: '2px 7px', borderRadius: 4,
-                  border: `1px solid ${col}33`, whiteSpace: 'nowrap' }}>
-                  {ev.status?.replace(/_/g, ' ') || 'unknown'}
-                </span>
-                <span style={{ fontSize: 10, color: C.muted }}>{timeAgo(ev.event_at)}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 3 }}>
+                <TrackingStatusBadge status={ev.status} />
+                <span style={{ fontSize: 11, color: C.muted }}>{timeAgo(ev.event_at)}</span>
               </div>
               {ev.description && (
-                <p style={{ fontSize: 12, color: C.sub, margin: '2px 0 0', lineHeight: 1.4 }}>{ev.description}</p>
+                <p style={{ fontSize: 13, color: C.sub, margin: '3px 0' }}>{ev.description}</p>
               )}
               {ev.location && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, color: C.muted, marginTop: 2 }}>
-                  <MapPin size={9} /> {ev.location}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: C.muted, marginTop: 2 }}>
+                  <MapPin size={11} /> {ev.location}
                 </span>
               )}
-              <div style={{ fontSize: 10, color: '#3a3f47', marginTop: 2 }}>
+              <div style={{ fontSize: 11, color: '#444', marginTop: 3 }}>
                 {new Date(ev.event_at).toLocaleString('en-GB')}
               </div>
             </div>
