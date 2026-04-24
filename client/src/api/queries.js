@@ -58,10 +58,12 @@ export async function updateQuery(id, body) {
 }
 
 export async function approveEmail(queryId, body) {
-  const r = await fetch(`${BASE}/${queryId}/emails`, {
-    method: 'POST',
+  // body must contain email_id (the draft row to approve) and optionally body_text
+  const { email_id, body_text } = body;
+  const r = await fetch(`${BASE}/${queryId}/emails/${email_id}/approve`, {
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ body_text }),
   });
   if (!r.ok) throw new Error(await r.text());
   return r.json();

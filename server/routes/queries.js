@@ -751,6 +751,59 @@ router.post('/:id/emails', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PATCH /api/queries/:id/emails/:emailId/approve
+// Mark an existing AI draft as approved (and optionally update body text).
+// This avoids re-inserting a new row — we simply mark the draft sent.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.patch('/:id/emails/:emailId/approve', async (req, res, next) => {
+  try {
+    const { body_text } = req.body;
+    const { id: queryId, emailId } = req.params;
+
+    // Fetch the existing draft so we know the original body (to detect edits)
+    const existing = await query(
+      `SELECT * FROM query_emails WHERE id = $1 AND query_id = $2`,
+      [emailId, queryId]
+    );
+    if (!existing.rows.length) {
+      return res.status(404).json({ error: 'Draft email not found' });
+    }
+
+    const draft = existing.rows[0];
+    const wasEdited = body_text && body_text.trim() !== (draft.body_text || '').trim();
+    const finalBody = body_text || draft.body_text;
+
+    const result = await query(`
+      UPDATE query_emails SET
+        body_text              = $1,
+        ai_draft_approved_by   = 'staff'::varchar,
+        ai_draft_approved_at   = NOW(),
+        ai_draft_edited        = $2,
+        sent_at                = NOW()
+      WHERE id = $3 AND query_id = $4
+      RETURNING *
+    `, [finalBody, wasEdited, emailId, queryId]);
+
+    // Record first response time if not already set
+    if (draft.direction && draft.direction.startsWith('outbound')) {
+      await query(`
+        UPDATE queries
+        SET
+          first_response_at   = COALESCE(first_response_at, NOW()),
+          first_response_mins = COALESCE(first_response_mins,
+            CEIL(EXTRACT(EPOCH FROM (NOW() - created_at)) / 60)::int
+          ),
+          updated_at = NOW()
+        WHERE id = $1
+      `, [queryId]);
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /api/queries/:id/generate-draft
 // Generate an AI draft reply — either to the customer or to the courier
 // ─────────────────────────────────────────────────────────────────────────────
