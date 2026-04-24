@@ -132,7 +132,9 @@ router.get('/debug', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/seed-now', async (req, res, next) => {
+router.get('/seed-now', async (req, res, next) => seedNowHandler(req, res, next));
+router.post('/seed-now', async (req, res, next) => seedNowHandler(req, res, next));
+async function seedNowHandler(req, res, next) {
   try {
     // Get first 10 customers with email
     const customers = await query(
