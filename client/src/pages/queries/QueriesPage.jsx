@@ -550,7 +550,7 @@ function QueryDetail({ queryId, onUpdated }) {
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [parcel,         setParcel]         = useState(null);
   const [trackingEvents, setTrackingEvents] = useState([]);
-  const [trackExpanded,  setTrackExpanded]  = useState(true);
+  const [showTracking,   setShowTracking]   = useState(false);
   const [draft,          setDraft]          = useState({ customer: null, courier: null, loadingCustomer: false, loadingCourier: false });
   const [phoneCall,      setPhoneCall]      = useState(null); // { reason, target }
 
@@ -678,12 +678,13 @@ function QueryDetail({ queryId, onUpdated }) {
                     {q.consignment_number}
                   </span>
                   <button
-                    onClick={() => setTab('tracking')}
-                    title="See tracking timeline"
+                    onClick={() => setShowTracking(s => !s)}
+                    title={showTracking ? 'Hide tracking' : 'Show tracking timeline'}
                     style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '2px 7px', borderRadius: 4,
-                      border: `1px solid ${C.blue}44`, background: `${C.blue}12`, color: C.blue, fontSize: 10,
-                      fontWeight: 600, cursor: 'pointer' }}>
-                    <Truck size={9} /> Track
+                      border: `1px solid ${showTracking ? C.blue : C.blue + '44'}`,
+                      background: showTracking ? `${C.blue}28` : `${C.blue}12`,
+                      color: C.blue, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
+                    <Truck size={9} /> {showTracking ? 'Hide' : 'Track'}
                   </button>
                   <button
                     onClick={() => navigate(`/tracking?q=${encodeURIComponent(q.consignment_number)}`)}
@@ -781,7 +782,6 @@ function QueryDetail({ queryId, onUpdated }) {
       <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, background: C.surface, flexShrink: 0 }}>
         {[
           { key: 'emails',   label: `Emails (${emails.length})`,             icon: Mail },
-          { key: 'tracking', label: `Tracking (${trackingEvents.length})`,   icon: Truck },
           { key: 'evidence', label: `Evidence (${evidence.length})`,         icon: FileText },
           { key: 'info',     label: 'Info',                                  icon: Package },
           { key: 'notes',    label: `Alerts (${notifications.length})`,      icon: AlertCircle },
@@ -798,8 +798,11 @@ function QueryDetail({ queryId, onUpdated }) {
         ))}
       </div>
 
+      {/* Body row: tab content + optional tracking panel */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+
       {/* Tab content */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '14px 16px' }}>
+      <div style={{ flex: 1, overflow: 'auto', padding: '14px 16px', minWidth: 0 }}>
 
         {tab === 'emails' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -869,42 +872,6 @@ function QueryDetail({ queryId, onUpdated }) {
           </div>
         )}
 
-        {tab === 'tracking' && (
-          <div>
-            {/* Parcel summary bar */}
-            {parcel && (
-              <div style={{ marginBottom: 18, padding: '10px 13px', background: C.card,
-                border: `1px solid ${C.border}`, borderRadius: 8 }}>
-                <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase',
-                  letterSpacing: '0.05em', marginBottom: 6 }}>Current Status</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontWeight: 700, color: PARCEL_STATUS_COLOR[parcel.status] || C.muted, fontSize: 13,
-                    textTransform: 'capitalize' }}>
-                    {parcel.status?.replace(/_/g, ' ')}
-                  </span>
-                  {parcel.last_location && <span style={{ color: C.muted, fontSize: 12 }}>· {parcel.last_location}</span>}
-                  {parcel.last_event_at && (
-                    <span style={{ color: C.muted, fontSize: 11, marginLeft: 'auto' }}>
-                      {fmtDate(parcel.last_event_at)}
-                    </span>
-                  )}
-                </div>
-                {parcel.estimated_delivery && (
-                  <div style={{ marginTop: 6, fontSize: 11, color: C.muted }}>
-                    Est. delivery: <span style={{ color: '#FFC107', fontWeight: 700 }}>{fmtDate(parcel.estimated_delivery)}</span>
-                  </div>
-                )}
-              </div>
-            )}
-            {/* Timeline */}
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
-              letterSpacing: '0.06em', marginBottom: 14 }}>
-              Event History ({trackingEvents.length})
-            </div>
-            <TrackingTimeline events={trackingEvents} />
-          </div>
-        )}
-
         {tab === 'evidence' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {evidence.length === 0 && <div style={{ textAlign: 'center', color: C.muted, fontSize: 13, padding: 40 }}>No evidence collected yet</div>}
@@ -962,7 +929,95 @@ function QueryDetail({ queryId, onUpdated }) {
             ))}
           </div>
         )}
-      </div>
+      </div>{/* end tab content */}
+
+      {/* ── Tracking panel — slides in from right ── */}
+      {showTracking && (
+        <div style={{
+          width: 300, flexShrink: 0,
+          borderLeft: `1px solid ${C.border}`,
+          background: '#0A0E1A',
+          display: 'flex', flexDirection: 'column',
+          overflow: 'hidden',
+        }}>
+          {/* Panel header */}
+          <div style={{ padding: '14px 18px', borderBottom: `1px solid rgba(255,255,255,0.08)`,
+            display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 10, color: '#AAAAAA', fontWeight: 700, textTransform: 'uppercase',
+                letterSpacing: '0.06em', marginBottom: 3 }}>Consignment</div>
+              <div style={{ fontSize: 16, fontWeight: 900, color: '#fff', fontFamily: 'monospace' }}>
+                {q.consignment_number}
+              </div>
+            </div>
+            <button onClick={() => setShowTracking(false)}
+              style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', padding: 4 }}>
+              <X size={16} />
+            </button>
+          </div>
+
+          {/* Scrollable content */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '18px 18px' }}>
+            {/* Delivery address box */}
+            {parcel && (parcel.recipient_name || parcel.recipient_address || parcel.recipient_postcode) && (
+              <div style={{ marginBottom: 20, padding: 14, background: 'rgba(0,188,212,0.05)',
+                borderRadius: 10, border: '1px solid rgba(0,188,212,0.18)' }}>
+                <div style={{ fontSize: 10, color: '#00BCD4', fontWeight: 700, textTransform: 'uppercase',
+                  letterSpacing: '0.06em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <MapPin size={10} /> Delivery Address
+                </div>
+                {parcel.recipient_name && (
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 4 }}>
+                    {parcel.recipient_name}
+                  </div>
+                )}
+                {parcel.recipient_address && (
+                  <div style={{ fontSize: 12, color: '#CCC', lineHeight: 1.6, whiteSpace: 'pre-line' }}>
+                    {parcel.recipient_address}
+                  </div>
+                )}
+                {parcel.recipient_postcode && (
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#CCC',
+                    marginTop: parcel.recipient_address ? 2 : 0 }}>
+                    {parcel.recipient_postcode}
+                  </div>
+                )}
+                {(parcel.estimated_delivery || parcel.delivered_at) && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                    {parcel.estimated_delivery && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ fontSize: 11, color: '#AAAAAA' }}>Estimated delivery</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#FFC107' }}>
+                          {new Date(parcel.estimated_delivery).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                        </span>
+                      </div>
+                    )}
+                    {parcel.delivered_at && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: 11, color: '#AAAAAA' }}>Delivered</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#00C853' }}>
+                          {new Date(parcel.delivered_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Event history label */}
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#AAAAAA', textTransform: 'uppercase',
+              letterSpacing: '0.06em', marginBottom: 16 }}>
+              Event History ({trackingEvents.length})
+            </div>
+
+            {/* Timeline */}
+            <TrackingTimeline events={trackingEvents} />
+          </div>
+        </div>
+      )}
+
+      </div>{/* end body row */}
     </div>
   );
 }
