@@ -751,6 +751,153 @@ router.post('/:id/emails', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// POST /api/queries/:id/generate-draft
+// Generate an AI draft reply — either to the customer or to the courier
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/:id/generate-draft', async (req, res, next) => {
+  try {
+    const { target } = req.body; // 'customer' | 'courier'
+    if (!['customer', 'courier'].includes(target)) {
+      return res.status(400).json({ error: "target must be 'customer' or 'courier'" });
+    }
+
+    const [queryRes, emailsRes] = await Promise.all([
+      query(`SELECT * FROM queries_inbox_view WHERE id = $1`, [req.params.id]),
+      query(`SELECT direction, subject, body_text, from_address, to_address, created_at
+             FROM query_emails WHERE query_id = $1 ORDER BY created_at ASC`, [req.params.id]),
+    ]);
+
+    if (!queryRes.rows.length) return res.status(404).json({ error: 'Query not found' });
+    const q = queryRes.rows[0];
+    const emails = emailsRes.rows;
+
+    const emailThread = emails
+      .map(e => `[${e.direction.replace(/_/g, ' ')}]\nFrom: ${e.from_address}\nSubject: ${e.subject}\n\n${e.body_text}`)
+      .join('\n\n---\n\n');
+
+    const isCustomer = target === 'customer';
+
+    const systemPrompt = isCustomer
+      ? `You are a customer service agent for Moov Parcel, a UK parcel reseller using couriers like DPD and DHL. Write professional, empathetic emails in British English. Be solution-focused. Sign off as "Moov Parcel Support Team". Do not use American spellings.`
+      : `You are a customer service agent writing to a courier company on behalf of Moov Parcel, a UK parcel reseller. Write professional, firm but polite emails in British English requesting investigation or action. Be concise and specific.`;
+
+    const queryTypeLabel = q.query_type?.replace(/_/g, ' ') || 'query';
+    const statusLabel    = q.status?.replace(/_/g, ' ') || '';
+
+    const userPrompt = isCustomer
+      ? `Write a customer acknowledgement email for this ${queryTypeLabel} query.
+
+Customer: ${q.customer_name}
+Consignment: ${q.consignment_number}
+Courier: ${q.courier_name}
+Current status: ${statusLabel}
+
+Email thread:
+${emailThread}
+
+Instructions:
+- Acknowledge receipt of their message warmly
+- Confirm you are investigating with ${q.courier_name}
+- Give a realistic timeframe (1-2 working days unless urgent)
+- Do not make promises you cannot keep
+- Keep it concise — under 200 words
+- Then on a new line, output ONLY this JSON (no markdown, no code block): {"phone_call_recommended":true/false,"urgency_reason":"brief reason or null"}`
+      : `Write an email to ${q.courier_name} to chase/raise this ${queryTypeLabel} issue.
+
+Consignment: ${q.consignment_number}
+Our customer: ${q.customer_name}
+Issue type: ${queryTypeLabel}
+Current status: ${statusLabel}
+
+Customer's email thread:
+${emailThread}
+
+Instructions:
+- State the consignment number prominently
+- Explain the issue clearly and professionally
+- Request specific action (investigation / GPS proof / redelivery etc)
+- Ask for a response within 24 hours
+- Keep it under 200 words
+- Then on a new line, output ONLY this JSON (no markdown, no code block): {"phone_call_recommended":true/false,"urgency_reason":"brief reason or null"}`;
+
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+    }
+
+    const aiResp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 900,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    });
+
+    if (!aiResp.ok) {
+      const err = await aiResp.text();
+      return res.status(502).json({ error: 'Anthropic API error', detail: err });
+    }
+
+    const aiJson    = await aiResp.json();
+    const fullText  = aiJson.content?.[0]?.text || '';
+
+    // Split draft text from trailing JSON block
+    let draftText = fullText.trim();
+    let phoneCallRecommended = false;
+    let urgencyReason = null;
+
+    const jsonMatch = draftText.match(/\{"phone_call_recommended"\s*:\s*(true|false)[^}]*\}/);
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[0]);
+        phoneCallRecommended = parsed.phone_call_recommended === true;
+        urgencyReason = parsed.urgency_reason || null;
+        draftText = draftText.slice(0, draftText.lastIndexOf(jsonMatch[0])).trim();
+      } catch { /* ignore parse errors */ }
+    }
+
+    // Save as AI draft in query_emails
+    const direction  = isCustomer ? 'outbound_customer' : 'outbound_courier';
+    const subject    = isCustomer ? `Re: ${q.subject}` : `Query — Consignment ${q.consignment_number} [${q.courier_name}]`;
+    const toAddress  = isCustomer ? (q.sender_email || null) : null;
+
+    const savedEmail = await query(`
+      INSERT INTO query_emails (query_id, direction, subject, body_text, from_address, to_address, is_ai_draft, created_at)
+      VALUES ($1, $2::email_direction, $3::varchar, $4::text, 'queries@moovparcel.co.uk'::varchar, $5, true, NOW())
+      RETURNING id
+    `, [req.params.id, direction, subject, draftText, toAddress]);
+
+    // If phone call recommended: raise attention and save notification
+    if (phoneCallRecommended) {
+      const msg = `📞 PHONE CALL RECOMMENDED${urgencyReason ? ': ' + urgencyReason : ''}`;
+      await query(`
+        UPDATE queries SET requires_attention = true, attention_reason = $1,
+          attention_raised_at = NOW(), updated_at = NOW() WHERE id = $2
+      `, [msg, req.params.id]);
+      await query(`
+        INSERT INTO query_notifications (query_id, notification_type, message)
+        VALUES ($1, 'attention_required'::notification_type, $2)
+      `, [req.params.id, msg]);
+    }
+
+    res.json({
+      draft_id:              savedEmail.rows[0]?.id,
+      draft_text:            draftText,
+      subject,
+      phone_call_recommended: phoneCallRecommended,
+      urgency_reason:         urgencyReason,
+    });
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /api/queries/:id/attention
 // Flag a query for human attention (called by AI or automation)
 // ─────────────────────────────────────────────────────────────────────────────

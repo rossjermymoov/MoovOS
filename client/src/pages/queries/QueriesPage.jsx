@@ -5,6 +5,7 @@ import {
   Inbox, RefreshCw, MessageSquare, FileText,
   Send, Edit2, Flag, Link2,
   AlertCircle, Package, Filter, Search, X, ExternalLink, Receipt,
+  Phone, MapPin, Truck, Sparkles, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import {
   fetchInbox, fetchStats, fetchQuery, updateQuery,
@@ -108,6 +109,79 @@ function timeAgo(ts) {
 function fmtDate(ts) {
   if (!ts) return '—';
   return new Date(ts).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+// ─── Tracking timeline ────────────────────────────────────────────────────────
+
+const TRACK_STATUS = {
+  booked:              { color: '#00BCD4' },
+  collected:           { color: '#2196F3' },
+  at_depot:            { color: '#5C6BC0' },
+  in_transit:          { color: '#7B2FBE' },
+  out_for_delivery:    { color: '#FFC107' },
+  failed_delivery:     { color: '#F44336' },
+  delivered:           { color: '#00C853' },
+  on_hold:             { color: '#FF9800' },
+  exception:           { color: '#F44336' },
+  returned:            { color: '#607D8B' },
+  tracking_expired:    { color: '#757575' },
+  cancelled:           { color: '#757575' },
+  awaiting_collection: { color: '#FF6F00' },
+  damaged:             { color: '#E91E8C' },
+  customs_hold:        { color: '#9C27B0' },
+  unknown:             { color: '#555555' },
+};
+
+function TrackingTimeline({ events }) {
+  if (!events?.length) return (
+    <div style={{ padding: '28px 0', textAlign: 'center', color: C.muted, fontSize: 12, fontStyle: 'italic' }}>
+      No tracking events yet
+    </div>
+  );
+  return (
+    <div style={{ position: 'relative' }}>
+      {events.map((ev, i) => {
+        const col    = TRACK_STATUS[ev.status]?.color || '#555';
+        const isLast = i === events.length - 1;
+        return (
+          <div key={ev.id || i} style={{ display: 'flex', gap: 14, position: 'relative', paddingBottom: isLast ? 0 : 18 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
+              <div style={{ width: 22, height: 22, borderRadius: '50%', background: `${col}22`,
+                border: `2px solid ${col}`, display: 'flex', alignItems: 'center',
+                justifyContent: 'center', zIndex: 1 }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: col }} />
+              </div>
+              {!isLast && (
+                <div style={{ width: 2, flex: 1, minHeight: 14,
+                  background: 'linear-gradient(to bottom, rgba(255,255,255,0.1), rgba(255,255,255,0.02))' }} />
+              )}
+            </div>
+            <div style={{ flex: 1, paddingTop: 2, paddingBottom: isLast ? 0 : 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: col,
+                  background: `${col}15`, padding: '2px 7px', borderRadius: 4,
+                  border: `1px solid ${col}33`, whiteSpace: 'nowrap' }}>
+                  {ev.status?.replace(/_/g, ' ') || 'unknown'}
+                </span>
+                <span style={{ fontSize: 10, color: C.muted }}>{timeAgo(ev.event_at)}</span>
+              </div>
+              {ev.description && (
+                <p style={{ fontSize: 12, color: C.sub, margin: '2px 0 0', lineHeight: 1.4 }}>{ev.description}</p>
+              )}
+              {ev.location && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, color: C.muted, marginTop: 2 }}>
+                  <MapPin size={9} /> {ev.location}
+                </span>
+              )}
+              <div style={{ fontSize: 10, color: '#3a3f47', marginTop: 2 }}>
+                {new Date(ev.event_at).toLocaleString('en-GB')}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 // ─── KPI card ─────────────────────────────────────────────────────────────────
@@ -398,6 +472,71 @@ function EmailThreads({ emails, onApprove, onEdit, approving, courierName, couri
   );
 }
 
+// ─── Draft reply card ─────────────────────────────────────────────────────────
+
+function DraftCard({ title, toLabel, icon: Icon, accentColor, loading, draft, onGenerate, onEdit }) {
+  const [expanded, setExpanded] = useState(false);
+
+  // Auto-expand when a draft arrives
+  useEffect(() => { if (draft) setExpanded(true); }, [draft]);
+
+  return (
+    <div style={{ background: C.card, border: `1px solid ${draft ? accentColor + '44' : C.border}`,
+      borderRadius: 8, marginBottom: 10, overflow: 'hidden', transition: 'border-color 0.2s' }}>
+      {/* Card header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 13px',
+        borderBottom: expanded && draft ? `1px solid ${C.border}` : 'none', cursor: 'pointer' }}
+        onClick={() => draft && setExpanded(e => !e)}>
+        <Icon size={13} color={accentColor} style={{ flexShrink: 0 }} />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{title}</div>
+          {toLabel && <div style={{ fontSize: 10, color: C.muted }}>To: {toLabel}</div>}
+        </div>
+        {draft && (
+          expanded ? <ChevronUp size={13} color={C.muted} /> : <ChevronDown size={13} color={C.muted} />
+        )}
+        <button
+          onClick={e => { e.stopPropagation(); onGenerate(); }}
+          disabled={loading}
+          style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px',
+            borderRadius: 5, border: `1px solid ${accentColor}55`, background: `${accentColor}14`,
+            color: accentColor, fontSize: 11, fontWeight: 600, cursor: loading ? 'default' : 'pointer',
+            opacity: loading ? 0.7 : 1, flexShrink: 0 }}>
+          <Sparkles size={11} />
+          {loading ? 'Generating…' : draft ? 'Regenerate' : 'Generate Draft'}
+        </button>
+      </div>
+
+      {/* Draft text area */}
+      {expanded && draft && (
+        <div style={{ padding: '12px 13px' }}>
+          {draft.subject && (
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>
+              Subject: <span style={{ color: C.sub, fontWeight: 600 }}>{draft.subject}</span>
+            </div>
+          )}
+          <textarea
+            value={draft.text}
+            onChange={e => onEdit(e.target.value)}
+            style={{ width: '100%', boxSizing: 'border-box', background: C.surface,
+              border: `1px solid ${C.border}`, borderRadius: 5, color: C.text, fontSize: 12,
+              padding: 10, resize: 'vertical', minHeight: 160, fontFamily: 'inherit',
+              lineHeight: 1.55, outline: 'none' }}
+          />
+          <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
+            <button
+              style={{ padding: '6px 14px', borderRadius: 5, border: 'none',
+                background: accentColor, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Send size={11} /> Send Email
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Query detail panel ───────────────────────────────────────────────────────
 
 function QueryDetail({ queryId, onUpdated }) {
@@ -410,6 +549,10 @@ function QueryDetail({ queryId, onUpdated }) {
   const [showFlag,       setShowFlag]       = useState(false);
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [parcel,         setParcel]         = useState(null);
+  const [trackingEvents, setTrackingEvents] = useState([]);
+  const [trackExpanded,  setTrackExpanded]  = useState(true);
+  const [draft,          setDraft]          = useState({ customer: null, courier: null, loadingCustomer: false, loadingCourier: false });
+  const [phoneCall,      setPhoneCall]      = useState(null); // { reason, target }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -420,14 +563,20 @@ function QueryDetail({ queryId, onUpdated }) {
 
   useEffect(() => { load(); }, [load]);
 
-  // Fetch live parcel status when we know the consignment number
+  // Fetch live parcel status + tracking events
   useEffect(() => {
     if (!data) return;
     const q = data.query || data;
     if (!q.consignment_number) return;
     api.get(`/tracking/${encodeURIComponent(q.consignment_number)}`)
-      .then(r => setParcel(r.data?.parcel || null))
-      .catch(() => setParcel(null));
+      .then(r => {
+        const d = r.data;
+        const parcelObj = d?.parcel || d || null;
+        setParcel(parcelObj);
+        // Events may be on the parcel obj or at the top level
+        setTrackingEvents(parcelObj?.events || d?.events || []);
+      })
+      .catch(() => { setParcel(null); setTrackingEvents([]); });
   }, [data]);
 
   async function handleApprove(emailId, bodyText) {
@@ -455,6 +604,30 @@ function QueryDetail({ queryId, onUpdated }) {
     try { await updateQuery(queryId, { status: e.target.value }); await load(); onUpdated?.(); }
     catch (err) { alert(err.message); }
     finally { setStatusUpdating(false); }
+  }
+
+  async function generateDraft(target) {
+    const key = target === 'customer' ? 'loadingCustomer' : 'loadingCourier';
+    setDraft(d => ({ ...d, [key]: true }));
+    try {
+      const r = await fetch(`/api/queries/${queryId}/generate-draft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target }),
+      });
+      const j = await r.json();
+      if (j.error) { alert('AI error: ' + j.error); return; }
+      setDraft(d => ({ ...d, [target]: { text: j.draft_text, subject: j.subject, id: j.draft_id } }));
+      if (j.phone_call_recommended) {
+        setPhoneCall({ reason: j.urgency_reason, target });
+        await load(); // reload to show attention flag
+        onUpdated?.();
+      }
+    } catch (e) {
+      alert('Failed to generate draft: ' + e.message);
+    } finally {
+      setDraft(d => ({ ...d, [key]: false }));
+    }
   }
 
   if (loading) return (
@@ -499,15 +672,28 @@ function QueryDetail({ queryId, onUpdated }) {
                 <img src={logoUrl} alt="" style={{ width: 24, height: 16, objectFit: 'contain', flexShrink: 0 }} />
               )}
               {q.consignment_number && (
-                <button
-                  onClick={() => navigate(`/tracking?q=${encodeURIComponent(q.consignment_number)}`)}
-                  title="Open in tracking"
-                  style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 4,
-                    border: `1px solid ${C.border}`, background: 'transparent', color: C.blue, fontSize: 11,
-                    fontWeight: 600, cursor: 'pointer', fontFamily: 'monospace' }}>
-                  {q.consignment_number}
-                  <ExternalLink size={10} />
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ padding: '2px 8px', borderRadius: 4, border: `1px solid ${C.border}`,
+                    color: C.text, fontSize: 11, fontWeight: 600, fontFamily: 'monospace', background: C.card }}>
+                    {q.consignment_number}
+                  </span>
+                  <button
+                    onClick={() => setTab('tracking')}
+                    title="See tracking timeline"
+                    style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '2px 7px', borderRadius: 4,
+                      border: `1px solid ${C.blue}44`, background: `${C.blue}12`, color: C.blue, fontSize: 10,
+                      fontWeight: 600, cursor: 'pointer' }}>
+                    <Truck size={9} /> Track
+                  </button>
+                  <button
+                    onClick={() => navigate(`/tracking?q=${encodeURIComponent(q.consignment_number)}`)}
+                    title="Open full tracking page"
+                    style={{ display: 'flex', alignItems: 'center', padding: '2px 5px', borderRadius: 4,
+                      border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 10,
+                      cursor: 'pointer' }}>
+                    <ExternalLink size={9} />
+                  </button>
+                </div>
               )}
               <TypeBadge type={q.query_type} small />
             </div>
@@ -546,8 +732,37 @@ function QueryDetail({ queryId, onUpdated }) {
           </div>
         )}
 
+        {/* Phone call banner — AI flagged */}
+        {phoneCall && (
+          <div style={{ padding: '9px 13px', borderRadius: 6, background: 'rgba(248,81,73,0.15)',
+            border: `1px solid ${C.red}55`, marginBottom: 6,
+            display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+            <Phone size={14} color={C.red} style={{ flexShrink: 0, marginTop: 1 }} />
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.red, marginBottom: 2 }}>
+                📞 Phone call recommended
+              </div>
+              {phoneCall.reason && (
+                <div style={{ fontSize: 11, color: '#e88'}}>
+                  {phoneCall.reason}
+                </div>
+              )}
+            </div>
+            <button onClick={() => setPhoneCall(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 0 }}>
+              <X size={12} />
+            </button>
+          </div>
+        )}
+
         {/* Alert banners */}
-        {q.requires_attention && q.attention_reason && (
+        {q.requires_attention && q.attention_reason && q.attention_reason.includes('PHONE') && !phoneCall && (
+          <div style={{ padding: '7px 11px', borderRadius: 6, background: 'rgba(248,81,73,0.15)',
+            border: `1px solid ${C.red}55`, fontSize: 11, color: C.red, marginBottom: 4,
+            display: 'flex', alignItems: 'center', gap: 7 }}>
+            <Phone size={12} /> {q.attention_reason}
+          </div>
+        )}
+        {q.requires_attention && q.attention_reason && !q.attention_reason.includes('PHONE') && (
           <div style={{ padding: '7px 11px', borderRadius: 6, background: C.redDim, border: `1px solid ${C.red}33`, fontSize: 11, color: C.red, marginBottom: 4 }}>
             ⚠ {q.attention_reason}
           </div>
@@ -566,6 +781,7 @@ function QueryDetail({ queryId, onUpdated }) {
       <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, background: C.surface, flexShrink: 0 }}>
         {[
           { key: 'emails',   label: `Emails (${emails.length})`,             icon: Mail },
+          { key: 'tracking', label: `Tracking (${trackingEvents.length})`,   icon: Truck },
           { key: 'evidence', label: `Evidence (${evidence.length})`,         icon: FileText },
           { key: 'info',     label: 'Info',                                  icon: Package },
           { key: 'notes',    label: `Alerts (${notifications.length})`,      icon: AlertCircle },
@@ -618,6 +834,74 @@ function QueryDetail({ queryId, onUpdated }) {
                 </button>
               )}
             </div>
+
+            {/* ── Draft Replies ── */}
+            <div style={{ marginTop: 16, borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
+                letterSpacing: '0.05em', marginBottom: 10 }}>
+                Draft Replies
+              </div>
+
+              {/* Customer reply card */}
+              <DraftCard
+                title="Reply to Customer"
+                toLabel={q.sender_email || q.customer_name}
+                icon={Mail}
+                accentColor={C.blue}
+                loading={draft.loadingCustomer}
+                draft={draft.customer}
+                onGenerate={() => generateDraft('customer')}
+                onEdit={text => setDraft(d => ({ ...d, customer: { ...d.customer, text } }))}
+              />
+
+              {/* Courier email card */}
+              <DraftCard
+                title={`Email to ${q.courier_name || 'Courier'}`}
+                toLabel={q.courier_name}
+                icon={Truck}
+                accentColor={C.amber}
+                loading={draft.loadingCourier}
+                draft={draft.courier}
+                onGenerate={() => generateDraft('courier')}
+                onEdit={text => setDraft(d => ({ ...d, courier: { ...d.courier, text } }))}
+              />
+            </div>
+          </div>
+        )}
+
+        {tab === 'tracking' && (
+          <div>
+            {/* Parcel summary bar */}
+            {parcel && (
+              <div style={{ marginBottom: 18, padding: '10px 13px', background: C.card,
+                border: `1px solid ${C.border}`, borderRadius: 8 }}>
+                <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase',
+                  letterSpacing: '0.05em', marginBottom: 6 }}>Current Status</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontWeight: 700, color: PARCEL_STATUS_COLOR[parcel.status] || C.muted, fontSize: 13,
+                    textTransform: 'capitalize' }}>
+                    {parcel.status?.replace(/_/g, ' ')}
+                  </span>
+                  {parcel.last_location && <span style={{ color: C.muted, fontSize: 12 }}>· {parcel.last_location}</span>}
+                  {parcel.last_event_at && (
+                    <span style={{ color: C.muted, fontSize: 11, marginLeft: 'auto' }}>
+                      {fmtDate(parcel.last_event_at)}
+                    </span>
+                  )}
+                </div>
+                {parcel.estimated_delivery && (
+                  <div style={{ marginTop: 6, fontSize: 11, color: C.muted }}>
+                    Est. delivery: <span style={{ color: '#FFC107', fontWeight: 700 }}>{fmtDate(parcel.estimated_delivery)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+            {/* Timeline */}
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
+              letterSpacing: '0.06em', marginBottom: 14 }}>
+              Event History ({trackingEvents.length})
+            </div>
+            <TrackingTimeline events={trackingEvents} />
           </div>
         )}
 
