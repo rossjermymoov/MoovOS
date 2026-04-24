@@ -777,7 +777,7 @@ router.patch('/:id/emails/:emailId/approve', async (req, res, next) => {
     const result = await query(`
       UPDATE query_emails SET
         body_text              = $1,
-        ai_draft_approved_by   = 'staff'::varchar,
+        ai_draft_approved_by   = NULL,
         ai_draft_approved_at   = NOW(),
         ai_draft_edited        = $2,
         sent_at                = NOW()
