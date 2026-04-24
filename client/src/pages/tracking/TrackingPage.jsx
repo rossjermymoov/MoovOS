@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Search, X, Truck, PackageCheck, Clock, AlertTriangle,
@@ -352,8 +353,9 @@ const darkSelect = {
 // ─── Main tracking page ───────────────────────────────────────
 
 export default function TrackingPage() {
-  const [search,          setSearch]        = useState('');
-  const [debouncedSearch, setDebounced]     = useState('');
+  const [searchParams] = useSearchParams();
+  const [search,          setSearch]        = useState(searchParams.get('q') || '');
+  const [debouncedSearch, setDebounced]     = useState(searchParams.get('q') || '');
   const [statusFilter,    setStatusFilter]  = useState('');
   const [courierFilter,   setCourierFilter] = useState('');
   const [customerFilter,  setCustomerFilter]= useState('');
