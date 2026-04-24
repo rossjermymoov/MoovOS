@@ -233,7 +233,7 @@ function EmailItem({ email, onApprove, onEdit, approving, courierName, courierCo
   else if (dir === 'outbound_courier')  { threadColor = C.amber; threadLabel = `To ${courierName || 'Courier'}`; logo = courierCode; }
   else { threadColor = C.muted; threadLabel = 'Internal Note'; }
 
-  const LogoComp = logo ? getCourierLogo(logo) : null;
+  const logoUrl = logo ? getCourierLogo(logo) : null;
 
   return (
     <div style={{
@@ -247,10 +247,8 @@ function EmailItem({ email, onApprove, onEdit, approving, courierName, courierCo
         display: 'flex', alignItems: 'center', gap: 8,
         padding: '9px 13px', borderBottom: `1px solid ${C.border}`, flexWrap: 'wrap',
       }}>
-        {LogoComp && (
-          <div style={{ width: 20, height: 14, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-            <LogoComp width={20} height={14} />
-          </div>
+        {logoUrl && (
+          <img src={logoUrl} alt="" style={{ width: 20, height: 14, objectFit: 'contain', flexShrink: 0 }} />
         )}
         <span style={{ fontSize: 10, fontWeight: 700, color: threadColor, background: `${threadColor}18`,
           padding: '2px 8px', borderRadius: 4, border: `1px solid ${threadColor}33` }}>
@@ -343,7 +341,7 @@ function EmailThreads({ emails, onApprove, onEdit, approving, courierName, couri
     ...(internalNotes.length > 0 ? [{ key: 'internal', label: `Notes (${internalNotes.length})`, color: C.muted }] : []),
   ];
 
-  const LogoComp = courierCode ? getCourierLogo(courierCode) : null;
+  const logoUrl = courierCode ? getCourierLogo(courierCode) : null;
 
   const threadEmails = activeThread === 'customer' ? customerEmails
                      : activeThread === 'courier'  ? courierEmails
@@ -361,10 +359,8 @@ function EmailThreads({ emails, onApprove, onEdit, approving, courierName, couri
             fontSize: 11, fontWeight: 600, cursor: 'pointer',
             display: 'flex', alignItems: 'center', gap: 5, transition: 'all 0.1s',
           }}>
-            {t.key === 'courier' && LogoComp && (
-              <div style={{ width: 16, height: 11, display: 'flex', alignItems: 'center' }}>
-                <LogoComp width={16} height={11} />
-              </div>
+            {t.key === 'courier' && logoUrl && (
+              <img src={logoUrl} alt="" style={{ width: 16, height: 11, objectFit: 'contain' }} />
             )}
             {t.label}
           </button>
@@ -467,7 +463,7 @@ function QueryDetail({ queryId, onUpdated }) {
   const notifications= data.notifications || [];
   const pendingDrafts= emails.filter(e => e.is_ai_draft && !e.sent_at && !e.ai_draft_approved_by);
 
-  const LogoComp = q.courier_code ? getCourierLogo(q.courier_code) : null;
+  const logoUrl = q.courier_code ? getCourierLogo(q.courier_code) : null;
 
   const PARCEL_STATUS_COLOR = {
     delivered: C.green, returned: C.amber, failed_delivery: C.amber,
@@ -488,10 +484,8 @@ function QueryDetail({ queryId, onUpdated }) {
             </div>
             {/* Meta row */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              {LogoComp && (
-                <div style={{ width: 24, height: 16, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                  <LogoComp width={24} height={16} />
-                </div>
+              {logoUrl && (
+                <img src={logoUrl} alt="" style={{ width: 24, height: 16, objectFit: 'contain', flexShrink: 0 }} />
               )}
               <span style={{ fontSize: 11, color: C.muted }}>{q.customer_name}</span>
               {q.consignment_number && (
