@@ -107,28 +107,97 @@ router.get('/', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /api/queries/debug
-// Diagnostic endpoint — shows raw DB state to help debug empty inbox
+// GET /api/queries/debug  — diagnostic
+// POST /api/queries/seed-now — force-seed 10 practice queries right now
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.get('/debug', async (req, res, next) => {
   try {
-    const [queryCount, customerCount, migrations, enumValues, viewTest, directInsertTest] = await Promise.all([
+    const [queryCount, customerCount, migrations, enumValues, viewTest, columns] = await Promise.all([
       query(`SELECT COUNT(*)::int AS n FROM queries`),
       query(`SELECT COUNT(*)::int AS n FROM customers WHERE primary_email IS NOT NULL`),
       query(`SELECT filename, run_at FROM _migrations WHERE filename LIKE '07%' ORDER BY filename`),
       query(`SELECT unnest(enum_range(NULL::query_status))::text AS v`),
       query(`SELECT COUNT(*)::int AS n FROM queries_inbox_view`),
-      query(`SELECT 1`), // basic connectivity check
+      query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'queries' ORDER BY ordinal_position`),
     ]);
     res.json({
-      queries_count:    queryCount.rows[0].n,
+      queries_count:        queryCount.rows[0].n,
       customers_with_email: customerCount.rows[0].n,
-      migrations_run:   migrations.rows,
-      query_status_values: enumValues.rows.map(r => r.v),
-      inbox_view_count: viewTest.rows[0].n,
+      migrations_run:       migrations.rows,
+      query_status_values:  enumValues.rows.map(r => r.v),
+      inbox_view_count:     viewTest.rows[0].n,
+      queries_columns:      columns.rows.map(r => r.column_name),
     });
   } catch (err) { next(err); }
+});
+
+router.post('/seed-now', async (req, res, next) => {
+  try {
+    // Get first 10 customers with email
+    const customers = await query(
+      `SELECT id, business_name, primary_email FROM customers
+       WHERE primary_email IS NOT NULL
+       ORDER BY account_number LIMIT 10`
+    );
+
+    if (customers.rows.length === 0) {
+      return res.status(400).json({ error: 'No customers found in database' });
+    }
+
+    const scenarios = [
+      { type: 'whereabouts',    status: 'open',                   subject: 'Where is my parcel?',                  attention: false, daysAgo: 10 },
+      { type: 'not_delivered',  status: 'awaiting_courier',       subject: 'Parcel shows delivered but not received', attention: true, daysAgo: 9 },
+      { type: 'damaged',        status: 'awaiting_customer_info', subject: 'Parcel arrived damaged',               attention: false, daysAgo: 8 },
+      { type: 'missing_items',  status: 'awaiting_customer_info', subject: 'Items missing from my delivery',       attention: false, daysAgo: 7 },
+      { type: 'other',          status: 'awaiting_courier',       subject: 'Parcel missing for 2 weeks — urgent',  attention: true,  daysAgo: 6 },
+      { type: 'wrong_address',  status: 'awaiting_courier',       subject: 'Parcel delivered to wrong address',    attention: false, daysAgo: 5 },
+      { type: 'delay',          status: 'courier_investigating',  subject: 'Parcel is 3 days late',                attention: false, daysAgo: 4 },
+      { type: 'failed_delivery',status: 'open',                   subject: 'Delivery attempted — no card left',   attention: false, daysAgo: 3 },
+      { type: 'returned',       status: 'awaiting_courier',       subject: 'Parcel returned — I never refused it', attention: false, daysAgo: 2 },
+      { type: 'other',          status: 'claim_submitted',        subject: 'Lost parcel — formal claim required',  attention: false, daysAgo: 1 },
+    ];
+
+    const inserted = [];
+    for (let i = 0; i < Math.min(customers.rows.length, scenarios.length); i++) {
+      const c = customers.rows[i];
+      const s = scenarios[i];
+      const consNum = `15000000${String(i + 1).padStart(3, '0')}`;
+      const createdAt = new Date(Date.now() - s.daysAgo * 86400000).toISOString();
+
+      const qRes = await query(`
+        INSERT INTO queries (
+          consignment_number, customer_id, customer_name,
+          courier_code, courier_name, service_code, service_name,
+          trigger, query_type, status,
+          subject, description,
+          sender_email, sender_matched, requires_attention,
+          created_at, updated_at
+        ) VALUES ($1,$2,$3,'dpd','DPD','DPD-12','DPD Next Day',
+          'customer_email'::query_trigger, $4::query_type, $5::query_status,
+          $6, $6, $7, true, $8, $9, $9)
+        RETURNING id
+      `, [consNum, c.id, c.business_name, s.type, s.status, s.subject,
+          c.primary_email, s.attention, createdAt]);
+
+      const qid = qRes.rows[0].id;
+
+      await query(`
+        INSERT INTO query_emails (
+          query_id, direction, subject, body_text,
+          from_address, to_address, is_ai_draft, received_at, created_at
+        ) VALUES ($1, 'inbound_customer'::email_direction, $2,
+          'Practice query ' || $3 || ' — ' || $2,
+          $4, 'queries@moovparcel.co.uk', false, $5, $5)
+      `, [qid, s.subject, consNum, c.primary_email, createdAt]);
+
+      inserted.push({ id: qid, consignment: consNum, customer: c.business_name, status: s.status });
+    }
+
+    res.json({ seeded: inserted.length, queries: inserted });
+  } catch (err) {
+    res.status(500).json({ error: err.message, detail: err.detail || null });
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
