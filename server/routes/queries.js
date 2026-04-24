@@ -360,11 +360,6 @@ async function seedNowHandler(req, res, next) {
             $12::varchar, true, $13::boolean,
             $14::timestamptz, $14::timestamptz
           )
-          ON CONFLICT (consignment_number) DO UPDATE SET
-            customer_id = EXCLUDED.customer_id,
-            status = EXCLUDED.status,
-            subject = EXCLUDED.subject,
-            updated_at = NOW()
           RETURNING id
         `, [consNum, customerId, s.business_name,
             s.courier_code, s.courier_name, s.service_code, s.service_name,
