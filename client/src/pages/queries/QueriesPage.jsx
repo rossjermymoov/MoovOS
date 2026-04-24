@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  AlertTriangle, Mail, Clock, CheckCircle, XCircle, User,
-  Inbox, BarChart2, RefreshCw, ChevronRight, Circle,
+  AlertTriangle, Mail, Clock, CheckCircle, User,
+  Inbox, RefreshCw, ChevronRight,
   MessageSquare, FileText, Send, Edit2, Flag, Link,
   AlertCircle, Package, Zap, Filter, Search, Plus, X,
 } from 'lucide-react';
@@ -23,22 +23,20 @@ const C = {
   amber:   '#FFC107',
   red:     '#E91E8C',
   blue:    '#00BCD4',
-  purple:  '#7B2FBE',
   text:    '#FFFFFF',
   muted:   '#AAAAAA',
-  greenDim:  'rgba(0,200,83,0.15)',
-  amberDim:  'rgba(255,193,7,0.15)',
-  redDim:    'rgba(233,30,140,0.15)',
-  blueDim:   'rgba(0,188,212,0.15)',
+  greenDim:  'rgba(0,200,83,0.12)',
+  amberDim:  'rgba(255,193,7,0.12)',
+  redDim:    'rgba(233,30,140,0.12)',
+  blueDim:   'rgba(0,188,212,0.12)',
 };
-
-// ─── Status config ────────────────────────────────────────────────────────────
 
 const STATUS_CFG = {
   open:                     { label: 'Open',               color: C.blue,   bg: C.blueDim },
   awaiting_customer_info:   { label: 'Awaiting Customer',  color: C.amber,  bg: C.amberDim },
   info_received:            { label: 'Info Received',       color: C.green,  bg: C.greenDim },
   awaiting_courier:         { label: 'Awaiting Courier',    color: C.amber,  bg: C.amberDim },
+  courier_replied:          { label: 'Courier Replied',     color: C.green,  bg: C.greenDim },
   courier_investigating:    { label: 'Investigating',        color: C.amber,  bg: C.amberDim },
   claim_raised:             { label: 'Claim Raised',        color: C.red,    bg: C.redDim },
   awaiting_claim_docs:      { label: 'Awaiting Claim Docs', color: C.red,    bg: C.redDim },
@@ -49,13 +47,15 @@ const STATUS_CFG = {
 };
 
 const TYPE_CFG = {
-  lost:       { label: 'Lost',         color: C.red },
-  damaged:    { label: 'Damaged',      color: C.red },
-  delayed:    { label: 'Delayed',      color: C.amber },
-  exception:  { label: 'Exception',    color: C.amber },
-  complaint:  { label: 'Complaint',    color: C.red },
-  enquiry:    { label: 'Enquiry',      color: C.blue },
-  returns:    { label: 'Returns',      color: C.amber },
+  whereabouts:   { label: 'Whereabouts',    color: C.blue },
+  not_delivered: { label: 'Not Delivered',  color: C.red },
+  wrong_address: { label: 'Wrong Address',  color: C.red },
+  damaged:       { label: 'Damaged',        color: C.red },
+  missing_items: { label: 'Missing Items',  color: C.red },
+  failed_delivery: { label: 'Failed Delivery', color: C.amber },
+  returned:      { label: 'Returned',       color: C.amber },
+  delay:         { label: 'Delay',          color: C.amber },
+  other:         { label: 'Other',          color: C.muted },
 };
 
 // ─── Tiny helpers ─────────────────────────────────────────────────────────────
@@ -120,37 +120,50 @@ function fmtDate(ts) {
   return new Date(ts).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-// ─── Stat card ────────────────────────────────────────────────────────────────
+// ─── Dashboard KPI card ───────────────────────────────────────────────────────
 
-function StatCard({ label, value, sub, color, icon: Icon }) {
+function KpiCard({ label, value, color, sub, onClick, active, icon: Icon, warn }) {
+  const isClickable = !!onClick;
+  const col = warn && value > 0 ? color : value === 0 ? C.muted : color;
   return (
-    <div style={{
-      flex: '1 1 160px',
-      background: C.card,
-      border: `1px solid ${C.border}`,
-      borderRadius: 12,
-      padding: '16px 20px',
-      minWidth: 0,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        {Icon && <Icon size={15} style={{ color: color || C.muted }} />}
-        <span style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</span>
+    <button
+      onClick={onClick}
+      style={{
+        flex: '1 1 120px',
+        minWidth: 100,
+        background: active ? `${color}18` : C.card,
+        border: `1px solid ${active ? color : value > 0 && warn ? `${color}44` : C.border}`,
+        borderRadius: 10,
+        padding: '14px 16px',
+        cursor: isClickable ? 'pointer' : 'default',
+        textAlign: 'left',
+        transition: 'all 0.15s',
+        outline: 'none',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 8 }}>
+        {Icon && <Icon size={12} style={{ color: col, flexShrink: 0 }} />}
+        <span style={{ fontSize: 10, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', lineHeight: 1 }}>
+          {label}
+        </span>
       </div>
-      <div style={{ fontSize: 28, fontWeight: 800, color: color || C.text, lineHeight: 1 }}>{value ?? '—'}</div>
-      {sub && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{sub}</div>}
-    </div>
+      <div style={{ fontSize: 26, fontWeight: 800, color: active ? color : value > 0 && warn ? color : C.text, lineHeight: 1 }}>
+        {value ?? '—'}
+      </div>
+      {sub && <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>{sub}</div>}
+    </button>
   );
 }
 
 // ─── Inbox row ────────────────────────────────────────────────────────────────
 
 function InboxRow({ q, selected, onClick }) {
-  const hasAttention  = q.requires_attention;
+  const hasAttention   = q.requires_attention;
   const hasSlaBreached = q.sla_breached;
-  const hasDrafts     = q.pending_drafts > 0;
-  const claimUrgent   = q.claim_days_remaining !== null && q.claim_days_remaining <= 3;
+  const hasDrafts      = q.pending_drafts > 0;
+  const claimUrgent    = q.claim_days_remaining !== null && q.claim_days_remaining <= 3;
 
-  const accent = hasAttention  ? C.red
+  const accent = hasAttention   ? C.red
                : hasSlaBreached ? C.amber
                : hasDrafts      ? C.green
                : C.border;
@@ -161,7 +174,7 @@ function InboxRow({ q, selected, onClick }) {
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 6,
+        gap: 5,
         padding: '12px 16px',
         cursor: 'pointer',
         borderBottom: `1px solid ${C.border}`,
@@ -169,10 +182,10 @@ function InboxRow({ q, selected, onClick }) {
         background: selected ? C.hover : 'transparent',
         transition: 'background 0.1s',
       }}
-      onMouseEnter={e => { if (!selected) e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
+      onMouseEnter={e => { if (!selected) e.currentTarget.style.background = 'rgba(255,255,255,0.025)'; }}
       onMouseLeave={e => { if (!selected) e.currentTarget.style.background = 'transparent'; }}
     >
-      {/* Row 1: consignment + badges */}
+      {/* Row 1: consignment + flags */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: C.text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {q.consignment_number || 'No consignment'}
@@ -182,7 +195,7 @@ function InboxRow({ q, selected, onClick }) {
             ⚠ ATTENTION
           </span>
         )}
-        {hasDrafts > 0 && (
+        {hasDrafts && (
           <span style={{ fontSize: 10, fontWeight: 700, color: C.green, background: C.greenDim, padding: '2px 6px', borderRadius: 10 }}>
             {q.pending_drafts} DRAFT{q.pending_drafts > 1 ? 'S' : ''}
           </span>
@@ -206,20 +219,14 @@ function InboxRow({ q, selected, onClick }) {
       {/* Row 3: preview + age */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{
-          fontSize: 11,
-          color: C.muted,
-          flex: 1,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          fontStyle: 'italic',
+          fontSize: 11, color: C.muted, flex: 1,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontStyle: 'italic',
         }}>
-          {q.latest_email_preview ? q.latest_email_preview.substring(0, 80) : q.subject || 'No emails yet'}
+          {q.latest_email_preview ? q.latest_email_preview.substring(0, 80) : q.subject || 'No messages yet'}
         </span>
         <span style={{ fontSize: 10, color: C.muted, flexShrink: 0 }}>{timeAgo(q.latest_email_at || q.created_at)}</span>
       </div>
 
-      {/* Row 4: SLA indicator */}
       {hasSlaBreached && (
         <div style={{ fontSize: 10, color: C.amber, fontWeight: 600 }}>
           ⏱ SLA breached — {q.courier_name}
@@ -233,13 +240,13 @@ function InboxRow({ q, selected, onClick }) {
 
 function EmailItem({ email, onApprove, onEdit, approving }) {
   const [editMode, setEditMode] = useState(false);
-  const [editBody, setEditBody]   = useState(email.body_text || '');
+  const [editBody, setEditBody] = useState(email.body_text || '');
   const isDraft = email.is_ai_draft && !email.sent_at && !email.ai_draft_approved_by;
   const isSent  = !!email.sent_at;
   const dir     = email.direction;
 
-  const dirColor = dir === 'inbound' ? C.blue : dir === 'outbound_customer' ? C.green : C.amber;
-  const dirLabel = dir === 'inbound' ? 'Inbound' : dir === 'outbound_customer' ? '→ Customer' : '→ Courier';
+  const dirColor = dir === 'inbound_customer' ? C.blue : dir === 'outbound_customer' ? C.green : C.amber;
+  const dirLabel = dir === 'inbound_customer' ? '← Customer' : dir === 'outbound_customer' ? '→ Customer' : dir === 'inbound_courier' ? '← Courier' : '→ Courier';
 
   return (
     <div style={{
@@ -248,12 +255,9 @@ function EmailItem({ email, onApprove, onEdit, approving }) {
       overflow: 'hidden',
       background: isDraft ? `${C.green}08` : C.card,
     }}>
-      {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
-        padding: '10px 14px',
-        borderBottom: `1px solid ${C.border}`,
-        flexWrap: 'wrap',
+        padding: '10px 14px', borderBottom: `1px solid ${C.border}`, flexWrap: 'wrap',
       }}>
         <span style={{ fontSize: 10, fontWeight: 700, color: dirColor, background: `${dirColor}22`, padding: '2px 8px', borderRadius: 10 }}>
           {dirLabel}
@@ -263,107 +267,57 @@ function EmailItem({ email, onApprove, onEdit, approving }) {
             🤖 AI DRAFT — PENDING APPROVAL
           </span>
         )}
-        {isSent && (
-          <span style={{ fontSize: 10, color: C.muted }}>Sent {fmtDate(email.sent_at)}</span>
-        )}
-        {!isSent && !isDraft && (
-          <span style={{ fontSize: 10, color: C.muted }}>Received {fmtDate(email.created_at)}</span>
-        )}
+        {isSent && <span style={{ fontSize: 10, color: C.muted }}>Sent {fmtDate(email.sent_at)}</span>}
+        {!isSent && !isDraft && <span style={{ fontSize: 10, color: C.muted }}>Received {fmtDate(email.created_at)}</span>}
         <span style={{ marginLeft: 'auto', fontSize: 11, color: C.muted }}>
           {email.from_address || email.to_address}
         </span>
       </div>
 
-      {/* Body */}
       <div style={{ padding: '12px 14px' }}>
         {editMode ? (
           <textarea
             value={editBody}
             onChange={e => setEditBody(e.target.value)}
             style={{
-              width: '100%',
-              minHeight: 140,
-              background: C.surface,
-              border: `1px solid ${C.green}44`,
-              borderRadius: 6,
-              color: C.text,
-              fontSize: 12,
-              padding: 10,
-              resize: 'vertical',
-              fontFamily: 'inherit',
-              boxSizing: 'border-box',
+              width: '100%', minHeight: 140, background: C.surface,
+              border: `1px solid ${C.green}44`, borderRadius: 6,
+              color: C.text, fontSize: 12, padding: 10, resize: 'vertical',
+              fontFamily: 'inherit', boxSizing: 'border-box',
             }}
           />
         ) : (
           <pre style={{
-            margin: 0,
-            fontSize: 12,
-            color: C.muted,
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            lineHeight: 1.6,
-            maxHeight: 200,
-            overflow: 'auto',
+            margin: 0, fontSize: 12, color: C.muted,
+            whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+            lineHeight: 1.6, maxHeight: 220, overflow: 'auto',
           }}>
-            {email.body_text || '(no plain text body)'}
+            {email.body_text || '(no body)'}
           </pre>
         )}
       </div>
 
-      {/* Draft actions */}
       {isDraft && (
-        <div style={{
-          display: 'flex', gap: 8, padding: '10px 14px',
-          borderTop: `1px solid ${C.border}`,
-          flexWrap: 'wrap',
-        }}>
+        <div style={{ display: 'flex', gap: 8, padding: '10px 14px', borderTop: `1px solid ${C.border}`, flexWrap: 'wrap' }}>
           {editMode ? (
             <>
-              <button
-                onClick={() => { onEdit(email.id, editBody); setEditMode(false); }}
-                style={{
-                  padding: '7px 16px', borderRadius: 8, border: 'none',
-                  background: C.green, color: '#000', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                }}
-              >
+              <button onClick={() => { onEdit(email.id, editBody); setEditMode(false); }}
+                style={{ padding: '7px 16px', borderRadius: 8, border: 'none', background: C.green, color: '#000', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                 Save &amp; Approve
               </button>
-              <button
-                onClick={() => { setEditMode(false); setEditBody(email.body_text || ''); }}
-                style={{
-                  padding: '7px 16px', borderRadius: 8, border: `1px solid ${C.border}`,
-                  background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer',
-                }}
-              >
+              <button onClick={() => { setEditMode(false); setEditBody(email.body_text || ''); }}
+                style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer' }}>
                 Cancel
               </button>
             </>
           ) : (
             <>
-              <button
-                onClick={() => onApprove(email.id, email.body_text)}
-                disabled={approving}
-                style={{
-                  padding: '7px 18px', borderRadius: 8, border: 'none',
-                  background: C.green, color: '#000',
-                  fontSize: 12, fontWeight: 700, cursor: approving ? 'default' : 'pointer',
-                  opacity: approving ? 0.6 : 1,
-                  display: 'flex', alignItems: 'center', gap: 6,
-                }}
-              >
-                <Send size={13} />
-                {approving ? 'Sending…' : 'Approve & Send'}
+              <button onClick={() => onApprove(email.id, email.body_text)} disabled={approving}
+                style={{ padding: '7px 18px', borderRadius: 8, border: 'none', background: C.green, color: '#000', fontSize: 12, fontWeight: 700, cursor: approving ? 'default' : 'pointer', opacity: approving ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Send size={13} />{approving ? 'Sending…' : 'Approve & Send'}
               </button>
-              <button
-                onClick={() => setEditMode(true)}
-                style={{
-                  padding: '7px 14px', borderRadius: 8,
-                  border: `1px solid ${C.border}`,
-                  background: 'transparent', color: C.muted,
-                  fontSize: 12, cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', gap: 6,
-                }}
-              >
+              <button onClick={() => setEditMode(true)}
+                style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Edit2 size={12} /> Edit First
               </button>
             </>
@@ -377,78 +331,48 @@ function EmailItem({ email, onApprove, onEdit, approving }) {
 // ─── Query detail panel ───────────────────────────────────────────────────────
 
 function QueryDetail({ queryId, onClose, onUpdated }) {
-  const [data,     setData]     = useState(null);
-  const [loading,  setLoading]  = useState(true);
-  const [tab,      setTab]      = useState('emails');
+  const [data,      setData]      = useState(null);
+  const [loading,   setLoading]   = useState(true);
+  const [tab,       setTab]       = useState('emails');
   const [approving, setApproving] = useState(false);
-  const [attentionNote, setAttentionNote] = useState('');
-  const [showAttentionInput, setShowAttentionInput] = useState(false);
-  const [statusUpdating, setStatusUpdating] = useState(false);
+  const [attentionNote,       setAttentionNote]       = useState('');
+  const [showAttentionInput,  setShowAttentionInput]  = useState(false);
+  const [statusUpdating,      setStatusUpdating]      = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
-    try {
-      const d = await fetchQuery(queryId);
-      setData(d);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+    try { setData(await fetchQuery(queryId)); }
+    catch (err) { console.error(err); }
+    finally { setLoading(false); }
   }, [queryId]);
 
   useEffect(() => { load(); }, [load]);
 
   async function handleApprove(emailId, bodyText) {
     setApproving(true);
-    try {
-      await approveEmail(queryId, { email_id: emailId, action: 'approve', body_text: bodyText });
-      await load();
-      onUpdated?.();
-    } catch (err) {
-      alert('Failed to approve: ' + err.message);
-    } finally {
-      setApproving(false);
-    }
+    try { await approveEmail(queryId, { email_id: emailId, action: 'approve', body_text: bodyText }); await load(); onUpdated?.(); }
+    catch (err) { alert('Failed: ' + err.message); }
+    finally { setApproving(false); }
   }
 
   async function handleEdit(emailId, newBody) {
     setApproving(true);
-    try {
-      await approveEmail(queryId, { email_id: emailId, action: 'approve', body_text: newBody });
-      await load();
-      onUpdated?.();
-    } catch (err) {
-      alert('Failed to send: ' + err.message);
-    } finally {
-      setApproving(false);
-    }
+    try { await approveEmail(queryId, { email_id: emailId, action: 'approve', body_text: newBody }); await load(); onUpdated?.(); }
+    catch (err) { alert('Failed: ' + err.message); }
+    finally { setApproving(false); }
   }
 
   async function handleFlagAttention() {
     if (!attentionNote.trim()) return;
-    try {
-      await flagAttention(queryId, { reason: attentionNote });
-      setAttentionNote('');
-      setShowAttentionInput(false);
-      await load();
-      onUpdated?.();
-    } catch (err) {
-      alert(err.message);
-    }
+    try { await flagAttention(queryId, { reason: attentionNote }); setAttentionNote(''); setShowAttentionInput(false); await load(); onUpdated?.(); }
+    catch (err) { alert(err.message); }
   }
 
   async function handleStatusChange(e) {
     setStatusUpdating(true);
-    try {
-      await updateQuery(queryId, { status: e.target.value });
-      await load();
-      onUpdated?.();
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setStatusUpdating(false);
-    }
+    try { await updateQuery(queryId, { status: e.target.value }); await load(); onUpdated?.(); }
+    catch (err) { alert(err.message); }
+    finally { setStatusUpdating(false); }
   }
 
   if (loading) return (
@@ -456,174 +380,85 @@ function QueryDetail({ queryId, onClose, onUpdated }) {
       Loading…
     </div>
   );
-
   if (!data) return null;
 
-  const q = data.query;
-  const emails = data.emails || [];
-  const evidence = data.evidence || [];
+  const q = data.query || data;
+  const emails        = data.emails        || [];
+  const evidence      = data.evidence      || [];
   const notifications = data.notifications || [];
   const pendingDrafts = emails.filter(e => e.is_ai_draft && !e.sent_at && !e.ai_draft_approved_by);
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden', borderLeft: `1px solid ${C.border}` }}>
       {/* Detail header */}
-      <div style={{
-        padding: '16px 20px',
-        borderBottom: `1px solid ${C.border}`,
-        background: C.surface,
-        flexShrink: 0,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+      <div style={{ padding: '14px 18px', borderBottom: `1px solid ${C.border}`, background: C.surface, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
-              <span style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{q.consignment_number}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 5 }}>
+              <span style={{ fontSize: 14, fontWeight: 800, color: C.text }}>{q.consignment_number}</span>
               <TypeBadge type={q.query_type} />
               <StatusBadge status={q.status} />
-              {q.requires_attention && (
-                <Badge label="⚠ NEEDS ATTENTION" color={C.red} bg={C.redDim} />
-              )}
-              {q.autopilot_enabled && (
-                <Badge label="⚡ AUTOPILOT" color={C.green} bg={C.greenDim} />
-              )}
+              {q.requires_attention && <Badge label="⚠ ATTENTION" color={C.red} bg={C.redDim} />}
+              {q.autopilot_enabled  && <Badge label="⚡ AUTOPILOT" color={C.green} bg={C.greenDim} />}
             </div>
-            <div style={{ fontSize: 12, color: C.muted }}>
-              {q.customer_name} · {q.courier_name} · {q.service_name}
-            </div>
-            {q.freshdesk_ticket_number && (
-              <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>
-                Freshdesk: #{q.freshdesk_ticket_number}
-              </div>
-            )}
+            <div style={{ fontSize: 11, color: C.muted }}>{q.customer_name} · {q.courier_name} · {q.service_name}</div>
           </div>
-
-          {/* Status changer */}
-          <select
-            value={q.status}
-            onChange={handleStatusChange}
-            disabled={statusUpdating}
-            style={{
-              background: C.card, border: `1px solid ${C.border}`,
-              borderRadius: 8, color: C.text, fontSize: 12, padding: '6px 10px', cursor: 'pointer',
-            }}
-          >
-            {Object.entries(STATUS_CFG).map(([k, v]) => (
-              <option key={k} value={k}>{v.label}</option>
-            ))}
+          <select value={q.status} onChange={handleStatusChange} disabled={statusUpdating}
+            style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 11, padding: '5px 8px', cursor: 'pointer' }}>
+            {Object.entries(STATUS_CFG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </select>
-
-          <button onClick={onClose} style={{
-            background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 4,
-          }}><X size={18} /></button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 4 }}>
+            <X size={16} />
+          </button>
         </div>
 
-        {/* Claim urgency bar */}
         {q.claim_deadline_at && (
-          <div style={{
-            marginTop: 10,
-            padding: '8px 12px',
-            borderRadius: 8,
-            background: C.amberDim,
-            border: `1px solid ${C.amber}44`,
-            fontSize: 12,
-            color: C.amber,
-            fontWeight: 600,
-          }}>
+          <div style={{ marginTop: 8, padding: '7px 12px', borderRadius: 8, background: C.amberDim, border: `1px solid ${C.amber}44`, fontSize: 12, color: C.amber, fontWeight: 600 }}>
             ⏱ Claim deadline: {fmtDate(q.claim_deadline_at)}
-            {q.claim_amount && ` · Amount: £${Number(q.claim_amount).toFixed(2)}`}
+            {q.claim_amount && ` · £${Number(q.claim_amount).toFixed(2)}`}
             {q.claim_number && ` · Ref: ${q.claim_number}`}
           </div>
         )}
-
-        {/* Attention reason */}
         {q.requires_attention && q.attention_reason && (
-          <div style={{
-            marginTop: 8,
-            padding: '8px 12px',
-            borderRadius: 8,
-            background: C.redDim,
-            border: `1px solid ${C.red}44`,
-            fontSize: 12,
-            color: C.red,
-          }}>
+          <div style={{ marginTop: 6, padding: '7px 12px', borderRadius: 8, background: C.redDim, border: `1px solid ${C.red}44`, fontSize: 12, color: C.red }}>
             ⚠ {q.attention_reason}
           </div>
         )}
-
-        {/* Pending drafts banner */}
         {pendingDrafts.length > 0 && (
-          <div
-            onClick={() => setTab('emails')}
-            style={{
-              marginTop: 8,
-              padding: '8px 12px',
-              borderRadius: 8,
-              background: C.greenDim,
-              border: `1px solid ${C.green}44`,
-              fontSize: 12,
-              color: C.green,
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: 6,
-            }}
-          >
-            <Zap size={13} />
-            {pendingDrafts.length} AI draft{pendingDrafts.length > 1 ? 's' : ''} waiting for approval — click to review
-            <ChevronRight size={13} style={{ marginLeft: 'auto' }} />
+          <div onClick={() => setTab('emails')} style={{ marginTop: 6, padding: '7px 12px', borderRadius: 8, background: C.greenDim, border: `1px solid ${C.green}44`, fontSize: 12, color: C.green, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Zap size={12} />
+            {pendingDrafts.length} AI draft{pendingDrafts.length > 1 ? 's' : ''} waiting for approval
+            <ChevronRight size={12} style={{ marginLeft: 'auto' }} />
           </div>
         )}
       </div>
 
       {/* Tabs */}
-      <div style={{
-        display: 'flex', gap: 0,
-        borderBottom: `1px solid ${C.border}`,
-        background: C.surface,
-        flexShrink: 0,
-      }}>
+      <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, background: C.surface, flexShrink: 0 }}>
         {[
-          { key: 'emails',    label: `Emails${emails.length ? ` (${emails.length})` : ''}`,           icon: Mail },
-          { key: 'evidence',  label: `Evidence${evidence.length ? ` (${evidence.length})` : ''}`,     icon: FileText },
-          { key: 'info',      label: 'Query Info',                                                    icon: Package },
-          { key: 'notes',     label: `Alerts${notifications.length ? ` (${notifications.length})` : ''}`, icon: AlertCircle },
+          { key: 'emails',   label: `Emails${emails.length ? ` (${emails.length})` : ''}`,           icon: Mail },
+          { key: 'evidence', label: `Evidence${evidence.length ? ` (${evidence.length})` : ''}`,     icon: FileText },
+          { key: 'info',     label: 'Info',                                                           icon: Package },
+          { key: 'notes',    label: `Alerts${notifications.length ? ` (${notifications.length})` : ''}`, icon: AlertCircle },
         ].map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            style={{
-              flex: 1,
-              padding: '10px 4px',
-              border: 'none',
-              borderBottom: `2px solid ${tab === key ? C.green : 'transparent'}`,
-              background: 'transparent',
-              color: tab === key ? C.green : C.muted,
-              fontSize: 12,
-              fontWeight: tab === key ? 700 : 500,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 5,
-              transition: 'all 0.15s',
-            }}
-          >
-            <Icon size={13} />{label}
+          <button key={key} onClick={() => setTab(key)} style={{
+            flex: 1, padding: '10px 4px', border: 'none',
+            borderBottom: `2px solid ${tab === key ? C.green : 'transparent'}`,
+            background: 'transparent', color: tab === key ? C.green : C.muted,
+            fontSize: 11, fontWeight: tab === key ? 700 : 500, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+          }}>
+            <Icon size={12} />{label}
           </button>
         ))}
       </div>
 
       {/* Tab content */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px' }}>
+      <div style={{ flex: 1, overflow: 'auto', padding: '14px 16px' }}>
 
-        {/* ── EMAILS ── */}
         {tab === 'emails' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {emails.length === 0 && (
-              <div style={{ textAlign: 'center', color: C.muted, fontSize: 13, padding: 40 }}>
-                No emails yet
-              </div>
-            )}
-            {/* Show pending drafts first */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {emails.length === 0 && <div style={{ textAlign: 'center', color: C.muted, fontSize: 13, padding: 40 }}>No messages yet</div>}
             {[...emails]
               .sort((a, b) => {
                 const aD = a.is_ai_draft && !a.sent_at ? 0 : 1;
@@ -632,48 +467,21 @@ function QueryDetail({ queryId, onClose, onUpdated }) {
                 return new Date(a.created_at) - new Date(b.created_at);
               })
               .map(email => (
-                <EmailItem
-                  key={email.id}
-                  email={email}
-                  onApprove={handleApprove}
-                  onEdit={handleEdit}
-                  approving={approving}
-                />
+                <EmailItem key={email.id} email={email} onApprove={handleApprove} onEdit={handleEdit} approving={approving} />
               ))
             }
-
-            {/* Flag for attention */}
-            <div style={{ marginTop: 8 }}>
+            <div style={{ marginTop: 6 }}>
               {showAttentionInput ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <textarea
-                    placeholder="Describe why this needs attention…"
-                    value={attentionNote}
-                    onChange={e => setAttentionNote(e.target.value)}
-                    style={{
-                      background: C.card, border: `1px solid ${C.red}44`,
-                      borderRadius: 8, color: C.text, fontSize: 12,
-                      padding: 10, resize: 'vertical', minHeight: 70,
-                      fontFamily: 'inherit',
-                    }}
-                  />
+                  <textarea placeholder="Describe why this needs attention…" value={attentionNote} onChange={e => setAttentionNote(e.target.value)}
+                    style={{ background: C.card, border: `1px solid ${C.red}44`, borderRadius: 8, color: C.text, fontSize: 12, padding: 10, resize: 'vertical', minHeight: 70, fontFamily: 'inherit' }} />
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={handleFlagAttention} style={{
-                      padding: '7px 16px', borderRadius: 8, border: 'none',
-                      background: C.red, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                    }}>Flag for Attention</button>
-                    <button onClick={() => setShowAttentionInput(false)} style={{
-                      padding: '7px 14px', borderRadius: 8, border: `1px solid ${C.border}`,
-                      background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer',
-                    }}>Cancel</button>
+                    <button onClick={handleFlagAttention} style={{ padding: '7px 16px', borderRadius: 8, border: 'none', background: C.red, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Flag for Attention</button>
+                    <button onClick={() => setShowAttentionInput(false)} style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer' }}>Cancel</button>
                   </div>
                 </div>
               ) : (
-                <button onClick={() => setShowAttentionInput(true)} style={{
-                  padding: '7px 14px', borderRadius: 8, border: `1px solid ${C.border}`,
-                  background: 'transparent', color: C.muted, fontSize: 12,
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-                }}>
+                <button onClick={() => setShowAttentionInput(true)} style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Flag size={12} /> Flag for Human Attention
                 </button>
               )}
@@ -681,90 +489,54 @@ function QueryDetail({ queryId, onClose, onUpdated }) {
           </div>
         )}
 
-        {/* ── EVIDENCE ── */}
         {tab === 'evidence' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {evidence.length === 0 && (
-              <div style={{ textAlign: 'center', color: C.muted, fontSize: 13, padding: 40 }}>
-                No evidence collected yet
-              </div>
-            )}
+            {evidence.length === 0 && <div style={{ textAlign: 'center', color: C.muted, fontSize: 13, padding: 40 }}>No evidence collected yet</div>}
             {evidence.map(ev => (
-              <div key={ev.id} style={{
-                background: C.card, border: `1px solid ${C.border}`,
-                borderRadius: 10, padding: '12px 14px',
-              }}>
+              <div key={ev.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 14px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: C.blue, background: C.blueDim, padding: '2px 8px', borderRadius: 10 }}>
                     {ev.evidence_type.replace(/_/g, ' ')}
                   </span>
                   <span style={{ fontSize: 10, color: C.muted }}>{fmtDate(ev.created_at)}</span>
-                  {ev.is_courier_approved && (
-                    <span style={{ fontSize: 10, fontWeight: 700, color: C.green, marginLeft: 'auto' }}>✓ Courier Approved</span>
-                  )}
+                  {ev.is_courier_approved && <span style={{ fontSize: 10, fontWeight: 700, color: C.green, marginLeft: 'auto' }}>✓ Courier Approved</span>}
                 </div>
                 {ev.value_text && <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>{ev.value_text}</div>}
-                {ev.value_numeric != null && (
-                  <div style={{ fontSize: 12, color: C.text }}>
-                    {ev.value_unit === 'GBP' ? '£' : ''}{Number(ev.value_numeric).toFixed(2)} {ev.value_unit !== 'GBP' ? ev.value_unit : ''}
-                  </div>
-                )}
-                {ev.file_name && (
-                  <div style={{ fontSize: 11, color: C.blue, marginTop: 4 }}>
-                    📎 {ev.file_name} ({ev.file_format?.toUpperCase()})
-                  </div>
-                )}
+                {ev.value_numeric != null && <div style={{ fontSize: 12, color: C.text }}>{ev.value_unit === 'GBP' ? '£' : ''}{Number(ev.value_numeric).toFixed(2)}</div>}
+                {ev.file_name && <div style={{ fontSize: 11, color: C.blue, marginTop: 4 }}>📎 {ev.file_name}</div>}
               </div>
             ))}
           </div>
         )}
 
-        {/* ── QUERY INFO ── */}
         {tab === 'info' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             {[
-              ['Consignment',    q.consignment_number],
-              ['Customer',       q.customer_name],
-              ['Customer ID',    q.customer_id],
-              ['Courier',        q.courier_name],
-              ['Service',        q.service_name],
-              ['Trigger',        q.trigger],
-              ['Query Type',     q.query_type],
-              ['Status',         q.status],
-              ['Subject',        q.subject],
-              ['Sender Email',   q.sender_email],
-              ['Sender Matched', q.sender_matched ? 'Yes' : 'No'],
-              ['Created',        fmtDate(q.created_at)],
-              ['First Response', q.first_response_at ? fmtDate(q.first_response_at) : '—'],
-              ['Resolved',       q.resolved_at ? fmtDate(q.resolved_at) : '—'],
-              ['Freshdesk',      q.freshdesk_ticket_number || '—'],
-              ['AI Confidence',  q.ai_confidence != null ? `${(q.ai_confidence * 100).toFixed(0)}%` : '—'],
+              ['Consignment',  q.consignment_number],
+              ['Customer',     q.customer_name],
+              ['Courier',      q.courier_name],
+              ['Service',      q.service_name],
+              ['Type',         q.query_type?.replace(/_/g, ' ')],
+              ['Status',       q.status?.replace(/_/g, ' ')],
+              ['Subject',      q.subject],
+              ['Sender Email', q.sender_email],
+              ['Created',      fmtDate(q.created_at)],
+              ['First Reply',  q.first_response_at ? fmtDate(q.first_response_at) : '—'],
+              ['Resolved',     q.resolved_at ? fmtDate(q.resolved_at) : '—'],
             ].map(([k, v]) => (
-              <div key={k} style={{
-                display: 'flex', alignItems: 'baseline', gap: 12,
-                padding: '8px 0', borderBottom: `1px solid ${C.border}`,
-              }}>
-                <span style={{ fontSize: 11, color: C.muted, fontWeight: 600, width: 130, flexShrink: 0 }}>{k}</span>
+              <div key={k} style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '8px 0', borderBottom: `1px solid ${C.border}` }}>
+                <span style={{ fontSize: 11, color: C.muted, fontWeight: 600, width: 110, flexShrink: 0 }}>{k}</span>
                 <span style={{ fontSize: 12, color: C.text }}>{v || '—'}</span>
               </div>
             ))}
           </div>
         )}
 
-        {/* ── ALERTS / NOTIFICATIONS ── */}
         {tab === 'notes' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {notifications.length === 0 && (
-              <div style={{ textAlign: 'center', color: C.muted, fontSize: 13, padding: 40 }}>
-                No notifications for this query
-              </div>
-            )}
+            {notifications.length === 0 && <div style={{ textAlign: 'center', color: C.muted, fontSize: 13, padding: 40 }}>No alerts for this query</div>}
             {notifications.map(n => (
-              <div key={n.id} style={{
-                background: C.card, border: `1px solid ${n.read_at ? C.border : `${C.amber}44`}`,
-                borderRadius: 10, padding: '12px 14px',
-                opacity: n.read_at ? 0.6 : 1,
-              }}>
+              <div key={n.id} style={{ background: C.card, border: `1px solid ${n.read_at ? C.border : `${C.amber}44`}`, borderRadius: 10, padding: '12px 14px', opacity: n.read_at ? 0.6 : 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: C.amber }}>{n.notification_type.replace(/_/g, ' ')}</span>
                   <span style={{ fontSize: 10, color: C.muted }}>{fmtDate(n.created_at)}</span>
@@ -780,82 +552,12 @@ function QueryDetail({ queryId, onClose, onUpdated }) {
   );
 }
 
-// ─── Stats dashboard ──────────────────────────────────────────────────────────
-
-function StatsDashboard() {
-  const [stats, setStats] = useState(null);
-
-  useEffect(() => {
-    fetchStats().then(setStats).catch(console.error);
-  }, []);
-
-  if (!stats) return (
-    <div style={{ padding: '20px 24px', color: C.muted, fontSize: 13 }}>Loading stats…</div>
-  );
-
-  const autopilotRate = stats.total_queries > 0
-    ? Math.round((stats.autopilot_sent / stats.total_queries) * 100)
-    : 0;
-
-  const breachRate = stats.total_open > 0
-    ? Math.round((stats.sla_breached / stats.total_open) * 100)
-    : 0;
-
-  return (
-    <div style={{ padding: '20px 24px' }}>
-      <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 16 }}>Dashboard</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
-        <StatCard label="Open Queries"     value={stats.total_open}       icon={Inbox}         color={C.blue}  />
-        <StatCard label="Need Attention"   value={stats.requires_attention} icon={AlertTriangle} color={C.red}   />
-        <StatCard label="SLA Breached"     value={stats.sla_breached}     icon={Clock}         color={C.amber} sub={`${breachRate}% of open`} />
-        <StatCard label="Pending Drafts"   value={stats.pending_drafts}   icon={Mail}          color={C.green} />
-        <StatCard label="Claim Deadlines"  value={stats.claim_deadlines_7d} icon={AlertCircle}  color={C.amber} sub="due within 7 days" />
-        <StatCard label="AI Autopilot"     value={`${autopilotRate}%`}    icon={Zap}           color={C.green} sub={`${stats.autopilot_sent} auto-sent`} />
-        <StatCard label="Unmatched Emails" value={stats.unmatched_emails} icon={User}          color={stats.unmatched_emails > 0 ? C.amber : C.muted} />
-      </div>
-
-      {/* Claim deadlines section */}
-      {stats.upcoming_claim_deadlines && stats.upcoming_claim_deadlines.length > 0 && (
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: C.amber, marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            ⏱ Upcoming Claim Deadlines
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {stats.upcoming_claim_deadlines.map(q => (
-              <div key={q.id} style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: '10px 14px',
-                background: C.card,
-                border: `1px solid ${q.claim_days_remaining <= 3 ? `${C.red}44` : `${C.amber}33`}`,
-                borderRadius: 8,
-              }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{q.consignment_number}</div>
-                  <div style={{ fontSize: 11, color: C.muted }}>{q.customer_name}</div>
-                </div>
-                <div style={{
-                  fontSize: 13, fontWeight: 800,
-                  color: q.claim_days_remaining <= 3 ? C.red : C.amber,
-                }}>
-                  {q.claim_days_remaining}d left
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Unmatched emails panel ───────────────────────────────────────────────────
+// ─── Unmatched emails modal ───────────────────────────────────────────────────
 
 function UnmatchedPanel({ onClose }) {
-  const [emails, setEmails]    = useState([]);
-  const [loading, setLoading]  = useState(true);
-  const [mapping,  setMapping] = useState(null); // { email, suggestions, selected }
-  const [customers, setCustomers] = useState([]);
-  const [search, setSearch]    = useState('');
+  const [emails,  setEmails]  = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [mapping, setMapping] = useState(null);
 
   useEffect(() => {
     fetchUnmatched().then(d => { setEmails(d.emails || []); setLoading(false); });
@@ -863,90 +565,46 @@ function UnmatchedPanel({ onClose }) {
 
   async function startMap(email) {
     const sugs = await fetchSenderSuggestions(email.from_address);
-    setMapping({ email, suggestions: sugs.suggestions || [], selected: null, search: '' });
+    setMapping({ email, suggestions: sugs.suggestions || [] });
   }
 
   async function doMap(customerId) {
-    await mapSender({
-      email_address: mapping.email.from_address,
-      customer_id: customerId,
-      unmatched_email_id: mapping.email.id,
-    });
+    await mapSender({ email_address: mapping.email.from_address, customer_id: customerId, unmatched_email_id: mapping.email.id });
     setMapping(null);
     const d = await fetchUnmatched();
     setEmails(d.emails || []);
   }
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
-    }}>
-      <div style={{
-        width: 600, maxHeight: '80vh', background: C.surface,
-        border: `1px solid ${C.border}`, borderRadius: 16,
-        display: 'flex', flexDirection: 'column', overflow: 'hidden',
-      }}>
-        <div style={{
-          display: 'flex', alignItems: 'center', padding: '16px 20px',
-          borderBottom: `1px solid ${C.border}`,
-        }}>
-          <span style={{ flex: 1, fontSize: 15, fontWeight: 700, color: C.text }}>Unmatched Emails</span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}>
-            <X size={18} />
-          </button>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+      <div style={{ width: 580, maxHeight: '80vh', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', padding: '14px 18px', borderBottom: `1px solid ${C.border}` }}>
+          <span style={{ flex: 1, fontSize: 14, fontWeight: 700, color: C.text }}>Unmatched Emails</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}><X size={16} /></button>
         </div>
-
         {mapping ? (
-          /* Mapping view */
-          <div style={{ flex: 1, overflow: 'auto', padding: 20 }}>
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>
-                Map: {mapping.email.from_address}
-              </div>
+          <div style={{ flex: 1, overflow: 'auto', padding: 18 }}>
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 3 }}>Map: {mapping.email.from_address}</div>
               <div style={{ fontSize: 12, color: C.muted }}>{mapping.email.subject}</div>
             </div>
-
             {mapping.suggestions.length > 0 && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
-                  Suggested Matches
-                </div>
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>Suggested Matches</div>
                 {mapping.suggestions.map(s => (
-                  <div key={s.id} style={{
-                    display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
-                    background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, marginBottom: 6, cursor: 'pointer',
-                  }}
-                    onClick={() => doMap(s.id)}
-                  >
+                  <div key={s.id} onClick={() => doMap(s.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, marginBottom: 6, cursor: 'pointer' }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{s.business_name}</div>
-                      <div style={{ fontSize: 11, color: C.muted }}>{s.account_number} · {s.match_reason}</div>
+                      <div style={{ fontSize: 11, color: C.muted }}>{s.account_number}</div>
                     </div>
                     <Badge label="Match" color={C.green} bg={C.greenDim} small />
                   </div>
                 ))}
               </div>
             )}
-
-            <input
-              placeholder="Search customer name…"
-              value={mapping.search || ''}
-              onChange={e => setMapping(m => ({ ...m, search: e.target.value }))}
-              style={{
-                width: '100%', background: C.card, border: `1px solid ${C.border}`,
-                borderRadius: 8, color: C.text, fontSize: 12, padding: '8px 12px',
-                boxSizing: 'border-box',
-              }}
-            />
-            <button onClick={() => setMapping(null)} style={{
-              marginTop: 12, padding: '7px 14px', borderRadius: 8,
-              border: `1px solid ${C.border}`, background: 'transparent',
-              color: C.muted, fontSize: 12, cursor: 'pointer',
-            }}>← Back</button>
+            <button onClick={() => setMapping(null)} style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer' }}>← Back</button>
           </div>
         ) : (
-          /* List view */
           <div style={{ flex: 1, overflow: 'auto' }}>
             {loading && <div style={{ padding: 40, textAlign: 'center', color: C.muted }}>Loading…</div>}
             {!loading && emails.length === 0 && (
@@ -956,30 +614,13 @@ function UnmatchedPanel({ onClose }) {
               </div>
             )}
             {emails.map(em => (
-              <div key={em.id} style={{
-                padding: '12px 20px',
-                borderBottom: `1px solid ${C.border}`,
-                display: 'flex', alignItems: 'center', gap: 12,
-              }}>
+              <div key={em.id} style={{ padding: '12px 18px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 2 }}>
-                    {em.from_address}
-                  </div>
-                  <div style={{ fontSize: 11, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {em.subject}
-                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 2 }}>{em.from_address}</div>
+                  <div style={{ fontSize: 11, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{em.subject}</div>
                   <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{fmtDate(em.received_at)}</div>
                 </div>
-                <button
-                  onClick={() => startMap(em)}
-                  style={{
-                    padding: '6px 14px', borderRadius: 8,
-                    border: `1px solid ${C.border}`, background: 'transparent',
-                    color: C.blue, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', gap: 5,
-                    flexShrink: 0,
-                  }}
-                >
+                <button onClick={() => startMap(em)} style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.blue, fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                   <Link size={11} /> Match
                 </button>
               </div>
@@ -993,21 +634,33 @@ function UnmatchedPanel({ onClose }) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
+const STATUS_FILTERS = [
+  { value: '',                       label: 'All Open' },
+  { value: 'open',                   label: 'Open' },
+  { value: 'awaiting_courier',       label: 'Awaiting Courier' },
+  { value: 'awaiting_customer_info', label: 'Awaiting Customer' },
+  { value: 'courier_investigating',  label: 'Investigating' },
+  { value: 'claim_raised',           label: 'Claim Raised' },
+  { value: 'claim_submitted',        label: 'Claim Submitted' },
+  { value: 'resolved',               label: 'Resolved' },
+];
+
 export default function QueriesPage() {
-  const [view,          setView]          = useState('inbox'); // 'inbox' | 'dashboard'
   const [queries,       setQueries]       = useState([]);
+  const [stats,         setStats]         = useState(null);
   const [loading,       setLoading]       = useState(true);
   const [selectedId,    setSelectedId]    = useState(null);
   const [showUnmatched, setShowUnmatched] = useState(false);
-  const [filters,       setFilters]       = useState({
-    status: '', attention: false, search: '',
-  });
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshKey,    setRefreshKey]    = useState(0);
+  const [filters,       setFilters]       = useState({ status: '', attention: false, search: '' });
   const searchRef = useRef();
 
-  // Derived active filter count for badge
-  const activeFilters = [filters.status, filters.attention].filter(Boolean).length;
+  // Load stats
+  useEffect(() => {
+    fetchStats().then(setStats).catch(console.error);
+  }, [refreshKey]);
 
+  // Load inbox
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -1017,182 +670,171 @@ export default function QueriesPage() {
       if (filters.search)    params.search     = filters.search;
       const d = await fetchInbox(params);
       setQueries(d.queries || []);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
   }, [filters]);
 
   useEffect(() => { load(); }, [load, refreshKey]);
 
   function refresh() { setRefreshKey(k => k + 1); }
 
-  // Status filter options
-  const STATUS_FILTERS = [
-    { value: '',         label: 'All' },
-    { value: 'open',     label: 'Open' },
-    { value: 'awaiting_customer_info', label: 'Awaiting Customer' },
-    { value: 'awaiting_courier',       label: 'Awaiting Courier' },
-    { value: 'claim_raised',           label: 'Claim Raised' },
-    { value: 'resolved',               label: 'Resolved' },
-  ];
+  // Clicking a KPI card sets a filter
+  function setKpiFilter(filter) {
+    setFilters(f => ({ ...f, ...filter }));
+  }
 
   return (
-    <div style={{
-      display: 'flex', flexDirection: 'column',
-      height: '100vh', background: C.bg, color: C.text,
-      overflow: 'hidden',
-    }}>
-      {/* Top bar */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 12,
-        padding: '12px 20px',
-        borderBottom: `1px solid ${C.border}`,
-        background: C.surface,
-        flexShrink: 0,
-        flexWrap: 'wrap',
-      }}>
-        {/* Title */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <AlertTriangle size={18} style={{ color: C.amber }} />
-          <span style={{ fontSize: 16, fontWeight: 800, color: C.text }}>Queries &amp; Claims</span>
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, color: C.text, overflow: 'hidden' }}>
 
-        {/* View switcher */}
-        <div style={{ display: 'flex', gap: 4, marginLeft: 8 }}>
-          <Pill color={C.blue} active={view === 'inbox'} onClick={() => setView('inbox')}>
-            <Inbox size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />Inbox
-          </Pill>
-          <Pill color={C.blue} active={view === 'dashboard'} onClick={() => setView('dashboard')}>
-            <BarChart2 size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />Dashboard
-          </Pill>
-        </div>
-
+      {/* ── Header ────────────────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 20px', borderBottom: `1px solid ${C.border}`, background: C.surface, flexShrink: 0, flexWrap: 'wrap' }}>
+        <AlertTriangle size={16} style={{ color: C.amber }} />
+        <span style={{ fontSize: 16, fontWeight: 800, color: C.text, marginRight: 4 }}>Queries &amp; Claims</span>
         <div style={{ flex: 1 }} />
 
         {/* Search */}
-        {view === 'inbox' && (
-          <div style={{ position: 'relative' }}>
-            <Search size={13} style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: C.muted }} />
-            <input
-              ref={searchRef}
-              placeholder="Search consignment, customer…"
-              value={filters.search}
-              onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
-              style={{
-                background: C.card, border: `1px solid ${C.border}`,
-                borderRadius: 8, color: C.text, fontSize: 12,
-                padding: '7px 10px 7px 30px', width: 220,
-              }}
-            />
-          </div>
-        )}
+        <div style={{ position: 'relative' }}>
+          <Search size={13} style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: C.muted }} />
+          <input
+            ref={searchRef}
+            placeholder="Search consignment, customer…"
+            value={filters.search}
+            onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
+            style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 12, padding: '7px 10px 7px 30px', width: 210 }}
+          />
+        </div>
 
-        {/* Unmatched emails button */}
-        <button
-          onClick={() => setShowUnmatched(true)}
-          style={{
-            padding: '7px 14px', borderRadius: 8,
-            border: `1px solid ${C.border}`,
-            background: 'transparent',
-            color: C.muted,
-            fontSize: 12, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: 5,
-          }}
-        >
-          <User size={13} /> Unmatched Emails
+        <button onClick={() => setShowUnmatched(true)} style={{ padding: '7px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+          <User size={13} />
+          {stats?.unmatched_emails > 0 && <span style={{ background: C.amber, color: '#000', borderRadius: 10, padding: '1px 6px', fontSize: 10, fontWeight: 700 }}>{stats.unmatched_emails}</span>}
+          Unmatched
         </button>
 
-        {/* Refresh */}
-        <button onClick={refresh} style={{
-          background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 6,
-        }}>
+        <button onClick={refresh} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 6 }}>
           <RefreshCw size={15} />
         </button>
       </div>
 
-      {/* Filter bar (inbox only) */}
-      {view === 'inbox' && (
-        <div style={{
-          display: 'flex', gap: 6, alignItems: 'center',
-          padding: '8px 20px',
-          borderBottom: `1px solid ${C.border}`,
-          background: C.bg,
-          flexShrink: 0,
-          flexWrap: 'wrap',
-        }}>
-          <Filter size={12} style={{ color: C.muted, flexShrink: 0 }} />
-          {STATUS_FILTERS.map(f => (
-            <Pill
-              key={f.value}
-              color={C.blue}
-              active={filters.status === f.value}
-              onClick={() => setFilters(prev => ({ ...prev, status: f.value }))}
-            >
-              {f.label}
-            </Pill>
-          ))}
-          <div style={{ width: 1, height: 16, background: C.border, flexShrink: 0 }} />
-          <Pill
+      {/* ── Fixed KPI Dashboard Strip ──────────────────────────────────────────── */}
+      <div style={{ flexShrink: 0, padding: '12px 20px', borderBottom: `1px solid ${C.border}`, background: C.bg }}>
+        <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 2 }}>
+          <KpiCard
+            label="Open"
+            value={stats?.total_open ?? '—'}
+            color={C.blue}
+            icon={Inbox}
+            active={!filters.attention && !filters.status}
+            onClick={() => setKpiFilter({ status: '', attention: false })}
+          />
+          <KpiCard
+            label="Needs Attention"
+            value={stats?.requires_attention ?? '—'}
             color={C.red}
+            icon={AlertTriangle}
+            warn
             active={filters.attention}
-            onClick={() => setFilters(prev => ({ ...prev, attention: !prev.attention }))}
-          >
-            ⚠ Needs Attention
-          </Pill>
+            onClick={() => setKpiFilter({ attention: !filters.attention })}
+          />
+          <KpiCard
+            label="SLA Breached"
+            value={stats?.sla_breached ?? '—'}
+            color={C.amber}
+            icon={Clock}
+            warn
+          />
+          <KpiCard
+            label="Pending Drafts"
+            value={stats?.pending_drafts ?? '—'}
+            color={C.green}
+            icon={Mail}
+            warn
+            sub="awaiting approval"
+          />
+          <KpiCard
+            label="Claim Deadlines"
+            value={stats?.claim_deadlines_7d ?? '—'}
+            color={C.amber}
+            icon={AlertCircle}
+            warn
+            sub="due within 7 days"
+            active={filters.status === 'claim_raised' || filters.status === 'claim_submitted'}
+            onClick={() => setKpiFilter({ status: 'claim_raised', attention: false })}
+          />
+          <KpiCard
+            label="Total Queries"
+            value={stats?.total_queries ?? '—'}
+            color={C.muted}
+            icon={MessageSquare}
+          />
         </div>
-      )}
 
-      {/* Body */}
-      {view === 'dashboard' ? (
-        <div style={{ flex: 1, overflow: 'auto' }}>
-          <StatsDashboard />
-        </div>
-      ) : (
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          {/* Inbox list */}
-          <div style={{
-            width: selectedId ? 360 : '100%',
-            maxWidth: selectedId ? 360 : undefined,
-            flexShrink: 0,
-            borderRight: selectedId ? `1px solid ${C.border}` : 'none',
-            overflow: 'auto',
-            transition: 'width 0.2s',
-          }}>
-            {loading && (
-              <div style={{ padding: 40, textAlign: 'center', color: C.muted }}>Loading…</div>
-            )}
-            {!loading && queries.length === 0 && (
-              <div style={{ padding: 60, textAlign: 'center' }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 4 }}>Inbox is clear</div>
-                <div style={{ fontSize: 12, color: C.muted }}>No queries match your current filters</div>
+        {/* Claim deadline alerts — shown when there are upcoming deadlines */}
+        {stats?.upcoming_claim_deadlines?.length > 0 && (
+          <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {stats.upcoming_claim_deadlines.map(d => (
+              <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: d.days_remaining <= 3 ? C.redDim : C.amberDim, border: `1px solid ${d.days_remaining <= 3 ? C.red : C.amber}44`, borderRadius: 8, fontSize: 11 }}>
+                <span style={{ fontWeight: 700, color: d.days_remaining <= 3 ? C.red : C.amber }}>{d.days_remaining}d</span>
+                <span style={{ color: C.muted }}>{d.consignment_number} · {d.customer_name}</span>
               </div>
-            )}
-            {queries.map(q => (
-              <InboxRow
-                key={q.id}
-                q={q}
-                selected={q.id === selectedId}
-                onClick={() => setSelectedId(id => id === q.id ? null : q.id)}
-              />
             ))}
           </div>
+        )}
+      </div>
 
-          {/* Detail panel */}
-          {selectedId && (
-            <QueryDetail
-              key={selectedId}
-              queryId={selectedId}
-              onClose={() => setSelectedId(null)}
-              onUpdated={refresh}
-            />
+      {/* ── Filter bar ────────────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '8px 20px', borderBottom: `1px solid ${C.border}`, background: C.bg, flexShrink: 0, flexWrap: 'wrap' }}>
+        <Filter size={12} style={{ color: C.muted, flexShrink: 0 }} />
+        {STATUS_FILTERS.map(f => (
+          <Pill key={f.value} color={C.blue} active={filters.status === f.value && !filters.attention} onClick={() => setFilters(p => ({ ...p, status: f.value, attention: false }))}>
+            {f.label}
+          </Pill>
+        ))}
+        <div style={{ width: 1, height: 16, background: C.border, flexShrink: 0 }} />
+        <Pill color={C.red} active={filters.attention} onClick={() => setFilters(p => ({ ...p, attention: !p.attention }))}>
+          ⚠ Attention Only
+        </Pill>
+      </div>
+
+      {/* ── Main content: ticket list + detail panel ───────────────────────────── */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+
+        {/* Ticket list */}
+        <div style={{
+          width: selectedId ? 360 : '100%',
+          maxWidth: selectedId ? 360 : undefined,
+          flexShrink: 0,
+          overflow: 'auto',
+          transition: 'width 0.2s',
+        }}>
+          {loading && <div style={{ padding: 40, textAlign: 'center', color: C.muted }}>Loading…</div>}
+          {!loading && queries.length === 0 && (
+            <div style={{ padding: 60, textAlign: 'center' }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>📭</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 4 }}>No queries match</div>
+              <div style={{ fontSize: 12, color: C.muted }}>Try a different filter or search term</div>
+            </div>
           )}
+          {queries.map(q => (
+            <InboxRow
+              key={q.id}
+              q={q}
+              selected={q.id === selectedId}
+              onClick={() => setSelectedId(id => id === q.id ? null : q.id)}
+            />
+          ))}
         </div>
-      )}
 
-      {/* Unmatched modal */}
+        {/* Detail panel */}
+        {selectedId && (
+          <QueryDetail
+            key={selectedId}
+            queryId={selectedId}
+            onClose={() => setSelectedId(null)}
+            onUpdated={refresh}
+          />
+        )}
+      </div>
+
       {showUnmatched && <UnmatchedPanel onClose={() => setShowUnmatched(false)} />}
     </div>
   );

@@ -113,89 +113,74 @@ router.get('/', async (req, res, next) => {
 
 router.get('/stats', async (req, res, next) => {
   try {
-    const [overview, byStatus, byCourier, byType, slaStats, claimDeadlines, unmatched] = await Promise.all([
+    const RESOLVED = `('resolved','resolved_claim_approved','resolved_claim_rejected')`;
 
-      // Overview counts
+    const [overview, byStatus, byType, claimDeadlines, unmatched] = await Promise.all([
+
+      // All key counts in one pass over the inbox view
       query(`
         SELECT
-          COUNT(*)                                                    AS total_open,
-          COUNT(*) FILTER (WHERE requires_attention = true)          AS needs_attention,
-          COUNT(*) FILTER (WHERE pending_drafts > 0)                 AS awaiting_approval,
-          COUNT(*) FILTER (WHERE status = 'resolved'
-                              OR status = 'resolved_claim_approved'
-                              OR status = 'resolved_claim_rejected') AS resolved_today,
-          COUNT(*) FILTER (WHERE sla_breached = true)               AS sla_breached,
-          COUNT(*) FILTER (WHERE claim_days_remaining <= 7
-                              AND claim_days_remaining > 0)          AS claim_deadline_urgent,
-          ROUND(AVG(first_response_mins) FILTER (WHERE first_response_mins IS NOT NULL)) AS avg_first_response_mins
+          COUNT(*) FILTER (WHERE status NOT IN ${RESOLVED})                         AS total_open,
+          COUNT(*) FILTER (WHERE requires_attention = true
+                             AND status NOT IN ${RESOLVED})                          AS requires_attention,
+          COUNT(*) FILTER (WHERE sla_breached = true)                              AS sla_breached,
+          COALESCE(SUM(pending_drafts) FILTER (WHERE status NOT IN ${RESOLVED}), 0) AS pending_drafts,
+          COUNT(*) FILTER (
+            WHERE claim_deadline_at IS NOT NULL
+              AND claim_deadline_at BETWEEN NOW() AND NOW() + INTERVAL '7 days'
+              AND status NOT IN ${RESOLVED}
+          )                                                                          AS claim_deadlines_7d,
+          COUNT(*)                                                                   AS total_queries
         FROM queries_inbox_view
-        WHERE (status NOT IN ('resolved','resolved_claim_approved','resolved_claim_rejected')
-               OR resolved_at >= NOW() - INTERVAL '24 hours')
       `),
 
-      // By status
+      // By status (open only)
       query(`
         SELECT status, COUNT(*)::int AS count
         FROM queries
-        WHERE status NOT IN ('resolved','resolved_claim_approved','resolved_claim_rejected')
+        WHERE status NOT IN ${RESOLVED}
         GROUP BY status ORDER BY count DESC
       `),
 
-      // By courier
-      query(`
-        SELECT courier_name, courier_code, COUNT(*)::int AS count
-        FROM queries
-        WHERE status NOT IN ('resolved','resolved_claim_approved','resolved_claim_rejected')
-          AND courier_name IS NOT NULL
-        GROUP BY courier_name, courier_code ORDER BY count DESC
-      `),
-
-      // By query type
+      // By query type (open only)
       query(`
         SELECT query_type, COUNT(*)::int AS count
         FROM queries
-        WHERE status NOT IN ('resolved','resolved_claim_approved','resolved_claim_rejected')
+        WHERE status NOT IN ${RESOLVED}
         GROUP BY query_type ORDER BY count DESC
       `),
 
-      // SLA performance (last 30 days)
+      // Upcoming claim deadlines (next 14 days)
       query(`
-        SELECT
-          COUNT(*)::int                                                          AS total,
-          COUNT(*) FILTER (WHERE sla_breached = false)::int                     AS within_sla,
-          ROUND((COUNT(*) FILTER (WHERE sla_breached = false)::numeric /
-                 NULLIF(COUNT(*),0) * 100), 1)                                  AS sla_compliance_pct,
-          ROUND(AVG(first_response_mins) FILTER (WHERE first_response_mins IS NOT NULL)) AS avg_response_mins
-        FROM queries_inbox_view
-        WHERE created_at >= NOW() - INTERVAL '30 days'
-          AND sla_hours IS NOT NULL
-      `),
-
-      // Claims with approaching deadlines (next 14 days)
-      query(`
-        SELECT id, consignment_number, customer_name, claim_number,
-               claim_amount, claim_deadline_at,
+        SELECT id, consignment_number, customer_name,
+               claim_deadline_at,
                CEIL(EXTRACT(EPOCH FROM (claim_deadline_at - NOW())) / 86400)::int AS days_remaining
         FROM queries
         WHERE claim_deadline_at IS NOT NULL
           AND claim_deadline_at > NOW()
           AND claim_deadline_at < NOW() + INTERVAL '14 days'
-          AND status NOT IN ('resolved','resolved_claim_approved','resolved_claim_rejected')
+          AND status NOT IN ${RESOLVED}
         ORDER BY claim_deadline_at ASC
+        LIMIT 10
       `),
 
-      // Unmatched emails count
+      // Unmatched emails
       query(`SELECT COUNT(*)::int AS count FROM unmatched_emails WHERE resolved = false`),
     ]);
 
+    const o = overview.rows[0];
     res.json({
-      overview:         overview.rows[0],
-      by_status:        byStatus.rows,
-      by_courier:       byCourier.rows,
-      by_type:          byType.rows,
-      sla_performance:  slaStats.rows[0],
-      claim_deadlines:  claimDeadlines.rows,
-      unmatched_emails: unmatched.rows[0].count,
+      total_open:               parseInt(o.total_open)            || 0,
+      requires_attention:       parseInt(o.requires_attention)    || 0,
+      sla_breached:             parseInt(o.sla_breached)          || 0,
+      pending_drafts:           parseInt(o.pending_drafts)        || 0,
+      claim_deadlines_7d:       parseInt(o.claim_deadlines_7d)    || 0,
+      autopilot_sent:           0,                                        // future
+      total_queries:            parseInt(o.total_queries)         || 0,
+      unmatched_emails:         parseInt(unmatched.rows[0].count) || 0,
+      upcoming_claim_deadlines: claimDeadlines.rows,
+      by_status:                byStatus.rows,
+      by_type:                  byType.rows,
     });
   } catch (err) { next(err); }
 });
