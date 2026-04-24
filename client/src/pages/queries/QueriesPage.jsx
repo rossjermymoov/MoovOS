@@ -757,6 +757,45 @@ function UnmatchedPanel({ onClose }) {
   );
 }
 
+// ─── Seed button (dev tool) ───────────────────────────────────────────────────
+
+function SeedButton({ onDone }) {
+  const [state, setState] = useState('idle'); // idle | loading | ok | error
+  const [msg,   setMsg]   = useState('');
+
+  async function run() {
+    setState('loading');
+    try {
+      const r = await fetch('/api/queries/seed-now', { method: 'POST' });
+      const j = await r.json();
+      if (j.error) {
+        setState('error');
+        setMsg(j.error + (j.detail ? ' — ' + j.detail : ''));
+      } else {
+        setState('ok');
+        setMsg(`Seeded ${j.seeded} tickets`);
+        setTimeout(() => { setState('idle'); onDone?.(); }, 2000);
+      }
+    } catch (e) {
+      setState('error');
+      setMsg(e.message);
+    }
+  }
+
+  const bg    = state === 'ok' ? C.green : state === 'error' ? C.red : C.card;
+  const label = state === 'loading' ? 'Seeding…' : state === 'ok' ? msg : state === 'error' ? '⚠ ' + msg : 'Re-seed';
+
+  return (
+    <button onClick={run} disabled={state === 'loading'} title="Wipe and re-seed practice tickets"
+      style={{ padding: '5px 11px', borderRadius: 7, border: `1px solid ${C.border}`,
+        background: bg, color: state === 'idle' ? C.muted : '#fff', fontSize: 11,
+        cursor: state === 'loading' ? 'default' : 'pointer', maxWidth: state === 'error' ? 280 : 'auto',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      {label}
+    </button>
+  );
+}
+
 // ─── Filter bar ───────────────────────────────────────────────────────────────
 
 const STATUS_FILTERS = [
@@ -849,6 +888,8 @@ export default function QueriesPage() {
         <button onClick={refresh} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 5 }}>
           <RefreshCw size={14} />
         </button>
+
+        <SeedButton onDone={refresh} />
       </div>
 
       {/* ── KPI strip ──────────────────────────────────────────────────────── */}
