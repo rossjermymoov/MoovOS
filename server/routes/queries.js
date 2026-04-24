@@ -177,7 +177,7 @@ async function seedNowHandler(req, res, next) {
           created_at, updated_at
         ) VALUES ($1,$2,$3,'dpd','DPD','DPD-12','DPD Next Day',
           'customer_email'::query_trigger, $4::query_type, $5::query_status,
-          $6, $6, $7, true, $8, $9, $9)
+          $6, $6::text, $7, true, $8, $9, $9)
         RETURNING id
       `, [consNum, c.id, c.business_name, s.type, s.status, s.subject,
           c.primary_email, s.attention, createdAt]);
