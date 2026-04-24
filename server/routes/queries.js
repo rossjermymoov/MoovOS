@@ -107,6 +107,31 @@ router.get('/', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/queries/debug
+// Diagnostic endpoint — shows raw DB state to help debug empty inbox
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/debug', async (req, res, next) => {
+  try {
+    const [queryCount, customerCount, migrations, enumValues, viewTest, directInsertTest] = await Promise.all([
+      query(`SELECT COUNT(*)::int AS n FROM queries`),
+      query(`SELECT COUNT(*)::int AS n FROM customers WHERE primary_email IS NOT NULL`),
+      query(`SELECT filename, run_at FROM _migrations WHERE filename LIKE '07%' ORDER BY filename`),
+      query(`SELECT unnest(enum_range(NULL::query_status))::text AS v`),
+      query(`SELECT COUNT(*)::int AS n FROM queries_inbox_view`),
+      query(`SELECT 1`), // basic connectivity check
+    ]);
+    res.json({
+      queries_count:    queryCount.rows[0].n,
+      customers_with_email: customerCount.rows[0].n,
+      migrations_run:   migrations.rows,
+      query_status_values: enumValues.rows.map(r => r.v),
+      inbox_view_count: viewTest.rows[0].n,
+    });
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/queries/stats
 // Dashboard statistics for the queries module
 // ─────────────────────────────────────────────────────────────────────────────
