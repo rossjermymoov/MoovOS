@@ -11,6 +11,45 @@ import { query } from './index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+/**
+ * Split a SQL file into individual statements, respecting dollar-quoted blocks.
+ *
+ * A naive split on ";" breaks DO $$ … $$; blocks because every internal
+ * semicolon (variable declarations, IF … END IF; etc.) becomes a separate
+ * fragment that PostgreSQL rejects.
+ *
+ * Strategy: walk line by line, toggling `inDollarQuote` each time we see an
+ * odd number of `$$` tokens on a line.  Only treat a trailing `;` as a
+ * statement boundary when we are NOT inside a dollar-quoted block.
+ */
+function splitSqlStatements(sql) {
+  const statements = [];
+  let buffer       = '';
+  let inDollar     = false;
+
+  for (const line of sql.split('\n')) {
+    buffer += line + '\n';
+
+    // Count bare $$ occurrences on this line (ignores $tag$ variants for now,
+    // which none of our migrations use).
+    const dollarCount = (line.match(/\$\$/g) || []).length;
+    if (dollarCount % 2 !== 0) inDollar = !inDollar;
+
+    // A trailing semicolon outside a dollar-quoted block ends a statement.
+    if (!inDollar && /;\s*$/.test(line)) {
+      const stmt = buffer.trim().replace(/;\s*$/, '');
+      if (stmt && !stmt.startsWith('--')) statements.push(stmt);
+      buffer = '';
+    }
+  }
+
+  // Any remaining content (statement without trailing newline)
+  const tail = buffer.trim();
+  if (tail && !tail.startsWith('--')) statements.push(tail);
+
+  return statements;
+}
+
 export async function runMigrations() {
   console.log('🔄 Checking database migrations…');
 
@@ -45,10 +84,11 @@ export async function runMigrations() {
       // PostgreSQL does not allow a newly-added enum value to be used in the
       // same transaction in which it was created, so each statement must be
       // committed separately.
-      const statements = sql
-        .split(/;\s*$/m)
-        .map(s => s.trim())
-        .filter(s => s.length > 0 && !s.startsWith('--'));
+      //
+      // We must NOT split inside dollar-quoted blocks (DO $$ … $$; or
+      // CREATE FUNCTION … $$; etc.) — splitting there would send fragments
+      // like "qid UUID" to the server, causing confusing parse errors.
+      const statements = splitSqlStatements(sql);
 
       for (const stmt of statements) {
         await query(stmt);
