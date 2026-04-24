@@ -283,39 +283,78 @@ async function seedNowHandler(req, res, next) {
       },
     ];
 
-    // Wipe ALL queries and every dependent row via CASCADE
-    await query(`TRUNCATE queries CASCADE`);
+    const log = [];
+
+    // Step 1: clear everything
+    try {
+      await query(`TRUNCATE queries CASCADE`);
+      log.push({ step: 'truncate', ok: true });
+    } catch (e) {
+      // TRUNCATE failed — try row-by-row delete instead
+      log.push({ step: 'truncate', ok: false, error: e.message });
+      try {
+        await query(`DELETE FROM query_emails`);
+        await query(`DELETE FROM query_notifications`);
+        await query(`DELETE FROM query_evidence`);
+        await query(`DELETE FROM queries`);
+        log.push({ step: 'manual_delete', ok: true });
+      } catch (e2) {
+        return res.status(500).json({ step: 'clear', error: e2.message, log });
+      }
+    }
+
+    // Step 2: look up customer IDs live (don't rely on hardcoded UUIDs)
+    const emailToCustomer = {};
+    const emails = SEEDS.map(s => s.primary_email);
+    const custRes = await query(
+      `SELECT id, primary_email FROM customers WHERE primary_email = ANY($1::varchar[])`,
+      [emails]
+    );
+    for (const r of custRes.rows) emailToCustomer[r.primary_email] = r.id;
+    log.push({ step: 'lookup_customers', found: custRes.rows.length, emails: Object.keys(emailToCustomer) });
 
     const inserted = [];
     for (const s of SEEDS) {
       const createdAt = new Date(Date.now() - s.daysAgo * 86400000).toISOString();
       const consNum = s.consignment_number;
+      // Use live customer ID, fall back to hardcoded if lookup missed it
+      const customerId = emailToCustomer[s.primary_email] || s.customer_id;
 
-      const qRes = await query(`
-        INSERT INTO queries (
-          consignment_number, customer_id, customer_name,
-          courier_code, courier_name, service_code, service_name,
-          trigger, query_type, status,
-          subject, description,
-          sender_email, sender_matched, requires_attention,
-          created_at, updated_at
-        ) VALUES (
-          $1::varchar, $2::uuid, $3::varchar,
-          $4::varchar, $5::varchar, $6::varchar, $7::varchar,
-          'customer_email'::query_trigger, $8::query_type, $9::query_status,
-          $10::varchar, $11::text,
-          $12::varchar, true, $13::boolean,
-          $14::timestamptz, $14::timestamptz
-        )
-        ON CONFLICT (consignment_number) DO NOTHING
-        RETURNING id
-      `, [consNum, s.customer_id, s.business_name,
-          s.courier_code, s.courier_name, s.service_code, s.service_name,
-          s.type, s.status,
-          s.subject, s.body,
-          s.primary_email, s.attention, createdAt]);
+      let qid;
+      try {
+        const qRes = await query(`
+          INSERT INTO queries (
+            consignment_number, customer_id, customer_name,
+            courier_code, courier_name, service_code, service_name,
+            trigger, query_type, status,
+            subject, description,
+            sender_email, sender_matched, requires_attention,
+            created_at, updated_at
+          ) VALUES (
+            $1::varchar, $2::uuid, $3::varchar,
+            $4::varchar, $5::varchar, $6::varchar, $7::varchar,
+            'customer_email'::query_trigger, $8::query_type, $9::query_status,
+            $10::varchar, $11::text,
+            $12::varchar, true, $13::boolean,
+            $14::timestamptz, $14::timestamptz
+          )
+          ON CONFLICT (consignment_number) DO UPDATE SET
+            customer_id = EXCLUDED.customer_id,
+            status = EXCLUDED.status,
+            subject = EXCLUDED.subject,
+            updated_at = NOW()
+          RETURNING id
+        `, [consNum, customerId, s.business_name,
+            s.courier_code, s.courier_name, s.service_code, s.service_name,
+            s.type, s.status,
+            s.subject, s.body,
+            s.primary_email, s.attention, createdAt]);
+        qid = qRes.rows[0]?.id;
+      } catch (e) {
+        inserted.push({ consignment: consNum, error: e.message });
+        continue;
+      }
 
-      const qid = qRes.rows[0]?.id;
       if (!qid) { inserted.push({ skipped: true, consignment: consNum }); continue; }
 
       await query(`
@@ -331,7 +370,7 @@ async function seedNowHandler(req, res, next) {
       inserted.push({ id: qid, consignment: consNum, customer: s.business_name, status: s.status });
     }
 
-    res.json({ seeded: inserted.length, queries: inserted });
+    res.json({ seeded: inserted.filter(i => i.id).length, log, queries: inserted });
   } catch (err) {
     res.status(500).json({ error: err.message, detail: err.detail || null });
   }
