@@ -200,7 +200,7 @@ async function seedNowHandler(req, res, next) {
   } catch (err) {
     res.status(500).json({ error: err.message, detail: err.detail || null });
   }
-});
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/queries/stats
