@@ -175,12 +175,17 @@ async function seedNowHandler(req, res, next) {
           subject, description,
           sender_email, sender_matched, requires_attention,
           created_at, updated_at
-        ) VALUES ($1,$2,$3,'dpd','DPD','DPD-12','DPD Next Day',
+        ) VALUES (
+          $1::varchar, $2::uuid, $3::varchar,
+          'dpd', 'DPD', 'DPD-12', 'DPD Next Day',
           'customer_email'::query_trigger, $4::query_type, $5::query_status,
-          $6, $10, $7, true, $8, $9, $9)
+          $6::varchar, $7::text,
+          $8::varchar, true, $9::boolean,
+          $10::timestamptz, $10::timestamptz
+        )
         RETURNING id
-      `, [consNum, c.id, c.business_name, s.type, s.status, s.subject,
-          c.primary_email, s.attention, createdAt, s.subject]);
+      `, [consNum, c.id, c.business_name, s.type, s.status,
+          s.subject, s.subject, c.primary_email, s.attention, createdAt]);
 
       const qid = qRes.rows[0].id;
 
@@ -188,9 +193,11 @@ async function seedNowHandler(req, res, next) {
         INSERT INTO query_emails (
           query_id, direction, subject, body_text,
           from_address, to_address, is_ai_draft, received_at, created_at
-        ) VALUES ($1, 'inbound_customer'::email_direction, $2,
-          'Practice query ' || $3 || ' — ' || $2,
-          $4, 'queries@moovparcel.co.uk', false, $5, $5)
+        ) VALUES (
+          $1::uuid, 'inbound_customer'::email_direction, $2::varchar,
+          ('Practice query ' || $3::varchar || ' — ' || $2::varchar)::text,
+          $4::varchar, 'queries@moovparcel.co.uk', false, $5::timestamptz, $5::timestamptz
+        )
       `, [qid, s.subject, consNum, c.primary_email, createdAt]);
 
       inserted.push({ id: qid, consignment: consNum, customer: c.business_name, status: s.status });
