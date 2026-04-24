@@ -113,13 +113,22 @@ router.get('/', async (req, res, next) => {
 
 router.get('/debug', async (req, res, next) => {
   try {
-    const [queryCount, customerCount, migrations, enumValues, viewTest, columns] = await Promise.all([
+    const [queryCount, customerCount, migrations, enumValues, viewTest, columns, sampleParcels] = await Promise.all([
       query(`SELECT COUNT(*)::int AS n FROM queries`),
       query(`SELECT COUNT(*)::int AS n FROM customers WHERE primary_email IS NOT NULL`),
       query(`SELECT filename, run_at FROM _migrations WHERE filename LIKE '07%' ORDER BY filename`),
       query(`SELECT unnest(enum_range(NULL::query_status))::text AS v`),
       query(`SELECT COUNT(*)::int AS n FROM queries_inbox_view`),
       query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'queries' ORDER BY ordinal_position`),
+      query(`SELECT DISTINCT ON (p.customer_id)
+               p.consignment_number, p.courier_code, p.courier_name, p.service_name,
+               p.status AS parcel_status, p.last_event_at,
+               c.id AS customer_id, c.business_name, c.primary_email
+             FROM parcels p
+             JOIN customers c ON p.customer_id = c.id
+             WHERE c.primary_email IS NOT NULL AND p.consignment_number IS NOT NULL
+             ORDER BY p.customer_id, p.last_event_at DESC NULLS LAST
+             LIMIT 12`),
     ]);
     res.json({
       queries_count:        queryCount.rows[0].n,
@@ -128,6 +137,7 @@ router.get('/debug', async (req, res, next) => {
       query_status_values:  enumValues.rows.map(r => r.v),
       inbox_view_count:     viewTest.rows[0].n,
       queries_columns:      columns.rows.map(r => r.column_name),
+      sample_parcels:       sampleParcels.rows,
     });
   } catch (err) { next(err); }
 });
