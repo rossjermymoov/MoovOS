@@ -472,67 +472,99 @@ function EmailThreads({ emails, onApprove, onEdit, approving, courierName, couri
   );
 }
 
-// ─── Draft reply card ─────────────────────────────────────────────────────────
+// ─── Draft footer — fixed bottom compose bar ──────────────────────────────────
 
-function DraftCard({ title, toLabel, icon: Icon, accentColor, loading, draft, onGenerate, onEdit }) {
-  const [expanded, setExpanded] = useState(false);
+function DraftFooter({ q, draft, setDraft, generateDraft }) {
+  const [active, setActive] = useState(null); // null | 'customer' | 'courier'
 
-  // Auto-expand when a draft arrives
-  useEffect(() => { if (draft) setExpanded(true); }, [draft]);
+  // Auto-open when a draft arrives
+  useEffect(() => {
+    if (draft.customer && active === null) setActive('customer');
+    else if (draft.courier && active === null) setActive('courier');
+  }, [draft.customer, draft.courier]);
+
+  const current = active ? draft[active] : null;
+  const loading  = active === 'customer' ? draft.loadingCustomer : draft.loadingCourier;
+  const accent   = active === 'customer' ? C.blue : C.amber;
+  const label    = active === 'customer' ? `Reply to ${q.sender_email || q.customer_name}` : `Email ${q.courier_name || 'Courier'}`;
 
   return (
-    <div style={{ background: C.card, border: `1px solid ${draft ? accentColor + '44' : C.border}`,
-      borderRadius: 8, marginBottom: 10, overflow: 'hidden', transition: 'border-color 0.2s' }}>
-      {/* Card header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 13px',
-        borderBottom: expanded && draft ? `1px solid ${C.border}` : 'none', cursor: 'pointer' }}
-        onClick={() => draft && setExpanded(e => !e)}>
-        <Icon size={13} color={accentColor} style={{ flexShrink: 0 }} />
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{title}</div>
-          {toLabel && <div style={{ fontSize: 10, color: C.muted }}>To: {toLabel}</div>}
-        </div>
-        {draft && (
-          expanded ? <ChevronUp size={13} color={C.muted} /> : <ChevronDown size={13} color={C.muted} />
-        )}
-        <button
-          onClick={e => { e.stopPropagation(); onGenerate(); }}
-          disabled={loading}
-          style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px',
-            borderRadius: 5, border: `1px solid ${accentColor}55`, background: `${accentColor}14`,
-            color: accentColor, fontSize: 11, fontWeight: 600, cursor: loading ? 'default' : 'pointer',
-            opacity: loading ? 0.7 : 1, flexShrink: 0 }}>
-          <Sparkles size={11} />
-          {loading ? 'Generating…' : draft ? 'Regenerate' : 'Generate Draft'}
-        </button>
-      </div>
+    <div style={{ flexShrink: 0, borderTop: `1px solid ${C.border}`, background: C.surface }}>
 
-      {/* Draft text area */}
-      {expanded && draft && (
-        <div style={{ padding: '12px 13px' }}>
-          {draft.subject && (
-            <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>
-              Subject: <span style={{ color: C.sub, fontWeight: 600 }}>{draft.subject}</span>
+      {/* Compose area — expands upward when a panel is active */}
+      {active && (
+        <div style={{ padding: '10px 14px', borderBottom: `1px solid ${C.border}` }}>
+          {current?.subject && (
+            <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>
+              Subject: <span style={{ color: C.sub }}>{current.subject}</span>
             </div>
           )}
-          <textarea
-            value={draft.text}
-            onChange={e => onEdit(e.target.value)}
-            style={{ width: '100%', boxSizing: 'border-box', background: C.surface,
-              border: `1px solid ${C.border}`, borderRadius: 5, color: C.text, fontSize: 12,
-              padding: 10, resize: 'vertical', minHeight: 160, fontFamily: 'inherit',
-              lineHeight: 1.55, outline: 'none' }}
-          />
-          <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
-            <button
-              style={{ padding: '6px 14px', borderRadius: 5, border: 'none',
-                background: accentColor, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', gap: 5 }}>
-              <Send size={11} /> Send Email
-            </button>
-          </div>
+          {loading ? (
+            <div style={{ padding: '18px 0', textAlign: 'center', color: C.muted, fontSize: 12 }}>
+              <Sparkles size={14} style={{ marginBottom: 6, display: 'block', margin: '0 auto 6px' }} />
+              Generating AI draft…
+            </div>
+          ) : current ? (
+            <>
+              <textarea
+                value={current.text}
+                onChange={e => setDraft(d => ({ ...d, [active]: { ...d[active], text: e.target.value } }))}
+                style={{ width: '100%', boxSizing: 'border-box', background: C.card,
+                  border: `1px solid ${accent}33`, borderRadius: 6, color: C.text, fontSize: 12,
+                  padding: 10, resize: 'none', height: 160, fontFamily: 'inherit',
+                  lineHeight: 1.55, outline: 'none', display: 'block' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+                <button onClick={() => generateDraft(active)} disabled={loading}
+                  style={{ padding: '5px 10px', borderRadius: 5, border: `1px solid ${accent}44`,
+                    background: 'transparent', color: accent, fontSize: 11, cursor: 'pointer' }}>
+                  Regenerate
+                </button>
+                <button style={{ padding: '5px 14px', borderRadius: 5, border: 'none',
+                  background: accent, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Send size={11} /> Send
+                </button>
+              </div>
+            </>
+          ) : (
+            <div style={{ padding: '14px 0', textAlign: 'center' }}>
+              <button onClick={() => generateDraft(active)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 16px',
+                  borderRadius: 6, border: `1px solid ${accent}55`, background: `${accent}14`,
+                  color: accent, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                <Sparkles size={13} /> Generate AI Draft
+              </button>
+            </div>
+          )}
         </div>
       )}
+
+      {/* Button bar — always visible */}
+      <div style={{ display: 'flex', gap: 0 }}>
+        {[
+          { key: 'customer', label: 'Reply to Customer', icon: Mail, color: C.blue,
+            has: !!draft.customer, loading: draft.loadingCustomer },
+          { key: 'courier',  label: `Email ${q.courier_name || 'Courier'}`, icon: Truck, color: C.amber,
+            has: !!draft.courier, loading: draft.loadingCourier },
+        ].map(btn => (
+          <button key={btn.key}
+            onClick={() => setActive(a => a === btn.key ? null : btn.key)}
+            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              padding: '9px 12px', border: 'none', borderRight: btn.key === 'customer' ? `1px solid ${C.border}` : 'none',
+              background: active === btn.key ? `${btn.color}15` : 'transparent',
+              color: active === btn.key ? btn.color : C.muted,
+              fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
+              borderTop: active === btn.key ? `2px solid ${btn.color}` : '2px solid transparent',
+            }}>
+            <btn.icon size={11} />
+            {btn.label}
+            {btn.has && (
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: btn.color, flexShrink: 0 }} />
+            )}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -645,151 +677,109 @@ function QueryDetail({ queryId, onUpdated }) {
 
   const logoUrl = q.courier_code ? getCourierLogo(q.courier_code) : null;
 
-  const PARCEL_STATUS_COLOR = {
+  const PSC = { // parcel status colours
     delivered: C.green, returned: C.amber, failed_delivery: C.amber,
     exception: C.red, on_hold: C.amber, customs_hold: C.amber,
     in_transit: C.blue, out_for_delivery: C.blue, collected: C.blue,
     booked: C.muted, unknown: C.muted,
   };
+  const parcelColor = PSC[parcel?.status] || C.muted;
+  const showPhoneCall = phoneCall || (q.requires_attention && q.attention_reason?.includes('PHONE'));
+  const showAttention = q.requires_attention && q.attention_reason && !q.attention_reason.includes('PHONE');
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'row', minWidth: 0, overflow: 'hidden' }}>
     {/* Left column: all detail content */}
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-      {/* Detail header */}
-      <div style={{ padding: '14px 18px', borderBottom: `1px solid ${C.border}`, background: C.surface, flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {/* Customer name — large */}
-            <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 2, lineHeight: 1.2 }}>
-              {q.customer_name}
-            </div>
-            {/* Subject */}
-            <div style={{ fontSize: 13, color: C.sub, marginBottom: 6, lineHeight: 1.3 }}>
-              {q.subject}
-            </div>
-            {/* Meta row: courier logo, consignment link, type badge */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              {logoUrl && (
-                <img src={logoUrl} alt="" style={{ width: 24, height: 16, objectFit: 'contain', flexShrink: 0 }} />
-              )}
-              {q.consignment_number && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ padding: '2px 8px', borderRadius: 4, border: `1px solid ${C.border}`,
-                    color: C.text, fontSize: 11, fontWeight: 600, fontFamily: 'monospace', background: C.card }}>
-                    {q.consignment_number}
-                  </span>
-                  <button
-                    onClick={() => setShowTracking(s => !s)}
-                    title={showTracking ? 'Hide tracking' : 'Show tracking timeline'}
-                    style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '2px 7px', borderRadius: 4,
-                      border: `1px solid ${showTracking ? C.blue : C.blue + '44'}`,
-                      background: showTracking ? `${C.blue}28` : `${C.blue}12`,
-                      color: C.blue, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
-                    <Truck size={9} /> {showTracking ? 'Hide' : 'Track'}
-                  </button>
-                  <button
-                    onClick={() => navigate(`/tracking?q=${encodeURIComponent(q.consignment_number)}`)}
-                    title="Open full tracking page"
-                    style={{ display: 'flex', alignItems: 'center', padding: '2px 5px', borderRadius: 4,
-                      border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 10,
-                      cursor: 'pointer' }}>
-                    <ExternalLink size={9} />
-                  </button>
-                </div>
-              )}
-              <TypeBadge type={q.query_type} small />
-            </div>
-          </div>
-          {/* Status select */}
+
+      {/* ── Compact header ── */}
+      <div style={{ flexShrink: 0, padding: '11px 16px', borderBottom: `1px solid ${C.border}`, background: C.surface }}>
+
+        {/* Row 1: customer name + status dropdown */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 5 }}>
+          <span style={{ flex: 1, fontSize: 17, fontWeight: 800, color: C.text,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {q.customer_name}
+          </span>
           <select value={q.status} onChange={handleStatusChange} disabled={statusUpdating}
             style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text,
-              fontSize: 11, padding: '5px 8px', cursor: 'pointer', flexShrink: 0 }}>
+              fontSize: 11, padding: '4px 7px', cursor: 'pointer', flexShrink: 0 }}>
             {Object.entries(STATUS_CFG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </select>
         </div>
 
-        {/* Parcel info bar: live status + delivery address */}
-        {parcel && (
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, marginBottom: 6, overflow: 'hidden' }}>
-            {/* Status row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 11px', borderBottom: parcel.recipient_address || parcel.recipient_name || parcel.recipient_postcode ? `1px solid ${C.border}` : 'none' }}>
-              <Package size={12} style={{ color: PARCEL_STATUS_COLOR[parcel.status] || C.muted, flexShrink: 0 }} />
-              <span style={{ color: PARCEL_STATUS_COLOR[parcel.status] || C.muted, fontWeight: 600, textTransform: 'capitalize' }}>
+        {/* Row 2: consignment · courier logo · type · track button */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5 }}>
+          {logoUrl && <img src={logoUrl} alt="" style={{ height: 14, objectFit: 'contain', flexShrink: 0 }} />}
+          {q.consignment_number && (
+            <span style={{ fontFamily: 'monospace', fontSize: 11, color: C.muted, fontWeight: 600 }}>
+              {q.consignment_number}
+            </span>
+          )}
+          <TypeBadge type={q.query_type} small />
+          <div style={{ flex: 1 }} />
+          {q.consignment_number && (
+            <button onClick={() => setShowTracking(s => !s)}
+              style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '3px 8px', borderRadius: 4,
+                border: `1px solid ${showTracking ? C.blue : C.blue + '44'}`,
+                background: showTracking ? `${C.blue}28` : `${C.blue}12`,
+                color: C.blue, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
+              <Truck size={9} /> {showTracking ? 'Hide tracking' : 'Track'}
+            </button>
+          )}
+          <button onClick={() => navigate(`/tracking?q=${encodeURIComponent(q.consignment_number)}`)}
+            title="Full tracking page"
+            style={{ display: 'flex', alignItems: 'center', padding: '3px 5px', borderRadius: 4,
+              border: `1px solid ${C.border}`, background: 'transparent', color: C.muted,
+              fontSize: 10, cursor: 'pointer' }}>
+            <ExternalLink size={9} />
+          </button>
+        </div>
+
+        {/* Row 3: subject (one line) */}
+        <div style={{ fontSize: 12, color: C.sub, overflow: 'hidden', textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap', marginBottom: parcel || showPhoneCall || showAttention ? 6 : 0 }}>
+          {q.subject}
+        </div>
+
+        {/* Row 4: parcel status · postcode · phone flag · attention — all inline */}
+        {(parcel || showPhoneCall || showAttention) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 0, fontSize: 11, flexWrap: 'wrap' }}>
+            {parcel && (
+              <span style={{ color: parcelColor, fontWeight: 700, textTransform: 'capitalize', marginRight: 6 }}>
                 {parcel.status?.replace(/_/g, ' ')}
               </span>
-              {parcel.last_location && <span style={{ color: C.muted }}>· {parcel.last_location}</span>}
-              {parcel.last_event_at && <span style={{ color: C.muted, marginLeft: 'auto', fontSize: 10 }}>{fmtDate(parcel.last_event_at)}</span>}
-            </div>
-            {/* Delivery address row */}
-            {(parcel.recipient_name || parcel.recipient_address || parcel.recipient_postcode) && (
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '7px 11px', fontSize: 11 }}>
-                <span style={{ color: C.muted, fontWeight: 600, flexShrink: 0, paddingTop: 1 }}>Delivering to</span>
-                <div style={{ color: C.sub, lineHeight: 1.5 }}>
-                  {parcel.recipient_name && <span style={{ fontWeight: 600, color: C.text }}>{parcel.recipient_name}</span>}
-                  {parcel.recipient_address && <span style={{ color: C.muted }}>{parcel.recipient_name ? ' · ' : ''}{parcel.recipient_address}</span>}
-                  {parcel.recipient_postcode && <span style={{ color: C.sub, fontWeight: 600 }}>{parcel.recipient_address || parcel.recipient_name ? ' · ' : ''}{parcel.recipient_postcode}</span>}
-                </div>
-              </div>
             )}
-          </div>
-        )}
-
-        {/* Phone call banner — AI flagged */}
-        {phoneCall && (
-          <div style={{ padding: '9px 13px', borderRadius: 6, background: 'rgba(248,81,73,0.15)',
-            border: `1px solid ${C.red}55`, marginBottom: 6,
-            display: 'flex', alignItems: 'flex-start', gap: 9 }}>
-            <Phone size={14} color={C.red} style={{ flexShrink: 0, marginTop: 1 }} />
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: C.red, marginBottom: 2 }}>
-                📞 Phone call recommended
-              </div>
-              {phoneCall.reason && (
-                <div style={{ fontSize: 11, color: '#e88'}}>
-                  {phoneCall.reason}
-                </div>
-              )}
-            </div>
-            <button onClick={() => setPhoneCall(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 0 }}>
-              <X size={12} />
-            </button>
-          </div>
-        )}
-
-        {/* Alert banners */}
-        {q.requires_attention && q.attention_reason && q.attention_reason.includes('PHONE') && !phoneCall && (
-          <div style={{ padding: '7px 11px', borderRadius: 6, background: 'rgba(248,81,73,0.15)',
-            border: `1px solid ${C.red}55`, fontSize: 11, color: C.red, marginBottom: 4,
-            display: 'flex', alignItems: 'center', gap: 7 }}>
-            <Phone size={12} /> {q.attention_reason}
-          </div>
-        )}
-        {q.requires_attention && q.attention_reason && !q.attention_reason.includes('PHONE') && (
-          <div style={{ padding: '7px 11px', borderRadius: 6, background: C.redDim, border: `1px solid ${C.red}33`, fontSize: 11, color: C.red, marginBottom: 4 }}>
-            ⚠ {q.attention_reason}
-          </div>
-        )}
-        {pendingDrafts.length > 0 && (
-          <div onClick={() => setTab('emails')} style={{ padding: '7px 11px', borderRadius: 6, background: C.greenDim,
-            border: `1px solid ${C.green}33`, fontSize: 11, color: C.green, fontWeight: 600, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Mail size={11} />
-            {pendingDrafts.length} AI draft{pendingDrafts.length > 1 ? 's' : ''} waiting for approval
+            {parcel?.recipient_postcode && (
+              <span style={{ color: C.muted, marginRight: 6 }}>· {parcel.recipient_postcode}</span>
+            )}
+            {parcel?.last_event_at && (
+              <span style={{ color: C.muted, marginRight: 6 }}>· {fmtDate(parcel.last_event_at)}</span>
+            )}
+            {showPhoneCall && (
+              <span style={{ color: C.red, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                · <Phone size={10} /> Phone call recommended
+              </span>
+            )}
+            {showAttention && (
+              <span style={{ color: C.amber, fontWeight: 600 }}>
+                · ⚠ {q.attention_reason}
+              </span>
+            )}
           </div>
         )}
       </div>
 
-      {/* Tabs */}
+      {/* ── Tabs ── */}
       <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, background: C.surface, flexShrink: 0 }}>
         {[
-          { key: 'emails',   label: `Emails (${emails.length})`,             icon: Mail },
-          { key: 'evidence', label: `Evidence (${evidence.length})`,         icon: FileText },
-          { key: 'info',     label: 'Info',                                  icon: Package },
-          { key: 'notes',    label: `Alerts (${notifications.length})`,      icon: AlertCircle },
+          { key: 'emails',   label: `Emails (${emails.length})`,        icon: Mail },
+          { key: 'evidence', label: `Evidence (${evidence.length})`,    icon: FileText },
+          { key: 'info',     label: 'Info',                             icon: Package },
+          { key: 'notes',    label: `Alerts (${notifications.length})`, icon: AlertCircle },
         ].map(({ key, label, icon: Icon }) => (
           <button key={key} onClick={() => setTab(key)} style={{
-            flex: 1, padding: '10px 4px', border: 'none',
+            flex: 1, padding: '9px 4px', border: 'none',
             borderBottom: `2px solid ${tab === key ? C.blue : 'transparent'}`,
             background: 'transparent', color: tab === key ? C.blue : C.muted,
             fontSize: 11, fontWeight: tab === key ? 700 : 500, cursor: 'pointer',
@@ -800,11 +790,11 @@ function QueryDetail({ queryId, onUpdated }) {
         ))}
       </div>
 
-      {/* Tab content */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '14px 16px' }}>
+      {/* ── Tab content (only scroll zone) ── */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px' }}>
 
         {tab === 'emails' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <EmailThreads
               emails={emails}
               onApprove={handleApprove}
@@ -813,60 +803,36 @@ function QueryDetail({ queryId, onUpdated }) {
               courierName={q.courier_name}
               courierCode={q.courier_code}
             />
-            <div style={{ marginTop: 4 }}>
+            {/* Flag for attention */}
+            <div style={{ paddingTop: 4 }}>
               {showFlag ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <textarea placeholder="Why does this need attention?" value={attentionNote} onChange={e => setAttentionNote(e.target.value)}
-                    style={{ background: C.card, border: `1px solid ${C.red}44`, borderRadius: 6, color: C.text, fontSize: 12, padding: 10, resize: 'vertical', minHeight: 60, fontFamily: 'inherit' }} />
+                  <textarea placeholder="Why does this need attention?" value={attentionNote}
+                    onChange={e => setAttentionNote(e.target.value)}
+                    style={{ background: C.card, border: `1px solid ${C.red}44`, borderRadius: 6,
+                      color: C.text, fontSize: 12, padding: 10, resize: 'vertical', minHeight: 56,
+                      fontFamily: 'inherit', outline: 'none' }} />
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={handleFlagAttention}
-                      style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: C.red, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                      Flag for Attention
+                      style={{ padding: '5px 12px', borderRadius: 6, border: 'none', background: C.red,
+                        color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                      Flag
                     </button>
                     <button onClick={() => setShowFlag(false)}
-                      style={{ padding: '6px 12px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer' }}>
+                      style={{ padding: '5px 10px', borderRadius: 6, border: `1px solid ${C.border}`,
+                        background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer' }}>
                       Cancel
                     </button>
                   </div>
                 </div>
               ) : (
                 <button onClick={() => setShowFlag(true)}
-                  style={{ padding: '6px 12px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <Flag size={11} /> Flag for attention
+                  style={{ padding: '5px 10px', borderRadius: 6, border: `1px solid ${C.border}`,
+                    background: 'transparent', color: C.muted, fontSize: 11, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Flag size={10} /> Flag for attention
                 </button>
               )}
-            </div>
-
-            {/* ── Draft Replies ── */}
-            <div style={{ marginTop: 16, borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
-                letterSpacing: '0.05em', marginBottom: 10 }}>
-                Draft Replies
-              </div>
-
-              {/* Customer reply card */}
-              <DraftCard
-                title="Reply to Customer"
-                toLabel={q.sender_email || q.customer_name}
-                icon={Mail}
-                accentColor={C.blue}
-                loading={draft.loadingCustomer}
-                draft={draft.customer}
-                onGenerate={() => generateDraft('customer')}
-                onEdit={text => setDraft(d => ({ ...d, customer: { ...d.customer, text } }))}
-              />
-
-              {/* Courier email card */}
-              <DraftCard
-                title={`Email to ${q.courier_name || 'Courier'}`}
-                toLabel={q.courier_name}
-                icon={Truck}
-                accentColor={C.amber}
-                loading={draft.loadingCourier}
-                draft={draft.courier}
-                onGenerate={() => generateDraft('courier')}
-                onEdit={text => setDraft(d => ({ ...d, courier: { ...d.courier, text } }))}
-              />
             </div>
           </div>
         )}
@@ -929,6 +895,15 @@ function QueryDetail({ queryId, onUpdated }) {
           </div>
         )}
       </div>
+    </div>
+
+      {/* ── Draft footer (fixed bottom) ── */}
+      <DraftFooter
+        q={q}
+        draft={draft}
+        setDraft={setDraft}
+        generateDraft={generateDraft}
+      />
     </div>
 
       {/* ── Tracking panel — full-height right column ── */}
