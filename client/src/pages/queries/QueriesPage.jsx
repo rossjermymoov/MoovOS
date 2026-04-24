@@ -494,6 +494,14 @@ function DraftFooter({ q, draft, setDraft, generateDraft }) {
       {/* Compose area — expands upward when a panel is active */}
       {active && (
         <div style={{ padding: '10px 14px', borderBottom: `1px solid ${C.border}` }}>
+          {/* Simulation banner */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8,
+            padding: '4px 9px', borderRadius: 5, background: 'rgba(210,153,34,0.12)',
+            border: `1px solid ${C.amber}33` }}>
+            <AlertTriangle size={11} color={C.amber} />
+            <span style={{ fontSize: 10, fontWeight: 700, color: C.amber, textTransform: 'uppercase',
+              letterSpacing: '0.4px' }}>Simulation — no emails will be sent</span>
+          </div>
           {current?.subject && (
             <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>
               Subject: <span style={{ color: C.sub }}>{current.subject}</span>
@@ -520,10 +528,12 @@ function DraftFooter({ q, draft, setDraft, generateDraft }) {
                     background: 'transparent', color: accent, fontSize: 11, cursor: 'pointer' }}>
                   Regenerate
                 </button>
-                <button style={{ padding: '5px 14px', borderRadius: 5, border: 'none',
-                  background: accent, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <Send size={11} /> Send
+                <button
+                  onClick={() => alert('SIMULATION MODE\n\nThis email has not been sent. Real sending is not yet connected.')}
+                  style={{ padding: '5px 14px', borderRadius: 5, border: `1px solid ${C.muted}44`,
+                    background: C.card, color: C.muted, fontSize: 12, fontWeight: 700, cursor: 'not-allowed',
+                    display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Send size={11} /> Send (sim only)
                 </button>
               </div>
             </>
