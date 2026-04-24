@@ -928,8 +928,8 @@ function QueryDetail({ queryId, onUpdated }) {
             ))}
           </div>
         )}
-      </div>{/* end tab content */}
-    </div>{/* end left column */}
+      </div>
+    </div>
 
       {/* ── Tracking panel — full-height right column ── */}
       {showTracking && (
@@ -1017,7 +1017,7 @@ function QueryDetail({ queryId, onUpdated }) {
         </div>
       )}
 
-    </div>{/* end root row */}
+    </div>
   );
 }
 
