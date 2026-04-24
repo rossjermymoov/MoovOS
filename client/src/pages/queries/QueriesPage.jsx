@@ -895,9 +895,6 @@ function QueryDetail({ queryId, onUpdated }) {
           </div>
         )}
       </div>
-    </div>
-
-      {/* ── Draft footer (fixed bottom) ── */}
       <DraftFooter
         q={q}
         draft={draft}
@@ -905,8 +902,6 @@ function QueryDetail({ queryId, onUpdated }) {
         generateDraft={generateDraft}
       />
     </div>
-
-      {/* ── Tracking panel — full-height right column ── */}
       {showTracking && (
         <div style={{
           width: 300, flexShrink: 0,
