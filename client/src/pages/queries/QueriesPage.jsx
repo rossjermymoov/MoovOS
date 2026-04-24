@@ -653,6 +653,8 @@ function QueryDetail({ queryId, onUpdated }) {
   };
 
   return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'row', minWidth: 0, overflow: 'hidden' }}>
+    {/* Left column: all detail content */}
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
       {/* Detail header */}
       <div style={{ padding: '14px 18px', borderBottom: `1px solid ${C.border}`, background: C.surface, flexShrink: 0 }}>
@@ -798,11 +800,8 @@ function QueryDetail({ queryId, onUpdated }) {
         ))}
       </div>
 
-      {/* Body row: tab content + optional tracking panel */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-
       {/* Tab content */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '14px 16px', minWidth: 0 }}>
+      <div style={{ flex: 1, overflow: 'auto', padding: '14px 16px' }}>
 
         {tab === 'emails' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -930,8 +929,9 @@ function QueryDetail({ queryId, onUpdated }) {
           </div>
         )}
       </div>{/* end tab content */}
+    </div>{/* end left column */}
 
-      {/* ── Tracking panel — slides in from right ── */}
+      {/* ── Tracking panel — full-height right column ── */}
       {showTracking && (
         <div style={{
           width: 300, flexShrink: 0,
@@ -1017,8 +1017,7 @@ function QueryDetail({ queryId, onUpdated }) {
         </div>
       )}
 
-      </div>{/* end body row */}
-    </div>
+    </div>{/* end root row */}
   );
 }
 
