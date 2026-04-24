@@ -728,12 +728,18 @@ function QueryDetail({ queryId, onUpdated }) {
               {q.consignment_number}
             </span>
           )}
+          <span style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
+            letterSpacing: '0.5px', flexShrink: 0 }}>Reported</span>
           <TypeBadge type={q.query_type} />
 
           {/* Separator */}
           <div style={{ width: 1, height: 18, background: C.border, flexShrink: 0 }} />
 
           {/* Parcel status + postcode */}
+          {parcel && (
+            <span style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
+              letterSpacing: '0.5px', flexShrink: 0 }}>Courier</span>
+          )}
           {parcel && (
             <span style={{ fontSize: 13, fontWeight: 700, color: parcelColor, textTransform: 'capitalize', whiteSpace: 'nowrap' }}>
               {parcel.status?.replace(/_/g, ' ')}
