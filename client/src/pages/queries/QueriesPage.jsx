@@ -4,7 +4,7 @@ import {
   AlertTriangle, Mail, Clock, User,
   Inbox, RefreshCw, MessageSquare, FileText,
   Send, Edit2, Flag, Link2,
-  AlertCircle, Package, Filter, Search, X, ExternalLink,
+  AlertCircle, Package, Filter, Search, X, ExternalLink, Receipt,
 } from 'lucide-react';
 import {
   fetchInbox, fetchStats, fetchQuery, updateQuery,
@@ -202,11 +202,11 @@ function InboxRow({ q, selected, onClick }) {
           </span>
         )}
         <div style={{ flex: 1 }} />
-        {/* Query (orange triangle) or Claim (red receipt) indicator */}
+        {/* Query (filled orange triangle) or Claim (red receipt icon) */}
         {isClaim ? (
-          <span title="Claim" style={{ fontSize: 14, lineHeight: 1 }}>🧾</span>
+          <Receipt size={20} color={C.red} strokeWidth={1.5} title="Claim" />
         ) : (
-          <span title="Query" style={{ fontSize: 13, color: '#D29922', lineHeight: 1 }}>▲</span>
+          <AlertTriangle size={22} fill={C.amber} color={C.amber} strokeWidth={0} title="Query" />
         )}
       </div>
 

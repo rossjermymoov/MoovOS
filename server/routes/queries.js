@@ -283,12 +283,8 @@ async function seedNowHandler(req, res, next) {
       },
     ];
 
-    // Delete any existing queries for these consignment numbers so re-seeding is clean
-    const consNums = SEEDS.map(s => s.consignment_number);
-    await query(
-      `DELETE FROM queries WHERE consignment_number = ANY($1::varchar[])`,
-      [consNums]
-    );
+    // Wipe ALL queries (this is a dev seed — start fresh every time)
+    await query(`DELETE FROM queries`);
 
     const inserted = [];
     for (const s of SEEDS) {
