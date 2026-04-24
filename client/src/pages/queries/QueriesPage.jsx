@@ -692,82 +692,97 @@ function QueryDetail({ queryId, onUpdated }) {
     {/* Left column: all detail content */}
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
 
-      {/* ── Compact header ── */}
-      <div style={{ flexShrink: 0, padding: '11px 16px', borderBottom: `1px solid ${C.border}`, background: C.surface }}>
+      {/* ── Header ── */}
+      <div style={{ flexShrink: 0, padding: '16px 20px', borderBottom: `1px solid ${C.border}`, background: C.surface }}>
 
-        {/* Row 1: customer name + status dropdown */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 5 }}>
-          <span style={{ flex: 1, fontSize: 17, fontWeight: 800, color: C.text,
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {q.customer_name}
-          </span>
+        {/* Block 1: customer name + subject + status */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 12 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: C.text, lineHeight: 1.1,
+              marginBottom: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {q.customer_name}
+            </div>
+            <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.4,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {q.subject}
+            </div>
+          </div>
           <select value={q.status} onChange={handleStatusChange} disabled={statusUpdating}
-            style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text,
-              fontSize: 11, padding: '4px 7px', cursor: 'pointer', flexShrink: 0 }}>
+            style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, color: C.text,
+              fontSize: 12, padding: '6px 10px', cursor: 'pointer', flexShrink: 0, marginTop: 2 }}>
             {Object.entries(STATUS_CFG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </select>
         </div>
 
-        {/* Row 2: consignment · courier logo · type · track button */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5 }}>
-          {logoUrl && <img src={logoUrl} alt="" style={{ height: 14, objectFit: 'contain', flexShrink: 0 }} />}
+        {/* Block 2: info strip — consignment · courier · type · parcel status · phone · buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10,
+          padding: '9px 13px', background: C.card, borderRadius: 8, border: `1px solid ${C.border}` }}>
+          {logoUrl && (
+            <div style={{ width: 28, height: 20, display: 'flex', alignItems: 'center',
+              justifyContent: 'center', background: '#fff', borderRadius: 4, flexShrink: 0, padding: 2 }}>
+              <img src={logoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+            </div>
+          )}
           {q.consignment_number && (
-            <span style={{ fontFamily: 'monospace', fontSize: 11, color: C.muted, fontWeight: 600 }}>
+            <span style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, color: C.text, letterSpacing: '0.02em' }}>
               {q.consignment_number}
             </span>
           )}
-          <TypeBadge type={q.query_type} small />
-          <div style={{ flex: 1 }} />
-          {q.consignment_number && (
-            <button onClick={() => setShowTracking(s => !s)}
-              style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '3px 8px', borderRadius: 4,
-                border: `1px solid ${showTracking ? C.blue : C.blue + '44'}`,
-                background: showTracking ? `${C.blue}28` : `${C.blue}12`,
-                color: C.blue, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
-              <Truck size={9} /> {showTracking ? 'Hide tracking' : 'Track'}
-            </button>
+          <TypeBadge type={q.query_type} />
+
+          {/* Separator */}
+          <div style={{ width: 1, height: 18, background: C.border, flexShrink: 0 }} />
+
+          {/* Parcel status + postcode */}
+          {parcel && (
+            <span style={{ fontSize: 13, fontWeight: 700, color: parcelColor, textTransform: 'capitalize', whiteSpace: 'nowrap' }}>
+              {parcel.status?.replace(/_/g, ' ')}
+            </span>
           )}
+          {parcel?.recipient_postcode && (
+            <span style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>
+              {parcel.recipient_postcode}
+            </span>
+          )}
+          {parcel?.last_event_at && (
+            <span style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>
+              {fmtDate(parcel.last_event_at)}
+            </span>
+          )}
+
+          {/* Phone call chip */}
+          {showPhoneCall && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700,
+              color: C.red, background: C.redDim, padding: '3px 8px', borderRadius: 5,
+              border: `1px solid ${C.red}33`, whiteSpace: 'nowrap', flexShrink: 0 }}>
+              <Phone size={11} /> Phone call
+            </span>
+          )}
+          {showAttention && !showPhoneCall && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700,
+              color: C.amber, background: C.amberDim, padding: '3px 8px', borderRadius: 5,
+              border: `1px solid ${C.amber}33`, whiteSpace: 'nowrap', flexShrink: 0 }}>
+              ⚠ Attention
+            </span>
+          )}
+
+          <div style={{ flex: 1 }} />
+
+          {/* Action buttons */}
+          <button onClick={() => setShowTracking(s => !s)}
+            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 12px', borderRadius: 5,
+              border: `1px solid ${showTracking ? C.blue : C.blue + '44'}`,
+              background: showTracking ? `${C.blue}22` : `${C.blue}0D`,
+              color: C.blue, fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            <Truck size={11} /> {showTracking ? 'Hide' : 'Track'}
+          </button>
           <button onClick={() => navigate(`/tracking?q=${encodeURIComponent(q.consignment_number)}`)}
             title="Full tracking page"
-            style={{ display: 'flex', alignItems: 'center', padding: '3px 5px', borderRadius: 4,
-              border: `1px solid ${C.border}`, background: 'transparent', color: C.muted,
-              fontSize: 10, cursor: 'pointer' }}>
-            <ExternalLink size={9} />
+            style={{ display: 'flex', alignItems: 'center', padding: '5px 7px', borderRadius: 5,
+              border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, cursor: 'pointer' }}>
+            <ExternalLink size={12} />
           </button>
         </div>
-
-        {/* Row 3: subject (one line) */}
-        <div style={{ fontSize: 12, color: C.sub, overflow: 'hidden', textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap', marginBottom: parcel || showPhoneCall || showAttention ? 6 : 0 }}>
-          {q.subject}
-        </div>
-
-        {/* Row 4: parcel status · postcode · phone flag · attention — all inline */}
-        {(parcel || showPhoneCall || showAttention) && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 0, fontSize: 11, flexWrap: 'wrap' }}>
-            {parcel && (
-              <span style={{ color: parcelColor, fontWeight: 700, textTransform: 'capitalize', marginRight: 6 }}>
-                {parcel.status?.replace(/_/g, ' ')}
-              </span>
-            )}
-            {parcel?.recipient_postcode && (
-              <span style={{ color: C.muted, marginRight: 6 }}>· {parcel.recipient_postcode}</span>
-            )}
-            {parcel?.last_event_at && (
-              <span style={{ color: C.muted, marginRight: 6 }}>· {fmtDate(parcel.last_event_at)}</span>
-            )}
-            {showPhoneCall && (
-              <span style={{ color: C.red, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                · <Phone size={10} /> Phone call recommended
-              </span>
-            )}
-            {showAttention && (
-              <span style={{ color: C.amber, fontWeight: 600 }}>
-                · ⚠ {q.attention_reason}
-              </span>
-            )}
-          </div>
-        )}
       </div>
 
       {/* ── Tabs ── */}
