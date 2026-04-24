@@ -765,12 +765,22 @@ function SeedButton({ onDone }) {
 
   async function run() {
     setState('loading');
+    setMsg('');
     try {
       const r = await fetch('/api/queries/seed-now', { method: 'POST' });
       const j = await r.json();
       if (j.error) {
         setState('error');
         setMsg(j.error + (j.detail ? ' — ' + j.detail : ''));
+      } else if (!j.seeded || j.seeded === 0) {
+        // Inserts silently failed — surface the first per-row error
+        setState('error');
+        const firstErr = j.queries?.find(q => q.error);
+        const errText  = firstErr
+          ? `${firstErr.consignment}: ${firstErr.error}`
+          : `Seeded 0 — check Railway logs`;
+        setMsg(errText);
+        console.error('[seed] full response:', j);
       } else {
         setState('ok');
         setMsg(`Seeded ${j.seeded} tickets`);

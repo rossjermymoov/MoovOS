@@ -97,6 +97,7 @@ router.get('/', async (req, res, next) => {
       query(`SELECT COUNT(*)::int AS total FROM queries_inbox_view ${where}`, values),
     ]);
 
+    res.set('Cache-Control', 'no-store');
     res.json({
       queries: dataRes.rows,
       total:   countRes.rows[0].total,
@@ -303,7 +304,18 @@ async function seedNowHandler(req, res, next) {
       }
     }
 
-    // Step 2: look up customer IDs live (don't rely on hardcoded UUIDs)
+    // Step 2: check what enum values are actually in the DB
+    const [qtEnums, qsEnums, edEnums] = await Promise.all([
+      query(`SELECT unnest(enum_range(NULL::query_type))::text AS v`),
+      query(`SELECT unnest(enum_range(NULL::query_status))::text AS v`),
+      query(`SELECT unnest(enum_range(NULL::email_direction))::text AS v`),
+    ]);
+    const validTypes     = new Set(qtEnums.rows.map(r => r.v));
+    const validStatuses  = new Set(qsEnums.rows.map(r => r.v));
+    const validDirs      = new Set(edEnums.rows.map(r => r.v));
+    log.push({ step: 'enums', query_types: [...validTypes], query_statuses: [...validStatuses], email_directions: [...validDirs] });
+
+    // Step 3: look up customer IDs live (don't rely on hardcoded UUIDs)
     const emailToCustomer = {};
     const emails = SEEDS.map(s => s.primary_email);
     const custRes = await query(
@@ -319,6 +331,16 @@ async function seedNowHandler(req, res, next) {
       const consNum = s.consignment_number;
       // Use live customer ID, fall back to hardcoded if lookup missed it
       const customerId = emailToCustomer[s.primary_email] || s.customer_id;
+
+      // Validate enum values before hitting the DB
+      if (!validTypes.has(s.type)) {
+        inserted.push({ consignment: consNum, error: `query_type '${s.type}' not in enum: [${[...validTypes].join(', ')}]` });
+        continue;
+      }
+      if (!validStatuses.has(s.status)) {
+        inserted.push({ consignment: consNum, error: `query_status '${s.status}' not in enum: [${[...validStatuses].join(', ')}]` });
+        continue;
+      }
 
       let qid;
       try {
