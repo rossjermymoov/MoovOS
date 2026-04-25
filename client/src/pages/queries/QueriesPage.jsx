@@ -682,6 +682,10 @@ function QueryDetail({ queryId, onUpdated }) {
   const [showFlag,       setShowFlag]       = useState(false);
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [parcel,         setParcel]         = useState(null);
+
+  // Keep onUpdated in a ref so it never causes load() to re-run
+  const onUpdatedRef = useRef(onUpdated);
+  useEffect(() => { onUpdatedRef.current = onUpdated; }, [onUpdated]);
   const [trackingEvents, setTrackingEvents] = useState([]);
   const [showTracking,   setShowTracking]   = useState(false);
   const [draft,          setDraft]          = useState({ customer: null, courier: null, loadingCustomer: false, loadingCourier: false });
@@ -695,11 +699,11 @@ function QueryDetail({ queryId, onUpdated }) {
       // Mark all inbound emails read, then immediately refresh the inbox list
       // so the unread badge on the left card clears in real time.
       await fetch(`/api/queries/${queryId}/mark-read`, { method: 'PATCH' }).catch(() => {});
-      onUpdated?.();
+      onUpdatedRef.current?.();
     }
     catch (err) { console.error(err); }
     finally { setLoading(false); }
-  }, [queryId, onUpdated]);
+  }, [queryId]); // onUpdated intentionally excluded — read via ref to prevent re-fire loop
 
   useEffect(() => { load(); }, [load]);
 
@@ -1303,7 +1307,7 @@ export default function QueriesPage() {
     fetchStats().then(setStats).catch(console.error);
   }, [refreshKey]);
 
-  const load = useCallback(async () => {
+  const loadInbox = useCallback(async () => {
     setLoading(true);
     try {
       const params = {};
@@ -1316,9 +1320,15 @@ export default function QueriesPage() {
     finally { setLoading(false); }
   }, [filters]);
 
-  useEffect(() => { load(); }, [load, refreshKey]);
+  // Run on filter change
+  useEffect(() => { loadInbox(); }, [loadInbox]);
 
-  function refresh() { setRefreshKey(k => k + 1); }
+  // Also run when refreshKey increments (triggered by onUpdated from QueryDetail)
+  useEffect(() => {
+    if (refreshKey > 0) loadInbox();
+  }, [refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const refresh = useCallback(() => setRefreshKey(k => k + 1), []);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, color: C.text, overflow: 'hidden' }}>
