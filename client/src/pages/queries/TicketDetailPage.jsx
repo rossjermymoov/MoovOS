@@ -328,7 +328,7 @@ function ThreadPanel({ emails, directions, queryId, replyDirection, replyPlaceho
           <div style={{ fontSize: 14 }}>No messages yet</div>
         </div>
       ) : (
-        [...filtered].reverse().map(email => (
+        filtered.map(email => (
           <EmailBubble key={email.id} email={email} courierCode={courierCode} />
         ))
       )}
@@ -347,7 +347,7 @@ function ThreadPanel({ emails, directions, queryId, replyDirection, replyPlaceho
 function TrackingPanel({ consignmentNumber, courierCode }) {
   const { data: parcel, isLoading } = useQuery({
     queryKey: ['ticket-tracking', consignmentNumber],
-    queryFn:  () => api.get(`/tracking/parcel/${consignmentNumber}`).then(r => r.data),
+    queryFn:  () => api.get(`/tracking/${encodeURIComponent(consignmentNumber)}`).then(r => r.data),
     enabled:  !!consignmentNumber,
     staleTime: 60_000,
   });
@@ -473,9 +473,11 @@ export default function TicketDetailPage() {
   const customerEmails  = emails.filter(e => !e.direction.includes('courier') && e.direction !== 'note');
   const noteEmails      = emails.filter(e => e.direction === 'note');
 
+  const courierLogoUrl = ticket.courier_code ? getCourierLogo(ticket.courier_code) : null;
+
   const tabs = [
     { key: 'customer', label: 'Customer', count: customerEmails.length, icon: Mail },
-    { key: 'courier',  label: 'Courier',  count: courierEmails.length,  icon: Truck },
+    { key: 'courier',  label: ticket.courier_name || 'Courier', count: courierEmails.length,  icon: Truck, logo: courierLogoUrl },
     { key: 'notes',    label: 'Notes',    count: noteEmails.length,     icon: FileText },
   ];
 
@@ -571,7 +573,13 @@ export default function TicketDetailPage() {
                   cursor: 'pointer', transition: 'color 0.15s',
                 }}
               >
-                <t.icon size={13} />
+                {t.logo ? (
+                  <div style={{ background: '#fff', borderRadius: 3, padding: '1px 4px', display: 'flex', alignItems: 'center' }}>
+                    <img src={t.logo} alt="" style={{ height: 12, objectFit: 'contain', display: 'block' }} />
+                  </div>
+                ) : (
+                  <t.icon size={13} />
+                )}
                 {t.label}
                 {t.count > 0 && (
                   <span style={{ fontSize: 10, fontWeight: 700, background: tab === t.key ? C.blueDim : 'rgba(255,255,255,0.06)', color: tab === t.key ? C.blue : C.muted, padding: '1px 6px', borderRadius: 10 }}>
