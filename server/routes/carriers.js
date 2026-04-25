@@ -637,11 +637,22 @@ router.post('/couriers/:id/contacts', async (req, res, next) => {
   try {
     const { name, phone, email, department, role, notes } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'name is required' });
+    // ON CONFLICT DO NOTHING prevents duplicate rows if the form fires more than once
     const result = await query(
       `INSERT INTO courier_contacts (courier_id, name, phone, email, department, role, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
+       ON CONFLICT (courier_id, LOWER(TRIM(name))) DO NOTHING
+       RETURNING *`,
       [req.params.id, name.trim(), phone||null, email||null, department||null, role||null, notes||null]
     );
+    // If DO NOTHING fired, return the existing row
+    if (!result.rows.length) {
+      const existing = await query(
+        `SELECT * FROM courier_contacts WHERE courier_id = $1 AND LOWER(TRIM(name)) = LOWER(TRIM($2))`,
+        [req.params.id, name.trim()]
+      );
+      return res.status(200).json(existing.rows[0]);
+    }
     res.status(201).json(result.rows[0]);
   } catch (err) { next(err); }
 });
