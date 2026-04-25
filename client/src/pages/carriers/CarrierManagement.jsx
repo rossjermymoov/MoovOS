@@ -11,7 +11,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, ChevronRight, ChevronDown, ChevronUp, Trash2, X, Check, Phone, Mail,
   User, Building2, Edit2, Zap, AlertTriangle, ArrowLeft, GripVertical,
-  Upload, Download, Copy, TrendingUp, Calendar, FileText, CheckCircle, Save,
+  Upload, Download, Copy, TrendingUp, Calendar, FileText, CheckCircle, Save, RefreshCw,
 } from 'lucide-react';
 import { carriersApi } from '../../api/carriers';
 import { getCourierLogo } from '../../utils/courierLogos';
@@ -1169,6 +1169,7 @@ function CustomerRcTemplatesTab({ courierCode, courierName }) {
   const [newName, setNewName]     = useState('');
   const [confirmDel, setConfirmDel] = useState(null); // template id to delete
   const [rateEdits, setRateEdits] = useState({});     // { [templateId]: rate[] }
+  const [loadingCarrier, setLoadingCarrier] = useState(null); // template id being loaded
 
   const { data: templates = [], isLoading } = useQuery({
     queryKey: ['pricing-templates', courierCode],
@@ -1224,6 +1225,30 @@ function CustomerRcTemplatesTab({ courierCode, courierName }) {
     const current = getRates(tpl);
     setRates(tpl.id, [...current, { service_code: '', service_name: '', zone_name: '', price: '', price_sub: '', cost_price: null, is_international: intl }]);
   };
+
+  const loadFromCarrier = async (tpl) => {
+    setLoadingCarrier(tpl.id);
+    try {
+      const svc = await fetch(`/api/pricing/carrier-services?courier_code=${courierCode}`).then(r => r.json());
+      const current = getRates(tpl);
+      const existing = new Set(current.map(r => `${r.service_code}__${r.zone_name}`));
+      const newRows = svc
+        .filter(s => !existing.has(`${s.service_code}__${s.zone_name}`))
+        .map(s => ({
+          service_code:    s.service_code,
+          service_name:    s.service_name,
+          zone_name:       s.zone_name,
+          price:           '',
+          price_sub:       '',
+          cost_price:      s.cost_price,
+          cost_price_sub:  s.cost_price_sub,
+          is_international: s.is_international,
+        }));
+      setRates(tpl.id, [...current, ...newRows]);
+    } finally {
+      setLoadingCarrier(null);
+    }
+  };
   const removeRow = (tpl, idx) => setRates(tpl.id, getRates(tpl).filter((_, i) => i !== idx));
   const updateRow = (tpl, idx, field, val) =>
     setRates(tpl.id, getRates(tpl).map((r, i) => i === idx ? { ...r, [field]: val } : r));
@@ -1242,6 +1267,7 @@ function CustomerRcTemplatesTab({ courierCode, courierName }) {
 
   return (
     <div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
@@ -1392,6 +1418,24 @@ function CustomerRcTemplatesTab({ courierCode, courierName }) {
                 {/* Expanded rate editor */}
                 {isOpen && (
                   <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', padding: '14px 14px 16px' }}>
+
+                    {/* Load from carrier button */}
+                    <div style={{ marginBottom: 14 }}>
+                      <button
+                        onClick={() => loadFromCarrier(tpl)}
+                        disabled={loadingCarrier === tpl.id}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6,
+                          background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.35)',
+                          borderRadius: 7, padding: '7px 14px', color: '#A5B4FC',
+                          fontSize: 12, fontWeight: 600, cursor: loadingCarrier === tpl.id ? 'wait' : 'pointer',
+                          opacity: loadingCarrier === tpl.id ? 0.6 : 1 }}>
+                        <RefreshCw size={12} style={{ animation: loadingCarrier === tpl.id ? 'spin 1s linear infinite' : 'none' }} />
+                        {loadingCarrier === tpl.id ? 'Loading…' : `Load all ${courierName} services`}
+                      </button>
+                      <div style={{ fontSize: 11, color: '#555', marginTop: 5 }}>
+                        Adds every service &amp; zone from the master rate card. Already-present rows are not duplicated. Set sell prices below.
+                      </div>
+                    </div>
 
                     {/* Domestic */}
                     <div style={{ marginBottom: 16 }}>

@@ -106,6 +106,51 @@ router.put('/templates/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── GET /api/pricing/carrier-services?courier_code= ─────────────────────────
+// Returns every service+zone for a carrier with cost price from master rate card.
+// Used to populate Customer Rate Card Template rows.
+
+router.get('/carrier-services', async (req, res, next) => {
+  try {
+    const { courier_code } = req.query;
+    if (!courier_code) return res.status(400).json({ error: 'courier_code required' });
+
+    const r = await query(`
+      SELECT
+        cs.service_code,
+        cs.name          AS service_name,
+        z.name           AS zone_name,
+        z.id             AS zone_id,
+        EXISTS (
+          SELECT 1 FROM zone_country_codes zcc WHERE zcc.zone_id = z.id
+        )                AS is_international,
+        (
+          SELECT wb.price_first
+          FROM weight_bands wb
+          JOIN carrier_rate_cards crc ON crc.id = wb.carrier_rate_card_id
+          WHERE wb.zone_id = z.id AND crc.is_master = true
+          ORDER BY wb.min_weight_kg ASC NULLS LAST
+          LIMIT 1
+        ) AS cost_price,
+        (
+          SELECT wb.price_sub
+          FROM weight_bands wb
+          JOIN carrier_rate_cards crc ON crc.id = wb.carrier_rate_card_id
+          WHERE wb.zone_id = z.id AND crc.is_master = true
+          ORDER BY wb.min_weight_kg ASC NULLS LAST
+          LIMIT 1
+        ) AS cost_price_sub
+      FROM couriers co
+      JOIN courier_services cs ON cs.courier_id = co.id
+      JOIN zones z              ON z.courier_service_id = cs.id
+      WHERE co.code ILIKE $1
+      ORDER BY cs.service_code, z.name
+    `, [courier_code]);
+
+    res.json(r.rows);
+  } catch (err) { next(err); }
+});
+
 // ─── DELETE /api/pricing/templates/:id ───────────────────────────────────────
 
 router.delete('/templates/:id', async (req, res, next) => {
