@@ -513,9 +513,8 @@ router.put('/rate-cards/:id', async (req, res, next) => {
   try {
     const {
       rates, surcharge_markups, fuel_markup_pct, intl_markup_pct,
-      weekly_parcels, volume_mix,
+      weekly_parcels, domestic_pct,
     } = req.body;
-    const proj = calcProjections(rates || [], volume_mix || [], weekly_parcels);
     const r = await query(`
       UPDATE prospect_rate_cards SET
         rates              = COALESCE($1, rates),
@@ -523,19 +522,15 @@ router.put('/rate-cards/:id', async (req, res, next) => {
         fuel_markup_pct    = COALESCE($3, fuel_markup_pct),
         intl_markup_pct    = COALESCE($4, intl_markup_pct),
         weekly_parcels     = COALESCE($5, weekly_parcels),
-        volume_mix         = COALESCE($6, volume_mix),
-        projected_weekly_revenue = $7,
-        projected_weekly_cost    = $8,
-        projected_weekly_profit  = $9,
+        domestic_pct       = COALESCE($6, domestic_pct),
         updated_at         = NOW()
-      WHERE id = $10
+      WHERE id = $7
       RETURNING *
     `, [rates ? JSON.stringify(rates) : null,
         surcharge_markups ? JSON.stringify(surcharge_markups) : null,
         fuel_markup_pct ?? null, intl_markup_pct ?? null,
         weekly_parcels ?? null,
-        volume_mix ? JSON.stringify(volume_mix) : null,
-        proj.revenue, proj.cost, proj.profit,
+        domestic_pct ?? null,
         req.params.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'Rate card not found' });
     res.json(r.rows[0]);
@@ -671,6 +666,44 @@ router.get('/approvals/pending', async (req, res, next) => {
       ORDER BY a.requested_at ASC
     `);
     res.json(r.rows);
+  } catch (err) { next(err); }
+});
+
+// ─── GET /api/pricing/intl-averages?courier_code=DPD ─────────────────────────
+// Returns average revenue, cost, and profit per parcel for international charges
+// for the given carrier, using service_type = 'international' from courier_services.
+// Used by the rate card projection panel to estimate international spend.
+// sample_count is returned so the UI can flag low-confidence estimates.
+
+router.get('/intl-averages', async (req, res, next) => {
+  try {
+    const { courier_code } = req.query;
+    if (!courier_code) return res.status(400).json({ error: 'courier_code required' });
+
+    const r = await query(`
+      SELECT
+        COUNT(ch.id)::int                                                          AS sample_count,
+        ROUND(AVG(ch.price       / NULLIF(ch.parcel_qty, 0))::numeric, 2)         AS avg_sell,
+        ROUND(AVG(ch.cost_price  / NULLIF(ch.parcel_qty, 0))::numeric, 2)         AS avg_cost,
+        ROUND(AVG((ch.price - ch.cost_price) / NULLIF(ch.parcel_qty, 0))::numeric, 2) AS avg_profit
+      FROM charges ch
+      JOIN courier_services cs
+        ON cs.name ILIKE ch.service_name
+       AND cs.courier_id = (SELECT id FROM couriers WHERE code ILIKE $1)
+      WHERE ch.charge_type = 'courier'
+        AND ch.cancelled   = false
+        AND ch.price       IS NOT NULL
+        AND ch.cost_price  IS NOT NULL
+        AND cs.service_type = 'international'
+    `, [courier_code]);
+
+    const row = r.rows[0];
+    res.json({
+      sample_count: row.sample_count ?? 0,
+      avg_sell:     parseFloat(row.avg_sell   ?? 0),
+      avg_cost:     parseFloat(row.avg_cost   ?? 0),
+      avg_profit:   parseFloat(row.avg_profit ?? 0),
+    });
   } catch (err) { next(err); }
 });
 

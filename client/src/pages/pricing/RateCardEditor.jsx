@@ -87,6 +87,7 @@ export default function RateCardEditor() {
   const [savedMsg, setSavedMsg] = useState('');
   const [openSvcs,     setOpenSvcs]     = useState(new Set());
   const [openIntlSvcs, setOpenIntlSvcs] = useState(new Set());
+  const [domesticPct,  setDomesticPct]  = useState(95);
 
   const { data: rc, isLoading, error } = useQuery({
     queryKey: ['rate-card-detail', id],
@@ -95,6 +96,14 @@ export default function RateCardEditor() {
 
   const { data: staffList = [] } = useQuery({ queryKey: ['staff'], queryFn: api.staffList });
 
+  // International averages — learns as more shipments arrive via webhook
+  const { data: intlAvg } = useQuery({
+    queryKey: ['intl-averages', rc?.courier_code],
+    queryFn: () => apiFetch(`/api/pricing/intl-averages?courier_code=${encodeURIComponent(rc.courier_code)}`),
+    enabled: !!rc?.courier_code,
+    staleTime: 5 * 60 * 1000,
+  });
+
   // Initialise local state when rate card loads
   useEffect(() => {
     if (!rc) return;
@@ -102,6 +111,7 @@ export default function RateCardEditor() {
     setIntlMarkup(rc.intl_markup_pct ?? '');
     setFuelMarkup(rc.fuel_markup_pct ?? '');
     setWeeklyParcels(rc.weekly_parcels ?? '');
+    setDomesticPct(rc.domestic_pct ?? 95);
     setDirty(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rc?.id]);
@@ -112,6 +122,7 @@ export default function RateCardEditor() {
       intl_markup_pct: num(intlMarkup),
       fuel_markup_pct: num(fuelMarkup),
       weekly_parcels:  weeklyParcels ? parseInt(weeklyParcels) : null,
+      domestic_pct:    domesticPct,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['rate-card-detail', id] });
@@ -195,48 +206,77 @@ export default function RateCardEditor() {
   const intlServices     = groupByCode(intlRates);
 
   // ── Projections ───────────────────────────────────────────────────────────
-  // Simple: weekly parcels × Zone 1 (lowest-numbered zone) of the primary service.
-  // Primary service priority: known main service codes per carrier, then first domestic rate.
-  // No volume mix — the prospect's service usage is unknown and guessing from other
-  // customers' patterns produces misleading results.
+  // Domestic/international split (slider, default 95% domestic).
+  // Domestic:     primary mainland service cost × volume-tier markup.
+  // International: average revenue/cost per parcel from actual charges (learns over time).
+  // Markup tiers: ≤50/wk = 40%, ≤100 = 35%, ≤200 = 30%, 200+ = 20%.
 
   const [showDebug, setShowDebug] = useState(false);
 
-  // Known primary service codes per carrier — always the standard Next Day / main service
-  const PRIMARY_CODES = ['DPD-12', 'DHLPCUK-220', 'UPS-EXPRESS', 'FEDEX-IE', 'RM-24', 'YODEL-24'];
-
-  // Pick the lowest-numbered zone for a given service code
-  const pickZone1 = (serviceCode) => {
-    const matching = domesticRates.filter(x => x.service_code === serviceCode);
-    if (!matching.length) return null;
-    return matching.slice().sort((a, b) => {
-      const numA = parseInt((a.zone_name || '').match(/\d+/)?.[0] ?? '9999');
-      const numB = parseInt((b.zone_name || '').match(/\d+/)?.[0] ?? '9999');
-      if (numA !== numB) return numA - numB;
-      return (a.zone_name || '').localeCompare(b.zone_name || '');
-    })[0];
+  // Markup tier based on total weekly parcel volume
+  const markupTier = (parcels) => {
+    if (parcels <= 50)  return 0.40;
+    if (parcels <= 100) return 0.35;
+    if (parcels <= 200) return 0.30;
+    return 0.20;
   };
 
-  // Find the primary rate: try known primary codes first, then cheapest Zone 1 domestic
+  // Find the primary mainland domestic rate.
+  // Priority: known primary service codes → Mainland zone → lowest numbered zone.
+  const PRIMARY_CODES = ['DPD-12', 'DHLPCUK-220', 'UPS-EXPRESS', 'FEDEX-IE', 'RM-24', 'YODEL-24'];
+  const isMainland = (z) => !z || /mainland/i.test(z) || /^zone\s*1$/i.test(z) || /^zone\s*a$/i.test(z);
+  const pickMainland = (code) => {
+    const rows = domesticRates.filter(r => r.service_code === code);
+    if (!rows.length) return null;
+    return rows.find(r => isMainland(r.zone_name))
+      || rows.slice().sort((a, b) => {
+           const na = parseInt((a.zone_name || '').match(/\d+/)?.[0] ?? '9999');
+           const nb = parseInt((b.zone_name || '').match(/\d+/)?.[0] ?? '9999');
+           return na - nb;
+         })[0];
+  };
   const primaryRate = (() => {
     for (const code of PRIMARY_CODES) {
-      const r = pickZone1(code);
+      const r = pickMainland(code);
       if (r) return r;
     }
-    // Fallback: use the lowest zone of the first service alphabetically
     const firstCode = [...new Set(domesticRates.map(r => r.service_code).filter(Boolean))].sort()[0];
-    return firstCode ? pickZone1(firstCode) : null;
+    return firstCode ? pickMainland(firstCode) : null;
   })();
 
   const projections = (() => {
     if (!weeklyParcels || !primaryRate) return null;
-    const qty    = parseInt(weeklyParcels);
-    const sell   = parseFloat(primaryRate.price      || 0);
-    const cst    = parseFloat(primaryRate.cost_price || 0);
-    const rev    = sell * qty;
-    const cost   = cst  * qty;
-    const profit = rev - cost;
-    return { rev, cost, profit, margin: rev > 0 ? profit / rev * 100 : 0 };
+    const total      = parseInt(weeklyParcels);
+    const domParcels = Math.round(total * domesticPct / 100);
+    const intlParcels = total - domParcels;
+    const markup     = markupTier(total);
+
+    // Domestic leg
+    const domCostRate = parseFloat(primaryRate.cost_price || 0);
+    const domSellRate = domCostRate * (1 + markup);
+    const domRev      = domSellRate * domParcels;
+    const domCost     = domCostRate * domParcels;
+    const domProfit   = domRev - domCost;
+
+    // International leg — from actual charge averages, zero if no data yet
+    const avgSell   = parseFloat(intlAvg?.avg_sell   || 0);
+    const avgCost   = parseFloat(intlAvg?.avg_cost   || 0);
+    const intlRev   = avgSell  * intlParcels;
+    const intlCost  = avgCost  * intlParcels;
+    const intlProfit = intlRev - intlCost;
+
+    const totalRev    = domRev    + intlRev;
+    const totalCost   = domCost   + intlCost;
+    const totalProfit = domProfit + intlProfit;
+
+    return {
+      rev: totalRev, cost: totalCost, profit: totalProfit,
+      margin: totalRev > 0 ? totalProfit / totalRev * 100 : 0,
+      dom:  { parcels: domParcels,  rev: domRev,  cost: domCost,  profit: domProfit,
+              sell_rate: domSellRate, cost_rate: domCostRate, markup },
+      intl: { parcels: intlParcels, rev: intlRev, cost: intlCost, profit: intlProfit,
+              avg_sell: avgSell, avg_cost: avgCost, sample_count: intlAvg?.sample_count ?? 0 },
+    };
   })();
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -639,27 +679,57 @@ export default function RateCardEditor() {
                   </div>
                 </div>
 
-                {/* Debug: show the single rate the projection is based on */}
-                {showDebug && primaryRate && (
-                  <div style={{ marginTop: 10, background: 'rgba(245,158,11,0.03)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: 8, padding: '10px 14px', fontSize: 11 }}>
-                    <div style={{ fontSize: 10, color: '#F59E0B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
-                      Projection basis
+                {/* Debug: show both domestic and international assumptions */}
+                {showDebug && projections && (
+                  <div style={{ marginTop: 10, background: 'rgba(245,158,11,0.03)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: 8, overflow: 'hidden', fontSize: 11 }}>
+                    <div style={{ padding: '8px 12px', borderBottom: '1px solid rgba(245,158,11,0.1)', fontSize: 10, color: '#F59E0B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Projection assumptions
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-                      {[
-                        { label: 'Service',   val: primaryRate.service_name || primaryRate.service_code, mono: false },
-                        { label: 'Zone',      val: primaryRate.zone_name || '—', mono: true },
-                        { label: 'Qty',       val: `${parseInt(weeklyParcels).toLocaleString()} parcels`, mono: true },
-                        { label: 'Sell rate', val: gbp(primaryRate.price),      mono: true, color: '#00C853' },
-                        { label: 'Cost rate', val: gbp(primaryRate.cost_price), mono: true, color: '#B39DDB' },
-                        { label: 'Margin',    val: `${projections.margin.toFixed(1)}%`, mono: true,
-                          color: projections.margin < 0 ? '#EF4444' : projections.margin < 15 ? '#F59E0B' : '#34D399' },
-                      ].map(({ label, val, mono, color }) => (
-                        <div key={label}>
-                          <div style={{ fontSize: 10, color: '#555', marginBottom: 2 }}>{label}</div>
-                          <div style={{ color: color || '#CCC', fontFamily: mono ? 'monospace' : 'inherit', fontWeight: 600 }}>{val}</div>
-                        </div>
-                      ))}
+                    {/* Domestic leg */}
+                    <div style={{ padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                      <div style={{ fontSize: 10, color: '#888', fontWeight: 700, textTransform: 'uppercase', marginBottom: 6 }}>
+                        Domestic — {projections.dom.parcels.toLocaleString()} parcels ({domesticPct}%)
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                        {[
+                          { label: 'Service',    val: primaryRate.service_name || primaryRate.service_code },
+                          { label: 'Zone',       val: primaryRate.zone_name || 'Mainland', mono: true },
+                          { label: 'Markup tier',val: `${(projections.dom.markup * 100).toFixed(0)}%`, mono: true, color: '#A5B4FC' },
+                          { label: 'Carrier cost',val: gbp(projections.dom.cost_rate), mono: true, color: '#B39DDB' },
+                          { label: 'Sell rate',  val: gbp(projections.dom.sell_rate), mono: true, color: '#00C853' },
+                          { label: 'Dom profit', val: gbp(projections.dom.profit), mono: true,
+                            color: projections.dom.profit >= 0 ? '#34D399' : '#EF4444' },
+                        ].map(({ label, val, mono, color }) => (
+                          <div key={label}>
+                            <div style={{ fontSize: 10, color: '#555', marginBottom: 2 }}>{label}</div>
+                            <div style={{ color: color || '#CCC', fontFamily: mono ? 'monospace' : 'inherit', fontWeight: 600 }}>{val}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {/* International leg */}
+                    <div style={{ padding: '10px 12px' }}>
+                      <div style={{ fontSize: 10, color: '#888', fontWeight: 700, textTransform: 'uppercase', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        International — {projections.intl.parcels.toLocaleString()} parcels ({100 - domesticPct}%)
+                        {projections.intl.sample_count < 10 && (
+                          <span style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 99, padding: '1px 6px', color: '#F59E0B', fontSize: 9, fontWeight: 700, textTransform: 'none' }}>
+                            {projections.intl.sample_count === 0 ? 'No data yet' : `${projections.intl.sample_count} charges`}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                        {[
+                          { label: 'Avg sell/parcel', val: projections.intl.avg_sell > 0 ? gbp(projections.intl.avg_sell) : '—', mono: true, color: '#00C853' },
+                          { label: 'Avg cost/parcel', val: projections.intl.avg_cost > 0 ? gbp(projections.intl.avg_cost) : '—', mono: true, color: '#B39DDB' },
+                          { label: 'Intl profit',     val: projections.intl.rev > 0 ? gbp(projections.intl.profit) : '—', mono: true,
+                            color: projections.intl.profit >= 0 ? '#34D399' : '#EF4444' },
+                        ].map(({ label, val, mono, color }) => (
+                          <div key={label}>
+                            <div style={{ fontSize: 10, color: '#555', marginBottom: 2 }}>{label}</div>
+                            <div style={{ color: color || '#CCC', fontFamily: mono ? 'monospace' : 'inherit', fontWeight: 600 }}>{val}</div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -674,7 +744,28 @@ export default function RateCardEditor() {
             <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>Est. weekly parcels</label>
             <input value={weeklyParcels} onChange={e => { setWeeklyParcels(e.target.value); markDirty(); }}
               type="number" min={0} disabled={!isEditable}
-              style={{ ...inputStyle, marginBottom: 16 }} placeholder="e.g. 500" />
+              style={{ ...inputStyle, marginBottom: 12 }} placeholder="e.g. 500" />
+
+            {/* Domestic / International split slider */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <label style={{ fontSize: 12, color: '#666' }}>Domestic / International split</label>
+                <span style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: 700 }}>
+                  <span style={{ color: '#A5B4FC' }}>{domesticPct}% dom</span>
+                  <span style={{ color: '#555', margin: '0 4px' }}>·</span>
+                  <span style={{ color: '#B39DDB' }}>{100 - domesticPct}% intl</span>
+                </span>
+              </div>
+              <input
+                type="range" min={50} max={100} step={1} value={domesticPct}
+                onChange={e => { setDomesticPct(parseInt(e.target.value)); markDirty(); }}
+                disabled={!isEditable}
+                style={{ width: '100%', accentColor: '#6366F1', cursor: isEditable ? 'pointer' : 'default' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#444', marginTop: 2 }}>
+                <span>50% dom</span><span>100% dom</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
