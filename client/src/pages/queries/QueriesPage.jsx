@@ -690,13 +690,16 @@ function QueryDetail({ queryId, onUpdated }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setData(await fetchQuery(queryId));
-      // Mark all inbound emails as read — fire-and-forget, non-blocking
-      fetch(`/api/queries/${queryId}/mark-read`, { method: 'PATCH' }).catch(() => {});
+      const d = await fetchQuery(queryId);
+      setData(d);
+      // Mark all inbound emails read, then immediately refresh the inbox list
+      // so the unread badge on the left card clears in real time.
+      await fetch(`/api/queries/${queryId}/mark-read`, { method: 'PATCH' }).catch(() => {});
+      onUpdated?.();
     }
     catch (err) { console.error(err); }
     finally { setLoading(false); }
-  }, [queryId]);
+  }, [queryId, onUpdated]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -803,9 +806,28 @@ function QueryDetail({ queryId, onUpdated }) {
         {/* Block 1: customer name + subject + status */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 12 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: C.text, lineHeight: 1.1,
-              marginBottom: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {q.customer_name}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: C.text, lineHeight: 1.1,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
+                {q.customer_name}
+              </div>
+              {/* Unread badge — shows on open, clears once mark-read fires */}
+              {(() => {
+                const n = emails.filter(e =>
+                  (e.direction === 'inbound_customer' || e.direction === 'inbound_courier') &&
+                  !e.read_at && !e.is_ai_draft
+                ).length;
+                return n > 0 ? (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    fontSize: 10, fontWeight: 700, color: C.blue,
+                    background: 'rgba(41,121,255,0.12)', padding: '2px 8px',
+                    borderRadius: 20, border: `1px solid ${C.blue}44`, flexShrink: 0,
+                  }}>
+                    <Mail size={9} /> {n} unread
+                  </span>
+                ) : null;
+              })()}
             </div>
             <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.4,
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -833,18 +855,6 @@ function QueryDetail({ queryId, onUpdated }) {
               {q.consignment_number}
             </span>
           )}
-          {/* Unread customer email badge */}
-          {(() => {
-            const n = emails.filter(e => e.direction === 'inbound_customer' && !e.read_at && !e.is_ai_draft).length;
-            return n > 0 ? (
-              <span title={`${n} unread customer email${n > 1 ? 's' : ''}`} style={{
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                minWidth: 18, height: 18, borderRadius: 9999,
-                background: C.blue, color: '#fff',
-                fontSize: 10, fontWeight: 800, padding: '0 5px', flexShrink: 0,
-              }}>{n}</span>
-            ) : null;
-          })()}
           <span style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
             letterSpacing: '0.5px', flexShrink: 0 }}>Reported</span>
           <TypeBadge type={q.query_type} />
@@ -854,22 +864,8 @@ function QueryDetail({ queryId, onUpdated }) {
 
           {/* Parcel status + postcode */}
           {parcel && (
-            <>
-              {/* Unread courier email badge */}
-              {(() => {
-                const n = emails.filter(e => e.direction === 'inbound_courier' && !e.read_at && !e.is_ai_draft).length;
-                return n > 0 ? (
-                  <span title={`${n} unread courier email${n > 1 ? 's' : ''}`} style={{
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    minWidth: 18, height: 18, borderRadius: 9999,
-                    background: C.amber, color: '#111',
-                    fontSize: 10, fontWeight: 800, padding: '0 5px', flexShrink: 0,
-                  }}>{n}</span>
-                ) : null;
-              })()}
-              <span style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
-                letterSpacing: '0.5px', flexShrink: 0 }}>Courier</span>
-            </>
+            <span style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
+              letterSpacing: '0.5px', flexShrink: 0 }}>Courier</span>
           )}
           {parcel && (
             <span style={{ fontSize: 13, fontWeight: 700, color: parcelColor, textTransform: 'capitalize', whiteSpace: 'nowrap' }}>
