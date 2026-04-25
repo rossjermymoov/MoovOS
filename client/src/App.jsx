@@ -11,6 +11,7 @@ import FinancePage from './pages/finance/FinancePage';
 import QueriesPage from './pages/queries/QueriesPage';
 import TicketDetailPage from './pages/queries/TicketDetailPage';
 import CustomerSimPage from './pages/customer/CustomerSimPage';
+import KatanaPage from './pages/katana/KatanaPage';
 
 // Placeholder pages for other sections (to be built)
 const Placeholder = ({ name }) => (
@@ -44,7 +45,7 @@ export default function App() {
         <Route path="customer-sim"  element={<CustomerSimPage />} />
         <Route path="carriers"      element={<CarrierManagement />} />
         <Route path="reports"   element={<Placeholder name="Dashboards & Reporting" />} />
-        <Route path="knowledge" element={<Placeholder name="Knowledge Base & AI" />} />
+        <Route path="knowledge" element={<KatanaPage />} />
         <Route path="settings">
           <Route index element={<StaffSettings />} />
           <Route path="staff"  element={<StaffSettings />} />

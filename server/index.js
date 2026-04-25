@@ -23,6 +23,7 @@ import queriesRouter from './routes/queries.js';
 import surchargesRouter from './routes/surcharges.js';
 import customerCarrierLinksRouter from './routes/customerCarrierLinks.js';
 import slaRulesRouter from './routes/slaRules.js';
+import katanaRouter from './routes/katana.js';
 
 dotenv.config();
 
@@ -55,6 +56,7 @@ app.use('/api/queries',               queriesRouter);
 app.use('/api/surcharges',            surchargesRouter);
 app.use('/api/customer-carrier-links', customerCarrierLinksRouter);
 app.use('/api/sla',                   slaRulesRouter);
+app.use('/api/katana',                katanaRouter);
 // Webhook-safe alias — suppliers that block URLs containing "billing"
 // should send to /api/moov-charges/webhook instead
 app.use('/api/moov-charges',          billingRouter);
