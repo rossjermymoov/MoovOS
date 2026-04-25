@@ -641,7 +641,7 @@ function evaluateSurchargeFilters(rule, data) {
  * Evaluate all active surcharge rules for the courier and create
  * surcharge charge rows for any that match the shipment.
  */
-async function applySurcharges(shipmentId, customerId, basePrice, shipmentData) {
+async function applySurcharges(shipmentId, customerId, basePrice, shipmentData, carrierSurchargeCostTotal = 0) {
   try {
     if (!shipmentId || !customerId) return;
 
@@ -731,11 +731,23 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData) 
         price = effectiveValue;
       }
 
+      // Carrier cost = default_value (the base rate before any customer markup).
+      // For pass-through surcharges this equals the sell price; for marked-up ones it's lower.
+      const carrierSurchargePrice = parseFloat(surcharge.default_value || 0);
+      let carrierSurchargeCost;
+      if (surcharge.calc_type === 'percentage') {
+        carrierSurchargeCost = parseFloat(((parseFloat(basePrice) || 0) * carrierSurchargePrice / 100).toFixed(2));
+      } else if (surcharge.charge_per === 'parcel') {
+        carrierSurchargeCost = parseFloat((carrierSurchargePrice * (shipmentData.parcel_count || 1)).toFixed(2));
+      } else {
+        carrierSurchargeCost = carrierSurchargePrice;
+      }
+
       await query(`
         INSERT INTO charges
-          (shipment_id, customer_id, charge_type, service_name, price, price_auto, surcharge_id, parcel_qty)
-        VALUES ($1, $2, 'surcharge', $3, $4, true, $5, 1)
-      `, [shipmentId, customerId, surcharge.name, price, surcharge.id]);
+          (shipment_id, customer_id, charge_type, service_name, price, cost_price, price_auto, surcharge_id, parcel_qty)
+        VALUES ($1, $2, 'surcharge', $3, $4, $5, true, $6, 1)
+      `, [shipmentId, customerId, surcharge.name, price, carrierSurchargeCost, surcharge.id]);
     }
 
     // ── Fuel group charge ─────────────────────────────────────────────────────
@@ -744,10 +756,11 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData) 
     if (shipmentData.dc_service_id) {
       const fuelRes = await query(`
         SELECT
-          fg.id          AS fuel_group_id,
-          fg.name        AS fuel_group_name,
+          fg.id                  AS fuel_group_id,
+          fg.name                AS fuel_group_name,
           fg.standard_sell_pct,
-          cfgp.sell_pct  AS customer_sell_pct
+          fg.fuel_surcharge_pct  AS carrier_pct,
+          cfgp.sell_pct          AS customer_sell_pct
         FROM courier_services cs
         JOIN fuel_groups fg ON fg.id = cs.fuel_group_id
         LEFT JOIN customer_fuel_group_pricing cfgp
@@ -758,7 +771,8 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData) 
 
       if (fuelRes.rows.length) {
         const fg = fuelRes.rows[0];
-        const sellPct = parseFloat(fg.customer_sell_pct ?? fg.standard_sell_pct ?? 0);
+        const sellPct    = parseFloat(fg.customer_sell_pct ?? fg.standard_sell_pct ?? 0);
+        const carrierPct = parseFloat(fg.carrier_pct ?? 0);
 
         if (sellPct > 0) {
           // Idempotency: one fuel charge per shipment — check by charge_type='fuel'
@@ -768,12 +782,14 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData) 
           );
 
           if (!existingFuel.length) {
-            const fuelPrice = parseFloat(((parseFloat(basePrice) || 0) * sellPct / 100).toFixed(2));
+            const baseCost    = parseFloat(basePrice) || 0;
+            const fuelPrice   = parseFloat((baseCost * sellPct    / 100).toFixed(2));
+            const fuelCost    = carrierPct > 0 ? parseFloat((baseCost * carrierPct / 100).toFixed(2)) : null;
             await query(`
               INSERT INTO charges
-                (shipment_id, customer_id, charge_type, service_name, price, price_auto, parcel_qty)
-              VALUES ($1, $2, 'fuel', $3, $4, true, 1)
-            `, [shipmentId, customerId, `${fg.fuel_group_name} Fuel`, fuelPrice]);
+                (shipment_id, customer_id, charge_type, service_name, price, cost_price, price_auto, parcel_qty)
+              VALUES ($1, $2, 'fuel', $3, $4, $5, true, 1)
+            `, [shipmentId, customerId, `${fg.fuel_group_name} Fuel`, fuelPrice, fuelCost]);
           }
         }
       }
@@ -901,7 +917,11 @@ router.post('/webhook', async (req, res, next) => {
 
     // ── Created ───────────────────────────────────────────────────────────────
     const shipment       = payload.shipment || {};
-    const responseParsed = safeJson(payload.response) || {};
+    // payload.response may arrive as a pre-parsed object or as a JSON string —
+    // handle both so billing.shipping (carrier cost) is always readable.
+    const responseParsed = (typeof payload.response === 'object' && payload.response !== null
+      ? payload.response
+      : safeJson(payload.response)) || {};
     const billingResp    = responseParsed.billing || {};
 
     // Use consolidated extractor — handles all known payload shapes
@@ -931,8 +951,10 @@ router.post('/webhook', async (req, res, next) => {
     const primaryTrackingCode = trackingCodes[0] || null;
     const trackingHashVal = computeTrackingHash(primaryTrackingCode, collectionDate);
 
-    // Courier costs (what Moov pays) per parcel
-    const courierCosts = billingResp.shipping || [];
+    // Courier costs (what Moov pays) — from DC billing block
+    const courierCosts      = Array.isArray(billingResp.shipping)   ? billingResp.shipping   : (billingResp.shipping   != null ? [billingResp.shipping]   : []);
+    const dcSurchargeCosts  = Array.isArray(billingResp.surcharges) ? billingResp.surcharges : (billingResp.surcharges != null ? [billingResp.surcharges] : []);
+    const totalCarrierSurchargeCost = dcSurchargeCosts.reduce((s, c) => s + (parseFloat(c) || 0), 0);
     const totalCostPrice = courierCosts.reduce((s, c) => s + (parseFloat(c) || 0), 0);
 
     // Resolve customer:
@@ -1101,7 +1123,7 @@ router.post('/webhook', async (req, res, next) => {
       dim_height_cm:          addl.dimHeight,
       total_declared_value:   addl.totalDeclaredValue,
       parcel_declared_value:  addl.parcelDeclaredValue,
-    });
+    }, totalCarrierSurchargeCost);
 
     res.json({
       ok: true,
@@ -1372,7 +1394,19 @@ router.get('/charges', async (req, res, next) => {
             WHERE sc.shipment_id = c.shipment_id
               AND sc.charge_type IN ('surcharge','fuel')
               AND sc.cancelled = false
-          ), 0) AS surcharge_count
+          ), 0) AS surcharge_count,
+          COALESCE((
+            SELECT json_agg(json_build_object(
+              'type',       sc.charge_type,
+              'name',       sc.service_name,
+              'price',      sc.price,
+              'cost_price', sc.cost_price
+            ) ORDER BY sc.charge_type DESC, sc.created_at)
+            FROM charges sc
+            WHERE sc.shipment_id = c.shipment_id
+              AND sc.charge_type IN ('surcharge','fuel')
+              AND sc.cancelled = false
+          ), '[]'::json) AS charge_lines
         FROM charges c
         LEFT JOIN customers cu ON cu.id = c.customer_id
         LEFT JOIN shipments  s  ON s.id  = c.shipment_id

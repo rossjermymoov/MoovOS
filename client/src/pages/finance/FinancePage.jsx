@@ -60,6 +60,87 @@ function FlagBadge({ value, trueLabel = 'Yes', falseLabel = 'No' }) {
   );
 }
 
+// ─── Price breakdown tooltip ──────────────────────────────────────────────────
+
+function BreakdownTooltip({ charge, mode }) {
+  // mode: 'sell' | 'cost'
+  const base      = mode === 'sell' ? parseFloat(charge.price || 0) : parseFloat(charge.cost_price || 0);
+  const lines     = Array.isArray(charge.charge_lines) ? charge.charge_lines : [];
+  const total     = base + lines.reduce((s, l) => s + parseFloat(mode === 'sell' ? (l.price || 0) : (l.cost_price || l.price || 0)), 0);
+  const accentCol = mode === 'sell' ? '#00C853' : '#B39DDB';
+
+  return (
+    <div style={{
+      position: 'absolute', bottom: 'calc(100% + 6px)', right: 0,
+      background: '#1A1B3A', border: `1px solid ${accentCol}44`,
+      borderRadius: 8, padding: '10px 14px', minWidth: 220, zIndex: 200,
+      boxShadow: '0 8px 24px rgba(0,0,0,0.6)', pointerEvents: 'none',
+      fontFamily: 'monospace', fontSize: 12,
+    }}>
+      {/* Base */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 4 }}>
+        <span style={{ color: '#888' }}>Base rate</span>
+        <span style={{ color: '#fff' }}>
+          {base > 0 ? `£${base.toFixed(2)}` : <span style={{ color: '#F44336' }}>not set</span>}
+        </span>
+      </div>
+      {/* Surcharge / fuel lines */}
+      {lines.map((l, i) => {
+        const val = mode === 'sell' ? parseFloat(l.price || 0) : parseFloat(l.cost_price ?? l.price ?? 0);
+        return (
+          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 4 }}>
+            <span style={{ color: '#888' }}>{l.name || (l.type === 'fuel' ? 'Fuel' : 'Surcharge')}</span>
+            <span style={{ color: '#fff' }}>
+              {l.cost_price == null && mode === 'cost'
+                ? <span style={{ color: '#555' }}>—</span>
+                : `£${val.toFixed(2)}`}
+            </span>
+          </div>
+        );
+      })}
+      {/* Divider + total */}
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', gap: 16,
+        marginTop: 6, paddingTop: 6, borderTop: `1px solid ${accentCol}33`,
+        fontWeight: 700,
+      }}>
+        <span style={{ color: '#aaa' }}>Total</span>
+        <span style={{ color: accentCol }}>£{total.toFixed(2)}</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Charge cell with hover breakdown ────────────────────────────────────────
+
+function ChargeCellSell({ charge, onSave, onDebug }) {
+  const [hov, setHov] = useState(false);
+  const hasLines = charge.price != null && charge.charge_lines?.length > 0;
+  return (
+    <div style={{ position: 'relative', display: 'inline-block' }}
+      onMouseEnter={() => hasLines && setHov(true)}
+      onMouseLeave={() => setHov(false)}>
+      <PriceCell charge={charge} onSave={onSave} onDebug={onDebug} />
+      {hov && <BreakdownTooltip charge={charge} mode="sell" />}
+    </div>
+  );
+}
+
+function ChargeCellCost({ charge }) {
+  const [hov, setHov] = useState(false);
+  const hasCost = charge.cost_price != null;
+  return (
+    <div style={{ position: 'relative', display: 'inline-block' }}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}>
+      <span style={{ color: hasCost ? '#B39DDB' : '#555', fontWeight: hasCost ? 700 : 400, fontSize: 13 }}>
+        {hasCost ? gbp(charge.cost_price) : '—'}
+      </span>
+      {hov && hasCost && <BreakdownTooltip charge={charge} mode="cost" />}
+    </div>
+  );
+}
+
 // ─── Row actions hamburger menu ───────────────────────────────────────────────
 
 function MoreMenu({ charge, onBill, onReprice, onLog, onDebug, onCancel }) {
@@ -1256,27 +1337,34 @@ export default function FinancePage() {
                     )}
                   </td>
 
-                  {/* Charge (ex. VAT) */}
+                  {/* Charge (ex. VAT) — hover shows breakdown */}
                   <td style={{ ...td, textAlign: 'right' }}>
                     {charge.cancelled ? (
                       <span style={{ color: '#555', textDecoration: 'line-through', fontSize: 12 }}>
                         {gbp(charge.price)}
                       </span>
                     ) : (
-                      <PriceCell charge={charge} onSave={(price) => savePrice(charge, price)} onDebug={() => setDebugCharge(charge)} />
+                      <ChargeCellSell
+                        charge={charge}
+                        onSave={(price) => savePrice(charge, price)}
+                        onDebug={() => setDebugCharge(charge)}
+                      />
                     )}
                   </td>
 
-                  {/* Carrier Cost */}
-                  <td style={{ ...td, textAlign: 'right', color: '#888', fontSize: 12 }}>
-                    {charge.cost_price != null ? gbp(charge.cost_price) : '—'}
+                  {/* Carrier Cost — hover shows breakdown */}
+                  <td style={{ ...td, textAlign: 'right' }}>
+                    <ChargeCellCost charge={charge} />
                   </td>
 
                   {/* Profit */}
                   <td style={{ ...td, textAlign: 'right' }}>
                     {charge.price != null && charge.cost_price != null ? (() => {
-                      const profit = parseFloat(charge.price) - parseFloat(charge.cost_price);
-                      const color = profit > 0 ? '#00C853' : profit < 0 ? '#F44336' : '#888';
+                      const lines     = Array.isArray(charge.charge_lines) ? charge.charge_lines : [];
+                      const sellTotal = parseFloat(charge.price) + lines.reduce((s, l) => s + parseFloat(l.price || 0), 0);
+                      const costTotal = parseFloat(charge.cost_price) + lines.reduce((s, l) => s + parseFloat(l.cost_price ?? l.price ?? 0), 0);
+                      const profit    = sellTotal - costTotal;
+                      const color     = profit > 0 ? '#00C853' : profit < 0 ? '#F44336' : '#888';
                       return <span style={{ color, fontWeight: 700, fontSize: 13 }}>{gbp(profit)}</span>;
                     })() : <span style={{ color: '#555' }}>—</span>}
                   </td>
