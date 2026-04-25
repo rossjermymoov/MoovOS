@@ -508,6 +508,27 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
     return { rate: null, reason: 'no matching price' };
   }
 
+  // ── Step 4: carrier cost from weight_bands (master rate card) ────────────────
+  const costRes = await query(`
+    SELECT wb.price_first AS carrier_cost, wb.price_sub AS carrier_cost_sub
+    FROM weight_bands wb
+    JOIN zones z              ON z.id  = wb.zone_id
+    JOIN courier_services cs  ON cs.id = z.courier_service_id
+    JOIN carrier_rate_cards crc ON crc.id = wb.carrier_rate_card_id
+    WHERE cs.service_code ILIKE $1
+      AND z.name           ILIKE $2
+      AND crc.is_master         = true
+      AND wb.min_weight_kg      < $3
+      AND wb.max_weight_kg      >= $3
+    ORDER BY wb.max_weight_kg ASC
+    LIMIT 1
+  `, [serviceCode, zoneName, weightKg ?? 0]);
+
+  const carrierCost    = costRes.rows.length ? parseFloat(costRes.rows[0].carrier_cost) : null;
+  const carrierCostSub = costRes.rows.length && costRes.rows[0].carrier_cost_sub != null
+    ? parseFloat(costRes.rows[0].carrier_cost_sub)
+    : null;
+
   const rateRow = priceRes.rows[0];
   return {
     rate: {
@@ -515,6 +536,8 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
       price_sub:         rateRow.price_sub != null ? parseFloat(rateRow.price_sub) : null,
       zone_name:         rateRow.zone_name,
       weight_class_name: rateRow.weight_class_name,
+      cost_price:        carrierCost,
+      cost_price_sub:    carrierCostSub,
     },
     reason: null,
   };
@@ -951,11 +974,9 @@ router.post('/webhook', async (req, res, next) => {
     const primaryTrackingCode = trackingCodes[0] || null;
     const trackingHashVal = computeTrackingHash(primaryTrackingCode, collectionDate);
 
-    // Courier costs (what Moov pays) — from DC billing block
-    const courierCosts      = Array.isArray(billingResp.shipping)   ? billingResp.shipping   : (billingResp.shipping   != null ? [billingResp.shipping]   : []);
-    const dcSurchargeCosts  = Array.isArray(billingResp.surcharges) ? billingResp.surcharges : (billingResp.surcharges != null ? [billingResp.surcharges] : []);
+    // Carrier surcharge cost — from DC billing block (used by applySurcharges until surcharge cost calc moves to rate cards)
+    const dcSurchargeCosts          = Array.isArray(billingResp.surcharges) ? billingResp.surcharges : (billingResp.surcharges != null ? [billingResp.surcharges] : []);
     const totalCarrierSurchargeCost = dcSurchargeCosts.reduce((s, c) => s + (parseFloat(c) || 0), 0);
-    const totalCostPrice = courierCosts.reduce((s, c) => s + (parseFloat(c) || 0), 0);
 
     // Resolve customer:
     //  1. account_number → customers.account_number
@@ -1100,7 +1121,13 @@ router.post('/webhook', async (req, res, next) => {
       shipmentId, customerId, 'courier',
       reference, parcelCount, serviceName,
       totalPrice,
-      totalCostPrice > 0 ? parseFloat(totalCostPrice.toFixed(2)) : null,
+      rate?.cost_price != null ? (() => {
+        const n = Math.max(1, parseInt(parcelCount) || 1);
+        const costTotal = rate.cost_price_sub != null && n > 1
+          ? rate.cost_price + (n - 1) * rate.cost_price_sub
+          : rate.cost_price * n;
+        return parseFloat(costTotal.toFixed(2));
+      })() : null,
       rate?.zone_name || null,
       rate?.weight_class_name || null,
       rate != null,
