@@ -935,12 +935,15 @@ export default function CustomerPricingTab({ customer }) {
   const activeCourierCodes = new Set(activeCarriers.map(c => c.courier_code));
 
   const services    = rateData?.services || [];
-  const selectedIds = new Set(selectedServices.map(s => s.courier_service_id));
+  // Use service_code for comparison — selectedServices has new courier_services.id (e.g. 12)
+  // while customer_rates.service_id is the old billing system ID (e.g. 764). Both share
+  // service_code ('DPD_NEXT_DAY') as the safe cross-reference key.
+  const selectedCodes = new Set(selectedServices.map(s => s.service_code).filter(Boolean));
 
   // Rate cards: filter to active carriers + selected services
   const visibleServices = services.filter(s => {
     const courierOk  = activeCourierCodes.size === 0 || activeCourierCodes.has(s.courier_code);
-    const serviceOk  = selectedIds.size === 0         || selectedIds.has(s.service_id);
+    const serviceOk  = selectedCodes.size === 0       || selectedCodes.has(s.service_code);
     return courierOk && serviceOk;
   });
 
