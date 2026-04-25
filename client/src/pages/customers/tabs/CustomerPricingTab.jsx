@@ -1,12 +1,13 @@
 /**
  * CustomerPricingTab
- * Service selector (which services the customer has) + rate card view
+ * Courier links, fuel groups, surcharge overrides, service selector, rate card view
  */
 
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Trash2, Globe, Search, X, ChevronDown, ChevronRight, Package, Check } from 'lucide-react';
+import { Trash2, Globe, Search, X, ChevronDown, ChevronRight, Package, Check, Zap, AlertCircle } from 'lucide-react';
 import axios from 'axios';
+import { getCourierLogo } from '../../../utils/courierLogos';
 
 const api = axios.create({ baseURL: '/api' });
 
@@ -608,6 +609,378 @@ function ServiceSelector({ customerId }) {
   );
 }
 
+// ─── Courier Links + Fuel Groups panel ───────────────────────
+function CourierLinksPanel({ customerId }) {
+  const qc = useQueryClient();
+  const [expandedFuel, setExpandedFuel] = useState(null);
+
+  const { data: carriers = [], isLoading } = useQuery({
+    queryKey: ['customer-carrier-links', customerId],
+    queryFn:  () => api.get(`/customer-carrier-links/${customerId}`).then(r => r.data),
+  });
+
+  const toggleLink = useMutation({
+    mutationFn: ({ courier_id, active }) =>
+      active
+        ? api.delete(`/customer-carrier-links/${customerId}/${courier_id}`)
+        : api.post(`/customer-carrier-links/${customerId}`, { courier_id }),
+    onSuccess: () => qc.invalidateQueries(['customer-carrier-links', customerId]),
+  });
+
+  const changeCard = useMutation({
+    mutationFn: ({ courierId, cardId }) =>
+      api.patch(`/customer-carrier-links/${customerId}/${courierId}`, { carrier_rate_card_id: cardId }),
+    onSuccess: () => qc.invalidateQueries(['customer-carrier-links', customerId]),
+  });
+
+  const setFuel = useMutation({
+    mutationFn: ({ fuelGroupId, sell_pct }) =>
+      sell_pct === null
+        ? api.delete(`/customer-carrier-links/${customerId}/fuel/${fuelGroupId}`)
+        : api.put(`/customer-carrier-links/${customerId}/fuel/${fuelGroupId}`, { sell_pct }),
+    onSuccess: () => qc.invalidateQueries(['customer-carrier-links', customerId]),
+  });
+
+  if (isLoading) return null;
+
+  const activeCarriers = carriers.filter(c => c.active);
+
+  return (
+    <div className="moov-card" style={{ marginBottom: 20, overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ padding: '14px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <Zap size={15} color="#7B2FBE" />
+        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#7B2FBE', margin: 0, flex: 1 }}>Carrier Links & Fuel Groups</h3>
+        {activeCarriers.length > 0
+          ? <span style={{ fontSize: 12, color: '#00C853', fontWeight: 700 }}>{activeCarriers.length} carrier{activeCarriers.length !== 1 ? 's' : ''} active</span>
+          : <span style={{ fontSize: 12, color: '#AAAAAA', fontStyle: 'italic' }}>No carriers linked — link a carrier to enable rate cards</span>
+        }
+      </div>
+
+      {/* Carrier grid */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, padding: 16 }}>
+        {carriers.map(carrier => {
+          const logo = getCourierLogo(carrier.courier_code);
+          const isActive = carrier.active;
+          const hasFuel  = carrier.fuel_groups?.length > 0;
+          const fuelOpen = expandedFuel === carrier.courier_id;
+
+          return (
+            <div key={carrier.courier_id} style={{
+              border: `1.5px solid ${isActive ? 'rgba(0,200,83,0.45)' : 'rgba(255,255,255,0.07)'}`,
+              borderRadius: 10,
+              background: isActive ? 'rgba(0,200,83,0.04)' : 'rgba(255,255,255,0.01)',
+              minWidth: 200, flex: '1 1 200px',
+              overflow: 'hidden',
+            }}>
+              {/* Carrier header row */}
+              <div
+                onClick={() => toggleLink.mutate({ courier_id: carrier.courier_id, active: isActive })}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', cursor: 'pointer' }}
+              >
+                {logo
+                  ? <img src={logo} alt={carrier.courier_name} style={{ height: 18, objectFit: 'contain', flexShrink: 0 }} />
+                  : <div style={{ width: 30, height: 18, background: 'rgba(255,255,255,0.1)', borderRadius: 3, flexShrink: 0 }} />
+                }
+                <span style={{ fontSize: 13, fontWeight: 700, color: isActive ? '#fff' : '#AAAAAA', flex: 1 }}>
+                  {carrier.courier_name}
+                </span>
+                {/* Toggle */}
+                <div style={{
+                  width: 34, height: 18, borderRadius: 9, flexShrink: 0,
+                  background: isActive ? '#00C853' : 'rgba(255,255,255,0.1)',
+                  position: 'relative', transition: 'background 0.2s',
+                }}>
+                  <div style={{
+                    position: 'absolute', top: 2, left: isActive ? 18 : 2,
+                    width: 14, height: 14, borderRadius: '50%', background: '#fff',
+                    transition: 'left 0.2s',
+                  }} />
+                </div>
+              </div>
+
+              {/* Rate card selector — only when active */}
+              {isActive && carrier.available_cards?.length > 1 && (
+                <div style={{ padding: '0 14px 8px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 11, color: '#AAAAAA', flexShrink: 0 }}>Rate card</span>
+                  <select
+                    value={String(carrier.active_card_id || '')}
+                    onChange={e => changeCard.mutate({ courierId: carrier.courier_id, cardId: e.target.value })}
+                    style={{ ...inp, flex: 1, fontSize: 11 }}
+                  >
+                    {carrier.available_cards.map(card => (
+                      <option key={card.id} value={String(card.id)}>
+                        {card.name}{card.is_master ? ' (Master)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {isActive && carrier.available_cards?.length === 1 && (
+                <div style={{ padding: '0 14px 8px' }}>
+                  <span style={{ fontSize: 11, color: '#555' }}>
+                    {carrier.available_cards[0]?.name || carrier.active_card_name || 'Master rate card'}
+                  </span>
+                </div>
+              )}
+
+              {/* Fuel groups toggle */}
+              {isActive && hasFuel && (
+                <div>
+                  <div
+                    onClick={() => setExpandedFuel(fuelOpen ? null : carrier.courier_id)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', cursor: 'pointer', borderTop: '1px solid rgba(255,255,255,0.05)', background: 'rgba(255,193,7,0.03)' }}
+                  >
+                    {fuelOpen ? <ChevronDown size={11} color="#FFC107" /> : <ChevronRight size={11} color="#555" />}
+                    <span style={{ fontSize: 11, fontWeight: 700, color: fuelOpen ? '#FFC107' : '#666', flex: 1 }}>
+                      Fuel Groups ({carrier.fuel_groups.length})
+                    </span>
+                    {carrier.fuel_groups.some(fg => fg.customer_pct != null) && (
+                      <span style={{ fontSize: 10, color: '#FFC107', fontWeight: 700 }}>Custom</span>
+                    )}
+                  </div>
+                  {fuelOpen && carrier.fuel_groups.map(fg => (
+                    <FuelGroupRow
+                      key={fg.id}
+                      fg={fg}
+                      customerId={customerId}
+                      onSave={(sell_pct) => setFuel.mutate({ fuelGroupId: fg.id, sell_pct })}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function FuelGroupRow({ fg, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal]         = useState(fg.customer_pct != null ? String(fg.customer_pct) : '');
+  const inputRef              = useRef(null);
+
+  function startEdit() { setEditing(true); setTimeout(() => inputRef.current?.select(), 0); }
+
+  function commit() {
+    const trimmed = val.trim();
+    if (trimmed === '') { onSave(null); setEditing(false); return; }
+    const parsed = parseFloat(trimmed);
+    if (isNaN(parsed) || parsed < 0 || parsed > 100) { setVal(''); setEditing(false); return; }
+    onSave(parsed);
+    setEditing(false);
+  }
+
+  const hasOverride = fg.customer_pct != null;
+  const displayPct  = hasOverride ? fg.customer_pct : fg.standard_sell_pct;
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 14px 5px 22px', borderTop: '1px solid rgba(255,255,255,0.03)' }}>
+      <span style={{ fontSize: 11, color: '#888', flex: 1 }}>{fg.name}</span>
+      <span style={{ fontSize: 10, color: '#555' }}>cost {fg.cost_pct}%</span>
+      <span style={{ fontSize: 10, color: '#555' }}>std {fg.standard_sell_pct}%</span>
+      {/* Customer sell % */}
+      {editing ? (
+        <input
+          ref={inputRef}
+          value={val}
+          onChange={e => setVal(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
+          placeholder="sell %"
+          style={{ ...inp, width: 60, textAlign: 'right', color: '#FFC107', fontFamily: 'monospace', border: '1px solid rgba(255,193,7,0.6)', background: 'rgba(255,193,7,0.08)', fontSize: 11 }}
+        />
+      ) : (
+        <span
+          onClick={startEdit}
+          title="Click to set customer fuel sell %. Clear to revert to standard."
+          style={{
+            fontSize: 12, fontWeight: 700,
+            color: hasOverride ? '#FFC107' : '#444',
+            cursor: 'pointer', padding: '2px 7px', borderRadius: 4,
+            border: `1px solid ${hasOverride ? 'rgba(255,193,7,0.35)' : 'rgba(255,255,255,0.08)'}`,
+            background: hasOverride ? 'rgba(255,193,7,0.08)' : 'transparent',
+            fontFamily: 'monospace',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,193,7,0.6)'; e.currentTarget.style.color = '#FFC107'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = hasOverride ? 'rgba(255,193,7,0.35)' : 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = hasOverride ? '#FFC107' : '#444'; }}
+        >
+          {displayPct != null ? `${displayPct}%` : '—'}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ─── Surcharge overrides panel ────────────────────────────────
+function SurchargeOverridesPanel({ customerId }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+
+  // All surcharges across all couriers
+  const { data: allSurcharges = [] } = useQuery({
+    queryKey: ['surcharges-all'],
+    queryFn:  () => api.get('/surcharges').then(r => r.data),
+    enabled:  open,
+  });
+
+  // Customer overrides
+  const { data: overrides = [], refetch: refetchOverrides } = useQuery({
+    queryKey: ['surcharge-overrides', customerId],
+    queryFn:  () => api.get(`/surcharges/customer-overrides/${customerId}`).then(r => r.data),
+    enabled:  open,
+  });
+
+  const upsert = useMutation({
+    mutationFn: ({ surcharge_id, override_value }) =>
+      api.post(`/surcharges/customer-overrides/${customerId}`, { surcharge_id, override_value }),
+    onSuccess: () => qc.invalidateQueries(['surcharge-overrides', customerId]),
+  });
+
+  const remove = useMutation({
+    mutationFn: (overrideId) =>
+      api.delete(`/surcharges/customer-overrides/${customerId}/${overrideId}`),
+    onSuccess: () => qc.invalidateQueries(['surcharge-overrides', customerId]),
+  });
+
+  // Index overrides by surcharge_id for quick lookup
+  const overrideMap = {};
+  for (const ov of overrides) overrideMap[ov.surcharge_id] = ov;
+
+  // Group all surcharges by courier
+  const byCourier = {};
+  for (const s of allSurcharges) {
+    const key = s.courier_name || 'Other';
+    if (!byCourier[key]) byCourier[key] = { courier_code: s.courier_code, surcharges: [] };
+    byCourier[key].surcharges.push(s);
+  }
+
+  const overrideCount = overrides.length;
+
+  return (
+    <div className="moov-card" style={{ marginBottom: 20, overflow: 'hidden' }}>
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', borderBottom: open ? '1px solid rgba(255,255,255,0.06)' : 'none' }}
+      >
+        {open ? <ChevronDown size={14} color="#7B2FBE" /> : <ChevronRight size={14} color="#555" />}
+        <AlertCircle size={15} color="#7B2FBE" />
+        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#7B2FBE', margin: 0, flex: 1 }}>Surcharge Overrides</h3>
+        {overrideCount > 0
+          ? <span style={{ fontSize: 12, color: '#FFC107', fontWeight: 700 }}>{overrideCount} override{overrideCount !== 1 ? 's' : ''} set</span>
+          : <span style={{ fontSize: 12, color: '#AAAAAA', fontStyle: 'italic' }}>No overrides — standard rates apply</span>
+        }
+      </div>
+
+      {open && (
+        <div style={{ padding: 16 }}>
+          {Object.keys(byCourier).length === 0 ? (
+            <div style={{ color: '#555', fontSize: 13, fontStyle: 'italic' }}>No surcharges configured yet</div>
+          ) : Object.entries(byCourier).map(([courierName, { courier_code, surcharges }]) => {
+            const logo = getCourierLogo(courier_code);
+            return (
+              <div key={courierName} style={{ marginBottom: 16 }}>
+                {/* Courier header */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  {logo && <img src={logo} alt={courierName} style={{ height: 14, objectFit: 'contain' }} />}
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#7B2FBE', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{courierName}</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {surcharges.map(s => {
+                    const ov = overrideMap[s.id];
+                    return (
+                      <SurchargeOverrideRow
+                        key={s.id}
+                        surcharge={s}
+                        override={ov}
+                        onSave={(val) => upsert.mutate({ surcharge_id: s.id, override_value: val })}
+                        onRemove={() => remove.mutate(ov.id)}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SurchargeOverrideRow({ surcharge, override, onSave, onRemove }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal]         = useState('');
+  const inputRef              = useRef(null);
+
+  function startEdit() {
+    setVal(override ? String(override.override_value) : String(parseFloat(surcharge.default_value || 0).toFixed(2)));
+    setEditing(true);
+    setTimeout(() => inputRef.current?.select(), 0);
+  }
+
+  function commit() {
+    const parsed = parseFloat(val);
+    if (isNaN(parsed) || parsed < 0) { setEditing(false); return; }
+    onSave(parsed);
+    setEditing(false);
+  }
+
+  const hasOverride = !!override;
+  const displayVal  = hasOverride ? override.override_value : surcharge.default_value;
+  const typeLabel   = surcharge.calc_type === 'percentage' ? '%' : '£';
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 10px', borderRadius: 6, background: hasOverride ? 'rgba(255,193,7,0.04)' : 'transparent' }}>
+      <span style={{ fontSize: 12, color: hasOverride ? '#DDD' : '#888', flex: 1 }}>{surcharge.name}</span>
+      <span style={{ fontSize: 11, color: '#555', fontFamily: 'monospace' }}>
+        {surcharge.calc_type === 'percentage' ? `${surcharge.default_value}%` : `£${parseFloat(surcharge.default_value || 0).toFixed(2)}`}
+      </span>
+      <span style={{ fontSize: 10, color: '#444' }}>→</span>
+      {editing ? (
+        <input
+          ref={inputRef}
+          value={val}
+          onChange={e => setVal(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
+          style={{ ...inp, width: 72, textAlign: 'right', color: '#FFC107', fontFamily: 'monospace', border: '1px solid rgba(255,193,7,0.6)', background: 'rgba(255,193,7,0.08)', fontSize: 11 }}
+        />
+      ) : (
+        <span
+          onClick={startEdit}
+          title="Click to set customer override"
+          style={{
+            fontSize: 12, fontWeight: hasOverride ? 700 : 400,
+            color: hasOverride ? '#FFC107' : '#444',
+            cursor: 'pointer', padding: '2px 8px', borderRadius: 4,
+            border: `1px solid ${hasOverride ? 'rgba(255,193,7,0.35)' : 'rgba(255,255,255,0.06)'}`,
+            background: hasOverride ? 'rgba(255,193,7,0.08)' : 'transparent',
+            fontFamily: 'monospace',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,193,7,0.6)'; e.currentTarget.style.color = '#FFC107'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = hasOverride ? 'rgba(255,193,7,0.35)' : 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = hasOverride ? '#FFC107' : '#444'; }}
+        >
+          {hasOverride ? `${typeLabel === '%' ? '' : '£'}${parseFloat(override.override_value).toFixed(2)}${typeLabel === '%' ? '%' : ''}` : '+ Override'}
+        </span>
+      )}
+      {hasOverride && !editing && (
+        <button
+          onClick={onRemove}
+          title="Remove override"
+          style={{ background: 'none', border: 'none', color: '#333', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center' }}
+          onMouseEnter={e => e.currentTarget.style.color = '#E91E8C'}
+          onMouseLeave={e => e.currentTarget.style.color = '#333'}
+        >
+          <Trash2 size={11} />
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ─── Main tab ─────────────────────────────────────────────────
 export default function CustomerPricingTab({ customer }) {
   const queryClient = useQueryClient();
@@ -657,6 +1030,8 @@ export default function CustomerPricingTab({ customer }) {
 
   return (
     <div>
+      <CourierLinksPanel customerId={customer.id} />
+      <SurchargeOverridesPanel customerId={customer.id} />
       <ServiceSelector customerId={customer.id} />
 
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
