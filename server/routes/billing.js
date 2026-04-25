@@ -1346,15 +1346,16 @@ router.get('/charges/customer-perf', async (req, res, next) => {
           COUNT(*)::int AS charges,
           COALESCE(SUM(c.price), 0)::numeric(12,2) AS revenue,
           COALESCE(SUM(c.cost_price), 0)::numeric(12,2) AS cost,
-          COALESCE(SUM(c.price) - SUM(c.cost_price), 0)::numeric(12,2) AS profit,
-          COALESCE(SUM(c.parcel_qty), COUNT(*))::int AS parcels
+          (COALESCE(SUM(c.price), 0) - COALESCE(SUM(c.cost_price), 0))::numeric(12,2) AS profit,
+          COALESCE(SUM(c.parcel_qty), COUNT(*))::int AS parcels,
+          SUM(CASE WHEN c.cost_price IS NULL THEN 1 ELSE 0 END)::int AS missing_cost_count
         FROM charges c
         WHERE c.customer_id = $1
           AND c.charge_type = 'courier'
           AND c.cancelled = false
           AND c.created_at >= $2
       `, [customerId, fromDate]);
-      return res.rows[0] || { charges: 0, revenue: 0, cost: 0, profit: 0, parcels: 0 };
+      return res.rows[0] || { charges: 0, revenue: 0, cost: 0, profit: 0, parcels: 0, missing_cost_count: 0 };
     };
 
     // Get all-time stats (no date filter)
@@ -1363,8 +1364,9 @@ router.get('/charges/customer-perf', async (req, res, next) => {
         COUNT(*)::int AS charges,
         COALESCE(SUM(c.price), 0)::numeric(12,2) AS revenue,
         COALESCE(SUM(c.cost_price), 0)::numeric(12,2) AS cost,
-        COALESCE(SUM(c.price) - SUM(c.cost_price), 0)::numeric(12,2) AS profit,
-        COALESCE(SUM(c.parcel_qty), COUNT(*))::int AS parcels
+        (COALESCE(SUM(c.price), 0) - COALESCE(SUM(c.cost_price), 0))::numeric(12,2) AS profit,
+        COALESCE(SUM(c.parcel_qty), COUNT(*))::int AS parcels,
+        SUM(CASE WHEN c.cost_price IS NULL THEN 1 ELSE 0 END)::int AS missing_cost_count
       FROM charges c
       WHERE c.customer_id = $1
         AND c.charge_type = 'courier'

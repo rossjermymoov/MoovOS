@@ -537,6 +537,8 @@ function ContactsTab({ customerId, contacts = [], onRefresh }) {
 
 // ─── Performance tab ───────────────────────────────────────────────
 function PerformanceTab({ customerId }) {
+  const [showPerfDebug, setShowPerfDebug] = useState(false);
+
   const { data: perfData, isLoading, isError } = useQuery({
     queryKey: ['customer-perf', customerId],
     queryFn: async () => {
@@ -566,8 +568,6 @@ function PerformanceTab({ customerId }) {
   const profit30 = parseFloat(perfData.last30?.profit || 0);
   const revenue30 = parseFloat(perfData.last30?.revenue || 0);
   const profitMargin = revenue30 > 0 ? ((profit30 / revenue30) * 100).toFixed(1) : '—';
-
-  const [showPerfDebug, setShowPerfDebug] = useState(false);
 
   return (
     <div>
@@ -622,6 +622,7 @@ function PerformanceTab({ customerId }) {
                   { k: 'cost',     v: d?.cost     != null ? `£${parseFloat(d.cost).toFixed(2)}`    : '—',  c: '#B39DDB' },
                   { k: 'profit',   v: d?.profit   != null ? `£${parseFloat(d.profit).toFixed(2)}`  : '—',
                     c: parseFloat(d?.profit || 0) >= 0 ? '#34D399' : '#EF4444' },
+                  ...(d?.missing_cost_count > 0 ? [{ k: '⚠ missing cost', v: `${d.missing_cost_count} charges`, c: '#EF4444' }] : []),
                 ].map(({ k, v, c }) => (
                   <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
                     <span style={{ color: '#555' }}>{k}</span>
