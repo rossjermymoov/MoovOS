@@ -268,119 +268,154 @@ function SlaChip({ mins, policyName }) {
 
 const CLAIM_STATUSES = new Set(['claim_raised','awaiting_claim_docs','claim_submitted','resolved_claim_approved','resolved_claim_rejected']);
 
-function InboxRow({ q, selected, onClick }) {
+const PRIORITY_BAR = {
+  urgent: C.red,
+  high:   C.amber,
+  medium: C.blue,
+  low:    'rgba(125,133,144,0.4)',
+};
+
+function InboxRow({ q, onClick }) {
   const hasAttention   = q.requires_attention;
   const hasSlaBreached = q.sla_breached;
   const isClaim        = CLAIM_STATUSES.has(q.status);
   const unread         = parseInt(q.unread_emails) || 0;
   const hasNewReply    = q.has_new_reply;
 
-  // Left accent: attention > new reply > sla breach > selected > neutral
-  const accentColor = hasAttention  ? C.red
-                    : hasNewReply   ? C.blue
-                    : hasSlaBreached ? C.amber
-                    : 'transparent';
+  // Left bar: attention > new reply > sla breach > priority
+  const barColor = hasAttention   ? C.red
+                 : hasNewReply    ? C.blue
+                 : hasSlaBreached ? C.amber
+                 : PRIORITY_BAR[q.priority] || PRIORITY_BAR.medium;
+
+  const logoUrl = q.courier_code ? getCourierLogo(q.courier_code) : null;
 
   return (
     <div
       onClick={onClick}
       style={{
-        display: 'flex', flexDirection: 'column', gap: 5,
-        padding: '12px 14px 12px 12px',
+        display: 'flex', alignItems: 'stretch', gap: 0,
         cursor: 'pointer',
         borderBottom: `1px solid ${C.border}`,
-        borderLeft: `3px solid ${selected ? C.blue : accentColor}`,
-        background: selected
-          ? C.selected
-          : hasNewReply && !selected
-            ? 'rgba(41,121,255,0.04)'
-            : 'transparent',
+        background: hasNewReply ? 'rgba(88,166,255,0.04)' : 'transparent',
         transition: 'background 0.1s',
       }}
-      onMouseEnter={e => { if (!selected) e.currentTarget.style.background = C.hover; }}
-      onMouseLeave={e => {
-        if (!selected) e.currentTarget.style.background =
-          hasNewReply ? 'rgba(41,121,255,0.04)' : 'transparent';
-      }}
+      onMouseEnter={e => { e.currentTarget.style.background = C.hover; }}
+      onMouseLeave={e => { e.currentTarget.style.background = hasNewReply ? 'rgba(88,166,255,0.04)' : 'transparent'; }}
     >
-      {/* Row 1: customer name + timestamp + unread badge */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{
-          flex: 1, fontSize: 15,
-          fontWeight: hasNewReply ? 800 : 700,
-          color: hasNewReply ? C.text : C.sub,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
-          {q.customer_name || 'Unknown Customer'}
-        </span>
-        <span style={{
-          fontSize: 10, flexShrink: 0,
-          color: hasNewReply ? C.blue : C.muted,
-          fontWeight: hasNewReply ? 700 : 400,
-        }}>
-          {timeAgo(q.latest_email_at || q.created_at)}
-        </span>
-        {/* Unread count badge */}
-        {unread > 0 && (
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            minWidth: 18, height: 18, borderRadius: 9999,
-            background: C.blue, color: '#fff',
-            fontSize: 10, fontWeight: 800, padding: '0 5px', flexShrink: 0,
-          }}>
-            {unread}
-          </span>
-        )}
-      </div>
+      {/* Priority accent bar */}
+      <div style={{ width: 4, flexShrink: 0, background: barColor, borderRadius: '2px 0 0 2px' }} />
 
-      {/* Row 2: subject */}
+      {/* Avatar */}
       <div style={{
-        fontSize: 12,
-        color: hasNewReply ? C.text : C.sub,
-        fontWeight: hasNewReply ? 600 : 400,
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+        margin: 'auto 14px auto 14px',
+        background: hasNewReply ? `${C.blue}22` : 'rgba(255,255,255,0.06)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 14, fontWeight: 800, color: hasNewReply ? C.blue : C.muted,
+        border: `1px solid ${hasNewReply ? `${C.blue}33` : C.border}`,
       }}>
-        {q.subject || q.consignment_number || 'No subject'}
+        {(q.customer_name || '?')[0].toUpperCase()}
       </div>
 
-      {/* Row 3: status + attention + SLA + type icon */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'nowrap' }}>
-        <StatusBadge status={q.status} small />
-        {hasAttention && (
-          <span style={{ fontSize: 9, fontWeight: 700, color: C.red, background: C.redDim,
-            padding: '1px 6px', borderRadius: 3, border: `1px solid ${C.red}33` }}>
-            ⚠ ATTENTION
-          </span>
-        )}
-        {hasNewReply && !hasAttention && (
-          <span style={{ fontSize: 9, fontWeight: 700, color: C.blue,
-            background: 'rgba(41,121,255,0.12)', padding: '1px 6px',
-            borderRadius: 3, border: `1px solid ${C.blue}44` }}>
-            ↩ NEW REPLY
-          </span>
-        )}
-        {/* SLA timer — show if we have remaining time data */}
-        {!hasAttention && q.sla_mins_remaining !== null && q.sla_mins_remaining !== undefined && (
-          <SlaChip mins={parseFloat(q.sla_mins_remaining)} policyName={q.sla_policy_name} />
-        )}
-        <div style={{ flex: 1 }} />
-        {isClaim ? (
-          <Receipt size={20} color={C.red} strokeWidth={1.5} title="Claim" />
-        ) : (
-          <AlertTriangle size={22} fill={C.amber} color={C.amber} strokeWidth={0} title="Query" />
-        )}
-      </div>
+      {/* Middle: main content */}
+      <div style={{ flex: 1, minWidth: 0, padding: '11px 0 10px' }}>
 
-      {/* Row 4: email preview */}
-      {q.latest_email_preview && (
-        <div style={{
-          fontSize: 11,
-          color: hasNewReply ? C.sub : C.muted,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
-          {q.latest_email_preview.substring(0, 90)}
+        {/* Row 1: ticket # + subject */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          {q.ticket_number && (
+            <span style={{ fontSize: 10, fontWeight: 700, color: C.muted, fontFamily: 'monospace', flexShrink: 0 }}>
+              #{q.ticket_number}
+            </span>
+          )}
+          <span style={{
+            fontSize: 14, fontWeight: hasNewReply ? 700 : 500,
+            color: hasNewReply ? C.text : C.sub,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+          }}>
+            {q.subject || q.customer_name || 'No subject'}
+          </span>
         </div>
-      )}
+
+        {/* Row 2: customer · courier · consignment */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4, flexWrap: 'nowrap', overflow: 'hidden' }}>
+          <span style={{ fontSize: 12, color: hasNewReply ? C.sub : C.muted, fontWeight: hasNewReply ? 600 : 400, flexShrink: 0 }}>
+            {q.customer_name}
+          </span>
+          {q.courier_name && (
+            <>
+              <span style={{ color: C.muted, fontSize: 10, flexShrink: 0 }}>·</span>
+              {logoUrl && <img src={logoUrl} alt="" style={{ width: 14, height: 10, objectFit: 'contain', flexShrink: 0 }} />}
+              <span style={{ fontSize: 11, color: C.muted, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.courier_name}</span>
+            </>
+          )}
+          {q.consignment_number && (
+            <>
+              <span style={{ color: C.muted, fontSize: 10, flexShrink: 0 }}>·</span>
+              <span style={{ fontSize: 11, fontFamily: 'monospace', color: C.muted, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.consignment_number}</span>
+            </>
+          )}
+        </div>
+
+        {/* Row 3: email preview */}
+        {q.latest_email_preview && (
+          <div style={{ fontSize: 12, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {q.latest_email_preview.substring(0, 120)}
+          </div>
+        )}
+      </div>
+
+      {/* Right: badges + meta */}
+      <div style={{
+        flexShrink: 0, display: 'flex', flexDirection: 'column',
+        alignItems: 'flex-end', justifyContent: 'center',
+        gap: 6, padding: '10px 16px 10px 14px', minWidth: 160,
+      }}>
+        {/* Timestamp + unread bubble */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          <span style={{ fontSize: 11, color: hasNewReply ? C.blue : C.muted, fontWeight: hasNewReply ? 700 : 400 }}>
+            {timeAgo(q.latest_email_at || q.created_at)}
+          </span>
+          {unread > 0 && (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              minWidth: 18, height: 18, borderRadius: 9999,
+              background: C.blue, color: '#fff', fontSize: 10, fontWeight: 800, padding: '0 5px',
+            }}>
+              {unread}
+            </span>
+          )}
+        </div>
+
+        {/* Status badge */}
+        <StatusBadge status={q.status} small />
+
+        {/* Alert chips row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {hasAttention && (
+            <span style={{ fontSize: 9, fontWeight: 700, color: C.red, background: C.redDim,
+              padding: '1px 6px', borderRadius: 3, border: `1px solid ${C.red}33` }}>
+              ⚠ ATTN
+            </span>
+          )}
+          {hasNewReply && !hasAttention && (
+            <span style={{ fontSize: 9, fontWeight: 700, color: C.blue,
+              background: 'rgba(88,166,255,0.12)', padding: '1px 6px',
+              borderRadius: 3, border: `1px solid ${C.blue}44` }}>
+              ↩ REPLY
+            </span>
+          )}
+          {isClaim && (
+            <span style={{ fontSize: 9, fontWeight: 700, color: C.red, background: C.redDim,
+              padding: '1px 6px', borderRadius: 3, border: `1px solid ${C.red}33` }}>
+              CLAIM
+            </span>
+          )}
+          {q.sla_mins_remaining !== null && q.sla_mins_remaining !== undefined && (
+            <SlaChip mins={parseFloat(q.sla_mins_remaining)} policyName={q.sla_policy_name} />
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1403,29 +1438,23 @@ export default function QueriesPage() {
         </FilterPill>
       </div>
 
-      {/* ── Main split layout ───────────────────────────────────────────────── */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-
-        {/* Left — inbox list (fixed 340px) */}
-        <div style={{ width: 340, flexShrink: 0, overflow: 'auto', borderRight: `1px solid ${C.border}` }}>
-          {loading && <div style={{ padding: 40, textAlign: 'center', color: C.muted, fontSize: 12 }}>Loading…</div>}
-          {!loading && queries.length === 0 && (
-            <div style={{ padding: 50, textAlign: 'center' }}>
-              <div style={{ fontSize: 30, marginBottom: 10 }}>📭</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.sub, marginBottom: 4 }}>No queries match</div>
-              <div style={{ fontSize: 11, color: C.muted }}>Try a different filter</div>
-            </div>
-          )}
-          {queries.map(q => (
-            <InboxRow
-              key={q.id}
-              q={q}
-              selected={false}
-              onClick={() => navigate(`/queries/${q.id}`)}
-            />
-          ))}
-        </div>
-
+      {/* ── Ticket list ────────────────────────────────────────────────────── */}
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        {loading && <div style={{ padding: 40, textAlign: 'center', color: C.muted, fontSize: 12 }}>Loading…</div>}
+        {!loading && queries.length === 0 && (
+          <div style={{ padding: 60, textAlign: 'center' }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>📭</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.sub, marginBottom: 6 }}>No queries match</div>
+            <div style={{ fontSize: 12, color: C.muted }}>Try a different filter or check back later</div>
+          </div>
+        )}
+        {queries.map(q => (
+          <InboxRow
+            key={q.id}
+            q={q}
+            onClick={() => navigate(`/queries/${q.id}`)}
+          />
+        ))}
       </div>
 
       {showUnmatched && <UnmatchedPanel onClose={() => setShowUnmatched(false)} />}

@@ -169,7 +169,7 @@ function InlineSelect({ value, onChange, options, colorMap }) {
 }
 
 // ─── Email bubble ─────────────────────────────────────────────
-function EmailBubble({ email, isCustomerThread }) {
+function EmailBubble({ email, courierCode }) {
   const [expanded, setExpanded] = useState(true);
   const isInbound  = email.direction.startsWith('inbound');
   const isCourier  = email.direction.includes('courier');
@@ -177,6 +177,9 @@ function EmailBubble({ email, isCustomerThread }) {
 
   const bubbleColor = isDraft ? C.purple : isInbound ? C.surface : C.card;
   const borderColor = isDraft ? `${C.purple}40` : isInbound ? C.border : 'rgba(88,166,255,0.2)';
+
+  // Courier logo — only show on courier thread emails
+  const courierLogoUrl = isCourier && courierCode ? getCourierLogo(courierCode) : null;
 
   // Strip reply chains — show only first section
   const bodyLines   = (email.body_text || '').split('\n');
@@ -194,14 +197,25 @@ function EmailBubble({ email, isCustomerThread }) {
     }}>
       {/* Header row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: expanded ? 12 : 0, cursor: 'pointer' }} onClick={() => setExpanded(e => !e)}>
-        <div style={{
-          width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-          background: isInbound ? C.blue : C.green, opacity: 0.9,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 12, fontWeight: 700, color: '#000',
-        }}>
-          {(email.from_address || '?')[0].toUpperCase()}
-        </div>
+        {/* Avatar / logo */}
+        {courierLogoUrl ? (
+          <div style={{
+            width: 32, height: 22, borderRadius: 5, flexShrink: 0,
+            background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '2px 4px', border: `1px solid rgba(255,255,255,0.15)`,
+          }}>
+            <img src={courierLogoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+          </div>
+        ) : (
+          <div style={{
+            width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+            background: isInbound ? C.blue : C.green, opacity: 0.9,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 12, fontWeight: 700, color: '#000',
+          }}>
+            {(email.from_address || '?')[0].toUpperCase()}
+          </div>
+        )}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: C.text, display: 'flex', alignItems: 'center', gap: 8 }}>
             {email.from_address}
@@ -303,7 +317,7 @@ function ReplyComposer({ queryId, direction, placeholder, onSent }) {
 }
 
 // ─── Thread panel ─────────────────────────────────────────────
-function ThreadPanel({ emails, directions, queryId, replyDirection, replyPlaceholder }) {
+function ThreadPanel({ emails, directions, queryId, replyDirection, replyPlaceholder, courierCode }) {
   const filtered = emails.filter(e => directions.includes(e.direction));
 
   return (
@@ -315,7 +329,7 @@ function ThreadPanel({ emails, directions, queryId, replyDirection, replyPlaceho
         </div>
       ) : (
         [...filtered].reverse().map(email => (
-          <EmailBubble key={email.id} email={email} />
+          <EmailBubble key={email.id} email={email} courierCode={courierCode} />
         ))
       )}
       {replyDirection && (
@@ -399,7 +413,8 @@ export default function TicketDetailPage() {
   const { id }      = useParams();
   const navigate    = useNavigate();
   const qc          = useQueryClient();
-  const [tab, setTab] = useState('customer');
+  const [tab, setTab]             = useState('customer');
+  const [showTracking, setShowTracking] = useState(false);
 
   // Fetch ticket + emails
   const { data: ticket, isLoading, error } = useQuery({
@@ -514,6 +529,24 @@ export default function TicketDetailPage() {
             FD#{ticket.freshdesk_ticket_number}
           </span>
         )}
+
+        {/* Tracking button */}
+        {ticket.consignment_number && (
+          <button
+            onClick={() => setShowTracking(s => !s)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '5px 13px', borderRadius: 6, cursor: 'pointer',
+              border: `1px solid ${showTracking ? C.blue : `${C.blue}44`}`,
+              background: showTracking ? `${C.blue}1A` : 'transparent',
+              color: showTracking ? C.blue : C.muted,
+              fontSize: 12, fontWeight: 600, transition: 'all 0.15s', flexShrink: 0,
+            }}
+          >
+            <Truck size={12} />
+            Track
+          </button>
+        )}
       </div>
 
       {/* ── Body ────────────────────────────────────────────── */}
@@ -566,6 +599,7 @@ export default function TicketDetailPage() {
               queryId={id}
               replyDirection="outbound_courier"
               replyPlaceholder="Message to courier (DPD, DHL, etc.)…"
+              courierCode={ticket.courier_code}
             />
           )}
           {tab === 'notes' && (
@@ -632,7 +666,7 @@ export default function TicketDetailPage() {
               onChange={v => patch.mutate({ assigned_to: v || null })}
               options={[
                 { value: '', label: '— Unassigned —' },
-                ...staffList.map(s => ({ value: s.id, label: s.name })),
+                ...staffList.map(s => ({ value: s.id, label: s.full_name || s.name })),
               ]}
             />
             {ticket.assignee_name && (
@@ -701,10 +735,60 @@ export default function TicketDetailPage() {
             </>
           )}
 
-          {/* ── Tracking ── */}
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', margin: '16px 0 8px' }}>
-            Tracking
+        </div>
+      </div>
+
+      {/* ── Tracking slide-in drawer ─────────────────────────── */}
+      {/* Backdrop */}
+      {showTracking && (
+        <div
+          onClick={() => setShowTracking(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 40,
+            background: 'rgba(0,0,0,0.4)',
+          }}
+        />
+      )}
+      {/* Drawer */}
+      <div style={{
+        position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 50,
+        width: 360,
+        background: '#0A0E1A',
+        borderLeft: `1px solid ${C.border}`,
+        display: 'flex', flexDirection: 'column',
+        transform: showTracking ? 'translateX(0)' : 'translateX(100%)',
+        transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
+        boxShadow: showTracking ? '-8px 0 32px rgba(0,0,0,0.5)' : 'none',
+      }}>
+        {/* Drawer header */}
+        <div style={{
+          flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12,
+          padding: '16px 20px', borderBottom: `1px solid rgba(255,255,255,0.08)`,
+        }}>
+          <Truck size={14} color={C.blue} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 11, color: C.muted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>
+              Consignment Tracking
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', fontFamily: 'monospace' }}>
+              {ticket.consignment_number}
+            </div>
           </div>
+          {ticket.courier_code && getCourierLogo(ticket.courier_code) && (
+            <div style={{ background: '#fff', borderRadius: 5, padding: '3px 6px', flexShrink: 0 }}>
+              <img src={getCourierLogo(ticket.courier_code)} alt="" style={{ height: 18, objectFit: 'contain', display: 'block' }} />
+            </div>
+          )}
+          <button
+            onClick={() => setShowTracking(false)}
+            style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 4, flexShrink: 0 }}
+          >
+            <ArrowLeft size={16} />
+          </button>
+        </div>
+
+        {/* Drawer content */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 20px' }}>
           <TrackingPanel
             consignmentNumber={ticket.consignment_number}
             courierCode={ticket.courier_code}
