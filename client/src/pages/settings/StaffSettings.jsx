@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { UserPlus, Check, X } from 'lucide-react';
 import axios from 'axios';
+import { SettingsNav } from './RulesSettings';
 
 const api = axios.create({ baseURL: '/api' });
 
@@ -75,6 +76,7 @@ export default function StaffSettings() {
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto' }}>
+      <SettingsNav />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 700, color: '#00C853' }}>Staff</h1>

@@ -4,6 +4,7 @@ import CustomerList from './pages/customers/CustomerList';
 import CustomerRecord from './pages/customers/CustomerRecord';
 import CustomerNew from './pages/customers/CustomerNew';
 import StaffSettings from './pages/settings/StaffSettings';
+import RulesSettings from './pages/settings/RulesSettings';
 import CarrierManagement from './pages/carriers/CarrierManagement';
 import TrackingPage from './pages/tracking/TrackingPage';
 import FinancePage from './pages/finance/FinancePage';
@@ -46,7 +47,8 @@ export default function App() {
         <Route path="knowledge" element={<Placeholder name="Knowledge Base & AI" />} />
         <Route path="settings">
           <Route index element={<StaffSettings />} />
-          <Route path="staff" element={<StaffSettings />} />
+          <Route path="staff"  element={<StaffSettings />} />
+          <Route path="rules"  element={<RulesSettings />} />
         </Route>
         <Route path="*"         element={<Navigate to="/" replace />} />
       </Route>
