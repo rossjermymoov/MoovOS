@@ -1331,25 +1331,68 @@ router.get('/charges/aged-alerts', async (req, res, next) => {
 router.get('/charges/stats', async (req, res, next) => {
   try {
     const { customer_id, unassigned, date_from, date_to } = req.query;
-    const conds = ["c.charge_type = 'courier'", 'c.cancelled = false'];
+
+    // Courier-only conditions (for charge counts / total value)
+    const courierConds = ["c.charge_type = 'courier'", 'c.cancelled = false'];
+    // All-charge conditions (for profit — includes surcharge + fuel lines)
+    const allConds     = ['c.cancelled = false'];
     const vals  = [];
     let   idx   = 1;
-    if (unassigned === 'true') { conds.push(`c.customer_id IS NULL`); }
-    else if (customer_id) { conds.push(`c.customer_id = $${idx++}`); vals.push(customer_id); }
-    if (date_from)   { conds.push(`c.created_at >= $${idx++}`); vals.push(date_from); }
-    if (date_to)     { conds.push(`c.created_at <  $${idx++}`); vals.push(date_to); }
-    const where = `WHERE ${conds.join(' AND ')}`;
+
+    if (unassigned === 'true') {
+      courierConds.push(`c.customer_id IS NULL`);
+      allConds.push(`c.customer_id IS NULL`);
+    } else if (customer_id) {
+      courierConds.push(`c.customer_id = $${idx}`);
+      allConds.push(`c.customer_id = $${idx}`);
+      idx++; vals.push(customer_id);
+    }
+    if (date_from) {
+      courierConds.push(`c.created_at >= $${idx}`);
+      allConds.push(`c.created_at >= $${idx}`);
+      idx++; vals.push(date_from);
+    }
+    if (date_to) {
+      courierConds.push(`c.created_at < $${idx}`);
+      allConds.push(`c.created_at < $${idx}`);
+      idx++; vals.push(date_to);
+    }
+
+    const courierWhere = `WHERE ${courierConds.join(' AND ')}`;
+    const allWhere     = `WHERE ${allConds.join(' AND ')}`;
 
     const r = await query(`
+      WITH courier_stats AS (
+        SELECT
+          COUNT(*)::int                                                              AS total_charges,
+          SUM(CASE WHEN c.price IS NULL THEN 1 ELSE 0 END)::int                    AS unpriced,
+          SUM(CASE WHEN c.billed  THEN 1 ELSE 0 END)::int                          AS billed,
+          SUM(CASE WHEN NOT c.billed AND c.price IS NOT NULL THEN 1 ELSE 0 END)::int AS pending,
+          SUM(CASE WHEN c.awaiting_reconciliation AND NOT c.billed THEN 1 ELSE 0 END)::int AS awaiting_reconciliation,
+          COALESCE(SUM(c.price), 0)::numeric(12,2)                                 AS total_value,
+          COALESCE(SUM(CASE WHEN NOT c.billed THEN c.price ELSE 0 END), 0)::numeric(12,2) AS unbilled_value
+        FROM charges c
+        ${courierWhere}
+      ),
+      profit_stats AS (
+        SELECT
+          COALESCE(SUM(c.price),      0)::numeric(12,2) AS gross_sell,
+          COALESCE(SUM(c.cost_price), 0)::numeric(12,2) AS gross_cost
+        FROM charges c
+        ${allWhere}
+        AND c.price      IS NOT NULL
+        AND c.cost_price IS NOT NULL
+      )
       SELECT
-        COUNT(*)::int                              AS total_charges,
-        SUM(CASE WHEN c.price IS NULL THEN 1 ELSE 0 END)::int AS unpriced,
-        SUM(CASE WHEN c.billed  THEN 1 ELSE 0 END)::int AS billed,
-        SUM(CASE WHEN NOT c.billed AND c.price IS NOT NULL THEN 1 ELSE 0 END)::int AS pending,
-        COALESCE(SUM(c.price), 0)::numeric(12,2)  AS total_value,
-        COALESCE(SUM(CASE WHEN NOT c.billed THEN c.price ELSE 0 END), 0)::numeric(12,2) AS unbilled_value
-      FROM charges c
-      ${where}
+        cs.*,
+        ps.gross_sell,
+        ps.gross_cost,
+        (ps.gross_sell - ps.gross_cost)::numeric(12,2)                         AS profit,
+        CASE WHEN ps.gross_sell > 0
+             THEN ROUND((ps.gross_sell - ps.gross_cost) / ps.gross_sell * 100, 1)
+             ELSE 0
+        END::numeric(6,1)                                                       AS profit_pct
+      FROM courier_stats cs, profit_stats ps
     `, vals);
 
     res.json(r.rows[0]);
@@ -2345,6 +2388,238 @@ router.delete('/charges/:id', async (req, res, next) => {
       [req.params.id]
     );
     res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// ─── POST /api/billing/run-cycle ─────────────────────────────────────────────
+// Moves verified, unbilled charges to awaiting_reconciliation for all customers
+// whose billing cycle is due on the given date (defaults to today).
+// Called automatically by the Saturday midnight scheduled job.
+// Can also be triggered manually for testing.
+//
+// Billing cycle rules:
+//   weekly      → runs every Saturday
+//   fortnightly → runs every other Saturday (based on weeks since epoch)
+//   monthly     → runs on the 1st of each month (or nearest Saturday if desired)
+
+router.post('/billing/run-cycle', async (req, res, next) => {
+  try {
+    const runDate  = req.body?.date ? new Date(req.body.date) : new Date();
+    const dayOfWeek = runDate.getDay(); // 0=Sun … 6=Sat
+    const isSaturday = dayOfWeek === 6;
+
+    // Week number since Unix epoch — used to alternate fortnightly customers
+    const weeksSinceEpoch = Math.floor(runDate.getTime() / (7 * 24 * 3600 * 1000));
+    const isFortnightlyWeek = weeksSinceEpoch % 2 === 0;
+
+    // Determine which billing cycles are due today
+    const dueCycles = [];
+    if (isSaturday) {
+      dueCycles.push('weekly');
+      if (isFortnightlyWeek) dueCycles.push('fortnightly');
+    }
+    // Monthly: 1st of the month regardless of day
+    const isFirstOfMonth = runDate.getDate() === 1;
+    if (isFirstOfMonth) dueCycles.push('monthly');
+
+    if (dueCycles.length === 0) {
+      return res.json({ ok: true, message: 'No billing cycles due today', due_cycles: [], customers_processed: 0, charges_queued: 0 });
+    }
+
+    // Find all customers on a due cycle
+    const custRes = await query(`
+      SELECT id, account_number, business_name, billing_cycle
+      FROM customers
+      WHERE billing_cycle = ANY($1)
+        AND account_status = 'active'
+    `, [dueCycles]);
+
+    let totalCharged = 0;
+    const results = [];
+
+    for (const customer of custRes.rows) {
+      // Mark all verified, unbilled, non-reconciled charges as awaiting_reconciliation
+      const upd = await query(`
+        UPDATE charges
+        SET awaiting_reconciliation = true,
+            updated_at = NOW()
+        WHERE customer_id = $1
+          AND verified    = true
+          AND billed      = false
+          AND awaiting_reconciliation = false
+          AND cancelled   = false
+      `, [customer.id]);
+
+      totalCharged += upd.rowCount;
+      if (upd.rowCount > 0) {
+        results.push({ customer_id: customer.id, account: customer.account_number, name: customer.business_name, charges_queued: upd.rowCount });
+      }
+    }
+
+    res.json({
+      ok: true,
+      run_date:            runDate.toISOString().split('T')[0],
+      due_cycles:          dueCycles,
+      customers_processed: custRes.rows.length,
+      charges_queued:      totalCharged,
+      details:             results,
+    });
+
+  } catch (err) { next(err); }
+});
+
+// ─── GET /api/billing/invoices ────────────────────────────────────────────────
+
+router.get('/invoices', async (req, res, next) => {
+  try {
+    const { customer_id, status, date_from, date_to, limit = 50, offset = 0 } = req.query;
+    const conds = [];
+    const vals  = [];
+    let   idx   = 1;
+
+    if (customer_id) { conds.push(`i.customer_id = $${idx++}`); vals.push(customer_id); }
+    if (status)      { conds.push(`i.status = $${idx++}`);      vals.push(status); }
+    if (date_from)   { conds.push(`i.created_at >= $${idx++}`); vals.push(date_from); }
+    if (date_to)     { conds.push(`i.created_at <  $${idx++}`); vals.push(date_to); }
+
+    const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+
+    const countRes = await query(`SELECT COUNT(*)::int FROM invoices i ${where}`, vals);
+    const rows = await query(`
+      SELECT i.*, c.business_name, c.account_number
+      FROM invoices i
+      JOIN customers c ON c.id = i.customer_id
+      ${where}
+      ORDER BY i.created_at DESC
+      LIMIT $${idx++} OFFSET $${idx++}
+    `, [...vals, parseInt(limit), parseInt(offset)]);
+
+    res.json({ total: countRes.rows[0].count, invoices: rows.rows });
+  } catch (err) { next(err); }
+});
+
+// ─── POST /api/billing/invoices ───────────────────────────────────────────────
+// Creates an invoice from a customer's awaiting_reconciliation charges.
+// Assigns the next sequential invoice number: {account_number}-{00001}.
+
+router.post('/invoices', async (req, res, next) => {
+  try {
+    const { customer_id, period_start, period_end } = req.body;
+    if (!customer_id) return res.status(400).json({ error: 'customer_id required' });
+
+    // Load customer
+    const custRes = await query(`SELECT id, account_number, business_name, billing_cycle FROM customers WHERE id = $1`, [customer_id]);
+    if (!custRes.rows.length) return res.status(404).json({ error: 'Customer not found' });
+    const customer = custRes.rows[0];
+
+    // Get charges to invoice — awaiting_reconciliation, not yet billed
+    const chargeFilter = period_start && period_end
+      ? `AND c.created_at >= $2 AND c.created_at < $3`
+      : '';
+    const chargeVals = period_start && period_end
+      ? [customer_id, period_start, period_end]
+      : [customer_id];
+
+    const chargesRes = await query(`
+      SELECT id, charge_type, price, cost_price, order_id, parcel_qty, service_name
+      FROM charges
+      WHERE customer_id             = $1
+        AND awaiting_reconciliation = true
+        AND billed                  = false
+        AND cancelled               = false
+        ${chargeFilter}
+    `, chargeVals);
+
+    if (!chargesRes.rows.length) {
+      return res.status(400).json({ error: 'No awaiting_reconciliation charges found for this customer' });
+    }
+
+    const charges = chargesRes.rows;
+
+    // Calculate totals
+    const subtotal  = charges.reduce((s, c) => s + parseFloat(c.price      || 0), 0);
+    const costTotal = charges.reduce((s, c) => s + parseFloat(c.cost_price || 0), 0);
+    const vatTotal  = parseFloat((subtotal * 0.20).toFixed(2));
+    const total     = parseFloat((subtotal + vatTotal).toFixed(2));
+    const profit    = parseFloat((subtotal - costTotal).toFixed(2));
+    const profitPct = subtotal > 0 ? parseFloat((profit / subtotal * 100).toFixed(1)) : 0;
+
+    // Get next invoice sequence number (atomic increment)
+    const seqRes = await query(`
+      INSERT INTO invoice_sequences (customer_id, next_seq) VALUES ($1, 2)
+      ON CONFLICT (customer_id) DO UPDATE
+        SET next_seq = invoice_sequences.next_seq + 1
+      RETURNING next_seq - 1 AS seq
+    `, [customer_id]);
+    const seq = seqRes.rows[0].seq;
+    const invoiceNumber = `${customer.account_number}-${String(seq).padStart(5, '0')}`;
+
+    // Create invoice
+    const invRes = await query(`
+      INSERT INTO invoices
+        (customer_id, account_number, customer_name, invoice_number,
+         period_start, period_end,
+         subtotal, vat_total, total, cost_total, profit, profit_pct,
+         billing_cycle, status)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'awaiting_reconciliation')
+      RETURNING *
+    `, [
+      customer_id, customer.account_number, customer.business_name, invoiceNumber,
+      period_start || null, period_end || null,
+      subtotal.toFixed(2), vatTotal.toFixed(2), total.toFixed(2),
+      costTotal.toFixed(2), profit.toFixed(2), profitPct,
+      customer.billing_cycle,
+    ]);
+    const invoice = invRes.rows[0];
+
+    // Link charges to invoice and mark billed
+    const chargeIds = charges.map(c => c.id);
+    await query(`
+      UPDATE charges
+      SET invoice_id = $1,
+          billed     = true,
+          updated_at = NOW()
+      WHERE id = ANY($2)
+    `, [invoice.id, chargeIds]);
+
+    res.json({ ok: true, invoice, charges_billed: chargeIds.length });
+  } catch (err) { next(err); }
+});
+
+// ─── GET /api/billing/invoices/:id/csv ───────────────────────────────────────
+// Returns CSV backing data for an invoice: order_id, qty, service, price
+
+router.get('/invoices/:id/csv', async (req, res, next) => {
+  try {
+    const invRes = await query(`SELECT * FROM invoices WHERE id = $1`, [req.params.id]);
+    if (!invRes.rows.length) return res.status(404).json({ error: 'Invoice not found' });
+    const invoice = invRes.rows[0];
+
+    const chargesRes = await query(`
+      SELECT order_id, parcel_qty, service_name, charge_type, price, cost_price, created_at
+      FROM charges
+      WHERE invoice_id = $1 AND cancelled = false
+      ORDER BY created_at ASC, charge_type ASC
+    `, [req.params.id]);
+
+    const lines = ['Order ID,Quantity,Service,Net Price (£),VAT (£),Gross Price (£)'];
+    for (const c of chargesRes.rows) {
+      const net   = parseFloat(c.price || 0);
+      const vat   = parseFloat((net * 0.20).toFixed(2));
+      const gross = parseFloat((net + vat).toFixed(2));
+      lines.push([
+        c.order_id || '',
+        c.parcel_qty || 1,
+        c.service_name || c.charge_type,
+        net.toFixed(2),
+        vat.toFixed(2),
+        gross.toFixed(2),
+      ].join(','));
+    }
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${invoice.invoice_number}.csv"`);
+    res.send(lines.join('\n'));
   } catch (err) { next(err); }
 });
 

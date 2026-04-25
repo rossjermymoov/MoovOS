@@ -1132,6 +1132,20 @@ export default function FinancePage() {
           color="#FFC107"
           bg="rgba(255,193,7,0.05)"
         />
+        <StatCard
+          label="Awaiting Reconciliation"
+          value={stats?.awaiting_reconciliation ?? '—'}
+          sub="Queued for invoice"
+          color="#42A5F5"
+          bg="rgba(66,165,245,0.05)"
+        />
+        <StatCard
+          label="Profit"
+          value={gbp(stats?.profit)}
+          sub={stats?.profit_pct != null ? `${stats.profit_pct}% margin` : undefined}
+          color={stats?.profit > 0 ? '#00C853' : stats?.profit < 0 ? '#F44336' : '#888'}
+          bg={stats?.profit > 0 ? 'rgba(0,200,83,0.05)' : stats?.profit < 0 ? 'rgba(244,67,54,0.05)' : 'rgba(255,255,255,0.04)'}
+        />
       </div>
 
       {/* Filter bar */}
