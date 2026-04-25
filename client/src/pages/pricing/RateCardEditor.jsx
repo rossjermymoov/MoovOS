@@ -259,14 +259,29 @@ export default function RateCardEditor() {
   const [showDebug, setShowDebug] = useState(false);
 
   const mixTotal = volumeMix.reduce((s, m) => s + parseFloat(m.pct || 0), 0);
+
+  // For a given service code, pick the base rate zone.
+  // Priority: lowest numeric zone (Zone 1 < Zone 2 … < Zone 8), then alphabetic.
+  // This ensures DPD Zone 1 (£3.76) is always used rather than a random zone from array order.
+  const pickBaseRate = (serviceCode) => {
+    const matching = domesticRates.filter(x => x.service_code === serviceCode);
+    if (!matching.length) return null;
+    return matching.slice().sort((a, b) => {
+      const numA = parseInt((a.zone_name || '').match(/\d+/)?.[0] ?? '9999');
+      const numB = parseInt((b.zone_name || '').match(/\d+/)?.[0] ?? '9999');
+      if (numA !== numB) return numA - numB;
+      return (a.zone_name || '').localeCompare(b.zone_name || '');
+    })[0];
+  };
+
   const projections = (() => {
     if (!weeklyParcels || mixTotal !== 100) return null;
     let rev = 0, cost = 0;
     const lines = [];
     volumeMix.forEach(m => {
       const qty  = Math.round((m.pct / 100) * parseInt(weeklyParcels));
-      // Use the first zone rate for this service (lightest band / base rate)
-      const r    = domesticRates.find(x => x.service_code === m.service_code);
+      // Use base rate zone (Zone 1 / numerically lowest) for this service
+      const r    = pickBaseRate(m.service_code);
       const sell = parseFloat(r?.price      || 0);
       const cst  = parseFloat(r?.cost_price || 0);
       const lineRev    = sell * qty;
@@ -284,6 +299,7 @@ export default function RateCardEditor() {
         sell:         r ? sell : null,
         cost_price:   r ? cst  : null,
         zone_name:    r?.zone_name || null,
+        zone_count:   domesticRates.filter(x => x.service_code === m.service_code).length,
         rev:          r ? lineRev    : null,
         cost:         r ? lineCost   : null,
         profit:       r ? lineProfit : null,
@@ -716,13 +732,14 @@ export default function RateCardEditor() {
                 {showDebug && (
                   <div style={{ marginTop: 10, background: 'rgba(245,158,11,0.03)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: 8, overflow: 'hidden' }}>
                     <div style={{ padding: '8px 10px', borderBottom: '1px solid rgba(245,158,11,0.1)', fontSize: 10, color: '#F59E0B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Calculation Breakdown — base rate per service (1st zone)
+                      Calculation Breakdown — Zone 1 (lowest zone) per service
                     </div>
                     <div style={{ overflowX: 'auto' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                         <thead>
                           <tr style={{ borderBottom: '1px solid rgba(245,158,11,0.1)' }}>
                             <th style={{ padding: '5px 8px', textAlign: 'left',  color: '#666', fontWeight: 600 }}>Service</th>
+                            <th style={{ padding: '5px 6px', textAlign: 'left',  color: '#666', fontWeight: 600 }}>Zone used</th>
                             <th style={{ padding: '5px 6px', textAlign: 'right', color: '#666', fontWeight: 600 }}>Mix</th>
                             <th style={{ padding: '5px 6px', textAlign: 'right', color: '#666', fontWeight: 600 }}>Qty</th>
                             <th style={{ padding: '5px 6px', textAlign: 'right', color: '#B39DDB', fontWeight: 600 }}>Cost</th>
@@ -736,14 +753,23 @@ export default function RateCardEditor() {
                           {projections.lines.map((ln, i) => (
                             <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)',
                               opacity: ln.matched ? 1 : 0.4 }}>
-                              <td style={{ padding: '4px 8px', color: ln.matched ? '#CCC' : '#555', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <td style={{ padding: '4px 8px', color: ln.matched ? '#CCC' : '#555', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {ln.service_name}
                                 {!ln.matched && <span style={{ marginLeft: 4, color: '#EF4444', fontSize: 9 }}>no rate</span>}
+                              </td>
+                              <td style={{ padding: '4px 6px' }}>
+                                {ln.zone_name
+                                  ? <span style={{ fontSize: 10, color: '#F59E0B', fontFamily: 'monospace',
+                                      background: 'rgba(245,158,11,0.08)', padding: '1px 5px', borderRadius: 4 }}>
+                                      {ln.zone_name}
+                                      {ln.zone_count > 1 && <span style={{ color: '#555', marginLeft: 3 }}>/{ln.zone_count}</span>}
+                                    </span>
+                                  : <span style={{ color: '#444', fontSize: 10 }}>—</span>}
                               </td>
                               <td style={{ padding: '4px 6px', textAlign: 'right', color: '#888',    fontFamily: 'monospace' }}>{ln.pct}%</td>
                               <td style={{ padding: '4px 6px', textAlign: 'right', color: '#AAA',    fontFamily: 'monospace' }}>{ln.qty.toLocaleString()}</td>
                               <td style={{ padding: '4px 6px', textAlign: 'right', color: '#B39DDB', fontFamily: 'monospace' }}>{ln.cost_price != null ? gbp(ln.cost_price) : '—'}</td>
-                              <td style={{ padding: '4px 6px', textAlign: 'right', color: '#00C853', fontFamily: 'monospace' }}>{ln.sell != null ? gbp(ln.sell) : '—'}</td>
+                              <td style={{ padding: '4px 6px', textAlign: 'right', color: '#00C853', fontFamily: 'monospace', fontWeight: 700 }}>{ln.sell != null ? gbp(ln.sell) : '—'}</td>
                               <td style={{ padding: '4px 6px', textAlign: 'right', color: '#A5B4FC', fontFamily: 'monospace' }}>{ln.rev != null ? gbp(ln.rev) : '—'}</td>
                               <td style={{ padding: '4px 6px', textAlign: 'right', fontFamily: 'monospace',
                                 color: ln.profit == null ? '#555' : ln.profit >= 0 ? '#34D399' : '#EF4444' }}>
@@ -758,8 +784,8 @@ export default function RateCardEditor() {
                         </tbody>
                         <tfoot>
                           <tr style={{ borderTop: '1px solid rgba(245,158,11,0.15)' }}>
-                            <td colSpan={5} style={{ padding: '5px 8px', fontSize: 10, color: '#666', fontStyle: 'italic' }}>
-                              Using 1st zone rate per service · {parseInt(weeklyParcels).toLocaleString()} parcels/wk
+                            <td colSpan={6} style={{ padding: '5px 8px', fontSize: 10, color: '#666', fontStyle: 'italic' }}>
+                              Lowest numbered zone per service · {parseInt(weeklyParcels).toLocaleString()} parcels/wk
                             </td>
                             <td style={{ padding: '5px 6px', textAlign: 'right', color: '#A5B4FC', fontFamily: 'monospace', fontWeight: 700 }}>{gbp(projections.rev)}</td>
                             <td style={{ padding: '5px 6px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700,
@@ -773,7 +799,7 @@ export default function RateCardEditor() {
                       </table>
                     </div>
                     <div style={{ padding: '6px 10px', fontSize: 10, color: '#555', borderTop: '1px solid rgba(245,158,11,0.08)' }}>
-                      🟠 Services without a rate are excluded from totals
+                      Zone column shows which zone was matched and how many zones exist (e.g. Zone 1/8). 🟠 No rate = excluded from totals.
                     </div>
                   </div>
                 )}
