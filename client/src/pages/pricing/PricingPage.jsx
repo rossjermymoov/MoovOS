@@ -5,10 +5,10 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
-  Plus, Search, Building2, Mail, Phone,
+  Plus, Search, Mail, Phone,
   ChevronDown, ChevronUp,
   Check, X, AlertCircle, ArrowLeft, ArrowRight,
-  Send, Package, RefreshCw,
+  Send, Package, RefreshCw, Edit2, Trash2,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
@@ -32,6 +32,8 @@ const pricingApi = {
   templates:       (p)      => apiFetch(`/api/pricing/templates?${new URLSearchParams(p)}`),
   createRateCard:  (pid, b) => apiFetch(`/api/pricing/prospects/${pid}/rate-cards`, { method: 'POST', body: b }),
   rateCards:       (pid)    => apiFetch(`/api/pricing/prospects/${pid}/rate-cards`),
+  patchProspect:   (id, b)  => apiFetch(`/api/pricing/prospects/${id}`, { method: 'PATCH', body: b }),
+  deleteProspect:  (id)     => apiFetch(`/api/pricing/prospects/${id}`, { method: 'DELETE' }),
   submitApproval:  (id, b)  => apiFetch(`/api/pricing/rate-cards/${id}/submit-for-approval`, { method: 'POST', body: b }),
   pendingApprovals:()       => apiFetch('/api/pricing/approvals/pending'),
   reviewApproval:  (id, b)  => apiFetch(`/api/pricing/approvals/${id}/review`, { method: 'POST', body: b }),
@@ -503,14 +505,33 @@ function ReviewModal({ approval, onClose, onDone, staffList }) {
 // ─── Prospect Row ─────────────────────────────────────────────────────────────
 
 function ProspectRow({ prospect, staffList, navigate }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded]   = useState(false);
   const [submitStaff, setSubmitStaff] = useState('');
+  const [editing, setEditing]     = useState(false);
+  const [editForm, setEditForm]   = useState({});
+  const [confirmDel, setConfirmDel] = useState(false);
   const qc = useQueryClient();
 
   const { data: rateCards = [], isLoading: rcLoading } = useQuery({
     queryKey: ['rate-cards', prospect.id],
     queryFn: () => pricingApi.rateCards(prospect.id),
     enabled: expanded,
+  });
+
+  const patchMut = useMutation({
+    mutationFn: (body) => pricingApi.patchProspect(prospect.id, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pricing-prospects'] });
+      setEditing(false);
+    },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: () => pricingApi.deleteProspect(prospect.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pricing-prospects'] });
+      qc.invalidateQueries({ queryKey: ['pricing-stats'] });
+    },
   });
 
   const submitMut = useMutation({
@@ -526,9 +547,61 @@ function ProspectRow({ prospect, staffList, navigate }) {
 
   return (
     <>
+      {/* Edit inline form */}
+      {editing && (
+        <div style={{ background: 'rgba(99,102,241,0.05)', borderBottom: '1px solid rgba(99,102,241,0.2)',
+          padding: '12px 16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '0 12px', marginBottom: 10 }}>
+            {[
+              { key: 'company_name', label: 'Company Name', placeholder: '' },
+              { key: 'contact_name', label: 'Contact Name', placeholder: '' },
+              { key: 'contact_email', label: 'Email', placeholder: '' },
+              { key: 'contact_phone', label: 'Phone', placeholder: '' },
+            ].map(({ key, label }) => (
+              <div key={key}>
+                <label style={{ fontSize: 10, color: '#888', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>{label}</label>
+                <input value={editForm[key] ?? ''} onChange={e => setEditForm(p => ({ ...p, [key]: e.target.value }))}
+                  style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.07)',
+                    border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, padding: '6px 9px',
+                    color: '#fff', fontSize: 12, outline: 'none' }} />
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button onClick={() => setEditing(false)}
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 6, padding: '6px 14px', color: '#777', fontSize: 12, cursor: 'pointer' }}>
+              Cancel
+            </button>
+            <button onClick={() => patchMut.mutate(editForm)} disabled={patchMut.isPending}
+              style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid #6366F1',
+                borderRadius: 6, padding: '6px 16px', color: '#A5B4FC', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              Save Changes
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirm */}
+      {confirmDel && (
+        <div style={{ background: 'rgba(239,68,68,0.07)', borderBottom: '1px solid rgba(239,68,68,0.2)',
+          padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: '#F87171' }}>
+          <span>Delete <strong>{prospect.company_name}</strong>? This removes the prospect and all their rate cards.</span>
+          <button onClick={() => deleteMut.mutate()} disabled={deleteMut.isPending}
+            style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)',
+              borderRadius: 6, padding: '5px 14px', color: '#EF4444', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            Yes, Delete
+          </button>
+          <button onClick={() => setConfirmDel(false)}
+            style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer' }}>
+            Cancel
+          </button>
+        </div>
+      )}
+
       <div onClick={() => setExpanded(p => !p)}
         style={{
-          display: 'grid', gridTemplateColumns: '1.8fr 1.2fr 130px 120px 100px 110px 40px',
+          display: 'grid', gridTemplateColumns: '1.8fr 1.2fr 130px 120px 100px 80px 60px 40px',
           padding: '10px 16px', alignItems: 'center', cursor: 'pointer',
           borderBottom: expanded ? 'none' : '1px solid rgba(255,255,255,0.05)',
           background: expanded ? 'rgba(99,102,241,0.04)' : 'transparent',
@@ -544,6 +617,21 @@ function ProspectRow({ prospect, staffList, navigate }) {
           {topRC?.projected_weekly_revenue ? gbp(topRC.projected_weekly_revenue) : '—'}
         </div>
         <div style={{ fontSize: 11, color: '#555' }}>{prospect.assigned_to_name || '—'}</div>
+        {/* Edit / Delete */}
+        <div style={{ display: 'flex', gap: 5 }} onClick={e => e.stopPropagation()}>
+          <button title="Edit"
+            onClick={() => { setEditForm({ company_name: prospect.company_name, contact_name: prospect.contact_name, contact_email: prospect.contact_email || '', contact_phone: prospect.contact_phone || '' }); setEditing(true); setConfirmDel(false); }}
+            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 5, padding: '3px 7px', color: '#888', cursor: 'pointer' }}>
+            <Edit2 size={11} />
+          </button>
+          <button title="Delete"
+            onClick={() => { setConfirmDel(true); setEditing(false); }}
+            style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
+              borderRadius: 5, padding: '3px 7px', color: '#EF4444', cursor: 'pointer' }}>
+            <Trash2 size={11} />
+          </button>
+        </div>
         <div style={{ color: '#555' }}>{expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</div>
       </div>
 
@@ -714,9 +802,9 @@ export default function PricingPage() {
 
       {/* Table */}
       <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.8fr 1.2fr 130px 120px 100px 110px 40px',
+        <div style={{ display: 'grid', gridTemplateColumns: '1.8fr 1.2fr 130px 120px 100px 80px 60px 40px',
           padding: '8px 16px', background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-          {['Company', 'Email', 'Status', 'Carrier(s)', 'Proj./wk', 'Assigned', ''].map(h => (
+          {['Company', 'Email', 'Status', 'Carrier(s)', 'Proj./wk', 'Assigned', '', ''].map(h => (
             <div key={h} style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</div>
           ))}
         </div>

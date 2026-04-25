@@ -9,9 +9,9 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Plus, ChevronRight, ChevronDown, Trash2, X, Check, Phone, Mail,
+  Plus, ChevronRight, ChevronDown, ChevronUp, Trash2, X, Check, Phone, Mail,
   User, Building2, Edit2, Zap, AlertTriangle, ArrowLeft, GripVertical,
-  Upload, Download, Copy, TrendingUp, Calendar, FileText, CheckCircle,
+  Upload, Download, Copy, TrendingUp, Calendar, FileText, CheckCircle, Save,
 } from 'lucide-react';
 import { carriersApi } from '../../api/carriers';
 import { getCourierLogo } from '../../utils/courierLogos';
@@ -1157,6 +1157,365 @@ function condToValue(op, raw) {
   return isNaN(num) ? raw : num;
 }
 
+// ─── Customer Rate Card Templates Tab ─────────────────────────────────────────
+
+function CustomerRcTemplatesTab({ courierCode, courierName }) {
+  const qc = useQueryClient();
+  const [expanded, setExpanded]   = useState(null);   // template id being viewed
+  const [creating, setCreating]   = useState(false);
+  const [cloneTarget, setClone]   = useState(null);   // template to clone
+  const [editing, setEditing]     = useState(null);   // id being name-edited
+  const [editName, setEditName]   = useState('');
+  const [newName, setNewName]     = useState('');
+  const [confirmDel, setConfirmDel] = useState(null); // template id to delete
+  const [rateEdits, setRateEdits] = useState({});     // { [templateId]: rate[] }
+
+  const { data: templates = [], isLoading } = useQuery({
+    queryKey: ['pricing-templates', courierCode],
+    queryFn:  () => fetch(`/api/pricing/templates?courier_code=${courierCode}&active=true`).then(r => r.json()),
+    refetchOnWindowFocus: false,
+  });
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ['pricing-categories'],
+    queryFn:  () => fetch('/api/pricing/categories').then(r => r.json()),
+  });
+
+  const apiFetch = (url, opts = {}) =>
+    fetch(url, { headers: { 'Content-Type': 'application/json' }, ...opts,
+      body: opts.body ? JSON.stringify(opts.body) : undefined })
+      .then(r => r.json().then(d => { if (!r.ok) throw new Error(d.error || 'Error'); return d; }));
+
+  const createMut = useMutation({
+    mutationFn: (name) => apiFetch('/api/pricing/templates', { method: 'POST',
+      body: { name, courier_code: courierCode, rates: [], surcharge_markups: [] } }),
+    onSuccess: () => { qc.invalidateQueries(['pricing-templates', courierCode]); setCreating(false); setNewName(''); },
+  });
+
+  const cloneMut = useMutation({
+    mutationFn: ({ id, name }) => apiFetch('/api/pricing/templates', { method: 'POST',
+      body: { ...cloneTarget, name, courier_code: courierCode, id: undefined, created_at: undefined, updated_at: undefined, created_by: undefined } }),
+    onSuccess: () => { qc.invalidateQueries(['pricing-templates', courierCode]); setClone(null); setNewName(''); },
+  });
+
+  const renameMut = useMutation({
+    mutationFn: ({ id, name }) => apiFetch(`/api/pricing/templates/${id}`, { method: 'PUT', body: { name } }),
+    onSuccess: () => { qc.invalidateQueries(['pricing-templates', courierCode]); setEditing(null); },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id) => apiFetch(`/api/pricing/templates/${id}`, { method: 'DELETE' }),
+    onSuccess: () => { qc.invalidateQueries(['pricing-templates', courierCode]); setConfirmDel(null); },
+  });
+
+  const saveRatesMut = useMutation({
+    mutationFn: ({ id, rates }) => apiFetch(`/api/pricing/templates/${id}`, { method: 'PUT', body: { rates } }),
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries(['pricing-templates', courierCode]);
+      setRateEdits(p => { const n = { ...p }; delete n[id]; return n; });
+    },
+  });
+
+  const getRates = (t) => rateEdits[t.id] !== undefined ? rateEdits[t.id] : (t.rates || []);
+  const setRates = (id, rates) => setRateEdits(p => ({ ...p, [id]: rates }));
+  const isDirty  = (id) => rateEdits[id] !== undefined;
+
+  const addRow = (tpl, intl) => {
+    const current = getRates(tpl);
+    setRates(tpl.id, [...current, { service_code: '', service_name: '', zone_name: '', price: '', price_sub: '', cost_price: null, is_international: intl }]);
+  };
+  const removeRow = (tpl, idx) => setRates(tpl.id, getRates(tpl).filter((_, i) => i !== idx));
+  const updateRow = (tpl, idx, field, val) =>
+    setRates(tpl.id, getRates(tpl).map((r, i) => i === idx ? { ...r, [field]: val } : r));
+
+  const inputSt = {
+    background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: 5, padding: '4px 8px', color: '#fff', fontSize: 12, outline: 'none', width: '100%', boxSizing: 'border-box',
+  };
+
+  const markupPct = (sell, cost) => {
+    if (!sell || !cost || parseFloat(cost) === 0) return null;
+    return ((parseFloat(sell) - parseFloat(cost)) / parseFloat(cost)) * 100;
+  };
+
+  if (isLoading) return <div style={{ padding: 32, color: '#555', fontSize: 13 }}>Loading templates…</div>;
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#A5B4FC' }}>
+            Customer Rate Card Templates — {courierName}
+          </h2>
+          <div style={{ fontSize: 12, color: '#555', marginTop: 3 }}>
+            Build sell-price templates here, then pick them when creating a prospect rate card.
+          </div>
+        </div>
+        <button onClick={() => setCreating(p => !p)}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 34, padding: '0 16px',
+            background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.4)',
+            borderRadius: 8, color: '#A5B4FC', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+          <Plus size={13} /> New Template
+        </button>
+      </div>
+
+      {/* Create form */}
+      {creating && (
+        <div style={{ marginBottom: 14, display: 'flex', gap: 8, alignItems: 'center',
+          background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: 9, padding: '12px 16px' }}>
+          <input value={newName} onChange={e => setNewName(e.target.value)}
+            placeholder="Template name, e.g. Standard DPD 2025"
+            style={{ ...inputSt, flex: 1, padding: '7px 11px', fontSize: 13 }}
+            onKeyDown={e => e.key === 'Enter' && newName.trim() && createMut.mutate(newName.trim())} />
+          <button onClick={() => createMut.mutate(newName.trim())} disabled={!newName.trim() || createMut.isPending}
+            style={{ padding: '7px 16px', background: 'rgba(99,102,241,0.2)', border: '1px solid #6366F1',
+              borderRadius: 7, color: '#A5B4FC', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: !newName.trim() ? 0.5 : 1 }}>
+            Create
+          </button>
+          <button onClick={() => { setCreating(false); setNewName(''); }}
+            style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', padding: 6 }}>
+            <X size={15} />
+          </button>
+        </div>
+      )}
+
+      {/* Clone form */}
+      {cloneTarget && (
+        <div style={{ marginBottom: 14, display: 'flex', gap: 8, alignItems: 'center',
+          background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 9, padding: '12px 16px' }}>
+          <span style={{ fontSize: 13, color: '#888', whiteSpace: 'nowrap' }}>Clone "{cloneTarget.name}" as:</span>
+          <input value={newName} onChange={e => setNewName(e.target.value)}
+            placeholder="New template name"
+            style={{ ...inputSt, flex: 1, padding: '7px 11px', fontSize: 13 }} />
+          <button onClick={() => cloneMut.mutate({ id: cloneTarget.id, name: newName.trim() })}
+            disabled={!newName.trim() || cloneMut.isPending}
+            style={{ padding: '7px 16px', background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)',
+              borderRadius: 7, color: '#F59E0B', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: !newName.trim() ? 0.5 : 1 }}>
+            Clone
+          </button>
+          <button onClick={() => { setClone(null); setNewName(''); }}
+            style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', padding: 6 }}>
+            <X size={15} />
+          </button>
+        </div>
+      )}
+
+      {/* Templates list */}
+      {templates.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '48px 0', color: '#444', fontSize: 14 }}>
+          No templates yet for {courierName}. Click <strong style={{ color: '#A5B4FC' }}>New Template</strong> to create one.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {templates.map(tpl => {
+            const isOpen = expanded === tpl.id;
+            const rates  = getRates(tpl);
+            const domestic = rates.filter(r => !r.is_international);
+            const intl     = rates.filter(r => r.is_international);
+
+            return (
+              <div key={tpl.id} style={{ border: `1px solid ${isOpen ? 'rgba(99,102,241,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                borderRadius: 10, overflow: 'hidden',
+                background: isOpen ? 'rgba(99,102,241,0.03)' : 'rgba(255,255,255,0.02)' }}>
+
+                {/* Template header row */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', cursor: 'pointer' }}
+                  onClick={() => setExpanded(p => p === tpl.id ? null : tpl.id)}>
+                  {editing === tpl.id ? (
+                    <input value={editName} onChange={e => setEditName(e.target.value)} onClick={e => e.stopPropagation()}
+                      onKeyDown={e => { if (e.key === 'Enter') renameMut.mutate({ id: tpl.id, name: editName }); if (e.key === 'Escape') setEditing(null); }}
+                      style={{ ...inputSt, flex: 1, padding: '5px 9px', fontSize: 13, fontWeight: 700 }} autoFocus />
+                  ) : (
+                    <div style={{ flex: 1, fontSize: 14, fontWeight: 700, color: '#DDD' }}>{tpl.name}</div>
+                  )}
+
+                  <div style={{ fontSize: 11, color: '#555' }}>
+                    {domestic.length} domestic · {intl.length} intl
+                  </div>
+
+                  {/* Actions */}
+                  <div style={{ display: 'flex', gap: 6 }} onClick={e => e.stopPropagation()}>
+                    {editing === tpl.id ? (
+                      <>
+                        <button onClick={() => renameMut.mutate({ id: tpl.id, name: editName })}
+                          style={{ background: 'rgba(0,200,83,0.12)', border: '1px solid rgba(0,200,83,0.3)', borderRadius: 5, padding: '3px 10px', color: '#00C853', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                          Save
+                        </button>
+                        <button onClick={() => setEditing(null)}
+                          style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', padding: 4 }}>
+                          <X size={13} />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => { setEditing(tpl.id); setEditName(tpl.name); }}
+                          title="Rename"
+                          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 5, padding: '3px 9px', color: '#888', fontSize: 11, cursor: 'pointer' }}>
+                          Rename
+                        </button>
+                        <button onClick={() => { setClone(tpl); setNewName(`${tpl.name} (copy)`); }}
+                          title="Clone"
+                          style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 5, padding: '3px 9px', color: '#F59E0B', fontSize: 11, cursor: 'pointer' }}>
+                          Clone
+                        </button>
+                        <button onClick={() => setConfirmDel(tpl.id)}
+                          title="Delete"
+                          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 5, padding: '3px 9px', color: '#EF4444', fontSize: 11, cursor: 'pointer' }}>
+                          Delete
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  <div style={{ color: '#444', marginLeft: 4 }}>
+                    {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </div>
+                </div>
+
+                {/* Delete confirm */}
+                {confirmDel === tpl.id && (
+                  <div style={{ padding: '10px 14px', background: 'rgba(239,68,68,0.07)', borderTop: '1px solid rgba(239,68,68,0.15)',
+                    display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: '#F87171' }}>
+                    <span>Delete "{tpl.name}"? This cannot be undone.</span>
+                    <button onClick={() => deleteMut.mutate(tpl.id)} disabled={deleteMut.isPending}
+                      style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 6, padding: '4px 14px', color: '#EF4444', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                      Yes, Delete
+                    </button>
+                    <button onClick={() => setConfirmDel(null)}
+                      style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer' }}>
+                      Cancel
+                    </button>
+                  </div>
+                )}
+
+                {/* Expanded rate editor */}
+                {isOpen && (
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', padding: '14px 14px 16px' }}>
+
+                    {/* Domestic */}
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <div style={{ fontSize: 11, color: '#888', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          Domestic Rates
+                        </div>
+                        <button onClick={() => addRow(tpl, false)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(255,255,255,0.05)',
+                            border: '1px solid rgba(255,255,255,0.1)', borderRadius: 5, padding: '3px 9px',
+                            color: '#888', fontSize: 11, cursor: 'pointer' }}>
+                          <Plus size={10} /> Add row
+                        </button>
+                      </div>
+                      <div style={{ border: '1px solid rgba(255,255,255,0.07)', borderRadius: 7, overflow: 'hidden' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 0.8fr 0.8fr 28px',
+                          padding: '5px 10px', background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                          {['Service / Name', 'Zone', 'Sell (base)', 'Sell (sub)', ''].map(h => (
+                            <div key={h} style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</div>
+                          ))}
+                        </div>
+                        {domestic.length === 0 ? (
+                          <div style={{ padding: '16px', color: '#444', fontSize: 12, textAlign: 'center' }}>No rows yet — click Add row</div>
+                        ) : domestic.map((r, i) => {
+                          const origIdx = rates.indexOf(r);
+                          return (
+                            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 0.8fr 0.8fr 28px',
+                              padding: '4px 10px', alignItems: 'center',
+                              borderBottom: i < domestic.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
+                              <input value={r.service_name || ''} onChange={e => updateRow(tpl, origIdx, 'service_name', e.target.value)}
+                                style={inputSt} placeholder="Service name" />
+                              <input value={r.zone_name || ''} onChange={e => updateRow(tpl, origIdx, 'zone_name', e.target.value)}
+                                style={inputSt} placeholder="Zone" />
+                              <input value={r.price ?? ''} type="number" step="0.01" onChange={e => updateRow(tpl, origIdx, 'price', e.target.value)}
+                                style={inputSt} placeholder="0.00" />
+                              <input value={r.price_sub ?? ''} type="number" step="0.01" onChange={e => updateRow(tpl, origIdx, 'price_sub', e.target.value)}
+                                style={inputSt} placeholder="0.00" />
+                              <button onClick={() => removeRow(tpl, origIdx)}
+                                style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', padding: 3 }}>
+                                <Trash2 size={11} />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* International */}
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <div style={{ fontSize: 11, color: '#888', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          International Rates
+                        </div>
+                        <button onClick={() => addRow(tpl, true)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(255,255,255,0.05)',
+                            border: '1px solid rgba(255,255,255,0.1)', borderRadius: 5, padding: '3px 9px',
+                            color: '#888', fontSize: 11, cursor: 'pointer' }}>
+                          <Plus size={10} /> Add row
+                        </button>
+                      </div>
+                      {intl.length > 0 && (
+                        <div style={{ border: '1px solid rgba(255,255,255,0.07)', borderRadius: 7, overflow: 'hidden' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 0.8fr 0.8fr 28px',
+                            padding: '5px 10px', background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                            {['Zone / Description', 'Region', 'Sell (base)', 'Sell (sub)', ''].map(h => (
+                              <div key={h} style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</div>
+                            ))}
+                          </div>
+                          {intl.map((r, i) => {
+                            const origIdx = rates.indexOf(r);
+                            return (
+                              <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 0.8fr 0.8fr 28px',
+                                padding: '4px 10px', alignItems: 'center',
+                                borderBottom: i < intl.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
+                                <input value={r.service_name || ''} onChange={e => updateRow(tpl, origIdx, 'service_name', e.target.value)}
+                                  style={inputSt} placeholder="Zone name" />
+                                <input value={r.zone_name || ''} onChange={e => updateRow(tpl, origIdx, 'zone_name', e.target.value)}
+                                  style={inputSt} placeholder="Region" />
+                                <input value={r.price ?? ''} type="number" step="0.01" onChange={e => updateRow(tpl, origIdx, 'price', e.target.value)}
+                                  style={inputSt} placeholder="0.00" />
+                                <input value={r.price_sub ?? ''} type="number" step="0.01" onChange={e => updateRow(tpl, origIdx, 'price_sub', e.target.value)}
+                                  style={inputSt} placeholder="0.00" />
+                                <button onClick={() => removeRow(tpl, origIdx)}
+                                  style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', padding: 3 }}>
+                                  <Trash2 size={11} />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Save bar */}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                      {isDirty(tpl.id) && (
+                        <button onClick={() => setRateEdits(p => { const n = { ...p }; delete n[tpl.id]; return n; })}
+                          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+                            borderRadius: 7, padding: '7px 14px', color: '#777', fontSize: 12, cursor: 'pointer' }}>
+                          Discard
+                        </button>
+                      )}
+                      <button onClick={() => saveRatesMut.mutate({ id: tpl.id, rates: getRates(tpl) })}
+                        disabled={!isDirty(tpl.id) || saveRatesMut.isPending}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6,
+                          background: isDirty(tpl.id) ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.04)',
+                          border: `1px solid ${isDirty(tpl.id) ? '#6366F1' : 'rgba(255,255,255,0.08)'}`,
+                          borderRadius: 7, padding: '7px 16px',
+                          color: isDirty(tpl.id) ? '#A5B4FC' : '#444',
+                          fontSize: 12, fontWeight: 700, cursor: isDirty(tpl.id) ? 'pointer' : 'default' }}>
+                        <Save size={12} /> Save Rates
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── LEVEL 2 — Carrier detail (services list) ─────────────────────────────────
 
 function CarrierDetail({ carrierId, onBack, onDrillService }) {
@@ -1333,9 +1692,10 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
       <div style={{ display:'flex', gap:2, marginBottom:20, borderBottom:'1px solid rgba(255,255,255,0.08)' }}>
         {[
           { key:'services',   label:'Services' },
-          { key:'rate-cards', label:'Cost Rate Cards' },
-          { key:'fuel',       label:'Fuel Groups' },
-          { key:'surcharges', label:`Surcharges${surcharges.length ? ` (${surcharges.length})` : ''}` },
+          { key:'rate-cards',   label:'Cost Rate Cards' },
+          { key:'crc-templates', label:'Customer Rate Card Templates' },
+          { key:'fuel',         label:'Fuel Groups' },
+          { key:'surcharges',   label:`Surcharges${surcharges.length ? ` (${surcharges.length})` : ''}` },
         ].map(t => (
           <button key={t.key} onClick={() => setCarrierTab(t.key)} style={{
             background:'none', border:'none', cursor:'pointer',
@@ -1503,6 +1863,11 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
       {/* ── Tab: Cost Rate Cards ── */}
       {carrierTab === 'rate-cards' && carrier && (
         <CarrierRateCardsTab courierId={carrier.id} courierCode={carrier.code} />
+      )}
+
+      {/* ── Tab: Customer Rate Card Templates ── */}
+      {carrierTab === 'crc-templates' && carrier && (
+        <CustomerRcTemplatesTab courierCode={carrier.code} courierName={carrier.name} />
       )}
 
       {/* ── Tab: Fuel Groups ── */}

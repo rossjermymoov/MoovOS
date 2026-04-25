@@ -106,6 +106,15 @@ router.put('/templates/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── DELETE /api/pricing/templates/:id ───────────────────────────────────────
+
+router.delete('/templates/:id', async (req, res, next) => {
+  try {
+    await query(`DELETE FROM rate_card_templates WHERE id = $1`, [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
 // ─── GET /api/pricing/stats ───────────────────────────────────────────────────
 
 router.get('/stats', async (req, res, next) => {
@@ -224,6 +233,15 @@ router.get('/rate-card/:id', async (req, res, next) => {
     `, [req.params.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'Rate card not found' });
     res.json(r.rows[0]);
+  } catch (err) { next(err); }
+});
+
+// ─── DELETE /api/pricing/prospects/:id ───────────────────────────────────────
+
+router.delete('/prospects/:id', async (req, res, next) => {
+  try {
+    await query(`DELETE FROM prospects WHERE id = $1`, [req.params.id]);
+    res.json({ ok: true });
   } catch (err) { next(err); }
 });
 
