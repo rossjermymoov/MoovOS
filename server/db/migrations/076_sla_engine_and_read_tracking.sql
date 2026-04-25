@@ -65,16 +65,18 @@ CREATE INDEX IF NOT EXISTS idx_sla_assignments_active
   ON query_sla_assignments(query_id)
   WHERE is_active = true;
 
+ALTER TYPE query_type ADD VALUE IF NOT EXISTS 'claim' AFTER 'other';
+
 INSERT INTO sla_policies (name, courier_code, query_type, duration_hours, priority) VALUES
-  ('DPD Parcel Claim',             'dpd',   'claim',           168, 100),
-  ('DHL Parcel Claim',             'dhl',   'claim',           168, 100),
-  ('Yodel Parcel Claim',           'yodel', 'claim',           168, 100),
-  ('Evri Parcel Claim',            'evri',  'claim',           168, 100),
+  ('DPD Claim',                    'dpd',   'claim',           168, 100),
+  ('DHL Claim',                    'dhl',   'claim',           168, 100),
+  ('Yodel Claim',                  'yodel', 'claim',           168, 100),
+  ('Evri Claim',                   'evri',  'claim',           168, 100),
   ('Default Claim (14 days)',       NULL,   'claim',           336,  50),
   ('Not Delivered',                 NULL,   'not_delivered',     4,  80),
   ('Damaged',                       NULL,   'damaged',           4,  80),
-  ('Wrong Item',                    NULL,   'wrong_item',        4,  80),
-  ('Late Delivery',                 NULL,   'late_delivery',    24,  80),
+  ('Missing Items',                 NULL,   'missing_items',     4,  80),
+  ('Late Delivery',                 NULL,   'delay',            24,  80),
   ('General Query Default',         NULL,    NULL,               4,   0)
 ON CONFLICT DO NOTHING;
 
