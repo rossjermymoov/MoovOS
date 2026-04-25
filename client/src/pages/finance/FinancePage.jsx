@@ -1115,12 +1115,6 @@ export default function FinancePage() {
           bg="rgba(255,193,7,0.05)"
         />
         <StatCard
-          label="Billed"
-          value={stats?.billed ?? '—'}
-          color="#00C853"
-          bg="rgba(0,200,83,0.05)"
-        />
-        <StatCard
           label="Total Value"
           value={gbp(stats?.total_value)}
           color="#AAAAAA"
@@ -1133,6 +1127,13 @@ export default function FinancePage() {
           bg="rgba(255,193,7,0.05)"
         />
         <StatCard
+          label="Profit"
+          value={gbp(stats?.profit)}
+          sub={stats?.profit_pct != null ? `${stats.profit_pct}% margin` : undefined}
+          color={stats?.profit > 0 ? '#00C853' : stats?.profit < 0 ? '#F44336' : '#888'}
+          bg={stats?.profit > 0 ? 'rgba(0,200,83,0.05)' : stats?.profit < 0 ? 'rgba(244,67,54,0.05)' : 'rgba(255,255,255,0.04)'}
+        />
+        <StatCard
           label="Awaiting Reconciliation"
           value={stats?.awaiting_reconciliation ?? '—'}
           sub="Queued for invoice"
@@ -1140,11 +1141,10 @@ export default function FinancePage() {
           bg="rgba(66,165,245,0.05)"
         />
         <StatCard
-          label="Profit"
-          value={gbp(stats?.profit)}
-          sub={stats?.profit_pct != null ? `${stats.profit_pct}% margin` : undefined}
-          color={stats?.profit > 0 ? '#00C853' : stats?.profit < 0 ? '#F44336' : '#888'}
-          bg={stats?.profit > 0 ? 'rgba(0,200,83,0.05)' : stats?.profit < 0 ? 'rgba(244,67,54,0.05)' : 'rgba(255,255,255,0.04)'}
+          label="Billed"
+          value={stats?.billed ?? '—'}
+          color="#00C853"
+          bg="rgba(0,200,83,0.05)"
         />
       </div>
 
