@@ -247,31 +247,71 @@ function bandMaxKg(rate) {
 
 // zoneForPostcode — resolve zone name from service code + destination postcode.
 //
-// Match is on service_code ONLY. Never looks at service name.
+// Uses dc_zones as the primary source — this is the carrier rate card data
+// imported directly from DespatchCloud and covers all legacy services.
+// Falls back to the zones/zone_postcode_rules tables for new-model services
+// that haven't been imported into dc_zones.
 //
-// Outward code matching:
-//   - Exact:      pr.postcode_prefix = outward  (e.g. "IV1" = "IV1")
-//   - Letter-only prefix: outward LIKE prefix||'%' where prefix is [A-Z]+ only
-//     (e.g. "IM" matches "IM1", "IM2" etc. — Isle of Man)
+// Outward code matching (same logic in both sources):
+//   - Exact:   outward = element  (e.g. "IV1")
+//   - Prefix:  outward LIKE element||'%' where element is letters-only
+//              (e.g. "IV" matches "IV1", "IV2", etc.)
 //
 // Zone resolution order:
-//   1. Include rule matches this outward code → that zone
-//   2. No include match → catch-all: a zone that does NOT exclude this postcode.
-//      Covers two cases:
-//        a) Zone has exclude rules but this code isn't in them (classic Mainland)
-//        b) Zone has no postcode rules at all (implicit catch-all)
-//      Zones with any rules are preferred over bare zones.
+//   1. dc_zones — included_postcodes match → that zone
+//   2. dc_zones — no included list AND outward not in excluded_postcodes → catch-all (Mainland)
+//   3. zones/zone_postcode_rules — include rule match (new-model services)
+//   4. zones/zone_postcode_rules — catch-all (has excludes, this postcode not excluded)
+//   5. zones/zone_postcode_rules — universal zone (no rules at all)
 async function zoneForPostcode(serviceCode, postcode) {
   if (!postcode || !serviceCode) return null;
 
   const outward = postcode.trim().toUpperCase().split(/\s+/)[0];
 
+  // Helper: does an array column contain a match for this outward code?
+  // Exact match OR letter-only prefix (e.g. "IV" matches "IV1", "IV2")
+  const ARRAY_MATCH = `EXISTS (
+    SELECT 1 FROM unnest($2::text[]) p
+    WHERE p = $3 OR ($3 LIKE p || '%' AND p ~ '^[A-Z]+$')
+  )`;
+
+  // ── 1. dc_zones: explicit include ─────────────────────────────────────────
+  const dcInclRes = await query(`
+    SELECT zone_name
+    FROM dc_zones
+    WHERE service_code ILIKE $1
+      AND included_postcodes IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM unnest(included_postcodes) p
+        WHERE p = $2 OR ($2 LIKE p || '%' AND p ~ '^[A-Z]+$')
+      )
+    LIMIT 1
+  `, [serviceCode, outward]);
+  if (dcInclRes.rows.length) return dcInclRes.rows[0].zone_name;
+
+  // ── 2. dc_zones: catch-all (no include list, outward not excluded) ────────
+  const dcCatchRes = await query(`
+    SELECT zone_name
+    FROM dc_zones
+    WHERE service_code ILIKE $1
+      AND included_postcodes IS NULL
+      AND (
+        excluded_postcodes IS NULL
+        OR NOT EXISTS (
+          SELECT 1 FROM unnest(excluded_postcodes) p
+          WHERE p = $2 OR ($2 LIKE p || '%' AND p ~ '^[A-Z]+$')
+        )
+      )
+    LIMIT 1
+  `, [serviceCode, outward]);
+  if (dcCatchRes.rows.length) return dcCatchRes.rows[0].zone_name;
+
+  // ── 3–5. zones/zone_postcode_rules (new-model services) ──────────────────
   const MATCH_CLAUSE = `(
     pr.postcode_prefix = $2
     OR ($2 LIKE pr.postcode_prefix || '%' AND pr.postcode_prefix ~ '^[A-Z]+$')
   )`;
 
-  // 1. Explicit include rule
   const inclRes = await query(`
     SELECT z.name AS zone_name
     FROM zones z
@@ -284,7 +324,6 @@ async function zoneForPostcode(serviceCode, postcode) {
   `, [serviceCode, outward]);
   if (inclRes.rows.length) return inclRes.rows[0].zone_name;
 
-  // 2. Catch-all zone — has exclude rules but this postcode isn't excluded
   const EXCL_MATCH = MATCH_CLAUSE.replace(/pr\./g, 'pr3.');
   const catchRes = await query(`
     SELECT z.name AS zone_name
@@ -304,10 +343,6 @@ async function zoneForPostcode(serviceCode, postcode) {
   `, [serviceCode, outward]);
   if (catchRes.rows.length) return catchRes.rows[0].zone_name;
 
-  // 3. Universal zone — no postcode rules at all.
-  //    No include list, no exclude list = matches every shipment.
-  //    e.g. a simple "Zone A / Zone B" split with no geographic restriction.
-  //    When multiple such zones exist, return the first alphabetically.
   const univRes = await query(`
     SELECT z.name AS zone_name
     FROM zones z
