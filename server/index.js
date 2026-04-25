@@ -15,7 +15,8 @@ import { runMigrations } from './db/migrate.js';
 import { seedCustomerRates } from './scripts/seedCustomerRates.js';
 import customerRatesRouter from './routes/customerRates.js';
 import trackingRouter, { catchUpVerified, purgeOldTrackingData } from './routes/tracking.js';
-import billingRouter from './routes/billing.js';
+import billingRouter, { runBillingCycle } from './routes/billing.js';
+import { query as dbQuery } from './db/index.js';
 import carrierRateCardsRouter, { activateDueCarrierRateCards } from './routes/carrierRateCards.js';
 import customerRateCardsRouter from './routes/customerRateCards.js';
 import carrierDataRouter from './routes/carrierData.js';
@@ -100,6 +101,8 @@ async function start() {
     setInterval(purgeOldTrackingData, 24 * 60 * 60 * 1000);
     // Re-check rate card activation every 24 hours (catches date-boundary activations)
     setInterval(activateDueCarrierRateCards, 24 * 60 * 60 * 1000);
+    // Billing cycle scheduler — checks every minute whether a billing run is due
+    startBillingScheduler();
   } catch (err) {
     console.error('❌ Migration failed — server will not start.');
     console.error('   Error code:   ', err.code    || 'unknown');
@@ -111,6 +114,44 @@ async function start() {
   app.listen(PORT, () => {
     console.log(`🟢 Moov OS server running on port ${PORT}`);
   });
+}
+
+// ─── Billing cycle scheduler ─────────────────────────────────────────────────
+// Checks every minute whether a billing run is due based on billing_settings.
+// Runs the cycle at most once per day to prevent double-firing on server restart.
+
+function startBillingScheduler() {
+  let lastRunDate = null; // track date string 'YYYY-MM-DD' of last automatic run
+
+  setInterval(async () => {
+    try {
+      const settingsRes = await dbQuery(`SELECT * FROM billing_settings WHERE id = 1`);
+      const s = settingsRes.rows[0];
+      if (!s || !s.enabled) return;
+
+      const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
+
+      // Already ran today — skip
+      if (lastRunDate === todayStr) return;
+
+      // Check time match
+      if (now.getDay()     !== s.billing_day_of_week) return;
+      if (now.getHours()   !== s.billing_hour)        return;
+      if (now.getMinutes() !== s.billing_minute)      return;
+
+      console.log(`⏰ Billing scheduler: running cycle for ${todayStr}`);
+      lastRunDate = todayStr;
+
+      const result = await runBillingCycle(now);
+      await dbQuery(`UPDATE billing_settings SET last_run_at = NOW() WHERE id = 1`);
+      console.log(`✅ Billing cycle complete — ${result.charges_queued} charges queued across ${result.customers_processed} customers`);
+    } catch (err) {
+      console.error('❌ Billing scheduler error:', err.message);
+    }
+  }, 60 * 1000); // every minute
+
+  console.log('🗓️  Billing scheduler started');
 }
 
 start();

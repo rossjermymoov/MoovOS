@@ -17,26 +17,30 @@ const api = axios.create({ baseURL: '/api' });
 // ─── Settings sub-nav (shared with StaffSettings) ─────────────
 export function SettingsNav() {
   const { pathname } = useLocation();
-  const isRules = pathname.includes('/rules');
+  const tabs = [
+    { to: '/settings/staff',   label: 'Staff' },
+    { to: '/settings/rules',   label: 'SLA Rules Engine' },
+    { to: '/settings/billing', label: 'Billing' },
+  ];
   return (
     <div style={{ display: 'flex', gap: 0, marginBottom: 28, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-      {[
-        { to: '/settings/staff', label: 'Staff',            active: !isRules },
-        { to: '/settings/rules', label: 'SLA Rules Engine', active: isRules  },
-      ].map(t => (
-        <NavLink
-          key={t.to} to={t.to}
-          style={{
-            padding: '8px 22px', fontSize: 13, fontWeight: 600,
-            color: t.active ? '#00C853' : '#AAAAAA',
-            borderBottom: t.active ? '2px solid #00C853' : '2px solid transparent',
-            textDecoration: 'none', transition: 'color 0.12s',
-            marginBottom: -1,
-          }}
-        >
-          {t.label}
-        </NavLink>
-      ))}
+      {tabs.map(t => {
+        const active = pathname.startsWith(t.to);
+        return (
+          <NavLink
+            key={t.to} to={t.to}
+            style={{
+              padding: '8px 22px', fontSize: 13, fontWeight: 600,
+              color: active ? '#00C853' : '#AAAAAA',
+              borderBottom: active ? '2px solid #00C853' : '2px solid transparent',
+              textDecoration: 'none', transition: 'color 0.12s',
+              marginBottom: -1,
+            }}
+          >
+            {t.label}
+          </NavLink>
+        );
+      })}
     </div>
   );
 }

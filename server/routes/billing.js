@@ -2391,6 +2391,51 @@ router.delete('/charges/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── GET /api/billing/settings ───────────────────────────────────────────────
+
+router.get('/settings', async (req, res, next) => {
+  try {
+    const r = await query(`SELECT * FROM billing_settings WHERE id = 1`);
+    res.json(r.rows[0] || {});
+  } catch (err) { next(err); }
+});
+
+// ─── PUT /api/billing/settings ────────────────────────────────────────────────
+
+router.put('/settings', async (req, res, next) => {
+  try {
+    const {
+      billing_day_of_week,
+      billing_hour,
+      billing_minute,
+      fortnightly_parity,
+      monthly_billing_date,
+      enabled,
+    } = req.body;
+
+    const r = await query(`
+      UPDATE billing_settings SET
+        billing_day_of_week  = COALESCE($1, billing_day_of_week),
+        billing_hour         = COALESCE($2, billing_hour),
+        billing_minute       = COALESCE($3, billing_minute),
+        fortnightly_parity   = COALESCE($4, fortnightly_parity),
+        monthly_billing_date = COALESCE($5, monthly_billing_date),
+        enabled              = COALESCE($6, enabled),
+        updated_at           = NOW()
+      WHERE id = 1
+      RETURNING *
+    `, [
+      billing_day_of_week  ?? null,
+      billing_hour         ?? null,
+      billing_minute       ?? null,
+      fortnightly_parity   ?? null,
+      monthly_billing_date ?? null,
+      enabled              ?? null,
+    ]);
+    res.json(r.rows[0]);
+  } catch (err) { next(err); }
+});
+
 // ─── POST /api/billing/run-cycle ─────────────────────────────────────────────
 // Moves verified, unbilled charges to awaiting_reconciliation for all customers
 // whose billing cycle is due on the given date (defaults to today).
@@ -2402,69 +2447,71 @@ router.delete('/charges/:id', async (req, res, next) => {
 //   fortnightly → runs every other Saturday (based on weeks since epoch)
 //   monthly     → runs on the 1st of each month (or nearest Saturday if desired)
 
+// Exported so index.js scheduler can call it directly without going through HTTP
+export async function runBillingCycle(runDate = new Date(), { fortnightlyParity = 0 } = {}) {
+  const weeksSinceEpoch   = Math.floor(runDate.getTime() / (7 * 24 * 3600 * 1000));
+  const isFortnightlyWeek = (weeksSinceEpoch % 2) === fortnightlyParity;
+  const dayOfWeek         = runDate.getDay();
+
+  // Fetch billing settings to get the configured billing day
+  const settingsRes = await query(`SELECT * FROM billing_settings WHERE id = 1`);
+  const settings = settingsRes.rows[0] || {};
+  const billingDay = settings.billing_day_of_week ?? 6;
+
+  const dueCycles = [];
+  if (dayOfWeek === billingDay) {
+    dueCycles.push('weekly');
+    if (isFortnightlyWeek) dueCycles.push('fortnightly');
+  }
+  if (runDate.getDate() === (settings.monthly_billing_date ?? 1)) {
+    dueCycles.push('monthly');
+  }
+
+  if (dueCycles.length === 0) {
+    return { ok: true, message: 'No billing cycles due today', due_cycles: [], customers_processed: 0, charges_queued: 0 };
+  }
+
+  const custRes = await query(`
+    SELECT id, account_number, business_name, billing_cycle
+    FROM customers
+    WHERE billing_cycle = ANY($1) AND account_status = 'active'
+  `, [dueCycles]);
+
+  let totalCharged = 0;
+  const results = [];
+
+  for (const customer of custRes.rows) {
+    const upd = await query(`
+      UPDATE charges
+      SET awaiting_reconciliation = true, updated_at = NOW()
+      WHERE customer_id           = $1
+        AND verified               = true
+        AND billed                 = false
+        AND awaiting_reconciliation = false
+        AND cancelled              = false
+    `, [customer.id]);
+
+    totalCharged += upd.rowCount;
+    if (upd.rowCount > 0) {
+      results.push({ customer_id: customer.id, account: customer.account_number, name: customer.business_name, charges_queued: upd.rowCount });
+    }
+  }
+
+  return {
+    ok:                  true,
+    run_date:            runDate.toISOString().split('T')[0],
+    due_cycles:          dueCycles,
+    customers_processed: custRes.rows.length,
+    charges_queued:      totalCharged,
+    details:             results,
+  };
+}
+
 router.post('/billing/run-cycle', async (req, res, next) => {
   try {
-    const runDate  = req.body?.date ? new Date(req.body.date) : new Date();
-    const dayOfWeek = runDate.getDay(); // 0=Sun … 6=Sat
-    const isSaturday = dayOfWeek === 6;
-
-    // Week number since Unix epoch — used to alternate fortnightly customers
-    const weeksSinceEpoch = Math.floor(runDate.getTime() / (7 * 24 * 3600 * 1000));
-    const isFortnightlyWeek = weeksSinceEpoch % 2 === 0;
-
-    // Determine which billing cycles are due today
-    const dueCycles = [];
-    if (isSaturday) {
-      dueCycles.push('weekly');
-      if (isFortnightlyWeek) dueCycles.push('fortnightly');
-    }
-    // Monthly: 1st of the month regardless of day
-    const isFirstOfMonth = runDate.getDate() === 1;
-    if (isFirstOfMonth) dueCycles.push('monthly');
-
-    if (dueCycles.length === 0) {
-      return res.json({ ok: true, message: 'No billing cycles due today', due_cycles: [], customers_processed: 0, charges_queued: 0 });
-    }
-
-    // Find all customers on a due cycle
-    const custRes = await query(`
-      SELECT id, account_number, business_name, billing_cycle
-      FROM customers
-      WHERE billing_cycle = ANY($1)
-        AND account_status = 'active'
-    `, [dueCycles]);
-
-    let totalCharged = 0;
-    const results = [];
-
-    for (const customer of custRes.rows) {
-      // Mark all verified, unbilled, non-reconciled charges as awaiting_reconciliation
-      const upd = await query(`
-        UPDATE charges
-        SET awaiting_reconciliation = true,
-            updated_at = NOW()
-        WHERE customer_id = $1
-          AND verified    = true
-          AND billed      = false
-          AND awaiting_reconciliation = false
-          AND cancelled   = false
-      `, [customer.id]);
-
-      totalCharged += upd.rowCount;
-      if (upd.rowCount > 0) {
-        results.push({ customer_id: customer.id, account: customer.account_number, name: customer.business_name, charges_queued: upd.rowCount });
-      }
-    }
-
-    res.json({
-      ok: true,
-      run_date:            runDate.toISOString().split('T')[0],
-      due_cycles:          dueCycles,
-      customers_processed: custRes.rows.length,
-      charges_queued:      totalCharged,
-      details:             results,
-    });
-
+    const runDate = req.body?.date ? new Date(req.body.date) : new Date();
+    const result  = await runBillingCycle(runDate);
+    res.json(result);
   } catch (err) { next(err); }
 });
 
