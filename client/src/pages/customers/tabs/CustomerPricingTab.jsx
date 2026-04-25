@@ -927,16 +927,20 @@ export default function CustomerPricingTab({ customer }) {
     queryFn:  () => api.get(`/customers/${customer.id}/services`).then(r => r.data),
   });
 
-  const activeCarriers   = carriers.filter(c => c.active);
-  const activeCourierIds = new Set(activeCarriers.map(c => c.courier_id));
+  const activeCarriers    = carriers.filter(c => c.active);
+  const activeCourierIds  = new Set(activeCarriers.map(c => c.courier_id));
+  // Use courier_code for rate filtering — customer_rates stores old billing-system
+  // courier_id (e.g. 150) which is different from couriers.id (e.g. 3). Both APIs
+  // expose courier_code ('DPD', 'DHL') so that's the safe cross-reference key.
+  const activeCourierCodes = new Set(activeCarriers.map(c => c.courier_code));
 
   const services    = rateData?.services || [];
   const selectedIds = new Set(selectedServices.map(s => s.courier_service_id));
 
   // Rate cards: filter to active carriers + selected services
   const visibleServices = services.filter(s => {
-    const courierOk  = activeCourierIds.size === 0 || activeCourierIds.has(s.courier_id);
-    const serviceOk  = selectedIds.size === 0      || selectedIds.has(s.service_id);
+    const courierOk  = activeCourierCodes.size === 0 || activeCourierCodes.has(s.courier_code);
+    const serviceOk  = selectedIds.size === 0         || selectedIds.has(s.service_id);
     return courierOk && serviceOk;
   });
 
