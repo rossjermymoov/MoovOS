@@ -106,6 +106,36 @@ router.put('/templates/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── GET /api/pricing/volume-mix-snapshot?courier_code= ──────────────────────
+// Returns actual service usage from last 90 days of charges, sorted by volume.
+// Used to pre-populate the volume mix in RateCardEditor projections.
+
+router.get('/volume-mix-snapshot', async (req, res, next) => {
+  try {
+    const { courier_code } = req.query;
+    if (!courier_code) return res.status(400).json({ error: 'courier_code required' });
+
+    const r = await query(`
+      SELECT
+        cs.service_code,
+        cs.name                                             AS service_name,
+        COUNT(*)                                            AS charge_count,
+        ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 1) AS pct
+      FROM charges ch
+      JOIN courier_services cs
+        ON cs.name ILIKE ch.service_name
+       AND cs.courier_id = (SELECT id FROM couriers WHERE code ILIKE $1)
+      WHERE ch.charge_type = 'courier'
+        AND ch.cancelled   = false
+        AND ch.created_at >= NOW() - INTERVAL '90 days'
+      GROUP BY cs.service_code, cs.name
+      ORDER BY charge_count DESC
+    `, [courier_code]);
+
+    res.json(r.rows);
+  } catch (err) { next(err); }
+});
+
 // ─── GET /api/pricing/carrier-services?courier_code= ─────────────────────────
 // Returns every service+zone for a carrier with cost price from master rate card.
 // Used to populate Customer Rate Card Template rows.

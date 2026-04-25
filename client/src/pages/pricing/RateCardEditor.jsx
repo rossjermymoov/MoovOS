@@ -86,11 +86,11 @@ export default function RateCardEditor() {
   const [submitStaff, setSubmitStaff] = useState('');
   const [showSubmit, setShowSubmit] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
-  const [openSvcs,     setOpenSvcs]     = useState(new Set());
-  const [openIntlSvcs, setOpenIntlSvcs] = useState(new Set());
+  const [openSvcs,       setOpenSvcs]       = useState(new Set());
+  const [openIntlSvcs,   setOpenIntlSvcs]   = useState(new Set());
+  const [mixRefreshing,  setMixRefreshing]  = useState(false);
+  const [mixSnapshotDate, setMixSnapshotDate] = useState(null);
 
-  // Load rate card detail — we'll use the existing rate-cards endpoint via prospect
-  // We need a direct endpoint for a single rate card. Add a route alias.
   const { data: rc, isLoading, error } = useQuery({
     queryKey: ['rate-card-detail', id],
     queryFn: () => apiFetch(`/api/pricing/rate-card/${id}`),
@@ -98,25 +98,72 @@ export default function RateCardEditor() {
 
   const { data: staffList = [] } = useQuery({ queryKey: ['staff'], queryFn: api.staffList });
 
+  // Build a service_code → service_name map from rate card rates
+  const svcNameMap = Object.fromEntries(
+    (rc?.rates || []).filter(r => r.service_name && r.service_code)
+      .map(r => [r.service_code, r.service_name])
+  );
+
+  // Apply volume snapshot: filter to codes present in this rate card, re-normalise to 100%
+  const applySnapshot = (snapshotRows, domesticCodes) => {
+    const filtered = snapshotRows.filter(s => domesticCodes.includes(s.service_code));
+    // For codes in the rate card but NOT in snapshot, append with pct=0
+    const inSnapshot = new Set(filtered.map(s => s.service_code));
+    const missing = domesticCodes.filter(c => !inSnapshot.has(c));
+
+    const total = filtered.reduce((s, r) => s + parseFloat(r.pct), 0);
+    const normalised = filtered.map(r => ({
+      service_code: r.service_code,
+      service_name: r.service_name || svcNameMap[r.service_code] || r.service_code,
+      pct: total > 0 ? Math.round(parseFloat(r.pct) / total * 100) : 0,
+    }));
+    // Fix rounding so it sums exactly to 100
+    const sum = normalised.reduce((s, r) => s + r.pct, 0);
+    if (normalised.length > 0) normalised[0].pct += (100 - sum);
+
+    return [
+      ...normalised,
+      ...missing.map(c => ({ service_code: c, service_name: svcNameMap[c] || c, pct: 0 })),
+    ];
+  };
+
+  const refreshMix = async (courierCode, domesticCodes) => {
+    if (!courierCode || !domesticCodes.length) return;
+    setMixRefreshing(true);
+    try {
+      const snapshot = await apiFetch(`/api/pricing/volume-mix-snapshot?courier_code=${courierCode}`);
+      if (snapshot?.length) {
+        setVolumeMix(applySnapshot(snapshot, domesticCodes));
+        setMixSnapshotDate(new Date());
+        setDirty(true);
+      }
+    } catch (e) { /* silently ignore — keep existing mix */ }
+    finally { setMixRefreshing(false); }
+  };
+
   // Initialise local state when rate card loads
   useEffect(() => {
-    if (rc) {
-      setRates((rc.rates || []).map(r => ({ ...r })));
-      setIntlMarkup(rc.intl_markup_pct ?? '');
-      setFuelMarkup(rc.fuel_markup_pct ?? '');
-      setWeeklyParcels(rc.weekly_parcels ?? '');
-      // Build volume mix from rate card or derive from service codes
-      if (rc.volume_mix?.length) {
-        setVolumeMix(rc.volume_mix.map(m => ({ ...m })));
-      } else {
-        const codes = [...new Set((rc.rates || []).filter(r => !r.is_international).map(r => r.service_code))];
-        const even  = codes.length > 0 ? Math.floor(100 / codes.length) : 0;
-        const rem   = codes.length > 0 ? 100 - even * codes.length : 0;
-        setVolumeMix(codes.map((sc, i) => ({ service_code: sc, pct: i === 0 ? even + rem : even })));
-      }
-      setDirty(false);
+    if (!rc) return;
+    setRates((rc.rates || []).map(r => ({ ...r })));
+    setIntlMarkup(rc.intl_markup_pct ?? '');
+    setFuelMarkup(rc.fuel_markup_pct ?? '');
+    setWeeklyParcels(rc.weekly_parcels ?? '');
+
+    const domesticCodes = [...new Set((rc.rates || []).filter(r => !r.is_international).map(r => r.service_code).filter(Boolean))];
+
+    if (rc.volume_mix?.length) {
+      // Saved mix — enrich with service names if missing
+      setVolumeMix(rc.volume_mix.map(m => ({
+        ...m,
+        service_name: m.service_name || svcNameMap[m.service_code] || m.service_code,
+      })));
+    } else {
+      // No saved mix — auto-load from actual data
+      refreshMix(rc.courier_code, domesticCodes);
     }
-  }, [rc]);
+    setDirty(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rc?.id]);
 
   const updateMut = useMutation({
     mutationFn: () => api.updateRateCard(id, {
@@ -228,13 +275,16 @@ export default function RateCardEditor() {
   // ── Service codes from domestic rates (for volume mix) ────────────────────
 
   const serviceCodes = [...new Set(domesticRates.map(r => r.service_code).filter(Boolean))];
-  // Sync volume mix when service codes change
+  // Sync volume mix when service codes change (preserve existing pcts + names)
   useEffect(() => {
     if (!rc) return;
     setVolumeMix(prev => {
-      const existing = new Map(prev.map(m => [m.service_code, m.pct]));
-      const next = serviceCodes.map(sc => ({ service_code: sc, pct: existing.get(sc) ?? 0 }));
-      return next;
+      const existing = new Map(prev.map(m => [m.service_code, m]));
+      return serviceCodes.map(sc => ({
+        service_code: sc,
+        service_name: existing.get(sc)?.service_name || svcNameMap[sc] || sc,
+        pct: existing.get(sc)?.pct ?? 0,
+      }));
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(serviceCodes)]);
@@ -611,13 +661,41 @@ export default function RateCardEditor() {
             {/* Volume mix */}
             {volumeMix.length > 0 && (
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11, color: '#666', marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
+                <div style={{ fontSize: 11, color: '#666', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Volume mix</span>
                   <span style={{ color: mixTotal === 100 ? '#34D399' : '#F59E0B', fontWeight: 700 }}>{mixTotal}%</span>
                 </div>
+                {/* Refresh button + snapshot date */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <button
+                    onClick={() => {
+                      const domesticCodes = [...new Set(domesticRates.map(r => r.service_code).filter(Boolean))];
+                      refreshMix(rc.courier_code, domesticCodes);
+                    }}
+                    disabled={mixRefreshing}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px',
+                      borderRadius: 9999, fontSize: 11, fontWeight: 700,
+                      background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)',
+                      color: '#A5B4FC', cursor: 'pointer', opacity: mixRefreshing ? 0.6 : 1 }}>
+                    <RefreshCw size={11} style={mixRefreshing ? { animation: 'spin 1s linear infinite' } : {}} />
+                    Refresh mix
+                  </button>
+                  {mixSnapshotDate && (
+                    <span style={{ fontSize: 10, color: '#444' }}>
+                      {format(mixSnapshotDate, 'd MMM yyyy')}
+                    </span>
+                  )}
+                </div>
                 {volumeMix.map((m, i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                    <div style={{ flex: 1, fontSize: 11, color: '#AAA', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.service_code}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, color: '#CCC', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 500 }}>
+                        {m.service_name || m.service_code}
+                      </div>
+                      {m.service_name && m.service_name !== m.service_code && (
+                        <div style={{ fontSize: 10, color: '#555', fontFamily: 'monospace', marginTop: 1 }}>{m.service_code}</div>
+                      )}
+                    </div>
                     <input
                       type="number" min={0} max={100} value={m.pct}
                       onChange={e => {
@@ -625,7 +703,7 @@ export default function RateCardEditor() {
                         markDirty();
                       }}
                       disabled={!isEditable}
-                      style={{ ...inputStyle, width: 56, padding: '4px 8px', fontSize: 12 }}
+                      style={{ ...inputStyle, width: 56, padding: '4px 8px', fontSize: 12, flexShrink: 0 }}
                     />
                     <span style={{ fontSize: 11, color: '#555' }}>%</span>
                   </div>
