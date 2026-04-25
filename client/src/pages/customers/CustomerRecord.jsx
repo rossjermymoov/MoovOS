@@ -567,8 +567,120 @@ function PerformanceTab({ customerId }) {
   const revenue30 = parseFloat(perfData.last30?.revenue || 0);
   const profitMargin = revenue30 > 0 ? ((profit30 / revenue30) * 100).toFixed(1) : '—';
 
+  const [showPerfDebug, setShowPerfDebug] = useState(false);
+
   return (
     <div>
+      {/* Debug toggle */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+        <button
+          onClick={() => setShowPerfDebug(d => !d)}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px',
+            borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+            background: showPerfDebug ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.05)',
+            border: `1px solid ${showPerfDebug ? 'rgba(245,158,11,0.45)' : 'rgba(255,255,255,0.1)'}`,
+            color: showPerfDebug ? '#F59E0B' : '#555' }}>
+          <Bug size={11} /> {showPerfDebug ? 'Hide debug' : 'Debug numbers'}
+        </button>
+      </div>
+
+      {/* Debug panel */}
+      {showPerfDebug && (
+        <div style={{ marginBottom: 20, border: '1px solid rgba(245,158,11,0.25)', borderRadius: 10, overflow: 'hidden', fontSize: 11 }}>
+          <div style={{ padding: '8px 14px', background: 'rgba(245,158,11,0.07)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Bug size={12} style={{ color: '#F59E0B' }} />
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#F59E0B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Performance debug — source &amp; assumptions
+            </span>
+          </div>
+
+          {/* Assumptions */}
+          <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,0.05)', lineHeight: 1.8 }}>
+            <div style={{ fontWeight: 700, color: '#888', marginBottom: 4, fontSize: 10, textTransform: 'uppercase' }}>Data source</div>
+            <div style={{ color: '#AAA' }}>Table: <code style={{ color: '#00C853' }}>charges</code> WHERE <code style={{ color: '#F59E0B' }}>charge_type = 'courier'</code> AND <code style={{ color: '#F59E0B' }}>cancelled = false</code></div>
+            <div style={{ color: '#AAA', marginTop: 4 }}>
+              <span style={{ color: '#A5B4FC' }}>Revenue</span> = SUM(price) &nbsp;·&nbsp;
+              <span style={{ color: '#B39DDB' }}>Cost</span> = SUM(cost_price) &nbsp;·&nbsp;
+              <span style={{ color: '#34D399' }}>Profit</span> = revenue − cost &nbsp;·&nbsp;
+              <span style={{ color: '#00BCD4' }}>Parcels</span> = SUM(parcel_qty)
+            </div>
+          </div>
+
+          {/* Period summary */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+            {[
+              { label: 'Last 7 days', d: perfData.last7 },
+              { label: 'Last 30 days', d: perfData.last30 },
+              { label: 'All time', d: perfData.all },
+            ].map(({ label, d }) => (
+              <div key={label} style={{ padding: '10px 14px', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ fontWeight: 700, color: '#888', fontSize: 10, textTransform: 'uppercase', marginBottom: 6 }}>{label}</div>
+                {[
+                  { k: 'charges',  v: d?.charges,  c: '#AAA' },
+                  { k: 'parcels',  v: d?.parcels,  c: '#00BCD4' },
+                  { k: 'revenue',  v: d?.revenue != null ? `£${parseFloat(d.revenue).toFixed(2)}` : '—',  c: '#A5B4FC' },
+                  { k: 'cost',     v: d?.cost     != null ? `£${parseFloat(d.cost).toFixed(2)}`    : '—',  c: '#B39DDB' },
+                  { k: 'profit',   v: d?.profit   != null ? `£${parseFloat(d.profit).toFixed(2)}`  : '—',
+                    c: parseFloat(d?.profit || 0) >= 0 ? '#34D399' : '#EF4444' },
+                ].map(({ k, v, c }) => (
+                  <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                    <span style={{ color: '#555' }}>{k}</span>
+                    <span style={{ color: c, fontFamily: 'monospace', fontWeight: 600 }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          {/* Full by-service breakdown including null cost rows */}
+          <div style={{ padding: '10px 14px' }}>
+            <div style={{ fontWeight: 700, color: '#888', fontSize: 10, textTransform: 'uppercase', marginBottom: 8 }}>
+              All-time by service — {perfData.by_courier?.length ?? 0} services
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                  {['Service name', 'Charges', 'Revenue', 'Cost', 'Profit', 'Margin'].map(h => (
+                    <th key={h} style={{ padding: '3px 6px', textAlign: h === 'Service name' ? 'left' : 'right',
+                      color: '#555', fontWeight: 600, fontSize: 10 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(perfData.by_courier || []).map((row, i) => {
+                  const rev = parseFloat(row.revenue || 0);
+                  const cst = parseFloat(row.cost    || 0);
+                  const pft = parseFloat(row.profit  || 0);
+                  const mgn = rev > 0 ? (pft / rev * 100).toFixed(1) : '—';
+                  const noCost = cst === 0 && rev > 0;
+                  return (
+                    <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                      <td style={{ padding: '3px 6px', color: '#CCC' }}>{row.service_name || '—'}</td>
+                      <td style={{ padding: '3px 6px', textAlign: 'right', color: '#888', fontFamily: 'monospace' }}>{row.charges}</td>
+                      <td style={{ padding: '3px 6px', textAlign: 'right', color: '#A5B4FC', fontFamily: 'monospace' }}>£{parseFloat(row.revenue).toFixed(2)}</td>
+                      <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace',
+                        color: noCost ? '#EF4444' : '#B39DDB' }}>
+                        £{parseFloat(row.cost).toFixed(2)}
+                        {noCost && <span style={{ marginLeft: 4, fontSize: 9, color: '#EF4444' }}>⚠ null</span>}
+                      </td>
+                      <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace',
+                        color: pft >= 0 ? '#34D399' : '#EF4444' }}>£{pft.toFixed(2)}</td>
+                      <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace',
+                        color: mgn === '—' ? '#555' : parseFloat(mgn) < 0 ? '#EF4444' : parseFloat(mgn) < 15 ? '#F59E0B' : '#34D399' }}>
+                        {mgn === '—' ? '—' : `${mgn}%`}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div style={{ marginTop: 8, fontSize: 10, color: '#555' }}>
+              ⚠ Red cost = £0.00 cost_price on those charges — profit will be inflated. Check carrier rate card linkage.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top stats row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
         {[
