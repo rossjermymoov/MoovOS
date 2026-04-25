@@ -21,6 +21,7 @@ import {
   Package, Truck, Mail, MessageSquare, FileText, Send, ChevronDown,
   Globe, MapPin, RotateCcw, Zap, RefreshCw, ExternalLink,
   Tag, Building2, Phone, PackageCheck, PackageX, Store, ShieldAlert,
+  Sparkles,
 } from 'lucide-react';
 import { getCourierLogo } from '../../utils/courierLogos';
 
@@ -255,9 +256,37 @@ function EmailBubble({ email, courierCode }) {
 
 // ─── Reply composer ───────────────────────────────────────────
 function ReplyComposer({ queryId, direction, placeholder, onSent }) {
-  const [text, setText]   = useState('');
-  const [sending, setSend] = useState(false);
-  const qc                = useQueryClient();
+  const [text, setText]         = useState('');
+  const [sending, setSend]      = useState(false);
+  const [generating, setGen]    = useState(false);
+  const [hasDraft, setHasDraft] = useState(false);
+  const qc                      = useQueryClient();
+
+  const target    = direction.includes('courier') ? 'courier' : 'customer';
+  const accentCol = target === 'courier' ? C.amber : C.blue;
+
+  async function generateDraft() {
+    setGen(true);
+    try {
+      const r = await fetch(`/api/queries/${queryId}/generate-draft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      const d = await r.json();
+      // draft text can come back as body_text or text
+      const body = d.body_text || d.text || '';
+      setText(body);
+      setHasDraft(true);
+      // reload ticket so the AI DRAFT email badge shows
+      qc.invalidateQueries(['ticket', queryId]);
+    } catch (e) {
+      alert('Failed to generate draft: ' + e.message);
+    } finally {
+      setGen(false);
+    }
+  }
 
   async function send() {
     if (!text.trim()) return;
@@ -269,6 +298,7 @@ function ReplyComposer({ queryId, direction, placeholder, onSent }) {
         from_address: 'service@moovparcel.co.uk',
       });
       setText('');
+      setHasDraft(false);
       qc.invalidateQueries(['ticket', queryId]);
       onSent?.();
     } catch (e) {
@@ -280,30 +310,64 @@ function ReplyComposer({ queryId, direction, placeholder, onSent }) {
 
   return (
     <div style={{ padding: '12px 0 0', borderTop: `1px solid ${C.border}`, marginTop: 8 }}>
+
+      {/* Simulation banner */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10,
+        padding: '5px 10px', borderRadius: 5,
+        background: 'rgba(210,153,34,0.08)', border: `1px solid ${C.amber}22`,
+      }}>
+        <AlertTriangle size={10} color={C.amber} />
+        <span style={{ fontSize: 10, fontWeight: 700, color: C.amber, textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+          Simulation — no emails will be sent
+        </span>
+      </div>
+
       <textarea
         value={text}
         onChange={e => setText(e.target.value)}
-        placeholder={placeholder}
-        rows={4}
+        placeholder={generating ? 'Generating AI draft…' : placeholder}
+        rows={5}
+        disabled={generating}
         style={{
           width: '100%', boxSizing: 'border-box',
-          background: C.card, border: `1px solid ${C.border}`,
+          background: C.card,
+          border: `1px solid ${hasDraft ? `${accentCol}44` : C.border}`,
           borderRadius: 8, padding: '10px 14px', color: C.text,
           fontSize: 13, lineHeight: 1.6, resize: 'vertical', outline: 'none',
-          fontFamily: 'inherit',
+          fontFamily: 'inherit', opacity: generating ? 0.5 : 1,
         }}
-        onFocus={e => e.target.style.borderColor = `${C.blue}60`}
-        onBlur={e => e.target.style.borderColor = C.border}
+        onFocus={e => e.target.style.borderColor = `${accentCol}60`}
+        onBlur={e => e.target.style.borderColor = hasDraft ? `${accentCol}44` : C.border}
       />
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+        {/* AI draft button */}
+        <button
+          onClick={generateDraft}
+          disabled={generating}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: generating ? 'rgba(188,140,255,0.08)' : 'rgba(188,140,255,0.12)',
+            border: `1px solid rgba(188,140,255,0.3)`, borderRadius: 6,
+            color: generating ? C.muted : C.purple,
+            fontSize: 12, fontWeight: 600, padding: '7px 14px',
+            cursor: generating ? 'not-allowed' : 'pointer',
+          }}
+        >
+          <Sparkles size={12} />
+          {generating ? 'Generating…' : hasDraft ? 'Regenerate' : 'AI Draft'}
+        </button>
+
+        {/* Send button */}
         <button
           onClick={send}
           disabled={sending || !text.trim()}
           style={{
             display: 'flex', alignItems: 'center', gap: 7,
-            background: sending || !text.trim() ? 'rgba(88,166,255,0.1)' : 'rgba(88,166,255,0.18)',
-            border: `1px solid ${C.blue}50`, borderRadius: 7,
-            color: text.trim() ? C.blue : C.muted,
+            background: sending || !text.trim() ? `${accentCol}10` : `${accentCol}1A`,
+            border: `1px solid ${accentCol}50`, borderRadius: 7,
+            color: text.trim() ? accentCol : C.muted,
             fontSize: 13, fontWeight: 700, padding: '8px 20px',
             cursor: sending || !text.trim() ? 'not-allowed' : 'pointer',
           }}
