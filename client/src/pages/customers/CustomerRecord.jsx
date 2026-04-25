@@ -4,12 +4,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, AlertTriangle, Phone, Mail, MapPin, Building2,
   Users, MessageSquare, TrendingUp, DollarSign, Zap, Info,
-  Pencil, X, Check, ShieldCheck, Trash2, Plus, Tag,
+  Pencil, X, Check, ShieldCheck, Trash2,
 } from 'lucide-react';
 import { customersApi } from '../../api/customers';
 import { customerRateCardsApi } from '../../api/customerRateCards';
-import { surchargesApi } from '../../api/surcharges';
-import { getCourierLogo } from '../../utils/courierLogos';
 import { HealthBadge, AccountStatusBadge, TierBadge, CreditUtilisationBar } from '../../components/ui/StatusBadge';
 import CustomerPricingTab from './tabs/CustomerPricingTab';
 import { format } from 'date-fns';
@@ -56,16 +54,6 @@ function Row({ label, value, edit, editNode }) {
   );
 }
 
-// Simple read-only label/value row used in Financial tab
-function ERow({ label, value }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, minHeight: 24 }}>
-      <span style={{ fontSize: 12, color: '#AAAAAA', flexShrink: 0 }}>{label}</span>
-      <span style={{ fontSize: 12, color: '#fff', textAlign: 'right' }}>{value || '—'}</span>
-    </div>
-  );
-}
-
 function SectionTitle({ children }) {
   return <h3 style={{ fontSize: 11, fontWeight: 700, color: '#7B2FBE', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>{children}</h3>;
 }
@@ -79,498 +67,63 @@ function InfoCard({ title, children }) {
   );
 }
 
-// ─── Billing Aliases ─────────────────────────────────────────
-function BillingAliasesEditor({ customerId, aliases, onRefresh }) {
-  const [newAlias, setNewAlias] = useState('');
-
-  const addAlias = useMutation({
-    mutationFn: () => customersApi.addBillingAlias(customerId, newAlias),
-    onSuccess: () => { setNewAlias(''); onRefresh(); },
-  });
-
-  const removeAlias = useMutation({
-    mutationFn: (alias) => customersApi.removeBillingAlias(customerId, alias),
-    onSuccess: onRefresh,
-  });
-
-  return (
-    <div style={{ marginTop: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-        <Tag size={11} style={{ color: '#7B2FBE' }} />
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#AAAAAA', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          Billing Aliases
-        </span>
-      </div>
-      <div style={{ fontSize: 11, color: '#666', marginBottom: 8 }}>
-        Short names the billing engine will match as a last resort (e.g. "europa" for "Europa Worldwide Ltd")
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
-        {aliases.length === 0 && (
-          <span style={{ fontSize: 12, color: '#444', fontStyle: 'italic' }}>No aliases set</span>
-        )}
-        {aliases.map(alias => (
-          <span key={alias} style={{
-            display: 'inline-flex', alignItems: 'center', gap: 4,
-            padding: '3px 10px', borderRadius: 9999,
-            fontSize: 11, fontWeight: 700,
-            background: 'rgba(123,47,190,0.15)', color: '#B39DDB',
-            border: '1px solid rgba(123,47,190,0.3)',
-          }}>
-            {alias}
-            <button onClick={() => removeAlias.mutate(alias)}
-              style={{ background: 'none', border: 'none', color: '#B39DDB', cursor: 'pointer', padding: 0, lineHeight: 1 }}>
-              <X size={9} />
-            </button>
-          </span>
-        ))}
-      </div>
-      <div style={{ display: 'flex', gap: 5 }}>
-        <input
-          value={newAlias}
-          onChange={e => setNewAlias(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && newAlias.trim() && addAlias.mutate()}
-          placeholder="e.g. europa"
-          style={{
-            flex: 1, background: 'rgba(255,255,255,0.05)',
-            border: '1px solid rgba(123,47,190,0.3)', borderRadius: 6,
-            color: '#fff', padding: '4px 10px', fontSize: 12,
-          }}
-        />
-        <button onClick={() => newAlias.trim() && addAlias.mutate()}
-          disabled={addAlias.isPending || !newAlias.trim()}
-          style={{
-            background: 'rgba(123,47,190,0.2)', border: '1px solid rgba(123,47,190,0.35)',
-            borderRadius: 6, color: '#B39DDB', cursor: 'pointer',
-            fontSize: 11, fontWeight: 700, padding: '4px 12px',
-            display: 'inline-flex', alignItems: 'center', gap: 4,
-          }}>
-          <Plus size={10} /> Add
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Surcharge Overrides per customer ────────────────────────
-function SurchargeOverridesEditor({ customerId }) {
-  const qc = useQueryClient();
-  const [adding, setAdding] = useState(false);
-  const [newForm, setNewForm] = useState({ surcharge_id: '', override_value: '' });
-
-  const { data: overrides = [], isLoading: loadingOverrides } = useQuery({
-    queryKey: ['customer-surcharge-overrides', customerId],
-    queryFn: () => surchargesApi.getCustomerOverrides(customerId),
-    enabled: !!customerId,
-  });
-
-  // Fetch all surcharges so we can pick which one to override
-  const { data: allSurcharges = [] } = useQuery({
-    queryKey: ['surcharges'],
-    queryFn: () => surchargesApi.list(),
-  });
-
-  const upsert = useMutation({
-    mutationFn: () => surchargesApi.upsertCustomerOverride(customerId, {
-      surcharge_id: newForm.surcharge_id,
-      override_value: parseFloat(newForm.override_value),
-    }),
-    onSuccess: () => {
-      qc.invalidateQueries(['customer-surcharge-overrides', customerId]);
-      setAdding(false);
-      setNewForm({ surcharge_id: '', override_value: '' });
-    },
-  });
-
-  const remove = useMutation({
-    mutationFn: (id) => surchargesApi.deleteCustomerOverride(customerId, id),
-    onSuccess: () => qc.invalidateQueries(['customer-surcharge-overrides', customerId]),
-  });
-
-  // Surcharges not yet overridden
-  const overriddenIds = overrides.map(o => o.surcharge_id);
-  const available = allSurcharges.filter(s => !overriddenIds.includes(s.id));
-
-  const selectedSurcharge = allSurcharges.find(s => s.id === newForm.surcharge_id);
-
-  return (
-    <InfoCard title="Surcharge Overrides">
-      {loadingOverrides && <span style={{ fontSize: 12, color: '#888' }}>Loading…</span>}
-
-      {overrides.length === 0 && !loadingOverrides && (
-        <p style={{ fontSize: 12, color: '#666', fontStyle: 'italic', margin: '0 0 8px' }}>
-          No overrides — all standard surcharge rates apply.
-        </p>
-      )}
-
-      {overrides.map(o => {
-        const isPercent = o.calc_type === 'percentage';
-        return (
-          <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-            <div style={{ flex: 1 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{o.surcharge_name}</span>
-              <span style={{ fontSize: 11, color: '#888', marginLeft: 6 }}>{o.courier_name} · {o.code}</span>
-            </div>
-            <span style={{ fontSize: 11, color: '#888' }}>
-              Standard: {isPercent ? `${parseFloat(o.default_value).toFixed(2)}%` : `£${parseFloat(o.default_value).toFixed(2)}`}
-            </span>
-            <span style={{
-              fontSize: 12, fontWeight: 700,
-              color: parseFloat(o.override_value) > parseFloat(o.default_value) ? '#F59E0B' : '#00C853',
-            }}>
-              → {isPercent ? `${parseFloat(o.override_value).toFixed(2)}%` : `£${parseFloat(o.override_value).toFixed(2)}`}
-            </span>
-            <button
-              onClick={() => remove.mutate(o.id)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#E91E8C', padding: 4 }}
-              title="Remove override"
-            >
-              <X size={13} />
-            </button>
-          </div>
-        );
-      })}
-
-      {adding ? (
-        <div style={{ background: 'rgba(0,200,83,0.05)', border: '1px solid rgba(0,200,83,0.2)', borderRadius: 8, padding: 12, marginTop: 8 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 8, marginBottom: 8 }}>
-            <div>
-              <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 3 }}>Surcharge</label>
-              <select
-                value={newForm.surcharge_id}
-                onChange={e => setNewForm(f => ({ ...f, surcharge_id: e.target.value }))}
-                style={{ background: 'rgba(30,30,40,0.95)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, color: '#fff', fontSize: 13, padding: '6px 10px', width: '100%' }}
-              >
-                <option value="">— Select surcharge —</option>
-                {available.map(s => (
-                  <option key={s.id} value={s.id}>{s.courier_name} · {s.code} — {s.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 3 }}>
-                Override {selectedSurcharge?.calc_type === 'percentage' ? '(%)' : '(£)'}
-              </label>
-              <input
-                type="number" step="0.01"
-                value={newForm.override_value}
-                onChange={e => setNewForm(f => ({ ...f, override_value: e.target.value }))}
-                placeholder={selectedSurcharge?.calc_type === 'percentage' ? '12.00' : '5.50'}
-                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, color: '#fff', fontSize: 13, padding: '6px 10px', width: '100%', boxSizing: 'border-box' }}
-              />
-            </div>
-          </div>
-          {selectedSurcharge && (
-            <p style={{ fontSize: 11, color: '#888', margin: '0 0 8px' }}>
-              Standard: {selectedSurcharge.calc_type === 'percentage'
-                ? `${parseFloat(selectedSurcharge.default_value).toFixed(2)}%${selectedSurcharge.calc_base === 'base_rate' ? ' of base rate' : ' of total'}`
-                : `£${parseFloat(selectedSurcharge.default_value).toFixed(2)} flat`}
-            </p>
-          )}
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button onClick={() => setAdding(false)} style={{ background: 'none', border: 'none', color: '#AAAAAA', cursor: 'pointer', fontSize: 12 }}>Cancel</button>
-            <button
-              onClick={() => upsert.mutate()}
-              disabled={!newForm.surcharge_id || !newForm.override_value || upsert.isPending}
-              style={{ background: '#00C853', border: 'none', borderRadius: 6, color: '#fff', fontSize: 12, fontWeight: 700, padding: '6px 14px', cursor: 'pointer' }}
-            >
-              <Check size={12} style={{ marginRight: 4 }} /> Save override
-            </button>
-          </div>
-        </div>
-      ) : (
-        <button
-          onClick={() => setAdding(true)}
-          style={{ background: 'none', border: '1px dashed rgba(255,255,255,0.15)', borderRadius: 6, color: '#AAAAAA', cursor: 'pointer', fontSize: 12, padding: '6px 14px', marginTop: 4 }}
-        >
-          <Plus size={11} style={{ marginRight: 4 }} /> Add override
-        </button>
-      )}
-    </InfoCard>
-  );
-}
-
-// ─── Active Carrier Panel ────────────────────────────────────
-// Rate card picker + fuel groups table for one active carrier.
-function ActiveCarrierPanel({ carrier, customerId, onChangeCard, onSetFuel }) {
-  const [selectedCardId, setSelectedCardId] = useState(carrier.active_card_id);
-  const [fuelEdits, setFuelEdits] = useState({});
-
-  // Keep picker in sync if parent data refreshes
-  useEffect(() => { setSelectedCardId(carrier.active_card_id); }, [carrier.active_card_id]);
-
-  const hasCardChange = Number(selectedCardId) !== Number(carrier.active_card_id);
-
-  const thStyle = { fontSize: 10, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '4px 8px', textAlign: 'right' };
-  const tdStyle = { fontSize: 12, color: '#AAAAAA', padding: '5px 8px', verticalAlign: 'middle' };
-
-  return (
-    <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.07)' }}>
-
-      {/* ── Carrier name + rate card picker ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: '#fff', minWidth: 60 }}>
-          {carrier.courier_name}
-        </span>
-        <select
-          value={selectedCardId ?? ''}
-          onChange={e => setSelectedCardId(e.target.value)}
-          style={{
-            flex: 1, background: '#0D0E2A', border: '1px solid rgba(255,255,255,0.12)',
-            borderRadius: 6, color: '#AAAAAA', fontSize: 11, padding: '4px 8px', outline: 'none',
-          }}
-        >
-          {carrier.available_cards.map(card => (
-            <option key={card.id} value={card.id}>
-              {card.name}{card.is_master ? ' (master)' : ''}
-            </option>
-          ))}
-        </select>
-        {hasCardChange && (
-          <button
-            type="button"
-            onClick={() => onChangeCard(selectedCardId)}
-            style={{
-              background: '#00C853', border: 'none', borderRadius: 6,
-              color: '#000', fontSize: 11, fontWeight: 700, padding: '4px 12px', cursor: 'pointer',
-              display: 'inline-flex', alignItems: 'center', gap: 4,
-            }}
-          >
-            <Check size={10} /> Confirm
-          </button>
-        )}
-      </div>
-
-      {/* ── Fuel groups table ── */}
-      {carrier.fuel_groups.length > 0 && (
-        <div>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#F59E0B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>
-            ⛽ Fuel
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-                <th style={{ ...thStyle, textAlign: 'left' }}>Group</th>
-                <th style={thStyle}>Our Cost</th>
-                <th style={thStyle}>Standard Sell</th>
-                <th style={{ ...thStyle, textAlign: 'left', paddingLeft: 4 }}>Customer %</th>
-              </tr>
-            </thead>
-            <tbody>
-              {carrier.fuel_groups.map(fg => {
-                const editVal = fuelEdits[fg.id];
-                // Default display: customer override → standard sell → blank
-                const currentSaved = fg.customer_pct != null ? String(fg.customer_pct) : '';
-                const displayVal   = editVal !== undefined ? editVal : currentSaved;
-                const defaultVal   = fg.standard_sell_pct != null ? String(fg.standard_sell_pct) : '';
-                const savedNum     = fg.customer_pct != null ? parseFloat(fg.customer_pct) : null;
-                const editNum      = editVal !== undefined && editVal !== '' ? parseFloat(editVal) : null;
-                const isDirty      = editVal !== undefined && editNum !== savedNum;
-                const isCustom     = fg.customer_pct != null;
-
-                return (
-                  <tr key={fg.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                    <td style={{ ...tdStyle, textAlign: 'left', color: '#ccc' }}>{fg.name}</td>
-                    <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'monospace', color: '#888' }}>
-                      {parseFloat(fg.cost_pct).toFixed(2)}%
-                    </td>
-                    <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'monospace', color: '#666' }}>
-                      {fg.standard_sell_pct != null ? `${parseFloat(fg.standard_sell_pct).toFixed(2)}%` : '—'}
-                    </td>
-                    <td style={{ ...tdStyle, paddingLeft: 4 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder={defaultVal || '0.00'}
-                          value={displayVal}
-                          onChange={e => setFuelEdits(prev => ({ ...prev, [fg.id]: e.target.value }))}
-                          style={{
-                            width: 58, background: 'rgba(255,255,255,0.06)',
-                            border: isDirty ? '1px solid #00C853' : isCustom ? '1px solid rgba(0,200,83,0.35)' : '1px solid rgba(255,255,255,0.1)',
-                            borderRadius: 5, color: isCustom ? '#00C853' : '#888',
-                            fontSize: 11, padding: '3px 6px', outline: 'none', fontFamily: 'monospace',
-                          }}
-                        />
-                        <span style={{ fontSize: 11, color: '#555' }}>%</span>
-                        {isDirty && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onSetFuel(fg.id, parseFloat(editVal));
-                              setFuelEdits(prev => { const n = { ...prev }; delete n[fg.id]; return n; });
-                            }}
-                            style={{
-                              background: '#00C853', border: 'none', borderRadius: 4,
-                              color: '#000', fontSize: 10, fontWeight: 700, padding: '3px 8px', cursor: 'pointer',
-                            }}
-                          >
-                            ✓
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <div style={{ fontSize: 10, color: '#444', fontStyle: 'italic', marginTop: 5 }}>
-            Green = custom override · grey = standard sell default
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Customer Pricing Overview ────────────────────────────────
-// Carrier logo grid (dim = inactive, bright = active) + per-carrier
-// rate card picker and fuel group pricing.
-function CustomerPricingOverview({ customerId }) {
+// ─── Rate Card Assignments per carrier ───────────────────────
+function CustomerRateCardAssignments({ customerId }) {
   const qc = useQueryClient();
 
   const { data: carriers = [], isLoading } = useQuery({
-    queryKey: ['customer-carrier-links', customerId],
-    queryFn:  () => fetch(`/api/customer-carrier-links/${customerId}`).then(r => r.json()),
-    enabled:  !!customerId,
+    queryKey: ['customer-rate-card-assignments', customerId],
+    queryFn: () => customerRateCardsApi.forCustomer(customerId),
+    enabled: !!customerId,
   });
 
-  const activate = useMutation({
-    mutationFn: (courierId) =>
-      fetch(`/api/customer-carrier-links/${customerId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ courier_id: courierId }),
-      }).then(r => r.json()),
-    onSuccess: () => qc.invalidateQueries(['customer-carrier-links', customerId]),
-  });
-
-  const deactivate = useMutation({
-    mutationFn: (courierId) =>
-      fetch(`/api/customer-carrier-links/${customerId}/${courierId}`, { method: 'DELETE' }).then(r => r.json()),
-    onSuccess: () => qc.invalidateQueries(['customer-carrier-links', customerId]),
-  });
-
-  const changeCard = useMutation({
-    mutationFn: ({ courierId, cardId }) =>
-      fetch(`/api/customer-carrier-links/${customerId}/${courierId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ carrier_rate_card_id: parseInt(cardId) }),
-      }).then(r => r.json()),
-    onSuccess: () => qc.invalidateQueries(['customer-carrier-links', customerId]),
-  });
-
-  const setFuel = useMutation({
-    mutationFn: ({ fuelGroupId, sell_pct }) =>
-      fetch(`/api/customer-carrier-links/${customerId}/fuel/${fuelGroupId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sell_pct }),
-      }).then(r => r.json()),
-    onSuccess: () => qc.invalidateQueries(['customer-carrier-links', customerId]),
+  const setAssignment = useMutation({
+    mutationFn: ({ courierId, rateCardId }) =>
+      rateCardId === 'master'
+        ? customerRateCardsApi.clearAssignment(customerId, courierId)
+        : customerRateCardsApi.setAssignment(customerId, courierId, rateCardId),
+    onSuccess: () => qc.invalidateQueries(['customer-rate-card-assignments', customerId]),
   });
 
   if (isLoading) return null;
-
-  const activeCarriers = carriers.filter(c => c.active);
+  if (!carriers.length) return (
+    <InfoCard title="Rate Cards">
+      <span style={{ fontSize: 12, color: '#555', fontStyle: 'italic' }}>No rate cards configured yet — go to Carriers to create them.</span>
+    </InfoCard>
+  );
 
   return (
-    <InfoCard title="Carriers">
-
-      {/* ── Carrier toggle grid ── */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: activeCarriers.length ? 0 : 4 }}>
-        {carriers.length === 0 && (
-          <span style={{ fontSize: 12, color: '#555', fontStyle: 'italic' }}>No carriers configured — set up carriers first.</span>
-        )}
-        {carriers.map(carrier => {
-          const busy = activate.isPending || deactivate.isPending;
-          const logo = getCourierLogo(carrier.courier_code) || getCourierLogo(carrier.courier_name);
-          const letter = (carrier.courier_name || carrier.courier_code || '?').charAt(0).toUpperCase();
-
-          return (
-            <button
-              key={carrier.courier_id}
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                if (carrier.active) deactivate.mutate(carrier.courier_id);
-                else activate.mutate(carrier.courier_id);
-              }}
-              title={carrier.active ? `Deactivate ${carrier.courier_name}` : `Activate ${carrier.courier_name}`}
-              style={{
-                position: 'relative',
-                width: 80, height: 52,
-                padding: 0, borderRadius: 10,
-                cursor: busy ? 'wait' : 'pointer',
-                border: carrier.active ? '2px solid #00C853' : '2px solid rgba(255,255,255,0.08)',
-                background: '#fff',
-                overflow: 'hidden',
-                transition: 'border-color 0.15s, box-shadow 0.15s',
-                boxShadow: carrier.active ? '0 0 0 3px rgba(0,200,83,0.18)' : 'none',
-                filter: carrier.active ? 'none' : 'grayscale(100%) opacity(0.35)',
-                flexShrink: 0,
-              }}
+    <InfoCard title="Rate Cards">
+      {carriers.map(row => {
+        const currentId = row.assigned_card_id ?? 'master';
+        return (
+          <div key={row.courier_id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, minHeight:26 }}>
+            <span style={{ fontSize:12, color:'#AAAAAA', flexShrink:0, whiteSpace:'nowrap', minWidth:110 }}>
+              {row.courier_name}
+            </span>
+            <select
+              value={String(currentId)}
+              onChange={e => setAssignment.mutate({ courierId: row.courier_id, rateCardId: e.target.value === 'master' ? 'master' : parseInt(e.target.value) })}
+              style={inp({ width: 180, flexShrink: 0, fontSize: 11 })}
             >
-              {logo ? (
-                <img
-                  src={logo}
-                  alt={carrier.courier_name}
-                  style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', padding: '6px 4px', boxSizing: 'border-box' }}
-                  onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
-                />
-              ) : null}
-              {/* Fallback letter badge — shown if no logo or image fails to load */}
-              <div style={{
-                display: logo ? 'none' : 'flex',
-                width: '100%', height: '100%',
-                alignItems: 'center', justifyContent: 'center',
-                background: '#1A1D35',
-                fontSize: 18, fontWeight: 700, color: '#7B2FBE',
-              }}>
-                {letter}
-              </div>
-              {/* Active tick */}
-              {carrier.active && (
-                <div style={{
-                  position: 'absolute', top: 3, right: 3,
-                  width: 14, height: 14, borderRadius: '50%',
-                  background: '#00C853',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <Check size={8} strokeWidth={3} color="#000" />
-                </div>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── Per-active-carrier panels ── */}
-      {activeCarriers.map(carrier => (
-        <ActiveCarrierPanel
-          key={carrier.courier_id}
-          carrier={carrier}
-          customerId={customerId}
-          onChangeCard={(cardId) => changeCard.mutate({ courierId: carrier.courier_id, cardId })}
-          onSetFuel={(fuelGroupId, sell_pct) => setFuel.mutate({ fuelGroupId, sell_pct })}
-        />
-      ))}
-
-      {activeCarriers.length === 0 && carriers.length > 0 && (
-        <p style={{ fontSize: 11, color: '#444', fontStyle: 'italic', marginTop: 10 }}>
-          Click a carrier above to activate it for this customer.
-        </p>
-      )}
-
+              {(row.available_cards || []).map(card => (
+                <option key={card.id} value={card.id}>
+                  {card.name}{card.is_master ? ' (Master)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        );
+      })}
+      <p style={{ fontSize:11, color:'#555', marginTop:6, fontStyle:'italic' }}>
+        Master is the default rate card. Select an alternative to use custom pricing for this customer.
+      </p>
     </InfoCard>
   );
 }
 
 // ─── Overview Tab ────────────────────────────────────────────
 function OverviewTab({ c, onSaved, onDeleteRequest }) {
-  const qc = useQueryClient();
   const [edit, setEdit] = useState(false);
   const [form, setForm] = useState({});
 
@@ -596,9 +149,8 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
       credit_limit:       c.credit_limit ?? 0,
       bond_amount_held:   c.bond_amount_held ?? 0,
       tier:               c.tier || 'bronze',
-      manual_billing:        c.manual_billing ?? false,
-      parcel_pricing_mode:   c.parcel_pricing_mode || 'sub',
-      dc_customer_id:        c.dc_customer_id || '',
+      manual_billing:     c.manual_billing ?? false,
+      dc_customer_id:     c.dc_customer_id || '',
     });
     setEdit(true);
   }
@@ -700,7 +252,8 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
             </InfoCard>
           )}
 
-          <InfoCard title="API Integration">
+          {(c.dc_customer_id || edit) && (
+            <InfoCard title="API Integration">
               <Row
                 label="DC Customer ID"
                 value={c.dc_customer_id}
@@ -720,8 +273,8 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
                   Billing will fall back to this if no standard account number is matched.
                 </div>
               )}
-              <BillingAliasesEditor customerId={c.id} aliases={c.billing_aliases || []} onRefresh={() => qc.invalidateQueries(['customer', c.id])} />
-          </InfoCard>
+            </InfoCard>
+          )}
 
         </div>
 
@@ -776,34 +329,6 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
               } />
             <Row label="Account Status"    value={<AccountStatusBadge status={c.account_status} />} />
             <Row label="Health Score"      value={<HealthBadge score={c.health_score} />} />
-            <Row
-              label="Multi-Box Pricing"
-              value={
-                <span style={{ fontSize: 12, color: c.parcel_pricing_mode === 'multi' ? '#00BCD4' : '#888', fontWeight: 600 }}>
-                  {c.parcel_pricing_mode === 'multi' ? '● Multi-parcel (all at sub rate)' : '● Sub-parcel (first higher, rest lower)'}
-                </span>
-              }
-              edit={edit}
-              editNode={
-                <div style={{ display: 'inline-flex', background: 'rgba(255,255,255,0.05)', borderRadius: 7, padding: 3, gap: 2 }}>
-                  {[['sub', 'Sub-parcel'], ['multi', 'Multi-parcel']].map(([val, label]) => (
-                    <button
-                      key={val}
-                      type="button"
-                      onClick={() => set('parcel_pricing_mode', val)}
-                      style={{
-                        padding: '4px 12px', borderRadius: 5, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700,
-                        background: form.parcel_pricing_mode === val ? (val === 'multi' ? '#00BCD4' : '#7B2FBE') : 'transparent',
-                        color: form.parcel_pricing_mode === val ? '#fff' : '#666',
-                        transition: 'all 0.12s',
-                      }}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              }
-            />
           </InfoCard>
 
           <InfoCard title="Team">
@@ -813,9 +338,7 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
             <Row label="Customer Since"    value={c.date_onboarded ? format(new Date(c.date_onboarded), 'dd MMM yyyy') : '—'} />
           </InfoCard>
 
-          <CustomerPricingOverview customerId={c.id} />
-
-          <SurchargeOverridesEditor customerId={c.id} />
+          <CustomerRateCardAssignments customerId={c.id} />
 
           {c.health_score_summary && (
             <InfoCard title="Health Score Detail">
@@ -986,14 +509,138 @@ function FinancialTab({ c, creditPct }) {
   );
 }
 
-function CommsPlaceholder() {
+// ─── Direction colours / labels ──────────────────────────────────────────────
+const DIR_CFG = {
+  inbound_customer:  { label: 'From Customer',  color: '#2979FF', bg: 'rgba(41,121,255,0.10)' },
+  outbound_customer: { label: 'To Customer',    color: '#00C853', bg: 'rgba(0,200,83,0.10)'   },
+  inbound_courier:   { label: 'From Courier',   color: '#FFC107', bg: 'rgba(255,193,7,0.10)'  },
+  outbound_courier:  { label: 'To Courier',     color: '#FF9800', bg: 'rgba(255,152,0,0.10)'  },
+  internal_note:     { label: 'Internal Note',  color: '#9E9E9E', bg: 'rgba(158,158,158,0.10)'},
+  inbound:           { label: 'Inbound',        color: '#2979FF', bg: 'rgba(41,121,255,0.10)' },
+  outbound:          { label: 'Outbound',       color: '#00C853', bg: 'rgba(0,200,83,0.10)'   },
+};
+
+function CustomerCommsTab({ customerId }) {
+  const [items, setItems]       = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState(null);
+  const [expanded, setExpanded] = useState(null);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/customers/${customerId}/correspondence`)
+      .then(r => r.ok ? r.json() : Promise.reject(r.statusText))
+      .then(data => { setItems(data); setError(null); })
+      .catch(e => setError(String(e)))
+      .finally(() => setLoading(false));
+  }, [customerId]);
+
+  if (loading) return (
+    <div className="moov-card" style={{ padding: 32, textAlign: 'center', color: '#777' }}>
+      <MessageSquare size={24} style={{ margin: '0 auto 10px', display: 'block', opacity: 0.4 }} />
+      Loading correspondence…
+    </div>
+  );
+
+  if (error) return (
+    <div className="moov-card" style={{ padding: 24, color: '#E53935' }}>
+      Could not load correspondence: {error}
+    </div>
+  );
+
+  if (!items.length) return (
+    <div className="moov-card" style={{ padding: 32, textAlign: 'center', color: '#777' }}>
+      <MessageSquare size={32} style={{ margin: '0 auto 12px', display: 'block', opacity: 0.3 }} />
+      No correspondence yet.
+    </div>
+  );
+
   return (
-    <div className="moov-card" style={{ padding: 32, textAlign: 'center' }}>
-      <MessageSquare size={32} style={{ color: '#AAAAAA', margin: '0 auto 12px' }} />
-      <p style={{ color: '#AAAAAA', fontSize: 14 }}>
-        Communications hub — email, WhatsApp, and tickets will appear here.<br />
-        <span style={{ fontSize: 12 }}>WhatsApp Business API + Freshdesk integration required.</span>
-      </p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {items.map(item => {
+        const dir    = DIR_CFG[item.direction] || { label: item.direction || '—', color: '#9E9E9E', bg: 'rgba(158,158,158,0.08)' };
+        const isOpen = expanded === item.id;
+        const preview = (item.body_text || '').substring(0, 160);
+        const date    = item.created_at
+          ? new Date(item.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+          : '—';
+
+        return (
+          <div key={item.id}
+            className="moov-card"
+            style={{ padding: 0, overflow: 'hidden', cursor: 'pointer',
+              border: `1px solid rgba(255,255,255,0.06)`,
+              borderLeft: `3px solid ${dir.color}` }}
+            onClick={() => setExpanded(isOpen ? null : item.id)}
+          >
+            {/* Header row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+              background: isOpen ? 'rgba(255,255,255,0.03)' : 'transparent' }}>
+
+              {/* Direction badge */}
+              <span style={{ fontSize: 10, fontWeight: 700, color: dir.color,
+                background: dir.bg, padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                {dir.label}
+              </span>
+
+              {/* Source / query context */}
+              {item.source === 'query_email' && item.consignment_number && (
+                <span style={{ fontSize: 10, color: '#888', background: 'rgba(255,255,255,0.05)',
+                  padding: '2px 7px', borderRadius: 3, fontFamily: 'monospace', flexShrink: 0 }}>
+                  {item.consignment_number}
+                </span>
+              )}
+              {item.source === 'query_email' && item.query_type && (
+                <span style={{ fontSize: 10, color: '#777', flexShrink: 0, textTransform: 'capitalize' }}>
+                  {item.query_type.replace(/_/g,' ')}
+                </span>
+              )}
+
+              {/* Subject */}
+              <span style={{ flex: 1, fontSize: 13, color: '#DDD', fontWeight: 600,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {item.subject || '(no subject)'}
+              </span>
+
+              {/* Date */}
+              <span style={{ fontSize: 11, color: '#666', flexShrink: 0 }}>{date}</span>
+            </div>
+
+            {/* Expanded body */}
+            {isOpen && (
+              <div style={{ padding: '0 14px 14px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                {item.from_address && (
+                  <div style={{ fontSize: 11, color: '#666', padding: '8px 0 6px' }}>
+                    From: <span style={{ color: '#999' }}>{item.from_address}</span>
+                    {item.to_address && <> · To: <span style={{ color: '#999' }}>{item.to_address}</span></>}
+                  </div>
+                )}
+                <pre style={{ margin: 0, fontSize: 12, color: '#CCC', lineHeight: 1.6,
+                  whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit' }}>
+                  {item.body_text || '(no body)'}
+                </pre>
+                {item.source === 'query_email' && item.query_id && (
+                  <div style={{ marginTop: 10 }}>
+                    <a href={`/queries?id=${item.query_id}`}
+                      style={{ fontSize: 11, color: '#2979FF', textDecoration: 'none' }}
+                      onClick={e => e.stopPropagation()}>
+                      Open in Queries inbox →
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Collapsed preview */}
+            {!isOpen && item.body_text && (
+              <div style={{ padding: '0 14px 10px', fontSize: 11, color: '#555',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {preview}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1187,7 +834,7 @@ export default function CustomerRecord() {
       {activeTab === 'contacts'  && <ContactsTab contacts={contacts} />}
       {activeTab === 'volume'    && <VolumeTab snapshots={volume_snapshots} />}
       {activeTab === 'financial' && <FinancialTab c={c} creditPct={creditPct} />}
-      {activeTab === 'comms'     && <CommsPlaceholder />}
+      {activeTab === 'comms'     && <CustomerCommsTab customerId={id} />}
       {activeTab === 'pricing'   && (
         <CustomerPricingTab customer={c}
           onCustomerUpdate={(updated) => queryClient.setQueryData(['customer', id], d => ({ ...d, customer: { ...d.customer, ...updated } }))}

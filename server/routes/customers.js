@@ -213,7 +213,6 @@ router.patch('/:id', async (req, res, next) => {
       'tier', 'account_status', 'payment_terms_days', 'billing_cycle', 'credit_limit', 'bond_amount_held',
       'accounts_email', 'eori_number', 'ioss_number',
       'salesperson_id', 'account_manager_id', 'onboarding_person_id',
-      'billing_aliases', 'dc_customer_id', 'account_number', 'manual_billing', 'parcel_pricing_mode',
     ];
     const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));
     if (!updates.length) return res.status(400).json({ error: 'No valid fields to update' });
@@ -227,52 +226,6 @@ router.patch('/:id', async (req, res, next) => {
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Customer not found' });
     res.json(result.rows[0]);
-  } catch (err) { next(err); }
-});
-
-// ─────────────────────────────────────────────────────────────
-// POST /api/customers/:id/billing-aliases  — add a billing alias
-// DELETE /api/customers/:id/billing-aliases/:alias  — remove an alias
-// ─────────────────────────────────────────────────────────────
-router.post('/:id/billing-aliases', async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const { alias } = req.body;
-    if (!alias || !alias.trim()) return res.status(400).json({ error: 'alias is required' });
-    const clean = alias.trim(); // store exactly as typed
-    const result = await query(
-      `UPDATE customers
-         SET billing_aliases = array_append(
-               array_remove(billing_aliases, $2::text),
-               $2::text
-             ),
-             updated_at = NOW()
-       WHERE id = $1
-       RETURNING billing_aliases`,
-      [id, clean]
-    );
-    if (!result.rows.length) return res.status(404).json({ error: 'Customer not found' });
-    res.json({ billing_aliases: result.rows[0].billing_aliases });
-  } catch (err) { next(err); }
-});
-
-router.delete('/:id/billing-aliases/:alias', async (req, res, next) => {
-  try {
-    const { id, alias } = req.params;
-    // Remove case-insensitively: filter out any entry that matches ignoring case
-    const result = await query(
-      `UPDATE customers
-         SET billing_aliases = ARRAY(
-               SELECT a FROM unnest(billing_aliases) a
-               WHERE LOWER(a) != LOWER($2)
-             ),
-             updated_at = NOW()
-       WHERE id = $1
-       RETURNING billing_aliases`,
-      [id, decodeURIComponent(alias)]
-    );
-    if (!result.rows.length) return res.status(404).json({ error: 'Customer not found' });
-    res.json({ billing_aliases: result.rows[0].billing_aliases });
   } catch (err) { next(err); }
 });
 
@@ -485,6 +438,68 @@ router.get('/:id/communications', async (req, res, next) => {
     values.push(limit, offset);
 
     const result = await query(sql, values);
+    res.json(result.rows);
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────
+// GET /api/customers/:id/correspondence
+// Unified correspondence: query emails + customer_communications
+// Most recent first, suitable for the Communications tab on the customer record.
+// ─────────────────────────────────────────────────────────────
+
+router.get('/:id/correspondence', async (req, res, next) => {
+  try {
+    const { limit = 100, offset = 0 } = req.query;
+    const { id } = req.params;
+
+    const result = await query(`
+      SELECT
+        'query_email'                  AS source,
+        qe.id,
+        qe.direction::text             AS direction,
+        qe.subject,
+        qe.body_text,
+        qe.from_address,
+        qe.to_address,
+        q.id                           AS query_id,
+        q.consignment_number,
+        q.query_type::text             AS query_type,
+        q.status::text                 AS query_status,
+        q.courier_name,
+        q.courier_code,
+        NULL::text                     AS channel,
+        qe.created_at
+      FROM query_emails qe
+      JOIN queries q ON q.id = qe.query_id
+      WHERE q.customer_id = $1
+        AND (qe.is_ai_draft = false OR qe.sent_at IS NOT NULL)
+
+      UNION ALL
+
+      SELECT
+        'communication'                AS source,
+        cc.id,
+        cc.direction::text             AS direction,
+        cc.subject,
+        cc.body                        AS body_text,
+        cc.from_address,
+        NULL::text                     AS to_address,
+        NULL::uuid                     AS query_id,
+        NULL::text                     AS consignment_number,
+        NULL::text                     AS query_type,
+        NULL::text                     AS query_status,
+        NULL::text                     AS courier_name,
+        NULL::text                     AS courier_code,
+        cc.channel::text               AS channel,
+        cc.created_at
+      FROM customer_communications cc
+      WHERE cc.customer_id = $1
+
+      ORDER BY created_at DESC
+      LIMIT $2 OFFSET $3
+    `, [id, parseInt(limit), parseInt(offset)]);
+
     res.json(result.rows);
   } catch (err) { next(err); }
 });

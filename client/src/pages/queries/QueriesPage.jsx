@@ -229,6 +229,41 @@ function KpiCard({ label, value, color, sub, onClick, active, icon: Icon, warn }
   );
 }
 
+// ─── SLA timer helpers ────────────────────────────────────────────────────────
+
+function formatSlaTime(mins) {
+  if (mins === null || mins === undefined) return null;
+  const abs = Math.abs(mins);
+  const breached = mins < 0;
+  let label;
+  if (abs < 60)        label = `${Math.round(abs)}m`;
+  else if (abs < 1440) label = `${Math.floor(abs / 60)}h ${Math.round(abs % 60)}m`;
+  else                 label = `${Math.floor(abs / 1440)}d ${Math.floor((abs % 1440) / 60)}h`;
+  return { label, breached };
+}
+
+function SlaChip({ mins, policyName }) {
+  if (mins === null || mins === undefined) return null;
+  const info = formatSlaTime(mins);
+  if (!info) return null;
+
+  // Colour bands: green > 25% time unused, amber < 25% or < 4h, red breached
+  const color = info.breached ? C.red : mins < 240 ? C.amber : C.green;
+  const bg    = info.breached ? C.redDim : mins < 240 ? C.amberDim : 'rgba(0,200,83,0.1)';
+
+  return (
+    <span title={policyName || 'SLA'} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 3,
+      fontSize: 9, fontWeight: 700, color,
+      background: bg, padding: '1px 6px',
+      borderRadius: 3, border: `1px solid ${color}33`,
+      whiteSpace: 'nowrap',
+    }}>
+      ⏱ {info.breached ? '−' : ''}{info.label}
+    </span>
+  );
+}
+
 // ─── Inbox list row ───────────────────────────────────────────────────────────
 
 const CLAIM_STATUSES = new Set(['claim_raised','awaiting_claim_docs','claim_submitted','resolved_claim_approved','resolved_claim_rejected']);
@@ -237,8 +272,12 @@ function InboxRow({ q, selected, onClick }) {
   const hasAttention   = q.requires_attention;
   const hasSlaBreached = q.sla_breached;
   const isClaim        = CLAIM_STATUSES.has(q.status);
+  const unread         = parseInt(q.unread_emails) || 0;
+  const hasNewReply    = q.has_new_reply;
 
-  const accentColor = hasAttention   ? C.red
+  // Left accent: attention > new reply > sla breach > selected > neutral
+  const accentColor = hasAttention  ? C.red
+                    : hasNewReply   ? C.blue
                     : hasSlaBreached ? C.amber
                     : 'transparent';
 
@@ -251,35 +290,61 @@ function InboxRow({ q, selected, onClick }) {
         cursor: 'pointer',
         borderBottom: `1px solid ${C.border}`,
         borderLeft: `3px solid ${selected ? C.blue : accentColor}`,
-        background: selected ? C.selected : 'transparent',
+        background: selected
+          ? C.selected
+          : hasNewReply && !selected
+            ? 'rgba(41,121,255,0.04)'
+            : 'transparent',
         transition: 'background 0.1s',
       }}
       onMouseEnter={e => { if (!selected) e.currentTarget.style.background = C.hover; }}
-      onMouseLeave={e => { if (!selected) e.currentTarget.style.background = 'transparent'; }}
+      onMouseLeave={e => {
+        if (!selected) e.currentTarget.style.background =
+          hasNewReply ? 'rgba(41,121,255,0.04)' : 'transparent';
+      }}
     >
-      {/* Customer name — large and prominent */}
+      {/* Row 1: customer name + timestamp + unread badge */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span style={{
-          flex: 1, fontSize: 15, fontWeight: 700, color: C.text,
+          flex: 1, fontSize: 15,
+          fontWeight: hasNewReply ? 800 : 700,
+          color: hasNewReply ? C.text : C.sub,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
           {q.customer_name || 'Unknown Customer'}
         </span>
-        <span style={{ fontSize: 10, color: C.muted, flexShrink: 0 }}>
+        <span style={{
+          fontSize: 10, flexShrink: 0,
+          color: hasNewReply ? C.blue : C.muted,
+          fontWeight: hasNewReply ? 700 : 400,
+        }}>
           {timeAgo(q.latest_email_at || q.created_at)}
         </span>
+        {/* Unread count badge */}
+        {unread > 0 && (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            minWidth: 18, height: 18, borderRadius: 9999,
+            background: C.blue, color: '#fff',
+            fontSize: 10, fontWeight: 800, padding: '0 5px', flexShrink: 0,
+          }}>
+            {unread}
+          </span>
+        )}
       </div>
 
-      {/* Subject */}
+      {/* Row 2: subject */}
       <div style={{
-        fontSize: 12, color: C.sub,
+        fontSize: 12,
+        color: hasNewReply ? C.text : C.sub,
+        fontWeight: hasNewReply ? 600 : 400,
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
       }}>
         {q.subject || q.consignment_number || 'No subject'}
       </div>
 
-      {/* Status badge + attention/SLA flag + query/claim icon */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      {/* Row 3: status + attention + SLA + type icon */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'nowrap' }}>
         <StatusBadge status={q.status} small />
         {hasAttention && (
           <span style={{ fontSize: 9, fontWeight: 700, color: C.red, background: C.redDim,
@@ -287,14 +352,18 @@ function InboxRow({ q, selected, onClick }) {
             ⚠ ATTENTION
           </span>
         )}
-        {!hasAttention && hasSlaBreached && (
-          <span style={{ fontSize: 9, fontWeight: 700, color: C.amber, background: C.amberDim,
-            padding: '1px 6px', borderRadius: 3, border: `1px solid ${C.amber}33` }}>
-            ⏱ SLA
+        {hasNewReply && !hasAttention && (
+          <span style={{ fontSize: 9, fontWeight: 700, color: C.blue,
+            background: 'rgba(41,121,255,0.12)', padding: '1px 6px',
+            borderRadius: 3, border: `1px solid ${C.blue}44` }}>
+            ↩ NEW REPLY
           </span>
         )}
+        {/* SLA timer — show if we have remaining time data */}
+        {!hasAttention && q.sla_mins_remaining !== null && q.sla_mins_remaining !== undefined && (
+          <SlaChip mins={parseFloat(q.sla_mins_remaining)} policyName={q.sla_policy_name} />
+        )}
         <div style={{ flex: 1 }} />
-        {/* Query (filled orange triangle) or Claim (red receipt icon) */}
         {isClaim ? (
           <Receipt size={20} color={C.red} strokeWidth={1.5} title="Claim" />
         ) : (
@@ -302,10 +371,14 @@ function InboxRow({ q, selected, onClick }) {
         )}
       </div>
 
-      {/* Email preview */}
+      {/* Row 4: email preview */}
       {q.latest_email_preview && (
-        <div style={{ fontSize: 11, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {q.latest_email_preview.substring(0, 85)}
+        <div style={{
+          fontSize: 11,
+          color: hasNewReply ? C.sub : C.muted,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {q.latest_email_preview.substring(0, 90)}
         </div>
       )}
     </div>
@@ -616,7 +689,11 @@ function QueryDetail({ queryId, onUpdated }) {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setData(await fetchQuery(queryId)); }
+    try {
+      setData(await fetchQuery(queryId));
+      // Mark all inbound emails as read — fire-and-forget, non-blocking
+      fetch(`/api/queries/${queryId}/mark-read`, { method: 'PATCH' }).catch(() => {});
+    }
     catch (err) { console.error(err); }
     finally { setLoading(false); }
   }, [queryId]);
@@ -756,6 +833,18 @@ function QueryDetail({ queryId, onUpdated }) {
               {q.consignment_number}
             </span>
           )}
+          {/* Unread customer email badge */}
+          {(() => {
+            const n = emails.filter(e => e.direction === 'inbound_customer' && !e.read_at && !e.is_ai_draft).length;
+            return n > 0 ? (
+              <span title={`${n} unread customer email${n > 1 ? 's' : ''}`} style={{
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                minWidth: 18, height: 18, borderRadius: 9999,
+                background: C.blue, color: '#fff',
+                fontSize: 10, fontWeight: 800, padding: '0 5px', flexShrink: 0,
+              }}>{n}</span>
+            ) : null;
+          })()}
           <span style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
             letterSpacing: '0.5px', flexShrink: 0 }}>Reported</span>
           <TypeBadge type={q.query_type} />
@@ -765,8 +854,22 @@ function QueryDetail({ queryId, onUpdated }) {
 
           {/* Parcel status + postcode */}
           {parcel && (
-            <span style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
-              letterSpacing: '0.5px', flexShrink: 0 }}>Courier</span>
+            <>
+              {/* Unread courier email badge */}
+              {(() => {
+                const n = emails.filter(e => e.direction === 'inbound_courier' && !e.read_at && !e.is_ai_draft).length;
+                return n > 0 ? (
+                  <span title={`${n} unread courier email${n > 1 ? 's' : ''}`} style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    minWidth: 18, height: 18, borderRadius: 9999,
+                    background: C.amber, color: '#111',
+                    fontSize: 10, fontWeight: 800, padding: '0 5px', flexShrink: 0,
+                  }}>{n}</span>
+                ) : null;
+              })()}
+              <span style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
+                letterSpacing: '0.5px', flexShrink: 0 }}>Courier</span>
+            </>
           )}
           {parcel && (
             <span style={{ fontSize: 13, fontWeight: 700, color: parcelColor, textTransform: 'capitalize', whiteSpace: 'nowrap' }}>

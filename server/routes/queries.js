@@ -548,10 +548,10 @@ router.get('/:id', async (req, res, next) => {
         SELECT id, direction, subject, body_text, body_html,
                from_address, to_address, cc_address,
                is_ai_draft, ai_draft_approved_by, ai_draft_approved_at, ai_draft_edited,
-               sent_at, received_at, created_at
+               sent_at, received_at, read_at, created_at
         FROM query_emails
         WHERE query_id = $1
-        ORDER BY created_at ASC
+        ORDER BY created_at DESC
       `, [req.params.id]),
       query(`
         SELECT id, evidence_type, value_text, value_numeric, value_unit,
@@ -631,7 +631,35 @@ router.post('/', async (req, res, next) => {
       created_by || null,
     ]);
 
-    res.status(201).json(result.rows[0]);
+    const newQuery = result.rows[0];
+
+    // ── Auto-assign SLA policy ──────────────────────────────────────────────
+    // Match most specific policy: courier+type > type-only > catch-all
+    try {
+      const policyRes = await query(`
+        SELECT id, name, duration_hours
+        FROM sla_policies
+        WHERE is_active = true
+          AND (courier_code = $1 OR courier_code IS NULL)
+          AND (query_type  = $2::query_type OR query_type IS NULL)
+        ORDER BY
+          (CASE WHEN courier_code IS NOT NULL THEN 2 ELSE 0 END) +
+          (CASE WHEN query_type  IS NOT NULL THEN 1 ELSE 0 END) DESC,
+          priority DESC
+        LIMIT 1
+      `, [courier_code, query_type || 'other']);
+
+      if (policyRes.rows.length) {
+        const p = policyRes.rows[0];
+        await query(`
+          INSERT INTO query_sla_assignments
+            (query_id, policy_id, policy_name, duration_hours, due_at, triggered_by)
+          VALUES ($1, $2, $3, $4, NOW() + ($4 || ' hours')::INTERVAL, 'auto_policy')
+        `, [newQuery.id, p.id, p.name, p.duration_hours]);
+      }
+    } catch (_) { /* SLA table may not exist on older DBs — non-fatal */ }
+
+    res.status(201).json(newQuery);
   } catch (err) { next(err); }
 });
 
@@ -747,6 +775,26 @@ router.post('/:id/emails', async (req, res, next) => {
     }
 
     res.status(201).json(result.rows[0]);
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /api/queries/:id/mark-read
+// Mark all unread inbound emails on this query as read.
+// Called automatically when staff open a query in the UI.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.patch('/:id/mark-read', async (req, res, next) => {
+  try {
+    await query(`
+      UPDATE query_emails
+      SET read_at = NOW()
+      WHERE query_id = $1
+        AND read_at IS NULL
+        AND direction IN ('inbound_customer', 'inbound_courier')
+        AND is_ai_draft = false
+    `, [req.params.id]);
+    res.json({ ok: true });
   } catch (err) { next(err); }
 });
 
