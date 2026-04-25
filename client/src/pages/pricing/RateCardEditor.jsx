@@ -256,20 +256,43 @@ export default function RateCardEditor() {
 
   // ── Projections ───────────────────────────────────────────────────────────
 
+  const [showDebug, setShowDebug] = useState(false);
+
   const mixTotal = volumeMix.reduce((s, m) => s + parseFloat(m.pct || 0), 0);
   const projections = (() => {
     if (!weeklyParcels || mixTotal !== 100) return null;
     let rev = 0, cost = 0;
+    const lines = [];
     volumeMix.forEach(m => {
-      const qty = Math.round((m.pct / 100) * parseInt(weeklyParcels));
-      const r = domesticRates.find(x => x.service_code === m.service_code);
+      const qty  = Math.round((m.pct / 100) * parseInt(weeklyParcels));
+      // Use the first zone rate for this service (lightest band / base rate)
+      const r    = domesticRates.find(x => x.service_code === m.service_code);
+      const sell = parseFloat(r?.price      || 0);
+      const cst  = parseFloat(r?.cost_price || 0);
+      const lineRev    = sell * qty;
+      const lineCost   = cst  * qty;
+      const lineProfit = lineRev - lineCost;
       if (r) {
-        rev  += parseFloat(r.price || 0) * qty;
-        cost += parseFloat(r.cost_price || 0) * qty;
+        rev  += lineRev;
+        cost += lineCost;
       }
+      lines.push({
+        service_code: m.service_code,
+        service_name: m.service_name || m.service_code,
+        pct:          m.pct,
+        qty,
+        sell:         r ? sell : null,
+        cost_price:   r ? cst  : null,
+        zone_name:    r?.zone_name || null,
+        rev:          r ? lineRev    : null,
+        cost:         r ? lineCost   : null,
+        profit:       r ? lineProfit : null,
+        margin:       lineRev > 0 ? (lineProfit / lineRev) * 100 : null,
+        matched:      !!r,
+      });
     });
     const profit = rev - cost;
-    return { rev, cost, profit, margin: rev > 0 ? profit / rev * 100 : 0 };
+    return { rev, cost, profit, margin: rev > 0 ? profit / rev * 100 : 0, lines };
   })();
 
   // ── Service codes from domestic rates (for volume mix) ────────────────────
@@ -655,22 +678,105 @@ export default function RateCardEditor() {
 
             {/* Projection output — shown at top */}
             {projections ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
-                <div style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 8, padding: '10px 12px' }}>
-                  <div style={{ fontSize: 10, color: '#888', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Revenue / wk</div>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: '#A5B4FC' }}>{gbp(projections.rev)}</div>
+              <div style={{ marginBottom: 18 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 8, padding: '10px 12px' }}>
+                    <div style={{ fontSize: 10, color: '#888', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Revenue / wk</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: '#A5B4FC' }}>{gbp(projections.rev)}</div>
+                  </div>
+                  <div style={{ background: 'rgba(179,157,219,0.06)', border: '1px solid rgba(179,157,219,0.2)', borderRadius: 8, padding: '10px 12px' }}>
+                    <div style={{ fontSize: 10, color: '#888', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Cost / wk</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: '#B39DDB' }}>{gbp(projections.cost)}</div>
+                  </div>
+                  <div style={{ background: projections.profit >= 0 ? 'rgba(0,200,83,0.07)' : 'rgba(239,68,68,0.07)',
+                    border: `1px solid ${projections.profit >= 0 ? 'rgba(0,200,83,0.25)' : 'rgba(239,68,68,0.25)'}`,
+                    borderRadius: 8, padding: '10px 12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <div style={{ fontSize: 10, color: '#888', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Profit / wk</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: projections.profit >= 0 ? '#00C853' : '#EF4444' }}>{gbp(projections.profit)}</div>
+                        <div style={{ fontSize: 11, color: projections.profit >= 0 ? '#00C853' : '#EF4444', marginTop: 2 }}>{projections.margin.toFixed(1)}% margin</div>
+                      </div>
+                      <button
+                        onClick={() => setShowDebug(d => !d)}
+                        title="Show calculation breakdown"
+                        style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 9px',
+                          borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                          background: showDebug ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.06)',
+                          border: `1px solid ${showDebug ? 'rgba(245,158,11,0.4)' : 'rgba(255,255,255,0.1)'}`,
+                          color: showDebug ? '#F59E0B' : '#555', marginTop: 2 }}>
+                        {showDebug ? <ChevronDown size={10}/> : <ChevronRight size={10}/>}
+                        Debug
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <div style={{ background: 'rgba(179,157,219,0.06)', border: '1px solid rgba(179,157,219,0.2)', borderRadius: 8, padding: '10px 12px' }}>
-                  <div style={{ fontSize: 10, color: '#888', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Cost / wk</div>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: '#B39DDB' }}>{gbp(projections.cost)}</div>
-                </div>
-                <div style={{ background: projections.profit >= 0 ? 'rgba(0,200,83,0.07)' : 'rgba(239,68,68,0.07)',
-                  border: `1px solid ${projections.profit >= 0 ? 'rgba(0,200,83,0.25)' : 'rgba(239,68,68,0.25)'}`,
-                  borderRadius: 8, padding: '10px 12px' }}>
-                  <div style={{ fontSize: 10, color: '#888', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Profit / wk</div>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: projections.profit >= 0 ? '#00C853' : '#EF4444' }}>{gbp(projections.profit)}</div>
-                  <div style={{ fontSize: 11, color: projections.profit >= 0 ? '#00C853' : '#EF4444', marginTop: 2 }}>{projections.margin.toFixed(1)}% margin</div>
-                </div>
+
+                {/* Debug breakdown */}
+                {showDebug && (
+                  <div style={{ marginTop: 10, background: 'rgba(245,158,11,0.03)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: 8, overflow: 'hidden' }}>
+                    <div style={{ padding: '8px 10px', borderBottom: '1px solid rgba(245,158,11,0.1)', fontSize: 10, color: '#F59E0B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Calculation Breakdown — base rate per service (1st zone)
+                    </div>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid rgba(245,158,11,0.1)' }}>
+                            <th style={{ padding: '5px 8px', textAlign: 'left',  color: '#666', fontWeight: 600 }}>Service</th>
+                            <th style={{ padding: '5px 6px', textAlign: 'right', color: '#666', fontWeight: 600 }}>Mix</th>
+                            <th style={{ padding: '5px 6px', textAlign: 'right', color: '#666', fontWeight: 600 }}>Qty</th>
+                            <th style={{ padding: '5px 6px', textAlign: 'right', color: '#B39DDB', fontWeight: 600 }}>Cost</th>
+                            <th style={{ padding: '5px 6px', textAlign: 'right', color: '#00C853', fontWeight: 600 }}>Sell</th>
+                            <th style={{ padding: '5px 6px', textAlign: 'right', color: '#A5B4FC', fontWeight: 600 }}>Rev</th>
+                            <th style={{ padding: '5px 6px', textAlign: 'right', color: '#34D399', fontWeight: 600 }}>Profit</th>
+                            <th style={{ padding: '5px 6px', textAlign: 'right', color: '#888',    fontWeight: 600 }}>Mgn</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {projections.lines.map((ln, i) => (
+                            <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)',
+                              opacity: ln.matched ? 1 : 0.4 }}>
+                              <td style={{ padding: '4px 8px', color: ln.matched ? '#CCC' : '#555', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {ln.service_name}
+                                {!ln.matched && <span style={{ marginLeft: 4, color: '#EF4444', fontSize: 9 }}>no rate</span>}
+                              </td>
+                              <td style={{ padding: '4px 6px', textAlign: 'right', color: '#888',    fontFamily: 'monospace' }}>{ln.pct}%</td>
+                              <td style={{ padding: '4px 6px', textAlign: 'right', color: '#AAA',    fontFamily: 'monospace' }}>{ln.qty.toLocaleString()}</td>
+                              <td style={{ padding: '4px 6px', textAlign: 'right', color: '#B39DDB', fontFamily: 'monospace' }}>{ln.cost_price != null ? gbp(ln.cost_price) : '—'}</td>
+                              <td style={{ padding: '4px 6px', textAlign: 'right', color: '#00C853', fontFamily: 'monospace' }}>{ln.sell != null ? gbp(ln.sell) : '—'}</td>
+                              <td style={{ padding: '4px 6px', textAlign: 'right', color: '#A5B4FC', fontFamily: 'monospace' }}>{ln.rev != null ? gbp(ln.rev) : '—'}</td>
+                              <td style={{ padding: '4px 6px', textAlign: 'right', fontFamily: 'monospace',
+                                color: ln.profit == null ? '#555' : ln.profit >= 0 ? '#34D399' : '#EF4444' }}>
+                                {ln.profit != null ? gbp(ln.profit) : '—'}
+                              </td>
+                              <td style={{ padding: '4px 6px', textAlign: 'right', fontFamily: 'monospace',
+                                color: ln.margin == null ? '#555' : ln.margin < 0 ? '#EF4444' : ln.margin < 15 ? '#F59E0B' : '#34D399' }}>
+                                {ln.margin != null ? `${ln.margin.toFixed(1)}%` : '—'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr style={{ borderTop: '1px solid rgba(245,158,11,0.15)' }}>
+                            <td colSpan={5} style={{ padding: '5px 8px', fontSize: 10, color: '#666', fontStyle: 'italic' }}>
+                              Using 1st zone rate per service · {parseInt(weeklyParcels).toLocaleString()} parcels/wk
+                            </td>
+                            <td style={{ padding: '5px 6px', textAlign: 'right', color: '#A5B4FC', fontFamily: 'monospace', fontWeight: 700 }}>{gbp(projections.rev)}</td>
+                            <td style={{ padding: '5px 6px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700,
+                              color: projections.profit >= 0 ? '#34D399' : '#EF4444' }}>{gbp(projections.profit)}</td>
+                            <td style={{ padding: '5px 6px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700,
+                              color: projections.margin < 0 ? '#EF4444' : projections.margin < 15 ? '#F59E0B' : '#34D399' }}>
+                              {projections.margin.toFixed(1)}%
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                    <div style={{ padding: '6px 10px', fontSize: 10, color: '#555', borderTop: '1px solid rgba(245,158,11,0.08)' }}>
+                      🟠 Services without a rate are excluded from totals
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div style={{ fontSize: 12, color: '#444', textAlign: 'center', padding: '10px 0 16px',
