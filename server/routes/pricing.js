@@ -115,33 +115,36 @@ router.get('/volume-mix-snapshot', async (req, res, next) => {
     const { courier_code } = req.query;
     if (!courier_code) return res.status(400).json({ error: 'courier_code required' });
 
-    // Service code aliases: charges recorded under one code are always rolled into another.
-    // Rule: DPD-ND2KG data is counted as DPD-32 (non-document 2kg is effectively the same service).
+    // Volume alias rule: DPD-ND2KG historical charges are counted against DPD-32.
+    // DPD-ND2KG remains as a separate service in the rate card (pct=0 via applySnapshot
+    // missing-code logic on the client). Only DPD-32 appears in the snapshot so its
+    // pct includes the combined volume of both services.
+    const courierId = `(SELECT id FROM couriers WHERE code ILIKE $1)`;
     const r = await query(`
       WITH raw AS (
         SELECT
-          -- Apply alias mappings before grouping
           CASE WHEN cs.service_code = 'DPD-ND2KG' THEN 'DPD-32' ELSE cs.service_code END AS service_code,
-          CASE WHEN cs.service_code = 'DPD-ND2KG' THEN 'DPD 2kg'  ELSE cs.name         END AS service_name,
           COUNT(*) AS charge_count
         FROM charges ch
         JOIN courier_services cs
           ON cs.name ILIKE ch.service_name
-         AND cs.courier_id = (SELECT id FROM couriers WHERE code ILIKE $1)
+         AND cs.courier_id = ${courierId}
         WHERE ch.charge_type = 'courier'
           AND ch.cancelled   = false
           AND ch.created_at >= NOW() - INTERVAL '90 days'
         GROUP BY
-          CASE WHEN cs.service_code = 'DPD-ND2KG' THEN 'DPD-32'  ELSE cs.service_code END,
-          CASE WHEN cs.service_code = 'DPD-ND2KG' THEN 'DPD 2kg' ELSE cs.name         END
+          CASE WHEN cs.service_code = 'DPD-ND2KG' THEN 'DPD-32' ELSE cs.service_code END
       )
       SELECT
-        service_code,
-        service_name,
-        SUM(charge_count)                                                    AS charge_count,
-        ROUND(SUM(charge_count) * 100.0 / SUM(SUM(charge_count)) OVER (), 1) AS pct
-      FROM raw
-      GROUP BY service_code, service_name
+        r.service_code,
+        cs.name                                                                  AS service_name,
+        SUM(r.charge_count)                                                      AS charge_count,
+        ROUND(SUM(r.charge_count) * 100.0 / SUM(SUM(r.charge_count)) OVER (), 1) AS pct
+      FROM raw r
+      JOIN courier_services cs
+        ON cs.service_code = r.service_code
+       AND cs.courier_id   = ${courierId}
+      GROUP BY r.service_code, cs.name
       ORDER BY charge_count DESC
     `, [courier_code]);
 
