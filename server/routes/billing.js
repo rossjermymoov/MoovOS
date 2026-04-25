@@ -1528,6 +1528,86 @@ router.post('/batch-apply-surcharges', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── GET /api/billing/surcharge-debug/:shipmentId ────────────────────────────
+// Shows exactly why surcharges did/didn't fire for a shipment.
+// Compares shipment.courier against couriers.code and lists matching surcharges.
+
+router.get('/surcharge-debug/:shipmentId', async (req, res, next) => {
+  try {
+    const { shipmentId } = req.params;
+
+    // Get the shipment
+    const { rows: shipRows } = await query(
+      `SELECT id, courier, dc_service_id, service_name, ship_to_postcode,
+              total_weight_kg, parcel_count, customer_id
+       FROM shipments WHERE id = $1`,
+      [shipmentId]
+    );
+    if (!shipRows.length) return res.status(404).json({ error: 'Shipment not found' });
+    const ship = shipRows[0];
+
+    // Show all couriers in the DB and whether they match
+    const { rows: couriers } = await query(`SELECT id, code, name FROM couriers ORDER BY name`);
+    const courierMatch = couriers.map(c => ({
+      ...c,
+      matches: c.code.toLowerCase() === (ship.courier || '').toLowerCase(),
+    }));
+
+    // Fetch the surcharges that WOULD be found with this courier string
+    const { rows: matchingSurcharges } = await query(`
+      SELECT s.id, s.code, s.name, s.applies_when, s.active,
+             c.code AS courier_code,
+             LOWER(c.code) = LOWER($1) AS code_match,
+             COALESCE((
+               SELECT json_agg(r ORDER BY r.created_at)
+               FROM surcharge_rules r
+               WHERE r.surcharge_id = s.id AND r.active = true
+             ), '[]'::json) AS rules
+      FROM surcharges s
+      JOIN couriers c ON c.id = s.courier_id
+      ORDER BY c.name, s.name
+    `, [ship.courier]);
+
+    const willFire = matchingSurcharges.filter(s =>
+      s.active && s.code_match && (s.applies_when === 'always' || s.applies_when === null)
+    );
+    const wonFire = matchingSurcharges.filter(s =>
+      !s.code_match || !s.active || (s.applies_when !== 'always' && s.applies_when !== null)
+    );
+
+    // Check existing surcharge charges on this shipment
+    const { rows: existingCharges } = await query(
+      `SELECT c.id, c.charge_type, c.service_name, c.price, c.surcharge_id, c.cancelled
+       FROM charges c
+       WHERE c.shipment_id = $1 AND c.charge_type IN ('surcharge', 'fuel')
+       ORDER BY c.created_at`,
+      [shipmentId]
+    );
+
+    res.json({
+      shipment: {
+        id:           ship.id,
+        courier:      ship.courier,
+        dc_service_id: ship.dc_service_id,
+        postcode:     ship.ship_to_postcode,
+        weight_kg:    ship.total_weight_kg,
+        parcel_count: ship.parcel_count,
+        customer_id:  ship.customer_id,
+      },
+      courier_match_analysis: {
+        shipment_courier_value: ship.courier,
+        couriers_in_db: courierMatch,
+        note: 'The billing engine matches: LOWER(couriers.code) = LOWER(shipments.courier)',
+      },
+      surcharges: {
+        will_fire:  willFire,
+        wont_fire:  wonFire,
+      },
+      existing_surcharge_charges: existingCharges,
+    });
+  } catch (err) { next(err); }
+});
+
 // ─── GET /api/billing/charges/:id/debug ──────────────────────────────────────
 // Full step-by-step trace using the SAME functions as the live billing engine.
 // Every field extracted, every DB lookup attempted, every decision explained.
