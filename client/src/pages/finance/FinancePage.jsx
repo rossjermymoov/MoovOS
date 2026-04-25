@@ -62,7 +62,7 @@ function FlagBadge({ value, trueLabel = 'Yes', falseLabel = 'No' }) {
 
 // ─── Price breakdown tooltip ──────────────────────────────────────────────────
 
-function BreakdownTooltip({ charge, mode }) {
+function BreakdownTooltip({ charge, mode, above = false }) {
   // mode: 'sell' | 'cost'
   const base      = mode === 'sell' ? parseFloat(charge.price || 0) : parseFloat(charge.cost_price || 0);
   const lines     = Array.isArray(charge.charge_lines) ? charge.charge_lines : [];
@@ -71,7 +71,9 @@ function BreakdownTooltip({ charge, mode }) {
 
   return (
     <div style={{
-      position: 'absolute', bottom: 'calc(100% + 6px)', right: 0,
+      position: 'absolute',
+      ...(above ? { bottom: 'calc(100% + 6px)' } : { top: 'calc(100% + 6px)' }),
+      right: 0,
       background: '#1A1B3A', border: `1px solid ${accentCol}44`,
       borderRadius: 8, padding: '10px 14px', minWidth: 220, zIndex: 200,
       boxShadow: '0 8px 24px rgba(0,0,0,0.6)', pointerEvents: 'none',
@@ -115,28 +117,46 @@ function BreakdownTooltip({ charge, mode }) {
 
 function ChargeCellSell({ charge, onSave, onDebug }) {
   const [hov, setHov] = useState(false);
+  const [above, setAbove] = useState(false);
+  const wrapRef = useRef(null);
   const hasLines = charge.price != null && charge.charge_lines?.length > 0;
   return (
-    <div style={{ position: 'relative', display: 'inline-block' }}
-      onMouseEnter={() => hasLines && setHov(true)}
+    <div ref={wrapRef} style={{ position: 'relative', display: 'inline-block' }}
+      onMouseEnter={() => {
+        if (hasLines) {
+          const rect = wrapRef.current?.getBoundingClientRect();
+          setAbove(rect ? rect.top > 280 : false);
+          setHov(true);
+        }
+      }}
       onMouseLeave={() => setHov(false)}>
       <PriceCell charge={charge} onSave={onSave} onDebug={onDebug} />
-      {hov && <BreakdownTooltip charge={charge} mode="sell" />}
+      {hov && <BreakdownTooltip charge={charge} mode="sell" above={above} />}
     </div>
   );
 }
 
 function ChargeCellCost({ charge }) {
   const [hov, setHov] = useState(false);
+  const [above, setAbove] = useState(false);
+  const wrapRef = useRef(null);
   const hasCost = charge.cost_price != null;
+  const lines = Array.isArray(charge.charge_lines) ? charge.charge_lines : [];
+  const totalCost = hasCost
+    ? parseFloat(charge.cost_price || 0) + lines.reduce((s, l) => s + parseFloat(l.cost_price ?? l.price ?? 0), 0)
+    : null;
   return (
-    <div style={{ position: 'relative', display: 'inline-block' }}
-      onMouseEnter={() => setHov(true)}
+    <div ref={wrapRef} style={{ position: 'relative', display: 'inline-block' }}
+      onMouseEnter={() => {
+        const rect = wrapRef.current?.getBoundingClientRect();
+        setAbove(rect ? rect.top > 280 : false);
+        setHov(true);
+      }}
       onMouseLeave={() => setHov(false)}>
       <span style={{ color: hasCost ? '#B39DDB' : '#555', fontWeight: hasCost ? 700 : 400, fontSize: 13 }}>
-        {hasCost ? gbp(charge.cost_price) : '—'}
+        {totalCost != null ? gbp(totalCost) : '—'}
       </span>
-      {hov && hasCost && <BreakdownTooltip charge={charge} mode="cost" />}
+      {hov && hasCost && <BreakdownTooltip charge={charge} mode="cost" above={above} />}
     </div>
   );
 }
@@ -275,13 +295,16 @@ function PriceCell({ charge, onSave, onDebug }) {
     );
   }
 
+  const displayLines = Array.isArray(charge.charge_lines) ? charge.charge_lines : [];
+  const displayTotal = parseFloat(charge.price || 0) + displayLines.reduce((s, l) => s + parseFloat(l.price || 0), 0);
+
   return (
     <button onClick={startEdit} style={{
       background: 'rgba(0,200,83,0.08)', border: '1px solid rgba(0,200,83,0.25)',
       borderRadius: 5, color: '#00C853', padding: '3px 10px', fontSize: 13, fontWeight: 700,
       cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
     }}>
-      {gbp(charge.price)}
+      {gbp(displayTotal)}
       <Edit2 size={10} style={{ opacity: 0.6 }} />
     </button>
   );
@@ -1341,7 +1364,11 @@ export default function FinancePage() {
                   <td style={{ ...td, textAlign: 'right' }}>
                     {charge.cancelled ? (
                       <span style={{ color: '#555', textDecoration: 'line-through', fontSize: 12 }}>
-                        {gbp(charge.price)}
+                        {(() => {
+                          const cls = Array.isArray(charge.charge_lines) ? charge.charge_lines : [];
+                          const tot = parseFloat(charge.price || 0) + cls.reduce((s, l) => s + parseFloat(l.price || 0), 0);
+                          return gbp(tot);
+                        })()}
                       </span>
                     ) : (
                       <ChargeCellSell
