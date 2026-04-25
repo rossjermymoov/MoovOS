@@ -86,10 +86,10 @@ export default function RateCardEditor() {
   const [submitStaff, setSubmitStaff] = useState('');
   const [showSubmit, setShowSubmit] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
-  const [openSvcs,       setOpenSvcs]       = useState(new Set());
-  const [openIntlSvcs,   setOpenIntlSvcs]   = useState(new Set());
-  const [mixRefreshing,  setMixRefreshing]  = useState(false);
-  const [mixSnapshotDate, setMixSnapshotDate] = useState(null);
+  const [openSvcs,     setOpenSvcs]     = useState(new Set());
+  const [openIntlSvcs, setOpenIntlSvcs] = useState(new Set());
+  const [mixLoading,   setMixLoading]   = useState(false);
+  const [mixMeta,      setMixMeta]      = useState(null); // { customer_count, weekly_avg_min, weekly_avg_max }
 
   const { data: rc, isLoading, error } = useQuery({
     queryKey: ['rate-card-detail', id],
@@ -127,18 +127,21 @@ export default function RateCardEditor() {
     ];
   };
 
-  const refreshMix = async (courierCode, domesticCodes) => {
-    if (!courierCode || !domesticCodes.length) return;
-    setMixRefreshing(true);
+  // Load mix from similar customers — called on initial load and when weeklyParcels changes
+  const loadSimilarMix = async (vol, courierCode, domesticCodes) => {
+    if (!courierCode || !domesticCodes.length || !vol || parseInt(vol) <= 0) return;
+    setMixLoading(true);
     try {
-      const snapshot = await apiFetch(`/api/pricing/volume-mix-snapshot?courier_code=${courierCode}`);
-      if (snapshot?.length) {
-        setVolumeMix(applySnapshot(snapshot, domesticCodes));
-        setMixSnapshotDate(new Date());
+      const result = await apiFetch(
+        `/api/pricing/similar-customer-mix?courier_code=${encodeURIComponent(courierCode)}&weekly_volume=${parseInt(vol)}`
+      );
+      if (result?.mix?.length) {
+        setVolumeMix(applySnapshot(result.mix, domesticCodes));
+        setMixMeta(result.meta || null);
         setDirty(true);
       }
     } catch (e) { /* silently ignore — keep existing mix */ }
-    finally { setMixRefreshing(false); }
+    finally { setMixLoading(false); }
   };
 
   // Initialise local state when rate card loads
@@ -157,13 +160,22 @@ export default function RateCardEditor() {
         ...m,
         service_name: m.service_name || svcNameMap[m.service_code] || m.service_code,
       })));
-    } else {
-      // No saved mix — auto-load from actual data
-      refreshMix(rc.courier_code, domesticCodes);
+    } else if (rc.weekly_parcels) {
+      // No saved mix but we have a target volume — auto-load similar customer mix
+      loadSimilarMix(rc.weekly_parcels, rc.courier_code, domesticCodes);
     }
     setDirty(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rc?.id]);
+
+  // Auto-refresh mix when weeklyParcels changes (debounced 600ms)
+  useEffect(() => {
+    if (!rc?.courier_code || !weeklyParcels || parseInt(weeklyParcels) <= 0) return;
+    const domesticCodes = [...new Set((rc.rates || []).filter(r => !r.is_international).map(r => r.service_code).filter(Boolean))];
+    const timer = setTimeout(() => loadSimilarMix(weeklyParcels, rc.courier_code, domesticCodes), 600);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weeklyParcels]);
 
   const updateMut = useMutation({
     mutationFn: () => api.updateRateCard(id, {
@@ -822,30 +834,23 @@ export default function RateCardEditor() {
             {volumeMix.length > 0 && (
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 11, color: '#666', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>Volume mix</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    Volume mix
+                    {mixLoading && <RefreshCw size={10} style={{ color: '#555', animation: 'spin 1s linear infinite' }} />}
+                  </span>
                   <span style={{ color: mixTotal === 100 ? '#34D399' : '#F59E0B', fontWeight: 700 }}>{mixTotal}%</span>
                 </div>
-                {/* Refresh button + snapshot date */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                  <button
-                    onClick={() => {
-                      const domesticCodes = [...new Set(domesticRates.map(r => r.service_code).filter(Boolean))];
-                      refreshMix(rc.courier_code, domesticCodes);
-                    }}
-                    disabled={mixRefreshing}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px',
-                      borderRadius: 9999, fontSize: 11, fontWeight: 700,
-                      background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)',
-                      color: '#A5B4FC', cursor: 'pointer', opacity: mixRefreshing ? 0.6 : 1 }}>
-                    <RefreshCw size={11} style={mixRefreshing ? { animation: 'spin 1s linear infinite' } : {}} />
-                    Refresh mix
-                  </button>
-                  {mixSnapshotDate && (
-                    <span style={{ fontSize: 10, color: '#444' }}>
-                      {format(mixSnapshotDate, 'd MMM yyyy')}
+                {/* Source: similar customers */}
+                {mixMeta && (
+                  <div style={{ fontSize: 10, color: '#444', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)',
+                      borderRadius: 99, padding: '2px 8px', color: '#6366F1', fontWeight: 600 }}>
+                      {mixMeta.customer_count === 0
+                        ? 'No similar customers found — adjust manually'
+                        : `Based on ${mixMeta.customer_count} similar customer${mixMeta.customer_count === 1 ? '' : 's'} · avg ${mixMeta.weekly_avg_min}–${mixMeta.weekly_avg_max}/wk`}
                     </span>
-                  )}
-                </div>
+                  </div>
+                )}
                 {volumeMix.map((m, i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>

@@ -152,6 +152,121 @@ router.get('/volume-mix-snapshot', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── GET /api/pricing/similar-customer-mix?courier_code=DPD&weekly_volume=200 ─
+// Finds the N customers whose actual weekly parcel volume (last 90 days, for this
+// carrier) is closest to the prospect's target, then returns their combined service
+// mix as percentages.  Much more reliable than a manually-curated snapshot because
+// it learns automatically as webhook data arrives.
+//
+// Alias rule: DPD-ND2KG charges always count against DPD-32 (same as volume-mix-snapshot).
+// Returns: { mix: [{service_code, service_name, pct}], meta: {customer_count, weekly_avg_min, weekly_avg_max} }
+
+router.get('/similar-customer-mix', async (req, res, next) => {
+  try {
+    const { courier_code, weekly_volume } = req.query;
+    if (!courier_code)   return res.status(400).json({ error: 'courier_code required' });
+    if (!weekly_volume)  return res.status(400).json({ error: 'weekly_volume required' });
+
+    const targetVol = parseFloat(weekly_volume);
+    if (isNaN(targetVol) || targetVol <= 0) return res.status(400).json({ error: 'weekly_volume must be a positive number' });
+
+    const SIMILAR_COUNT = 8;   // how many nearest customers to use
+    const courierId = `(SELECT id FROM couriers WHERE code ILIKE $1)`;
+
+    // Step 1: calculate each customer's average weekly parcel volume for this courier
+    //         over the last 90 days, then pick the N closest to the target.
+    // Step 2: sum their actual charge counts per service (with DPD-ND2KG alias).
+    // Step 3: express as percentages.
+    const r = await query(`
+      WITH customer_weekly AS (
+        -- weekly parcel volume per customer for this courier, last 90 days
+        SELECT
+          ch.customer_id,
+          COALESCE(SUM(ch.parcel_qty), COUNT(*)) / (90.0 / 7) AS weekly_avg
+        FROM charges ch
+        JOIN courier_services cs
+          ON cs.name ILIKE ch.service_name
+         AND cs.courier_id = ${courierId}
+        WHERE ch.charge_type = 'courier'
+          AND ch.cancelled   = false
+          AND ch.created_at >= NOW() - INTERVAL '90 days'
+          AND ch.customer_id IS NOT NULL
+        GROUP BY ch.customer_id
+        HAVING COALESCE(SUM(ch.parcel_qty), COUNT(*)) > 0
+      ),
+      closest AS (
+        -- nearest N customers by absolute weekly volume distance
+        SELECT customer_id, weekly_avg
+        FROM customer_weekly
+        ORDER BY ABS(weekly_avg - $2)
+        LIMIT $3
+      ),
+      raw_mix AS (
+        -- charge counts per service for those customers, with alias
+        SELECT
+          CASE WHEN cs.service_code = 'DPD-ND2KG' THEN 'DPD-32'
+               ELSE cs.service_code END AS service_code,
+          COALESCE(SUM(ch.parcel_qty), COUNT(*)) AS parcel_count
+        FROM charges ch
+        JOIN closest cl ON cl.customer_id = ch.customer_id
+        JOIN courier_services cs
+          ON cs.name ILIKE ch.service_name
+         AND cs.courier_id = ${courierId}
+        WHERE ch.charge_type = 'courier'
+          AND ch.cancelled   = false
+          AND ch.created_at >= NOW() - INTERVAL '90 days'
+        GROUP BY
+          CASE WHEN cs.service_code = 'DPD-ND2KG' THEN 'DPD-32'
+               ELSE cs.service_code END
+      )
+      SELECT
+        rm.service_code,
+        cs.name                                                                       AS service_name,
+        SUM(rm.parcel_count)                                                          AS parcel_count,
+        ROUND(SUM(rm.parcel_count) * 100.0 / SUM(SUM(rm.parcel_count)) OVER (), 1)   AS pct
+      FROM raw_mix rm
+      JOIN courier_services cs
+        ON cs.service_code = rm.service_code
+       AND cs.courier_id   = ${courierId}
+      GROUP BY rm.service_code, cs.name
+      ORDER BY parcel_count DESC
+    `, [courier_code, targetVol, SIMILAR_COUNT]);
+
+    // Meta: how many customers fed this estimate and their weekly volume range
+    const metaR = await query(`
+      WITH customer_weekly AS (
+        SELECT
+          ch.customer_id,
+          COALESCE(SUM(ch.parcel_qty), COUNT(*)) / (90.0 / 7) AS weekly_avg
+        FROM charges ch
+        JOIN courier_services cs
+          ON cs.name ILIKE ch.service_name
+         AND cs.courier_id = (SELECT id FROM couriers WHERE code ILIKE $1)
+        WHERE ch.charge_type = 'courier'
+          AND ch.cancelled   = false
+          AND ch.created_at >= NOW() - INTERVAL '90 days'
+          AND ch.customer_id IS NOT NULL
+        GROUP BY ch.customer_id
+        HAVING COALESCE(SUM(ch.parcel_qty), COUNT(*)) > 0
+      )
+      SELECT
+        COUNT(*)::int                           AS customer_count,
+        ROUND(MIN(weekly_avg))::int             AS weekly_avg_min,
+        ROUND(MAX(weekly_avg))::int             AS weekly_avg_max
+      FROM (
+        SELECT customer_id, weekly_avg
+        FROM customer_weekly
+        ORDER BY ABS(weekly_avg - $2)
+        LIMIT $3
+      ) closest
+    `, [courier_code, targetVol, SIMILAR_COUNT]);
+
+    const meta = metaR.rows[0] || { customer_count: 0, weekly_avg_min: 0, weekly_avg_max: 0 };
+
+    res.json({ mix: r.rows, meta });
+  } catch (err) { next(err); }
+});
+
 // ─── GET /api/pricing/carrier-services?courier_code= ─────────────────────────
 // Returns every service+zone for a carrier with cost price from master rate card.
 // Used to populate Customer Rate Card Template rows.
