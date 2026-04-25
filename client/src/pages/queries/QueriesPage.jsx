@@ -1424,6 +1424,7 @@ export default function QueriesPage() {
               onClick={() => navigate(`/queries/${q.id}`)}
             />
           ))}
+        </div>
 
       </div>
 

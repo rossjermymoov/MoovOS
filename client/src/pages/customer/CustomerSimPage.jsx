@@ -365,7 +365,6 @@ export default function CustomerSimPage() {
               {/* Reply box */}
               <div style={{
                 padding: '16px 20px',
-                borderTop: `1px solid ${C.border}`,
                 background: p.dim,
                 borderTop: `2px solid ${p.color}22`,
               }}>
