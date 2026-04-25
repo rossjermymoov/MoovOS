@@ -280,10 +280,12 @@ export default function RateCardEditor() {
 
     // ── Domestic leg ──────────────────────────────────────────────────────
     const domCostRate = parseFloat(primaryRate.cost_price);
-    // Reverse the margin to get sell: sell = cost / (1 - margin/100)
-    const domSellRate = weightedMargin < 99
-      ? domCostRate / (1 - weightedMargin / 100)
-      : domCostRate * 2;
+    const domSellEntered = parseFloat(primaryRate.price);
+    // Use the actual sell price from the rate card if set; only fall back to
+    // deriving from weighted margin if no sell price has been entered yet.
+    const domSellRate = domSellEntered > 0
+      ? domSellEntered
+      : (weightedMargin < 99 ? domCostRate / (1 - weightedMargin / 100) : domCostRate * 2);
     const domRev    = domSellRate * domParcels;
     const domCost   = domCostRate * domParcels;
     const domProfit = domRev - domCost;
