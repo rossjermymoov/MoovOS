@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Search, CheckCircle, XCircle, AlertCircle,
   Edit2, Check, X, RefreshCw, ChevronLeft, ChevronRight, Bell,
-  Bug, FileJson, RotateCcw, Zap,
+  Bug, FileJson, RotateCcw, Zap, MoreHorizontal,
 } from 'lucide-react';
 import { billingApi } from '../../api/billing';
 import { customersApi } from '../../api/customers';
@@ -60,6 +60,73 @@ function FlagBadge({ value, trueLabel = 'Yes', falseLabel = 'No' }) {
   );
 }
 
+// ─── Row actions hamburger menu ───────────────────────────────────────────────
+
+function MoreMenu({ charge, onBill, onReprice, onLog, onDebug, onCancel }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  const items = [
+    charge.price != null && !charge.billed && { label: 'Bill', action: onBill, color: '#00C853' },
+    { label: 'Reprice', action: onReprice, color: '#aaa' },
+    { label: 'View payload', action: onLog, color: '#aaa' },
+    { label: 'Diagnose', action: onDebug, color: '#FFC107' },
+    { label: 'Cancel', action: onCancel, color: '#F44336' },
+  ].filter(Boolean);
+
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{
+          background: open ? 'rgba(255,255,255,0.08)' : 'none',
+          border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 6, color: '#888', cursor: 'pointer',
+          padding: '4px 7px', display: 'flex', alignItems: 'center',
+        }}
+      >
+        <MoreHorizontal size={14} />
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', right: 0, top: 'calc(100% + 4px)',
+          background: '#1A1B3A', border: '1px solid rgba(255,255,255,0.12)',
+          borderRadius: 8, minWidth: 140, zIndex: 100,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+          overflow: 'hidden',
+        }}>
+          {items.map((item, i) => (
+            <button
+              key={i}
+              onClick={() => { item.action(); setOpen(false); }}
+              style={{
+                display: 'block', width: '100%', textAlign: 'left',
+                background: 'none', border: 'none',
+                padding: '9px 14px', fontSize: 13,
+                color: item.color, cursor: 'pointer',
+                borderBottom: i < items.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Inline price editor ──────────────────────────────────────────────────────
 
 function PriceCell({ charge, onSave, onDebug }) {
@@ -110,7 +177,7 @@ function PriceCell({ charge, onSave, onDebug }) {
 
   if (charge.price == null) {
     return (
-      <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+      <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
         <button onClick={startEdit} style={{
           background: 'rgba(255,193,7,0.12)', border: '1px solid rgba(255,193,7,0.4)',
           borderRadius: 5, color: '#FFC107', padding: '3px 10px', fontSize: 12, fontWeight: 700,
@@ -119,19 +186,9 @@ function PriceCell({ charge, onSave, onDebug }) {
           <AlertCircle size={11} /> Set Price
         </button>
         {charge.price_failure_reason && (
-          <button
-            onClick={onDebug}
-            title="Click to run full diagnostic"
-            style={{
-              background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-              fontSize: 10, color: '#F44336', fontWeight: 600,
-              display: 'inline-flex', alignItems: 'center', gap: 3,
-              textAlign: 'left', lineHeight: 1.3,
-            }}
-          >
-            <Bug size={9} style={{ flexShrink: 0 }} />
+          <span style={{ fontSize: 10, color: '#F44336', fontWeight: 600, textAlign: 'right', lineHeight: 1.3 }}>
             {charge.price_failure_reason}
-          </button>
+          </span>
         )}
       </div>
     );
@@ -694,6 +751,20 @@ export default function FinancePage() {
     patch.mutate({ id: charge.id, data: { cancelled: true } });
   }
 
+  async function repriceCharge(charge) {
+    try {
+      const result = await billingApi.repriceCharge(charge.id);
+      if (result.ok) {
+        qc.invalidateQueries(['billing-charges']);
+        qc.invalidateQueries(['billing-stats']);
+      } else {
+        alert(`Reprice failed: ${result.message || 'No matching rate found'}`);
+      }
+    } catch (err) {
+      alert(`Reprice error: ${err.message}`);
+    }
+  }
+
   async function runPurgeTracking() {
     if (!confirm('This will permanently delete all charges and shipments that were created by tracking webhooks (not shipment.created events). Continue?')) return;
     setPurgeRunning(true);
@@ -1084,7 +1155,7 @@ export default function FinancePage() {
       {/* Table */}
       <div className="moov-card" style={{ overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 980 }}>
             <thead>
               <tr style={{ background: 'rgba(255,255,255,0.02)' }}>
                 <th style={th}>Date</th>
@@ -1092,24 +1163,25 @@ export default function FinancePage() {
                 <th style={th}>Order ID</th>
                 <th style={{ ...th, textAlign: 'center' }}>Qty</th>
                 <th style={th}>Service</th>
-                <th style={{ ...th, textAlign: 'right' }}>Price (ex. VAT)</th>
-                <th style={{ ...th, textAlign: 'right' }}>VAT</th>
+                <th style={{ ...th, textAlign: 'right' }}>Charge (ex. VAT)</th>
+                <th style={{ ...th, textAlign: 'right' }}>Carrier Cost</th>
+                <th style={{ ...th, textAlign: 'right' }}>Profit</th>
                 <th style={{ ...th, textAlign: 'center' }}>Billed</th>
                 <th style={{ ...th, textAlign: 'center' }}>Verified</th>
-                <th style={{ ...th, textAlign: 'center' }}>Actions</th>
+                <th style={{ ...th, textAlign: 'center' }}></th>
               </tr>
             </thead>
             <tbody>
               {isLoading && (
                 <tr>
-                  <td colSpan={10} style={{ ...td, textAlign: 'center', padding: 40, color: '#555' }}>
+                  <td colSpan={11} style={{ ...td, textAlign: 'center', padding: 40, color: '#555' }}>
                     Loading charges…
                   </td>
                 </tr>
               )}
               {!isLoading && displayCharges.length === 0 && (
                 <tr>
-                  <td colSpan={10} style={{ ...td, textAlign: 'center', padding: 40, color: '#555' }}>
+                  <td colSpan={11} style={{ ...td, textAlign: 'center', padding: 40, color: '#555' }}>
                     No charges found
                   </td>
                 </tr>
@@ -1184,7 +1256,7 @@ export default function FinancePage() {
                     )}
                   </td>
 
-                  {/* Price */}
+                  {/* Charge (ex. VAT) */}
                   <td style={{ ...td, textAlign: 'right' }}>
                     {charge.cancelled ? (
                       <span style={{ color: '#555', textDecoration: 'line-through', fontSize: 12 }}>
@@ -1195,9 +1267,18 @@ export default function FinancePage() {
                     )}
                   </td>
 
-                  {/* VAT */}
-                  <td style={{ ...td, textAlign: 'right', color: '#666', fontSize: 12 }}>
-                    {charge.price != null ? gbp(charge.vat_amount) : '—'}
+                  {/* Carrier Cost */}
+                  <td style={{ ...td, textAlign: 'right', color: '#888', fontSize: 12 }}>
+                    {charge.cost_price != null ? gbp(charge.cost_price) : '—'}
+                  </td>
+
+                  {/* Profit */}
+                  <td style={{ ...td, textAlign: 'right' }}>
+                    {charge.price != null && charge.cost_price != null ? (() => {
+                      const profit = parseFloat(charge.price) - parseFloat(charge.cost_price);
+                      const color = profit > 0 ? '#00C853' : profit < 0 ? '#F44336' : '#888';
+                      return <span style={{ color, fontWeight: 700, fontSize: 13 }}>{gbp(profit)}</span>;
+                    })() : <span style={{ color: '#555' }}>—</span>}
                   </td>
 
                   {/* Billed */}
@@ -1226,67 +1307,17 @@ export default function FinancePage() {
                     )}
                   </td>
 
-                  {/* Actions */}
+                  {/* Hamburger menu */}
                   <td style={{ ...td, textAlign: 'center' }}>
                     {!charge.cancelled && (
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
-                        {/* Mark billed quick-action */}
-                        {!charge.billed && charge.price != null && (
-                          <button
-                            onClick={() => toggleBilled(charge)}
-                            title="Mark as billed"
-                            style={{
-                              background: 'rgba(0,200,83,0.1)', border: '1px solid rgba(0,200,83,0.3)',
-                              borderRadius: 5, color: '#00C853', padding: '4px 8px',
-                              cursor: 'pointer', fontSize: 11, fontWeight: 600,
-                              display: 'inline-flex', alignItems: 'center', gap: 4,
-                            }}
-                          >
-                            <CheckCircle size={11} /> Bill
-                          </button>
-                        )}
-                        {/* Debug pricing — shown when no price */}
-                        {charge.price == null && (
-                          <button
-                            onClick={() => setDebugCharge(charge)}
-                            title="Diagnose why no price was set"
-                            style={{
-                              background: 'rgba(255,193,7,0.1)', border: '1px solid rgba(255,193,7,0.35)',
-                              borderRadius: 5, color: '#FFC107', padding: '4px 8px',
-                              cursor: 'pointer', fontSize: 11, fontWeight: 600,
-                              display: 'inline-flex', alignItems: 'center', gap: 4,
-                            }}
-                          >
-                            <Bug size={11} /> Debug
-                          </button>
-                        )}
-                        {/* Webhook payload viewer */}
-                        <button
-                          onClick={() => setPayloadCharge(charge)}
-                          title="View raw webhook payload"
-                          style={{
-                            background: 'rgba(0,188,212,0.08)', border: '1px solid rgba(0,188,212,0.25)',
-                            borderRadius: 5, color: '#00BCD4', padding: '4px 8px',
-                            cursor: 'pointer', fontSize: 11, fontWeight: 600,
-                            display: 'inline-flex', alignItems: 'center', gap: 4,
-                          }}
-                        >
-                          <FileJson size={11} />
-                        </button>
-                        {/* Cancel */}
-                        <button
-                          onClick={() => cancelCharge(charge)}
-                          title="Cancel charge"
-                          style={{
-                            background: 'rgba(244,67,54,0.08)', border: '1px solid rgba(244,67,54,0.25)',
-                            borderRadius: 5, color: '#F44336', padding: '4px 8px',
-                            cursor: 'pointer', fontSize: 11, fontWeight: 600,
-                            display: 'inline-flex', alignItems: 'center', gap: 4,
-                          }}
-                        >
-                          <XCircle size={11} /> Cancel
-                        </button>
-                      </div>
+                      <MoreMenu
+                        charge={charge}
+                        onBill={() => toggleBilled(charge)}
+                        onReprice={() => repriceCharge(charge)}
+                        onLog={() => setPayloadCharge(charge)}
+                        onDebug={() => setDebugCharge(charge)}
+                        onCancel={() => cancelCharge(charge)}
+                      />
                     )}
                   </td>
                 </tr>
