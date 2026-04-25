@@ -5,7 +5,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Trash2, Globe, Search, X, ChevronDown, ChevronRight, Package, Check, Zap, AlertCircle } from 'lucide-react';
+import { Trash2, Globe, Search, X, ChevronDown, ChevronRight, Package, Check, Zap, AlertCircle, Percent } from 'lucide-react';
 import axios from 'axios';
 import { getCourierLogo } from '../../../utils/courierLogos';
 
@@ -200,10 +200,81 @@ function weightClassCoversKg(weightClassName, weightKg) {
 }
 
 // ─── International rate overlay ───────────────────────────────
-function InternationalRateOverlay({ service, onClose, onRateUpdate, onRateDelete }) {
+function InternationalRateOverlay({ service, customerId, activeCardId, onClose, onRateUpdate, onRateDelete, onRateCreated }) {
   const [searchText, setSearchText] = useState('');
   const [parsed, setParsed]         = useState({ weightKg: null, zoneTerm: null });
+  const [markup, setMarkup]         = useState('');
+  const [applying, setApplying]     = useState(false);
+  const [applyResult, setApplyResult] = useState(null); // { created, updated }
   const searchRef                   = useRef(null);
+  const qc                          = useQueryClient();
+
+  // Fetch carrier rate card bands for markup calculation
+  const { data: cardData } = useQuery({
+    queryKey: ['carrier-rate-card-bands', activeCardId],
+    queryFn:  () => api.get(`/carrier-rate-cards/${activeCardId}/bands`).then(r => r.data),
+    enabled:  !!activeCardId,
+    staleTime: 300_000,
+  });
+
+  const cardService = cardData?.services?.find(s => s.service_code === service.service_code);
+
+  // Derive a consistent weight_class_name from a carrier band's min/max kg
+  function bandLabel(band) {
+    const fmt = n => {
+      const f = parseFloat(n);
+      return Number.isInteger(f) ? String(f) : f.toFixed(f < 1 ? 3 : 1).replace(/\.?0+$/, '');
+    };
+    return `${fmt(band.min_weight_kg)}-${fmt(band.max_weight_kg)}KG`;
+  }
+
+  // Apply markup: cost × (1 + pct/100) for every zone/band in the carrier card
+  async function applyMarkup() {
+    const pct = parseFloat(markup);
+    if (isNaN(pct) || pct < 0 || !cardService) return;
+    setApplying(true);
+    setApplyResult(null);
+    try {
+      // Build lookup of existing customer rates for this service
+      const existingMap = {};
+      for (const r of service.rates) existingMap[`${r.zone_name}::${r.weight_class_name}`] = r;
+
+      const toCreate = [];
+      for (const zone of cardService.zones) {
+        for (const band of zone.bands) {
+          const wcn      = bandLabel(band);
+          const sellPrice = parseFloat((parseFloat(band.price_first) * (1 + pct / 100)).toFixed(2));
+          const sellSub   = band.price_sub != null
+            ? parseFloat((parseFloat(band.price_sub) * (1 + pct / 100)).toFixed(2))
+            : null;
+          toCreate.push({ zone_name: zone.zone_name, wcn, sellPrice, sellSub });
+        }
+      }
+
+      await Promise.all(toCreate.map(({ zone_name, wcn, sellPrice, sellSub }) =>
+        api.post(`/customer-rates/${customerId}`, {
+          courier_id:        service.courier_id   || 0,
+          courier_code:      service.courier_code || '',
+          courier_name:      service.courier_name || '',
+          service_id:        service.service_id,
+          service_code:      service.service_code,
+          service_name:      service.service_name,
+          zone_name,
+          weight_class_name: wcn,
+          price:             sellPrice,
+          price_sub:         sellSub,
+        })
+      ));
+
+      setApplyResult({ created: toCreate.length });
+      qc.invalidateQueries(['customer-rates', customerId]);
+      onRateCreated?.();
+    } catch (e) {
+      console.error('[applyMarkup] failed', e);
+    } finally {
+      setApplying(false);
+    }
+  }
 
   useEffect(() => { setTimeout(() => searchRef.current?.focus(), 50); }, []);
   useEffect(() => {
@@ -289,6 +360,44 @@ function InternationalRateOverlay({ service, onClose, onRateUpdate, onRateDelete
           Close  <span style={{ opacity: 0.5, fontSize: 11 }}>esc</span>
         </button>
       </div>
+
+      {/* Markup toolbar — only shown when carrier rate card is available */}
+      {cardService && (
+        <div style={{ flexShrink: 0, padding: '8px 28px', background: 'rgba(0,200,83,0.04)', borderBottom: '1px solid rgba(0,200,83,0.08)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Percent size={12} color="#00C853" />
+          <span style={{ fontSize: 12, color: '#AAAAAA' }}>Markup from carrier cost</span>
+          <input
+            value={markup}
+            onChange={e => { setMarkup(e.target.value); setApplyResult(null); }}
+            onKeyDown={e => { if (e.key === 'Enter') applyMarkup(); }}
+            placeholder="e.g. 20"
+            style={{ ...inp, width: 70, textAlign: 'right', fontSize: 12, color: '#00C853', border: '1px solid rgba(0,200,83,0.4)', background: 'rgba(0,200,83,0.06)' }}
+          />
+          <span style={{ fontSize: 12, color: '#AAAAAA' }}>%</span>
+          <button
+            onClick={applyMarkup}
+            disabled={applying || !markup}
+            style={{
+              background: applying ? 'transparent' : 'rgba(0,200,83,0.12)',
+              border: '1px solid rgba(0,200,83,0.4)', borderRadius: 5,
+              color: applying ? '#555' : '#00C853',
+              fontSize: 12, fontWeight: 700, padding: '5px 14px',
+              cursor: applying ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {applying ? 'Applying…' : 'Apply to all zones'}
+          </button>
+          {applyResult && (
+            <span style={{ fontSize: 12, color: '#00C853', fontWeight: 700 }}>
+              ✓ {applyResult.created} rates set
+            </span>
+          )}
+          <span style={{ fontSize: 11, color: '#444', marginLeft: 'auto' }}>
+            {cardService.zones.length} zones · {[...new Set(cardService.zones.flatMap(z => z.bands.map(bandLabel)))].length} weight bands in carrier card
+          </span>
+        </div>
+      )}
+
 
       {/* Search status bar */}
       {hasSearch && (
@@ -472,10 +581,12 @@ function NewPriceCell({ service, customerId, zoneName, weightClassName, onCreate
 // price use PriceCell (edit/delete).  Zones with no price use NewPriceCell
 // (click → type → auto-creates the rate row).  Zone names and weight classes
 // are read-only — they come from the carrier, not the customer.
-function ServiceBlock({ service, customerId, onRateUpdate, onRateDelete, onRateCreated }) {
+function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateDelete, onRateCreated }) {
   const [overlayOpen, setOverlay] = useState(false);
-
   const isIntl = service.service_type === 'international';
+
+  // Domestic: default open; international: always uses click-to-open overlay (no inline collapse needed)
+  const [open, setOpen] = useState(true);
 
   // Fetch zone template from other customers' rates for this service.
   // This gives us the canonical zones/weight-bands defined at the carrier level.
@@ -486,7 +597,22 @@ function ServiceBlock({ service, customerId, onRateUpdate, onRateDelete, onRateC
     staleTime: 120_000,
   });
 
-  // ── International: collapsed row → fullscreen overlay ───────
+  // Derived values (used in both header and body)
+  const rateMap = {};
+  for (const rate of service.rates) {
+    rateMap[`${rate.zone_name}::${rate.weight_class_name}`] = rate;
+  }
+  const zonesToShow = !isIntl
+    ? (templateZones.length > 0
+        ? templateZones
+        : service.rates.map(r => ({ zone_name: r.zone_name, weight_class_name: r.weight_class_name })))
+    : [];
+  const multiWeight = [...new Set(zonesToShow.map(z => z.weight_class_name))].length > 1;
+  const pricedCount = service.rates.length;
+  const totalCount  = isIntl ? service.rate_count : zonesToShow.length;
+  const allPriced   = totalCount > 0 && pricedCount >= totalCount;
+
+  // ── International: compact row → fullscreen overlay ──────────
   if (isIntl) {
     return (
       <>
@@ -498,49 +624,47 @@ function ServiceBlock({ service, customerId, onRateUpdate, onRateDelete, onRateC
         >
           <Globe size={12} color="#00BCD4" style={{ marginRight: 8, flexShrink: 0 }} />
           <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', flex: 1 }}>{service.service_name}</span>
-          <span style={{ fontSize: 11, color: '#AAAAAA', marginRight: 16 }}>{service.rate_count.toLocaleString()} rates</span>
+          {totalCount > 0 && (
+            <span style={{ fontSize: 11, color: allPriced ? '#00C853' : '#FFC107', fontWeight: 700, marginRight: 12 }}>
+              {pricedCount}/{totalCount} priced
+            </span>
+          )}
           <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#00BCD4', background: 'rgba(0,188,212,0.1)', padding: '2px 8px', borderRadius: 4, marginRight: 12 }}>{service.service_code}</span>
           <span style={{ fontSize: 11, color: '#00BCD4', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}><Search size={11} /> Search →</span>
         </div>
         {overlayOpen && (
           <InternationalRateOverlay
             service={service}
+            customerId={customerId}
+            activeCardId={activeCardId}
             onClose={() => setOverlay(false)}
             onRateUpdate={onRateUpdate}
             onRateDelete={onRateDelete}
+            onRateCreated={onRateCreated}
           />
         )}
       </>
     );
   }
 
-  // ── Domestic: zone chips ─────────────────────────────────────
-  // Build a lookup of existing rates so we can match template zones to prices.
-  const rateMap = {};
-  for (const rate of service.rates) {
-    rateMap[`${rate.zone_name}::${rate.weight_class_name}`] = rate;
-  }
-
-  // Zones to display: template (canonical carrier zones) if available,
-  // otherwise fall back to whatever rates this customer already has.
-  const zonesToShow = templateZones.length > 0
-    ? templateZones
-    : service.rates.map(r => ({ zone_name: r.zone_name, weight_class_name: r.weight_class_name }));
-
-  const multiWeight = [...new Set(zonesToShow.map(z => z.weight_class_name))].length > 1;
-  const pricedCount = service.rates.length;
-  const totalCount  = zonesToShow.length;
-
+  // ── Domestic: collapsible zone chips ─────────────────────────
   return (
-    <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', padding: '10px 18px 14px' }}>
-      {/* Service name header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+    <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+      {/* Collapsible header */}
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 18px', cursor: 'pointer' }}
+        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
+        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+      >
+        {open
+          ? <ChevronDown size={11} color="#555" style={{ flexShrink: 0 }} />
+          : <ChevronRight size={11} color="#555" style={{ flexShrink: 0 }} />}
         <span style={{ fontSize: 12, fontWeight: 700, color: '#AAAAAA', textTransform: 'uppercase', letterSpacing: '0.06em', flex: 1 }}>
           {service.service_name}
         </span>
-        {/* Pricing progress — how many zones have a price */}
         {totalCount > 0 && (
-          <span style={{ fontSize: 10, color: pricedCount === totalCount ? '#00C853' : '#FFC107', fontWeight: 700 }}>
+          <span style={{ fontSize: 10, color: allPriced ? '#00C853' : '#FFC107', fontWeight: 700 }}>
             {pricedCount}/{totalCount}
           </span>
         )}
@@ -549,45 +673,49 @@ function ServiceBlock({ service, customerId, onRateUpdate, onRateDelete, onRateC
         </span>
       </div>
 
-      {/* Zone chips — template zones merged with existing customer rates */}
-      {templateLoading ? (
-        <div style={{ fontSize: 11, color: '#444' }}>Loading zones…</div>
-      ) : zonesToShow.length === 0 ? (
-        <div style={{ fontSize: 11, color: '#555', fontStyle: 'italic' }}>No zone template found for this service</div>
-      ) : (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {zonesToShow.map(({ zone_name, weight_class_name }) => {
-            const key  = `${zone_name}::${weight_class_name}`;
-            const rate = rateMap[key];
-            return (
-              <div key={key} style={{
-                display: 'inline-flex', alignItems: 'center', gap: 8,
-                padding: '5px 8px 5px 10px',
-                background: rate ? 'rgba(255,255,255,0.02)' : 'transparent',
-                border: `1px solid ${rate ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.04)'}`,
-                borderRadius: 7,
-              }}>
-                <span style={{ fontSize: 11, color: rate ? '#666' : '#444', fontWeight: 500, whiteSpace: 'nowrap' }}>
-                  {zone_name}
-                  {multiWeight && <span style={{ color: '#333', marginLeft: 5 }}>· {weight_class_name}</span>}
-                </span>
-                {rate ? (
-                  <>
-                    <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
-                    <SubPriceCell rateId={rate.id} initialSubPrice={rate.price_sub} onSaved={onRateUpdate} />
-                  </>
-                ) : (
-                  <NewPriceCell
-                    service={service}
-                    customerId={customerId}
-                    zoneName={zone_name}
-                    weightClassName={weight_class_name}
-                    onCreated={onRateCreated}
-                  />
-                )}
-              </div>
-            );
-          })}
+      {/* Zone chips — only when open */}
+      {open && (
+        <div style={{ padding: '4px 18px 14px' }}>
+          {templateLoading ? (
+            <div style={{ fontSize: 11, color: '#444' }}>Loading zones…</div>
+          ) : zonesToShow.length === 0 ? (
+            <div style={{ fontSize: 11, color: '#555', fontStyle: 'italic' }}>No zone template found for this service</div>
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {zonesToShow.map(({ zone_name, weight_class_name }) => {
+                const key  = `${zone_name}::${weight_class_name}`;
+                const rate = rateMap[key];
+                return (
+                  <div key={key} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 8,
+                    padding: '5px 8px 5px 10px',
+                    background: rate ? 'rgba(255,255,255,0.02)' : 'transparent',
+                    border: `1px solid ${rate ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.04)'}`,
+                    borderRadius: 7,
+                  }}>
+                    <span style={{ fontSize: 11, color: rate ? '#666' : '#444', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                      {zone_name}
+                      {multiWeight && <span style={{ color: '#333', marginLeft: 5 }}>· {weight_class_name}</span>}
+                    </span>
+                    {rate ? (
+                      <>
+                        <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
+                        <SubPriceCell rateId={rate.id} initialSubPrice={rate.price_sub} onSaved={onRateUpdate} />
+                      </>
+                    ) : (
+                      <NewPriceCell
+                        service={service}
+                        customerId={customerId}
+                        zoneName={zone_name}
+                        weightClassName={weight_class_name}
+                        onCreated={onRateCreated}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -595,7 +723,7 @@ function ServiceBlock({ service, customerId, onRateUpdate, onRateDelete, onRateC
 }
 
 // ─── Courier group ────────────────────────────────────────────
-function CourierGroup({ courierName, services, customerId, onRateUpdate, onRateDelete, onRateCreated }) {
+function CourierGroup({ courierName, services, customerId, activeCardId, onRateUpdate, onRateDelete, onRateCreated }) {
   const [open, setOpen] = useState(true);
   const totalRates = services.reduce((a, s) => a + s.rate_count, 0);
   const hasIntl    = services.some(s => s.service_type === 'international');
@@ -613,6 +741,7 @@ function CourierGroup({ courierName, services, customerId, onRateUpdate, onRateD
           key={svc.service_id}
           service={svc}
           customerId={customerId}
+          activeCardId={activeCardId}
           onRateUpdate={onRateUpdate}
           onRateDelete={onRateDelete}
           onRateCreated={onRateCreated}
@@ -1124,13 +1253,18 @@ export default function CustomerPricingTab({ customer }) {
       });
   }
 
+  // Map courier_code → active_card_id so ServiceBlock can fetch carrier cost prices for markup
+  const carrierCardMap = Object.fromEntries(
+    carriers.filter(c => c.active && c.active_card_id).map(c => [c.courier_code, c.active_card_id])
+  );
+
   const byCourier = {};
   for (const s of visibleServices) {
-    if (!byCourier[s.courier_name]) byCourier[s.courier_name] = [];
-    byCourier[s.courier_name].push(s);
+    if (!byCourier[s.courier_name]) byCourier[s.courier_name] = { courier_code: s.courier_code, services: [] };
+    byCourier[s.courier_name].services.push(s);
   }
 
-  const visibleRates = visibleServices.reduce((a, s) => a + s.rate_count, 0);
+  const visibleRates  = visibleServices.reduce((a, s) => a + s.rate_count, 0);
 
   async function handlePriceUpdate(rateId, price, isSub = false) {
     if (isSub) await api.patch(`/customer-rates/rate/${rateId}`, { price_sub: price });
@@ -1184,12 +1318,13 @@ export default function CustomerPricingTab({ customer }) {
         </div>
       )}
 
-      {Object.entries(byCourier).map(([courierName, svcs]) => (
+      {Object.entries(byCourier).map(([courierName, { courier_code, services: svcs }]) => (
         <CourierGroup
           key={courierName}
           courierName={courierName}
           services={svcs}
           customerId={customer.id}
+          activeCardId={carrierCardMap[courier_code]}
           onRateUpdate={handlePriceUpdate}
           onRateDelete={handlePriceDelete}
           onRateCreated={() => qc.invalidateQueries(['customer-rates', customer.id])}
