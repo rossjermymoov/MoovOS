@@ -207,19 +207,13 @@ export default function RateCardEditor() {
 
   // ── Projections ───────────────────────────────────────────────────────────
   // Domestic/international split (slider, default 95% domestic).
-  // Domestic:     primary mainland service cost × volume-tier markup.
+  // Domestic: weighted average margin from rates already entered in this rate card.
+  //   - 80% weight on the primary mainland Next Day service margin
+  //   - 20% weight on the average margin of all other domestic rates
+  //   Applied to the primary rate's carrier cost price to get projected sell.
   // International: average revenue/cost per parcel from actual charges (learns over time).
-  // Markup tiers: ≤50/wk = 40%, ≤100 = 35%, ≤200 = 30%, 200+ = 20%.
 
   const [showDebug, setShowDebug] = useState(false);
-
-  // Markup tier based on total weekly parcel volume
-  const markupTier = (parcels) => {
-    if (parcels <= 50)  return 0.40;
-    if (parcels <= 100) return 0.35;
-    if (parcels <= 200) return 0.30;
-    return 0.20;
-  };
 
   // Find the primary mainland domestic rate.
   // Priority: known primary service codes → Mainland zone → lowest numbered zone.
@@ -244,25 +238,51 @@ export default function RateCardEditor() {
     return firstCode ? pickMainland(firstCode) : null;
   })();
 
+  // Margin % for a single rate row: (sell - cost) / sell × 100
+  const marginOf = (r) => {
+    const sell = parseFloat(r.price);
+    const cost = parseFloat(r.cost_price);
+    return sell > 0 && cost != null ? (sell - cost) / sell * 100 : null;
+  };
+
   const projections = (() => {
-    if (!weeklyParcels || !primaryRate) return null;
-    const total      = parseInt(weeklyParcels);
-    const domParcels = Math.round(total * domesticPct / 100);
+    if (!weeklyParcels || !primaryRate?.cost_price) return null;
+    const total       = parseInt(weeklyParcels);
+    const domParcels  = Math.round(total * domesticPct / 100);
     const intlParcels = total - domParcels;
-    const markup     = markupTier(total);
 
-    // Domestic leg
-    const domCostRate = parseFloat(primaryRate.cost_price || 0);
-    const domSellRate = domCostRate * (1 + markup);
-    const domRev      = domSellRate * domParcels;
-    const domCost     = domCostRate * domParcels;
-    const domProfit   = domRev - domCost;
+    // ── Weighted margin from rate card prices ─────────────────────────────
+    const pricedRates = domesticRates.filter(r =>
+      parseFloat(r.price) > 0 && parseFloat(r.cost_price) > 0
+    );
 
-    // International leg — from actual charge averages, zero if no data yet
-    const avgSell   = parseFloat(intlAvg?.avg_sell   || 0);
-    const avgCost   = parseFloat(intlAvg?.avg_cost   || 0);
-    const intlRev   = avgSell  * intlParcels;
-    const intlCost  = avgCost  * intlParcels;
+    const mainlandMargin = marginOf(primaryRate);
+
+    const otherRates = pricedRates.filter(r => r !== primaryRate);
+    const otherAvgMargin = otherRates.length > 0
+      ? otherRates.reduce((s, r) => s + (marginOf(r) ?? 0), 0) / otherRates.length
+      : mainlandMargin ?? 20; // fallback if only one rate
+
+    // If primary rate has no sell price yet, fall back to other rates' average
+    const weightedMargin = mainlandMargin != null
+      ? 0.80 * mainlandMargin + 0.20 * otherAvgMargin
+      : otherAvgMargin;
+
+    // ── Domestic leg ──────────────────────────────────────────────────────
+    const domCostRate = parseFloat(primaryRate.cost_price);
+    // Reverse the margin to get sell: sell = cost / (1 - margin/100)
+    const domSellRate = weightedMargin < 99
+      ? domCostRate / (1 - weightedMargin / 100)
+      : domCostRate * 2;
+    const domRev    = domSellRate * domParcels;
+    const domCost   = domCostRate * domParcels;
+    const domProfit = domRev - domCost;
+
+    // ── International leg ─────────────────────────────────────────────────
+    const avgSell    = parseFloat(intlAvg?.avg_sell  || 0);
+    const avgCost    = parseFloat(intlAvg?.avg_cost  || 0);
+    const intlRev    = avgSell * intlParcels;
+    const intlCost   = avgCost * intlParcels;
     const intlProfit = intlRev - intlCost;
 
     const totalRev    = domRev    + intlRev;
@@ -272,10 +292,18 @@ export default function RateCardEditor() {
     return {
       rev: totalRev, cost: totalCost, profit: totalProfit,
       margin: totalRev > 0 ? totalProfit / totalRev * 100 : 0,
-      dom:  { parcels: domParcels,  rev: domRev,  cost: domCost,  profit: domProfit,
-              sell_rate: domSellRate, cost_rate: domCostRate, markup },
-      intl: { parcels: intlParcels, rev: intlRev, cost: intlCost, profit: intlProfit,
-              avg_sell: avgSell, avg_cost: avgCost, sample_count: intlAvg?.sample_count ?? 0 },
+      dom: {
+        parcels: domParcels, rev: domRev, cost: domCost, profit: domProfit,
+        sell_rate: domSellRate, cost_rate: domCostRate,
+        weighted_margin: weightedMargin,
+        mainland_margin: mainlandMargin,
+        other_avg_margin: otherAvgMargin,
+        priced_rate_count: pricedRates.length,
+      },
+      intl: {
+        parcels: intlParcels, rev: intlRev, cost: intlCost, profit: intlProfit,
+        avg_sell: avgSell, avg_cost: avgCost, sample_count: intlAvg?.sample_count ?? 0,
+      },
     };
   })();
 
@@ -687,24 +715,45 @@ export default function RateCardEditor() {
                     </div>
                     {/* Domestic leg */}
                     <div style={{ padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                      <div style={{ fontSize: 10, color: '#888', fontWeight: 700, textTransform: 'uppercase', marginBottom: 6 }}>
+                      <div style={{ fontSize: 10, color: '#888', fontWeight: 700, textTransform: 'uppercase', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
                         Domestic — {projections.dom.parcels.toLocaleString()} parcels ({domesticPct}%)
+                        <span style={{ color: '#555', fontWeight: 400, textTransform: 'none' }}>
+                          {projections.dom.priced_rate_count} rated rows used
+                        </span>
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 8 }}>
                         {[
-                          { label: 'Service',    val: primaryRate.service_name || primaryRate.service_code },
-                          { label: 'Zone',       val: primaryRate.zone_name || 'Mainland', mono: true },
-                          { label: 'Markup tier',val: `${(projections.dom.markup * 100).toFixed(0)}%`, mono: true, color: '#A5B4FC' },
-                          { label: 'Carrier cost',val: gbp(projections.dom.cost_rate), mono: true, color: '#B39DDB' },
-                          { label: 'Sell rate',  val: gbp(projections.dom.sell_rate), mono: true, color: '#00C853' },
-                          { label: 'Dom profit', val: gbp(projections.dom.profit), mono: true,
-                            color: projections.dom.profit >= 0 ? '#34D399' : '#EF4444' },
+                          { label: 'Service',       val: primaryRate.service_name || primaryRate.service_code },
+                          { label: 'Zone',          val: primaryRate.zone_name || 'Mainland', mono: true },
+                          { label: 'Carrier cost',  val: gbp(projections.dom.cost_rate), mono: true, color: '#B39DDB' },
                         ].map(({ label, val, mono, color }) => (
                           <div key={label}>
                             <div style={{ fontSize: 10, color: '#555', marginBottom: 2 }}>{label}</div>
                             <div style={{ color: color || '#CCC', fontFamily: mono ? 'monospace' : 'inherit', fontWeight: 600 }}>{val}</div>
                           </div>
                         ))}
+                      </div>
+                      {/* Margin weighting breakdown */}
+                      <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 6, padding: '6px 10px', fontSize: 10 }}>
+                        <div style={{ color: '#555', marginBottom: 4, fontWeight: 600 }}>Margin weighting</div>
+                        <div style={{ display: 'flex', gap: 12 }}>
+                          <span style={{ color: '#A5B4FC' }}>
+                            80% × mainland {projections.dom.mainland_margin != null ? `${projections.dom.mainland_margin.toFixed(1)}%` : 'no price set'}
+                          </span>
+                          <span style={{ color: '#555' }}>+</span>
+                          <span style={{ color: '#888' }}>
+                            20% × others {projections.dom.other_avg_margin.toFixed(1)}%
+                          </span>
+                          <span style={{ color: '#555' }}>=</span>
+                          <span style={{ color: '#34D399', fontWeight: 700 }}>
+                            {projections.dom.weighted_margin.toFixed(1)}% weighted margin
+                          </span>
+                        </div>
+                        <div style={{ marginTop: 6, display: 'flex', gap: 16 }}>
+                          <span>Projected sell: <span style={{ color: '#00C853', fontFamily: 'monospace', fontWeight: 700 }}>{gbp(projections.dom.sell_rate)}</span>/parcel</span>
+                          <span>Dom profit: <span style={{ fontFamily: 'monospace', fontWeight: 700,
+                            color: projections.dom.profit >= 0 ? '#34D399' : '#EF4444' }}>{gbp(projections.dom.profit)}</span></span>
+                        </div>
                       </div>
                     </div>
                     {/* International leg */}
@@ -737,7 +786,9 @@ export default function RateCardEditor() {
             ) : (
               <div style={{ fontSize: 12, color: '#444', textAlign: 'center', padding: '10px 0 16px',
                 background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 8, marginBottom: 16 }}>
-                {!weeklyParcels ? 'Enter weekly parcels below to see projection' : 'Add domestic rates to calculate'}
+                {!weeklyParcels ? 'Enter weekly parcels below to see projection' :
+                 !primaryRate?.cost_price ? 'Add domestic rates with cost prices to calculate' :
+                 'Set sell prices on domestic rates to project margin'}
               </div>
             )}
 
