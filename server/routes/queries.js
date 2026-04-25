@@ -934,7 +934,16 @@ Instructions:
 - Confirm you are investigating with ${ticket.courier_name || 'the courier'}
 - Give a realistic timeframe (1-2 working days unless urgent)
 - Keep it under 200 words
-- Then on a new line, output ONLY this JSON: {"phone_call_recommended":true/false,"urgency_reason":"brief reason or null"}`;
+
+Then on a new line, output ONLY this JSON: {"phone_call_recommended":true/false,"urgency_reason":"brief reason or null"}
+
+IMPORTANT — phone_call_recommended must be TRUE only if the customer's message contains CLEAR evidence of:
+- Explicit threatening or abusive language directed at staff
+- Explicit mention of legal action, a solicitor, trading standards, small claims court, or formal complaint
+- Extremely high-value loss (over £500) combined with an aggressive/distressed tone
+- Repeated escalation after previous resolution attempts
+
+For ALL other cases — standard queries, delayed parcels, missing items, general frustration, mild upset, routine WISMO — set phone_call_recommended to FALSE. Most tickets do NOT warrant a phone call.`;
 
         const aiResp = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',

@@ -201,8 +201,24 @@ function EmailBubble({ email, courierCode, queryId, onApproved }) {
   const [approving, setApproving]   = useState(false);
   const [reviseMode, setReviseMode] = useState(false);
   const [reviseText, setReviseText] = useState('');
+  const reviseTextRef               = useRef('');        // always-current mirror
   const [revising, setRevising]     = useState(false);
-  const speech = useSpeechInput(setReviseText);
+
+  // Keeps state + ref in sync — pass this instead of raw setReviseText
+  function updateReviseText(val) {
+    if (typeof val === 'function') {
+      setReviseText(prev => {
+        const next = val(prev);
+        reviseTextRef.current = next;
+        return next;
+      });
+    } else {
+      reviseTextRef.current = val;
+      setReviseText(val);
+    }
+  }
+
+  const speech = useSpeechInput(updateReviseText);
   const qc = useQueryClient();
 
   const isInbound  = email.direction.startsWith('inbound');
@@ -237,15 +253,18 @@ function EmailBubble({ email, courierCode, queryId, onApproved }) {
   }
 
   async function submitRevision() {
-    if (!reviseText.trim() || revising) return;
+    // Always read from ref — avoids stale closure when called from voice input or Enter key
+    const feedback = reviseTextRef.current.trim();
+    if (!feedback || revising) return;
     setRevising(true);
     try {
       await fetch(`/api/queries/${queryId}/revise-draft`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email_id: email.id, feedback: reviseText.trim() }),
+        body: JSON.stringify({ email_id: email.id, feedback }),
       });
       setReviseMode(false);
+      reviseTextRef.current = '';
       setReviseText('');
       qc.invalidateQueries(['ticket', queryId]);
     } catch (e) {
@@ -363,7 +382,7 @@ function EmailBubble({ email, courierCode, queryId, onApproved }) {
                   <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
                     <textarea
                       value={reviseText}
-                      onChange={e => setReviseText(e.target.value)}
+                      onChange={e => updateReviseText(e.target.value)}
                       placeholder="e.g. Too formal — this customer is very upset, be more apologetic and offer to escalate…"
                       rows={3}
                       autoFocus
@@ -396,16 +415,16 @@ function EmailBubble({ email, courierCode, queryId, onApproved }) {
                           <line x1="12" y1="19" x2="12" y2="22"/>
                         </svg>
                       </button>
-                      {/* Send revision */}
+                      {/* Send revision — enabled check uses ref so voice input is always current */}
                       <button
                         onClick={submitRevision}
-                        disabled={!reviseText.trim() || revising}
-                        title="Send to Katana (⌘+Enter)"
+                        disabled={revising}
+                        title="Send to Katana (Enter)"
                         style={{
                           width: 32, height: 32, borderRadius: 6, border: 'none',
-                          background: reviseText.trim() && !revising ? C.amber : `${C.amber}18`,
-                          color: reviseText.trim() && !revising ? '#000' : C.muted,
-                          cursor: reviseText.trim() && !revising ? 'pointer' : 'default',
+                          background: !revising ? C.amber : `${C.amber}18`,
+                          color: !revising ? '#000' : C.muted,
+                          cursor: !revising ? 'pointer' : 'default',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                         }}
                       >
@@ -462,7 +481,7 @@ function EmailBubble({ email, courierCode, queryId, onApproved }) {
                       {approving ? 'Approving…' : 'Approve & Send'}
                     </button>
                     <button
-                      onClick={() => { setReviseMode(r => !r); setReviseText(''); }}
+                      onClick={() => { setReviseMode(r => !r); reviseTextRef.current = ''; setReviseText(''); }}
                       style={{
                         display: 'flex', alignItems: 'center', gap: 6,
                         padding: '7px 14px', borderRadius: 6,

@@ -275,7 +275,10 @@ const PRIORITY_BAR = {
   low:    'rgba(125,133,144,0.4)',
 };
 
-function InboxRow({ q, onClick }) {
+function InboxRow({ q, onClick, staffList = [], onUpdate }) {
+  const [statusSaving,   setStatusSaving]   = useState(false);
+  const [assigneeSaving, setAssigneeSaving] = useState(false);
+
   const hasAttention   = q.requires_attention;
   const hasSlaBreached = q.sla_breached;
   const isClaim        = CLAIM_STATUSES.has(q.status);
@@ -288,7 +291,29 @@ function InboxRow({ q, onClick }) {
                  : hasSlaBreached ? C.amber
                  : PRIORITY_BAR[q.priority] || PRIORITY_BAR.medium;
 
-  const logoUrl = q.courier_code ? getCourierLogo(q.courier_code) : null;
+  const logoUrl        = q.courier_code ? getCourierLogo(q.courier_code) : null;
+  const statusCfg      = STATUS_CFG[q.status] || { label: q.status, color: C.muted };
+  const assigneeName   = staffList.find(s => s.id === q.assigned_to)?.full_name;
+
+  async function handleStatusChange(e) {
+    e.stopPropagation();
+    const newStatus = e.target.value;
+    if (newStatus === q.status) return;
+    setStatusSaving(true);
+    try { await updateQuery(q.id, { status: newStatus }); onUpdate?.(); }
+    catch { /* silently ignore */ }
+    finally { setStatusSaving(false); }
+  }
+
+  async function handleAssigneeChange(e) {
+    e.stopPropagation();
+    const newAssignee = e.target.value || null;
+    if (newAssignee === (q.assigned_to || '')) return;
+    setAssigneeSaving(true);
+    try { await updateQuery(q.id, { assigned_to: newAssignee }); onUpdate?.(); }
+    catch { /* silently ignore */ }
+    finally { setAssigneeSaving(false); }
+  }
 
   return (
     <div
@@ -303,7 +328,7 @@ function InboxRow({ q, onClick }) {
       onMouseEnter={e => { e.currentTarget.style.background = C.hover; }}
       onMouseLeave={e => { e.currentTarget.style.background = hasNewReply ? 'rgba(88,166,255,0.04)' : 'transparent'; }}
     >
-      {/* Priority accent bar */}
+      {/* Priority / status accent bar */}
       <div style={{ width: 4, flexShrink: 0, background: barColor, borderRadius: '2px 0 0 2px' }} />
 
       {/* Avatar */}
@@ -314,22 +339,26 @@ function InboxRow({ q, onClick }) {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 14, fontWeight: 800, color: hasNewReply ? C.blue : C.muted,
         border: `1px solid ${hasNewReply ? `${C.blue}33` : C.border}`,
+        flexShrink: 0,
       }}>
         {(q.customer_name || '?')[0].toUpperCase()}
       </div>
 
-      {/* Middle: main content */}
-      <div style={{ flex: 1, minWidth: 0, padding: '11px 0 10px' }}>
+      {/* ── Middle: main content ── */}
+      <div style={{ flex: 1, minWidth: 0, padding: '10px 0 10px' }}>
 
-        {/* Row 1: ticket # + subject */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+        {/* Row 1: ticket number + subject (big + bold) */}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
           {q.ticket_number && (
-            <span style={{ fontSize: 10, fontWeight: 700, color: C.muted, fontFamily: 'monospace', flexShrink: 0 }}>
+            <span style={{
+              fontSize: 12, fontWeight: 800, color: hasNewReply ? C.blue : C.muted,
+              flexShrink: 0, letterSpacing: '-0.01em',
+            }}>
               #{q.ticket_number}
             </span>
           )}
           <span style={{
-            fontSize: 14, fontWeight: hasNewReply ? 700 : 500,
+            fontSize: 14, fontWeight: hasNewReply ? 700 : 600,
             color: hasNewReply ? C.text : C.sub,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
           }}>
@@ -338,41 +367,49 @@ function InboxRow({ q, onClick }) {
         </div>
 
         {/* Row 2: customer · courier · consignment */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4, flexWrap: 'nowrap', overflow: 'hidden' }}>
-          <span style={{ fontSize: 12, color: hasNewReply ? C.sub : C.muted, fontWeight: hasNewReply ? 600 : 400, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5, overflow: 'hidden' }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: C.sub, flexShrink: 0 }}>
             {q.customer_name}
           </span>
           {q.courier_name && (
             <>
-              <span style={{ color: C.muted, fontSize: 10, flexShrink: 0 }}>·</span>
-              {logoUrl && <img src={logoUrl} alt="" style={{ width: 14, height: 10, objectFit: 'contain', flexShrink: 0 }} />}
-              <span style={{ fontSize: 11, color: C.muted, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.courier_name}</span>
+              <span style={{ color: C.muted, fontSize: 11, flexShrink: 0 }}>·</span>
+              {logoUrl && (
+                <img src={logoUrl} alt="" style={{ width: 14, height: 10, objectFit: 'contain', flexShrink: 0 }} />
+              )}
+              <span style={{ fontSize: 11, color: C.muted, flexShrink: 0 }}>{q.courier_name}</span>
             </>
           )}
           {q.consignment_number && (
             <>
-              <span style={{ color: C.muted, fontSize: 10, flexShrink: 0 }}>·</span>
-              <span style={{ fontSize: 11, fontFamily: 'monospace', color: C.muted, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.consignment_number}</span>
+              <span style={{ color: C.muted, fontSize: 11, flexShrink: 0 }}>·</span>
+              <span style={{ fontSize: 11, fontFamily: 'monospace', color: C.muted, flexShrink: 0,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
+                {q.consignment_number}
+              </span>
             </>
           )}
         </div>
 
-        {/* Row 3: email preview */}
+        {/* Row 3: preview snippet */}
         {q.latest_email_preview && (
-          <div style={{ fontSize: 12, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 12, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '95%' }}>
             {q.latest_email_preview.substring(0, 120)}
           </div>
         )}
       </div>
 
-      {/* Right: badges + meta */}
-      <div style={{
-        flexShrink: 0, display: 'flex', flexDirection: 'column',
-        alignItems: 'flex-end', justifyContent: 'center',
-        gap: 6, padding: '10px 16px 10px 14px', minWidth: 160,
-      }}>
-        {/* Timestamp + unread bubble */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+      {/* ── Right: inline controls + meta ── */}
+      <div
+        style={{
+          flexShrink: 0, display: 'flex', flexDirection: 'column',
+          alignItems: 'flex-end', justifyContent: 'center',
+          gap: 5, padding: '10px 14px 10px 10px', minWidth: 180,
+        }}
+        onClick={e => e.stopPropagation()} /* prevent card nav when clicking dropdowns */
+      >
+        {/* Timestamp + unread badge */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 1 }}>
           <span style={{ fontSize: 11, color: hasNewReply ? C.blue : C.muted, fontWeight: hasNewReply ? 700 : 400 }}>
             {timeAgo(q.latest_email_at || q.created_at)}
           </span>
@@ -387,10 +424,59 @@ function InboxRow({ q, onClick }) {
           )}
         </div>
 
-        {/* Status badge */}
-        <StatusBadge status={q.status} small />
+        {/* Inline status dropdown */}
+        <div style={{ position: 'relative', width: '100%' }}>
+          <select
+            value={q.status || ''}
+            onChange={handleStatusChange}
+            disabled={statusSaving}
+            style={{
+              width: '100%', appearance: 'none',
+              background: `${statusCfg.color}18`,
+              border: `1px solid ${statusCfg.color}44`,
+              borderRadius: 5, color: statusCfg.color,
+              fontSize: 11, fontWeight: 700, padding: '4px 22px 4px 8px',
+              cursor: 'pointer', outline: 'none',
+              opacity: statusSaving ? 0.6 : 1,
+            }}
+          >
+            {Object.entries(STATUS_CFG).map(([k, v]) => (
+              <option key={k} value={k} style={{ background: '#1C2128', color: '#E6EDF3', fontWeight: 400 }}>
+                {v.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown size={11} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', color: statusCfg.color, pointerEvents: 'none' }} />
+        </div>
 
-        {/* Alert chips row */}
+        {/* Inline assignee dropdown */}
+        <div style={{ position: 'relative', width: '100%' }}>
+          <select
+            value={q.assigned_to || ''}
+            onChange={handleAssigneeChange}
+            disabled={assigneeSaving}
+            style={{
+              width: '100%', appearance: 'none',
+              background: 'rgba(255,255,255,0.04)',
+              border: `1px solid ${C.border}`,
+              borderRadius: 5, color: assigneeName ? C.sub : C.muted,
+              fontSize: 11, fontWeight: assigneeName ? 600 : 400,
+              padding: '4px 22px 4px 8px',
+              cursor: 'pointer', outline: 'none',
+              opacity: assigneeSaving ? 0.6 : 1,
+            }}
+          >
+            <option value="" style={{ background: '#1C2128', color: '#7D8590' }}>Unassigned</option>
+            {staffList.map(s => (
+              <option key={s.id} value={s.id} style={{ background: '#1C2128', color: '#E6EDF3' }}>
+                {s.full_name}
+              </option>
+            ))}
+          </select>
+          <ChevronDown size={11} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', color: C.muted, pointerEvents: 'none' }} />
+        </div>
+
+        {/* Alert / claim chips */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {hasAttention && (
             <span style={{ fontSize: 9, fontWeight: 700, color: C.red, background: C.redDim,
@@ -1669,7 +1755,13 @@ export default function QueriesPage() {
             </div>
           )}
           {queries.map(q => (
-            <InboxRow key={q.id} q={q} onClick={() => navigate(`/queries/${q.id}`)} />
+            <InboxRow
+              key={q.id}
+              q={q}
+              onClick={() => navigate(`/queries/${q.id}`)}
+              staffList={staffList}
+              onUpdate={refresh}
+            />
           ))}
         </div>
 
