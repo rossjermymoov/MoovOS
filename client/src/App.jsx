@@ -14,6 +14,7 @@ import TicketDetailPage from './pages/queries/TicketDetailPage';
 import CustomerSimPage from './pages/customer/CustomerSimPage';
 import KatanaPage from './pages/katana/KatanaPage';
 import PricingPage from './pages/pricing/PricingPage';
+import RateCardEditor from './pages/pricing/RateCardEditor';
 
 // Placeholder pages for other sections (to be built)
 const Placeholder = ({ name }) => (
@@ -37,7 +38,10 @@ export default function App() {
           <Route path=":id" element={<CustomerRecord />} />
         </Route>
 
-        <Route path="pricing"   element={<PricingPage />} />
+        <Route path="pricing">
+          <Route index element={<PricingPage />} />
+          <Route path="rate-card/:id" element={<RateCardEditor />} />
+        </Route>
         <Route path="tracking"  element={<TrackingPage />} />
         <Route path="finance"   element={<FinancePage />} />
         <Route path="queries">

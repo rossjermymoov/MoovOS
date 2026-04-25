@@ -202,6 +202,31 @@ router.patch('/prospects/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── GET /api/pricing/rate-card/:id — single rate card detail ────────────────
+
+router.get('/rate-card/:id', async (req, res, next) => {
+  try {
+    const r = await query(`
+      SELECT prc.*,
+             t.name AS template_name,
+             c.name AS category_name,
+             p.company_name AS prospect_company,
+             p.contact_name AS prospect_contact,
+             s.full_name AS created_by_name,
+             (SELECT row_to_json(a) FROM rate_card_approvals a
+              WHERE a.rate_card_id = prc.id ORDER BY a.requested_at DESC LIMIT 1) AS latest_approval
+      FROM prospect_rate_cards prc
+      LEFT JOIN rate_card_templates t ON t.id = prc.template_id
+      LEFT JOIN rate_card_categories c ON c.id = t.category_id
+      LEFT JOIN prospects p ON p.id = prc.prospect_id
+      LEFT JOIN staff s ON s.id = prc.created_by
+      WHERE prc.id = $1
+    `, [req.params.id]);
+    if (!r.rows.length) return res.status(404).json({ error: 'Rate card not found' });
+    res.json(r.rows[0]);
+  } catch (err) { next(err); }
+});
+
 // ─── GET /api/pricing/prospects/:id/rate-cards ───────────────────────────────
 
 router.get('/prospects/:id/rate-cards', async (req, res, next) => {

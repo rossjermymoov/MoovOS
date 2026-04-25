@@ -10,14 +10,6 @@ CREATE TABLE IF NOT EXISTS rate_card_categories (
   created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-INSERT INTO rate_card_categories (name, description, sort_order) VALUES
-  ('Standard',     'General starting rates for new customers',          1),
-  ('High Volume',  'Discounted rates for high-volume shippers',         2),
-  ('Low Volume',   'Rates for low-volume or trial customers',           3),
-  ('Drop to Shop', 'Rates for customers using DPD Drop to Shop',        4),
-  ('International','Templates with international markup focus',         5),
-  ('Bespoke',      'Custom rates built from scratch',                   6)
-ON CONFLICT (name) DO NOTHING;
 
 -- ── 2. Rate card templates ────────────────────────────────────────────────────
 -- Each template is a starting point for a courier — editable at quote time.
