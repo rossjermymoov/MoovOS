@@ -137,6 +137,25 @@ router.post('/:customerId/sub-rates', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── GET /zones/:serviceCode — zone/weight-band template ─────
+// Returns the distinct (zone_name, weight_class_name) pairs that exist
+// in customer_rates for this service across ALL customers.  This is used
+// as the canonical zone template when setting up a new customer's rate card
+// so that zones match the carrier's structure rather than being entered manually.
+// Must be declared BEFORE /:customerId so Express does not treat "zones" as an id.
+router.get('/zones/:serviceCode', async (req, res, next) => {
+  try {
+    const { serviceCode } = req.params;
+    const result = await query(`
+      SELECT DISTINCT zone_name, weight_class_name
+      FROM   customer_rates
+      WHERE  service_code ILIKE $1
+      ORDER  BY zone_name, weight_class_name
+    `, [serviceCode]);
+    res.json(result.rows);
+  } catch (err) { next(err); }
+});
+
 // ─── GET /:customerId — rates grouped by courier → service ────
 router.get('/:customerId', async (req, res, next) => {
   try {

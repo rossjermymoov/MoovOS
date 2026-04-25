@@ -394,140 +394,97 @@ function InternationalRateOverlay({ service, onClose, onRateUpdate, onRateDelete
   );
 }
 
-// ─── Inline add-rate form ─────────────────────────────────────
-// Renders zone rows with empty price inputs. Used when a service has no
-// pricing yet, and as an expandable "add zone" row on existing services.
-function AddRateForm({ service, customerId, onSaved, onCancel }) {
-  const emptyRow = () => ({ zone_name: '', weight_class_name: 'Parcel', price: '', price_sub: '' });
-  const [rows, setRows] = useState([emptyRow()]);
-  const [saving, setSaving] = useState(false);
-  const [error, setError]   = useState(null);
+// ─── Empty price cell — creates a new rate on first entry ─────
+// Looks like PriceCell but dashed border, click-to-type, POSTs on commit.
+function NewPriceCell({ service, customerId, zoneName, weightClassName, onCreated }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal]         = useState('');
+  const [saving, setSaving]   = useState(false);
+  const inputRef              = useRef(null);
 
-  const addRow    = () => setRows(r => [...r, emptyRow()]);
-  const removeRow = (i) => setRows(r => r.filter((_, idx) => idx !== i));
-  const updateRow = (i, field, val) => setRows(r => r.map((row, idx) => idx === i ? { ...row, [field]: val } : row));
+  function startEdit() { setEditing(true); setTimeout(() => inputRef.current?.focus(), 0); }
 
-  const validRows = rows.filter(r => r.zone_name.trim() && r.price !== '' && !isNaN(parseFloat(r.price)));
-
-  async function save() {
-    if (!validRows.length) return;
-    setSaving(true); setError(null);
+  async function commit() {
+    const parsed = parseFloat(val);
+    if (isNaN(parsed) || parsed <= 0) { setEditing(false); setVal(''); return; }
+    setSaving(true);
     try {
-      await Promise.all(validRows.map(r =>
-        api.post(`/customer-rates/${customerId}`, {
-          courier_id:        service.courier_id || 0,
-          courier_code:      service.courier_code || '',
-          courier_name:      service.courier_name || '',
-          service_id:        service.service_id,
-          service_code:      service.service_code,
-          service_name:      service.service_name,
-          zone_name:         r.zone_name.trim(),
-          weight_class_name: r.weight_class_name.trim() || 'Parcel',
-          price:             parseFloat(r.price),
-          price_sub:         r.price_sub !== '' && !isNaN(parseFloat(r.price_sub)) ? parseFloat(r.price_sub) : null,
-        })
-      ));
-      setRows([emptyRow()]);
-      onSaved();
-    } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Save failed');
+      await api.post(`/customer-rates/${customerId}`, {
+        courier_id:        service.courier_id || 0,
+        courier_code:      service.courier_code || '',
+        courier_name:      service.courier_name || '',
+        service_id:        service.service_id,
+        service_code:      service.service_code,
+        service_name:      service.service_name,
+        zone_name:         zoneName,
+        weight_class_name: weightClassName,
+        price:             parsed,
+      });
+      onCreated();
+    } catch (e) {
+      console.error('[NewPriceCell] create failed', e);
     } finally {
       setSaving(false);
+      setEditing(false);
+      setVal('');
     }
   }
 
-  const fi = (extra = {}) => ({
-    background: '#0D0E2A', border: '1px solid rgba(255,255,255,0.12)',
-    borderRadius: 6, padding: '5px 9px', color: '#fff',
-    fontSize: 12, outline: 'none', boxSizing: 'border-box', ...extra,
-  });
+  if (saving) {
+    return <span style={{ fontSize: 12, color: '#555', fontFamily: 'monospace', padding: '3px 10px' }}>…</span>;
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setEditing(false); setVal(''); } }}
+        style={{ ...inp, width: 80, textAlign: 'right', color: '#00C853', fontWeight: 700, fontFamily: 'monospace', border: '1px solid rgba(0,200,83,0.6)', background: 'rgba(0,200,83,0.08)' }}
+      />
+    );
+  }
 
   return (
-    <div style={{ padding: '8px 0 4px' }}>
-      {/* Column headers */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 5 }}>
-        <div style={{ width: 110, fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Zone</div>
-        <div style={{ width: 90,  fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Weight class</div>
-        <div style={{ width: 82,  fontSize: 10, color: '#00C853', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>1st parcel</div>
-        <div style={{ width: 82,  fontSize: 10, color: '#FFC107', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>2nd+</div>
-      </div>
-
-      {rows.map((row, i) => (
-        <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 5, alignItems: 'center' }}>
-          <input
-            placeholder="Zone A"
-            value={row.zone_name}
-            onChange={e => updateRow(i, 'zone_name', e.target.value)}
-            style={fi({ width: 110 })}
-          />
-          <input
-            placeholder="Parcel"
-            value={row.weight_class_name}
-            onChange={e => updateRow(i, 'weight_class_name', e.target.value)}
-            style={fi({ width: 90 })}
-          />
-          <input
-            placeholder="£"
-            value={row.price}
-            onChange={e => updateRow(i, 'price', e.target.value)}
-            style={fi({ width: 82, textAlign: 'right', color: '#00C853', fontFamily: 'monospace', border: '1px solid rgba(0,200,83,0.3)' })}
-          />
-          <input
-            placeholder="£ sub"
-            value={row.price_sub}
-            onChange={e => updateRow(i, 'price_sub', e.target.value)}
-            style={fi({ width: 82, textAlign: 'right', color: '#FFC107', fontFamily: 'monospace', border: '1px solid rgba(255,193,7,0.2)' })}
-          />
-          {rows.length > 1 && (
-            <button onClick={() => removeRow(i)}
-              style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', padding: '2px 4px', flexShrink: 0, display: 'flex' }}
-              onMouseEnter={e => e.currentTarget.style.color = '#E91E8C'}
-              onMouseLeave={e => e.currentTarget.style.color = '#444'}>
-              <X size={12} />
-            </button>
-          )}
-        </div>
-      ))}
-
-      <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
-        <button onClick={addRow}
-          style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 5, color: '#AAAAAA', fontSize: 11, padding: '3px 10px', cursor: 'pointer' }}
-          onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.25)'}
-          onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'}>
-          + Add row
-        </button>
-        <button onClick={save} disabled={saving || !validRows.length}
-          style={{
-            background: validRows.length ? 'rgba(0,200,83,0.12)' : 'transparent',
-            border: `1px solid ${validRows.length ? '#00C853' : 'rgba(255,255,255,0.07)'}`,
-            borderRadius: 5, color: validRows.length ? '#00C853' : '#444',
-            fontSize: 11, fontWeight: 700, padding: '3px 14px',
-            cursor: validRows.length ? 'pointer' : 'default',
-          }}>
-          {saving ? 'Saving…' : 'Save'}
-        </button>
-        {onCancel && (
-          <button onClick={onCancel}
-            style={{ background: 'none', border: 'none', color: '#444', fontSize: 11, cursor: 'pointer', padding: '3px 8px' }}
-            onMouseEnter={e => e.currentTarget.style.color = '#AAAAAA'}
-            onMouseLeave={e => e.currentTarget.style.color = '#444'}>
-            Cancel
-          </button>
-        )}
-        {error && <span style={{ fontSize: 11, color: '#E91E8C' }}>{error}</span>}
-      </div>
-    </div>
+    <span
+      onClick={startEdit}
+      title="Click to set price"
+      style={{
+        fontSize: 12, color: '#2A2A2A', cursor: 'pointer',
+        padding: '3px 10px', borderRadius: 5, fontFamily: 'monospace',
+        border: '1px dashed rgba(255,255,255,0.1)',
+        display: 'inline-block', minWidth: 52, textAlign: 'center',
+        transition: 'border-color 0.12s, color 0.12s',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(0,200,83,0.5)'; e.currentTarget.style.color = '#00C853'; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = '#2A2A2A'; }}
+    >
+      —
+    </span>
   );
 }
 
 // ─── Service block — horizontal zone layout ───────────────────
+// For domestic services: shows ALL zones from the carrier template (fetched
+// from other customers' rates for this service_code).  Zones with a customer
+// price use PriceCell (edit/delete).  Zones with no price use NewPriceCell
+// (click → type → auto-creates the rate row).  Zone names and weight classes
+// are read-only — they come from the carrier, not the customer.
 function ServiceBlock({ service, customerId, onRateUpdate, onRateDelete, onRateCreated }) {
-  const [overlayOpen, setOverlay]   = useState(false);
-  const [addingZone, setAddingZone] = useState(false);
+  const [overlayOpen, setOverlay] = useState(false);
 
-  const isEmpty     = service.rates.length === 0;
-  const isIntl      = service.service_type === 'international';
-  const multiWeight = [...new Set(service.rates.map(r => r.weight_class_name))].length > 1;
+  const isIntl = service.service_type === 'international';
+
+  // Fetch zone template from other customers' rates for this service.
+  // This gives us the canonical zones/weight-bands defined at the carrier level.
+  const { data: templateZones = [], isLoading: templateLoading } = useQuery({
+    queryKey: ['rate-zone-template', service.service_code],
+    queryFn:  () => api.get(`/customer-rates/zones/${encodeURIComponent(service.service_code)}`).then(r => r.data),
+    enabled:  !isIntl,
+    staleTime: 120_000,
+  });
 
   // ── International: collapsed row → fullscreen overlay ───────
   if (isIntl) {
@@ -558,64 +515,80 @@ function ServiceBlock({ service, customerId, onRateUpdate, onRateDelete, onRateC
   }
 
   // ── Domestic: zone chips ─────────────────────────────────────
+  // Build a lookup of existing rates so we can match template zones to prices.
+  const rateMap = {};
+  for (const rate of service.rates) {
+    rateMap[`${rate.zone_name}::${rate.weight_class_name}`] = rate;
+  }
+
+  // Zones to display: template (canonical carrier zones) if available,
+  // otherwise fall back to whatever rates this customer already has.
+  const zonesToShow = templateZones.length > 0
+    ? templateZones
+    : service.rates.map(r => ({ zone_name: r.zone_name, weight_class_name: r.weight_class_name }));
+
+  const multiWeight = [...new Set(zonesToShow.map(z => z.weight_class_name))].length > 1;
+  const pricedCount = service.rates.length;
+  const totalCount  = zonesToShow.length;
+
   return (
     <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', padding: '10px 18px 14px' }}>
       {/* Service name header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: isEmpty ? 8 : 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: '#AAAAAA', textTransform: 'uppercase', letterSpacing: '0.06em', flex: 1 }}>
           {service.service_name}
         </span>
+        {/* Pricing progress — how many zones have a price */}
+        {totalCount > 0 && (
+          <span style={{ fontSize: 10, color: pricedCount === totalCount ? '#00C853' : '#FFC107', fontWeight: 700 }}>
+            {pricedCount}/{totalCount}
+          </span>
+        )}
         <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#555', background: 'rgba(255,255,255,0.04)', padding: '1px 6px', borderRadius: 3, border: '1px solid rgba(255,255,255,0.07)' }}>
           {service.service_code}
         </span>
-        {/* "Add zone" toggle — only shown when service already has rates */}
-        {!isEmpty && !addingZone && (
-          <button onClick={() => setAddingZone(true)}
-            style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, color: '#555', fontSize: 10, fontWeight: 700, padding: '2px 8px', cursor: 'pointer', flexShrink: 0 }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(0,200,83,0.4)'; e.currentTarget.style.color = '#00C853'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = '#555'; }}>
-            + zone
-          </button>
-        )}
       </div>
 
-      {/* Existing zone chips */}
-      {!isEmpty && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: addingZone ? 12 : 0 }}>
-          {service.rates.map((rate) => (
-            <div key={rate.id} style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8,
-              padding: '5px 8px 5px 10px',
-              background: 'rgba(255,255,255,0.02)',
-              border: '1px solid rgba(255,255,255,0.07)',
-              borderRadius: 7,
-            }}>
-              <span style={{ fontSize: 11, color: '#666', fontWeight: 500, whiteSpace: 'nowrap' }}>
-                {rate.zone_name}
-                {multiWeight && <span style={{ color: '#444', marginLeft: 5 }}>· {rate.weight_class_name}</span>}
-              </span>
-              <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
-              <SubPriceCell rateId={rate.id} initialSubPrice={rate.price_sub} onSaved={onRateUpdate} />
-            </div>
-          ))}
+      {/* Zone chips — template zones merged with existing customer rates */}
+      {templateLoading ? (
+        <div style={{ fontSize: 11, color: '#444' }}>Loading zones…</div>
+      ) : zonesToShow.length === 0 ? (
+        <div style={{ fontSize: 11, color: '#555', fontStyle: 'italic' }}>No zone template found for this service</div>
+      ) : (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {zonesToShow.map(({ zone_name, weight_class_name }) => {
+            const key  = `${zone_name}::${weight_class_name}`;
+            const rate = rateMap[key];
+            return (
+              <div key={key} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                padding: '5px 8px 5px 10px',
+                background: rate ? 'rgba(255,255,255,0.02)' : 'transparent',
+                border: `1px solid ${rate ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.04)'}`,
+                borderRadius: 7,
+              }}>
+                <span style={{ fontSize: 11, color: rate ? '#666' : '#444', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                  {zone_name}
+                  {multiWeight && <span style={{ color: '#333', marginLeft: 5 }}>· {weight_class_name}</span>}
+                </span>
+                {rate ? (
+                  <>
+                    <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
+                    <SubPriceCell rateId={rate.id} initialSubPrice={rate.price_sub} onSaved={onRateUpdate} />
+                  </>
+                ) : (
+                  <NewPriceCell
+                    service={service}
+                    customerId={customerId}
+                    zoneName={zone_name}
+                    weightClassName={weight_class_name}
+                    onCreated={onRateCreated}
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
-      )}
-
-      {/* No pricing yet — always show form. Existing service — show form when + zone clicked */}
-      {(isEmpty || addingZone) && (
-        <>
-          {isEmpty && (
-            <div style={{ fontSize: 11, color: '#555', fontStyle: 'italic', marginBottom: 10 }}>
-              No pricing found — enter rates below
-            </div>
-          )}
-          <AddRateForm
-            service={service}
-            customerId={customerId}
-            onSaved={() => { setAddingZone(false); onRateCreated(); }}
-            onCancel={isEmpty ? null : () => setAddingZone(false)}
-          />
-        </>
       )}
     </div>
   );
