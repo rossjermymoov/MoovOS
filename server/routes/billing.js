@@ -553,7 +553,12 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData) 
       FROM surcharges s
       JOIN couriers c ON c.id = s.courier_id
       WHERE s.active = true
-        AND LOWER(c.code) = LOWER($1)
+        AND (
+          LOWER(c.code) = LOWER($1)
+          OR LOWER($1) LIKE '%' || LOWER(c.code) || '%'
+          OR LOWER(c.name) = LOWER($1)
+          OR LOWER($1) LIKE '%' || LOWER(c.name) || '%'
+        )
         AND (s.applies_when = 'always' OR s.applies_when IS NULL)
         AND (s.effective_date IS NULL OR s.effective_date <= CURRENT_DATE)
     `, [shipmentData.courier]);
@@ -1452,7 +1457,7 @@ router.post('/batch-apply-surcharges', async (req, res, next) => {
     const conds = [`c.charge_type = 'courier'`, `c.cancelled = false`, `c.price IS NOT NULL`, `s.courier IS NOT NULL`];
     const vals  = [];
     if (customer_id) { vals.push(customer_id); conds.push(`c.customer_id = $${vals.length}`); }
-    if (courier_code) { vals.push(courier_code); conds.push(`LOWER(s.courier) = LOWER($${vals.length})`); }
+    if (courier_code) { vals.push(courier_code); conds.push(`(LOWER(s.courier) = LOWER($${vals.length}) OR LOWER(s.courier) LIKE '%' || LOWER($${vals.length}) || '%')`); }
 
     const { rows } = await query(`
       SELECT
