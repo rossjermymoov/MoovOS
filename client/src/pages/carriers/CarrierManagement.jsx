@@ -1170,6 +1170,8 @@ function CustomerRcTemplatesTab({ courierCode, courierName }) {
   const [confirmDel, setConfirmDel] = useState(null); // template id to delete
   const [rateEdits, setRateEdits] = useState({});     // { [templateId]: rate[] }
   const [loadingCarrier, setLoadingCarrier] = useState(null); // template id being loaded
+  const [openSvcs,      setOpenSvcs]      = useState(new Set()); // domestic service keys expanded
+  const [openIntlSvcs,  setOpenIntlSvcs]  = useState(new Set()); // intl service keys expanded
 
   const { data: templates = [], isLoading } = useQuery({
     queryKey: ['pricing-templates', courierCode],
@@ -1225,6 +1227,19 @@ function CustomerRcTemplatesTab({ courierCode, courierName }) {
     const current = getRates(tpl);
     setRates(tpl.id, [...current, { service_code: '', service_name: '', zone_name: '', price: '', price_sub: '', cost_price: null, is_international: intl }]);
   };
+
+  // Apply a % markup to cost_price and write the result into price
+  const applyMarkup = (tpl, idx, pct) => {
+    const rows = getRates(tpl);
+    const row  = rows[idx];
+    const cost = parseFloat(row.cost_price);
+    const mkp  = parseFloat(pct);
+    const newPrice = (!isNaN(cost) && !isNaN(mkp)) ? (cost * (1 + mkp / 100)).toFixed(2) : row.price;
+    setRates(tpl.id, rows.map((r, i) => i === idx ? { ...r, markup_pct: pct, price: newPrice } : r));
+  };
+
+  const toggleSvc = (key) => setOpenSvcs(s => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  const toggleIntl = (key) => setOpenIntlSvcs(s => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
   const loadFromCarrier = async (tpl) => {
     setLoadingCarrier(tpl.id);
@@ -1339,6 +1354,14 @@ function CustomerRcTemplatesTab({ courierCode, courierName }) {
             const rates  = getRates(tpl);
             const domestic = rates.filter(r => !r.is_international);
             const intl     = rates.filter(r => r.is_international);
+            const groupByCode = (rows) => Object.values(rows.reduce((acc, r) => {
+              const k = r.service_code || r.service_name || '?';
+              if (!acc[k]) acc[k] = { service_code: r.service_code, service_name: r.service_name, zones: [] };
+              acc[k].zones.push(r);
+              return acc;
+            }, {}));
+            const domesticServices = groupByCode(domestic);
+            const intlServices     = groupByCode(intl);
 
             return (
               <div key={tpl.id} style={{ border: `1px solid ${isOpen ? 'rgba(99,102,241,0.4)' : 'rgba(255,255,255,0.08)'}`,
@@ -1419,12 +1442,10 @@ function CustomerRcTemplatesTab({ courierCode, courierName }) {
                 {isOpen && (
                   <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', padding: '14px 14px 16px' }}>
 
-                    {/* Load from carrier button */}
-                    <div style={{ marginBottom: 14 }}>
-                      <button
-                        onClick={() => loadFromCarrier(tpl)}
-                        disabled={loadingCarrier === tpl.id}
-                        style={{ display: 'flex', alignItems: 'center', gap: 6,
+                    {/* Load from carrier */}
+                    <div style={{ marginBottom: 18 }}>
+                      <button onClick={() => loadFromCarrier(tpl)} disabled={loadingCarrier === tpl.id}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6,
                           background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.35)',
                           borderRadius: 7, padding: '7px 14px', color: '#A5B4FC',
                           fontSize: 12, fontWeight: 600, cursor: loadingCarrier === tpl.id ? 'wait' : 'pointer',
@@ -1432,105 +1453,186 @@ function CustomerRcTemplatesTab({ courierCode, courierName }) {
                         <RefreshCw size={12} style={{ animation: loadingCarrier === tpl.id ? 'spin 1s linear infinite' : 'none' }} />
                         {loadingCarrier === tpl.id ? 'Loading…' : `Load all ${courierName} services`}
                       </button>
-                      <div style={{ fontSize: 11, color: '#555', marginTop: 5 }}>
-                        Adds every service &amp; zone from the master rate card. Already-present rows are not duplicated. Set sell prices below.
-                      </div>
+                      <span style={{ fontSize: 11, color: '#555', marginLeft: 10 }}>
+                        Loads every service &amp; zone from the master rate card — existing rows are preserved.
+                      </span>
                     </div>
 
-                    {/* Domestic */}
-                    <div style={{ marginBottom: 16 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <div style={{ fontSize: 11, color: '#888', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                          Domestic Rates
-                        </div>
-                        <button onClick={() => addRow(tpl, false)}
-                          style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(255,255,255,0.05)',
-                            border: '1px solid rgba(255,255,255,0.1)', borderRadius: 5, padding: '3px 9px',
-                            color: '#888', fontSize: 11, cursor: 'pointer' }}>
-                          <Plus size={10} /> Add row
-                        </button>
+                    {rates.length === 0 && (
+                      <div style={{ padding: '28px 0', textAlign: 'center', color: '#444', fontSize: 13, fontStyle: 'italic' }}>
+                        No services yet — click the button above to populate from the master rate card.
                       </div>
-                      <div style={{ border: '1px solid rgba(255,255,255,0.07)', borderRadius: 7, overflow: 'hidden' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 0.8fr 0.8fr 28px',
-                          padding: '5px 10px', background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-                          {['Service / Name', 'Zone', 'Sell (base)', 'Sell (sub)', ''].map(h => (
-                            <div key={h} style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</div>
-                          ))}
+                    )}
+
+                    {/* ── DOMESTIC SERVICES ────────────────────────────────────── */}
+                    {domesticServices.length > 0 && (
+                      <div style={{ marginBottom: 24 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#00C853', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+                          Domestic Services
                         </div>
-                        {domestic.length === 0 ? (
-                          <div style={{ padding: '16px', color: '#444', fontSize: 12, textAlign: 'center' }}>No rows yet — click Add row</div>
-                        ) : domestic.map((r, i) => {
-                          const origIdx = rates.indexOf(r);
+                        {domesticServices.map(svc => {
+                          const svcKey = `${tpl.id}__${svc.service_code}`;
+                          const svcOpen = openSvcs.has(svcKey);
                           return (
-                            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 0.8fr 0.8fr 28px',
-                              padding: '4px 10px', alignItems: 'center',
-                              borderBottom: i < domestic.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
-                              <input value={r.service_name || ''} onChange={e => updateRow(tpl, origIdx, 'service_name', e.target.value)}
-                                style={inputSt} placeholder="Service name" />
-                              <input value={r.zone_name || ''} onChange={e => updateRow(tpl, origIdx, 'zone_name', e.target.value)}
-                                style={inputSt} placeholder="Zone" />
-                              <input value={r.price ?? ''} type="number" step="0.01" onChange={e => updateRow(tpl, origIdx, 'price', e.target.value)}
-                                style={inputSt} placeholder="0.00" />
-                              <input value={r.price_sub ?? ''} type="number" step="0.01" onChange={e => updateRow(tpl, origIdx, 'price_sub', e.target.value)}
-                                style={inputSt} placeholder="0.00" />
-                              <button onClick={() => removeRow(tpl, origIdx)}
-                                style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', padding: 3 }}>
-                                <Trash2 size={11} />
-                              </button>
+                            <div key={svcKey} style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, marginBottom: 8, overflow: 'hidden' }}>
+                              <div onClick={() => toggleSvc(svcKey)}
+                                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+                                  cursor: 'pointer', background: svcOpen ? 'rgba(255,255,255,0.03)' : 'transparent' }}>
+                                {svcOpen ? <ChevronDown size={13} color="#AAAAAA"/> : <ChevronRight size={13} color="#AAAAAA"/>}
+                                <span style={{ fontWeight: 600, fontSize: 13, color: '#fff', flex: 1 }}>{svc.service_name}</span>
+                                <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#00C853', background: 'rgba(0,200,83,0.08)', padding: '1px 8px', borderRadius: 9999 }}>{svc.service_code}</span>
+                                <span style={{ fontSize: 11, color: '#555' }}>{svc.zones.length} zone{svc.zones.length !== 1 ? 's' : ''}</span>
+                              </div>
+                              {svcOpen && (
+                                <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: 12 }}>
+                                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                                    <thead>
+                                      <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                                        <th style={{ textAlign: 'left',   padding: '4px 8px', color: '#555', fontWeight: 600, fontSize: 11 }}>Zone</th>
+                                        <th style={{ textAlign: 'right',  padding: '4px 8px', color: '#555', fontWeight: 600, fontSize: 11 }}>Cost (1st)</th>
+                                        <th style={{ textAlign: 'right',  padding: '4px 8px', color: '#A5B4FC', fontWeight: 600, fontSize: 11 }}>Markup %</th>
+                                        <th style={{ textAlign: 'right',  padding: '4px 8px', color: '#00C853', fontWeight: 600, fontSize: 11 }}>Sell (1st)</th>
+                                        <th style={{ textAlign: 'right',  padding: '4px 8px', color: '#FFC107', fontWeight: 600, fontSize: 11 }}>Sell (sub)</th>
+                                        <th style={{ width: 28 }}></th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {svc.zones.map(r => {
+                                        const origIdx = rates.indexOf(r);
+                                        return (
+                                          <tr key={origIdx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                                            <td style={{ padding: '5px 8px', color: '#AAAAAA' }}>{r.zone_name || '—'}</td>
+                                            <td style={{ padding: '5px 8px', textAlign: 'right', color: '#555', fontFamily: 'monospace' }}>
+                                              {r.cost_price ? `£${parseFloat(r.cost_price).toFixed(2)}` : '—'}
+                                            </td>
+                                            <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                                              <input value={r.markup_pct ?? ''} type="number" step="0.1" placeholder="—"
+                                                onChange={e => applyMarkup(tpl, origIdx, e.target.value)}
+                                                style={{ width: 64, textAlign: 'right', fontFamily: 'monospace', fontSize: 12,
+                                                  color: '#A5B4FC', background: 'rgba(99,102,241,0.08)',
+                                                  border: '1px solid rgba(99,102,241,0.3)', borderRadius: 9999, padding: '2px 8px', outline: 'none' }} />
+                                            </td>
+                                            <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                                              <input value={r.price ?? ''} type="number" step="0.01" placeholder="0.00"
+                                                onChange={e => updateRow(tpl, origIdx, 'price', e.target.value)}
+                                                style={{ width: 72, textAlign: 'right', fontFamily: 'monospace', fontSize: 12,
+                                                  color: '#00C853', fontWeight: 700, background: 'rgba(0,200,83,0.08)',
+                                                  border: '1px solid rgba(0,200,83,0.3)', borderRadius: 9999, padding: '2px 8px', outline: 'none' }} />
+                                            </td>
+                                            <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                                              <input value={r.price_sub ?? ''} type="number" step="0.01" placeholder="0.00"
+                                                onChange={e => updateRow(tpl, origIdx, 'price_sub', e.target.value)}
+                                                style={{ width: 72, textAlign: 'right', fontFamily: 'monospace', fontSize: 12,
+                                                  color: '#FFC107', background: 'rgba(255,193,7,0.08)',
+                                                  border: '1px solid rgba(255,193,7,0.3)', borderRadius: 9999, padding: '2px 8px', outline: 'none' }} />
+                                            </td>
+                                            <td style={{ padding: '5px 8px' }}>
+                                              <button onClick={() => removeRow(tpl, origIdx)}
+                                                style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', padding: 3 }}>
+                                                <Trash2 size={11} />
+                                              </button>
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
                       </div>
-                    </div>
+                    )}
 
-                    {/* International */}
-                    <div style={{ marginBottom: 14 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <div style={{ fontSize: 11, color: '#888', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                          International Rates
+                    {/* ── INTERNATIONAL SERVICES ───────────────────────────────── */}
+                    {intlServices.length > 0 && (
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#7B2FBE', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+                          International Services
                         </div>
-                        <button onClick={() => addRow(tpl, true)}
-                          style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(255,255,255,0.05)',
-                            border: '1px solid rgba(255,255,255,0.1)', borderRadius: 5, padding: '3px 9px',
-                            color: '#888', fontSize: 11, cursor: 'pointer' }}>
-                          <Plus size={10} /> Add row
-                        </button>
-                      </div>
-                      {intl.length > 0 && (
-                        <div style={{ border: '1px solid rgba(255,255,255,0.07)', borderRadius: 7, overflow: 'hidden' }}>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 0.8fr 0.8fr 28px',
-                            padding: '5px 10px', background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-                            {['Zone / Description', 'Region', 'Sell (base)', 'Sell (sub)', ''].map(h => (
-                              <div key={h} style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</div>
-                            ))}
-                          </div>
-                          {intl.map((r, i) => {
-                            const origIdx = rates.indexOf(r);
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 8 }}>
+                          {intlServices.map(svc => {
+                            const svcKey = `${tpl.id}__intl__${svc.service_code}`;
+                            const svcOpen = openIntlSvcs.has(svcKey);
+                            const filledZones = svc.zones.filter(z => z.markup_pct || z.price).length;
                             return (
-                              <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 0.8fr 0.8fr 28px',
-                                padding: '4px 10px', alignItems: 'center',
-                                borderBottom: i < intl.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
-                                <input value={r.service_name || ''} onChange={e => updateRow(tpl, origIdx, 'service_name', e.target.value)}
-                                  style={inputSt} placeholder="Zone name" />
-                                <input value={r.zone_name || ''} onChange={e => updateRow(tpl, origIdx, 'zone_name', e.target.value)}
-                                  style={inputSt} placeholder="Region" />
-                                <input value={r.price ?? ''} type="number" step="0.01" onChange={e => updateRow(tpl, origIdx, 'price', e.target.value)}
-                                  style={inputSt} placeholder="0.00" />
-                                <input value={r.price_sub ?? ''} type="number" step="0.01" onChange={e => updateRow(tpl, origIdx, 'price_sub', e.target.value)}
-                                  style={inputSt} placeholder="0.00" />
-                                <button onClick={() => removeRow(tpl, origIdx)}
-                                  style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', padding: 3 }}>
-                                  <Trash2 size={11} />
-                                </button>
+                              <div key={svcKey} style={{ border: '1px solid rgba(123,47,190,0.2)', borderRadius: 10,
+                                background: 'rgba(123,47,190,0.04)', overflow: 'hidden' }}>
+                                <div style={{ padding: '12px 14px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+                                    <span style={{ fontWeight: 600, fontSize: 13, color: '#fff', flex: 1 }}>{svc.service_name}</span>
+                                    <span style={{ fontFamily: 'monospace', fontSize: 10, color: '#7B2FBE', background: 'rgba(123,47,190,0.12)', padding: '1px 7px', borderRadius: 9999 }}>{svc.service_code}</span>
+                                  </div>
+                                  <div style={{ fontSize: 12, color: '#555', marginBottom: 10 }}>
+                                    {svc.zones.length} zone{svc.zones.length !== 1 ? 's' : ''}
+                                    {filledZones > 0 && <span style={{ color: '#00C853', marginLeft: 8 }}>· {filledZones} priced</span>}
+                                  </div>
+                                  <button onClick={() => toggleIntl(svcKey)}
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px',
+                                      borderRadius: 9999, fontSize: 11, fontWeight: 700,
+                                      background: svcOpen ? 'rgba(123,47,190,0.2)' : 'rgba(123,47,190,0.12)',
+                                      color: '#9B59E8', border: '1px solid rgba(123,47,190,0.3)', cursor: 'pointer' }}>
+                                    <FileText size={11}/> {svcOpen ? 'Hide Rates' : 'Edit Rates'}
+                                  </button>
+                                </div>
+                                {svcOpen && (
+                                  <div style={{ borderTop: '1px solid rgba(123,47,190,0.15)', padding: '10px 14px', maxHeight: 320, overflowY: 'auto' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                                      <thead>
+                                        <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                                          <th style={{ textAlign: 'left',  padding: '4px 6px', color: '#555', fontWeight: 600, fontSize: 10 }}>Zone</th>
+                                          <th style={{ textAlign: 'right', padding: '4px 6px', color: '#555', fontWeight: 600, fontSize: 10 }}>Cost</th>
+                                          <th style={{ textAlign: 'right', padding: '4px 6px', color: '#A5B4FC', fontWeight: 700, fontSize: 10 }}>Markup %</th>
+                                          <th style={{ textAlign: 'right', padding: '4px 6px', color: '#00C853', fontWeight: 600, fontSize: 10 }}>Sell</th>
+                                          <th style={{ width: 24 }}></th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {svc.zones.map(r => {
+                                          const origIdx = rates.indexOf(r);
+                                          return (
+                                            <tr key={origIdx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                                              <td style={{ padding: '4px 6px', color: '#AAAAAA', fontSize: 11, maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.zone_name || '—'}</td>
+                                              <td style={{ padding: '4px 6px', textAlign: 'right', color: '#555', fontFamily: 'monospace', fontSize: 11 }}>
+                                                {r.cost_price ? `£${parseFloat(r.cost_price).toFixed(2)}` : '—'}
+                                              </td>
+                                              <td style={{ padding: '4px 6px', textAlign: 'right' }}>
+                                                <input value={r.markup_pct ?? ''} type="number" step="0.1" placeholder="%"
+                                                  onChange={e => applyMarkup(tpl, origIdx, e.target.value)}
+                                                  style={{ width: 56, textAlign: 'right', fontFamily: 'monospace', fontSize: 11,
+                                                    color: '#A5B4FC', fontWeight: 700, background: 'rgba(99,102,241,0.1)',
+                                                    border: '1px solid rgba(99,102,241,0.4)', borderRadius: 9999, padding: '2px 6px', outline: 'none' }} />
+                                              </td>
+                                              <td style={{ padding: '4px 6px', textAlign: 'right' }}>
+                                                <input value={r.price ?? ''} type="number" step="0.01" placeholder="0.00"
+                                                  onChange={e => updateRow(tpl, origIdx, 'price', e.target.value)}
+                                                  style={{ width: 60, textAlign: 'right', fontFamily: 'monospace', fontSize: 11,
+                                                    color: '#00C853', background: 'rgba(0,200,83,0.08)',
+                                                    border: '1px solid rgba(0,200,83,0.25)', borderRadius: 9999, padding: '2px 6px', outline: 'none' }} />
+                                              </td>
+                                              <td style={{ padding: '4px 6px' }}>
+                                                <button onClick={() => removeRow(tpl, origIdx)}
+                                                  style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', padding: 2 }}>
+                                                  <Trash2 size={10} />
+                                                </button>
+                                              </td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
 
                     {/* Save bar */}
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                       {isDirty(tpl.id) && (
                         <button onClick={() => setRateEdits(p => { const n = { ...p }; delete n[tpl.id]; return n; })}
                           style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',

@@ -14,6 +14,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Save, Send, RefreshCw, Plus, Trash2, Check, X, AlertCircle,
+  ChevronDown, ChevronRight, FileText,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
@@ -85,6 +86,8 @@ export default function RateCardEditor() {
   const [submitStaff, setSubmitStaff] = useState('');
   const [showSubmit, setShowSubmit] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
+  const [openSvcs,     setOpenSvcs]     = useState(new Set());
+  const [openIntlSvcs, setOpenIntlSvcs] = useState(new Set());
 
   // Load rate card detail — we'll use the existing rate-cards endpoint via prospect
   // We need a direct endpoint for a single rate card. Add a route alias.
@@ -164,8 +167,45 @@ export default function RateCardEditor() {
     markDirty();
   };
 
+  // Apply markup % to a single zone → auto-set sell price
+  const applyMarkupToRate = (idx, pct) => {
+    setRates(prev => prev.map((r, i) => {
+      if (i !== idx) return r;
+      const cost = parseFloat(r.cost_price);
+      const mkp  = parseFloat(pct);
+      const newPrice = (!isNaN(cost) && !isNaN(mkp)) ? (cost * (1 + mkp / 100)).toFixed(2) : r.price;
+      return { ...r, markup_pct: pct, price: newPrice };
+    }));
+    markDirty();
+  };
+
+  // Apply global intl markup % to every international zone
+  const applyGlobalIntlMarkup = () => {
+    const pct = parseFloat(intlMarkup);
+    if (isNaN(pct)) return;
+    setRates(prev => prev.map(r => {
+      if (!r.is_international) return r;
+      const cost = parseFloat(r.cost_price);
+      const newPrice = !isNaN(cost) ? (cost * (1 + pct / 100)).toFixed(2) : r.price;
+      return { ...r, markup_pct: pct, price: newPrice };
+    }));
+    markDirty();
+  };
+
+  const toggleSvc     = (k) => setOpenSvcs(s => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
+  const toggleIntlSvc = (k) => setOpenIntlSvcs(s => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
+
   const domesticRates = rates.filter(r => !r.is_international);
   const intlRates     = rates.filter(r => r.is_international);
+
+  const groupByCode = (rows) => Object.values(rows.reduce((acc, r) => {
+    const k = r.service_code || r.service_name || '?';
+    if (!acc[k]) acc[k] = { service_code: r.service_code, service_name: r.service_name, zones: [] };
+    acc[k].zones.push(r);
+    return acc;
+  }, {}));
+  const domesticServices = groupByCode(domesticRates);
+  const intlServices     = groupByCode(intlRates);
 
   // ── Projections ───────────────────────────────────────────────────────────
 
@@ -336,161 +376,214 @@ export default function RateCardEditor() {
                 disabled={!isEditable}
                 style={{ ...inputStyle, width: 70, padding: '4px 8px' }} placeholder="—" />
             </label>
-            <label style={{ fontSize: 12, color: '#666', display: 'flex', alignItems: 'center', gap: 7 }}>
-              Intl markup %
-              <input value={intlMarkup} onChange={e => { setIntlMarkup(e.target.value); markDirty(); }}
-                disabled={!isEditable}
-                style={{ ...inputStyle, width: 70, padding: '4px 8px' }} placeholder="—" />
-            </label>
           </div>
 
-          {/* Domestic rates */}
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <div style={{ fontSize: 11, color: '#888', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Domestic Rates <span style={{ color: '#444', fontWeight: 400 }}>({domesticRates.length})</span>
-              </div>
-              {isEditable && (
-                <button onClick={addDomesticRow}
-                  style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,0.05)',
-                    border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '4px 10px',
-                    color: '#888', fontSize: 11, cursor: 'pointer' }}>
-                  <Plus size={11} /> Add row
-                </button>
-              )}
+          {/* ── DOMESTIC SERVICES ──────────────────────────────────────────── */}
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#00C853', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+              Domestic Services <span style={{ color: '#444', fontWeight: 400, textTransform: 'none' }}>({domesticServices.length} services · {domesticRates.length} zones)</span>
             </div>
-
-            <div style={{ border: '1px solid rgba(255,255,255,0.08)', borderRadius: 9, overflow: 'hidden' }}>
-              {/* Header */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.9fr 0.9fr 0.9fr 70px 30px',
-                padding: '7px 12px', background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                {['Service', 'Zone', 'Cost price', 'Sell (base)', 'Sell (sub)', 'Markup', ''].map(h => (
-                  <div key={h} style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</div>
-                ))}
+            {domesticServices.length === 0 && (
+              <div style={{ padding: '20px', textAlign: 'center', color: '#444', fontSize: 12, fontStyle: 'italic',
+                border: '1px solid rgba(255,255,255,0.06)', borderRadius: 9 }}>
+                No domestic rates yet.
               </div>
-
-              {domesticRates.length === 0 ? (
-                <div style={{ padding: '24px', textAlign: 'center', color: '#444', fontSize: 12 }}>
-                  No domestic rates yet.{isEditable ? ' Click "Add row" to start.' : ''}
-                </div>
-              ) : (
-                domesticRates.map((r, i) => {
-                  const origIdx = rates.indexOf(r);
-                  return (
-                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.9fr 0.9fr 0.9fr 70px 30px',
-                      padding: '5px 12px', alignItems: 'center',
-                      borderBottom: i < domesticRates.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
-                      background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
-                      {/* Service */}
-                      {isEditable
-                        ? <input value={r.service_name || r.service_code || ''}
-                            onChange={e => updateRate(origIdx, 'service_name', e.target.value)}
-                            style={{ ...inputStyle, fontSize: 12 }} placeholder="Service name" />
-                        : <div style={{ fontSize: 12, color: '#DDD', fontWeight: 600 }}>{r.service_name || r.service_code || '—'}</div>
-                      }
-                      {/* Zone */}
-                      {isEditable
-                        ? <input value={r.zone_name || ''}
-                            onChange={e => updateRate(origIdx, 'zone_name', e.target.value)}
-                            style={{ ...inputStyle, fontSize: 12 }} placeholder="Zone" />
-                        : <div style={{ fontSize: 12, color: '#888' }}>{r.zone_name || '—'}</div>
-                      }
-                      {/* Cost price (read-only) */}
-                      <div style={{ fontSize: 12, color: '#B39DDB', fontWeight: 600 }}>{gbp(r.cost_price)}</div>
-                      {/* Sell base */}
-                      {isEditable
-                        ? <input value={r.price ?? ''}
-                            onChange={e => updateRate(origIdx, 'price', e.target.value)}
-                            style={{ ...inputStyle, fontSize: 12 }} placeholder="0.00" type="number" step="0.01" />
-                        : <div style={{ fontSize: 12, color: '#DDD' }}>{gbp(r.price)}</div>
-                      }
-                      {/* Sell sub */}
-                      {isEditable
-                        ? <input value={r.price_sub ?? ''}
-                            onChange={e => updateRate(origIdx, 'price_sub', e.target.value)}
-                            style={{ ...inputStyle, fontSize: 12 }} placeholder="0.00" type="number" step="0.01" />
-                        : <div style={{ fontSize: 12, color: '#DDD' }}>{gbp(r.price_sub)}</div>
-                      }
-                      {/* Markup */}
-                      <MarkupChip sell={r.price} cost={r.cost_price} />
-                      {/* Delete */}
-                      {isEditable
-                        ? <button onClick={() => removeRow(origIdx)}
-                            style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', padding: 3 }}>
-                            <Trash2 size={12} />
-                          </button>
-                        : <div />
-                      }
+            )}
+            {domesticServices.map(svc => {
+              const svcOpen = openSvcs.has(svc.service_code);
+              const allPriced = svc.zones.every(z => z.price);
+              return (
+                <div key={svc.service_code} style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, marginBottom: 8, overflow: 'hidden' }}>
+                  <div onClick={() => toggleSvc(svc.service_code)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+                      cursor: 'pointer', background: svcOpen ? 'rgba(255,255,255,0.03)' : 'transparent' }}>
+                    {svcOpen ? <ChevronDown size={13} color="#AAAAAA"/> : <ChevronRight size={13} color="#AAAAAA"/>}
+                    <span style={{ fontWeight: 600, fontSize: 13, color: '#fff', flex: 1 }}>{svc.service_name}</span>
+                    <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#00C853', background: 'rgba(0,200,83,0.08)', padding: '1px 8px', borderRadius: 9999 }}>{svc.service_code}</span>
+                    {allPriced && <span style={{ fontSize: 10, color: '#34D399', background: 'rgba(52,211,153,0.1)', padding: '1px 7px', borderRadius: 9999 }}>✓ priced</span>}
+                    <span style={{ fontSize: 11, color: '#555' }}>{svc.zones.length} zone{svc.zones.length !== 1 ? 's' : ''}</span>
+                  </div>
+                  {svcOpen && (
+                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: 12 }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                            <th style={{ textAlign: 'left',  padding: '4px 8px', color: '#555', fontWeight: 600, fontSize: 11 }}>Zone</th>
+                            <th style={{ textAlign: 'right', padding: '4px 8px', color: '#B39DDB', fontWeight: 600, fontSize: 11 }}>Cost (1st)</th>
+                            <th style={{ textAlign: 'right', padding: '4px 8px', color: '#A5B4FC', fontWeight: 700, fontSize: 11 }}>Markup %</th>
+                            <th style={{ textAlign: 'right', padding: '4px 8px', color: '#00C853', fontWeight: 600, fontSize: 11 }}>Sell (1st)</th>
+                            <th style={{ textAlign: 'right', padding: '4px 8px', color: '#FFC107', fontWeight: 600, fontSize: 11 }}>Sell (sub)</th>
+                            <th style={{ textAlign: 'right', padding: '4px 8px', color: '#888',    fontWeight: 600, fontSize: 11 }}>Margin</th>
+                            <th style={{ width: 28 }}></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {svc.zones.map(r => {
+                            const origIdx = rates.indexOf(r);
+                            return (
+                              <tr key={origIdx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                                <td style={{ padding: '5px 8px', color: '#AAAAAA' }}>{r.zone_name || '—'}</td>
+                                <td style={{ padding: '5px 8px', textAlign: 'right', color: '#B39DDB', fontFamily: 'monospace' }}>{gbp(r.cost_price)}</td>
+                                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                                  {isEditable ? (
+                                    <input value={r.markup_pct ?? ''} type="number" step="0.1" placeholder="—"
+                                      onChange={e => applyMarkupToRate(origIdx, e.target.value)}
+                                      style={{ width: 64, textAlign: 'right', fontFamily: 'monospace', fontSize: 12,
+                                        color: '#A5B4FC', fontWeight: 700, background: 'rgba(99,102,241,0.08)',
+                                        border: '1px solid rgba(99,102,241,0.3)', borderRadius: 9999, padding: '2px 8px', outline: 'none' }} />
+                                  ) : <span style={{ color: '#A5B4FC', fontFamily: 'monospace' }}>{r.markup_pct != null ? `${r.markup_pct}%` : '—'}</span>}
+                                </td>
+                                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                                  {isEditable ? (
+                                    <input value={r.price ?? ''} type="number" step="0.01" placeholder="0.00"
+                                      onChange={e => updateRate(origIdx, 'price', e.target.value)}
+                                      style={{ width: 72, textAlign: 'right', fontFamily: 'monospace', fontSize: 12,
+                                        color: '#00C853', fontWeight: 700, background: 'rgba(0,200,83,0.08)',
+                                        border: '1px solid rgba(0,200,83,0.3)', borderRadius: 9999, padding: '2px 8px', outline: 'none' }} />
+                                  ) : <span style={{ color: '#00C853', fontFamily: 'monospace', fontWeight: 700 }}>{gbp(r.price)}</span>}
+                                </td>
+                                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                                  {isEditable ? (
+                                    <input value={r.price_sub ?? ''} type="number" step="0.01" placeholder="0.00"
+                                      onChange={e => updateRate(origIdx, 'price_sub', e.target.value)}
+                                      style={{ width: 72, textAlign: 'right', fontFamily: 'monospace', fontSize: 12,
+                                        color: '#FFC107', background: 'rgba(255,193,7,0.08)',
+                                        border: '1px solid rgba(255,193,7,0.3)', borderRadius: 9999, padding: '2px 8px', outline: 'none' }} />
+                                  ) : <span style={{ color: '#FFC107', fontFamily: 'monospace' }}>{gbp(r.price_sub)}</span>}
+                                </td>
+                                <td style={{ padding: '5px 8px', textAlign: 'right' }}><MarkupChip sell={r.price} cost={r.cost_price} /></td>
+                                <td style={{ padding: '5px 8px' }}>
+                                  {isEditable && (
+                                    <button onClick={() => removeRow(origIdx)}
+                                      style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', padding: 3 }}>
+                                      <Trash2 size={11} />
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
-                  );
-                })
-              )}
-            </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
-          {/* International rates */}
+          {/* ── INTERNATIONAL SERVICES ─────────────────────────────────────────── */}
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <div style={{ fontSize: 11, color: '#888', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                International Rates <span style={{ color: '#444', fontWeight: 400 }}>({intlRates.length})</span>
-              </div>
-              {isEditable && (
-                <button onClick={addIntlRow}
-                  style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,0.05)',
-                    border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '4px 10px',
-                    color: '#888', fontSize: 11, cursor: 'pointer' }}>
-                  <Plus size={11} /> Add row
-                </button>
-              )}
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#7B2FBE', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+              International Services <span style={{ color: '#444', fontWeight: 400, textTransform: 'none' }}>({intlServices.length} services · {intlRates.length} zones)</span>
             </div>
 
-            {intlMarkup && (
-              <div style={{ fontSize: 11, color: '#A78BFA', marginBottom: 8 }}>
-                Markup of <strong>{intlMarkup}%</strong> applied across all international zones
+            {/* Global markup applicator */}
+            {isEditable && intlRates.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14,
+                background: 'rgba(123,47,190,0.07)', border: '1px solid rgba(123,47,190,0.2)', borderRadius: 8, padding: '10px 14px' }}>
+                <span style={{ fontSize: 12, color: '#AAA' }}>Apply markup to all intl zones:</span>
+                <input value={intlMarkup} onChange={e => { setIntlMarkup(e.target.value); markDirty(); }}
+                  type="number" step="0.1" placeholder="e.g. 25"
+                  style={{ ...inputStyle, width: 80, padding: '4px 8px', color: '#A5B4FC', fontWeight: 700 }} />
+                <span style={{ fontSize: 12, color: '#888' }}>%</span>
+                <button onClick={applyGlobalIntlMarkup}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 14px', borderRadius: 7, fontSize: 12, fontWeight: 700,
+                    background: 'rgba(123,47,190,0.15)', color: '#9B59E8', border: '1px solid rgba(123,47,190,0.4)', cursor: 'pointer' }}>
+                  Apply to all
+                </button>
+                <span style={{ fontSize: 11, color: '#555' }}>Or set per-zone below</span>
               </div>
             )}
 
-            {intlRates.length > 0 && (
-              <div style={{ border: '1px solid rgba(255,255,255,0.08)', borderRadius: 9, overflow: 'hidden' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.9fr 0.9fr 0.9fr 70px 30px',
-                  padding: '7px 12px', background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                  {['Service', 'Zone', 'Cost price', 'Sell (base)', 'Sell (sub)', 'Markup', ''].map(h => (
-                    <div key={h} style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</div>
-                  ))}
-                </div>
-                {intlRates.map((r, i) => {
-                  const origIdx = rates.indexOf(r);
-                  return (
-                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.9fr 0.9fr 0.9fr 70px 30px',
-                      padding: '5px 12px', alignItems: 'center',
-                      borderBottom: i < intlRates.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
-                      {isEditable
-                        ? <input value={r.service_name || r.service_code || ''} onChange={e => updateRate(origIdx, 'service_name', e.target.value)} style={{ ...inputStyle, fontSize: 12 }} placeholder="Zone name" />
-                        : <div style={{ fontSize: 12, color: '#DDD' }}>{r.service_name || r.service_code || '—'}</div>
-                      }
-                      {isEditable
-                        ? <input value={r.zone_name || ''} onChange={e => updateRate(origIdx, 'zone_name', e.target.value)} style={{ ...inputStyle, fontSize: 12 }} placeholder="Region" />
-                        : <div style={{ fontSize: 12, color: '#888' }}>{r.zone_name || '—'}</div>
-                      }
-                      <div style={{ fontSize: 12, color: '#B39DDB' }}>{gbp(r.cost_price)}</div>
-                      {isEditable
-                        ? <input value={r.price ?? ''} onChange={e => updateRate(origIdx, 'price', e.target.value)} style={{ ...inputStyle, fontSize: 12 }} placeholder="0.00" type="number" step="0.01" />
-                        : <div style={{ fontSize: 12, color: '#DDD' }}>{gbp(r.price)}</div>
-                      }
-                      {isEditable
-                        ? <input value={r.price_sub ?? ''} onChange={e => updateRate(origIdx, 'price_sub', e.target.value)} style={{ ...inputStyle, fontSize: 12 }} placeholder="0.00" type="number" step="0.01" />
-                        : <div style={{ fontSize: 12, color: '#DDD' }}>{gbp(r.price_sub)}</div>
-                      }
-                      <MarkupChip sell={r.price} cost={r.cost_price} />
-                      {isEditable
-                        ? <button onClick={() => removeRow(origIdx)} style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', padding: 3 }}><Trash2 size={12} /></button>
-                        : <div />
-                      }
-                    </div>
-                  );
-                })}
+            {intlServices.length === 0 && (
+              <div style={{ padding: '20px', textAlign: 'center', color: '#444', fontSize: 12, fontStyle: 'italic',
+                border: '1px solid rgba(255,255,255,0.06)', borderRadius: 9 }}>
+                No international rates.
               </div>
             )}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 8 }}>
+              {intlServices.map(svc => {
+                const svcOpen = openIntlSvcs.has(svc.service_code);
+                const filledZones = svc.zones.filter(z => z.markup_pct || z.price).length;
+                return (
+                  <div key={svc.service_code} style={{ border: '1px solid rgba(123,47,190,0.2)', borderRadius: 10,
+                    background: 'rgba(123,47,190,0.04)', overflow: 'hidden' }}>
+                    <div style={{ padding: '12px 14px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+                        <span style={{ fontWeight: 600, fontSize: 13, color: '#fff', flex: 1 }}>{svc.service_name}</span>
+                        <span style={{ fontFamily: 'monospace', fontSize: 10, color: '#7B2FBE', background: 'rgba(123,47,190,0.12)', padding: '1px 7px', borderRadius: 9999 }}>{svc.service_code}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: '#555', marginBottom: 10 }}>
+                        {svc.zones.length} zone{svc.zones.length !== 1 ? 's' : ''}
+                        {filledZones > 0 && <span style={{ color: '#00C853', marginLeft: 8 }}>· {filledZones} priced</span>}
+                      </div>
+                      <button onClick={() => toggleIntlSvc(svc.service_code)}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px',
+                          borderRadius: 9999, fontSize: 11, fontWeight: 700,
+                          background: svcOpen ? 'rgba(123,47,190,0.2)' : 'rgba(123,47,190,0.12)',
+                          color: '#9B59E8', border: '1px solid rgba(123,47,190,0.3)', cursor: 'pointer' }}>
+                        <FileText size={11}/> {svcOpen ? 'Hide Rates' : 'Edit Rates'}
+                      </button>
+                    </div>
+                    {svcOpen && (
+                      <div style={{ borderTop: '1px solid rgba(123,47,190,0.15)', padding: '10px 14px', maxHeight: 340, overflowY: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                          <thead>
+                            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                              <th style={{ textAlign: 'left',  padding: '4px 6px', color: '#555', fontWeight: 600, fontSize: 10 }}>Zone</th>
+                              <th style={{ textAlign: 'right', padding: '4px 6px', color: '#B39DDB', fontWeight: 600, fontSize: 10 }}>Cost</th>
+                              <th style={{ textAlign: 'right', padding: '4px 6px', color: '#A5B4FC', fontWeight: 700, fontSize: 10 }}>Markup %</th>
+                              <th style={{ textAlign: 'right', padding: '4px 6px', color: '#00C853', fontWeight: 600, fontSize: 10 }}>Sell</th>
+                              <th style={{ textAlign: 'right', padding: '4px 6px', color: '#888',    fontWeight: 600, fontSize: 10 }}>Margin</th>
+                              <th style={{ width: 24 }}></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {svc.zones.map(r => {
+                              const origIdx = rates.indexOf(r);
+                              return (
+                                <tr key={origIdx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                                  <td style={{ padding: '4px 6px', color: '#AAAAAA', fontSize: 11, maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.zone_name || '—'}</td>
+                                  <td style={{ padding: '4px 6px', textAlign: 'right', color: '#B39DDB', fontFamily: 'monospace', fontSize: 11 }}>{gbp(r.cost_price)}</td>
+                                  <td style={{ padding: '4px 6px', textAlign: 'right' }}>
+                                    {isEditable ? (
+                                      <input value={r.markup_pct ?? ''} type="number" step="0.1" placeholder="%"
+                                        onChange={e => applyMarkupToRate(origIdx, e.target.value)}
+                                        style={{ width: 56, textAlign: 'right', fontFamily: 'monospace', fontSize: 11,
+                                          color: '#A5B4FC', fontWeight: 700, background: 'rgba(99,102,241,0.1)',
+                                          border: '1px solid rgba(99,102,241,0.4)', borderRadius: 9999, padding: '2px 6px', outline: 'none' }} />
+                                    ) : <span style={{ color: '#A5B4FC', fontFamily: 'monospace', fontWeight: 700 }}>{r.markup_pct != null ? `${r.markup_pct}%` : '—'}</span>}
+                                  </td>
+                                  <td style={{ padding: '4px 6px', textAlign: 'right' }}>
+                                    {isEditable ? (
+                                      <input value={r.price ?? ''} type="number" step="0.01" placeholder="0.00"
+                                        onChange={e => updateRate(origIdx, 'price', e.target.value)}
+                                        style={{ width: 60, textAlign: 'right', fontFamily: 'monospace', fontSize: 11,
+                                          color: '#00C853', background: 'rgba(0,200,83,0.08)',
+                                          border: '1px solid rgba(0,200,83,0.25)', borderRadius: 9999, padding: '2px 6px', outline: 'none' }} />
+                                    ) : <span style={{ color: '#00C853', fontFamily: 'monospace' }}>{gbp(r.price)}</span>}
+                                  </td>
+                                  <td style={{ padding: '4px 6px', textAlign: 'right' }}><MarkupChip sell={r.price} cost={r.cost_price} /></td>
+                                  <td style={{ padding: '4px 6px' }}>
+                                    {isEditable && (
+                                      <button onClick={() => removeRow(origIdx)}
+                                        style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', padding: 2 }}>
+                                        <Trash2 size={10} />
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 
