@@ -81,15 +81,12 @@ export default function RateCardEditor() {
   const [intlMarkup, setIntlMarkup] = useState('');
   const [fuelMarkup, setFuelMarkup] = useState('');
   const [weeklyParcels, setWeeklyParcels] = useState('');
-  const [volumeMix, setVolumeMix] = useState([]);
   const [dirty, setDirty] = useState(false);
   const [submitStaff, setSubmitStaff] = useState('');
   const [showSubmit, setShowSubmit] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
   const [openSvcs,     setOpenSvcs]     = useState(new Set());
   const [openIntlSvcs, setOpenIntlSvcs] = useState(new Set());
-  const [mixLoading,   setMixLoading]   = useState(false);
-  const [mixMeta,      setMixMeta]      = useState(null); // { customer_count, weekly_avg_min, weekly_avg_max }
 
   const { data: rc, isLoading, error } = useQuery({
     queryKey: ['rate-card-detail', id],
@@ -98,52 +95,6 @@ export default function RateCardEditor() {
 
   const { data: staffList = [] } = useQuery({ queryKey: ['staff'], queryFn: api.staffList });
 
-  // Build a service_code → service_name map from rate card rates
-  const svcNameMap = Object.fromEntries(
-    (rc?.rates || []).filter(r => r.service_name && r.service_code)
-      .map(r => [r.service_code, r.service_name])
-  );
-
-  // Apply volume snapshot: filter to codes present in this rate card, re-normalise to 100%
-  const applySnapshot = (snapshotRows, domesticCodes) => {
-    const filtered = snapshotRows.filter(s => domesticCodes.includes(s.service_code));
-    // For codes in the rate card but NOT in snapshot, append with pct=0
-    const inSnapshot = new Set(filtered.map(s => s.service_code));
-    const missing = domesticCodes.filter(c => !inSnapshot.has(c));
-
-    const total = filtered.reduce((s, r) => s + parseFloat(r.pct), 0);
-    const normalised = filtered.map(r => ({
-      service_code: r.service_code,
-      service_name: r.service_name || svcNameMap[r.service_code] || r.service_code,
-      pct: total > 0 ? Math.round(parseFloat(r.pct) / total * 100) : 0,
-    }));
-    // Fix rounding so it sums exactly to 100
-    const sum = normalised.reduce((s, r) => s + r.pct, 0);
-    if (normalised.length > 0) normalised[0].pct += (100 - sum);
-
-    return [
-      ...normalised,
-      ...missing.map(c => ({ service_code: c, service_name: svcNameMap[c] || c, pct: 0 })),
-    ];
-  };
-
-  // Load mix from similar customers — called on initial load and when weeklyParcels changes
-  const loadSimilarMix = async (vol, courierCode, domesticCodes) => {
-    if (!courierCode || !domesticCodes.length || !vol || parseInt(vol) <= 0) return;
-    setMixLoading(true);
-    try {
-      const result = await apiFetch(
-        `/api/pricing/similar-customer-mix?courier_code=${encodeURIComponent(courierCode)}&weekly_volume=${parseInt(vol)}`
-      );
-      if (result?.mix?.length) {
-        setVolumeMix(applySnapshot(result.mix, domesticCodes));
-        setMixMeta(result.meta || null);
-        setDirty(true);
-      }
-    } catch (e) { /* silently ignore — keep existing mix */ }
-    finally { setMixLoading(false); }
-  };
-
   // Initialise local state when rate card loads
   useEffect(() => {
     if (!rc) return;
@@ -151,31 +102,9 @@ export default function RateCardEditor() {
     setIntlMarkup(rc.intl_markup_pct ?? '');
     setFuelMarkup(rc.fuel_markup_pct ?? '');
     setWeeklyParcels(rc.weekly_parcels ?? '');
-
-    const domesticCodes = [...new Set((rc.rates || []).filter(r => !r.is_international).map(r => r.service_code).filter(Boolean))];
-
-    if (rc.volume_mix?.length) {
-      // Saved mix — enrich with service names if missing
-      setVolumeMix(rc.volume_mix.map(m => ({
-        ...m,
-        service_name: m.service_name || svcNameMap[m.service_code] || m.service_code,
-      })));
-    } else if (rc.weekly_parcels) {
-      // No saved mix but we have a target volume — auto-load similar customer mix
-      loadSimilarMix(rc.weekly_parcels, rc.courier_code, domesticCodes);
-    }
     setDirty(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rc?.id]);
-
-  // Auto-refresh mix when weeklyParcels changes (debounced 600ms)
-  useEffect(() => {
-    if (!rc?.courier_code || !weeklyParcels || parseInt(weeklyParcels) <= 0) return;
-    const domesticCodes = [...new Set((rc.rates || []).filter(r => !r.is_international).map(r => r.service_code).filter(Boolean))];
-    const timer = setTimeout(() => loadSimilarMix(weeklyParcels, rc.courier_code, domesticCodes), 600);
-    return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weeklyParcels]);
 
   const updateMut = useMutation({
     mutationFn: () => api.updateRateCard(id, {
@@ -183,7 +112,6 @@ export default function RateCardEditor() {
       intl_markup_pct: num(intlMarkup),
       fuel_markup_pct: num(fuelMarkup),
       weekly_parcels:  weeklyParcels ? parseInt(weeklyParcels) : null,
-      volume_mix: volumeMix,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['rate-card-detail', id] });
@@ -267,15 +195,18 @@ export default function RateCardEditor() {
   const intlServices     = groupByCode(intlRates);
 
   // ── Projections ───────────────────────────────────────────────────────────
+  // Simple: weekly parcels × Zone 1 (lowest-numbered zone) of the primary service.
+  // Primary service priority: known main service codes per carrier, then first domestic rate.
+  // No volume mix — the prospect's service usage is unknown and guessing from other
+  // customers' patterns produces misleading results.
 
   const [showDebug, setShowDebug] = useState(false);
 
-  const mixTotal = volumeMix.reduce((s, m) => s + parseFloat(m.pct || 0), 0);
+  // Known primary service codes per carrier — always the standard Next Day / main service
+  const PRIMARY_CODES = ['DPD-12', 'DHLPCUK-220', 'UPS-EXPRESS', 'FEDEX-IE', 'RM-24', 'YODEL-24'];
 
-  // For a given service code, pick the base rate zone.
-  // Priority: lowest numeric zone (Zone 1 < Zone 2 … < Zone 8), then alphabetic.
-  // This ensures DPD Zone 1 (£3.76) is always used rather than a random zone from array order.
-  const pickBaseRate = (serviceCode) => {
+  // Pick the lowest-numbered zone for a given service code
+  const pickZone1 = (serviceCode) => {
     const matching = domesticRates.filter(x => x.service_code === serviceCode);
     if (!matching.length) return null;
     return matching.slice().sort((a, b) => {
@@ -286,59 +217,27 @@ export default function RateCardEditor() {
     })[0];
   };
 
-  const projections = (() => {
-    if (!weeklyParcels || mixTotal !== 100) return null;
-    let rev = 0, cost = 0;
-    const lines = [];
-    volumeMix.forEach(m => {
-      const qty  = Math.round((m.pct / 100) * parseInt(weeklyParcels));
-      // Use base rate zone (Zone 1 / numerically lowest) for this service
-      const r    = pickBaseRate(m.service_code);
-      const sell = parseFloat(r?.price      || 0);
-      const cst  = parseFloat(r?.cost_price || 0);
-      const lineRev    = sell * qty;
-      const lineCost   = cst  * qty;
-      const lineProfit = lineRev - lineCost;
-      if (r) {
-        rev  += lineRev;
-        cost += lineCost;
-      }
-      lines.push({
-        service_code: m.service_code,
-        service_name: m.service_name || m.service_code,
-        pct:          m.pct,
-        qty,
-        sell:         r ? sell : null,
-        cost_price:   r ? cst  : null,
-        zone_name:    r?.zone_name || null,
-        zone_count:   domesticRates.filter(x => x.service_code === m.service_code).length,
-        rev:          r ? lineRev    : null,
-        cost:         r ? lineCost   : null,
-        profit:       r ? lineProfit : null,
-        margin:       lineRev > 0 ? (lineProfit / lineRev) * 100 : null,
-        matched:      !!r,
-      });
-    });
-    const profit = rev - cost;
-    return { rev, cost, profit, margin: rev > 0 ? profit / rev * 100 : 0, lines };
+  // Find the primary rate: try known primary codes first, then cheapest Zone 1 domestic
+  const primaryRate = (() => {
+    for (const code of PRIMARY_CODES) {
+      const r = pickZone1(code);
+      if (r) return r;
+    }
+    // Fallback: use the lowest zone of the first service alphabetically
+    const firstCode = [...new Set(domesticRates.map(r => r.service_code).filter(Boolean))].sort()[0];
+    return firstCode ? pickZone1(firstCode) : null;
   })();
 
-  // ── Service codes from domestic rates (for volume mix) ────────────────────
-
-  const serviceCodes = [...new Set(domesticRates.map(r => r.service_code).filter(Boolean))];
-  // Sync volume mix when service codes change (preserve existing pcts + names)
-  useEffect(() => {
-    if (!rc) return;
-    setVolumeMix(prev => {
-      const existing = new Map(prev.map(m => [m.service_code, m]));
-      return serviceCodes.map(sc => ({
-        service_code: sc,
-        service_name: existing.get(sc)?.service_name || svcNameMap[sc] || sc,
-        pct: existing.get(sc)?.pct ?? 0,
-      }));
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(serviceCodes)]);
+  const projections = (() => {
+    if (!weeklyParcels || !primaryRate) return null;
+    const qty    = parseInt(weeklyParcels);
+    const sell   = parseFloat(primaryRate.price      || 0);
+    const cst    = parseFloat(primaryRate.cost_price || 0);
+    const rev    = sell * qty;
+    const cost   = cst  * qty;
+    const profit = rev - cost;
+    return { rev, cost, profit, margin: rev > 0 ? profit / rev * 100 : 0 };
+  })();
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -727,7 +626,7 @@ export default function RateCardEditor() {
                       </div>
                       <button
                         onClick={() => setShowDebug(d => !d)}
-                        title="Show calculation breakdown"
+                        title="Show calculation"
                         style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 9px',
                           borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer',
                           background: showDebug ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.06)',
@@ -740,78 +639,27 @@ export default function RateCardEditor() {
                   </div>
                 </div>
 
-                {/* Debug breakdown */}
-                {showDebug && (
-                  <div style={{ marginTop: 10, background: 'rgba(245,158,11,0.03)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: 8, overflow: 'hidden' }}>
-                    <div style={{ padding: '8px 10px', borderBottom: '1px solid rgba(245,158,11,0.1)', fontSize: 10, color: '#F59E0B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Calculation Breakdown — Zone 1 (lowest zone) per service
+                {/* Debug: show the single rate the projection is based on */}
+                {showDebug && primaryRate && (
+                  <div style={{ marginTop: 10, background: 'rgba(245,158,11,0.03)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: 8, padding: '10px 14px', fontSize: 11 }}>
+                    <div style={{ fontSize: 10, color: '#F59E0B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                      Projection basis
                     </div>
-                    <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                        <thead>
-                          <tr style={{ borderBottom: '1px solid rgba(245,158,11,0.1)' }}>
-                            <th style={{ padding: '5px 8px', textAlign: 'left',  color: '#666', fontWeight: 600 }}>Service</th>
-                            <th style={{ padding: '5px 6px', textAlign: 'left',  color: '#666', fontWeight: 600 }}>Zone used</th>
-                            <th style={{ padding: '5px 6px', textAlign: 'right', color: '#666', fontWeight: 600 }}>Mix</th>
-                            <th style={{ padding: '5px 6px', textAlign: 'right', color: '#666', fontWeight: 600 }}>Qty</th>
-                            <th style={{ padding: '5px 6px', textAlign: 'right', color: '#B39DDB', fontWeight: 600 }}>Cost</th>
-                            <th style={{ padding: '5px 6px', textAlign: 'right', color: '#00C853', fontWeight: 600 }}>Sell</th>
-                            <th style={{ padding: '5px 6px', textAlign: 'right', color: '#A5B4FC', fontWeight: 600 }}>Rev</th>
-                            <th style={{ padding: '5px 6px', textAlign: 'right', color: '#34D399', fontWeight: 600 }}>Profit</th>
-                            <th style={{ padding: '5px 6px', textAlign: 'right', color: '#888',    fontWeight: 600 }}>Mgn</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {projections.lines.map((ln, i) => (
-                            <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)',
-                              opacity: ln.matched ? 1 : 0.4 }}>
-                              <td style={{ padding: '4px 8px', color: ln.matched ? '#CCC' : '#555', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {ln.service_name}
-                                {!ln.matched && <span style={{ marginLeft: 4, color: '#EF4444', fontSize: 9 }}>no rate</span>}
-                              </td>
-                              <td style={{ padding: '4px 6px' }}>
-                                {ln.zone_name
-                                  ? <span style={{ fontSize: 10, color: '#F59E0B', fontFamily: 'monospace',
-                                      background: 'rgba(245,158,11,0.08)', padding: '1px 5px', borderRadius: 4 }}>
-                                      {ln.zone_name}
-                                      {ln.zone_count > 1 && <span style={{ color: '#555', marginLeft: 3 }}>/{ln.zone_count}</span>}
-                                    </span>
-                                  : <span style={{ color: '#444', fontSize: 10 }}>—</span>}
-                              </td>
-                              <td style={{ padding: '4px 6px', textAlign: 'right', color: '#888',    fontFamily: 'monospace' }}>{ln.pct}%</td>
-                              <td style={{ padding: '4px 6px', textAlign: 'right', color: '#AAA',    fontFamily: 'monospace' }}>{ln.qty.toLocaleString()}</td>
-                              <td style={{ padding: '4px 6px', textAlign: 'right', color: '#B39DDB', fontFamily: 'monospace' }}>{ln.cost_price != null ? gbp(ln.cost_price) : '—'}</td>
-                              <td style={{ padding: '4px 6px', textAlign: 'right', color: '#00C853', fontFamily: 'monospace', fontWeight: 700 }}>{ln.sell != null ? gbp(ln.sell) : '—'}</td>
-                              <td style={{ padding: '4px 6px', textAlign: 'right', color: '#A5B4FC', fontFamily: 'monospace' }}>{ln.rev != null ? gbp(ln.rev) : '—'}</td>
-                              <td style={{ padding: '4px 6px', textAlign: 'right', fontFamily: 'monospace',
-                                color: ln.profit == null ? '#555' : ln.profit >= 0 ? '#34D399' : '#EF4444' }}>
-                                {ln.profit != null ? gbp(ln.profit) : '—'}
-                              </td>
-                              <td style={{ padding: '4px 6px', textAlign: 'right', fontFamily: 'monospace',
-                                color: ln.margin == null ? '#555' : ln.margin < 0 ? '#EF4444' : ln.margin < 15 ? '#F59E0B' : '#34D399' }}>
-                                {ln.margin != null ? `${ln.margin.toFixed(1)}%` : '—'}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot>
-                          <tr style={{ borderTop: '1px solid rgba(245,158,11,0.15)' }}>
-                            <td colSpan={6} style={{ padding: '5px 8px', fontSize: 10, color: '#666', fontStyle: 'italic' }}>
-                              Lowest numbered zone per service · {parseInt(weeklyParcels).toLocaleString()} parcels/wk
-                            </td>
-                            <td style={{ padding: '5px 6px', textAlign: 'right', color: '#A5B4FC', fontFamily: 'monospace', fontWeight: 700 }}>{gbp(projections.rev)}</td>
-                            <td style={{ padding: '5px 6px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700,
-                              color: projections.profit >= 0 ? '#34D399' : '#EF4444' }}>{gbp(projections.profit)}</td>
-                            <td style={{ padding: '5px 6px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700,
-                              color: projections.margin < 0 ? '#EF4444' : projections.margin < 15 ? '#F59E0B' : '#34D399' }}>
-                              {projections.margin.toFixed(1)}%
-                            </td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                    <div style={{ padding: '6px 10px', fontSize: 10, color: '#555', borderTop: '1px solid rgba(245,158,11,0.08)' }}>
-                      Zone column shows which zone was matched and how many zones exist (e.g. Zone 1/8). 🟠 No rate = excluded from totals.
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                      {[
+                        { label: 'Service',   val: primaryRate.service_name || primaryRate.service_code, mono: false },
+                        { label: 'Zone',      val: primaryRate.zone_name || '—', mono: true },
+                        { label: 'Qty',       val: `${parseInt(weeklyParcels).toLocaleString()} parcels`, mono: true },
+                        { label: 'Sell rate', val: gbp(primaryRate.price),      mono: true, color: '#00C853' },
+                        { label: 'Cost rate', val: gbp(primaryRate.cost_price), mono: true, color: '#B39DDB' },
+                        { label: 'Margin',    val: `${projections.margin.toFixed(1)}%`, mono: true,
+                          color: projections.margin < 0 ? '#EF4444' : projections.margin < 15 ? '#F59E0B' : '#34D399' },
+                      ].map(({ label, val, mono, color }) => (
+                        <div key={label}>
+                          <div style={{ fontSize: 10, color: '#555', marginBottom: 2 }}>{label}</div>
+                          <div style={{ color: color || '#CCC', fontFamily: mono ? 'monospace' : 'inherit', fontWeight: 600 }}>{val}</div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -819,9 +667,7 @@ export default function RateCardEditor() {
             ) : (
               <div style={{ fontSize: 12, color: '#444', textAlign: 'center', padding: '10px 0 16px',
                 background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 8, marginBottom: 16 }}>
-                {!weeklyParcels ? 'Enter weekly parcels below' :
-                 mixTotal !== 100 ? `Mix must total 100% (${mixTotal}%)` :
-                 'Add rates to calculate'}
+                {!weeklyParcels ? 'Enter weekly parcels below to see projection' : 'Add domestic rates to calculate'}
               </div>
             )}
 
@@ -829,52 +675,6 @@ export default function RateCardEditor() {
             <input value={weeklyParcels} onChange={e => { setWeeklyParcels(e.target.value); markDirty(); }}
               type="number" min={0} disabled={!isEditable}
               style={{ ...inputStyle, marginBottom: 16 }} placeholder="e.g. 500" />
-
-            {/* Volume mix */}
-            {volumeMix.length > 0 && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11, color: '#666', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    Volume mix
-                    {mixLoading && <RefreshCw size={10} style={{ color: '#555', animation: 'spin 1s linear infinite' }} />}
-                  </span>
-                  <span style={{ color: mixTotal === 100 ? '#34D399' : '#F59E0B', fontWeight: 700 }}>{mixTotal}%</span>
-                </div>
-                {/* Source: similar customers */}
-                {mixMeta && (
-                  <div style={{ fontSize: 10, color: '#444', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <span style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)',
-                      borderRadius: 99, padding: '2px 8px', color: '#6366F1', fontWeight: 600 }}>
-                      {mixMeta.customer_count === 0
-                        ? 'No similar customers found — adjust manually'
-                        : `Based on ${mixMeta.customer_count} similar customer${mixMeta.customer_count === 1 ? '' : 's'} · avg ${mixMeta.weekly_avg_min}–${mixMeta.weekly_avg_max}/wk`}
-                    </span>
-                  </div>
-                )}
-                {volumeMix.map((m, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, color: '#CCC', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 500 }}>
-                        {m.service_name || m.service_code}
-                      </div>
-                      {m.service_name && m.service_name !== m.service_code && (
-                        <div style={{ fontSize: 10, color: '#555', fontFamily: 'monospace', marginTop: 1 }}>{m.service_code}</div>
-                      )}
-                    </div>
-                    <input
-                      type="number" min={0} max={100} value={m.pct}
-                      onChange={e => {
-                        setVolumeMix(prev => prev.map((x, j) => j === i ? { ...x, pct: parseFloat(e.target.value) || 0 } : x));
-                        markDirty();
-                      }}
-                      disabled={!isEditable}
-                      style={{ ...inputStyle, width: 56, padding: '4px 8px', fontSize: 12, flexShrink: 0 }}
-                    />
-                    <span style={{ fontSize: 11, color: '#555' }}>%</span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       </div>
