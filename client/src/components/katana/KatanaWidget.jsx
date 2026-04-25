@@ -169,12 +169,14 @@ export default function KatanaWidget() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: msg, history }),
       });
-      if (!r.ok) throw new Error(await r.text());
       const data = await r.json();
-
+      if (!r.ok) {
+        setError(data.error || 'Something went wrong. Please try again.');
+        return;
+      }
       setMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
     } catch (e) {
-      setError('Katana encountered an error. Please try again.');
+      setError('Could not reach Katana. Please check your connection.');
       console.error('[KatanaWidget]', e);
     } finally {
       setLoading(false);

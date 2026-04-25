@@ -21,6 +21,49 @@ const ANTHROPIC_MODEL   = 'claude-haiku-4-5-20251001';
 const DB_SCHEMA = `
 DATABASE SCHEMA (PostgreSQL — read-only access):
 
+━━━ CARRIER PRICING (what Moov Parcel PAYS couriers) ━━━
+
+TABLE couriers
+  id int PK, code varchar (e.g. 'DPD', 'DHL', 'EVRI'), name varchar
+
+TABLE courier_services
+  id int PK, courier_id int FK→couriers, service_code varchar, name varchar
+  Examples: 'DPD Next Day', 'DPD Two Day', 'DHL Express', 'Evri Standard'
+
+TABLE zones
+  id int PK, courier_service_id int FK→courier_services, name varchar
+  Examples: 'Mainland', 'Highlands', 'Northern Ireland', 'Europe Zone 1'
+
+TABLE weight_bands  ← THIS IS THE CARRIER COST PRICE TABLE
+  id int PK, zone_id int FK→zones,
+  min_weight_kg numeric, max_weight_kg numeric,
+  price_first numeric(£) — cost per first parcel (what Moov pays the courier),
+  price_sub numeric(£)   — cost per additional parcel in same consignment
+
+  IMPORTANT: price_first = what MOOV PARCEL PAYS the courier.
+  To find carrier costs, JOIN: weight_bands → zones → courier_services → couriers
+
+  EXAMPLE query for "how much do we pay DPD for Next Day?":
+  SELECT c.name, cs.name as service, z.name as zone, wb.min_weight_kg, wb.max_weight_kg, wb.price_first
+  FROM weight_bands wb
+  JOIN zones z ON z.id = wb.zone_id
+  JOIN courier_services cs ON cs.id = z.courier_service_id
+  JOIN couriers c ON c.id = cs.courier_id
+  WHERE c.code ILIKE 'dpd' AND cs.name ILIKE '%next%day%'
+  ORDER BY z.name, wb.min_weight_kg
+
+━━━ CUSTOMER PRICING (what customers PAY Moov Parcel) ━━━
+
+TABLE customer_rates
+  id int PK, customer_id uuid FK→customers, courier_code, courier_name,
+  service_code, service_name, zone_name, weight_class_name,
+  price numeric(£) — what the CUSTOMER pays Moov Parcel for this service/zone/weight
+
+  IMPORTANT: customer_rates.price = what the CUSTOMER pays us (our sell price).
+  This is different from weight_bands.price_first (what WE pay the courier).
+
+━━━ CUSTOMERS & ACCOUNTS ━━━
+
 TABLE customers
   id uuid PK, business_name text, account_number varchar (format MOS-00001),
   tier enum(bronze/silver/gold/enterprise), account_status enum(active/on_stop/suspended/churned),
@@ -29,11 +72,10 @@ TABLE customers
   registered_address, postcode, date_onboarded timestamptz
 
 TABLE customer_contacts
-  id uuid PK, customer_id uuid FK→customers, full_name, email, phone, role, flag enum(main/finance/both/none)
+  id uuid PK, customer_id uuid FK→customers, full_name, email, phone, role,
+  flag enum(main/finance/both/none)
 
-TABLE customer_rates
-  id int PK, customer_id uuid FK→customers, courier_code, courier_name,
-  service_code, service_name, zone_name, weight_class_name, price numeric(£)
+━━━ BILLING & INVOICING ━━━
 
 TABLE shipments
   id uuid PK, customer_id uuid FK→customers, customer_name, customer_account,
@@ -54,7 +96,9 @@ TABLE invoices
   amount_paid numeric(£), balance_due numeric(£),
   due_date date, issued_at timestamptz, paid_at timestamptz
 
-TABLE queries  (support tickets)
+━━━ SUPPORT TICKETS ━━━
+
+TABLE queries
   id uuid PK, customer_id uuid FK→customers, ticket_number varchar,
   subject text, status enum(open/in_progress/waiting_on_customer/resolved/closed),
   query_type enum(whereabouts/not_delivered/damaged/missing_items/failed_delivery/returned/delay/claim/other),
@@ -66,17 +110,21 @@ TABLE query_emails
   subject, body_text, from_address, to_address, sent_at timestamptz,
   is_ai_draft bool, ai_draft_approved_by uuid FK→staff
 
+━━━ STAFF & COURIERS ━━━
+
 TABLE staff
-  id uuid PK, full_name, email, role enum(sales/account_management/onboarding/finance/cs/manager/director), is_active bool
+  id uuid PK, full_name, email,
+  role enum(sales/account_management/onboarding/finance/cs/manager/director), is_active bool
 
 TABLE courier_contacts
-  id int PK, courier_id int, courier_name, name, email, phone, role, service_name
+  id int PK, courier_id int FK→couriers, courier_name, name, email, phone, role, service_name
 
 TABLE tracking_events
   id int PK, consignment_number, courier_code, status_code, status_description,
-  event_timestamp timestamptz, location, raw_payload jsonb
+  event_timestamp timestamptz, location
 
 USEFUL JOINS:
+  weight_bands → carrier cost: wb JOIN zones z ON z.id=wb.zone_id JOIN courier_services cs ON cs.id=z.courier_service_id JOIN couriers c ON c.id=cs.courier_id
   charges → invoices: charges.invoice_id = invoices.id
   charges → customers: charges.customer_id = customers.id
   shipments → customers: shipments.customer_id = customers.id
@@ -347,9 +395,14 @@ router.post('/chat', async (req, res) => {
       `SELECT title, raw_content FROM katana_knowledge_sources WHERE is_active = true AND raw_content IS NOT NULL`
     );
 
-    // Build message history in Anthropic format
+    // Trim history to last 10 messages to avoid context overflow.
+    // Tool-use intermediate content is handled server-side; the client only
+    // stores plain text turns, so each entry is small — but cap it anyway.
+    const trimmedHistory = history.slice(-10);
+
+    // Build message list for Anthropic
     const messages = [
-      ...history,
+      ...trimmedHistory,
       { role: 'user', content: message },
     ];
 
@@ -358,7 +411,14 @@ router.post('/chat', async (req, res) => {
     res.json({ reply });
   } catch (e) {
     console.error('[Katana chat error]', e.message);
-    res.status(500).json({ error: e.message });
+    // Return a user-friendly message so the widget shows something meaningful
+    // rather than just "oops something went wrong"
+    const friendly = e.message?.includes('Anthropic API error')
+      ? 'I had trouble reaching the AI service. Please try again in a moment.'
+      : e.message?.includes('context_length_exceeded') || e.message?.includes('too long')
+      ? 'That conversation got too long for me to process. Try clearing the chat and asking again.'
+      : 'Something went wrong on my end. Please try again.';
+    res.status(500).json({ error: friendly, detail: e.message });
   }
 });
 
