@@ -1179,7 +1179,7 @@ export default function FinancePage() {
           >
             <option value="">All Customers</option>
             {customers.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
+              <option key={c.id} value={c.id}>{c.business_name}</option>
             ))}
           </select>
 
