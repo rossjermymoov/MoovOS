@@ -170,23 +170,24 @@ function InlineSelect({ value, onChange, options, colorMap }) {
 }
 
 // ─── Voice-to-text hook (Web Speech API) ─────────────────────
+// Single-shot: tap mic → speak → auto-stops → text appended.
+// Tap again to keep adding. Reliable across Chrome/Edge.
 function useSpeechInput(setText) {
   const [listening, setListening] = useState(false);
   function toggle() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { alert('Voice input is not supported in this browser. Please use Chrome or Edge.'); return; }
+    setListening(true);
     const rec = new SR();
     rec.lang = 'en-GB';
     rec.continuous = false;
     rec.interimResults = false;
     rec.onresult = (e) => {
-      const t = e.results[0][0].transcript;
-      setText(prev => prev ? prev + ' ' + t : t);
-      setListening(false);
+      const t = e.results[0]?.[0]?.transcript || '';
+      if (t) setText(prev => prev ? prev + ' ' + t : t);
     };
     rec.onend   = () => setListening(false);
     rec.onerror = () => setListening(false);
-    setListening(true);
     rec.start();
   }
   return { listening, toggle };
@@ -357,7 +358,7 @@ function EmailBubble({ email, courierCode, queryId, onApproved }) {
                   borderRadius: 8,
                 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: C.amber, marginBottom: 7 }}>
-                    Tell Katana why you'd change this — it will rewrite the draft
+                    Tell Katana why you'd change this — she'll rewrite the draft
                   </div>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
                     <textarea
@@ -374,7 +375,7 @@ function EmailBubble({ email, courierCode, queryId, onApproved }) {
                       }}
                       onFocus={e => e.target.style.borderColor = `${C.amber}66`}
                       onBlur={e => e.target.style.borderColor = `${C.amber}33`}
-                      onKeyDown={e => { if (e.key === 'Enter' && e.metaKey) submitRevision(); }}
+                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitRevision(); } }}
                     />
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                       {/* Mic button */}
@@ -416,7 +417,7 @@ function EmailBubble({ email, courierCode, queryId, onApproved }) {
                     </div>
                   </div>
                   <div style={{ fontSize: 10, color: C.muted, marginTop: 5 }}>
-                    Type or use the mic — ⌘+Enter to submit · Katana will rewrite the draft for you to re-review
+                    Type or tap the mic to dictate · Enter to submit · Shift+Enter for a new line
                   </div>
                 </div>
               )}

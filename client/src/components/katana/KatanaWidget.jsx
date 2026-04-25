@@ -6,7 +6,7 @@
  * about customers, pricing, tickets, invoices, etc.
  */
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { X, Send, Sparkles, RefreshCw, ChevronDown, Mic, MicOff } from 'lucide-react';
 
 // ─── Colours ──────────────────────────────────────────────────────────────────
@@ -92,34 +92,27 @@ function MessageBubble({ msg }) {
 }
 
 // ─── Voice-to-text hook ───────────────────────────────────────────────────────
+// Single-shot mode: tap mic → speak → stops automatically → text is appended.
+// Tap again to add more. Much more reliable than continuous mode.
 function useSpeechInput(setText) {
   const [listening, setListening] = useState(false);
-  const recRef = useRef(null);
 
-  const toggle = useCallback(() => {
-    if (listening) {
-      recRef.current?.stop();
-      setListening(false);
-      return;
-    }
+  function toggle() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { alert('Voice input not supported in this browser. Use Chrome or Edge.'); return; }
+    if (!SR) { alert('Voice input not supported in this browser. Please use Chrome or Edge.'); return; }
+    setListening(true);
     const rec = new SR();
-    recRef.current = rec;
     rec.lang = 'en-GB';
-    rec.continuous = true;
+    rec.continuous = false;
     rec.interimResults = false;
     rec.onresult = (e) => {
-      const transcript = Array.from(e.results)
-        .map(r => r[0].transcript)
-        .join(' ');
-      setText(transcript);
+      const transcript = e.results[0]?.[0]?.transcript || '';
+      if (transcript) setText(prev => prev ? prev + ' ' + transcript : transcript);
     };
     rec.onend   = () => setListening(false);
     rec.onerror = () => setListening(false);
-    setListening(true);
     rec.start();
-  }, [listening, setText]);
+  }
 
   return { listening, toggle };
 }
