@@ -71,48 +71,65 @@ function InfoCard({ title, children }) {
 function CustomerRateCardAssignments({ customerId }) {
   const qc = useQueryClient();
 
-  const { data: carriers = [], isLoading } = useQuery({
-    queryKey: ['customer-rate-card-assignments', customerId],
-    queryFn: () => customerRateCardsApi.forCustomer(customerId),
+  const { data: carrierLinks = [], isLoading, isError } = useQuery({
+    queryKey: ['customer-carrier-links', customerId],
+    queryFn: async () => {
+      const response = await fetch(`/api/customer-carrier-links/${customerId}`);
+      if (!response.ok) throw new Error('Failed to fetch carrier links');
+      return response.json();
+    },
     enabled: !!customerId,
   });
 
   const setAssignment = useMutation({
-    mutationFn: ({ courierId, rateCardId }) =>
-      rateCardId === 'master'
-        ? customerRateCardsApi.clearAssignment(customerId, courierId)
-        : customerRateCardsApi.setAssignment(customerId, courierId, rateCardId),
-    onSuccess: () => qc.invalidateQueries(['customer-rate-card-assignments', customerId]),
+    mutationFn: ({ courierId, cardId }) =>
+      fetch(`/api/customer-carrier-links/${customerId}/${courierId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ carrier_rate_card_id: cardId }),
+      }).then(r => r.ok ? r.json() : Promise.reject('Failed to update assignment')),
+    onSuccess: () => qc.invalidateQueries(['customer-carrier-links', customerId]),
   });
 
   if (isLoading) return null;
-  if (!carriers.length) return (
+  if (isError) return (
     <InfoCard title="Rate Cards">
-      <span style={{ fontSize: 12, color: '#555', fontStyle: 'italic' }}>No rate cards configured yet — go to Carriers to create them.</span>
+      <span style={{ fontSize: 12, color: '#E91E8C', fontStyle: 'italic' }}>Error loading carrier links.</span>
+    </InfoCard>
+  );
+
+  const activeCarriers = carrierLinks.filter(link => link.active === true);
+
+  if (!activeCarriers.length) return (
+    <InfoCard title="Rate Cards">
+      <span style={{ fontSize: 12, color: '#555', fontStyle: 'italic' }}>No active carrier links — link carriers to assign rate cards.</span>
     </InfoCard>
   );
 
   return (
     <InfoCard title="Rate Cards">
-      {carriers.map(row => {
-        const currentId = row.assigned_card_id ?? 'master';
+      {activeCarriers.map(link => {
+        const currentCardId = link.active_card_id ?? link.master_card_id;
         return (
-          <div key={row.courier_id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, minHeight:26 }}>
-            <span style={{ fontSize:12, color:'#AAAAAA', flexShrink:0, whiteSpace:'nowrap', minWidth:110 }}>
-              {row.courier_name}
-            </span>
-            <select
-              value={String(currentId)}
-              onChange={e => setAssignment.mutate({ courierId: row.courier_id, rateCardId: e.target.value === 'master' ? 'master' : parseInt(e.target.value) })}
-              style={inp({ width: 180, flexShrink: 0, fontSize: 11 })}
-            >
-              {(row.available_cards || []).map(card => (
-                <option key={card.id} value={card.id}>
-                  {card.name}{card.is_master ? ' (Master)' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
+          <Row
+            key={link.courier_id}
+            label={link.courier_name}
+            value={link.active_card_name || link.master_card_name || '—'}
+            edit={true}
+            editNode={
+              <select
+                value={String(currentCardId || '')}
+                onChange={e => setAssignment.mutate({ courierId: link.courier_id, cardId: parseInt(e.target.value) })}
+                style={inp({ width: 180, flexShrink: 0, fontSize: 11 })}
+              >
+                {(link.available_cards || []).map(card => (
+                  <option key={card.id} value={card.id}>
+                    {card.name}{card.is_master ? ' (Master)' : ''}
+                  </option>
+                ))}
+              </select>
+            }
+          />
         );
       })}
       <p style={{ fontSize:11, color:'#555', marginTop:6, fontStyle:'italic' }}>
@@ -518,46 +535,119 @@ function ContactsTab({ customerId, contacts = [], onRefresh }) {
   );
 }
 
-// ─── Volume tab ───────────────────────────────────────────────
-function VolumeTab({ snapshots = [] }) {
-  const total7  = snapshots.filter(s => daysAgo(s.snapshot_date) <= 7).reduce((a, s) => a + s.parcel_count, 0);
-  const total30 = snapshots.filter(s => daysAgo(s.snapshot_date) <= 30).reduce((a, s) => a + s.parcel_count, 0);
-  const avg13wk = snapshots.length
-    ? (snapshots.reduce((a, s) => a + s.parcel_count, 0) / Math.max(snapshots.length, 1)).toFixed(1)
-    : '—';
+// ─── Performance tab ───────────────────────────────────────────────
+function PerformanceTab({ customerId }) {
+  const { data: perfData, isLoading, isError } = useQuery({
+    queryKey: ['customer-perf', customerId],
+    queryFn: async () => {
+      const response = await fetch(`/api/billing/charges/customer-perf?customerId=${customerId}`);
+      if (!response.ok) throw new Error('Failed to fetch performance data');
+      return response.json();
+    },
+    enabled: !!customerId,
+  });
+
+  if (isLoading) {
+    return (
+      <div style={{ textAlign: 'center', color: '#AAAAAA', padding: 32 }}>
+        Loading performance data…
+      </div>
+    );
+  }
+
+  if (isError || !perfData) {
+    return (
+      <div className="moov-card" style={{ padding: 24, color: '#E91E8C' }}>
+        Could not load performance data.
+      </div>
+    );
+  }
+
+  const profit30 = parseFloat(perfData.last30?.profit || 0);
+  const revenue30 = parseFloat(perfData.last30?.revenue || 0);
+  const profitMargin = revenue30 > 0 ? ((profit30 / revenue30) * 100).toFixed(1) : '—';
+
   return (
     <div>
+      {/* Top stats row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
         {[
-          { label: 'Last 7 Days',        value: total7.toLocaleString(),  unit: 'parcels' },
-          { label: 'Last 30 Days',       value: total30.toLocaleString(), unit: 'parcels' },
-          { label: '13-Wk Daily Avg',    value: avg13wk,                  unit: 'parcels/day' },
-          { label: 'Data Available',     value: snapshots.length,         unit: 'days' },
-        ].map(({ label, value, unit }) => (
+          { label: 'Last 7 Days Revenue', value: gbp(perfData.last7?.revenue || 0), unit: '', color: '#00C853' },
+          { label: 'Last 30 Days Revenue', value: gbp(perfData.last30?.revenue || 0), unit: '', color: '#00C853' },
+          { label: 'Last 30 Days Profit', value: gbp(profit30), unit: '', color: profit30 >= 0 ? '#00C853' : '#E91E8C' },
+          { label: 'Total Charges', value: (perfData.all?.charges || 0).toLocaleString(), unit: '', color: '#00BCD4' },
+        ].map(({ label, value, color }) => (
           <div key={label} className="moov-card" style={{ padding: 16, textAlign: 'center' }}>
             <div style={{ fontSize: 11, color: '#AAAAAA', marginBottom: 4 }}>{label}</div>
-            <div style={{ fontSize: 28, fontWeight: 700, color: '#00C853' }}>{value}</div>
-            <div style={{ fontSize: 11, color: '#AAAAAA', marginTop: 2 }}>{unit}</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color }}>{value}</div>
           </div>
         ))}
       </div>
-      <div className="moov-card" style={{ padding: 20 }}>
-        <h3 style={{ fontSize: 13, fontWeight: 700, color: '#7B2FBE', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Daily Volume — Last 30 Days</h3>
-        <MiniBarChart snapshots={snapshots.slice(0, 30)} />
+
+      {/* Secondary stats row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 }}>
+        {[
+          { label: 'Last 7 Days Charges', value: (perfData.last7?.charges || 0).toLocaleString() },
+          { label: 'Last 30 Days Parcels', value: (perfData.last30?.parcels || 0).toLocaleString() },
+          { label: 'Profit Margin (30d)', value: profitMargin + '%' },
+        ].map(({ label, value }) => (
+          <div key={label} className="moov-card" style={{ padding: 16, textAlign: 'center' }}>
+            <div style={{ fontSize: 11, color: '#AAAAAA', marginBottom: 4 }}>{label}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: '#DDDDDD' }}>{value}</div>
+          </div>
+        ))}
       </div>
+
+      {/* Daily chart */}
+      <div className="moov-card" style={{ padding: 20, marginBottom: 16 }}>
+        <h3 style={{ fontSize: 13, fontWeight: 700, color: '#7B2FBE', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Daily Revenue — Last 30 Days</h3>
+        <MiniBarChart dailyData={perfData.daily || []} />
+      </div>
+
+      {/* Courier breakdown table */}
+      {(perfData.by_courier || []).length > 0 && (
+        <div className="moov-card" style={{ padding: 20, overflow: 'hidden' }}>
+          <h3 style={{ fontSize: 13, fontWeight: 700, color: '#7B2FBE', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Breakdown by Courier</h3>
+          <table className="moov-table" style={{ width: '100%' }}>
+            <thead>
+              <tr>
+                <th>Service</th>
+                <th style={{ textAlign: 'right' }}>Charges</th>
+                <th style={{ textAlign: 'right' }}>Revenue</th>
+                <th style={{ textAlign: 'right' }}>Cost</th>
+                <th style={{ textAlign: 'right' }}>Profit</th>
+              </tr>
+            </thead>
+            <tbody>
+              {perfData.by_courier.map(row => (
+                <tr key={row.service_name}>
+                  <td style={{ color: '#DDDDDD', fontWeight: 500 }}>{row.service_name}</td>
+                  <td style={{ textAlign: 'right', color: '#AAAAAA' }}>{row.charges}</td>
+                  <td style={{ textAlign: 'right', color: '#00C853', fontWeight: 600 }}>{gbp(row.revenue)}</td>
+                  <td style={{ textAlign: 'right', color: '#AAAAAA' }}>{gbp(row.cost)}</td>
+                  <td style={{ textAlign: 'right', fontWeight: 600, color: parseFloat(row.profit) >= 0 ? '#00C853' : '#E91E8C' }}>{gbp(row.profit)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
 
-function MiniBarChart({ snapshots }) {
-  if (!snapshots.length) return <p style={{ color: '#AAAAAA', fontSize: 13 }}>No data yet</p>;
-  const max = Math.max(...snapshots.map(s => s.parcel_count), 1);
+function MiniBarChart({ dailyData }) {
+  if (!dailyData || !dailyData.length) {
+    return <p style={{ color: '#AAAAAA', fontSize: 13 }}>No data yet</p>;
+  }
+  const max = Math.max(...dailyData.map(d => parseFloat(d.revenue || 0)), 1);
+  const sortedData = [...dailyData].sort((a, b) => new Date(a.date) - new Date(b.date));
   return (
     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 80, marginTop: 12 }}>
-      {[...snapshots].reverse().map((s, i) => (
+      {sortedData.map((d, i) => (
         <div key={i}
-          title={`${format(new Date(s.snapshot_date), 'dd MMM')}: ${s.parcel_count} parcels`}
-          style={{ flex: 1, borderRadius: '3px 3px 0 0', height: `${Math.max((s.parcel_count / max) * 100, 4)}%`, background: `rgba(0,200,83,${0.3 + (s.parcel_count / max) * 0.7})`, cursor: 'default' }}
+          title={`${format(new Date(d.date), 'dd MMM')}: ${gbp(d.revenue)}`}
+          style={{ flex: 1, borderRadius: '3px 3px 0 0', height: `${Math.max((parseFloat(d.revenue) / max) * 100, 4)}%`, background: `rgba(0,200,83,${0.3 + (parseFloat(d.revenue) / max) * 0.7})`, cursor: 'default' }}
         />
       ))}
     </div>
@@ -936,7 +1026,7 @@ export default function CustomerRecord() {
 
       {activeTab === 'overview'  && <OverviewTab c={c} onSaved={handleCustomerSaved} onDeleteRequest={() => { setDeleteModal(true); setDeleteConfirm(''); }} />}
       {activeTab === 'contacts'  && <ContactsTab customerId={id} contacts={contacts} onRefresh={refetch} />}
-      {activeTab === 'volume'    && <VolumeTab snapshots={volume_snapshots} />}
+      {activeTab === 'volume'    && <PerformanceTab customerId={c.id} />}
       {activeTab === 'financial' && <FinancialTab c={c} creditPct={creditPct} />}
       {activeTab === 'comms'     && <CustomerCommsTab customerId={id} />}
       {activeTab === 'pricing'   && (

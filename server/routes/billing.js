@@ -1326,6 +1326,98 @@ router.get('/charges/aged-alerts', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── GET /api/billing/charges/customer-perf ──────────────────────────────────────────
+
+router.get('/charges/customer-perf', async (req, res, next) => {
+  try {
+    const { customerId } = req.query;
+    if (!customerId) {
+      return res.status(400).json({ error: 'customerId is required' });
+    }
+
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    // Helper to get stats for a date range
+    const getStats = async (fromDate) => {
+      const res = await query(`
+        SELECT
+          COUNT(*)::int AS charges,
+          COALESCE(SUM(c.price), 0)::numeric(12,2) AS revenue,
+          COALESCE(SUM(c.cost_price), 0)::numeric(12,2) AS cost,
+          COALESCE(SUM(c.price) - SUM(c.cost_price), 0)::numeric(12,2) AS profit,
+          COALESCE(SUM(c.parcel_qty), COUNT(*))::int AS parcels
+        FROM charges c
+        WHERE c.customer_id = $1
+          AND c.charge_type = 'courier'
+          AND c.cancelled = false
+          AND c.created_at >= $2
+      `, [customerId, fromDate]);
+      return res.rows[0] || { charges: 0, revenue: 0, cost: 0, profit: 0, parcels: 0 };
+    };
+
+    // Get all-time stats (no date filter)
+    const allRes = await query(`
+      SELECT
+        COUNT(*)::int AS charges,
+        COALESCE(SUM(c.price), 0)::numeric(12,2) AS revenue,
+        COALESCE(SUM(c.cost_price), 0)::numeric(12,2) AS cost,
+        COALESCE(SUM(c.price) - SUM(c.cost_price), 0)::numeric(12,2) AS profit,
+        COALESCE(SUM(c.parcel_qty), COUNT(*))::int AS parcels
+      FROM charges c
+      WHERE c.customer_id = $1
+        AND c.charge_type = 'courier'
+        AND c.cancelled = false
+    `, [customerId]);
+    const allStats = allRes.rows[0] || { charges: 0, revenue: 0, cost: 0, profit: 0, parcels: 0 };
+
+    // Get daily breakdown for last 30 days
+    const dailyRes = await query(`
+      SELECT
+        DATE_TRUNC('day', c.created_at)::date AS date,
+        COALESCE(SUM(c.price), 0)::numeric(12,2) AS revenue,
+        COALESCE(SUM(c.cost_price), 0)::numeric(12,2) AS cost,
+        COALESCE(SUM(c.price) - SUM(c.cost_price), 0)::numeric(12,2) AS profit,
+        COUNT(*)::int AS charges
+      FROM charges c
+      WHERE c.customer_id = $1
+        AND c.charge_type = 'courier'
+        AND c.cancelled = false
+        AND c.created_at >= $2
+      GROUP BY DATE_TRUNC('day', c.created_at)
+      ORDER BY date DESC
+    `, [customerId, thirtyDaysAgo]);
+
+    // Get breakdown by courier/service
+    const byServiceRes = await query(`
+      SELECT
+        c.service_name,
+        COUNT(*)::int AS charges,
+        COALESCE(SUM(c.price), 0)::numeric(12,2) AS revenue,
+        COALESCE(SUM(c.cost_price), 0)::numeric(12,2) AS cost,
+        COALESCE(SUM(c.price) - SUM(c.cost_price), 0)::numeric(12,2) AS profit
+      FROM charges c
+      WHERE c.customer_id = $1
+        AND c.charge_type = 'courier'
+        AND c.cancelled = false
+      GROUP BY c.service_name
+      ORDER BY revenue DESC
+    `, [customerId]);
+
+    const last7 = await getStats(sevenDaysAgo);
+    const last30 = await getStats(thirtyDaysAgo);
+
+    res.json({
+      last7,
+      last30,
+      all: allStats,
+      daily: dailyRes.rows,
+      by_courier: byServiceRes.rows,
+    });
+  } catch (err) { next(err); }
+});
+
 // ─── GET /api/billing/charges/stats ──────────────────────────────────────────
 
 router.get('/charges/stats', async (req, res, next) => {
