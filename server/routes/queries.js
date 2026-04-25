@@ -1241,9 +1241,9 @@ Please rewrite the draft email incorporating the feedback. Output ONLY the revis
     const aiJson    = await aiResp.json();
     const newText   = (aiJson.content?.[0]?.text || '').trim();
 
-    // Update the draft body in-place
+    // Update the draft body in-place (query_emails has no updated_at column)
     const updated = await query(
-      `UPDATE query_emails SET body_text = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+      `UPDATE query_emails SET body_text = $1 WHERE id = $2 RETURNING *`,
       [newText, email_id]
     );
 

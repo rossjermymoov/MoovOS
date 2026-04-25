@@ -2503,26 +2503,32 @@ router.put('/settings', async (req, res, next) => {
       fortnightly_parity,
       monthly_billing_date,
       enabled,
+      volume_mix_refresh_day,
+      volume_mix_refresh_hour,
     } = req.body;
 
     const r = await query(`
       UPDATE billing_settings SET
-        billing_day_of_week  = COALESCE($1, billing_day_of_week),
-        billing_hour         = COALESCE($2, billing_hour),
-        billing_minute       = COALESCE($3, billing_minute),
-        fortnightly_parity   = COALESCE($4, fortnightly_parity),
-        monthly_billing_date = COALESCE($5, monthly_billing_date),
-        enabled              = COALESCE($6, enabled),
-        updated_at           = NOW()
+        billing_day_of_week      = COALESCE($1, billing_day_of_week),
+        billing_hour             = COALESCE($2, billing_hour),
+        billing_minute           = COALESCE($3, billing_minute),
+        fortnightly_parity       = COALESCE($4, fortnightly_parity),
+        monthly_billing_date     = COALESCE($5, monthly_billing_date),
+        enabled                  = COALESCE($6, enabled),
+        volume_mix_refresh_day   = COALESCE($7, volume_mix_refresh_day),
+        volume_mix_refresh_hour  = COALESCE($8, volume_mix_refresh_hour),
+        updated_at               = NOW()
       WHERE id = 1
       RETURNING *
     `, [
-      billing_day_of_week  ?? null,
-      billing_hour         ?? null,
-      billing_minute       ?? null,
-      fortnightly_parity   ?? null,
-      monthly_billing_date ?? null,
-      enabled              ?? null,
+      billing_day_of_week      ?? null,
+      billing_hour             ?? null,
+      billing_minute           ?? null,
+      fortnightly_parity       ?? null,
+      monthly_billing_date     ?? null,
+      enabled                  ?? null,
+      volume_mix_refresh_day   ?? null,
+      volume_mix_refresh_hour  ?? null,
     ]);
     res.json(r.rows[0]);
   } catch (err) { next(err); }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Save, Play, CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { Save, Play, CheckCircle, AlertCircle, Clock, BarChart2 } from 'lucide-react';
 import axios from 'axios';
 import { SettingsNav } from './RulesSettings';
 
@@ -42,22 +42,26 @@ export default function BillingSettings() {
   });
 
   const [form, setForm] = useState({
-    billing_day_of_week:  6,
-    billing_hour:         0,
-    billing_minute:       0,
-    fortnightly_parity:   0,
-    monthly_billing_date: 1,
-    enabled:              true,
+    billing_day_of_week:       6,
+    billing_hour:              0,
+    billing_minute:            0,
+    fortnightly_parity:        0,
+    monthly_billing_date:      1,
+    enabled:                   true,
+    volume_mix_refresh_day:    6,
+    volume_mix_refresh_hour:   8,
   });
 
   useEffect(() => {
     if (settings) setForm({
-      billing_day_of_week:  settings.billing_day_of_week  ?? 6,
-      billing_hour:         settings.billing_hour         ?? 0,
-      billing_minute:       settings.billing_minute       ?? 0,
-      fortnightly_parity:   settings.fortnightly_parity   ?? 0,
-      monthly_billing_date: settings.monthly_billing_date ?? 1,
-      enabled:              settings.enabled              ?? true,
+      billing_day_of_week:       settings.billing_day_of_week      ?? 6,
+      billing_hour:              settings.billing_hour             ?? 0,
+      billing_minute:            settings.billing_minute           ?? 0,
+      fortnightly_parity:        settings.fortnightly_parity       ?? 0,
+      monthly_billing_date:      settings.monthly_billing_date     ?? 1,
+      enabled:                   settings.enabled                  ?? true,
+      volume_mix_refresh_day:    settings.volume_mix_refresh_day   ?? 6,
+      volume_mix_refresh_hour:   settings.volume_mix_refresh_hour  ?? 8,
     });
   }, [settings]);
 
@@ -174,6 +178,35 @@ export default function BillingSettings() {
               <option key={d} value={d}>{d}{d === 1 ? 'st' : d === 2 ? 'nd' : d === 3 ? 'rd' : 'th'} of the month</option>
             ))}
           </select>
+        </div>
+      </div>
+
+      {/* Volume mix refresh */}
+      <div style={sectionStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <BarChart2 size={14} color="#A5B4FC" />
+          <div style={{ color: '#fff', fontWeight: 600, fontSize: 14 }}>Volume mix refresh</div>
+        </div>
+        <div style={{ color: '#888', fontSize: 12, marginBottom: 16, lineHeight: 1.55 }}>
+          Controls when rate card projection volume mixes are automatically updated from actual billing data.
+          The DPD-ND2KG service is always counted as DPD-32 in the mix.
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div>
+            <label style={labelStyle}>Refresh day</label>
+            <select value={form.volume_mix_refresh_day} onChange={e => field('volume_mix_refresh_day', parseInt(e.target.value))} style={inputStyle}>
+              {DAYS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Refresh time</label>
+            <select value={form.volume_mix_refresh_hour} onChange={e => field('volume_mix_refresh_hour', parseInt(e.target.value))} style={inputStyle}>
+              {HOURS.map(h => <option key={h.value} value={h.value}>{h.label}</option>)}
+            </select>
+          </div>
+        </div>
+        <div style={{ marginTop: 10, fontSize: 12, color: '#555' }}>
+          Next refresh: {nextRunDate(form.volume_mix_refresh_day, form.volume_mix_refresh_hour, 0)}
         </div>
       </div>
 

@@ -258,11 +258,15 @@ function EmailBubble({ email, courierCode, queryId, onApproved }) {
     if (!feedback || revising) return;
     setRevising(true);
     try {
-      await fetch(`/api/queries/${queryId}/revise-draft`, {
+      const resp = await fetch(`/api/queries/${queryId}/revise-draft`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email_id: email.id, feedback }),
       });
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.error || `Server error ${resp.status}`);
+      }
       setReviseMode(false);
       reviseTextRef.current = '';
       setReviseText('');
