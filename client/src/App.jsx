@@ -6,6 +6,7 @@ import CustomerNew from './pages/customers/CustomerNew';
 import StaffSettings from './pages/settings/StaffSettings';
 import RulesSettings from './pages/settings/RulesSettings';
 import BillingSettings from './pages/settings/BillingSettings';
+import XeroSettings from './pages/settings/XeroSettings';
 import CarrierManagement from './pages/carriers/CarrierManagement';
 import TrackingPage from './pages/tracking/TrackingPage';
 import FinancePage from './pages/finance/FinancePage';
@@ -57,6 +58,7 @@ export default function App() {
           <Route path="staff"   element={<StaffSettings />} />
           <Route path="rules"   element={<RulesSettings />} />
           <Route path="billing" element={<BillingSettings />} />
+          <Route path="xero"    element={<XeroSettings />} />
         </Route>
         <Route path="*"         element={<Navigate to="/" replace />} />
       </Route>

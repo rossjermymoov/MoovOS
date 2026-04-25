@@ -21,6 +21,7 @@ export function SettingsNav() {
     { to: '/settings/staff',   label: 'Staff' },
     { to: '/settings/rules',   label: 'SLA Rules Engine' },
     { to: '/settings/billing', label: 'Billing' },
+    { to: '/settings/xero',    label: 'Xero' },
   ];
   return (
     <div style={{ display: 'flex', gap: 0, marginBottom: 28, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
