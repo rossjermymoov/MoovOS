@@ -121,6 +121,30 @@ async function xeroRequest(method, path, body = null) {
 
 // ─── OAuth ────────────────────────────────────────────────────────────────────
 
+// GET /api/xero/debug — shows config without redirecting (remove once working)
+router.get('/debug', (req, res) => {
+  const clientId      = process.env.XERO_CLIENT_ID;
+  const clientSecret  = process.env.XERO_CLIENT_SECRET;
+  const redirectUri   = process.env.XERO_REDIRECT_URI;
+
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id:     clientId || 'NOT_SET',
+    redirect_uri:  redirectUri || 'NOT_SET',
+    scope:         SCOPES,
+    state:         'debug',
+  });
+
+  res.json({
+    client_id_set:     !!clientId,
+    client_id_prefix:  clientId ? clientId.slice(0, 8) + '…' : null,
+    client_secret_set: !!clientSecret,
+    redirect_uri:      redirectUri || 'NOT_SET',
+    scopes:            SCOPES,
+    auth_url:          `${XERO_AUTH_URL}?${params.toString()}`,
+  });
+});
+
 // GET /api/xero/status
 router.get('/status', async (req, res, next) => {
   try {
