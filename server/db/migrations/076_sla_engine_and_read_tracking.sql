@@ -88,7 +88,9 @@ INSERT INTO sla_rules (name, condition_type, condition_value, policy_id, priorit
 SELECT 'Keyword: software', 'keyword', 'software', p.id, 200 FROM sla_policies p WHERE p.name = 'Not Delivered'
 ON CONFLICT DO NOTHING;
 
-CREATE OR REPLACE VIEW queries_inbox_view AS
+DROP VIEW IF EXISTS queries_inbox_view;
+
+CREATE VIEW queries_inbox_view AS
 SELECT
   q.id,
   q.consignment_number,
