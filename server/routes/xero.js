@@ -31,6 +31,7 @@ const XERO_CONN_URL   = 'https://api.xero.com/connections';
 const XERO_API_BASE   = 'https://api.xero.com/api.xro/2.0';
 
 const SCOPES = [
+  'openid',
   'offline_access',
   'accounting.contacts',
   'accounting.transactions',
