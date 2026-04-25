@@ -42,16 +42,19 @@ CREATE INDEX IF NOT EXISTS idx_rct_courier ON rate_card_templates(courier_code);
 CREATE INDEX IF NOT EXISTS idx_rct_category ON rate_card_templates(category_id);
 
 -- ── 3. Prospects ──────────────────────────────────────────────────────────────
-CREATE TYPE prospect_status AS ENUM (
-  'quote',           -- rate card being built
-  'pending_approval',-- rate card sent for manager sign-off
-  'approved',        -- manager approved, ready to send to prospect
-  'sent',            -- rate card + account form sent to prospect
-  'form_returned',   -- prospect has filled in and returned the account form
-  'onboarding',      -- account form accepted, being onboarded
-  'converted',       -- now a full customer (customers record created)
-  'lost'             -- prospect did not convert
-);
+DO $$ BEGIN
+  CREATE TYPE prospect_status AS ENUM (
+    'quote',
+    'pending_approval',
+    'approved',
+    'sent',
+    'form_returned',
+    'onboarding',
+    'converted',
+    'lost'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 CREATE TABLE IF NOT EXISTS prospects (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -75,13 +78,16 @@ CREATE INDEX IF NOT EXISTS idx_prospects_status     ON prospects(status);
 CREATE INDEX IF NOT EXISTS idx_prospects_assigned   ON prospects(assigned_to);
 
 -- ── 4. Prospect rate cards ────────────────────────────────────────────────────
-CREATE TYPE rate_card_status AS ENUM (
-  'draft',
-  'pending_approval',
-  'approved',
-  'rejected',
-  'sent'
-);
+DO $$ BEGIN
+  CREATE TYPE rate_card_status AS ENUM (
+    'draft',
+    'pending_approval',
+    'approved',
+    'rejected',
+    'sent'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 CREATE TABLE IF NOT EXISTS prospect_rate_cards (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
