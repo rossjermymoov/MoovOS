@@ -831,7 +831,8 @@ export default function FinancePage() {
   const { data: stats } = useQuery({
     queryKey: ['billing-stats', statsParams],
     queryFn: () => billingApi.getStats(statsParams),
-    staleTime: 10_000,
+    staleTime: 0,               // always re-fetch on mount/focus so backfill totals are current
+    refetchOnWindowFocus: true,
   });
 
   // Charges list

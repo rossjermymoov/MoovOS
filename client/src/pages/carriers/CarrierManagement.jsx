@@ -1160,6 +1160,7 @@ function condToValue(op, raw) {
 // ─── LEVEL 2 — Carrier detail (services list) ─────────────────────────────────
 
 function CarrierDetail({ carrierId, onBack, onDrillService }) {
+  const qc = useQueryClient();
   const [addingService, setAddingService] = useState(false);
   const [serviceForm, setServiceForm] = useState({ service_code:'', name:'', fuel_surcharge_pct:'' });
   const [addingGroup, setAddingGroup]   = useState(false);
@@ -1197,6 +1198,11 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
   const triggerBackfill = (courierCode) => {
     if (!courierCode) return;
     api.post(`/billing/batch-apply-surcharges?courier_code=${encodeURIComponent(courierCode)}`)
+      .then(() => {
+        // Invalidate Finance page stats so Total Value / Unbilled Value refresh
+        qc.invalidateQueries(['billing-stats']);
+        qc.invalidateQueries(['billing-charges']);
+      })
       .catch(err => console.warn('[backfill] surcharge backfill error:', err.message));
   };
 
