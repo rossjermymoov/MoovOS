@@ -8,6 +8,7 @@ import CarrierManagement from './pages/carriers/CarrierManagement';
 import TrackingPage from './pages/tracking/TrackingPage';
 import FinancePage from './pages/finance/FinancePage';
 import QueriesPage from './pages/queries/QueriesPage';
+import TicketDetailPage from './pages/queries/TicketDetailPage';
 import CustomerSimPage from './pages/customer/CustomerSimPage';
 
 // Placeholder pages for other sections (to be built)
@@ -35,7 +36,10 @@ export default function App() {
         <Route path="pricing"   element={<Placeholder name="Pricing & Rate Cards" />} />
         <Route path="tracking"  element={<TrackingPage />} />
         <Route path="finance"   element={<FinancePage />} />
-        <Route path="queries"        element={<QueriesPage />} />
+        <Route path="queries">
+          <Route index element={<QueriesPage />} />
+          <Route path=":id" element={<TicketDetailPage />} />
+        </Route>
         <Route path="customer-sim"  element={<CustomerSimPage />} />
         <Route path="carriers"      element={<CarrierManagement />} />
         <Route path="reports"   element={<Placeholder name="Dashboards & Reporting" />} />

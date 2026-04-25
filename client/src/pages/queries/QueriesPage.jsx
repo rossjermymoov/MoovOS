@@ -1295,10 +1295,10 @@ function FilterPill({ active, color, onClick, children }) {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function QueriesPage() {
+  const navigate = useNavigate();
   const [queries,       setQueries]       = useState([]);
   const [stats,         setStats]         = useState(null);
   const [loading,       setLoading]       = useState(true);
-  const [selectedId,    setSelectedId]    = useState(null);
   const [showUnmatched, setShowUnmatched] = useState(false);
   const [refreshKey,    setRefreshKey]    = useState(0);
   const [filters,       setFilters]       = useState({ status: '', attention: false, search: '' });
@@ -1420,23 +1420,10 @@ export default function QueriesPage() {
             <InboxRow
               key={q.id}
               q={q}
-              selected={q.id === selectedId}
-              onClick={() => setSelectedId(id => id === q.id ? null : q.id)}
+              selected={false}
+              onClick={() => navigate(`/queries/${q.id}`)}
             />
           ))}
-        </div>
-
-        {/* Right — detail panel (always visible) */}
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden', background: C.bg }}>
-          {selectedId ? (
-            <QueryDetail key={selectedId} queryId={selectedId} onUpdated={refresh} />
-          ) : (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: C.muted, gap: 10 }}>
-              <MessageSquare size={32} style={{ opacity: 0.3 }} />
-              <div style={{ fontSize: 13, fontWeight: 600, opacity: 0.5 }}>Select a query to view the conversation</div>
-            </div>
-          )}
-        </div>
 
       </div>
 

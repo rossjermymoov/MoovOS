@@ -672,6 +672,7 @@ router.patch('/:id', async (req, res, next) => {
   try {
     const allowed = [
       'status', 'query_type', 'subject', 'assigned_to',
+      'priority', 'group_name',
       'requires_attention', 'attention_reason',
       'courier_reference', 'claim_number', 'claim_deadline_at',
       'claim_amount', 'approved_amount', 'resolution_notes',
