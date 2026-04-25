@@ -118,12 +118,11 @@ router.get('/carrier-services', async (req, res, next) => {
     const r = await query(`
       SELECT
         cs.service_code,
-        cs.name          AS service_name,
-        z.name           AS zone_name,
-        z.id             AS zone_id,
-        EXISTS (
-          SELECT 1 FROM zone_country_codes zcc WHERE zcc.zone_id = z.id
-        )                AS is_international,
+        cs.name                          AS service_name,
+        cs.service_type,
+        (cs.service_type = 'international') AS is_international,
+        z.name                           AS zone_name,
+        z.id                             AS zone_id,
         (
           SELECT wb.price_first
           FROM weight_bands wb
@@ -144,7 +143,7 @@ router.get('/carrier-services', async (req, res, next) => {
       JOIN courier_services cs ON cs.courier_id = co.id
       JOIN zones z              ON z.courier_service_id = cs.id
       WHERE co.code ILIKE $1
-      ORDER BY cs.service_code, z.name
+      ORDER BY cs.service_type, cs.service_code, z.name
     `, [courier_code]);
 
     res.json(r.rows);
