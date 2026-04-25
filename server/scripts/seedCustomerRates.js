@@ -1,8 +1,14 @@
 /**
  * seedCustomerRates.js
  * Reads server/data/prices.csv and seeds the customer_rates table.
- * Runs at server startup, skipped if table already has data.
- * Mapping from CSV customer_id → MOOV account_number is hardcoded here.
+ * Runs at server startup. Skips customers that already have rates.
+ *
+ * Matching strategy:
+ *   1. Try hardcoded CSV_TO_MOOV map (csv_id → account_number) — fast and exact
+ *   2. Fall back to normalised business_name fuzzy match
+ *
+ * After seeding rates, ensures customer_carrier_links are backfilled so
+ * the pricing tab shows active carriers correctly.
  */
 
 import { createReadStream } from 'fs';
@@ -14,7 +20,7 @@ import { query, getClient } from '../db/index.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 
-// CSV customer_id → MOOV account_number (matched by name)
+// Hardcoded CSV customer_id → MOOV account_number overrides (takes priority over name match)
 const CSV_TO_MOOV = {
   '1644': 'MOOV-0001', '1658': 'MOOV-0004', '1669': 'MOOV-0007', '1670': 'MOOV-0008',
   '1683': 'MOOV-0010', '1689': 'MOOV-0012', '1690': 'MOOV-0013', '1693': 'MOOV-0015',
@@ -42,70 +48,66 @@ const CSV_TO_MOOV = {
   '2714': 'MOOV-0157', '2717': 'MOOV-0158', '2737': 'MOOV-0160', '2745': 'MOOV-0161',
   '2752': 'MOOV-0162', '2769': 'MOOV-0164', '2770': 'MOOV-0165', '2772': 'MOOV-0166',
   '2786': 'MOOV-0169', '2823': 'MOOV-0171',
-  // Gap analysis additions
-  '2121': 'MOOV-0099',  // Hairways (Hair & Beauty) Ltd Site B → Harlow
-  '2445': 'MOOV-0133',  // Bill's Tool Store Ltd
-  '2587': 'MOOV-0138',  // Westcare Ltd
-  // HOF- entries that map to existing MOOV accounts
-  '1286': 'MOOV-0023',  // HOF - Beacons and Lightbars
-  '1356': 'MOOV-0032',  // HOF - ecom group uk limited
-  '1394': 'MOOV-0013',  // HOF - Code Nine Uk Ltd
-  '1449': 'MOOV-0035',  // HOF - Aegean Sea Ltd
-  '1526': 'MOOV-0022',  // HOF - M AND J BROTHERS LTD
-  '1561': 'MOOV-0015',  // HOF - Green Footprint Services ltd
-  '1624': 'MOOV-0004',  // HOF - I Luv Designer
 };
 
 const BATCH_SIZE = 500;
 
+/** Normalise a business name for fuzzy matching */
+function normaliseName(name) {
+  return (name || '')
+    .toLowerCase()
+    .replace(/\b(ltd|limited|plc|llp|inc|group|holdings?|co|uk|the|and|&)\b/g, '')
+    .replace(/[^a-z0-9]/g, '')
+    .trim();
+}
+
 export async function seedCustomerRates() {
-  // Check total — used for logging only, not for skipping
   const { rows: countRows } = await query('SELECT COUNT(*) FROM customer_rates');
-  console.log(`ℹ️  customer_rates currently has ${countRows[0].count} rows — checking per customer for gaps…`);
+  console.log(`ℹ️  customer_rates has ${countRows[0].count} rows — checking for gaps…`);
 
-  console.log('📦 Seeding customer_rates from prices.csv…');
-
-  // Load customer UUID lookup: account_number → uuid AND business_name → uuid
+  // Load all customers: id, account_number, business_name
   const { rows: customers } = await query('SELECT id, account_number, business_name FROM customers');
-  const accountToUuid = {};
-  const nameToUuid    = {};
+  const accountToUuid  = {};  // account_number → uuid
+  const nameToUuid     = {};  // normalised name → uuid (for fuzzy fallback)
+
   for (const c of customers) {
     if (c.account_number) accountToUuid[c.account_number] = c.id;
-    if (c.business_name)  nameToUuid[c.business_name.toLowerCase().trim()] = c.id;
+    const norm = normaliseName(c.business_name);
+    if (norm) nameToUuid[norm] = c.id;
   }
 
-  // Read CSV line by line into buckets per customer
+  // Read CSV — match each row to a customer UUID
   const csvPath = path.join(__dirname, '..', 'data', 'prices.csv');
-  const rowsByCustomer = {}; // uuid → [row, ...]
+  const rowsByCustomer = {};   // uuid → rows[]
+  const unmatchedNames = new Set();
 
   await new Promise((resolve, reject) => {
     const rl = createInterface({ input: createReadStream(csvPath) });
     let header = true;
     rl.on('line', line => {
       if (header) { header = false; return; }
-      // CSV: customer_id,customer_name,courier_id,courier_code,courier_name,service_id,service_code,service_name,zone_id,zone_name,weight_class_id,weight_class_name,price
-      const parts = line.split(',');
-      // Handle quoted fields
       const fields = parseCSVLine(line);
       if (fields.length < 13) return;
 
-      const [csvCustId, csvCustName, courierId, courierCode, courierName, serviceId, serviceCode, serviceName, zoneId, zoneName, weightClassId, weightClassName, price] = fields;
+      const [csvCustId, csvCustName, courierId, courierCode, courierName,
+             serviceId, serviceCode, serviceName,
+             zoneId, zoneName, weightClassId, weightClassName, price] = fields;
 
-      let uuid;
+      // 1. Try hardcoded map first
+      let uuid = null;
       const moovAcct = CSV_TO_MOOV[csvCustId];
-      if (moovAcct) {
-        uuid = accountToUuid[moovAcct];
-      } else {
-        const nameClean = csvCustName.trim().replace(/^["']|["']$/g, '');
-        if (!nameClean) return;
-        // For HOF- prefixed entries, strip the prefix and match by the actual business name
-        const stripped = nameClean.replace(/^HOF\s*[-–]\s*/i, '').trim();
-        // WXM- entries are not direct Moov customers
-        if (nameClean.match(/^WXM\s*[-–]/i)) return;
-        // Try direct name match first, then stripped name
-        uuid = nameToUuid[nameClean.toLowerCase()] || nameToUuid[stripped.toLowerCase()];
+      if (moovAcct) uuid = accountToUuid[moovAcct];
+
+      // 2. Fall back to name match
+      if (!uuid) {
+        const norm = normaliseName(csvCustName);
+        uuid = nameToUuid[norm] || null;
       }
-      if (!uuid) return; // customer not in DB
+
+      if (!uuid) {
+        unmatchedNames.add(csvCustName);
+        return;
+      }
 
       if (!rowsByCustomer[uuid]) rowsByCustomer[uuid] = [];
       rowsByCustomer[uuid].push([
@@ -121,50 +123,90 @@ export async function seedCustomerRates() {
     rl.on('error', reject);
   });
 
-  // Fetch which customers already have rates
-  const { rows: existingRows } = await query(
-    'SELECT DISTINCT customer_id FROM customer_rates'
-  );
+  if (unmatchedNames.size > 0) {
+    console.log(`⚠️  ${unmatchedNames.size} CSV customers could not be matched to the DB (skipped)`);
+  }
+
+  // Only seed customers that have no rates yet
+  const { rows: existingRows } = await query('SELECT DISTINCT customer_id FROM customer_rates');
   const alreadySeeded = new Set(existingRows.map(r => r.customer_id));
 
   const toSeed = Object.entries(rowsByCustomer).filter(([uuid]) => !alreadySeeded.has(uuid));
   if (toSeed.length === 0) {
-    console.log('ℹ️  All customers already have rate data — skipping');
-    return;
-  }
-  console.log(`📦 Seeding rates for ${toSeed.length} customers with missing data…`);
+    console.log('ℹ️  All matched customers already have rate data');
+  } else {
+    console.log(`📦 Seeding rates for ${toSeed.length} customers…`);
+    let totalInserted = 0;
 
-  // One transaction per customer so a large customer failing doesn't affect others
-  let totalInserted = 0;
-  for (const [uuid, rows] of toSeed) {
-    const client = await getClient();
-    try {
-      await client.query('BEGIN');
-      for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-        const batch = rows.slice(i, i + BATCH_SIZE);
-        const values = [];
-        const placeholders = batch.map((row, idx) => {
-          const base = idx * 12;
-          values.push(...row);
-          return `($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},$${base+12})`;
-        });
-        await client.query(`
-          INSERT INTO customer_rates
-            (customer_id, courier_id, courier_code, courier_name, service_id, service_code, service_name, zone_id, zone_name, weight_class_id, weight_class_name, price)
-          VALUES ${placeholders.join(',')}
-          ON CONFLICT (customer_id, service_id, zone_name, weight_class_name) DO NOTHING
-        `, values);
-        totalInserted += batch.length;
+    for (const [uuid, rows] of toSeed) {
+      const client = await getClient();
+      try {
+        await client.query('BEGIN');
+        for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+          const batch = rows.slice(i, i + BATCH_SIZE);
+          const values = [];
+          const placeholders = batch.map((row, idx) => {
+            const base = idx * 12;
+            values.push(...row);
+            return `($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},$${base+12})`;
+          });
+          await client.query(`
+            INSERT INTO customer_rates
+              (customer_id, courier_id, courier_code, courier_name,
+               service_id, service_code, service_name,
+               zone_id, zone_name, weight_class_id, weight_class_name, price)
+            VALUES ${placeholders.join(',')}
+            ON CONFLICT (customer_id, service_id, zone_name, weight_class_name) DO NOTHING
+          `, values);
+          totalInserted += batch.length;
+        }
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(`❌ Failed to seed rates for customer ${uuid}:`, err.message);
+      } finally {
+        client.release();
       }
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      console.error(`❌ Failed to seed rates for customer ${uuid}:`, err.message);
-    } finally {
-      client.release();
     }
+    console.log(`✅ Seeded ${totalInserted.toLocaleString()} rate rows for ${toSeed.length} customers`);
   }
-  console.log(`✅ Seeded ${totalInserted.toLocaleString()} rate rows for ${toSeed.length} customers`);
+
+  // ── Backfill customer_carrier_links ───────────────────────────────────────
+  // Ensure every customer with rate data has an active carrier link.
+  // This runs every startup so it self-heals after any migration gaps.
+  try {
+    // Create master carrier_rate_cards for couriers that don't have one
+    await query(`
+      INSERT INTO carrier_rate_cards (courier_id, name, is_master, is_active)
+      SELECT DISTINCT c.id, 'Master', true, true
+      FROM customer_rates cr
+      JOIN couriers c ON c.code = cr.courier_code
+      WHERE NOT EXISTS (
+        SELECT 1 FROM carrier_rate_cards crc2
+        WHERE crc2.courier_id = c.id AND crc2.is_master = true
+      )
+    `);
+
+    // Insert missing carrier links
+    const { rowCount } = await query(`
+      INSERT INTO customer_carrier_links (customer_id, courier_id, carrier_rate_card_id)
+      SELECT DISTINCT ON (cr.customer_id, c.id)
+        cr.customer_id,
+        c.id,
+        (SELECT id FROM carrier_rate_cards WHERE courier_id = c.id AND is_master = true LIMIT 1)
+      FROM customer_rates cr
+      JOIN couriers c ON c.code = cr.courier_code
+      ORDER BY cr.customer_id, c.id
+      ON CONFLICT (customer_id, courier_id) DO NOTHING
+    `);
+
+    if (rowCount > 0) {
+      console.log(`🔗 Backfilled ${rowCount} customer_carrier_links`);
+    }
+  } catch (err) {
+    // Non-fatal — carrier links are a UI convenience, not core data
+    console.warn('⚠️  carrier link backfill skipped:', err.message);
+  }
 }
 
 // Simple CSV parser that handles quoted fields
