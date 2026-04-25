@@ -252,18 +252,28 @@ export default function RateCardEditor() {
     const intlParcels = total - domParcels;
 
     // ── Weighted margin from rate card prices ─────────────────────────────
-    const pricedRates = domesticRates.filter(r =>
-      parseFloat(r.price) > 0 && parseFloat(r.cost_price) > 0
-    );
+    // Group by service_code — one mainland-representative row per service type.
+    // This prevents zone variants (Highlands, Islands, Saturday, etc.) from
+    // diluting the average with their low/negative margins.
+    const serviceCodes = [...new Set(domesticRates.map(r => r.service_code).filter(Boolean))];
+    const serviceMargins = serviceCodes
+      .map(code => {
+        const rep = pickMainland(code);
+        return rep && parseFloat(rep.price) > 0 && parseFloat(rep.cost_price) > 0
+          ? { code, margin: marginOf(rep) }
+          : null;
+      })
+      .filter(Boolean);
 
     const mainlandMargin = marginOf(primaryRate);
 
-    const otherRates = pricedRates.filter(r => r !== primaryRate);
-    const otherAvgMargin = otherRates.length > 0
-      ? otherRates.reduce((s, r) => s + (marginOf(r) ?? 0), 0) / otherRates.length
-      : mainlandMargin ?? 20; // fallback if only one rate
+    // Compare service types (Next Day vs 10:30 vs Saturday) — not 8 zone variants each
+    const otherServiceMargins = serviceMargins.filter(s => s.code !== primaryRate?.service_code);
+    const otherAvgMargin = otherServiceMargins.length > 0
+      ? otherServiceMargins.reduce((s, m) => s + m.margin, 0) / otherServiceMargins.length
+      : mainlandMargin ?? 20; // fallback if only one service type
 
-    // If primary rate has no sell price yet, fall back to other rates' average
+    // If primary rate has no sell price yet, fall back to other services' average
     const weightedMargin = mainlandMargin != null
       ? 0.80 * mainlandMargin + 0.20 * otherAvgMargin
       : otherAvgMargin;
@@ -298,7 +308,8 @@ export default function RateCardEditor() {
         weighted_margin: weightedMargin,
         mainland_margin: mainlandMargin,
         other_avg_margin: otherAvgMargin,
-        priced_rate_count: pricedRates.length,
+        service_count: serviceMargins.length,
+        other_service_count: otherServiceMargins.length,
       },
       intl: {
         parcels: intlParcels, rev: intlRev, cost: intlCost, profit: intlProfit,
@@ -718,7 +729,7 @@ export default function RateCardEditor() {
                       <div style={{ fontSize: 10, color: '#888', fontWeight: 700, textTransform: 'uppercase', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
                         Domestic — {projections.dom.parcels.toLocaleString()} parcels ({domesticPct}%)
                         <span style={{ color: '#555', fontWeight: 400, textTransform: 'none' }}>
-                          {projections.dom.priced_rate_count} rated rows used
+                          {projections.dom.service_count} service type{projections.dom.service_count !== 1 ? 's' : ''} used
                         </span>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 8 }}>
@@ -742,7 +753,7 @@ export default function RateCardEditor() {
                           </span>
                           <span style={{ color: '#555' }}>+</span>
                           <span style={{ color: '#888' }}>
-                            20% × others {projections.dom.other_avg_margin.toFixed(1)}%
+                            20% × other services ({projections.dom.other_service_count}) {projections.dom.other_avg_margin.toFixed(1)}%
                           </span>
                           <span style={{ color: '#555' }}>=</span>
                           <span style={{ color: '#34D399', fontWeight: 700 }}>
