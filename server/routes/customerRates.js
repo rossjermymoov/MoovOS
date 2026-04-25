@@ -146,11 +146,15 @@ router.post('/:customerId/sub-rates', async (req, res, next) => {
 router.get('/zones/:serviceCode', async (req, res, next) => {
   try {
     const { serviceCode } = req.params;
+    // has_sub_price = true when ANY customer has a sub price for this zone/weight combo.
+    // Used by the frontend to show an amber sub-price slot alongside unpriced zones.
     const result = await query(`
-      SELECT DISTINCT zone_name, weight_class_name
-      FROM   customer_rates
-      WHERE  service_code ILIKE $1
-      ORDER  BY zone_name, weight_class_name
+      SELECT   zone_name, weight_class_name,
+               BOOL_OR(price_sub IS NOT NULL) AS has_sub_price
+      FROM     customer_rates
+      WHERE    service_code ILIKE $1
+      GROUP BY zone_name, weight_class_name
+      ORDER BY zone_name, weight_class_name
     `, [serviceCode]);
     res.json(result.rows);
   } catch (err) { next(err); }
