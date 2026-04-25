@@ -478,23 +478,6 @@ export default function RateCardEditor() {
               International Services <span style={{ color: '#444', fontWeight: 400, textTransform: 'none' }}>({intlServices.length} services · {intlRates.length} zones)</span>
             </div>
 
-            {/* Global markup applicator */}
-            {isEditable && intlRates.length > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14,
-                background: 'rgba(123,47,190,0.07)', border: '1px solid rgba(123,47,190,0.2)', borderRadius: 8, padding: '10px 14px' }}>
-                <span style={{ fontSize: 12, color: '#AAA' }}>Apply markup to all intl zones:</span>
-                <input value={intlMarkup} onChange={e => { setIntlMarkup(e.target.value); markDirty(); }}
-                  type="number" step="0.1" placeholder="e.g. 25"
-                  style={{ ...inputStyle, width: 80, padding: '4px 8px', color: '#A5B4FC', fontWeight: 700 }} />
-                <span style={{ fontSize: 12, color: '#888' }}>%</span>
-                <button onClick={applyGlobalIntlMarkup}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 14px', borderRadius: 7, fontSize: 12, fontWeight: 700,
-                    background: 'rgba(123,47,190,0.15)', color: '#9B59E8', border: '1px solid rgba(123,47,190,0.4)', cursor: 'pointer' }}>
-                  Apply to all
-                </button>
-                <span style={{ fontSize: 11, color: '#555' }}>Or set per-zone below</span>
-              </div>
-            )}
 
             {intlServices.length === 0 && (
               <div style={{ padding: '20px', textAlign: 'center', color: '#444', fontSize: 12, fontStyle: 'italic',
@@ -518,6 +501,32 @@ export default function RateCardEditor() {
                         {svc.zones.length} zone{svc.zones.length !== 1 ? 's' : ''}
                         {filledZones > 0 && <span style={{ color: '#00C853', marginLeft: 8 }}>· {filledZones} priced</span>}
                       </div>
+
+                      {/* Single markup % — applies to all zones in this service */}
+                      {isEditable && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                          <input
+                            type="number" step="0.1" placeholder="Markup %"
+                            defaultValue={svc.zones[0]?.markup_pct ?? ''}
+                            onBlur={e => {
+                              const pct = e.target.value;
+                              if (!pct) return;
+                              setRates(prev => prev.map(r => {
+                                if (r.service_code !== svc.service_code || !r.is_international) return r;
+                                const cost = parseFloat(r.cost_price);
+                                const mkp  = parseFloat(pct);
+                                return { ...r, markup_pct: pct, price: !isNaN(cost) && !isNaN(mkp) ? (cost * (1 + mkp / 100)).toFixed(2) : r.price };
+                              }));
+                              markDirty();
+                            }}
+                            style={{ width: 80, textAlign: 'right', fontFamily: 'monospace', fontSize: 13,
+                              color: '#C084FC', fontWeight: 700, background: 'rgba(123,47,190,0.12)',
+                              border: '1px solid rgba(123,47,190,0.45)', borderRadius: 8, padding: '5px 10px', outline: 'none' }} />
+                          <span style={{ fontSize: 13, color: '#7B2FBE', fontWeight: 700 }}>%</span>
+                          <span style={{ fontSize: 11, color: '#555' }}>all zones</span>
+                        </div>
+                      )}
+
                       <button onClick={() => toggleIntlSvc(svc.service_code)}
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px',
                           borderRadius: 9999, fontSize: 11, fontWeight: 700,

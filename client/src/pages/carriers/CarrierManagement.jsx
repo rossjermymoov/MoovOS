@@ -1172,6 +1172,7 @@ function CustomerRcTemplatesTab({ courierCode, courierName }) {
   const [loadingCarrier, setLoadingCarrier] = useState(null); // template id being loaded
   const [openSvcs,      setOpenSvcs]      = useState(new Set()); // domestic service keys expanded
   const [openIntlSvcs,  setOpenIntlSvcs]  = useState(new Set()); // intl service keys expanded
+  const [globalIntlPct, setGlobalIntlPct] = useState('');        // "apply to all intl" input
 
   const { data: templates = [], isLoading } = useQuery({
     queryKey: ['pricing-templates', courierCode],
@@ -1236,6 +1237,19 @@ function CustomerRcTemplatesTab({ courierCode, courierName }) {
     const mkp  = parseFloat(pct);
     const newPrice = (!isNaN(cost) && !isNaN(mkp)) ? (cost * (1 + mkp / 100)).toFixed(2) : row.price;
     setRates(tpl.id, rows.map((r, i) => i === idx ? { ...r, markup_pct: pct, price: newPrice } : r));
+  };
+
+  // Apply one markup % across every international zone in a template
+  const applyGlobalIntlMarkup = (tpl, pct) => {
+    const mkp = parseFloat(pct);
+    if (isNaN(mkp)) return;
+    const updated = getRates(tpl).map(r => {
+      if (!r.is_international) return r;
+      const cost = parseFloat(r.cost_price);
+      const newPrice = !isNaN(cost) ? (cost * (1 + mkp / 100)).toFixed(2) : r.price;
+      return { ...r, markup_pct: pct, price: newPrice };
+    });
+    setRates(tpl.id, updated);
   };
 
   const toggleSvc = (key) => setOpenSvcs(s => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n; });
@@ -1551,6 +1565,7 @@ function CustomerRcTemplatesTab({ courierCode, courierName }) {
                         <div style={{ fontSize: 11, fontWeight: 700, color: '#7B2FBE', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
                           International Services
                         </div>
+
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 8 }}>
                           {intlServices.map(svc => {
                             const svcKey = `${tpl.id}__intl__${svc.service_code}`;
@@ -1568,6 +1583,30 @@ function CustomerRcTemplatesTab({ courierCode, courierName }) {
                                     {svc.zones.length} zone{svc.zones.length !== 1 ? 's' : ''}
                                     {filledZones > 0 && <span style={{ color: '#00C853', marginLeft: 8 }}>· {filledZones} priced</span>}
                                   </div>
+
+                                  {/* Single markup % input — applies to all zones in this service */}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                                    <input
+                                      type="number" step="0.1" placeholder="Markup %"
+                                      defaultValue={svc.zones[0]?.markup_pct ?? ''}
+                                      onBlur={e => {
+                                        const pct = e.target.value;
+                                        if (!pct) return;
+                                        const updated = getRates(tpl).map(r => {
+                                          if (r.service_code !== svc.service_code || !r.is_international) return r;
+                                          const cost = parseFloat(r.cost_price);
+                                          const mkp  = parseFloat(pct);
+                                          return { ...r, markup_pct: pct, price: !isNaN(cost) && !isNaN(mkp) ? (cost * (1 + mkp / 100)).toFixed(2) : r.price };
+                                        });
+                                        setRates(tpl.id, updated);
+                                      }}
+                                      style={{ width: 80, textAlign: 'right', fontFamily: 'monospace', fontSize: 13,
+                                        color: '#C084FC', fontWeight: 700, background: 'rgba(123,47,190,0.12)',
+                                        border: '1px solid rgba(123,47,190,0.45)', borderRadius: 8, padding: '5px 10px', outline: 'none' }} />
+                                    <span style={{ fontSize: 13, color: '#7B2FBE', fontWeight: 700 }}>%</span>
+                                    <span style={{ fontSize: 11, color: '#555' }}>all zones</span>
+                                  </div>
+
                                   <button onClick={() => toggleIntl(svcKey)}
                                     style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px',
                                       borderRadius: 9999, fontSize: 11, fontWeight: 700,
