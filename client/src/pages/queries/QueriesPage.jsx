@@ -1476,9 +1476,11 @@ export default function QueriesPage() {
   const [refreshKey,    setRefreshKey]    = useState(0);
   const [staffList,     setStaffList]     = useState([]);
   const [filters,       setFilters]       = useState({
-    status: '', attention: false, search: '',
+    status: '', attention: false, pending_draft: false, search: '',
     assigned_to: '', query_type: '', priority: '', group_name: '', courier: '',
   });
+  const [autoDrafting,  setAutoDrafting]  = useState(false);
+  const [autoDraftResult, setAutoDraftResult] = useState(null);
 
   useEffect(() => {
     fetchStats().then(setStats).catch(console.error);
@@ -1492,9 +1494,10 @@ export default function QueriesPage() {
     setLoading(true);
     try {
       const params = {};
-      if (filters.status)      params.status      = filters.status;
-      if (filters.attention)   params.attention   = true;
-      if (filters.search)      params.search      = filters.search;
+      if (filters.status)        params.status        = filters.status;
+      if (filters.attention)     params.attention     = true;
+      if (filters.pending_draft) params.pending_draft = true;
+      if (filters.search)        params.search        = filters.search;
       if (filters.assigned_to) params.assigned_to = filters.assigned_to;
       if (filters.query_type)  params.query_type  = filters.query_type;
       if (filters.priority)    params.priority    = filters.priority;
@@ -1558,6 +1561,41 @@ export default function QueriesPage() {
           )}
         </button>
 
+        {/* Auto-Draft All */}
+        <button
+          onClick={async () => {
+            if (autoDrafting) return;
+            setAutoDrafting(true);
+            setAutoDraftResult(null);
+            try {
+              const r = await fetch('/api/queries/auto-draft-all', { method: 'POST' });
+              const d = await r.json();
+              setAutoDraftResult(d);
+              refresh();
+            } catch (e) {
+              setAutoDraftResult({ error: e.message });
+            } finally {
+              setAutoDrafting(false);
+            }
+          }}
+          disabled={autoDrafting}
+          title="Auto-generate AI draft responses for all open tickets without a pending draft"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            padding: '6px 11px', borderRadius: 7, cursor: autoDrafting ? 'not-allowed' : 'pointer',
+            border: `1px solid ${autoDraftResult?.drafted > 0 ? C.green : autoDraftResult?.error ? C.red : `${C.blue}44`}`,
+            background: autoDrafting ? `${C.blue}10` : autoDraftResult?.drafted > 0 ? `${C.green}12` : 'transparent',
+            color: autoDraftResult?.drafted > 0 ? C.green : autoDraftResult?.error ? C.red : C.blue,
+            fontSize: 12, fontWeight: 600, transition: 'all 0.15s',
+          }}
+        >
+          <Sparkles size={12} />
+          {autoDrafting ? 'Drafting…'
+            : autoDraftResult?.drafted > 0 ? `✓ ${autoDraftResult.drafted} drafted`
+            : autoDraftResult?.error ? 'Error'
+            : 'Auto-Draft All'}
+        </button>
+
         <button onClick={() => setShowUnmatched(true)} style={{ padding: '6px 11px', borderRadius: 7, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
           <User size={12} />
           {stats?.unmatched_emails > 0 && (
@@ -1579,16 +1617,19 @@ export default function QueriesPage() {
       <div style={{ flexShrink: 0, padding: '10px 18px', borderBottom: `1px solid ${C.border}`, background: C.bg }}>
         <div style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
           <KpiCard label="Open" value={stats?.total_open ?? '—'} color={C.blue} icon={Inbox}
-            active={!filters.attention && !filters.status}
-            onClick={() => setFilters(f => ({ ...f, status: '', attention: false }))} />
+            active={!filters.attention && !filters.pending_draft && !filters.status}
+            onClick={() => setFilters(f => ({ ...f, status: '', attention: false, pending_draft: false }))} />
           <KpiCard label="Needs Attention" value={stats?.requires_attention ?? '—'} color={C.red} icon={AlertTriangle} warn
             active={filters.attention}
-            onClick={() => setFilters(f => ({ ...f, attention: !f.attention }))} />
+            onClick={() => setFilters(f => ({ ...f, attention: !f.attention, pending_draft: false, status: '' }))} />
           <KpiCard label="SLA Breached" value={stats?.sla_breached ?? '—'} color={C.amber} icon={Clock} warn />
-          <KpiCard label="Pending Drafts" value={stats?.pending_drafts ?? '—'} color={C.green} icon={Mail} warn sub="awaiting approval" />
+          <KpiCard label="To Verify" value={stats?.tickets_to_verify ?? '—'} color={C.green} icon={Sparkles} warn
+            sub="AI drafts awaiting approval"
+            active={filters.pending_draft}
+            onClick={() => setFilters(f => ({ ...f, pending_draft: !f.pending_draft, attention: false, status: '' }))} />
           <KpiCard label="Claim Deadlines" value={stats?.claim_deadlines_7d ?? '—'} color={C.amber} icon={AlertCircle} warn sub="due in 7 days"
             active={filters.status === 'claim_raised' || filters.status === 'claim_submitted'}
-            onClick={() => setFilters(f => ({ ...f, status: 'claim_raised', attention: false }))} />
+            onClick={() => setFilters(f => ({ ...f, status: 'claim_raised', attention: false, pending_draft: false }))} />
           <KpiCard label="Total" value={stats?.total_queries ?? '—'} color={C.muted} icon={MessageSquare} />
         </div>
       </div>
@@ -1605,8 +1646,12 @@ export default function QueriesPage() {
         ))}
         <div style={{ width: 1, height: 14, background: C.border, flexShrink: 0, margin: '0 2px' }} />
         <FilterPill color={C.red} active={filters.attention}
-          onClick={() => setFilters(p => ({ ...p, attention: !p.attention }))}>
+          onClick={() => setFilters(p => ({ ...p, attention: !p.attention, pending_draft: false }))}>
           ⚠ Attention Only
+        </FilterPill>
+        <FilterPill color={C.green} active={filters.pending_draft}
+          onClick={() => setFilters(p => ({ ...p, pending_draft: !p.pending_draft, attention: false }))}>
+          ✦ To Verify
         </FilterPill>
       </div>
 

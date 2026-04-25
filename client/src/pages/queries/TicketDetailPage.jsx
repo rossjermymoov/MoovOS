@@ -170,14 +170,20 @@ function InlineSelect({ value, onChange, options, colorMap }) {
 }
 
 // ─── Email bubble ─────────────────────────────────────────────
-function EmailBubble({ email, courierCode }) {
-  const [expanded, setExpanded] = useState(true);
+function EmailBubble({ email, courierCode, queryId, onApproved }) {
+  const [expanded, setExpanded]   = useState(true);
+  const [editMode, setEditMode]   = useState(false);
+  const [editBody, setEditBody]   = useState(email.body_text || '');
+  const [approving, setApproving] = useState(false);
+  const qc = useQueryClient();
+
   const isInbound  = email.direction.startsWith('inbound');
   const isCourier  = email.direction.includes('courier');
-  const isDraft    = email.is_ai_draft && !email.sent_at;
+  const isDraft    = email.is_ai_draft && !email.sent_at && !email.ai_draft_approved_by;
 
-  const bubbleColor = isDraft ? C.purple : isInbound ? C.surface : C.card;
-  const borderColor = isDraft ? `${C.purple}40` : isInbound ? C.border : 'rgba(88,166,255,0.2)';
+  // Readable draft style — amber border, very subtle bg (no purple)
+  const bubbleColor = isDraft ? 'rgba(210,153,34,0.05)' : isInbound ? C.surface : C.card;
+  const borderColor = isDraft ? `${C.amber}55`          : isInbound ? C.border  : 'rgba(88,166,255,0.2)';
 
   // Courier logo — only show on courier thread emails
   const courierLogoUrl = isCourier && courierCode ? getCourierLogo(courierCode) : null;
@@ -187,17 +193,49 @@ function EmailBubble({ email, courierCode }) {
   const cutoff      = bodyLines.findIndex(l => l.startsWith('On ') && l.includes('wrote:'));
   const displayBody = cutoff > 0 ? bodyLines.slice(0, cutoff).join('\n').trim() : (email.body_text || '').trim();
 
+  async function approve(bodyOverride) {
+    setApproving(true);
+    try {
+      await api.patch(`/queries/${queryId}/emails/${email.id}/approve`, {
+        body_text: bodyOverride ?? email.body_text,
+      });
+      qc.invalidateQueries(['ticket', queryId]);
+      onApproved?.();
+    } catch (e) {
+      alert('Failed to approve: ' + (e.response?.data?.error || e.message));
+    } finally {
+      setApproving(false);
+    }
+  }
+
   return (
     <div style={{
       marginBottom: 12,
-      padding: '14px 16px',
       background: bubbleColor,
       border: `1px solid ${borderColor}`,
       borderRadius: 9,
       position: 'relative',
+      overflow: 'hidden',
     }}>
+      {/* Draft banner */}
+      {isDraft && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 7,
+          padding: '6px 14px',
+          background: 'rgba(210,153,34,0.10)',
+          borderBottom: `1px solid ${C.amber}33`,
+          fontSize: 11, fontWeight: 700, color: C.amber,
+        }}>
+          <Sparkles size={11} />
+          AI Draft — Pending Your Approval
+          <span style={{ marginLeft: 'auto', fontSize: 10, color: C.muted, fontWeight: 400 }}>
+            {timeAgo(email.created_at)}
+          </span>
+        </div>
+      )}
+
       {/* Header row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: expanded ? 12 : 0, cursor: 'pointer' }} onClick={() => setExpanded(e => !e)}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', marginBottom: 0, cursor: 'pointer' }} onClick={() => setExpanded(e => !e)}>
         {/* Avatar / logo */}
         {courierLogoUrl ? (
           <div style={{
@@ -220,11 +258,6 @@ function EmailBubble({ email, courierCode }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: C.text, display: 'flex', alignItems: 'center', gap: 8 }}>
             {email.from_address}
-            {isDraft && (
-              <span style={{ fontSize: 10, fontWeight: 700, color: C.purple, background: `${C.purple}20`, padding: '1px 7px', borderRadius: 4, border: `1px solid ${C.purple}40` }}>
-                AI DRAFT
-              </span>
-            )}
             {!email.sent_at && !isDraft && (
               <span style={{ fontSize: 10, color: C.amber }}>unsent</span>
             )}
@@ -235,7 +268,7 @@ function EmailBubble({ email, courierCode }) {
             {email.direction === 'inbound_courier' && 'Courier → Moov Parcel'}
             {email.direction === 'outbound_courier' && 'Moov Parcel → Courier'}
             {email.direction === 'note' && 'Internal Note'}
-            <span style={{ marginLeft: 8, color: C.muted }}>{timeAgo(email.created_at)}</span>
+            {!isDraft && <span style={{ marginLeft: 8 }}>{timeAgo(email.created_at)}</span>}
           </div>
         </div>
         <ChevronDown size={13} color={C.muted} style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }} />
@@ -243,12 +276,87 @@ function EmailBubble({ email, courierCode }) {
 
       {/* Body */}
       {expanded && (
-        <pre style={{
-          margin: 0, fontFamily: 'inherit', fontSize: 13, color: C.sub,
-          whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.6,
-        }}>
-          {displayBody || <span style={{ color: C.muted, fontStyle: 'italic' }}>No message body</span>}
-        </pre>
+        <div style={{ padding: '0 14px 12px' }}>
+          {editMode ? (
+            <textarea
+              value={editBody}
+              onChange={e => setEditBody(e.target.value)}
+              style={{
+                width: '100%', boxSizing: 'border-box', minHeight: 140,
+                background: C.card, border: `1px solid ${C.amber}44`,
+                borderRadius: 7, padding: '10px 12px', color: C.text,
+                fontSize: 13, lineHeight: 1.6, resize: 'vertical',
+                outline: 'none', fontFamily: 'inherit',
+              }}
+            />
+          ) : (
+            <pre style={{
+              margin: 0, fontFamily: 'inherit', fontSize: 13, color: C.sub,
+              whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.6,
+            }}>
+              {displayBody || <span style={{ color: C.muted, fontStyle: 'italic' }}>No message body</span>}
+            </pre>
+          )}
+
+          {/* Approval action bar — only on pending drafts */}
+          {isDraft && (
+            <div style={{
+              display: 'flex', gap: 8, marginTop: 12, paddingTop: 12,
+              borderTop: `1px solid ${C.border}`,
+            }}>
+              {editMode ? (
+                <>
+                  <button
+                    onClick={() => approve(editBody)}
+                    disabled={approving}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '7px 16px', borderRadius: 6, border: 'none',
+                      background: C.green, color: '#000',
+                      fontSize: 12, fontWeight: 700, cursor: approving ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    <CheckCircle2 size={12} />
+                    {approving ? 'Approving…' : 'Save & Approve'}
+                  </button>
+                  <button
+                    onClick={() => { setEditMode(false); setEditBody(email.body_text || ''); }}
+                    style={{ padding: '7px 14px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer' }}
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => approve()}
+                    disabled={approving}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '7px 16px', borderRadius: 6, border: 'none',
+                      background: C.green, color: '#000',
+                      fontSize: 12, fontWeight: 700, cursor: approving ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    <CheckCircle2 size={12} />
+                    {approving ? 'Approving…' : 'Approve & Send'}
+                  </button>
+                  <button
+                    onClick={() => setEditMode(true)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '7px 14px', borderRadius: 6,
+                      border: `1px solid ${C.amber}44`, background: 'transparent',
+                      color: C.amber, fontSize: 12, cursor: 'pointer',
+                    }}
+                  >
+                    ✏ Edit before sending
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
@@ -256,15 +364,17 @@ function EmailBubble({ email, courierCode }) {
 
 // ─── Reply composer ───────────────────────────────────────────
 function ReplyComposer({ queryId, direction, placeholder, onSent }) {
-  const [text, setText]         = useState('');
-  const [sending, setSend]      = useState(false);
-  const [generating, setGen]    = useState(false);
-  const [hasDraft, setHasDraft] = useState(false);
-  const qc                      = useQueryClient();
+  const [text, setText]       = useState('');
+  const [sending, setSend]    = useState(false);
+  const [generating, setGen]  = useState(false);
+  const [drafted, setDrafted] = useState(false); // true once AI draft saved to DB
+  const qc                    = useQueryClient();
 
   const target    = direction.includes('courier') ? 'courier' : 'customer';
   const accentCol = target === 'courier' ? C.amber : C.blue;
 
+  // AI Draft: saves to DB as pending draft — does NOT pre-fill textarea
+  // Human must approve from the email thread above
   async function generateDraft() {
     setGen(true);
     try {
@@ -274,12 +384,8 @@ function ReplyComposer({ queryId, direction, placeholder, onSent }) {
         body: JSON.stringify({ target }),
       });
       if (!r.ok) throw new Error(await r.text());
-      const d = await r.json();
-      // draft text can come back as body_text or text
-      const body = d.body_text || d.text || '';
-      setText(body);
-      setHasDraft(true);
-      // reload ticket so the AI DRAFT email badge shows
+      setDrafted(true);
+      // Reload the thread so the draft appears above for review/approval
       qc.invalidateQueries(['ticket', queryId]);
     } catch (e) {
       alert('Failed to generate draft: ' + e.message);
@@ -288,6 +394,7 @@ function ReplyComposer({ queryId, direction, placeholder, onSent }) {
     }
   }
 
+  // Manual send — user has typed their own message, bypass AI flow
   async function send() {
     if (!text.trim()) return;
     setSend(true);
@@ -298,7 +405,7 @@ function ReplyComposer({ queryId, direction, placeholder, onSent }) {
         from_address: 'service@moovparcel.co.uk',
       });
       setText('');
-      setHasDraft(false);
+      setDrafted(false);
       qc.invalidateQueries(['ticket', queryId]);
       onSent?.();
     } catch (e) {
@@ -309,57 +416,61 @@ function ReplyComposer({ queryId, direction, placeholder, onSent }) {
   }
 
   return (
-    <div style={{ padding: '12px 0 0', borderTop: `1px solid ${C.border}`, marginTop: 8 }}>
+    <div style={{ padding: '16px 0 8px', borderTop: `1px solid ${C.border}`, marginTop: 12 }}>
 
-      {/* Simulation banner */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10,
-        padding: '5px 10px', borderRadius: 5,
-        background: 'rgba(210,153,34,0.08)', border: `1px solid ${C.amber}22`,
-      }}>
-        <AlertTriangle size={10} color={C.amber} />
-        <span style={{ fontSize: 10, fontWeight: 700, color: C.amber, textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-          Simulation — no emails will be sent
-        </span>
+      {/* AI draft confirmation banner */}
+      {drafted && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12,
+          padding: '8px 12px', borderRadius: 7,
+          background: 'rgba(63,185,80,0.08)', border: `1px solid ${C.green}33`,
+          fontSize: 12, color: C.green, fontWeight: 600,
+        }}>
+          <CheckCircle2 size={13} />
+          AI draft generated — scroll up to review and approve before sending
+        </div>
+      )}
+
+      {/* Section label */}
+      <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+        Write your own reply
       </div>
 
       <textarea
         value={text}
         onChange={e => setText(e.target.value)}
-        placeholder={generating ? 'Generating AI draft…' : placeholder}
-        rows={5}
-        disabled={generating}
+        placeholder={placeholder}
+        rows={4}
         style={{
           width: '100%', boxSizing: 'border-box',
-          background: C.card,
-          border: `1px solid ${hasDraft ? `${accentCol}44` : C.border}`,
+          background: C.card, border: `1px solid ${C.border}`,
           borderRadius: 8, padding: '10px 14px', color: C.text,
           fontSize: 13, lineHeight: 1.6, resize: 'vertical', outline: 'none',
-          fontFamily: 'inherit', opacity: generating ? 0.5 : 1,
+          fontFamily: 'inherit',
         }}
         onFocus={e => e.target.style.borderColor = `${accentCol}60`}
-        onBlur={e => e.target.style.borderColor = hasDraft ? `${accentCol}44` : C.border}
+        onBlur={e => e.target.style.borderColor = C.border}
       />
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-        {/* AI draft button */}
+        {/* AI draft button — saves to DB, appears in thread for approval */}
         <button
           onClick={generateDraft}
           disabled={generating}
           style={{
             display: 'flex', alignItems: 'center', gap: 6,
-            background: generating ? 'rgba(188,140,255,0.08)' : 'rgba(188,140,255,0.12)',
-            border: `1px solid rgba(188,140,255,0.3)`, borderRadius: 6,
-            color: generating ? C.muted : C.purple,
+            background: generating ? `${C.blue}08` : `${C.blue}12`,
+            border: `1px solid ${C.blue}33`, borderRadius: 6,
+            color: generating ? C.muted : C.blue,
             fontSize: 12, fontWeight: 600, padding: '7px 14px',
             cursor: generating ? 'not-allowed' : 'pointer',
           }}
         >
           <Sparkles size={12} />
-          {generating ? 'Generating…' : hasDraft ? 'Regenerate' : 'AI Draft'}
+          {generating ? 'Generating…' : drafted ? 'Regenerate AI Draft' : '✨ Generate AI Draft'}
         </button>
 
-        {/* Send button */}
+        {/* Manual send */}
         <button
           onClick={send}
           disabled={sending || !text.trim()}
@@ -382,6 +493,7 @@ function ReplyComposer({ queryId, direction, placeholder, onSent }) {
 
 // ─── Thread panel ─────────────────────────────────────────────
 function ThreadPanel({ emails, directions, queryId, replyDirection, replyPlaceholder, courierCode }) {
+  const qc = useQueryClient();
   const filtered = emails.filter(e => directions.includes(e.direction));
 
   return (
@@ -393,7 +505,13 @@ function ThreadPanel({ emails, directions, queryId, replyDirection, replyPlaceho
         </div>
       ) : (
         filtered.map(email => (
-          <EmailBubble key={email.id} email={email} courierCode={courierCode} />
+          <EmailBubble
+            key={email.id}
+            email={email}
+            courierCode={courierCode}
+            queryId={queryId}
+            onApproved={() => qc.invalidateQueries(['ticket', queryId])}
+          />
         ))
       )}
       {replyDirection && (

@@ -23,6 +23,7 @@ router.get('/', async (req, res, next) => {
       requires_attention, attention,      // attention is alias for requires_attention
       sender_matched,
       assigned_to, priority, group_name,  // new panel filters
+      pending_draft,                      // filter to tickets with AI drafts awaiting approval
       search,
       date_from, date_to,
       sort = 'updated_at', order = 'desc',
@@ -68,6 +69,9 @@ router.get('/', async (req, res, next) => {
     if (group_name) {
       conditions.push(`group_name = $${idx++}`);
       values.push(group_name);
+    }
+    if (pending_draft === 'true') {
+      conditions.push(`pending_drafts > 0`);
     }
     if (sender_matched === 'false') {
       conditions.push(`sender_matched = false`);
@@ -425,7 +429,8 @@ router.get('/stats', async (req, res, next) => {
           COUNT(*) FILTER (WHERE requires_attention = true
                              AND status NOT IN ${RESOLVED})                          AS requires_attention,
           COUNT(*) FILTER (WHERE sla_breached = true)                              AS sla_breached,
-          COALESCE(SUM(pending_drafts) FILTER (WHERE status NOT IN ${RESOLVED}), 0) AS pending_drafts,
+          COUNT(*) FILTER (WHERE pending_drafts > 0
+                             AND status NOT IN ${RESOLVED})                          AS tickets_to_verify,
           COUNT(*) FILTER (
             WHERE claim_deadline_at IS NOT NULL
               AND claim_deadline_at BETWEEN NOW() AND NOW() + INTERVAL '7 days'
@@ -474,7 +479,7 @@ router.get('/stats', async (req, res, next) => {
       total_open:               parseInt(o.total_open)            || 0,
       requires_attention:       parseInt(o.requires_attention)    || 0,
       sla_breached:             parseInt(o.sla_breached)          || 0,
-      pending_drafts:           parseInt(o.pending_drafts)        || 0,
+      tickets_to_verify:        parseInt(o.tickets_to_verify)     || 0,
       claim_deadlines_7d:       parseInt(o.claim_deadlines_7d)    || 0,
       autopilot_sent:           0,                                        // future
       total_queries:            parseInt(o.total_queries)         || 0,
@@ -863,6 +868,138 @@ router.patch('/:id/emails/:emailId/approve', async (req, res, next) => {
     }
 
     res.json(result.rows[0]);
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/queries/auto-draft-all
+// Auto-generate customer AI drafts for every open ticket that doesn't
+// already have a pending draft. Runs synchronously (up to 20 tickets) so
+// the caller can show a progress count. Only targets non-resolved tickets.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/auto-draft-all', async (req, res, next) => {
+  try {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+    }
+
+    const RESOLVED = `('resolved','resolved_claim_approved','resolved_claim_rejected')`;
+
+    // Find open tickets without a pending AI draft, oldest first, cap at 20
+    const eligible = await query(`
+      SELECT id, consignment_number, customer_name, courier_name, query_type,
+             status, subject, sender_email
+      FROM queries_inbox_view
+      WHERE status NOT IN ${RESOLVED}
+        AND pending_drafts = 0
+      ORDER BY created_at ASC
+      LIMIT 20
+    `);
+
+    const results = [];
+    let drafted = 0;
+
+    for (const ticket of eligible.rows) {
+      try {
+        // Fetch email thread
+        const emailsRes = await query(
+          `SELECT direction, subject, body_text, from_address, created_at
+           FROM query_emails WHERE query_id = $1 ORDER BY created_at ASC`,
+          [ticket.id]
+        );
+        const emails = emailsRes.rows;
+
+        const emailThread = emails
+          .map(e => `[${e.direction.replace(/_/g, ' ')}]\nFrom: ${e.from_address}\n\n${e.body_text}`)
+          .join('\n\n---\n\n');
+
+        const queryTypeLabel = ticket.query_type?.replace(/_/g, ' ') || 'query';
+        const statusLabel    = ticket.status?.replace(/_/g, ' ') || '';
+
+        const systemPrompt = `You are a customer service agent for Moov Parcel, a UK parcel reseller. Write professional, empathetic emails in British English. Sign off as "Moov Parcel Support Team".`;
+
+        const userPrompt = `Write a customer acknowledgement email for this ${queryTypeLabel} query.
+
+Customer: ${ticket.customer_name}
+Consignment: ${ticket.consignment_number}
+Courier: ${ticket.courier_name}
+Current status: ${statusLabel}
+
+Email thread:
+${emailThread || '(no emails yet)'}
+
+Instructions:
+- Acknowledge receipt of their message warmly
+- Confirm you are investigating with ${ticket.courier_name || 'the courier'}
+- Give a realistic timeframe (1-2 working days unless urgent)
+- Keep it under 200 words
+- Then on a new line, output ONLY this JSON: {"phone_call_recommended":true/false,"urgency_reason":"brief reason or null"}`;
+
+        const aiResp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': process.env.ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 700,
+            system: systemPrompt,
+            messages: [{ role: 'user', content: userPrompt }],
+          }),
+        });
+
+        if (!aiResp.ok) {
+          results.push({ id: ticket.id, status: 'error', error: `AI API ${aiResp.status}` });
+          continue;
+        }
+
+        const aiJson   = await aiResp.json();
+        let draftText  = (aiJson.content?.[0]?.text || '').trim();
+        let phoneCall  = false;
+
+        const jsonMatch = draftText.match(/\{"phone_call_recommended"\s*:\s*(true|false)[^}]*\}/);
+        if (jsonMatch) {
+          try {
+            phoneCall = JSON.parse(jsonMatch[0]).phone_call_recommended === true;
+            draftText = draftText.slice(0, draftText.lastIndexOf(jsonMatch[0])).trim();
+          } catch { /* ignore */ }
+        }
+
+        const subject   = `Re: ${ticket.subject}`;
+        const toAddress = ticket.sender_email || null;
+
+        await query(`
+          INSERT INTO query_emails
+            (query_id, direction, subject, body_text, from_address, to_address, is_ai_draft, created_at)
+          VALUES ($1, 'outbound_customer'::email_direction, $2, $3,
+                  'queries@moovparcel.co.uk', $4, true, NOW())
+        `, [ticket.id, subject, draftText, toAddress]);
+
+        if (phoneCall) {
+          await query(`
+            UPDATE queries SET requires_attention = true,
+              attention_reason = 'Phone call recommended by AI',
+              attention_raised_at = NOW(), updated_at = NOW()
+            WHERE id = $1
+          `, [ticket.id]);
+        }
+
+        drafted++;
+        results.push({ id: ticket.id, status: 'drafted' });
+      } catch (err) {
+        results.push({ id: ticket.id, status: 'error', error: err.message });
+      }
+    }
+
+    res.json({
+      eligible: eligible.rows.length,
+      drafted,
+      skipped: eligible.rows.length - drafted,
+      results,
+    });
   } catch (err) { next(err); }
 });
 

@@ -12,9 +12,10 @@ export async function fetchInbox(params = {}) {
   if (params.assigned_to)   qs.set('assigned_to',  params.assigned_to);
   if (params.priority)      qs.set('priority',     params.priority);
   if (params.group_name)    qs.set('group_name',   params.group_name);
-  if (params.search)        qs.set('search',       params.search);
-  if (params.limit)         qs.set('limit',        params.limit);
-  if (params.offset)        qs.set('offset',       params.offset);
+  if (params.search)        qs.set('search',        params.search);
+  if (params.pending_draft) qs.set('pending_draft', 'true');
+  if (params.limit)         qs.set('limit',         params.limit);
+  if (params.offset)        qs.set('offset',        params.offset);
   const r = await fetch(`${BASE}?${qs}`);
   if (!r.ok) throw new Error(await r.text());
   return r.json();
