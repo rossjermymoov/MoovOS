@@ -31,13 +31,9 @@ const XERO_CONN_URL   = 'https://api.xero.com/connections';
 const XERO_API_BASE   = 'https://api.xero.com/api.xro/2.0';
 
 const SCOPES = [
+  'offline_access',
   'accounting.contacts',
   'accounting.transactions',
-  'accounting.settings.read',
-  'offline_access',
-  'openid',
-  'profile',
-  'email',
 ].join(' ');
 
 // ─── Token helpers ────────────────────────────────────────────────────────────
