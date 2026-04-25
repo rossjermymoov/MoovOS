@@ -115,12 +115,17 @@ router.post('/:customerId', async (req, res, next) => {
     const { courier_id } = req.body;
     if (!courier_id) return res.status(400).json({ error: 'courier_id required' });
 
-    // Find master card for this courier
-    const masterRes = await query(
+    // Find master card for this courier — create one if it doesn't exist yet
+    let masterRes = await query(
       'SELECT id FROM carrier_rate_cards WHERE courier_id = $1 AND is_master = true LIMIT 1',
       [courier_id]
     );
-    if (!masterRes.rows.length) return res.status(400).json({ error: 'No master rate card found for this carrier' });
+    if (!masterRes.rows.length) {
+      masterRes = await query(
+        'INSERT INTO carrier_rate_cards (courier_id, name, is_master, is_active) VALUES ($1, $2, true, true) RETURNING *',
+        [courier_id, 'Master']
+      );
+    }
 
     const { rows } = await query(`
       INSERT INTO customer_carrier_links (customer_id, courier_id, carrier_rate_card_id)
