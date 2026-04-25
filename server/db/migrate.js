@@ -38,14 +38,22 @@ function splitSqlStatements(sql) {
     // A trailing semicolon outside a dollar-quoted block ends a statement.
     if (!inDollar && /;\s*$/.test(line)) {
       const stmt = buffer.trim().replace(/;\s*$/, '');
-      if (stmt && !stmt.startsWith('--')) statements.push(stmt);
+      // Push if ANY line in the buffer contains real SQL (not just comments/blanks).
+      // The old check `!stmt.startsWith('--')` silently dropped every statement
+      // whose buffer started with a section-header comment block.
+      const hasSQL = stmt.split('\n').some(l => {
+        const t = l.trim();
+        return t && !t.startsWith('--');
+      });
+      if (hasSQL) statements.push(stmt);
       buffer = '';
     }
   }
 
   // Any remaining content (statement without trailing newline)
   const tail = buffer.trim();
-  if (tail && !tail.startsWith('--')) statements.push(tail);
+  const tailHasSQL = tail.split('\n').some(l => { const t = l.trim(); return t && !t.startsWith('--'); });
+  if (tailHasSQL) statements.push(tail);
 
   return statements;
 }
