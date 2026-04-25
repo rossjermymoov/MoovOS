@@ -930,6 +930,13 @@ export default function CustomerPricingTab({ customer }) {
     queryFn:  () => api.get(`/customers/${customer.id}/services`).then(r => r.data),
   });
 
+  // All carrier services — for metadata when building placeholder rate rows.
+  // Shared cache key with ServiceSelector so no extra network request.
+  const { data: allCarrierServices = [] } = useQuery({
+    queryKey: ['all-carrier-services'],
+    queryFn:  () => api.get('/carriers/services').then(r => r.data),
+  });
+
   const activeCarriers    = carriers.filter(c => c.active);
   const activeCourierIds  = new Set(activeCarriers.map(c => c.courier_id));
   // Use courier_code for rate filtering — customer_rates stores old billing-system
@@ -937,18 +944,52 @@ export default function CustomerPricingTab({ customer }) {
   // expose courier_code ('DPD', 'DHL') so that's the safe cross-reference key.
   const activeCourierCodes = new Set(activeCarriers.map(c => c.courier_code));
 
-  const services    = rateData?.services || [];
   // Use service_code for comparison — selectedServices has new courier_services.id (e.g. 12)
   // while customer_rates.service_id is the old billing system ID (e.g. 764). Both share
   // service_code ('DPD_NEXT_DAY') as the safe cross-reference key.
   const selectedCodes = new Set(selectedServices.map(s => s.service_code).filter(Boolean));
 
-  // Rate cards: filter to active carriers + selected services
-  const visibleServices = services.filter(s => {
-    const courierOk  = activeCourierCodes.size === 0 || activeCourierCodes.has(s.courier_code);
-    const serviceOk  = selectedCodes.size === 0       || selectedCodes.has(s.service_code);
-    return courierOk && serviceOk;
-  });
+  // Lookup: service_code → full service metadata (from /carriers/services)
+  const allServicesMeta = Object.fromEntries(allCarrierServices.map(s => [s.service_code, s]));
+
+  // Lookup: service_code → rate data (from /customer-rates/:id)
+  const rateServiceMap = Object.fromEntries((rateData?.services || []).map(s => [s.service_code, s]));
+
+  // Rate cards:
+  // When services are selected, use selectedServices as the primary list so every
+  // selected service gets a block — even those with no rate rows yet.
+  // When nothing is selected, fall back to whatever rate data exists.
+  let visibleServices;
+  if (selectedCodes.size === 0) {
+    // No services selected: show all rate data filtered to active carriers
+    visibleServices = (rateData?.services || []).filter(s =>
+      activeCourierCodes.size === 0 || activeCourierCodes.has(s.courier_code)
+    );
+  } else {
+    visibleServices = selectedServices
+      .filter(s => {
+        const meta = allServicesMeta[s.service_code];
+        if (!meta) return false;
+        return activeCourierIds.size === 0 || activeCourierIds.has(meta.courier_id);
+      })
+      .map(s => {
+        // Prefer real rate data if it exists for this service
+        if (rateServiceMap[s.service_code]) return rateServiceMap[s.service_code];
+        // Otherwise build a placeholder so the user sees the row and can add rates
+        const meta    = allServicesMeta[s.service_code];
+        const carrier = activeCarriers.find(c => c.courier_id === meta?.courier_id);
+        return {
+          service_id:   s.courier_service_id,
+          service_code: s.service_code,
+          service_name: meta?.name || s.service_code,
+          courier_code: carrier?.courier_code || '',
+          courier_name: meta?.courier_name || carrier?.courier_name || '',
+          service_type: meta?.service_type || 'domestic',
+          rate_count:   0,
+          rates:        [],
+        };
+      });
+  }
 
   const byCourier = {};
   for (const s of visibleServices) {
@@ -973,8 +1014,8 @@ export default function CustomerPricingTab({ customer }) {
       {/* 1 — Thin carrier toggle strip */}
       <CourierToggleStrip carriers={carriers} customerId={customer.id} />
 
-      {/* 2 — Per-carrier: fuel groups (active only) + surcharge overrides (all carriers with surcharges) */}
-      {carriers.map(carrier => (
+      {/* 2 — Per-carrier: fuel groups + surcharge overrides (active carriers only) */}
+      {activeCarriers.map(carrier => (
         <ActiveCarrierSection
           key={carrier.courier_id}
           carrier={carrier}
@@ -988,12 +1029,13 @@ export default function CustomerPricingTab({ customer }) {
       <ServiceSelector customerId={customer.id} activeCourierIds={activeCourierIds} />
 
       {/* 4 — Rate cards */}
-      {visibleRates > 0 && (
+      {visibleServices.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
           <h3 style={{ fontSize: 15, fontWeight: 700, color: '#fff', margin: 0, flex: 1 }}>
             Rate Cards
             <span style={{ fontSize: 13, color: '#AAAAAA', fontWeight: 400, marginLeft: 10 }}>
-              {visibleServices.length} services · {visibleRates.toLocaleString()} rates
+              {visibleServices.length} service{visibleServices.length !== 1 ? 's' : ''}
+              {visibleRates > 0 && ` · ${visibleRates.toLocaleString()} rates`}
             </span>
           </h3>
         </div>
