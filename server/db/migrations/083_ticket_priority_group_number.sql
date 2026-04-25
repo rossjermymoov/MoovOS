@@ -76,8 +76,8 @@ SELECT
   q.resolved_at,
   q.assigned_to,
   -- Denormalised staff name + email for display without JOIN in the frontend
-  st.name   AS assignee_name,
-  st.email  AS assignee_email,
+  st.full_name AS assignee_name,
+  st.email     AS assignee_email,
 
   EXTRACT(EPOCH FROM (NOW() - q.created_at)) / 86400 AS age_days,
 
