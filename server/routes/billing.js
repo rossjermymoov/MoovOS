@@ -409,37 +409,35 @@ async function lookupViaServicePricing(customerId, serviceCode, weightKg, postco
 // ── Legacy model: customer_rates ──────────────────────────────────────────────
 // Match: customer + service_code only. No service name.
 //
-// Pricing flow (mirrors what the user described):
-//   1. Carrier rate card (dc_weight_classes) tells us which band name covers this weight.
-//      e.g. 3 kg on DPD12-DROP → "5KG"
-//   2. Zone resolution from destination postcode (country ISO + include/exclude postcode rules).
-//      If the service has only one zone, no lookup needed.
-//   3. Direct lookup: customer_rates WHERE customer + service + zone + weight_class_name.
-//      e.g. Riffai + DPD12-DROP + Mainland + 5KG → £5.37
-//   4. Fallback: dc_weight_classes not yet populated for this service — use numeric bounds
-//      or weight_class_name text parsing. Safety net during data migration only.
+// Pricing flow:
+//   1. dc_weight_classes (carrier rate card) → weight band name for this weight.
+//      No match → error: 'no matching weight band'
+//   2. Postcode → zone name. Single-zone services skip this lookup.
+//      No match → error: 'no matching zone'
+//   3. customer_rates: customer + service + zone + band name → sell price.
+//      No match → error: 'no matching price'
+//
+// No guessing, no fallbacks. Every failure mode returns a specific error.
 async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcode) {
-  if (!serviceCode) return { rate: null, reason: 'No service code — cannot price' };
+  if (!serviceCode) return { rate: null, reason: 'no matching weight band' };
 
-  // ── Step 1: resolve weight band from carrier rate card ───────────────────────
-  // dc_weight_classes is populated from the carrier's own rate card import.
-  // "5KG" band: min_weight_kg < parcel_weight <= max_weight_kg
-  // Pick the tightest-fitting band (smallest max) in case of overlaps.
-  let weightClassName = null;
-  if (weightKg != null) {
-    const wcRes = await query(`
-      SELECT weight_class_name
-      FROM dc_weight_classes
-      WHERE service_code ILIKE $1
-        AND min_weight_kg < $2
-        AND max_weight_kg >= $2
-      ORDER BY max_weight_kg ASC
-      LIMIT 1
-    `, [serviceCode, weightKg]);
-    if (wcRes.rows.length) weightClassName = wcRes.rows[0].weight_class_name;
+  // ── Step 1: weight band from carrier rate card ───────────────────────────────
+  const wcRes = await query(`
+    SELECT weight_class_name
+    FROM dc_weight_classes
+    WHERE service_code ILIKE $1
+      AND min_weight_kg < $2
+      AND max_weight_kg >= $2
+    ORDER BY max_weight_kg ASC
+    LIMIT 1
+  `, [serviceCode, weightKg ?? 0]);
+
+  if (!wcRes.rows.length) {
+    return { rate: null, reason: 'no matching weight band' };
   }
+  const weightClassName = wcRes.rows[0].weight_class_name;
 
-  // ── Step 2: check rates exist + determine zones ──────────────────────────────
+  // ── Step 2: zone from postcode ───────────────────────────────────────────────
   const zonesRes = await query(`
     SELECT DISTINCT zone_name
     FROM customer_rates
@@ -447,16 +445,7 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
   `, [customerId, serviceCode]);
 
   if (!zonesRes.rows.length) {
-    const any = await query(
-      'SELECT COUNT(*)::int AS cnt FROM customer_rates WHERE customer_id = $1',
-      [customerId]
-    );
-    return {
-      rate: null,
-      reason: any.rows[0].cnt === 0
-        ? 'No pricing set up for this customer'
-        : `Service code "${serviceCode}" not found in customer rates`,
-    };
+    return { rate: null, reason: 'no matching price' };
   }
 
   const distinctZones = zonesRes.rows.map(r => r.zone_name);
@@ -465,66 +454,26 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
     zoneName = distinctZones[0];
   } else {
     const resolved = await zoneForPostcode(serviceCode, postcode);
-    if (!resolved) return { rate: null, reason: `No matching zone for postcode "${postcode || 'none'}"` };
+    if (!resolved) return { rate: null, reason: 'no matching zone' };
     zoneName = resolved;
   }
 
-  // ── Step 3: direct price lookup using carrier band name + zone ───────────────
-  // Primary path: exact weight_class_name from carrier rate card.
-  let rateRow = null;
-  if (weightClassName) {
-    const exactRes = await query(`
-      SELECT id, price, price_sub, zone_name, weight_class_name
-      FROM customer_rates
-      WHERE customer_id       = $1
-        AND service_code ILIKE $2
-        AND zone_name    ILIKE $3
-        AND weight_class_name = $4
-      LIMIT 1
-    `, [customerId, serviceCode, zoneName, weightClassName]);
-    rateRow = exactRes.rows[0] || null;
+  // ── Step 3: sell price from customer rate card ───────────────────────────────
+  const priceRes = await query(`
+    SELECT id, price, price_sub, zone_name, weight_class_name
+    FROM customer_rates
+    WHERE customer_id       = $1
+      AND service_code ILIKE $2
+      AND zone_name    ILIKE $3
+      AND weight_class_name = $4
+    LIMIT 1
+  `, [customerId, serviceCode, zoneName, weightClassName]);
+
+  if (!priceRes.rows.length) {
+    return { rate: null, reason: 'no matching price' };
   }
 
-  // ── Step 4: fallback — dc_weight_classes not yet populated for this service ──
-  // Use numeric bounds from customer_rates (with dc_weight_classes JOIN for any NULLs)
-  // or weight_class_name text parsing.  Keeps the engine working during transitions.
-  if (!rateRow && weightKg != null) {
-    const fallRes = await query(`
-      SELECT
-        cr.id, cr.price, cr.price_sub, cr.zone_name, cr.weight_class_name,
-        COALESCE(cr.min_weight_kg, wc.min_weight_kg) AS min_weight_kg,
-        COALESCE(cr.max_weight_kg, wc.max_weight_kg) AS max_weight_kg
-      FROM customer_rates cr
-      LEFT JOIN dc_weight_classes wc
-        ON  wc.service_code      = cr.service_code
-        AND wc.weight_class_name = cr.weight_class_name
-      WHERE cr.customer_id = $1
-        AND cr.service_code ILIKE $2
-        AND cr.zone_name    ILIKE $3
-    `, [customerId, serviceCode, zoneName]);
-    const covering = fallRes.rows
-      .filter(r => rateCoversWeight(r, weightKg))
-      .sort((a, b) => bandMaxKg(a) - bandMaxKg(b));
-    rateRow = covering[0] || null;
-  }
-
-  // No weight specified — return first band in zone
-  if (!rateRow && weightKg == null) {
-    const anyRes = await query(`
-      SELECT id, price, price_sub, zone_name, weight_class_name
-      FROM customer_rates
-      WHERE customer_id = $1 AND service_code ILIKE $2 AND zone_name ILIKE $3
-      ORDER BY weight_class_name
-      LIMIT 1
-    `, [customerId, serviceCode, zoneName]);
-    rateRow = anyRes.rows[0] || null;
-  }
-
-  if (!rateRow) {
-    const wDesc = weightClassName ? `band "${weightClassName}"` : `${weightKg} kg`;
-    return { rate: null, reason: `No weight band covers ${wDesc} in zone "${zoneName}"` };
-  }
-
+  const rateRow = priceRes.rows[0];
   return {
     rate: {
       price:             parseFloat(rateRow.price),
@@ -1981,100 +1930,87 @@ router.get('/charges/:id/debug', async (req, res, next) => {
       return res.json(trace);
     }
 
-    // ── Step 4: Band + Zone resolution (mirrors live engine exactly) ─────────
-    // Engine flow:
-    //   a) dc_weight_classes → which weight band name covers this parcel weight?
-    //   b) postcode → zone name (skipped when only one zone exists for this service)
-    //   c) direct customer_rates lookup: customer + service + zone + band name
-    //   d) fallback: numeric/text matching if dc_weight_classes not yet populated
+    // ── Step 4: Band + Zone + Price resolution (mirrors live engine exactly) ──
+    // Three distinct steps — each either succeeds or returns a specific error.
     let legacyBandName = null;
+    let legacyBandError = null;
     let legacyZone = null;
+    let legacyZoneError = null;
     let legacyBand = null;
-    let legacyError = null;
-    let legacyUsedFallback = false;
+    let legacyPriceError = null;
 
     if (!newModelWinner && rateRes.rows.length > 0) {
-      // Step 4a: carrier rate card → band name
-      if (weightPerParcel != null) {
-        const wcDebug = await query(`
-          SELECT weight_class_name, min_weight_kg, max_weight_kg
-          FROM dc_weight_classes
-          WHERE service_code ILIKE $1
-            AND min_weight_kg < $2
-            AND max_weight_kg >= $2
-          ORDER BY max_weight_kg ASC
-          LIMIT 1
-        `, [dcServiceId || '', weightPerParcel]);
-        if (wcDebug.rows.length) legacyBandName = wcDebug.rows[0].weight_class_name;
-      }
+      // Step 4a: carrier rate card → weight band name
+      const wcDebug = await query(`
+        SELECT weight_class_name, min_weight_kg, max_weight_kg
+        FROM dc_weight_classes
+        WHERE service_code ILIKE $1
+          AND min_weight_kg < $2
+          AND max_weight_kg >= $2
+        ORDER BY max_weight_kg ASC
+        LIMIT 1
+      `, [dcServiceId || '', weightPerParcel ?? 0]);
 
-      // Step 4b: zone from postcode
-      const distinctLegacyZones = [...new Set(rateRes.rows.map(r => r.zone_name))];
-      if (distinctLegacyZones.length === 1) {
-        legacyZone = distinctLegacyZones[0];
+      if (wcDebug.rows.length) {
+        legacyBandName = wcDebug.rows[0].weight_class_name;
       } else {
-        legacyZone = await zoneForPostcode(rateRes.rows[0].service_code, postcode);
-        if (!legacyZone) legacyError = `No matching zone for postcode "${postcode || 'none'}"`;
+        legacyBandError = 'no matching weight band';
       }
 
-      // Step 4c: direct lookup
-      if (!legacyError && legacyZone) {
-        if (legacyBandName) {
-          const exactDebug = await query(`
-            SELECT id, price, price_sub, zone_name, weight_class_name
-            FROM customer_rates
-            WHERE customer_id       = $1
-              AND service_code ILIKE $2
-              AND zone_name    ILIKE $3
-              AND weight_class_name = $4
-            LIMIT 1
-          `, [customerId, dcServiceId || '', legacyZone, legacyBandName]);
-          legacyBand = exactDebug.rows[0] || null;
+      // Step 4b: zone from postcode (only if band resolved)
+      if (!legacyBandError) {
+        const distinctLegacyZones = [...new Set(rateRes.rows.map(r => r.zone_name))];
+        if (distinctLegacyZones.length === 1) {
+          legacyZone = distinctLegacyZones[0];
+        } else {
+          legacyZone = await zoneForPostcode(rateRes.rows[0].service_code, postcode);
+          if (!legacyZone) legacyZoneError = 'no matching zone';
         }
+      }
 
-        // Step 4d: fallback to numeric/text if exact match missed
-        if (!legacyBand && weightPerParcel != null) {
-          legacyUsedFallback = true;
-          const zl = legacyZone.toLowerCase();
-          const zoneRows = rateRes.rows.filter(r =>
-            r.zone_name.toLowerCase().includes(zl) || zl.includes(r.zone_name.toLowerCase())
-          );
-          const covering = zoneRows.filter(r => rateCoversWeight(r, weightPerParcel))
-            .sort((a, b) => bandMaxKg(a) - bandMaxKg(b));
-          legacyBand = covering[0] || null;
-        }
-
-        if (!legacyBand) {
-          const wDesc = legacyBandName ? `band "${legacyBandName}"` : `${weightPerParcel} kg`;
-          legacyError = `No weight band covers ${wDesc} in zone "${legacyZone}"`;
+      // Step 4c: price from customer rate card (only if band + zone resolved)
+      if (!legacyBandError && !legacyZoneError && legacyZone) {
+        const exactDebug = await query(`
+          SELECT id, price, price_sub, zone_name, weight_class_name
+          FROM customer_rates
+          WHERE customer_id       = $1
+            AND service_code ILIKE $2
+            AND zone_name    ILIKE $3
+            AND weight_class_name = $4
+          LIMIT 1
+        `, [customerId, dcServiceId || '', legacyZone, legacyBandName]);
+        if (exactDebug.rows.length) {
+          legacyBand = exactDebug.rows[0];
+        } else {
+          legacyPriceError = 'no matching price';
         }
       }
     }
 
     trace.steps.push({
       step: 4,
-      title: 'Band + Zone resolution (legacy)',
+      title: 'Band + Zone + Price resolution (legacy)',
       skipped: !!newModelWinner,
       weight_per_parcel_kg: weightPerParcel,
-      band_from_carrier_rate_card: legacyBandName,
-      zone_resolved: legacyZone,
-      used_fallback_matching: legacyUsedFallback,
-      fallback_note: legacyUsedFallback ? 'dc_weight_classes has no entry for this service — fell back to numeric/text band matching' : null,
+      step_4a_weight_band: {
+        result: legacyBandName || null,
+        error: legacyBandError || null,
+      },
+      step_4b_zone: {
+        result: legacyZone || null,
+        error: legacyZoneError || null,
+      },
+      step_4c_price: {
+        result: legacyBand ? { zone: legacyBand.zone_name, weight_class: legacyBand.weight_class_name, price: legacyBand.price } : null,
+        error: legacyPriceError || null,
+      },
       all_rates_for_service: rateRes.rows.map(r => ({
         zone_name: r.zone_name,
         weight_class_name: r.weight_class_name,
         min_weight_kg: r.min_weight_kg,
         max_weight_kg: r.max_weight_kg,
         price: r.price,
-        covers_weight: weightPerParcel != null ? rateCoversWeight(r, weightPerParcel) : null,
       })),
-      selected_band: legacyBand ? {
-        zone: legacyBand.zone_name,
-        weight_class: legacyBand.weight_class_name,
-        price: legacyBand.price,
-        matched_via: legacyUsedFallback ? 'fallback (numeric/text)' : 'carrier rate card band name',
-      } : null,
-      error: legacyError || null,
     });
 
     // ── Conclusion ────────────────────────────────────────────────────────────
@@ -2096,14 +2032,11 @@ router.get('/charges/:id/debug', async (req, res, next) => {
         method: 'legacy (customer_rates)',
       };
     } else {
+      const failReason = legacyBandError || legacyZoneError || legacyPriceError
+        || (rateRes.rows.length === 0 ? 'no matching price' : 'no matching price');
       trace.conclusion = {
         priced: false,
-        reason: legacyError || (legacyRates.length === 0
-          ? `Service "${dcServiceId}" not found in customer_rates`
-          : 'No rate resolved'),
-        fix: legacyError?.includes('zone')
-          ? 'Check postcode rules are configured on the zone for this service.'
-          : 'Check weight bands cover the parcel weight (min_weight_kg / max_weight_kg).',
+        reason: failReason,
       };
     }
 
