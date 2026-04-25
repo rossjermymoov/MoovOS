@@ -1042,16 +1042,16 @@ function IntlRateCardModal({ svc, onClose, onUpdateBand }) {
 }
 
 // ─── AddConditionRow — reusable condition builder row ────────────────────────
-// Used both inside existing rules (to add a condition) and inside the new-rule builder.
 
-function AddConditionRow({ onAdd, label = 'Add condition' }) {
+const SEL = { height:32, background:'#13131F', border:'1px solid rgba(255,255,255,0.1)', borderRadius:6, color:'#ccc', fontSize:12, padding:'0 8px', cursor:'pointer' };
+
+function AddConditionRow({ onAdd }) {
   const [field, setField] = useState('total_weight_kg');
   const [op,    setOp   ] = useState('gte');
   const [val,   setVal  ] = useState('');
 
   const ops = opsFor(field);
 
-  // Reset op if current op not valid for new field
   const handleFieldChange = (newField) => {
     setField(newField);
     const validOps = opsFor(newField).map(o => o.key);
@@ -1069,21 +1069,27 @@ function AddConditionRow({ onAdd, label = 'Add condition' }) {
     setVal('');
   };
 
+  const isListOp = op === 'in' || op === 'not_in';
+  const placeholder = isListOp ? 'e.g. GB, IE, FR' : (SURCHARGE_FIELDS.find(f=>f.key===field)?.type==='number' ? 'e.g. 30' : 'value');
+
   return (
-    <div style={{ display:'flex', gap:6, alignItems:'center', marginTop:6 }}>
-      <select value={field} onChange={e => handleFieldChange(e.target.value)} style={{ height:28, background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:6, color:'#ccc', fontSize:11, padding:'0 6px', minWidth:170 }}>
+    <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+      <select value={field} onChange={e => handleFieldChange(e.target.value)} style={{ ...SEL, flex:'0 0 auto', minWidth:170 }}>
         {SURCHARGE_FIELDS.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
       </select>
-      <select value={op} onChange={e => setOp(e.target.value)} style={{ height:28, background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:6, color:'#ccc', fontSize:11, padding:'0 6px', minWidth:130 }}>
+      <select value={op} onChange={e => setOp(e.target.value)} style={{ ...SEL, flex:'0 0 auto', minWidth:120 }}>
         {ops.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
       </select>
       <input
         value={val} onChange={e => setVal(e.target.value)}
         onKeyDown={e => e.key === 'Enter' && commit()}
-        placeholder={op==='in'||op==='not_in' ? 'GB, IE, FR' : (SURCHARGE_FIELDS.find(f=>f.key===field)?.type==='number' ? '30' : 'value')}
-        style={{ height:28, background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:6, color:'#fff', fontSize:11, padding:'0 8px', width:100 }}
+        placeholder={placeholder}
+        style={{ ...SEL, color:'#fff', flex:'1 1 90px', minWidth:80, maxWidth:160 }}
       />
-      <button onClick={commit} disabled={!val.trim()} style={{ height:28, padding:'0 10px', borderRadius:6, border:'1px solid rgba(233,30,140,0.3)', background:'rgba(233,30,140,0.1)', color:'#E91E8C', fontSize:11, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>+ {label}</button>
+      <button
+        onClick={commit} disabled={!val.trim()}
+        style={{ height:32, padding:'0 12px', borderRadius:6, border:'1px solid rgba(255,255,255,0.12)', background:'rgba(255,255,255,0.06)', color: val.trim() ? '#fff' : '#555', fontSize:12, cursor: val.trim() ? 'pointer' : 'default', whiteSpace:'nowrap', flexShrink:0 }}
+      >+ Add</button>
     </div>
   );
 }
@@ -1108,19 +1114,19 @@ const SURCHARGE_FIELDS = [
 ];
 
 const OPS_NUMBER = [
-  { key:'gte', label:'≥  at least' },
-  { key:'lte', label:'≤  at most' },
-  { key:'gt',  label:'>  greater than' },
-  { key:'lt',  label:'<  less than' },
-  { key:'eq',  label:'=  equals' },
-  { key:'not_eq', label:'≠  not equals' },
+  { key:'gte',    label:'≥ at least' },
+  { key:'lte',    label:'≤ at most' },
+  { key:'gt',     label:'> greater than' },
+  { key:'lt',     label:'< less than' },
+  { key:'eq',     label:'= equals' },
+  { key:'not_eq', label:'≠ not equals' },
 ];
 
 const OPS_STRING = [
-  { key:'eq',          label:'=  equals' },
-  { key:'not_eq',      label:'≠  not equals' },
-  { key:'in',          label:'in  (comma list)' },
-  { key:'not_in',      label:'not in  (comma list)' },
+  { key:'eq',          label:'= equals' },
+  { key:'not_eq',      label:'≠ not equals' },
+  { key:'in',          label:'in (comma list)' },
+  { key:'not_in',      label:'not in (comma list)' },
   { key:'contains',    label:'contains' },
   { key:'starts_with', label:'starts with' },
 ];
@@ -1696,8 +1702,8 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                               <div key={ci} style={{ display:'flex', alignItems:'center', gap:6 }}>
                                 {ci > 0 && <span style={{ fontSize:10, color: r.logic==='AND' ? '#00BCD4' : '#7B2FBE', fontWeight:700, minWidth:24 }}>{r.logic}</span>}
                                 {ci === 0 && <span style={{ minWidth:24 }}/>}
-                                <span style={{ fontSize:11, color:'#888' }}>{fieldLabel(cond.field)}</span>
-                                <span style={{ fontSize:11, color:'#E91E8C', fontWeight:600 }}>{opLabel(cond.op).replace(/\s+\(.*\)/, '')}</span>
+                                <span style={{ fontSize:11, color:'#aaa' }}>{fieldLabel(cond.field)}</span>
+                                <span style={{ fontSize:11, color:'#E91E8C', fontWeight:600 }}>{opLabel(cond.op)}</span>
                                 <span style={{ fontSize:11, color:'#fff', fontFamily:'monospace', background:'rgba(255,255,255,0.06)', padding:'1px 6px', borderRadius:4 }}>{formatCondValue(cond.op, cond.value)}</span>
                                 <button
                                   onClick={() => {
@@ -1721,53 +1727,69 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
 
                       {/* New rule builder */}
                       {isAddingRule && (
-                        <div style={{ marginTop:10, padding:'12px', background:'rgba(233,30,140,0.04)', borderRadius:8, border:'1px solid rgba(233,30,140,0.2)' }}>
-                          <div style={{ display:'grid', gridTemplateColumns:'1fr auto', gap:10, marginBottom:10 }}>
-                            <div>
-                              <label style={{ fontSize:10, color:'#AAAAAA', display:'block', marginBottom:3 }}>Rule name</label>
-                              <div className="pill-input-wrap" style={{ height:30 }}>
-                                <input value={newRuleName} onChange={e => setNewRuleName(e.target.value)} placeholder="e.g. Large parcel rule" autoFocus style={{ fontSize:12 }}/>
-                              </div>
+                        <div style={{ marginTop:10, padding:'14px', background:'rgba(0,0,0,0.2)', borderRadius:8, border:'1px solid rgba(255,255,255,0.08)' }}>
+
+                          {/* Row 1: name + logic toggle */}
+                          <div style={{ display:'flex', gap:10, alignItems:'flex-end', marginBottom:14 }}>
+                            <div style={{ flex:1 }}>
+                              <label style={{ fontSize:10, color:'#888', display:'block', marginBottom:4, textTransform:'uppercase', letterSpacing:'0.05em' }}>Rule name</label>
+                              <input
+                                value={newRuleName} onChange={e => setNewRuleName(e.target.value)}
+                                placeholder="e.g. Large parcel — over 30kg"
+                                autoFocus
+                                style={{ width:'100%', height:32, background:'#13131F', border:'1px solid rgba(255,255,255,0.12)', borderRadius:6, color:'#fff', fontSize:12, padding:'0 10px', boxSizing:'border-box' }}
+                              />
                             </div>
                             <div>
-                              <label style={{ fontSize:10, color:'#AAAAAA', display:'block', marginBottom:3 }}>Logic</label>
-                              <div style={{ display:'flex', height:30, borderRadius:6, overflow:'hidden', border:'1px solid rgba(255,255,255,0.1)' }}>
-                                {['AND','OR'].map(l => (
-                                  <button key={l} onClick={() => setNewRuleLogic(l)} style={{ flex:1, border:'none', cursor:'pointer', fontSize:11, fontWeight:700, background: newRuleLogic===l ? (l==='AND'?'rgba(0,188,212,0.25)':'rgba(123,47,190,0.3)') : 'rgba(255,255,255,0.04)', color: newRuleLogic===l ? (l==='AND'?'#00BCD4':'#7B2FBE') : '#555' }}>{l}</button>
+                              <label style={{ fontSize:10, color:'#888', display:'block', marginBottom:4, textTransform:'uppercase', letterSpacing:'0.05em' }}>Conditions match</label>
+                              <div style={{ display:'flex', borderRadius:6, overflow:'hidden', border:'1px solid rgba(255,255,255,0.12)', height:32 }}>
+                                {['AND','OR'].map((l, i) => (
+                                  <button
+                                    key={l} onClick={() => setNewRuleLogic(l)}
+                                    style={{
+                                      width:52, border:'none', cursor:'pointer', fontSize:12, fontWeight:700,
+                                      borderRight: i===0 ? '1px solid rgba(255,255,255,0.1)' : 'none',
+                                      background: newRuleLogic===l
+                                        ? (l==='AND' ? 'rgba(0,188,212,0.2)' : 'rgba(123,47,190,0.25)')
+                                        : '#13131F',
+                                      color: newRuleLogic===l
+                                        ? (l==='AND' ? '#00BCD4' : '#9C57E0')
+                                        : '#555',
+                                    }}
+                                  >{l}</button>
                                 ))}
                               </div>
                             </div>
                           </div>
 
-                          {/* Conditions being built */}
+                          {/* Conditions added so far */}
                           {newRuleConditions.length > 0 && (
-                            <div style={{ marginBottom:10, display:'flex', flexDirection:'column', gap:4 }}>
+                            <div style={{ marginBottom:10, display:'flex', flexDirection:'column', gap:5 }}>
                               {newRuleConditions.map((cond, ci) => (
-                                <div key={ci} style={{ display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
-                                  {ci > 0 && <span style={{ color: newRuleLogic==='AND' ? '#00BCD4' : '#7B2FBE', fontWeight:700, minWidth:24 }}>{newRuleLogic}</span>}
-                                  {ci === 0 && <span style={{ minWidth:24 }}/>}
-                                  <span style={{ color:'#888' }}>{fieldLabel(cond.field)}</span>
-                                  <span style={{ color:'#E91E8C', fontWeight:600 }}>{opLabel(cond.op).replace(/\s+\(.*\)/, '')}</span>
-                                  <span style={{ fontFamily:'monospace', color:'#fff', background:'rgba(255,255,255,0.06)', padding:'1px 6px', borderRadius:4 }}>{formatCondValue(cond.op, cond.value)}</span>
-                                  <button onClick={() => setNewRuleConditions(cs => cs.filter((_,i) => i!==ci))} style={{ background:'none', border:'none', cursor:'pointer', color:'#555', marginLeft:'auto' }}><X size={10}/></button>
+                                <div key={ci} style={{ display:'flex', alignItems:'center', gap:8 }}>
+                                  <span style={{ fontSize:10, fontWeight:700, minWidth:28, textAlign:'center', color: newRuleLogic==='AND'?'#00BCD4':'#9C57E0', opacity: ci===0?0:1 }}>{newRuleLogic}</span>
+                                  <div style={{ flex:1, display:'flex', alignItems:'center', gap:6, padding:'5px 10px', background:'rgba(255,255,255,0.04)', borderRadius:6, border:'1px solid rgba(255,255,255,0.07)' }}>
+                                    <span style={{ fontSize:11, color:'#aaa' }}>{fieldLabel(cond.field)}</span>
+                                    <span style={{ fontSize:11, color:'#E91E8C', fontWeight:600 }}>{opLabel(cond.op)}</span>
+                                    <span style={{ fontSize:11, color:'#fff', fontFamily:'monospace', background:'rgba(255,255,255,0.08)', padding:'1px 7px', borderRadius:4 }}>{formatCondValue(cond.op, cond.value)}</span>
+                                  </div>
+                                  <button onClick={() => setNewRuleConditions(cs => cs.filter((_,i)=>i!==ci))} style={{ background:'none', border:'none', cursor:'pointer', color:'#555', padding:'2px 4px', flexShrink:0 }}><X size={11}/></button>
                                 </div>
                               ))}
                             </div>
                           )}
 
-                          {/* Add condition row */}
-                          <AddConditionRow onAdd={(cond) => setNewRuleConditions(cs => [...cs, cond])} label="Add condition"/>
+                          {/* Add condition */}
+                          <AddConditionRow onAdd={(cond) => setNewRuleConditions(cs => [...cs, cond])} />
 
-                          <div style={{ display:'flex', gap:8, marginTop:10 }}>
+                          {/* Actions */}
+                          <div style={{ display:'flex', gap:8, marginTop:12, paddingTop:12, borderTop:'1px solid rgba(255,255,255,0.06)' }}>
                             <button
-                              onClick={() => {
-                                if (!newRuleName.trim()) return;
-                                addRule.mutate({ surchargeId:s.id, name:newRuleName, logic:newRuleLogic, filters:newRuleConditions });
-                              }}
+                              onClick={() => { if (newRuleName.trim()) addRule.mutate({ surchargeId:s.id, name:newRuleName, logic:newRuleLogic, filters:newRuleConditions }); }}
                               disabled={addRule.isPending || !newRuleName.trim()}
-                              style={{ fontSize:12, padding:'5px 14px', borderRadius:6, border:'1px solid rgba(233,30,140,0.4)', background:'rgba(233,30,140,0.2)', color:'#E91E8C', cursor:'pointer', fontWeight:700 }}
-                            ><Check size={11}/> Create Rule</button>
-                            <button onClick={() => { setAddingRuleTo(null); setNewRuleName(''); setNewRuleLogic('AND'); setNewRuleConditions([]); }} className="btn-ghost" style={{ fontSize:12, padding:'0 10px' }}>Cancel</button>
+                              style={{ height:32, padding:'0 16px', borderRadius:6, border:'1px solid rgba(0,200,83,0.35)', background:'rgba(0,200,83,0.12)', color:'#00C853', fontSize:12, cursor:'pointer', fontWeight:700 }}
+                            ><Check size={11}/> Save Rule</button>
+                            <button onClick={() => { setAddingRuleTo(null); setNewRuleName(''); setNewRuleLogic('AND'); setNewRuleConditions([]); }} style={{ height:32, padding:'0 12px', borderRadius:6, border:'1px solid rgba(255,255,255,0.1)', background:'none', color:'#888', fontSize:12, cursor:'pointer' }}>Cancel</button>
                           </div>
                         </div>
                       )}
