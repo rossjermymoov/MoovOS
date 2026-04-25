@@ -176,25 +176,73 @@ function extractAdditionalShipmentFields(payload) {
 //   1. customer_service_pricing (new model) — carrier cost price + markup % or fixed fee
 //   2. customer_rates (legacy) — explicit per-band sell prices
 
-// rateCoversWeight — uses numeric bounds (from dc_weight_classes import) when
-// available, falls back to text-band parsing via coversWeight().
+// coversWeightOrUnknown — like coversWeight() but returns null (not false) when
+// the weight_class_name is genuinely unparseable.  This lets callers distinguish
+// "out of range" (false) from "flat-rate / no pattern" (null).
+function coversWeightOrUnknown(weightClassName, weightKg) {
+  if (!weightClassName) return null;
+  const s = normaliseWeightBand(weightClassName);
+
+  const range = s.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/);
+  if (range) { const lo = parseFloat(range[1]), hi = parseFloat(range[2]); return weightKg > lo && weightKg <= hi; }
+
+  const plus = s.match(/^(\d+(?:\.\d+)?)\+$/) || s.match(/^OVER(\d+(?:\.\d+)?)$/);
+  if (plus) return weightKg > parseFloat(plus[1]);
+
+  const under = s.match(/^(?:UNDER|<)(\d+(?:\.\d+)?)$/);
+  if (under) return weightKg < parseFloat(under[1]);
+
+  const upto = s.match(/^(?:UPTO|MAX)(\d+(?:\.\d+)?)$/);
+  if (upto) return weightKg <= parseFloat(upto[1]);
+
+  // Bare number — e.g. "5KG" normalises to "5", interpreted as an upper bound.
+  // This is the standard Moov weight class naming convention: "5KG" = up to 5 kg.
+  const bare = s.match(/^(\d+(?:\.\d+)?)$/);
+  if (bare) return weightKg <= parseFloat(bare[1]);
+
+  return null; // e.g. "Parcel", "Small" — genuinely unparseable, caller treats as flat-rate
+}
+
+// extractUpperBound — pull a numeric upper limit out of a weight_class_name.
+// Returns null if not parseable.
+function extractUpperBound(weightClassName) {
+  if (!weightClassName) return null;
+  const s = normaliseWeightBand(weightClassName);
+  const bare  = s.match(/^(\d+(?:\.\d+)?)$/);
+  if (bare)  return parseFloat(bare[1]);
+  const upto  = s.match(/^(?:UPTO|MAX)(\d+(?:\.\d+)?)$/);
+  if (upto)  return parseFloat(upto[1]);
+  const range = s.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/);
+  if (range) return parseFloat(range[2]);
+  return null;
+}
+
+// rateCoversWeight — uses numeric bounds when present, then falls back to
+// weight_class_name text parsing.  Only treats a band as "covers any weight"
+// (flat-rate) if BOTH bounds are NULL AND the name is genuinely unparseable.
 function rateCoversWeight(rate, weightKg) {
   const minKg = parseFloat(rate.min_weight_kg);
   const maxKg = parseFloat(rate.max_weight_kg);
   if (!isNaN(minKg) && !isNaN(maxKg)) {
     return weightKg > minKg && weightKg <= maxKg;
   }
-  // NULL/NULL = flat-rate band (e.g. "Parcel") — any weight qualifies
-  if (rate.min_weight_kg == null && rate.max_weight_kg == null) return true;
-  return coversWeight(rate.weight_class_name, weightKg);
+  // Numeric bounds absent — try weight_class_name text (e.g. "5KG" = up to 5 kg).
+  // Returns null only for truly unparseable names like "Parcel".
+  const named = coversWeightOrUnknown(rate.weight_class_name, weightKg);
+  if (named !== null) return named;
+  // Genuinely unparseable name with no numeric bounds = flat-rate, any weight qualifies.
+  return rate.min_weight_kg == null && rate.max_weight_kg == null;
 }
 
 // Return the effective upper-weight-bound of a band.
-// Used when multiple bands match to pick the tightest fit.
-// Relies on numeric bounds being set (migration 047 backfills any that were missed).
+// Used when multiple bands match to pick the tightest fit (smallest max wins).
 function bandMaxKg(rate) {
   const maxKg = parseFloat(rate.max_weight_kg);
-  return !isNaN(maxKg) ? maxKg : Infinity;
+  if (!isNaN(maxKg)) return maxKg;
+  // No numeric bound — extract from weight_class_name (e.g. "5KG" → 5)
+  const fromName = extractUpperBound(rate.weight_class_name);
+  if (fromName !== null) return fromName;
+  return Infinity; // flat-rate band — sorts last (lowest priority)
 }
 
 // zoneForPostcode — resolve zone name from service code + destination postcode.
@@ -363,14 +411,25 @@ async function lookupViaServicePricing(customerId, serviceCode, weightKg, postco
 async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcode) {
   if (!serviceCode) return { rate: null, reason: 'No service code — cannot price' };
 
+  // JOIN dc_weight_classes to get authoritative min/max bounds whenever the
+  // customer_rates row itself has NULL bounds.  This is the carrier rate card
+  // acting as the source of truth — exactly the right hierarchy.
   const rateRes = await query(`
     SELECT
       cr.id, cr.price, cr.price_sub, cr.zone_name, cr.weight_class_name,
-      cr.service_code, cr.min_weight_kg, cr.max_weight_kg
+      cr.service_code,
+      COALESCE(cr.min_weight_kg, wc.min_weight_kg) AS min_weight_kg,
+      COALESCE(cr.max_weight_kg, wc.max_weight_kg) AS max_weight_kg
     FROM customer_rates cr
+    LEFT JOIN dc_weight_classes wc
+      ON  wc.service_code      = cr.service_code
+      AND wc.weight_class_name = cr.weight_class_name
     WHERE cr.customer_id = $1
       AND cr.service_code ILIKE $2
-    ORDER BY cr.zone_name, cr.min_weight_kg NULLS LAST, cr.weight_class_name
+    ORDER BY
+      cr.zone_name,
+      COALESCE(cr.min_weight_kg, wc.min_weight_kg) NULLS LAST,
+      cr.weight_class_name
   `, [customerId, serviceCode]);
 
   if (!rateRes.rows.length) {
@@ -1813,11 +1872,18 @@ router.get('/charges/:id/debug', async (req, res, next) => {
     const [rateRes, allSvcRes] = await Promise.all([
       query(`
         SELECT cr.id, cr.price, cr.zone_name, cr.weight_class_name,
-               cr.service_code, cr.min_weight_kg, cr.max_weight_kg
+               cr.service_code,
+               COALESCE(cr.min_weight_kg, wc.min_weight_kg) AS min_weight_kg,
+               COALESCE(cr.max_weight_kg, wc.max_weight_kg) AS max_weight_kg
         FROM customer_rates cr
+        LEFT JOIN dc_weight_classes wc
+          ON  wc.service_code      = cr.service_code
+          AND wc.weight_class_name = cr.weight_class_name
         WHERE cr.customer_id = $1
           AND cr.service_code ILIKE $2
-        ORDER BY cr.zone_name, cr.min_weight_kg NULLS LAST, cr.weight_class_name
+        ORDER BY cr.zone_name,
+                 COALESCE(cr.min_weight_kg, wc.min_weight_kg) NULLS LAST,
+                 cr.weight_class_name
       `, [customerId, dcServiceId || '']),
       query(`
         SELECT DISTINCT service_code, COUNT(*) AS rate_count

@@ -73,18 +73,37 @@ router.post('/:customerId', async (req, res, next) => {
       return res.status(400).json({ error: 'service_id, zone_name, and price are required' });
     }
 
+    // Pull numeric weight bounds from dc_weight_classes if available.
+    // This makes the carrier rate card the source of truth rather than
+    // relying on the weight_class_name text to be parsed at pricing time.
+    const wcRes = await query(
+      `SELECT min_weight_kg, max_weight_kg
+       FROM dc_weight_classes
+       WHERE service_code = $1 AND weight_class_name = $2
+       LIMIT 1`,
+      [service_code, weight_class_name]
+    );
+    const wc = wcRes.rows[0] || {};
+
     const result = await query(`
       INSERT INTO customer_rates
         (customer_id, courier_id, courier_code, courier_name,
          service_id, service_code, service_name,
-         zone_name, weight_class_name, price, price_sub)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         zone_name, weight_class_name,
+         min_weight_kg, max_weight_kg,
+         price, price_sub)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
       ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
-      DO UPDATE SET price = EXCLUDED.price, price_sub = EXCLUDED.price_sub
+      DO UPDATE SET
+        price         = EXCLUDED.price,
+        price_sub     = EXCLUDED.price_sub,
+        min_weight_kg = COALESCE(customer_rates.min_weight_kg, EXCLUDED.min_weight_kg),
+        max_weight_kg = COALESCE(customer_rates.max_weight_kg, EXCLUDED.max_weight_kg)
       RETURNING *
     `, [customerId, courier_id, courier_code, courier_name,
         service_id, service_code, service_name,
         zone_name, weight_class_name,
+        wc.min_weight_kg ?? null, wc.max_weight_kg ?? null,
         parseFloat(price),
         price_sub != null ? parseFloat(price_sub) : null]);
 
@@ -181,11 +200,21 @@ router.get('/:customerId', async (req, res, next) => {
     `, [customerId]);
 
     // All rate rows (include id, price_sub for edit/delete)
+    // Sort weight bands numerically by extracting the leading number from the
+    // weight_class_name (e.g. "2KG"→2, "5KG"→5, "10KG"→10) so that "2KG" sorts
+    // before "5KG" before "10KG", rather than alphabetically ("10KG" first).
     const ratesRes = await query(`
       SELECT id, service_id, zone_name, weight_class_name, price, price_sub
       FROM customer_rates
       WHERE customer_id = $1
-      ORDER BY zone_name, weight_class_name
+      ORDER BY
+        zone_name,
+        CASE
+          WHEN weight_class_name ~ '^[0-9]' THEN
+            (regexp_replace(weight_class_name, '[^0-9.].*$', '', ''))::numeric
+          ELSE NULL
+        END NULLS LAST,
+        weight_class_name
     `, [customerId]);
 
     // Group rates by service_id
