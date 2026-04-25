@@ -17,7 +17,6 @@ import { carriersApi } from '../../api/carriers';
 import { getCourierLogo } from '../../utils/courierLogos';
 import { carrierRateCardsApi } from '../../api/carrierRateCards';
 import carrierDataApi from '../../api/carrierData';
-import SurchargesTab from './SurchargesTab';
 import axios from 'axios';
 
 const api = axios.create({ baseURL: '/api' });
@@ -330,45 +329,150 @@ function CarrierCard({ carrier, onDrill, onRefresh }) {
 // ─── Fuel group card ──────────────────────────────────────────────────────────
 
 function FuelGroupCard({ group, onRefresh }) {
-  const [editing, setEditing]       = useState(false);
-  const [form, setForm]             = useState({ name: group.name, fuel_surcharge_pct: String(group.fuel_surcharge_pct) });
-  const [confirmDel, setConfirmDel] = useState(false);
+  const [editing, setEditing]           = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [confirmDel, setConfirmDel]     = useState(false);
+  const [form, setForm]                 = useState({});
+
+  function startEdit() {
+    setForm({
+      name:                     group.name,
+      fuel_surcharge_pct:       String(group.fuel_surcharge_pct ?? ''),
+      standard_sell_pct:        String(group.standard_sell_pct  ?? ''),
+      next_sell_pct:            String(group.next_sell_pct       ?? ''),
+      next_sell_effective_date: group.next_sell_effective_date
+        ? group.next_sell_effective_date.substring(0, 10) : '',
+    });
+    setEditing(true);
+  }
 
   const updateGroup = useMutation({
-    mutationFn: () => api.patch(`/carriers/fuel-groups/${group.id}`, { name: form.name, fuel_surcharge_pct: parseFloat(form.fuel_surcharge_pct) || 0 }).then(r => r.data),
-    onSuccess: () => { setEditing(false); onRefresh(); },
+    mutationFn: () => api.patch(`/carriers/fuel-groups/${group.id}`, {
+      name:                    form.name,
+      fuel_surcharge_pct:      parseFloat(form.fuel_surcharge_pct)  || 0,
+      standard_sell_pct:       form.standard_sell_pct  !== '' ? parseFloat(form.standard_sell_pct)  : null,
+      next_sell_pct:           form.next_sell_pct       !== '' ? parseFloat(form.next_sell_pct)       : null,
+      next_sell_effective_date: form.next_sell_effective_date || null,
+    }).then(r => r.data),
+    onSuccess: () => { setEditing(false); setShowSchedule(false); onRefresh(); },
   });
   const deleteGroup = useMutation({
     mutationFn: () => api.delete(`/carriers/fuel-groups/${group.id}`).then(r => r.data),
     onSuccess: onRefresh,
   });
 
+  const hasScheduled = group.next_sell_pct != null && group.next_sell_effective_date;
+
   return (
     <div style={{ border:'1px solid rgba(255,193,7,0.2)', borderRadius:10, overflow:'hidden', background:'rgba(255,193,7,0.03)' }}>
       <div style={{ padding:'12px 16px', display:'flex', alignItems:'center', gap:10 }}>
-        <Zap size={14} color="#FFC107"/>
+        <Zap size={14} color="#FFC107" style={{ flexShrink:0 }}/>
         {editing ? (
-          <div style={{ display:'flex', gap:8, flex:1, alignItems:'center' }}>
-            <div className="pill-input-wrap" style={{ height:30, flex:1 }}>
-              <input value={form.name} onChange={e => setForm(f=>({...f,name:e.target.value}))} placeholder="Group name" autoFocus style={{ fontSize:12 }}/>
+          <div style={{ display:'flex', flexDirection:'column', gap:8, flex:1 }}>
+            {/* Name + save/cancel */}
+            <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+              <div className="pill-input-wrap" style={{ height:30, flex:1 }}>
+                <input value={form.name} onChange={e => setForm(f=>({...f,name:e.target.value}))}
+                  placeholder="Group name" autoFocus style={{ fontSize:12 }}/>
+              </div>
+              <button onClick={() => updateGroup.mutate()} disabled={updateGroup.isPending}
+                className="btn-primary" style={{ height:30, padding:'0 12px', fontSize:12 }}>
+                <Check size={11}/> Save
+              </button>
+              <button onClick={() => { setEditing(false); setShowSchedule(false); }}
+                className="btn-ghost" style={{ height:30, padding:'0 8px', fontSize:12 }}>✕</button>
             </div>
-            <div className="pill-input-wrap" style={{ height:30, width:90 }}>
-              <input type="number" step="0.01" value={form.fuel_surcharge_pct} onChange={e => setForm(f=>({...f,fuel_surcharge_pct:e.target.value}))} placeholder="0.00" style={{ fontSize:12 }}/>
-              <div className="green-cap" style={{ fontSize:11 }}>%</div>
+            {/* Cost % + standard sell % */}
+            <div style={{ display:'flex', gap:10, alignItems:'flex-end' }}>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:10, color:'#888', marginBottom:3, textTransform:'uppercase', letterSpacing:'0.04em' }}>Our cost %</div>
+                <div className="pill-input-wrap" style={{ height:28 }}>
+                  <input type="number" step="0.01" value={form.fuel_surcharge_pct}
+                    onChange={e => setForm(f=>({...f,fuel_surcharge_pct:e.target.value}))}
+                    placeholder="0.00" style={{ fontSize:12 }}/>
+                  <div className="green-cap" style={{ fontSize:11 }}>%</div>
+                </div>
+              </div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:10, color:'#888', marginBottom:3, textTransform:'uppercase', letterSpacing:'0.04em' }}>Standard sell %</div>
+                <div className="pill-input-wrap" style={{ height:28 }}>
+                  <input type="number" step="0.01" value={form.standard_sell_pct}
+                    onChange={e => setForm(f=>({...f,standard_sell_pct:e.target.value}))}
+                    placeholder="0.00" style={{ fontSize:12 }}/>
+                  <div className="green-cap" style={{ fontSize:11 }}>%</div>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSchedule(s => !s)}
+                style={{ background:'none', border:'1px solid rgba(255,193,7,0.3)', borderRadius:6,
+                  color:'#FFC107', fontSize:11, padding:'5px 10px', cursor:'pointer', whiteSpace:'nowrap' }}>
+                {showSchedule ? '— Hide' : '+ Schedule'}
+              </button>
             </div>
-            <button onClick={() => updateGroup.mutate()} disabled={updateGroup.isPending} className="btn-primary" style={{ height:30, padding:'0 12px', fontSize:12 }}><Check size={11}/></button>
-            <button onClick={() => setEditing(false)} className="btn-ghost" style={{ height:30, padding:'0 8px', fontSize:12 }}>✕</button>
+            {/* Scheduled future rate */}
+            {showSchedule && (
+              <div style={{ display:'flex', gap:10, alignItems:'flex-end', padding:'8px 10px',
+                background:'rgba(255,193,7,0.04)', border:'1px solid rgba(255,193,7,0.15)', borderRadius:6 }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:10, color:'#888', marginBottom:3, textTransform:'uppercase', letterSpacing:'0.04em' }}>Next sell %</div>
+                  <div className="pill-input-wrap" style={{ height:28 }}>
+                    <input type="number" step="0.01" value={form.next_sell_pct}
+                      onChange={e => setForm(f=>({...f,next_sell_pct:e.target.value}))}
+                      placeholder="0.00" style={{ fontSize:12 }}/>
+                    <div className="green-cap" style={{ fontSize:11 }}>%</div>
+                  </div>
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:10, color:'#888', marginBottom:3, textTransform:'uppercase', letterSpacing:'0.04em' }}>Effective from</div>
+                  <div className="pill-input-wrap" style={{ height:28 }}>
+                    <input type="date" value={form.next_sell_effective_date}
+                      onChange={e => setForm(f=>({...f,next_sell_effective_date:e.target.value}))}
+                      style={{ fontSize:12, colorScheme:'dark' }}/>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <>
-            <span style={{ fontWeight:700, color:'#fff', fontSize:14, flex:1 }}>{group.name}</span>
-            <span style={{ fontSize:13, fontWeight:700, color:'#FFC107', background:'rgba(255,193,7,0.12)', padding:'2px 10px', borderRadius:9999 }}>
-              {parseFloat(group.fuel_surcharge_pct).toFixed(2)}%
-            </span>
-            <button onClick={() => { setForm({ name:group.name, fuel_surcharge_pct: String(group.fuel_surcharge_pct) }); setEditing(true); }}
-              style={{ background:'none', border:'none', color:'#AAAAAA', cursor:'pointer' }}><Edit2 size={12}/></button>
+            <div style={{ flex:1 }}>
+              <div style={{ fontWeight:700, color:'#fff', fontSize:14 }}>{group.name}</div>
+              {hasScheduled && (
+                <div style={{ fontSize:11, color:'rgba(255,193,7,0.6)', marginTop:2 }}>
+                  ↗ {parseFloat(group.next_sell_pct).toFixed(2)}% from{' '}
+                  {new Date(group.next_sell_effective_date).toLocaleDateString('en-GB',
+                    { day:'numeric', month:'short', year:'numeric' })}
+                </div>
+              )}
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:4 }}>
+              <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                <span style={{ fontSize:10, color:'#666' }}>cost</span>
+                <span style={{ fontSize:12, fontWeight:700, color:'#555',
+                  background:'rgba(255,255,255,0.05)', padding:'1px 8px',
+                  borderRadius:9999, fontFamily:'monospace' }}>
+                  {parseFloat(group.fuel_surcharge_pct || 0).toFixed(2)}%
+                </span>
+              </div>
+              <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                <span style={{ fontSize:10, color:'#666' }}>sell</span>
+                <span style={{ fontSize:12, fontWeight:700, color:'#FFC107',
+                  background:'rgba(255,193,7,0.12)', padding:'1px 8px',
+                  borderRadius:9999, fontFamily:'monospace' }}>
+                  {group.standard_sell_pct != null
+                    ? `${parseFloat(group.standard_sell_pct).toFixed(2)}%`
+                    : '—'}
+                </span>
+              </div>
+            </div>
+            <button onClick={startEdit}
+              style={{ background:'none', border:'none', color:'#AAAAAA', cursor:'pointer' }}>
+              <Edit2 size={12}/>
+            </button>
             <button onClick={() => setConfirmDel(true)}
-              style={{ background:'none', border:'none', color:'#555', cursor:'pointer' }}><Trash2 size={12}/></button>
+              style={{ background:'none', border:'none', color:'#555', cursor:'pointer' }}>
+              <Trash2 size={12}/>
+            </button>
           </>
         )}
       </div>
@@ -1040,7 +1144,6 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
           { key:'services',   label:'Services' },
           { key:'rate-cards', label:'Cost Rate Cards' },
           { key:'fuel',       label:'Fuel Groups' },
-          { key:'surcharges', label:'Surcharges' },
         ].map(t => (
           <button key={t.key} onClick={() => setCarrierTab(t.key)} style={{
             background:'none', border:'none', cursor:'pointer',
@@ -1281,11 +1384,6 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
           </div>
         )}
       </div>}  {/* end carrierTab === 'fuel' */}
-
-      {/* ── Tab: Surcharges ── */}
-      {carrierTab === 'surcharges' && carrier && (
-        <SurchargesTab courierId={carrier.id} courierCode={carrier.code} />
-      )}
     </div>
   );
 }
@@ -1418,16 +1516,13 @@ function CountryPickerModal({ zone, onClose, onRefresh }) {
   const [search, setSearch] = useState('');
 
   const addCountry = useMutation({
-    mutationFn: iso => carriersApi.addCountry(zone?.id, { country_iso: iso }),
+    mutationFn: iso => carriersApi.addCountry(zone.id, { country_iso: iso }),
     onSuccess: onRefresh,
   });
   const delCountry = useMutation({
     mutationFn: id => carriersApi.removeCountry(id),
     onSuccess: onRefresh,
   });
-
-  // Guard after hooks — zone may be briefly undefined during parent refetch
-  if (!zone) return null;
 
   const addedSet  = new Set((zone.country_codes || []).map(cc => cc.country_iso));
   const addedList = COUNTRIES.filter(c => addedSet.has(c.iso));
@@ -1521,19 +1616,89 @@ function CountryPickerModal({ zone, onClose, onRefresh }) {
           <button onClick={onClose} className="btn-ghost" style={{ height:32, padding:'0 16px', fontSize:13 }}>Close</button>
         </div>
       </div>
+
+      {/* ── Fuel Groups section ── */}
+      <div style={{ marginTop:20 }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+          <div>
+            <h2 style={{ fontSize:17, fontWeight:700, color:'#FFC107', margin:0, display:'flex', alignItems:'center', gap:8 }}>
+              <Zap size={16}/> Fuel Groups
+            </h2>
+            <p style={{ fontSize:13, color:'#AAAAAA', margin:'4px 0 0' }}>
+              Group services by fuel rate — assign services using the dropdown on each card
+            </p>
+          </div>
+          <button onClick={() => setAddingGroup(a => !a)} className="btn-primary"><Plus size={13}/> New Group</button>
+        </div>
+
+        {addingGroup && (
+          <div className="moov-card" style={{ padding:16, marginBottom:14, border:'1px solid rgba(255,193,7,0.25)' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr auto auto', gap:10, alignItems:'flex-end' }}>
+              <div>
+                <label style={{ fontSize:11, color:'#AAAAAA', display:'block', marginBottom:4 }}>Group Name</label>
+                <div className="pill-input-wrap" style={{ height:34 }}>
+                  <input value={groupForm.name} onChange={e => setGroupForm(f=>({...f,name:e.target.value}))}
+                    placeholder="e.g. Domestic Fuel, International Fuel" autoFocus style={{ fontSize:13 }}/>
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize:11, color:'#AAAAAA', display:'block', marginBottom:4 }}>Fuel Surcharge %</label>
+                <div className="pill-input-wrap" style={{ height:34 }}>
+                  <input type="number" step="0.01" value={groupForm.fuel_surcharge_pct}
+                    onChange={e => setGroupForm(f=>({...f,fuel_surcharge_pct:e.target.value}))}
+                    placeholder="5.50" style={{ fontSize:13 }}/>
+                  <div className="green-cap" style={{ fontSize:12 }}>%</div>
+                </div>
+              </div>
+              <button onClick={() => createGroup.mutate()} className="btn-primary" style={{ height:34, alignSelf:'flex-end' }}>
+                <Check size={13}/> Create
+              </button>
+              <button onClick={() => setAddingGroup(false)} className="btn-ghost" style={{ height:34, alignSelf:'flex-end' }}>Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {fuelGroups.length === 0 ? (
+          <div className="moov-card" style={{ padding:32, textAlign:'center', color:'#555', fontSize:13 }}>
+            No fuel groups yet — create one above, then assign services to it.
+          </div>
+        ) : (() => {
+          // Services not in any group = available to assign
+          const assignedIds = new Set(fuelGroups.flatMap(g => (g.services||[]).map(s => s.id)));
+          return (
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(340px, 1fr))', gap:14 }}>
+              {fuelGroups.map(group => {
+                const available = (carrier.services || []).filter(s => !assignedIds.has(s.id));
+                return (
+                  <FuelGroupCard
+                    key={group.id}
+                    group={group}
+                    carrierId={carrierId}
+                    availableServices={available}
+                    onRefresh={refetchAll}
+                  />
+                );
+              })}
+            </div>
+          );
+        })()}
+      </div>
     </div>
   );
 }
-
 
 // ─── LEVEL 3 — Rate card matrix ──────────────────────────────────────────────
 
 function formatBandLabel(min, max) {
   const mn = parseFloat(min);
   const mx = parseFloat(max);
-  const fmt = v => v % 1 === 0 ? v.toFixed(0) : v.toFixed(2);
-  if (mn === 0) return `Up to ${fmt(mx)}kg`;
-  return `${fmt(mn)} – ${fmt(mx)}kg`;
+  if (mn === 0) {
+    const mxFmt = mx % 1 === 0 ? mx : mx.toFixed(1);
+    return `Up to ${mxFmt}kg`;
+  }
+  const mnFmt = mn % 1 === 0 ? mn : mn.toFixed(1);
+  const mxFmt = mx % 1 === 0 ? mx : mx.toFixed(1);
+  return `${mnFmt} – ${mxFmt}kg`;
 }
 
 function RateMatrix({ zones }) {
@@ -1688,59 +1853,6 @@ function RateMatrix({ zones }) {
 
 // ─── LEVEL 3 — Zone config (accordion per zone) ───────────────────────────────
 
-// Inline editable cell for a weight band field
-function BandCell({ bandId, field, value, colour, prefix, onSaved }) {
-  const [editing, setEditing] = useState(false);
-  const [val, setVal] = useState('');
-  const inputRef = useRef(null);
-
-  function startEdit() {
-    setVal(value === null || value === undefined ? '' : String(parseFloat(value).toFixed(2)));
-    setEditing(true);
-    setTimeout(() => inputRef.current?.select(), 0);
-  }
-
-  function commit() {
-    const parsed = parseFloat(val);
-    if (!isNaN(parsed)) onSaved(bandId, field, parsed);
-    setEditing(false);
-  }
-
-  if (editing) {
-    return (
-      <input
-        ref={inputRef}
-        type="number"
-        step="0.01"
-        value={val}
-        onChange={e => setVal(e.target.value)}
-        onBlur={commit}
-        onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
-        style={{ width:70, background:'rgba(255,255,255,0.06)', border:`1px solid ${colour}55`, borderRadius:5,
-          color: colour, fontSize:12, padding:'2px 6px', outline:'none', fontFamily:'monospace' }}
-      />
-    );
-  }
-
-  const display = value !== null && value !== undefined
-    ? `${prefix || ''}${parseFloat(value).toFixed(2)}`
-    : <span style={{ color:'#555' }}>—</span>;
-
-  return (
-    <span
-      onClick={startEdit}
-      title="Click to edit"
-      style={{ color: colour, fontFamily:'monospace', cursor:'pointer', padding:'2px 6px', borderRadius:4,
-        border:'1px solid transparent', display:'inline-block',
-        transition:'border-color 0.12s, background 0.12s' }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = `${colour}55`; e.currentTarget.style.background = `${colour}18`; }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.background = 'transparent'; }}
-    >
-      {display}
-    </span>
-  );
-}
-
 function WeightBandsTable({ zoneId, bands, onRefresh }) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ min_weight_kg:'', max_weight_kg:'', price_first:'', price_sub:'' });
@@ -1750,18 +1862,10 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
     mutationFn: () => carriersApi.createWeightBand({ ...form, zone_id: zoneId }),
     onSuccess: () => { setAdding(false); setForm({ min_weight_kg:'', max_weight_kg:'', price_first:'', price_sub:'' }); onRefresh(); },
   });
-  const updateBand = useMutation({
-    mutationFn: ({ id, field, value }) => carriersApi.updateWeightBand(id, { [field]: value }),
-    onSuccess: onRefresh,
-  });
   const delBand = useMutation({
     mutationFn: (id) => carriersApi.deleteWeightBand(id),
     onSuccess: () => { setConfirmId(null); onRefresh(); },
   });
-
-  function handleSave(bandId, field, value) {
-    updateBand.mutate({ id: bandId, field, value });
-  }
 
   return (
     <div style={{ marginTop:8 }}>
@@ -1775,7 +1879,7 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr auto', gap:8, marginBottom:10 }}>
           {[['Min kg','min_weight_kg'],['Max kg','max_weight_kg'],['Cost 1st £','price_first'],['Cost Sub £','price_sub']].map(([ph,key]) => (
             <div key={key} className="pill-input-wrap" style={{ height:32 }}>
-              <input type="number" step="0.01" placeholder={ph} value={form[key]} onChange={e => setForm(f=>({...f,[key]:e.target.value}))} style={{ fontSize:12 }}/>
+              <input type="number" step="0.001" placeholder={ph} value={form[key]} onChange={e => setForm(f=>({...f,[key]:e.target.value}))} style={{ fontSize:12 }}/>
             </div>
           ))}
           <button onClick={() => addBand.mutate()} className="btn-primary" style={{ height:32 }}><Check size={12}/></button>
@@ -1783,19 +1887,15 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
       )}
       {confirmId && <div style={{ marginBottom:8 }}><Confirm message="Delete weight band?" onConfirm={() => delBand.mutate(confirmId)} onCancel={() => setConfirmId(null)}/></div>}
       <table className="moov-table" style={{ fontSize:12 }}>
-        <thead>
-          <tr>
-            <th>Min kg</th><th>Max kg</th><th>Cost 1st</th><th>Cost Sub</th><th></th>
-          </tr>
-        </thead>
+        <thead><tr><th>Min kg</th><th>Max kg</th><th>Cost 1st</th><th>Cost Sub</th><th></th></tr></thead>
         <tbody>
-          {bands.length === 0 && <tr><td colSpan={5} style={{ textAlign:'center', color:'#555' }}>No bands — click Add Band above</td></tr>}
+          {bands.length === 0 && <tr><td colSpan={5} style={{ textAlign:'center', color:'#555' }}>No bands</td></tr>}
           {bands.map(b => (
             <tr key={b.id}>
-              <td><BandCell bandId={b.id} field="min_weight_kg" value={b.min_weight_kg} colour="#AAAAAA" onSaved={handleSave}/></td>
-              <td><BandCell bandId={b.id} field="max_weight_kg" value={b.max_weight_kg} colour="#AAAAAA" onSaved={handleSave}/></td>
-              <td><BandCell bandId={b.id} field="price_first" value={b.price_first} colour="#00C853" prefix="£" onSaved={handleSave}/></td>
-              <td><BandCell bandId={b.id} field="price_sub" value={b.price_sub} colour="#FFC107" prefix="£" onSaved={handleSave}/></td>
+              <td>{parseFloat(b.min_weight_kg).toFixed(3)}</td>
+              <td>{parseFloat(b.max_weight_kg).toFixed(3)}</td>
+              <td style={{ color:'#00C853' }}>£{parseFloat(b.price_first).toFixed(4)}</td>
+              <td style={{ color:'#FFC107' }}>{b.price_sub ? `£${parseFloat(b.price_sub).toFixed(4)}` : <span style={{ color:'#555' }}>—</span>}</td>
               <td style={{ textAlign:'right' }}>
                 <button onClick={() => setConfirmId(b.id)} style={{ background:'none', border:'none', color:'#555', cursor:'pointer' }}><Trash2 size={11}/></button>
               </td>
@@ -1803,7 +1903,6 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
           ))}
         </tbody>
       </table>
-      <p style={{ fontSize:11, color:'#444', margin:'6px 0 0', fontStyle:'italic' }}>Click any value to edit it inline</p>
     </div>
   );
 }
@@ -1814,12 +1913,6 @@ function ZoneCard({ zone, onRefresh }) {
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [inclInput, setInclInput]           = useState('');
   const [exclInput, setExclInput]           = useState('');
-  const [inclBulk, setInclBulk]             = useState('');
-  const [exclBulk, setExclBulk]             = useState('');
-  const [inclMode, setInclMode]             = useState('single'); // 'single' | 'bulk'
-  const [exclMode, setExclMode]             = useState('single');
-  const [bulkRunning, setBulkRunning]       = useState(false);
-  const [bulkResult, setBulkResult]         = useState(null);
 
   const delZone     = useMutation({ mutationFn: () => carriersApi.deleteZone(zone.id), onSuccess: onRefresh });
   const delCountry  = useMutation({ mutationFn: id => carriersApi.removeCountry(id), onSuccess: onRefresh });
@@ -1828,34 +1921,6 @@ function ZoneCard({ zone, onRefresh }) {
     onSuccess: (_, { type }) => { type === 'include' ? setInclInput('') : setExclInput(''); onRefresh(); },
   });
   const delPostcode = useMutation({ mutationFn: id => carriersApi.removePostcodeRule(id), onSuccess: onRefresh });
-
-  async function addBulkPostcodes(raw, type) {
-    const existing = new Set(
-      (zone.postcode_rules || [])
-        .filter(r => r.rule_type === type)
-        .map(r => r.postcode_prefix.toUpperCase())
-    );
-    const codes = raw
-      .split(/[\s,\n]+/)
-      .map(s => s.toUpperCase().trim())
-      .filter(s => s.length > 0 && !existing.has(s));
-    if (codes.length === 0) { setBulkResult({ type, added: 0, skipped: 0 }); return; }
-    setBulkRunning(true);
-    setBulkResult(null);
-    let added = 0;
-    let failed = 0;
-    for (const prefix of codes) {
-      try {
-        await carriersApi.addPostcodeRule(zone.id, { postcode_prefix: prefix, rule_type: type });
-        added++;
-      } catch { failed++; }
-    }
-    setBulkRunning(false);
-    if (type === 'include') setInclBulk('');
-    else setExclBulk('');
-    setBulkResult({ type, added, skipped: codes.length - added - failed, failed });
-    onRefresh();
-  }
 
   const inclRules = (zone.postcode_rules || []).filter(r => r.rule_type === 'include');
   const exclRules = (zone.postcode_rules || []).filter(r => r.rule_type === 'exclude');
@@ -1950,151 +2015,66 @@ function ZoneCard({ zone, onRefresh }) {
               Postcode Rules
             </span>
 
-            {bulkResult && (
-              <div style={{ marginBottom:10, padding:'8px 12px', borderRadius:7,
-                background: bulkResult.failed > 0 ? 'rgba(244,67,54,0.08)' : 'rgba(0,200,83,0.08)',
-                border: `1px solid ${bulkResult.failed > 0 ? 'rgba(244,67,54,0.3)' : 'rgba(0,200,83,0.3)'}`,
-                fontSize:12, color: bulkResult.failed > 0 ? '#F44336' : '#00C853',
-                display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                <span>
-                  {bulkResult.added} added to {bulkResult.type}d list
-                  {bulkResult.skipped > 0 && ` · ${bulkResult.skipped} already existed`}
-                  {bulkResult.failed > 0 && ` · ${bulkResult.failed} failed`}
-                </span>
-                <button onClick={() => setBulkResult(null)} style={{ background:'none', border:'none', color:'inherit', cursor:'pointer', padding:0 }}><X size={11}/></button>
-              </div>
-            )}
-
-            <div style={{ display:'flex', flexDirection:'column', gap:0 }}>
-
-              {/* ── Included ── */}
-              <div style={{ paddingBottom:14 }}>
-                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
-                  <span style={{ fontSize:11, fontWeight:700, color:'#00BCD4', textTransform:'uppercase', letterSpacing:'0.05em' }}>✓ Included</span>
-                  <div style={{ display:'flex', gap:0, border:'1px solid rgba(0,188,212,0.25)', borderRadius:6, overflow:'hidden' }}>
-                    {['single','bulk'].map(m => (
-                      <button key={m} onClick={() => setInclMode(m)}
-                        style={{ fontSize:10, fontWeight:700, padding:'2px 8px', border:'none', cursor:'pointer',
-                          background: inclMode===m ? 'rgba(0,188,212,0.25)' : 'transparent',
-                          color: inclMode===m ? '#00BCD4' : '#666', textTransform:'capitalize' }}>
-                        {m}
-                      </button>
-                    ))}
-                  </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+              {/* Include column */}
+              <div>
+                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
+                  <span style={{ fontSize:11, fontWeight:700, color:'#00BCD4', textTransform:'uppercase' }}>✓ Included</span>
                 </div>
-
-                {inclRules.length > 0 && (
-                  <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:8 }}>
-                    {inclRules.map(pr => (
-                      <span key={pr.id} style={{ display:'inline-flex', alignItems:'center', gap:3, padding:'3px 9px', borderRadius:9999, fontSize:11, fontWeight:700, background:'rgba(0,188,212,0.12)', color:'#00BCD4' }}>
-                        {pr.postcode_prefix}
-                        <button onClick={() => delPostcode.mutate(pr.id)} style={{ background:'none', border:'none', color:'#00BCD4', cursor:'pointer', padding:0 }}><X size={8}/></button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {inclMode === 'single' ? (
-                  <div style={{ display:'flex', gap:5, maxWidth:340 }}>
-                    <div className="pill-input-wrap" style={{ height:28, flex:1 }}>
-                      <input value={inclInput} onChange={e => setInclInput(e.target.value)}
-                        placeholder={inclRules.length === 0 ? 'All postcodes included — add to restrict…' : 'AB, BT, SW…'}
-                        onKeyDown={e => e.key==='Enter' && inclInput.trim() && addPostcode.mutate({ prefix: inclInput, type:'include' })}
-                        style={{ fontSize:11, textTransform:'uppercase' }}/>
-                    </div>
-                    <button onClick={() => inclInput.trim() && addPostcode.mutate({ prefix: inclInput, type:'include' })}
-                      style={{ background:'rgba(0,188,212,0.12)', border:'1px solid rgba(0,188,212,0.3)', borderRadius:6, color:'#00BCD4', cursor:'pointer', fontSize:11, fontWeight:600, padding:'0 10px', height:28 }}>
-                      + Add
-                    </button>
-                  </div>
-                ) : (
-                  <div>
-                    <textarea
-                      value={inclBulk}
-                      onChange={e => setInclBulk(e.target.value)}
-                      placeholder={'Paste outcodes separated by commas or new lines\ne.g. IV1, IV2, FK17, AB31…'}
-                      style={{ width:'100%', minHeight:72, background:'rgba(255,255,255,0.04)',
-                        border:'1px solid rgba(0,188,212,0.25)', borderRadius:7, color:'#fff',
-                        fontSize:11, padding:'7px 10px', resize:'vertical', fontFamily:'monospace',
-                        textTransform:'uppercase', boxSizing:'border-box' }}
-                    />
-                    <button
-                      onClick={() => inclBulk.trim() && addBulkPostcodes(inclBulk, 'include')}
-                      disabled={bulkRunning || !inclBulk.trim()}
-                      style={{ marginTop:5, background:'rgba(0,188,212,0.15)', border:'1px solid rgba(0,188,212,0.35)',
-                        borderRadius:6, color:'#00BCD4', cursor: bulkRunning ? 'wait' : 'pointer',
-                        fontSize:11, fontWeight:700, padding:'5px 14px',
-                        display:'inline-flex', alignItems:'center', gap:5 }}>
-                      <Upload size={11}/> {bulkRunning ? 'Adding…' : 'Add All'}
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* ── Excluded ── */}
-              <div style={{ paddingTop:14, borderTop:'1px solid rgba(255,255,255,0.05)' }}>
-                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
-                  <span style={{ fontSize:11, fontWeight:700, color:'#E91E8C', textTransform:'uppercase', letterSpacing:'0.05em' }}>✗ Excluded</span>
-                  <div style={{ display:'flex', gap:0, border:'1px solid rgba(233,30,140,0.25)', borderRadius:6, overflow:'hidden' }}>
-                    {['single','bulk'].map(m => (
-                      <button key={m} onClick={() => setExclMode(m)}
-                        style={{ fontSize:10, fontWeight:700, padding:'2px 8px', border:'none', cursor:'pointer',
-                          background: exclMode===m ? 'rgba(233,30,140,0.2)' : 'transparent',
-                          color: exclMode===m ? '#E91E8C' : '#666', textTransform:'capitalize' }}>
-                        {m}
-                      </button>
-                    ))}
-                  </div>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:5, minHeight:28, marginBottom:8 }}>
+                  {inclRules.length === 0
+                    ? <span style={{ fontSize:12, color:'#444', fontStyle:'italic' }}>None — all postcodes included</span>
+                    : inclRules.map(pr => (
+                        <span key={pr.id} style={{ display:'inline-flex', alignItems:'center', gap:3, padding:'3px 9px', borderRadius:9999, fontSize:11, fontWeight:700, background:'rgba(0,188,212,0.12)', color:'#00BCD4' }}>
+                          {pr.postcode_prefix}
+                          <button onClick={() => delPostcode.mutate(pr.id)} style={{ background:'none', border:'none', color:'#00BCD4', cursor:'pointer', padding:0 }}><X size={8}/></button>
+                        </span>
+                      ))
+                  }
                 </div>
-
-                {exclRules.length > 0 && (
-                  <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:8 }}>
-                    {exclRules.map(pr => (
-                      <span key={pr.id} style={{ display:'inline-flex', alignItems:'center', gap:3, padding:'3px 9px', borderRadius:9999, fontSize:11, fontWeight:700, background:'rgba(233,30,140,0.12)', color:'#E91E8C' }}>
-                        {pr.postcode_prefix}
-                        <button onClick={() => delPostcode.mutate(pr.id)} style={{ background:'none', border:'none', color:'#E91E8C', cursor:'pointer', padding:0 }}><X size={8}/></button>
-                      </span>
-                    ))}
+                <div style={{ display:'flex', gap:5 }}>
+                  <div className="pill-input-wrap" style={{ height:28, flex:1 }}>
+                    <input value={inclInput} onChange={e => setInclInput(e.target.value)}
+                      placeholder="AB, BT, SW…"
+                      onKeyDown={e => e.key==='Enter' && inclInput.trim() && addPostcode.mutate({ prefix: inclInput, type:'include' })}
+                      style={{ fontSize:11, textTransform:'uppercase' }}/>
                   </div>
-                )}
-
-                {exclMode === 'single' ? (
-                  <div style={{ display:'flex', gap:5, maxWidth:340 }}>
-                    <div className="pill-input-wrap" style={{ height:28, flex:1 }}>
-                      <input value={exclInput} onChange={e => setExclInput(e.target.value)}
-                        placeholder={exclRules.length === 0 ? 'None excluded — add to exclude…' : 'FK17, IV1, HS…'}
-                        onKeyDown={e => e.key==='Enter' && exclInput.trim() && addPostcode.mutate({ prefix: exclInput, type:'exclude' })}
-                        style={{ fontSize:11, textTransform:'uppercase' }}/>
-                    </div>
-                    <button onClick={() => exclInput.trim() && addPostcode.mutate({ prefix: exclInput, type:'exclude' })}
-                      style={{ background:'rgba(233,30,140,0.1)', border:'1px solid rgba(233,30,140,0.25)', borderRadius:6, color:'#E91E8C', cursor:'pointer', fontSize:11, fontWeight:600, padding:'0 10px', height:28 }}>
-                      + Add
-                    </button>
-                  </div>
-                ) : (
-                  <div>
-                    <textarea
-                      value={exclBulk}
-                      onChange={e => setExclBulk(e.target.value)}
-                      placeholder={'Paste outcodes separated by commas or new lines\ne.g. FK17, IV1, AB55…'}
-                      style={{ width:'100%', minHeight:72, background:'rgba(255,255,255,0.04)',
-                        border:'1px solid rgba(233,30,140,0.25)', borderRadius:7, color:'#fff',
-                        fontSize:11, padding:'7px 10px', resize:'vertical', fontFamily:'monospace',
-                        textTransform:'uppercase', boxSizing:'border-box' }}
-                    />
-                    <button
-                      onClick={() => exclBulk.trim() && addBulkPostcodes(exclBulk, 'exclude')}
-                      disabled={bulkRunning || !exclBulk.trim()}
-                      style={{ marginTop:5, background:'rgba(233,30,140,0.12)', border:'1px solid rgba(233,30,140,0.3)',
-                        borderRadius:6, color:'#E91E8C', cursor: bulkRunning ? 'wait' : 'pointer',
-                        fontSize:11, fontWeight:700, padding:'5px 14px',
-                        display:'inline-flex', alignItems:'center', gap:5 }}>
-                      <Upload size={11}/> {bulkRunning ? 'Adding…' : 'Add All'}
-                    </button>
-                  </div>
-                )}
+                  <button onClick={() => inclInput.trim() && addPostcode.mutate({ prefix: inclInput, type:'include' })}
+                    style={{ background:'rgba(0,188,212,0.12)', border:'1px solid rgba(0,188,212,0.3)', borderRadius:6, color:'#00BCD4', cursor:'pointer', fontSize:11, fontWeight:600, padding:'0 10px', height:28 }}>
+                    + Add
+                  </button>
+                </div>
               </div>
 
+              {/* Exclude column */}
+              <div>
+                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
+                  <span style={{ fontSize:11, fontWeight:700, color:'#E91E8C', textTransform:'uppercase' }}>✗ Excluded</span>
+                </div>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:5, minHeight:28, marginBottom:8 }}>
+                  {exclRules.length === 0
+                    ? <span style={{ fontSize:12, color:'#444', fontStyle:'italic' }}>None excluded</span>
+                    : exclRules.map(pr => (
+                        <span key={pr.id} style={{ display:'inline-flex', alignItems:'center', gap:3, padding:'3px 9px', borderRadius:9999, fontSize:11, fontWeight:700, background:'rgba(233,30,140,0.12)', color:'#E91E8C' }}>
+                          {pr.postcode_prefix}
+                          <button onClick={() => delPostcode.mutate(pr.id)} style={{ background:'none', border:'none', color:'#E91E8C', cursor:'pointer', padding:0 }}><X size={8}/></button>
+                        </span>
+                      ))
+                  }
+                </div>
+                <div style={{ display:'flex', gap:5 }}>
+                  <div className="pill-input-wrap" style={{ height:28, flex:1 }}>
+                    <input value={exclInput} onChange={e => setExclInput(e.target.value)}
+                      placeholder="FK17, IV1, HS…"
+                      onKeyDown={e => e.key==='Enter' && exclInput.trim() && addPostcode.mutate({ prefix: exclInput, type:'exclude' })}
+                      style={{ fontSize:11, textTransform:'uppercase' }}/>
+                  </div>
+                  <button onClick={() => exclInput.trim() && addPostcode.mutate({ prefix: exclInput, type:'exclude' })}
+                    style={{ background:'rgba(233,30,140,0.1)', border:'1px solid rgba(233,30,140,0.25)', borderRadius:6, color:'#E91E8C', cursor:'pointer', fontSize:11, fontWeight:600, padding:'0 10px', height:28 }}>
+                    + Add
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 

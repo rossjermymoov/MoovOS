@@ -263,11 +263,11 @@ router.get('/couriers/:id/fuel-groups', async (req, res, next) => {
 // POST /api/carriers/couriers/:id/fuel-groups
 router.post('/couriers/:id/fuel-groups', async (req, res, next) => {
   try {
-    const { name, fuel_surcharge_pct = 0 } = req.body;
+    const { name, fuel_surcharge_pct = 0, standard_sell_pct = null } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'name is required' });
     const result = await query(
-      'INSERT INTO fuel_groups (courier_id, name, fuel_surcharge_pct) VALUES ($1,$2,$3) RETURNING *',
-      [req.params.id, name.trim(), fuel_surcharge_pct]
+      'INSERT INTO fuel_groups (courier_id, name, fuel_surcharge_pct, standard_sell_pct) VALUES ($1,$2,$3,$4) RETURNING *',
+      [req.params.id, name.trim(), fuel_surcharge_pct, standard_sell_pct]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) { next(err); }
@@ -276,7 +276,7 @@ router.post('/couriers/:id/fuel-groups', async (req, res, next) => {
 // PATCH /api/carriers/fuel-groups/:id
 router.patch('/fuel-groups/:id', async (req, res, next) => {
   try {
-    const allowed = ['name', 'fuel_surcharge_pct'];
+    const allowed = ['name', 'fuel_surcharge_pct', 'standard_sell_pct', 'next_sell_pct', 'next_sell_effective_date'];
     const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));
     if (!updates.length) return res.status(400).json({ error: 'No valid fields' });
     const setClauses = updates.map(([k], i) => `${k} = $${i + 2}`).join(', ');
