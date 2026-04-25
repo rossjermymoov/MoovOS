@@ -186,16 +186,28 @@ function parseNLQuery(query) {
 
 function weightClassCoversKg(weightClassName, weightKg) {
   if (weightKg == null) return false;
-  const s = weightClassName.toUpperCase().replace(/\s/g, '');
-  const rangeMatch = s.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)KG?$/);
+  // Strip whitespace and KG/KGS/KILOGRAM suffixes to get a pure numeric/operator string
+  let s = weightClassName.toUpperCase().replace(/\s/g, '');
+  s = s.replace(/KILOGRAMS$/, '').replace(/KILOGRAM$/, '').replace(/KGS$/, '').replace(/KG$/, '').replace(/K$/, '');
+
+  // Range: "0-5" or "2.5-5"
+  const rangeMatch = s.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/);
   if (rangeMatch) {
     const lo = parseFloat(rangeMatch[1]), hi = parseFloat(rangeMatch[2]);
     return weightKg > lo && weightKg <= hi;
   }
-  const plusMatch = s.match(/^(\d+(?:\.\d+)?)\+KG?$/) || s.match(/^OVER(\d+(?:\.\d+)?)KG?$/);
+  // Open upper: "5+" or "OVER5"
+  const plusMatch = s.match(/^(\d+(?:\.\d+)?)\+$/) || s.match(/^OVER(\d+(?:\.\d+)?)$/);
   if (plusMatch) return weightKg > parseFloat(plusMatch[1]);
-  const underMatch = s.match(/^(?:UNDER|<)(\d+(?:\.\d+)?)KG?$/);
+  // Exclusive upper: "UNDER5" or "<5"
+  const underMatch = s.match(/^(?:UNDER|<)(\d+(?:\.\d+)?)$/);
   if (underMatch) return weightKg < parseFloat(underMatch[1]);
+  // Inclusive upper: "UPTO5" or "MAX5"
+  const uptoMatch = s.match(/^(?:UPTO|MAX)(\d+(?:\.\d+)?)$/);
+  if (uptoMatch) return weightKg <= parseFloat(uptoMatch[1]);
+  // Bare number: "5" → up to 5kg (Moov convention — e.g. "5KG" = up to 5 kg)
+  const bareMatch = s.match(/^(\d+(?:\.\d+)?)$/);
+  if (bareMatch) return weightKg <= parseFloat(bareMatch[1]);
   return false;
 }
 
@@ -310,8 +322,21 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
   // Rows to display: filtered when searching, all when not
   const displayRates = matchedRates;
 
+  // Sort weight classes numerically by extracting the leading number
+  // so "2KG" < "5KG" < "10KG" rather than alphabetical "10KG" < "2KG"
+  function wcSortKey(wc) {
+    const s = wc.toUpperCase().replace(/\s/g, '').replace(/KILOGRAMS?$|KGS?$|K$/, '');
+    const bare  = s.match(/^(\d+(?:\.\d+)?)$/);
+    if (bare) return parseFloat(bare[1]);
+    const range = s.match(/^(\d+(?:\.\d+)?)-/);
+    if (range) return parseFloat(range[1]);
+    const upto  = s.match(/^(?:UPTO|MAX)(\d+(?:\.\d+)?)$/);
+    if (upto) return parseFloat(upto[1]);
+    return Infinity;
+  }
+
   // Build matrix from displayRates
-  const weightClasses = [...new Set(displayRates.map(r => r.weight_class_name))].sort();
+  const weightClasses = [...new Set(displayRates.map(r => r.weight_class_name))].sort((a, b) => wcSortKey(a) - wcSortKey(b));
   const zones         = [...new Set(displayRates.map(r => r.zone_name))].sort();
   const rateMap = {};
   for (const r of displayRates) {
