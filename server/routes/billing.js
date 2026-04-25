@@ -540,9 +540,32 @@ function evaluateSurchargeFilters(rule, data) {
  */
 async function applySurcharges(shipmentId, customerId, basePrice, shipmentData) {
   try {
-    if (!shipmentId || !customerId || !shipmentData.courier) return;
+    if (!shipmentId || !customerId) return;
 
-    // Only auto-apply surcharges marked as 'always' — 'reconciliation' ones are added manually
+    // Step 1: resolve the courier_id for this shipment.
+    // Use the service code (dc_service_id) first — it's structured and accurate.
+    // Fall back to the raw courier text field if no service code is available.
+    let courierId = null;
+
+    if (shipmentData.dc_service_id) {
+      const { rows: svcRows } = await query(
+        'SELECT courier_id FROM courier_services WHERE service_code ILIKE $1 LIMIT 1',
+        [shipmentData.dc_service_id]
+      );
+      if (svcRows.length) courierId = svcRows[0].courier_id;
+    }
+
+    if (!courierId && shipmentData.courier) {
+      const { rows: cRows } = await query(
+        `SELECT id FROM couriers WHERE LOWER(code) = LOWER($1) OR LOWER($1) LIKE '%' || LOWER(code) || '%' LIMIT 1`,
+        [shipmentData.courier]
+      );
+      if (cRows.length) courierId = cRows[0].id;
+    }
+
+    if (!courierId) return; // can't resolve carrier — skip surcharges
+
+    // Step 2: fetch all active auto-apply surcharges for this carrier
     const { rows: surcharges } = await query(`
       SELECT s.*,
              COALESCE((
@@ -551,17 +574,11 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData) 
                WHERE r.surcharge_id = s.id AND r.active = true
              ), '[]'::json) AS rules
       FROM surcharges s
-      JOIN couriers c ON c.id = s.courier_id
       WHERE s.active = true
-        AND (
-          LOWER(c.code) = LOWER($1)
-          OR LOWER($1) LIKE '%' || LOWER(c.code) || '%'
-          OR LOWER(c.name) = LOWER($1)
-          OR LOWER($1) LIKE '%' || LOWER(c.name) || '%'
-        )
+        AND s.courier_id = $1
         AND (s.applies_when = 'always' OR s.applies_when IS NULL)
         AND (s.effective_date IS NULL OR s.effective_date <= CURRENT_DATE)
-    `, [shipmentData.courier]);
+    `, [courierId]);
 
     for (const surcharge of surcharges) {
       const rules = Array.isArray(surcharge.rules) ? surcharge.rules : [];
