@@ -798,14 +798,17 @@ function SurchargeOverrideRow({ surcharge, override, customerId, onChanged }) {
 // ─── Per-active-carrier section (fuel + surcharges) ───────────
 function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesChange }) {
   const [fuelOpen,  setFuelOpen]  = useState(false);
-  const [surchOpen, setSurchOpen] = useState(false);
+  const [surchOpen, setSurchOpen] = useState(true);  // open by default so surcharges are visible
 
-  const logo     = getCourierLogo(carrier.courier_code);
-  const hasFuel  = carrier.fuel_groups?.length > 0;
+  const logo    = getCourierLogo(carrier.courier_code);
+  // Only show fuel section for active (linked) carriers
+  const hasFuel = carrier.active && carrier.fuel_groups?.length > 0;
 
   const { data: surcharges = [] } = useQuery({
     queryKey: ['surcharges', carrier.courier_id],
     queryFn:  () => api.get(`/surcharges?courier_id=${carrier.courier_id}`).then(r => r.data),
+    staleTime: 0,           // always re-fetch — surcharges change in carrier management
+    refetchOnWindowFocus: true,
   });
 
   const hasSurcharges    = surcharges.length > 0;
@@ -970,8 +973,8 @@ export default function CustomerPricingTab({ customer }) {
       {/* 1 — Thin carrier toggle strip */}
       <CourierToggleStrip carriers={carriers} customerId={customer.id} />
 
-      {/* 2 — Per-active-carrier: fuel groups + surcharge overrides */}
-      {activeCarriers.map(carrier => (
+      {/* 2 — Per-carrier: fuel groups (active only) + surcharge overrides (all carriers with surcharges) */}
+      {carriers.map(carrier => (
         <ActiveCarrierSection
           key={carrier.courier_id}
           carrier={carrier}
