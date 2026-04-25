@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, AlertTriangle, Phone, Mail, MapPin, Building2,
   Users, MessageSquare, TrendingUp, DollarSign, Zap, Info,
-  Pencil, X, Check, ShieldCheck, Trash2,
+  Pencil, X, Check, ShieldCheck, Trash2, Bug, ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { customersApi } from '../../api/customers';
 import { customerRateCardsApi } from '../../api/customerRateCards';
@@ -850,6 +850,8 @@ export default function CustomerRecord() {
   const [onStopInput, setOnStopInput] = useState('');
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [showDebug, setShowDebug]     = useState(false);
+  const [debugSection, setDebugSection] = useState(new Set(['customer']));
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['customer', id],
@@ -997,6 +999,112 @@ export default function CustomerRecord() {
       </div>
 
       {/* AI summary */}
+      {/* Debug toggle */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+        <button
+          onClick={() => setShowDebug(d => !d)}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px',
+            borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+            background: showDebug ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.05)',
+            border: `1px solid ${showDebug ? 'rgba(245,158,11,0.45)' : 'rgba(255,255,255,0.1)'}`,
+            color: showDebug ? '#F59E0B' : '#555' }}>
+          <Bug size={11} /> {showDebug ? 'Hide debug' : 'Debug data'}
+        </button>
+      </div>
+
+      {/* Debug panel */}
+      {showDebug && (() => {
+        const sections = [
+          {
+            key: 'customer',
+            label: 'Customer record',
+            color: '#00C853',
+            rows: Object.entries(c).map(([k, v]) => ({ k, v })),
+          },
+          {
+            key: 'contacts',
+            label: `Contacts (${contacts?.length ?? 0})`,
+            color: '#42A5F5',
+            rows: contacts?.map((ct, i) => ({ k: `[${i}]`, v: ct })) ?? [],
+          },
+          {
+            key: 'comm_summary',
+            label: 'Comm summary',
+            color: '#AB47BC',
+            rows: comm_summary ? Object.entries(comm_summary).map(([k, v]) => ({ k, v })) : [{ k: '—', v: 'null' }],
+          },
+          {
+            key: 'volume_snapshots',
+            label: `Volume snapshots (${volume_snapshots?.length ?? 0})`,
+            color: '#F59E0B',
+            rows: volume_snapshots?.slice(0, 10).map((s, i) => ({ k: `[${i}]`, v: s })) ?? [],
+            note: volume_snapshots?.length > 10 ? `…${volume_snapshots.length - 10} more rows` : null,
+          },
+          {
+            key: 'active_volume_alert',
+            label: 'Active volume alert',
+            color: '#EF4444',
+            rows: active_volume_alert ? Object.entries(active_volume_alert).map(([k, v]) => ({ k, v })) : [{ k: '—', v: 'none' }],
+          },
+        ];
+
+        const toggleSection = (key) => setDebugSection(s => {
+          const n = new Set(s);
+          n.has(key) ? n.delete(key) : n.add(key);
+          return n;
+        });
+
+        const renderVal = (v) => {
+          if (v === null || v === undefined) return <span style={{ color: '#555' }}>null</span>;
+          if (typeof v === 'boolean') return <span style={{ color: v ? '#00C853' : '#EF4444', fontWeight: 700 }}>{String(v)}</span>;
+          if (typeof v === 'object') return <span style={{ color: '#888', fontFamily: 'monospace', fontSize: 10 }}>{JSON.stringify(v)}</span>;
+          if (String(v).length > 80) return <span style={{ color: '#CCC', wordBreak: 'break-all', fontFamily: 'monospace', fontSize: 11 }}>{String(v)}</span>;
+          return <span style={{ color: '#CCC', fontFamily: 'monospace', fontSize: 11 }}>{String(v)}</span>;
+        };
+
+        return (
+          <div style={{ marginBottom: 20, border: '1px solid rgba(245,158,11,0.25)', borderRadius: 10, overflow: 'hidden' }}>
+            <div style={{ padding: '8px 14px', background: 'rgba(245,158,11,0.07)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Bug size={12} style={{ color: '#F59E0B' }} />
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#F59E0B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Debug — raw API data for {c.account_number}
+              </span>
+            </div>
+            {sections.map(sec => (
+              <div key={sec.key} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                <div
+                  onClick={() => toggleSection(sec.key)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px',
+                    cursor: 'pointer', background: 'rgba(255,255,255,0.02)' }}>
+                  {debugSection.has(sec.key)
+                    ? <ChevronDown size={12} color="#555" />
+                    : <ChevronRight size={12} color="#555" />}
+                  <span style={{ fontSize: 12, fontWeight: 700, color: sec.color }}>{sec.label}</span>
+                </div>
+                {debugSection.has(sec.key) && (
+                  <div style={{ padding: '0 0 8px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                      <tbody>
+                        {sec.rows.map(({ k, v }, i) => (
+                          <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                            <td style={{ padding: '3px 14px 3px 22px', color: '#666', fontFamily: 'monospace',
+                              width: 200, flexShrink: 0, verticalAlign: 'top', whiteSpace: 'nowrap' }}>{k}</td>
+                            <td style={{ padding: '3px 14px', verticalAlign: 'top' }}>{renderVal(v)}</td>
+                          </tr>
+                        ))}
+                        {sec.note && (
+                          <tr><td colSpan={2} style={{ padding: '4px 22px', color: '#555', fontStyle: 'italic', fontSize: 10 }}>{sec.note}</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
       {comm_summary && (
         <div className="moov-card" style={{ padding: 16, marginBottom: 20, border: '1px solid rgba(0,200,83,0.2)', background: 'rgba(0,200,83,0.04)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
