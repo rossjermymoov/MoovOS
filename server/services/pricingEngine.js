@@ -291,8 +291,8 @@ export async function processShipment(payload) {
           ...commonFields,
           charge_type:   'fuel_surcharge',
           parcel_number: parcelNum,
-          cost_price:    +(costPrice * fuelPct / 100).toFixed(4),
-          sell_price:    +(sellPrice * fuelPct / 100).toFixed(4),
+          cost_price:    +(costPrice * fuelPct / 100).toFixed(2),
+          sell_price:    +(sellPrice * fuelPct / 100).toFixed(2),
           status:        'unverified',
         });
       }
@@ -351,8 +351,8 @@ export async function processShipment(payload) {
       charges.push({
         ...commonFields,
         charge_type: rule.name,
-        cost_price:  +chargeAmt.toFixed(4),
-        sell_price:  +chargeAmt.toFixed(4),
+        cost_price:  +chargeAmt.toFixed(2),
+        sell_price:  +chargeAmt.toFixed(2),
         status:      'unverified',
       });
     }

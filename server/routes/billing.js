@@ -597,10 +597,10 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData) 
       let price;
       if (surcharge.calc_type === 'percentage') {
         // Percentage of base rate (fuel-style)
-        price = parseFloat(((parseFloat(basePrice) || 0) * effectiveValue / 100).toFixed(4));
+        price = parseFloat(((parseFloat(basePrice) || 0) * effectiveValue / 100).toFixed(2));
       } else if (surcharge.charge_per === 'parcel') {
         // Flat per parcel — multiply by parcel count
-        price = parseFloat((effectiveValue * (shipmentData.parcel_count || 1)).toFixed(4));
+        price = parseFloat((effectiveValue * (shipmentData.parcel_count || 1)).toFixed(2));
       } else {
         // Flat per shipment
         price = effectiveValue;
@@ -643,7 +643,7 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData) 
           );
 
           if (!existingFuel.length) {
-            const fuelPrice = parseFloat(((parseFloat(basePrice) || 0) * sellPct / 100).toFixed(4));
+            const fuelPrice = parseFloat(((parseFloat(basePrice) || 0) * sellPct / 100).toFixed(2));
             await query(`
               INSERT INTO charges
                 (shipment_id, customer_id, charge_type, service_name, price, price_auto, parcel_qty)
@@ -1446,12 +1446,13 @@ router.get('/shipments/:shipmentId/charges', async (req, res, next) => {
 
 router.post('/batch-apply-surcharges', async (req, res, next) => {
   try {
-    const { customer_id } = req.query;
+    const { customer_id, courier_code } = req.query;
 
     // Fetch all non-cancelled courier charges with their shipment data
     const conds = [`c.charge_type = 'courier'`, `c.cancelled = false`, `c.price IS NOT NULL`, `s.courier IS NOT NULL`];
     const vals  = [];
-    if (customer_id) { conds.push(`c.customer_id = $1`); vals.push(customer_id); }
+    if (customer_id) { vals.push(customer_id); conds.push(`c.customer_id = $${vals.length}`); }
+    if (courier_code) { vals.push(courier_code); conds.push(`LOWER(s.courier) = LOWER($${vals.length})`); }
 
     const { rows } = await query(`
       SELECT

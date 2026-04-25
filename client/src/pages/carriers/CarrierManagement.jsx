@@ -922,19 +922,19 @@ function DomesticServiceBands({ svc, cardId, onUpdateBand }) {
 function BandRow({ band, onUpdate }) {
   const [editFirst, setEditFirst] = useState(false);
   const [editSub,   setEditSub]   = useState(false);
-  const [valFirst,  setValFirst]  = useState(parseFloat(band.price_first).toFixed(4));
-  const [valSub,    setValSub]    = useState(band.price_sub ? parseFloat(band.price_sub).toFixed(4) : '');
+  const [valFirst,  setValFirst]  = useState(parseFloat(band.price_first).toFixed(2));
+  const [valSub,    setValSub]    = useState(band.price_sub ? parseFloat(band.price_sub).toFixed(2) : '');
 
   function commitFirst() {
     const v = parseFloat(valFirst);
     if (!isNaN(v) && v >= 0) onUpdate({ price_first: v });
-    else setValFirst(parseFloat(band.price_first).toFixed(4));
+    else setValFirst(parseFloat(band.price_first).toFixed(2));
     setEditFirst(false);
   }
   function commitSub() {
     const v = parseFloat(valSub);
     if (!isNaN(v) && v >= 0) onUpdate({ price_sub: v });
-    else setValSub(band.price_sub ? parseFloat(band.price_sub).toFixed(4) : '');
+    else setValSub(band.price_sub ? parseFloat(band.price_sub).toFixed(2) : '');
     setEditSub(false);
   }
 
@@ -945,24 +945,24 @@ function BandRow({ band, onUpdate }) {
       <td style={{ padding:'5px 8px', textAlign:'right' }}>
         {editFirst ? (
           <input value={valFirst} onChange={e => setValFirst(e.target.value)}
-            onBlur={commitFirst} onKeyDown={e => { if (e.key==='Enter') commitFirst(); if (e.key==='Escape') { setValFirst(parseFloat(band.price_first).toFixed(4)); setEditFirst(false); }}}
+            onBlur={commitFirst} onKeyDown={e => { if (e.key==='Enter') commitFirst(); if (e.key==='Escape') { setValFirst(parseFloat(band.price_first).toFixed(2)); setEditFirst(false); }}}
             autoFocus style={{ width:80, textAlign:'right', fontFamily:'monospace', fontSize:12, color:'#00C853', fontWeight:700, background:'rgba(0,200,83,0.08)', border:'1px solid rgba(0,200,83,0.4)', borderRadius:9999, padding:'2px 8px' }}/>
         ) : (
           <span onClick={() => setEditFirst(true)} title="Click to edit"
             style={{ fontFamily:'monospace', fontSize:12, fontWeight:700, color:'#00C853', cursor:'pointer', padding:'2px 8px', borderRadius:9999, border:'1px solid rgba(0,200,83,0.2)', background:'rgba(0,200,83,0.06)' }}>
-            £{parseFloat(band.price_first).toFixed(4)}
+            £{parseFloat(band.price_first).toFixed(2)}
           </span>
         )}
       </td>
       <td style={{ padding:'5px 8px', textAlign:'right' }}>
         {editSub ? (
           <input value={valSub} onChange={e => setValSub(e.target.value)}
-            onBlur={commitSub} onKeyDown={e => { if (e.key==='Enter') commitSub(); if (e.key==='Escape') { setValSub(band.price_sub ? parseFloat(band.price_sub).toFixed(4):''); setEditSub(false); }}}
+            onBlur={commitSub} onKeyDown={e => { if (e.key==='Enter') commitSub(); if (e.key==='Escape') { setValSub(band.price_sub ? parseFloat(band.price_sub).toFixed(2):''); setEditSub(false); }}}
             autoFocus style={{ width:80, textAlign:'right', fontFamily:'monospace', fontSize:12, color:'#FFC107', fontWeight:700, background:'rgba(255,193,7,0.08)', border:'1px solid rgba(255,193,7,0.4)', borderRadius:9999, padding:'2px 8px' }}/>
         ) : (
           <span onClick={() => setEditSub(true)} title="Click to edit"
             style={{ fontFamily:'monospace', fontSize:12, color: band.price_sub ? '#FFC107' : '#333', cursor:'pointer', padding:'2px 8px', borderRadius:9999, border:'1px solid rgba(255,255,255,0.06)' }}>
-            {band.price_sub ? `£${parseFloat(band.price_sub).toFixed(4)}` : '—'}
+            {band.price_sub ? `£${parseFloat(band.price_sub).toFixed(2)}` : '—'}
           </span>
         )}
       </td>
@@ -1194,14 +1194,29 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
     enabled: !!carrierId,
   });
 
+  const triggerBackfill = (courierCode) => {
+    if (!courierCode) return;
+    api.post(`/billing/batch-apply-surcharges?courier_code=${encodeURIComponent(courierCode)}`)
+      .catch(err => console.warn('[backfill] surcharge backfill error:', err.message));
+  };
+
   const addSurcharge = useMutation({
     mutationFn: () => api.post('/surcharges', { ...surchargeForm, courier_id: carrierId, default_value: parseFloat(surchargeForm.default_value) || 0 }).then(r => r.data),
-    onSuccess: () => { setAddingSurcharge(false); setSurchargeForm({ code:'', name:'', description:'', calc_type:'flat', calc_base:'fixed', default_value:'', applies_when:'reconciliation', charge_per:'shipment' }); refetchSurcharges(); },
+    onSuccess: (data) => {
+      setAddingSurcharge(false);
+      setSurchargeForm({ code:'', name:'', description:'', calc_type:'flat', calc_base:'fixed', default_value:'', applies_when:'reconciliation', charge_per:'shipment' });
+      refetchSurcharges();
+      if (data.applies_when === 'always') triggerBackfill(carrier.code);
+    },
   });
 
   const patchSurcharge = useMutation({
     mutationFn: ({ id, ...data }) => api.patch(`/surcharges/${id}`, data).then(r => r.data),
-    onSuccess: () => { setEditingSurcharge(null); refetchSurcharges(); },
+    onSuccess: (data) => {
+      setEditingSurcharge(null);
+      refetchSurcharges();
+      if (data.applies_when === 'always') triggerBackfill(carrier.code);
+    },
   });
 
   const delSurcharge = useMutation({
@@ -2311,8 +2326,8 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
             <tr key={b.id}>
               <td>{parseFloat(b.min_weight_kg).toFixed(3)}</td>
               <td>{parseFloat(b.max_weight_kg).toFixed(3)}</td>
-              <td style={{ color:'#00C853' }}>£{parseFloat(b.price_first).toFixed(4)}</td>
-              <td style={{ color:'#FFC107' }}>{b.price_sub ? `£${parseFloat(b.price_sub).toFixed(4)}` : <span style={{ color:'#555' }}>—</span>}</td>
+              <td style={{ color:'#00C853' }}>£{parseFloat(b.price_first).toFixed(2)}</td>
+              <td style={{ color:'#FFC107' }}>{b.price_sub ? `£${parseFloat(b.price_sub).toFixed(2)}` : <span style={{ color:'#555' }}>—</span>}</td>
               <td style={{ textAlign:'right' }}>
                 <button onClick={() => setConfirmId(b.id)} style={{ background:'none', border:'none', color:'#555', cursor:'pointer' }}><Trash2 size={11}/></button>
               </td>
