@@ -4,14 +4,17 @@ const BASE = '/api/queries';
 
 export async function fetchInbox(params = {}) {
   const qs = new URLSearchParams();
-  if (params.status)        qs.set('status', params.status);
-  if (params.courier)       qs.set('courier', params.courier);
-  if (params.query_type)    qs.set('query_type', params.query_type);
-  if (params.attention)     qs.set('attention', 'true');
-  if (params.assigned_to)   qs.set('assigned_to', params.assigned_to);
-  if (params.search)        qs.set('search', params.search);
-  if (params.limit)         qs.set('limit', params.limit);
-  if (params.offset)        qs.set('offset', params.offset);
+  if (params.status)        qs.set('status',      params.status);
+  if (params.courier)       qs.set('courier_code', params.courier);
+  if (params.courier_code)  qs.set('courier_code', params.courier_code);
+  if (params.query_type)    qs.set('query_type',   params.query_type);
+  if (params.attention)     qs.set('attention',    'true');
+  if (params.assigned_to)   qs.set('assigned_to',  params.assigned_to);
+  if (params.priority)      qs.set('priority',     params.priority);
+  if (params.group_name)    qs.set('group_name',   params.group_name);
+  if (params.search)        qs.set('search',       params.search);
+  if (params.limit)         qs.set('limit',        params.limit);
+  if (params.offset)        qs.set('offset',       params.offset);
   const r = await fetch(`${BASE}?${qs}`);
   if (!r.ok) throw new Error(await r.text());
   return r.json();

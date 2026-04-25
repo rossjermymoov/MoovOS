@@ -6,7 +6,7 @@ import {
   Send, Edit2, Flag, Link2,
   AlertCircle, Package, Filter, Search, X, ExternalLink, Receipt,
   Phone, MapPin, Truck, Sparkles, ChevronDown, ChevronUp,
-  PackageCheck, PackageX, RotateCcw, ShieldAlert, Store,
+  PackageCheck, PackageX, RotateCcw, ShieldAlert, Store, SlidersHorizontal,
 } from 'lucide-react';
 import {
   fetchInbox, fetchStats, fetchQuery, updateQuery,
@@ -1327,6 +1327,143 @@ function FilterPill({ active, color, onClick, children }) {
   );
 }
 
+// ─── Right-side filter panel ──────────────────────────────────────────────────
+
+const PRIORITY_OPTS = [
+  { value: '',       label: 'Any priority' },
+  { value: 'urgent', label: '🔴 Urgent' },
+  { value: 'high',   label: '🟠 High' },
+  { value: 'medium', label: '🔵 Medium' },
+  { value: 'low',    label: '⚪ Low' },
+];
+
+const TYPE_OPTS = [
+  { value: '',               label: 'Any type' },
+  { value: 'whereabouts',    label: 'WISMO' },
+  { value: 'not_delivered',  label: 'Not Delivered' },
+  { value: 'damaged',        label: 'Damaged' },
+  { value: 'missing_items',  label: 'Missing Items' },
+  { value: 'failed_delivery',label: 'Failed Delivery' },
+  { value: 'returned',       label: 'Returned' },
+  { value: 'delay',          label: 'Delay' },
+  { value: 'other',          label: 'Other' },
+  { value: 'claim',          label: 'Claim' },
+];
+
+const GROUPS_OPTS = [
+  '', 'Delivery Enquiries', 'Claims', 'Accounts', 'Technical', 'General',
+];
+
+const filterSelectStyle = {
+  width: '100%', background: 'rgba(255,255,255,0.06)',
+  border: `1px solid rgba(255,255,255,0.12)`,
+  borderRadius: 6, color: '#E6EDF3', fontSize: 12,
+  padding: '6px 10px', outline: 'none', cursor: 'pointer',
+};
+
+function FilterPanel({ filters, setFilters, staffList, onClose }) {
+  const set = (k, v) => setFilters(f => ({ ...f, [k]: v }));
+  const panelFilters = ['assigned_to', 'query_type', 'priority', 'group_name', 'courier'];
+  const hasActive = panelFilters.some(k => filters[k]);
+
+  return (
+    <div style={{
+      width: 240, flexShrink: 0,
+      background: C.surface, borderLeft: `1px solid ${C.border}`,
+      display: 'flex', flexDirection: 'column', overflow: 'hidden',
+    }}>
+      {/* Panel header */}
+      <div style={{ display: 'flex', alignItems: 'center', padding: '11px 14px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+        <SlidersHorizontal size={12} style={{ color: C.muted, marginRight: 7 }} />
+        <span style={{ fontSize: 12, fontWeight: 700, color: C.text, flex: 1 }}>Filters</span>
+        {hasActive && (
+          <button onClick={() => panelFilters.forEach(k => set(k, ''))}
+            style={{ fontSize: 10, color: C.red, background: 'none', border: 'none', cursor: 'pointer', marginRight: 6, fontWeight: 700 }}>
+            Clear all
+          </button>
+        )}
+        <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 2 }}>
+          <X size={13} />
+        </button>
+      </div>
+
+      {/* Filter controls */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '14px 14px' }}>
+
+        {/* Assignee */}
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+            Assignee
+          </label>
+          <select value={filters.assigned_to} onChange={e => set('assigned_to', e.target.value)} style={filterSelectStyle}>
+            <option value="">Anyone</option>
+            {staffList.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+          </select>
+        </div>
+
+        {/* Query type */}
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+            Query Type
+          </label>
+          <select value={filters.query_type} onChange={e => set('query_type', e.target.value)} style={filterSelectStyle}>
+            {TYPE_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+
+        {/* Priority */}
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+            Priority
+          </label>
+          <select value={filters.priority} onChange={e => set('priority', e.target.value)} style={filterSelectStyle}>
+            {PRIORITY_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+
+        {/* Group */}
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+            Group
+          </label>
+          <select value={filters.group_name} onChange={e => set('group_name', e.target.value)} style={filterSelectStyle}>
+            {GROUPS_OPTS.map(g => <option key={g} value={g}>{g || 'Any group'}</option>)}
+          </select>
+        </div>
+
+        {/* Courier */}
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+            Courier Code
+          </label>
+          <input
+            value={filters.courier}
+            onChange={e => set('courier', e.target.value.toLowerCase())}
+            placeholder="dpd, dhl, evri…"
+            style={filterSelectStyle}
+          />
+        </div>
+
+        {/* Active filter summary */}
+        {hasActive && (
+          <div style={{ marginTop: 8, padding: '8px 10px', background: `${C.blue}10`, border: `1px solid ${C.blue}30`, borderRadius: 6 }}>
+            <div style={{ fontSize: 10, color: C.blue, fontWeight: 700, marginBottom: 4 }}>ACTIVE FILTERS</div>
+            {filters.assigned_to && staffList.find(s => s.id === filters.assigned_to) && (
+              <div style={{ fontSize: 11, color: C.sub }}>
+                Assignee: {staffList.find(s => s.id === filters.assigned_to)?.full_name}
+              </div>
+            )}
+            {filters.query_type && <div style={{ fontSize: 11, color: C.sub }}>Type: {TYPE_OPTS.find(o => o.value === filters.query_type)?.label}</div>}
+            {filters.priority && <div style={{ fontSize: 11, color: C.sub }}>Priority: {filters.priority}</div>}
+            {filters.group_name && <div style={{ fontSize: 11, color: C.sub }}>Group: {filters.group_name}</div>}
+            {filters.courier && <div style={{ fontSize: 11, color: C.sub }}>Courier: {filters.courier.toUpperCase()}</div>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function QueriesPage() {
@@ -1335,35 +1472,49 @@ export default function QueriesPage() {
   const [stats,         setStats]         = useState(null);
   const [loading,       setLoading]       = useState(true);
   const [showUnmatched, setShowUnmatched] = useState(false);
+  const [showFilters,   setShowFilters]   = useState(false);
   const [refreshKey,    setRefreshKey]    = useState(0);
-  const [filters,       setFilters]       = useState({ status: '', attention: false, search: '' });
+  const [staffList,     setStaffList]     = useState([]);
+  const [filters,       setFilters]       = useState({
+    status: '', attention: false, search: '',
+    assigned_to: '', query_type: '', priority: '', group_name: '', courier: '',
+  });
 
   useEffect(() => {
     fetchStats().then(setStats).catch(console.error);
   }, [refreshKey]);
 
+  useEffect(() => {
+    api.get('/staff').then(r => setStaffList(r.data)).catch(() => {});
+  }, []);
+
   const loadInbox = useCallback(async () => {
     setLoading(true);
     try {
       const params = {};
-      if (filters.status)    params.status    = filters.status;
-      if (filters.attention) params.attention  = true;
-      if (filters.search)    params.search     = filters.search;
+      if (filters.status)      params.status      = filters.status;
+      if (filters.attention)   params.attention   = true;
+      if (filters.search)      params.search      = filters.search;
+      if (filters.assigned_to) params.assigned_to = filters.assigned_to;
+      if (filters.query_type)  params.query_type  = filters.query_type;
+      if (filters.priority)    params.priority    = filters.priority;
+      if (filters.group_name)  params.group_name  = filters.group_name;
+      if (filters.courier)     params.courier     = filters.courier;
       const d = await fetchInbox(params);
       setQueries(d.queries || []);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   }, [filters]);
 
-  // Run on filter change
   useEffect(() => { loadInbox(); }, [loadInbox]);
 
-  // Also run when refreshKey increments (triggered by onUpdated from QueryDetail)
   useEffect(() => {
     if (refreshKey > 0) loadInbox();
   }, [refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refresh = useCallback(() => setRefreshKey(k => k + 1), []);
+
+  const panelFilterCount = [filters.assigned_to, filters.query_type, filters.priority, filters.group_name, filters.courier].filter(Boolean).length;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, color: C.text, overflow: 'hidden' }}>
@@ -1385,6 +1536,27 @@ export default function QueriesPage() {
               fontSize: 12, padding: '6px 10px 6px 28px', width: 200, outline: 'none' }}
           />
         </div>
+
+        {/* Filter toggle */}
+        <button
+          onClick={() => setShowFilters(f => !f)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            padding: '6px 11px', borderRadius: 7, cursor: 'pointer',
+            border: `1px solid ${showFilters || panelFilterCount > 0 ? C.blue : C.border}`,
+            background: showFilters || panelFilterCount > 0 ? `${C.blue}15` : 'transparent',
+            color: showFilters || panelFilterCount > 0 ? C.blue : C.muted,
+            fontSize: 12, fontWeight: 600,
+          }}
+        >
+          <SlidersHorizontal size={12} />
+          Filters
+          {panelFilterCount > 0 && (
+            <span style={{ background: C.blue, color: '#fff', borderRadius: 10, padding: '1px 5px', fontSize: 9, fontWeight: 800 }}>
+              {panelFilterCount}
+            </span>
+          )}
+        </button>
 
         <button onClick={() => setShowUnmatched(true)} style={{ padding: '6px 11px', borderRadius: 7, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
           <User size={12} />
@@ -1438,23 +1610,33 @@ export default function QueriesPage() {
         </FilterPill>
       </div>
 
-      {/* ── Ticket list ────────────────────────────────────────────────────── */}
-      <div style={{ flex: 1, overflow: 'auto' }}>
-        {loading && <div style={{ padding: 40, textAlign: 'center', color: C.muted, fontSize: 12 }}>Loading…</div>}
-        {!loading && queries.length === 0 && (
-          <div style={{ padding: 60, textAlign: 'center' }}>
-            <div style={{ fontSize: 36, marginBottom: 12 }}>📭</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: C.sub, marginBottom: 6 }}>No queries match</div>
-            <div style={{ fontSize: 12, color: C.muted }}>Try a different filter or check back later</div>
-          </div>
-        )}
-        {queries.map(q => (
-          <InboxRow
-            key={q.id}
-            q={q}
-            onClick={() => navigate(`/queries/${q.id}`)}
+      {/* ── Body: list + filter panel ────────────────────────────────────── */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+
+        {/* Ticket list */}
+        <div style={{ flex: 1, overflow: 'auto' }}>
+          {loading && <div style={{ padding: 40, textAlign: 'center', color: C.muted, fontSize: 12 }}>Loading…</div>}
+          {!loading && queries.length === 0 && (
+            <div style={{ padding: 60, textAlign: 'center' }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>📭</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.sub, marginBottom: 6 }}>No queries match</div>
+              <div style={{ fontSize: 12, color: C.muted }}>Try a different filter or check back later</div>
+            </div>
+          )}
+          {queries.map(q => (
+            <InboxRow key={q.id} q={q} onClick={() => navigate(`/queries/${q.id}`)} />
+          ))}
+        </div>
+
+        {/* Right filter panel */}
+        {showFilters && (
+          <FilterPanel
+            filters={filters}
+            setFilters={setFilters}
+            staffList={staffList}
+            onClose={() => setShowFilters(false)}
           />
-        ))}
+        )}
       </div>
 
       {showUnmatched && <UnmatchedPanel onClose={() => setShowUnmatched(false)} />}

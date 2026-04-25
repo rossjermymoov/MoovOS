@@ -20,7 +20,9 @@ router.get('/', async (req, res, next) => {
   try {
     const {
       status, courier_code, customer_id, query_type, trigger,
-      requires_attention, sender_matched,
+      requires_attention, attention,      // attention is alias for requires_attention
+      sender_matched,
+      assigned_to, priority, group_name,  // new panel filters
       search,
       date_from, date_to,
       sort = 'updated_at', order = 'desc',
@@ -52,8 +54,20 @@ router.get('/', async (req, res, next) => {
       conditions.push(`trigger = $${idx++}::query_trigger`);
       values.push(trigger);
     }
-    if (requires_attention === 'true') {
+    if (requires_attention === 'true' || attention === 'true') {
       conditions.push(`requires_attention = true`);
+    }
+    if (assigned_to) {
+      conditions.push(`assigned_to = $${idx++}::uuid`);
+      values.push(assigned_to);
+    }
+    if (priority) {
+      conditions.push(`priority = $${idx++}::ticket_priority`);
+      values.push(priority);
+    }
+    if (group_name) {
+      conditions.push(`group_name = $${idx++}`);
+      values.push(group_name);
     }
     if (sender_matched === 'false') {
       conditions.push(`sender_matched = false`);

@@ -20,7 +20,7 @@ import {
   ArrowLeft, Clock, AlertTriangle, CheckCircle2, User, Users,
   Package, Truck, Mail, MessageSquare, FileText, Send, ChevronDown,
   Globe, MapPin, RotateCcw, Zap, RefreshCw, ExternalLink,
-  Tag, Building2, Phone,
+  Tag, Building2, Phone, PackageCheck, PackageX, Store, ShieldAlert,
 } from 'lucide-react';
 import { getCourierLogo } from '../../utils/courierLogos';
 
@@ -343,8 +343,92 @@ function ThreadPanel({ emails, directions, queryId, replyDirection, replyPlaceho
   );
 }
 
-// ─── Tracking sidebar ─────────────────────────────────────────
-function TrackingPanel({ consignmentNumber, courierCode }) {
+// ─── Tracking components (exact replica of QueriesPage) ───────
+const TRACK_STATUS = {
+  booked:              { label: 'Booked',                       color: '#00BCD4', bg: 'rgba(0,188,212,0.12)',    icon: Package },
+  collected:           { label: 'Collected',                    color: '#2196F3', bg: 'rgba(33,150,243,0.12)',   icon: Package },
+  at_depot:            { label: 'At Hub',                       color: '#5C6BC0', bg: 'rgba(92,107,192,0.12)',   icon: Package },
+  in_transit:          { label: 'In Transit',                   color: '#7B2FBE', bg: 'rgba(123,47,190,0.12)',   icon: Truck },
+  out_for_delivery:    { label: 'Out for Delivery',             color: '#FFC107', bg: 'rgba(255,193,7,0.12)',    icon: Truck },
+  failed_delivery:     { label: 'Failed Attempt',               color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
+  delivered:           { label: 'Delivered',                    color: '#00C853', bg: 'rgba(0,200,83,0.12)',     icon: PackageCheck },
+  on_hold:             { label: 'On Hold',                      color: '#FF9800', bg: 'rgba(255,152,0,0.12)',    icon: Clock },
+  exception:           { label: 'Address Issue',                color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
+  returned:            { label: 'Return to Sender',             color: '#607D8B', bg: 'rgba(96,125,139,0.12)',   icon: RotateCcw },
+  tracking_expired:    { label: 'Tracking Expired',             color: '#757575', bg: 'rgba(117,117,117,0.12)',  icon: Clock },
+  cancelled:           { label: 'Cancelled',                    color: '#757575', bg: 'rgba(117,117,117,0.12)',  icon: AlertTriangle },
+  awaiting_collection: { label: 'Awaiting Customer Collection', color: '#FF6F00', bg: 'rgba(255,111,0,0.12)',    icon: Store },
+  damaged:             { label: 'Damaged',                      color: '#E91E8C', bg: 'rgba(233,30,140,0.12)',   icon: PackageX },
+  customs_hold:        { label: 'Customs Hold',                 color: '#9C27B0', bg: 'rgba(156,39,176,0.12)',   icon: ShieldAlert },
+  unknown:             { label: 'Unknown',                      color: '#555555', bg: 'rgba(255,255,255,0.05)',  icon: Package },
+};
+
+function TrackingStatusBadge({ status }) {
+  const cfg = TRACK_STATUS[status] || TRACK_STATUS.unknown;
+  const Icon = cfg.icon;
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      padding: '3px 9px', borderRadius: 9999,
+      background: cfg.bg, border: `1px solid ${cfg.color}44`,
+      color: cfg.color, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+    }}>
+      <Icon size={10} strokeWidth={2.5} />
+      {cfg.label}
+    </span>
+  );
+}
+
+function TrackingTimeline({ events }) {
+  if (!events?.length) return (
+    <div style={{ padding: '28px 0', textAlign: 'center', color: '#7D8590', fontSize: 12, fontStyle: 'italic' }}>
+      No tracking events yet
+    </div>
+  );
+  return (
+    <div style={{ position: 'relative' }}>
+      {events.map((ev, i) => {
+        const cfg    = TRACK_STATUS[ev.status] || TRACK_STATUS.unknown;
+        const isLast = i === events.length - 1;
+        return (
+          <div key={ev.id || i} style={{ display: 'flex', gap: 16, position: 'relative', paddingBottom: isLast ? 0 : 20 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
+              <div style={{ width: 24, height: 24, borderRadius: '50%', background: cfg.bg,
+                border: `2px solid ${cfg.color}`, display: 'flex', alignItems: 'center',
+                justifyContent: 'center', zIndex: 1, flexShrink: 0 }}>
+                <div style={{ width: 7, height: 7, borderRadius: '50%', background: cfg.color }} />
+              </div>
+              {!isLast && (
+                <div style={{ width: 2, flex: 1, minHeight: 16,
+                  background: 'linear-gradient(to bottom, rgba(255,255,255,0.12), rgba(255,255,255,0.03))' }} />
+              )}
+            </div>
+            <div style={{ flex: 1, paddingTop: 2, paddingBottom: isLast ? 0 : 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 3 }}>
+                <TrackingStatusBadge status={ev.status} />
+                <span style={{ fontSize: 11, color: '#7D8590' }}>{timeAgo(ev.event_at)}</span>
+              </div>
+              {ev.description && (
+                <p style={{ fontSize: 13, color: '#C9D1D9', margin: '3px 0' }}>{ev.description}</p>
+              )}
+              {ev.location && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#7D8590', marginTop: 2 }}>
+                  <MapPin size={11} /> {ev.location}
+                </span>
+              )}
+              <div style={{ fontSize: 11, color: '#444', marginTop: 3 }}>
+                {new Date(ev.event_at).toLocaleString('en-GB')}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Tracking panel content ────────────────────────────────────
+function TrackingPanel({ consignmentNumber }) {
   const { data: parcel, isLoading } = useQuery({
     queryKey: ['ticket-tracking', consignmentNumber],
     queryFn:  () => api.get(`/tracking/${encodeURIComponent(consignmentNumber)}`).then(r => r.data),
@@ -354,56 +438,75 @@ function TrackingPanel({ consignmentNumber, courierCode }) {
 
   if (!consignmentNumber) {
     return (
-      <div style={{ padding: '12px 0', color: C.muted, fontSize: 12, fontStyle: 'italic' }}>
+      <div style={{ padding: '12px 0', color: '#7D8590', fontSize: 12, fontStyle: 'italic' }}>
         No consignment number on this ticket
       </div>
     );
   }
 
-  if (isLoading) return <div style={{ fontSize: 12, color: C.muted }}>Loading tracking…</div>;
+  if (isLoading) return <div style={{ fontSize: 12, color: '#7D8590' }}>Loading tracking…</div>;
 
-  if (!parcel) return <div style={{ fontSize: 12, color: C.muted }}>No tracking data found</div>;
+  if (!parcel) return <div style={{ fontSize: 12, color: '#7D8590' }}>No tracking data found</div>;
 
-  const events = parcel.events || [];
+  const trackingEvents = parcel.events || [];
 
   return (
     <div>
-      {/* Current status */}
-      <div style={{
-        padding: '8px 12px', borderRadius: 7, marginBottom: 12,
-        background: 'rgba(63,185,80,0.08)', border: `1px solid rgba(63,185,80,0.2)`,
-      }}>
-        <div style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>Current status</div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>{parcel.status_label || parcel.status || '—'}</div>
-        {parcel.last_event_at && (
-          <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{fmtDate(parcel.last_event_at)}</div>
-        )}
-      </div>
-
-      {/* Consignment link */}
-      <div style={{ fontSize: 11, fontFamily: 'monospace', color: C.blue, marginBottom: 12, wordBreak: 'break-all' }}>
-        {consignmentNumber}
-      </div>
-
-      {/* Events */}
-      <div style={{ maxHeight: 320, overflow: 'auto' }}>
-        {events.slice(0, 12).map((ev, i) => (
-          <div key={i} style={{ display: 'flex', gap: 10, paddingBottom: 10, position: 'relative' }}>
-            {/* Timeline line */}
-            {i < events.length - 1 && (
-              <div style={{ position: 'absolute', left: 5, top: 14, bottom: 0, width: 1, background: C.border }} />
-            )}
-            <div style={{ width: 11, height: 11, borderRadius: '50%', background: i === 0 ? C.green : C.muted, flexShrink: 0, marginTop: 2 }} />
-            <div>
-              <div style={{ fontSize: 12, color: i === 0 ? C.text : C.sub, fontWeight: i === 0 ? 600 : 400 }}>
-                {ev.status_label || ev.raw_status || ev.status}
-              </div>
-              {ev.location && <div style={{ fontSize: 11, color: C.muted }}>{ev.location}</div>}
-              <div style={{ fontSize: 10, color: C.muted }}>{fmtDate(ev.event_at)}</div>
-            </div>
+      {/* Delivery address box */}
+      {(parcel.recipient_name || parcel.recipient_address || parcel.recipient_postcode) && (
+        <div style={{ marginBottom: 20, padding: 14, background: 'rgba(0,188,212,0.05)',
+          borderRadius: 10, border: '1px solid rgba(0,188,212,0.18)' }}>
+          <div style={{ fontSize: 10, color: '#00BCD4', fontWeight: 700, textTransform: 'uppercase',
+            letterSpacing: '0.06em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <MapPin size={10} /> Delivery Address
           </div>
-        ))}
+          {parcel.recipient_name && (
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 4 }}>
+              {parcel.recipient_name}
+            </div>
+          )}
+          {parcel.recipient_address && (
+            <div style={{ fontSize: 12, color: '#CCC', lineHeight: 1.6, whiteSpace: 'pre-line' }}>
+              {parcel.recipient_address}
+            </div>
+          )}
+          {parcel.recipient_postcode && (
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#CCC',
+              marginTop: parcel.recipient_address ? 2 : 0 }}>
+              {parcel.recipient_postcode}
+            </div>
+          )}
+          {(parcel.estimated_delivery || parcel.delivered_at) && (
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              {parcel.estimated_delivery && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, color: '#AAAAAA' }}>Estimated delivery</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#FFC107' }}>
+                    {new Date(parcel.estimated_delivery).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                  </span>
+                </div>
+              )}
+              {parcel.delivered_at && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 11, color: '#AAAAAA' }}>Delivered</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#00C853' }}>
+                    {new Date(parcel.delivered_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Event history label */}
+      <div style={{ fontSize: 11, fontWeight: 700, color: '#AAAAAA', textTransform: 'uppercase',
+        letterSpacing: '0.06em', marginBottom: 16 }}>
+        Event History ({trackingEvents.length})
       </div>
+
+      {/* Timeline */}
+      <TrackingTimeline events={trackingEvents} />
     </div>
   );
 }
