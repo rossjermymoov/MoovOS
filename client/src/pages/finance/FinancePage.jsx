@@ -125,7 +125,7 @@ function ChargeCellSell({ charge, onSave, onDebug }) {
       onMouseEnter={() => {
         if (hasLines) {
           const rect = wrapRef.current?.getBoundingClientRect();
-          setAbove(rect ? rect.top > 280 : false);
+          setAbove(rect ? (window.innerHeight - rect.bottom) < 180 : false);
           setHov(true);
         }
       }}
@@ -149,7 +149,7 @@ function ChargeCellCost({ charge }) {
     <div ref={wrapRef} style={{ position: 'relative', display: 'inline-block' }}
       onMouseEnter={() => {
         const rect = wrapRef.current?.getBoundingClientRect();
-        setAbove(rect ? rect.top > 280 : false);
+        setAbove(rect ? (window.innerHeight - rect.bottom) < 180 : false);
         setHov(true);
       }}
       onMouseLeave={() => setHov(false)}>
