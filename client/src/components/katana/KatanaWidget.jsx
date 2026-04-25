@@ -6,8 +6,8 @@
  * about customers, pricing, tickets, invoices, etc.
  */
 
-import { useState, useRef, useEffect } from 'react';
-import { X, Send, Sparkles, RefreshCw, ChevronDown } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { X, Send, Sparkles, RefreshCw, ChevronDown, Mic, MicOff } from 'lucide-react';
 
 // ─── Colours ──────────────────────────────────────────────────────────────────
 const C = {
@@ -91,6 +91,39 @@ function MessageBubble({ msg }) {
   );
 }
 
+// ─── Voice-to-text hook ───────────────────────────────────────────────────────
+function useSpeechInput(setText) {
+  const [listening, setListening] = useState(false);
+  const recRef = useRef(null);
+
+  const toggle = useCallback(() => {
+    if (listening) {
+      recRef.current?.stop();
+      setListening(false);
+      return;
+    }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { alert('Voice input not supported in this browser. Use Chrome or Edge.'); return; }
+    const rec = new SR();
+    recRef.current = rec;
+    rec.lang = 'en-GB';
+    rec.continuous = true;
+    rec.interimResults = false;
+    rec.onresult = (e) => {
+      const transcript = Array.from(e.results)
+        .map(r => r[0].transcript)
+        .join(' ');
+      setText(transcript);
+    };
+    rec.onend   = () => setListening(false);
+    rec.onerror = () => setListening(false);
+    setListening(true);
+    rec.start();
+  }, [listening, setText]);
+
+  return { listening, toggle };
+}
+
 // ─── Suggested prompts ────────────────────────────────────────────────────────
 const SUGGESTIONS = [
   'How much does eHealth Pharmacy owe us?',
@@ -109,6 +142,7 @@ export default function KatanaWidget() {
   const [error, setError]       = useState(null);
   const bottomRef = useRef(null);
   const inputRef  = useRef(null);
+  const speech    = useSpeechInput(setInput);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -356,7 +390,7 @@ export default function KatanaWidget() {
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKey}
-                placeholder="Ask Katana anything…"
+                placeholder={speech.listening ? 'Listening… speak now' : 'Ask Katana anything…'}
                 rows={1}
                 style={{
                   flex: 1, background: 'none', border: 'none', outline: 'none',
@@ -366,6 +400,25 @@ export default function KatanaWidget() {
                   scrollbarWidth: 'none',
                 }}
               />
+              {/* Mic button */}
+              <button
+                onClick={speech.toggle}
+                title={speech.listening ? 'Stop listening' : 'Dictate question (en-GB)'}
+                style={{
+                  background: speech.listening ? C.amber : 'rgba(255,255,255,0.06)',
+                  border: 'none', borderRadius: 7, cursor: 'pointer',
+                  width: 32, height: 32, flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.15s',
+                  animation: speech.listening ? 'katana-pulse 1s ease-in-out infinite' : 'none',
+                }}
+              >
+                {speech.listening
+                  ? <MicOff size={13} color="#0D0E24" />
+                  : <Mic size={13} color={C.muted} />
+                }
+              </button>
+              {/* Send button */}
               <button
                 onClick={() => send()}
                 disabled={!input.trim() || loading}
@@ -384,7 +437,7 @@ export default function KatanaWidget() {
               </button>
             </div>
             <div style={{ fontSize: 10.5, color: C.muted, marginTop: 6, textAlign: 'center' }}>
-              Enter to send · Shift+Enter for new line
+              Enter to send · Shift+Enter for new line · Mic to dictate
             </div>
           </div>
         </div>

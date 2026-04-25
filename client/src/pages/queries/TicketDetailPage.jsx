@@ -169,12 +169,39 @@ function InlineSelect({ value, onChange, options, colorMap }) {
   );
 }
 
+// ─── Voice-to-text hook (Web Speech API) ─────────────────────
+function useSpeechInput(setText) {
+  const [listening, setListening] = useState(false);
+  function toggle() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { alert('Voice input is not supported in this browser. Please use Chrome or Edge.'); return; }
+    const rec = new SR();
+    rec.lang = 'en-GB';
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.onresult = (e) => {
+      const t = e.results[0][0].transcript;
+      setText(prev => prev ? prev + ' ' + t : t);
+      setListening(false);
+    };
+    rec.onend   = () => setListening(false);
+    rec.onerror = () => setListening(false);
+    setListening(true);
+    rec.start();
+  }
+  return { listening, toggle };
+}
+
 // ─── Email bubble ─────────────────────────────────────────────
 function EmailBubble({ email, courierCode, queryId, onApproved }) {
-  const [expanded, setExpanded]   = useState(true);
-  const [editMode, setEditMode]   = useState(false);
-  const [editBody, setEditBody]   = useState(email.body_text || '');
-  const [approving, setApproving] = useState(false);
+  const [expanded, setExpanded]     = useState(true);
+  const [editMode, setEditMode]     = useState(false);
+  const [editBody, setEditBody]     = useState(email.body_text || '');
+  const [approving, setApproving]   = useState(false);
+  const [reviseMode, setReviseMode] = useState(false);
+  const [reviseText, setReviseText] = useState('');
+  const [revising, setRevising]     = useState(false);
+  const speech = useSpeechInput(setReviseText);
   const qc = useQueryClient();
 
   const isInbound  = email.direction.startsWith('inbound');
@@ -208,6 +235,25 @@ function EmailBubble({ email, courierCode, queryId, onApproved }) {
     }
   }
 
+  async function submitRevision() {
+    if (!reviseText.trim() || revising) return;
+    setRevising(true);
+    try {
+      await fetch(`/api/queries/${queryId}/revise-draft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email_id: email.id, feedback: reviseText.trim() }),
+      });
+      setReviseMode(false);
+      setReviseText('');
+      qc.invalidateQueries(['ticket', queryId]);
+    } catch (e) {
+      alert('Revision failed: ' + e.message);
+    } finally {
+      setRevising(false);
+    }
+  }
+
   return (
     <div style={{
       marginBottom: 12,
@@ -227,7 +273,7 @@ function EmailBubble({ email, courierCode, queryId, onApproved }) {
           fontSize: 11, fontWeight: 700, color: C.amber,
         }}>
           <Sparkles size={11} />
-          AI Draft — Pending Your Approval
+          Katana Draft — Pending Your Approval
           <span style={{ marginLeft: 'auto', fontSize: 10, color: C.muted, fontWeight: 400 }}>
             {timeAgo(email.created_at)}
           </span>
@@ -300,60 +346,146 @@ function EmailBubble({ email, courierCode, queryId, onApproved }) {
 
           {/* Approval action bar — only on pending drafts */}
           {isDraft && (
-            <div style={{
-              display: 'flex', gap: 8, marginTop: 12, paddingTop: 12,
-              borderTop: `1px solid ${C.border}`,
-            }}>
-              {editMode ? (
-                <>
-                  <button
-                    onClick={() => approve(editBody)}
-                    disabled={approving}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 6,
-                      padding: '7px 16px', borderRadius: 6, border: 'none',
-                      background: C.green, color: '#000',
-                      fontSize: 12, fontWeight: 700, cursor: approving ? 'not-allowed' : 'pointer',
-                    }}
-                  >
-                    <CheckCircle2 size={12} />
-                    {approving ? 'Approving…' : 'Save & Approve'}
-                  </button>
-                  <button
-                    onClick={() => { setEditMode(false); setEditBody(email.body_text || ''); }}
-                    style={{ padding: '7px 14px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer' }}
-                  >
-                    Cancel
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    onClick={() => approve()}
-                    disabled={approving}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 6,
-                      padding: '7px 16px', borderRadius: 6, border: 'none',
-                      background: C.green, color: '#000',
-                      fontSize: 12, fontWeight: 700, cursor: approving ? 'not-allowed' : 'pointer',
-                    }}
-                  >
-                    <CheckCircle2 size={12} />
-                    {approving ? 'Approving…' : 'Approve & Send'}
-                  </button>
-                  <button
-                    onClick={() => setEditMode(true)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 6,
-                      padding: '7px 14px', borderRadius: 6,
-                      border: `1px solid ${C.amber}44`, background: 'transparent',
-                      color: C.amber, fontSize: 12, cursor: 'pointer',
-                    }}
-                  >
-                    ✏ Edit before sending
-                  </button>
-                </>
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+
+              {/* Revise-with-feedback panel */}
+              {reviseMode && (
+                <div style={{
+                  marginBottom: 10, padding: '10px 12px',
+                  background: 'rgba(245,158,11,0.04)',
+                  border: `1px solid ${C.amber}33`,
+                  borderRadius: 8,
+                }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.amber, marginBottom: 7 }}>
+                    Tell Katana why you'd change this — it will rewrite the draft
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+                    <textarea
+                      value={reviseText}
+                      onChange={e => setReviseText(e.target.value)}
+                      placeholder="e.g. Too formal — this customer is very upset, be more apologetic and offer to escalate…"
+                      rows={3}
+                      autoFocus
+                      style={{
+                        flex: 1, background: C.card, border: `1px solid ${C.amber}33`,
+                        borderRadius: 6, padding: '8px 10px', color: C.text,
+                        fontSize: 12, lineHeight: 1.5, resize: 'none',
+                        outline: 'none', fontFamily: 'inherit',
+                      }}
+                      onFocus={e => e.target.style.borderColor = `${C.amber}66`}
+                      onBlur={e => e.target.style.borderColor = `${C.amber}33`}
+                      onKeyDown={e => { if (e.key === 'Enter' && e.metaKey) submitRevision(); }}
+                    />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      {/* Mic button */}
+                      <button
+                        onClick={speech.toggle}
+                        title={speech.listening ? 'Listening… click to stop' : 'Dictate feedback'}
+                        style={{
+                          width: 32, height: 32, borderRadius: 6, border: 'none',
+                          background: speech.listening ? C.amber : `${C.amber}18`,
+                          color: speech.listening ? '#000' : C.amber,
+                          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          animation: speech.listening ? 'katana-pulse 1s ease-in-out infinite' : 'none',
+                        }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+                          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                          <line x1="12" y1="19" x2="12" y2="22"/>
+                        </svg>
+                      </button>
+                      {/* Send revision */}
+                      <button
+                        onClick={submitRevision}
+                        disabled={!reviseText.trim() || revising}
+                        title="Send to Katana (⌘+Enter)"
+                        style={{
+                          width: 32, height: 32, borderRadius: 6, border: 'none',
+                          background: reviseText.trim() && !revising ? C.amber : `${C.amber}18`,
+                          color: reviseText.trim() && !revising ? '#000' : C.muted,
+                          cursor: reviseText.trim() && !revising ? 'pointer' : 'default',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}
+                      >
+                        {revising
+                          ? <RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                          : <Send size={13} />
+                        }
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 10, color: C.muted, marginTop: 5 }}>
+                    Type or use the mic — ⌘+Enter to submit · Katana will rewrite the draft for you to re-review
+                  </div>
+                </div>
               )}
+
+              {/* Primary action buttons */}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {editMode ? (
+                  <>
+                    <button
+                      onClick={() => approve(editBody)}
+                      disabled={approving}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '7px 16px', borderRadius: 6, border: 'none',
+                        background: C.green, color: '#000',
+                        fontSize: 12, fontWeight: 700, cursor: approving ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      <CheckCircle2 size={12} />
+                      {approving ? 'Approving…' : 'Save & Approve'}
+                    </button>
+                    <button
+                      onClick={() => { setEditMode(false); setEditBody(email.body_text || ''); }}
+                      style={{ padding: '7px 14px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer' }}
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => approve()}
+                      disabled={approving}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '7px 16px', borderRadius: 6, border: 'none',
+                        background: C.green, color: '#000',
+                        fontSize: 12, fontWeight: 700, cursor: approving ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      <CheckCircle2 size={12} />
+                      {approving ? 'Approving…' : 'Approve & Send'}
+                    </button>
+                    <button
+                      onClick={() => { setReviseMode(r => !r); setReviseText(''); }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '7px 14px', borderRadius: 6,
+                        border: `1px solid ${C.amber}44`, background: reviseMode ? `${C.amber}10` : 'transparent',
+                        color: C.amber, fontSize: 12, cursor: 'pointer',
+                      }}
+                    >
+                      <Sparkles size={12} />
+                      {reviseMode ? 'Cancel revision' : 'Ask Katana to revise'}
+                    </button>
+                    <button
+                      onClick={() => setEditMode(true)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '7px 14px', borderRadius: 6,
+                        border: `1px solid ${C.border}`, background: 'transparent',
+                        color: C.muted, fontSize: 12, cursor: 'pointer',
+                      }}
+                    >
+                      ✏ Edit manually
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -427,7 +559,7 @@ function ReplyComposer({ queryId, direction, placeholder, onSent }) {
           fontSize: 12, color: C.green, fontWeight: 600,
         }}>
           <CheckCircle2 size={13} />
-          AI draft generated — scroll up to review and approve before sending
+          Katana draft generated — scroll up to review and approve before sending
         </div>
       )}
 
@@ -467,7 +599,7 @@ function ReplyComposer({ queryId, direction, placeholder, onSent }) {
           }}
         >
           <Sparkles size={12} />
-          {generating ? 'Generating…' : drafted ? 'Regenerate AI Draft' : '✨ Generate AI Draft'}
+          {generating ? 'Generating…' : drafted ? 'Regenerate Katana Draft' : 'Generate Katana Draft'}
         </button>
 
         {/* Manual send */}

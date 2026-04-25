@@ -1151,6 +1151,98 @@ Instructions:
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// POST /api/queries/:id/revise-draft
+// Revise an existing Katana draft based on human feedback
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/:id/revise-draft', async (req, res, next) => {
+  try {
+    const { email_id, feedback } = req.body;
+    if (!email_id || !feedback?.trim()) {
+      return res.status(400).json({ error: 'email_id and feedback are required' });
+    }
+
+    // Fetch the draft email + ticket context
+    const [queryRes, emailRes, threadRes] = await Promise.all([
+      query(`SELECT * FROM queries_inbox_view WHERE id = $1`, [req.params.id]),
+      query(`SELECT * FROM query_emails WHERE id = $1 AND query_id = $2`, [email_id, req.params.id]),
+      query(`SELECT direction, body_text, from_address, created_at FROM query_emails
+             WHERE query_id = $1 ORDER BY created_at ASC`, [req.params.id]),
+    ]);
+
+    if (!queryRes.rows.length)  return res.status(404).json({ error: 'Query not found' });
+    if (!emailRes.rows.length)  return res.status(404).json({ error: 'Draft email not found' });
+
+    const q          = queryRes.rows[0];
+    const draft      = emailRes.rows[0];
+    const isCustomer = draft.direction === 'outbound_customer';
+
+    const emailThread = threadRes.rows
+      .filter(e => e.id !== email_id)
+      .map(e => `[${e.direction.replace(/_/g, ' ')}]\nFrom: ${e.from_address}\n\n${e.body_text}`)
+      .join('\n\n---\n\n');
+
+    const systemPrompt = isCustomer
+      ? `You are a customer service agent for Moov Parcel, a UK parcel reseller. Write professional, empathetic emails in British English. Sign off as "Moov Parcel Support Team".`
+      : `You are a customer service agent writing to a courier on behalf of Moov Parcel. Write professional, firm but polite emails in British English.`;
+
+    const userPrompt = `Here is a Katana draft email that needs to be revised based on feedback from the team.
+
+ORIGINAL DRAFT:
+${draft.body_text}
+
+HUMAN FEEDBACK:
+${feedback.trim()}
+
+TICKET CONTEXT:
+Customer: ${q.customer_name}
+Consignment: ${q.consignment_number}
+Query type: ${q.query_type?.replace(/_/g, ' ')}
+Courier: ${q.courier_name}
+
+EMAIL THREAD (for context):
+${emailThread || '(no prior thread)'}
+
+Please rewrite the draft email incorporating the feedback. Output ONLY the revised email text — no preamble, no explanation, no JSON.`;
+
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+    }
+
+    const aiResp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 900,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    });
+
+    if (!aiResp.ok) {
+      const err = await aiResp.text();
+      return res.status(502).json({ error: 'Anthropic API error', detail: err });
+    }
+
+    const aiJson    = await aiResp.json();
+    const newText   = (aiJson.content?.[0]?.text || '').trim();
+
+    // Update the draft body in-place
+    const updated = await query(
+      `UPDATE query_emails SET body_text = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+      [newText, email_id]
+    );
+
+    res.json({ email: updated.rows[0], revised_text: newText });
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /api/queries/:id/attention
 // Flag a query for human attention (called by AI or automation)
 // ─────────────────────────────────────────────────────────────────────────────

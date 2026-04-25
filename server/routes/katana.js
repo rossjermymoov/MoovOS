@@ -10,7 +10,7 @@
  */
 
 import express from 'express';
-import pool from '../db/pool.js';
+import { query } from '../db/index.js';
 
 const router = express.Router();
 
@@ -183,7 +183,7 @@ async function runKatanaChat(messages, knowledgeSources) {
             if (!/^SELECT\b/i.test(sql)) {
               result = { error: 'Only SELECT queries are permitted.' };
             } else {
-              const { rows } = await pool.query(sql + (sql.toLowerCase().includes('limit') ? '' : ' LIMIT 50'));
+              const { rows } = await query(sql + (sql.toLowerCase().includes('limit') ? '' : ' LIMIT 50'));
               result = { rows, count: rows.length };
             }
           } catch (e) {
@@ -222,7 +222,7 @@ async function runKatanaChat(messages, knowledgeSources) {
 // GET /api/katana/sources
 router.get('/sources', async (req, res) => {
   try {
-    const { rows } = await pool.query(
+    const { rows } = await query(
       `SELECT * FROM katana_knowledge_sources ORDER BY created_at DESC`
     );
     res.json(rows);
@@ -260,7 +260,7 @@ router.post('/sources', async (req, res) => {
       }
     }
 
-    const { rows } = await pool.query(
+    const { rows } = await query(
       `INSERT INTO katana_knowledge_sources (title, source_type, url, raw_content, category, last_synced_at)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
       [title, source_type, url || null, content, category || null, synced_at]
@@ -285,7 +285,7 @@ router.patch('/sources/:id', async (req, res) => {
     if (is_active   !== undefined) { fields.push(`is_active = $${n++}`);   vals.push(is_active); }
     if (!fields.length) return res.status(400).json({ error: 'Nothing to update' });
     vals.push(id);
-    const { rows } = await pool.query(
+    const { rows } = await query(
       `UPDATE katana_knowledge_sources SET ${fields.join(', ')} WHERE id = $${n} RETURNING *`,
       vals
     );
@@ -298,7 +298,7 @@ router.patch('/sources/:id', async (req, res) => {
 // DELETE /api/katana/sources/:id
 router.delete('/sources/:id', async (req, res) => {
   try {
-    await pool.query('DELETE FROM katana_knowledge_sources WHERE id = $1', [req.params.id]);
+    await query('DELETE FROM katana_knowledge_sources WHERE id = $1', [req.params.id]);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -308,7 +308,7 @@ router.delete('/sources/:id', async (req, res) => {
 // POST /api/katana/sources/:id/sync  — re-fetch URL content
 router.post('/sources/:id/sync', async (req, res) => {
   try {
-    const { rows: [source] } = await pool.query(
+    const { rows: [source] } = await query(
       'SELECT * FROM katana_knowledge_sources WHERE id = $1', [req.params.id]
     );
     if (!source || source.source_type !== 'url' || !source.url) {
@@ -326,7 +326,7 @@ router.post('/sources/:id/sync', async (req, res) => {
       .replace(/\s{2,}/g, ' ')
       .trim()
       .slice(0, 20000);
-    const { rows } = await pool.query(
+    const { rows } = await query(
       `UPDATE katana_knowledge_sources SET raw_content = $1, last_synced_at = NOW() WHERE id = $2 RETURNING *`,
       [content, req.params.id]
     );
@@ -343,7 +343,7 @@ router.post('/chat', async (req, res) => {
 
   try {
     // Load active knowledge sources
-    const { rows: sources } = await pool.query(
+    const { rows: sources } = await query(
       `SELECT title, raw_content FROM katana_knowledge_sources WHERE is_active = true AND raw_content IS NOT NULL`
     );
 
