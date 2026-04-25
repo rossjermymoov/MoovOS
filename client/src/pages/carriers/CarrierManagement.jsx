@@ -1041,6 +1041,116 @@ function IntlRateCardModal({ svc, onClose, onUpdateBand }) {
   );
 }
 
+// ─── AddConditionRow — reusable condition builder row ────────────────────────
+// Used both inside existing rules (to add a condition) and inside the new-rule builder.
+
+function AddConditionRow({ onAdd, label = 'Add condition' }) {
+  const [field, setField] = useState('total_weight_kg');
+  const [op,    setOp   ] = useState('gte');
+  const [val,   setVal  ] = useState('');
+
+  const ops = opsFor(field);
+
+  // Reset op if current op not valid for new field
+  const handleFieldChange = (newField) => {
+    setField(newField);
+    const validOps = opsFor(newField).map(o => o.key);
+    if (!validOps.includes(op)) setOp(validOps[0]);
+    setVal('');
+  };
+
+  const commit = () => {
+    if (!val.trim()) return;
+    const isListOp = op === 'in' || op === 'not_in';
+    const value = isListOp
+      ? val.split(',').map(s => s.trim()).filter(Boolean)
+      : (SURCHARGE_FIELDS.find(f => f.key === field)?.type === 'number' ? parseFloat(val) : val.trim());
+    onAdd({ field, op, value });
+    setVal('');
+  };
+
+  return (
+    <div style={{ display:'flex', gap:6, alignItems:'center', marginTop:6 }}>
+      <select value={field} onChange={e => handleFieldChange(e.target.value)} style={{ height:28, background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:6, color:'#ccc', fontSize:11, padding:'0 6px', minWidth:170 }}>
+        {SURCHARGE_FIELDS.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+      </select>
+      <select value={op} onChange={e => setOp(e.target.value)} style={{ height:28, background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:6, color:'#ccc', fontSize:11, padding:'0 6px', minWidth:130 }}>
+        {ops.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+      </select>
+      <input
+        value={val} onChange={e => setVal(e.target.value)}
+        onKeyDown={e => e.key === 'Enter' && commit()}
+        placeholder={op==='in'||op==='not_in' ? 'GB, IE, FR' : (SURCHARGE_FIELDS.find(f=>f.key===field)?.type==='number' ? '30' : 'value')}
+        style={{ height:28, background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:6, color:'#fff', fontSize:11, padding:'0 8px', width:100 }}
+      />
+      <button onClick={commit} disabled={!val.trim()} style={{ height:28, padding:'0 10px', borderRadius:6, border:'1px solid rgba(233,30,140,0.3)', background:'rgba(233,30,140,0.1)', color:'#E91E8C', fontSize:11, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>+ {label}</button>
+    </div>
+  );
+}
+
+// ─── Surcharge rules engine constants ────────────────────────────────────────
+
+const SURCHARGE_FIELDS = [
+  { key:'total_weight_kg',      label:'Total Weight (kg)',        type:'number' },
+  { key:'parcel_weight_kg',     label:'Per-Parcel Weight (kg)',   type:'number' },
+  { key:'parcel_count',         label:'Parcel Count',             type:'number' },
+  { key:'dim_length_cm',        label:'Length (cm)',              type:'number' },
+  { key:'dim_width_cm',         label:'Width (cm)',               type:'number' },
+  { key:'dim_height_cm',        label:'Height (cm)',              type:'number' },
+  { key:'total_declared_value', label:'Declared Value (£)',       type:'number' },
+  { key:'parcel_declared_value',label:'Per-Parcel Value (£)',     type:'number' },
+  { key:'dc_service_id',        label:'DC Service ID',            type:'number' },
+  { key:'ship_to_country_iso',  label:'Destination Country ISO',  type:'string' },
+  { key:'ship_to_postcode',     label:'Destination Postcode',     type:'string' },
+  { key:'ship_from_country_iso',label:'Origin Country ISO',       type:'string' },
+  { key:'service_name',         label:'Service Name',             type:'string' },
+  { key:'courier',              label:'Courier Code',             type:'string' },
+];
+
+const OPS_NUMBER = [
+  { key:'gte', label:'≥  at least' },
+  { key:'lte', label:'≤  at most' },
+  { key:'gt',  label:'>  greater than' },
+  { key:'lt',  label:'<  less than' },
+  { key:'eq',  label:'=  equals' },
+  { key:'not_eq', label:'≠  not equals' },
+];
+
+const OPS_STRING = [
+  { key:'eq',          label:'=  equals' },
+  { key:'not_eq',      label:'≠  not equals' },
+  { key:'in',          label:'in  (comma list)' },
+  { key:'not_in',      label:'not in  (comma list)' },
+  { key:'contains',    label:'contains' },
+  { key:'starts_with', label:'starts with' },
+];
+
+function opsFor(fieldKey) {
+  const f = SURCHARGE_FIELDS.find(x => x.key === fieldKey);
+  return f?.type === 'number' ? OPS_NUMBER : OPS_STRING;
+}
+
+function fieldLabel(key) {
+  return SURCHARGE_FIELDS.find(f => f.key === key)?.label || key;
+}
+
+function opLabel(op) {
+  return [...OPS_NUMBER, ...OPS_STRING].find(o => o.key === op)?.label || op;
+}
+
+function formatCondValue(op, val) {
+  if (Array.isArray(val)) return val.join(', ');
+  return String(val);
+}
+
+function condToValue(op, raw) {
+  if (op === 'in' || op === 'not_in') {
+    return raw.split(',').map(s => s.trim()).filter(Boolean);
+  }
+  const num = parseFloat(raw);
+  return isNaN(num) ? raw : num;
+}
+
 // ─── LEVEL 2 — Carrier detail (services list) ─────────────────────────────────
 
 function CarrierDetail({ carrierId, onBack, onDrillService }) {
@@ -1052,7 +1162,15 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
   const [addingSurcharge, setAddingSurcharge] = useState(false);
   const [surchargeForm, setSurchargeForm] = useState({ code:'', name:'', description:'', calc_type:'flat', calc_base:'fixed', default_value:'', applies_when:'reconciliation', charge_per:'shipment' });
   const [expandedSurcharge, setExpandedSurcharge] = useState(null);
-  const [ruleForm, setRuleForm] = useState({ name:'', filters:'[]' });
+  const [editingSurcharge, setEditingSurcharge]   = useState(null);
+  const [editSForm, setEditSForm]                 = useState({});
+  const [addingRuleTo, setAddingRuleTo]           = useState(null);
+  const [newRuleName, setNewRuleName]             = useState('');
+  const [newRuleLogic, setNewRuleLogic]           = useState('AND');
+  const [newRuleConditions, setNewRuleConditions] = useState([]);
+  const [newCondField, setNewCondField]           = useState('total_weight_kg');
+  const [newCondOp, setNewCondOp]                 = useState('gte');
+  const [newCondVal, setNewCondVal]               = useState('');
 
   const { data: carrier, isLoading, refetch } = useQuery({
     queryKey: ['carrier-detail', carrierId],
@@ -1075,23 +1193,34 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
     onSuccess: () => { setAddingSurcharge(false); setSurchargeForm({ code:'', name:'', description:'', calc_type:'flat', calc_base:'fixed', default_value:'', applies_when:'reconciliation', charge_per:'shipment' }); refetchSurcharges(); },
   });
 
+  const patchSurcharge = useMutation({
+    mutationFn: ({ id, ...data }) => api.patch(`/surcharges/${id}`, data).then(r => r.data),
+    onSuccess: () => { setEditingSurcharge(null); refetchSurcharges(); },
+  });
+
   const delSurcharge = useMutation({
     mutationFn: (id) => api.delete(`/surcharges/${id}`).then(r => r.data),
     onSuccess: refetchSurcharges,
   });
 
-  const toggleSurcharge = useMutation({
-    mutationFn: ({ id, active }) => api.patch(`/surcharges/${id}`, { active }).then(r => r.data),
-    onSuccess: refetchSurcharges,
-  });
-
   const addRule = useMutation({
-    mutationFn: (surchargeId) => api.post(`/surcharges/${surchargeId}/rules`, { name: ruleForm.name, filters: JSON.parse(ruleForm.filters || '[]') }).then(r => r.data),
-    onSuccess: () => { setRuleForm({ name:'', filters:'[]' }); refetchSurcharges(); },
+    mutationFn: ({ surchargeId, name, logic, filters }) =>
+      api.post(`/surcharges/${surchargeId}/rules`, { name, logic, filters }).then(r => r.data),
+    onSuccess: () => {
+      setAddingRuleTo(null); setNewRuleName(''); setNewRuleLogic('AND');
+      setNewRuleConditions([]); setNewCondField('total_weight_kg'); setNewCondOp('gte'); setNewCondVal('');
+      refetchSurcharges();
+    },
   });
 
   const delRule = useMutation({
     mutationFn: ({ surchargeId, ruleId }) => api.delete(`/surcharges/${surchargeId}/rules/${ruleId}`).then(r => r.data),
+    onSuccess: refetchSurcharges,
+  });
+
+  const patchRuleFilters = useMutation({
+    mutationFn: ({ surchargeId, ruleId, filters }) =>
+      api.patch(`/surcharges/${surchargeId}/rules/${ruleId}`, { filters }).then(r => r.data),
     onSuccess: refetchSurcharges,
   });
 
@@ -1423,19 +1552,19 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
 
       {/* ── Tab: Surcharges ── */}
       {carrierTab === 'surcharges' && <div>
+
+        {/* Header */}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
           <div>
             <h2 style={{ fontSize:17, fontWeight:700, color:'#E91E8C', margin:'0 0 4px' }}>Surcharges</h2>
-            <p style={{ fontSize:12, color:'#888', margin:0 }}>Charges applied on top of base rate (e.g. remote area, signature, fuel). Rules control when each fires.</p>
+            <p style={{ fontSize:12, color:'#888', margin:0 }}>Additional charges on top of base rate. Rules use AND/OR conditions on shipment fields to control when each fires.</p>
           </div>
-          <button
-            onClick={() => setAddingSurcharge(a => !a)}
-            style={{ display:'inline-flex', alignItems:'center', gap:6, height:34, padding:'0 16px', background:'rgba(233,30,140,0.12)', border:'1px solid rgba(233,30,140,0.35)', borderRadius:8, color:'#E91E8C', fontSize:13, fontWeight:700, cursor:'pointer' }}
-          >
+          <button onClick={() => setAddingSurcharge(a => !a)} style={{ display:'inline-flex', alignItems:'center', gap:6, height:34, padding:'0 16px', background:'rgba(233,30,140,0.12)', border:'1px solid rgba(233,30,140,0.35)', borderRadius:8, color:'#E91E8C', fontSize:13, fontWeight:700, cursor:'pointer' }}>
             <Plus size={13}/> Add Surcharge
           </button>
         </div>
 
+        {/* Create form */}
         {addingSurcharge && (
           <div className="moov-card" style={{ padding:18, marginBottom:16, border:'1px solid rgba(233,30,140,0.3)', background:'rgba(233,30,140,0.03)' }}>
             <h4 style={{ fontSize:13, fontWeight:700, color:'#E91E8C', margin:'0 0 14px' }}>New Surcharge</h4>
@@ -1450,122 +1579,198 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
               </div>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:10, marginBottom:10 }}>
-              <div>
-                <label style={{ fontSize:11, color:'#AAAAAA', display:'block', marginBottom:4 }}>Type</label>
-                <select value={surchargeForm.calc_type} onChange={e => setSurchargeForm(f=>({...f,calc_type:e.target.value}))} style={{ width:'100%', height:34, background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, color:'#fff', fontSize:13, padding:'0 10px' }}>
-                  <option value="flat">Flat £</option>
-                  <option value="percentage">Percentage %</option>
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize:11, color:'#AAAAAA', display:'block', marginBottom:4 }}>Default Value</label>
-                <div className="pill-input-wrap">
-                  <input type="number" step="0.01" value={surchargeForm.default_value} onChange={e => setSurchargeForm(f=>({...f,default_value:e.target.value}))} placeholder="0.00" style={{ fontSize:13 }}/>
-                  <div className="green-cap" style={{ fontSize:11, color:'#E91E8C', background:'rgba(233,30,140,0.15)' }}>{surchargeForm.calc_type === 'percentage' ? '%' : '£'}</div>
-                </div>
-              </div>
-              <div>
-                <label style={{ fontSize:11, color:'#AAAAAA', display:'block', marginBottom:4 }}>Applies When</label>
-                <select value={surchargeForm.applies_when} onChange={e => setSurchargeForm(f=>({...f,applies_when:e.target.value}))} style={{ width:'100%', height:34, background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, color:'#fff', fontSize:13, padding:'0 10px' }}>
-                  <option value="always">Always (auto)</option>
-                  <option value="reconciliation">Reconciliation only</option>
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize:11, color:'#AAAAAA', display:'block', marginBottom:4 }}>Charge Per</label>
-                <select value={surchargeForm.charge_per} onChange={e => setSurchargeForm(f=>({...f,charge_per:e.target.value}))} style={{ width:'100%', height:34, background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, color:'#fff', fontSize:13, padding:'0 10px' }}>
-                  <option value="shipment">Shipment</option>
-                  <option value="parcel">Parcel</option>
-                </select>
-              </div>
+              {[
+                ['Type', <select value={surchargeForm.calc_type} onChange={e => setSurchargeForm(f=>({...f,calc_type:e.target.value}))} style={{ width:'100%', height:34, background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, color:'#fff', fontSize:13, padding:'0 10px' }}><option value="flat">Flat £</option><option value="percentage">Percentage %</option></select>],
+                ['Default Value', <div className="pill-input-wrap"><input type="number" step="0.01" value={surchargeForm.default_value} onChange={e => setSurchargeForm(f=>({...f,default_value:e.target.value}))} placeholder="0.00" style={{ fontSize:13 }}/><div className="green-cap" style={{ fontSize:11, color:'#E91E8C', background:'rgba(233,30,140,0.15)' }}>{surchargeForm.calc_type==='percentage'?'%':'£'}</div></div>],
+                ['Fires when', <select value={surchargeForm.applies_when} onChange={e => setSurchargeForm(f=>({...f,applies_when:e.target.value}))} style={{ width:'100%', height:34, background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, color:'#fff', fontSize:13, padding:'0 10px' }}><option value="always">Auto (always)</option><option value="reconciliation">Reconciliation only</option></select>],
+                ['Charge Per', <select value={surchargeForm.charge_per} onChange={e => setSurchargeForm(f=>({...f,charge_per:e.target.value}))} style={{ width:'100%', height:34, background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, color:'#fff', fontSize:13, padding:'0 10px' }}><option value="shipment">Per Shipment</option><option value="parcel">Per Parcel</option></select>],
+              ].map(([l, el]) => <div key={l}><label style={{ fontSize:11, color:'#AAAAAA', display:'block', marginBottom:4 }}>{l}</label>{el}</div>)}
             </div>
             <div style={{ marginBottom:12 }}>
               <label style={{ fontSize:11, color:'#AAAAAA', display:'block', marginBottom:4 }}>Description (optional)</label>
               <div className="pill-input-wrap"><input value={surchargeForm.description} onChange={e => setSurchargeForm(f=>({...f,description:e.target.value}))} placeholder="e.g. Applied for deliveries to remote postcodes" style={{ fontSize:13 }}/></div>
             </div>
             <div style={{ display:'flex', gap:8 }}>
-              <button onClick={() => addSurcharge.mutate()} disabled={addSurcharge.isPending || !surchargeForm.code.trim() || !surchargeForm.name.trim()} className="btn-primary" style={{ background:'rgba(233,30,140,0.2)', border:'1px solid rgba(233,30,140,0.4)', color:'#E91E8C' }}>
-                <Check size={13}/> Create
-              </button>
+              <button onClick={() => addSurcharge.mutate()} disabled={addSurcharge.isPending || !surchargeForm.code.trim() || !surchargeForm.name.trim()} className="btn-primary" style={{ background:'rgba(233,30,140,0.2)', border:'1px solid rgba(233,30,140,0.4)', color:'#E91E8C' }}><Check size={13}/> Create</button>
               <button onClick={() => setAddingSurcharge(false)} className="btn-ghost" style={{ padding:'0 12px' }}>Cancel</button>
             </div>
           </div>
         )}
 
+        {/* Surcharge list */}
         {surcharges.length === 0 && !addingSurcharge ? (
-          <div className="moov-card" style={{ padding:32, textAlign:'center', color:'#555', fontSize:13, fontStyle:'italic' }}>
-            No surcharges yet — click Add Surcharge to create one
-          </div>
+          <div className="moov-card" style={{ padding:32, textAlign:'center', color:'#555', fontSize:13, fontStyle:'italic' }}>No surcharges yet — click Add Surcharge to create one</div>
         ) : (
           <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
             {surcharges.map(s => {
-              const isExpanded = expandedSurcharge === s.id;
+              const isExpanded    = expandedSurcharge === s.id;
+              const isEditing     = editingSurcharge === s.id;
+              const isAddingRule  = addingRuleTo === s.id;
+              const sym = s.calc_type === 'percentage' ? '%' : '£';
+              const valStr = s.calc_type === 'percentage'
+                ? `${parseFloat(s.default_value||0).toFixed(2)}%`
+                : `£${parseFloat(s.default_value||0).toFixed(2)}`;
+
               return (
-                <div key={s.id} className="moov-card" style={{ padding:0, overflow:'hidden', border: s.active ? '1px solid rgba(233,30,140,0.15)' : '1px solid rgba(255,255,255,0.05)', opacity: s.active ? 1 : 0.55 }}>
-                  {/* Header row */}
-                  <div
-                    onClick={() => setExpandedSurcharge(isExpanded ? null : s.id)}
-                    style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 16px', cursor:'pointer' }}
-                  >
-                    <div style={{ flex:1 }}>
-                      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <div key={s.id} className="moov-card" style={{ padding:0, overflow:'hidden', opacity: s.active ? 1 : 0.6, border: s.active ? '1px solid rgba(233,30,140,0.18)' : '1px solid rgba(255,255,255,0.05)' }}>
+
+                  {/* ── Surcharge header row ── */}
+                  <div style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 14px' }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:7, flexWrap:'wrap' }}>
                         <span style={{ fontSize:13, fontWeight:700, color:'#fff' }}>{s.name}</span>
                         <span style={{ ...pill('rgba(233,30,140,0.15)', '#E91E8C'), fontSize:10 }}>{s.code}</span>
-                        <span style={{ ...pill(s.active ? 'rgba(0,200,83,0.12)' : 'rgba(255,255,255,0.05)', s.active ? '#00C853' : '#555'), fontSize:10 }}>{s.active ? 'Active' : 'Inactive'}</span>
-                        <span style={{ ...pill('rgba(255,255,255,0.06)', '#AAAAAA'), fontSize:10 }}>{s.applies_when === 'always' ? 'Auto' : 'Reconciliation'}</span>
+                        <span style={{ ...pill(s.active ? 'rgba(0,200,83,0.1)' : 'rgba(255,255,255,0.04)', s.active ? '#00C853' : '#555'), fontSize:10 }}>{s.active ? 'Active' : 'Inactive'}</span>
                       </div>
-                      {s.description && <div style={{ fontSize:11, color:'#888', marginTop:3 }}>{s.description}</div>}
+                      {s.description && <div style={{ fontSize:11, color:'#777', marginTop:2 }}>{s.description}</div>}
                     </div>
-                    <div style={{ fontSize:14, fontWeight:700, color:'#E91E8C', fontFamily:'monospace', minWidth:70, textAlign:'right' }}>
-                      {s.calc_type === 'percentage' ? `${parseFloat(s.default_value||0).toFixed(2)}%` : `£${parseFloat(s.default_value||0).toFixed(2)}`}
-                      <div style={{ fontSize:10, color:'#666', fontWeight:400 }}>per {s.charge_per}</div>
+
+                    {/* Value + firing mode — click to edit */}
+                    <div
+                      onClick={() => { if (!isEditing) { setEditingSurcharge(s.id); setEditSForm({ default_value: String(s.default_value||0), applies_when: s.applies_when, charge_per: s.charge_per, calc_type: s.calc_type, active: s.active }); } }}
+                      style={{ cursor:'pointer', textAlign:'right', padding:'4px 8px', borderRadius:6, background: isEditing ? 'rgba(233,30,140,0.08)' : 'transparent', border: isEditing ? '1px solid rgba(233,30,140,0.25)' : '1px solid transparent' }}
+                      title="Click to edit"
+                    >
+                      <div style={{ fontSize:14, fontWeight:700, color:'#E91E8C', fontFamily:'monospace' }}>{valStr}</div>
+                      <div style={{ fontSize:10, color:'#888' }}>per {s.charge_per} · {s.applies_when === 'always' ? '⚡ auto' : '📋 reconciliation'}</div>
                     </div>
-                    <div style={{ display:'flex', gap:6, alignItems:'center', marginLeft:8 }}>
-                      <button
-                        onClick={e => { e.stopPropagation(); toggleSurcharge.mutate({ id: s.id, active: !s.active }); }}
-                        style={{ fontSize:11, padding:'3px 10px', borderRadius:6, border:'none', cursor:'pointer', background: s.active ? 'rgba(255,200,0,0.12)' : 'rgba(0,200,83,0.12)', color: s.active ? '#FFC107' : '#00C853', fontWeight:700 }}
-                      >{s.active ? 'Deactivate' : 'Activate'}</button>
-                      <button
-                        onClick={e => { e.stopPropagation(); if (window.confirm(`Delete surcharge "${s.name}"?`)) delSurcharge.mutate(s.id); }}
-                        style={{ background:'none', border:'none', cursor:'pointer', color:'#555', padding:'4px 6px', borderRadius:4, lineHeight:1 }}
-                      ><Trash2 size={13}/></button>
-                      {isExpanded ? <ChevronDown size={14} color="#888"/> : <ChevronRight size={14} color="#888"/>}
+
+                    {/* Controls */}
+                    <div style={{ display:'flex', gap:4, alignItems:'center' }}>
+                      <button onClick={() => patchSurcharge.mutate({ id:s.id, active:!s.active })} style={{ fontSize:11, padding:'3px 9px', borderRadius:6, border:'none', cursor:'pointer', background: s.active ? 'rgba(255,200,0,0.1)' : 'rgba(0,200,83,0.1)', color: s.active ? '#FFC107' : '#00C853', fontWeight:700 }}>{s.active ? 'Deactivate' : 'Activate'}</button>
+                      <button onClick={() => setExpandedSurcharge(isExpanded ? null : s.id)} style={{ background:'none', border:'none', cursor:'pointer', color:'#888', padding:'4px 6px' }} title="Rules">{isExpanded ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}</button>
+                      <button onClick={() => { if (window.confirm(`Delete "${s.name}"?`)) delSurcharge.mutate(s.id); }} style={{ background:'none', border:'none', cursor:'pointer', color:'#444', padding:'4px 6px' }}><Trash2 size={13}/></button>
                     </div>
                   </div>
 
-                  {/* Expanded: rules */}
+                  {/* ── Inline edit panel ── */}
+                  {isEditing && (
+                    <div style={{ borderTop:'1px solid rgba(233,30,140,0.15)', padding:'12px 14px', background:'rgba(233,30,140,0.04)' }}>
+                      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:10, marginBottom:10 }}>
+                        {[
+                          ['Type', <select value={editSForm.calc_type} onChange={e => setEditSForm(f=>({...f,calc_type:e.target.value}))} style={{ width:'100%', height:30, background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:6, color:'#fff', fontSize:12, padding:'0 8px' }}><option value="flat">Flat £</option><option value="percentage">Percentage %</option></select>],
+                          ['Value', <div className="pill-input-wrap" style={{ height:30 }}><input type="number" step="0.01" value={editSForm.default_value} onChange={e => setEditSForm(f=>({...f,default_value:e.target.value}))} style={{ fontSize:12 }}/><div className="green-cap" style={{ fontSize:10, color:'#E91E8C', background:'rgba(233,30,140,0.15)' }}>{editSForm.calc_type==='percentage'?'%':'£'}</div></div>],
+                          ['Fires when', <select value={editSForm.applies_when} onChange={e => setEditSForm(f=>({...f,applies_when:e.target.value}))} style={{ width:'100%', height:30, background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:6, color:'#fff', fontSize:12, padding:'0 8px' }}><option value="always">Auto (always)</option><option value="reconciliation">Reconciliation only</option></select>],
+                          ['Charge Per', <select value={editSForm.charge_per} onChange={e => setEditSForm(f=>({...f,charge_per:e.target.value}))} style={{ width:'100%', height:30, background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:6, color:'#fff', fontSize:12, padding:'0 8px' }}><option value="shipment">Per Shipment</option><option value="parcel">Per Parcel</option></select>],
+                        ].map(([l, el]) => <div key={l}><label style={{ fontSize:10, color:'#AAAAAA', display:'block', marginBottom:3 }}>{l}</label>{el}</div>)}
+                      </div>
+                      <div style={{ display:'flex', gap:8 }}>
+                        <button onClick={() => patchSurcharge.mutate({ id:s.id, ...editSForm, default_value: parseFloat(editSForm.default_value)||0 })} disabled={patchSurcharge.isPending} className="btn-primary" style={{ height:28, fontSize:12, background:'rgba(233,30,140,0.2)', border:'1px solid rgba(233,30,140,0.4)', color:'#E91E8C' }}><Check size={11}/> Save</button>
+                        <button onClick={() => setEditingSurcharge(null)} className="btn-ghost" style={{ height:28, fontSize:12, padding:'0 10px' }}>Cancel</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Rules panel (expanded) ── */}
                   {isExpanded && (
-                    <div style={{ borderTop:'1px solid rgba(255,255,255,0.06)', padding:'14px 16px', background:'rgba(0,0,0,0.2)' }}>
-                      <div style={{ fontSize:12, fontWeight:700, color:'#AAAAAA', marginBottom:10, textTransform:'uppercase', letterSpacing:'0.06em' }}>Trigger Rules</div>
-                      {(s.rules || []).length === 0 && (
-                        <p style={{ fontSize:12, color:'#555', fontStyle:'italic', margin:'0 0 12px' }}>No rules — surcharge fires unconditionally when applied_when = always, or is added manually on reconciliation.</p>
+                    <div style={{ borderTop:'1px solid rgba(255,255,255,0.06)', padding:'14px', background:'rgba(0,0,0,0.22)' }}>
+                      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+                        <div style={{ fontSize:12, fontWeight:700, color:'#AAAAAA', textTransform:'uppercase', letterSpacing:'0.06em' }}>
+                          Trigger Rules <span style={{ fontSize:10, fontWeight:400, color:'#555', textTransform:'none' }}>— if ANY rule matches, this surcharge fires</span>
+                        </div>
+                        <button onClick={() => setAddingRuleTo(isAddingRule ? null : s.id)} style={{ fontSize:11, padding:'3px 10px', borderRadius:6, border:'1px solid rgba(233,30,140,0.3)', background:'rgba(233,30,140,0.1)', color:'#E91E8C', cursor:'pointer', fontWeight:700 }}>
+                          {isAddingRule ? 'Cancel' : '+ Add Rule'}
+                        </button>
+                      </div>
+
+                      {/* Existing rules */}
+                      {(s.rules || []).length === 0 && !isAddingRule && (
+                        <p style={{ fontSize:12, color:'#444', fontStyle:'italic', margin:'0 0 8px' }}>
+                          No rules yet. {s.applies_when === 'always' ? 'Surcharge fires on every shipment.' : 'Add a rule with conditions to auto-fire, or leave empty for manual reconciliation.'}
+                        </p>
                       )}
-                      {(s.rules || []).map(r => (
-                        <div key={r.id} style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'8px 10px', marginBottom:6, background:'rgba(255,255,255,0.03)', borderRadius:6, border:'1px solid rgba(255,255,255,0.06)' }}>
-                          <div style={{ flex:1 }}>
-                            <div style={{ fontSize:12, fontWeight:600, color:'#ddd' }}>{r.name}</div>
-                            <div style={{ fontSize:11, color:'#666', fontFamily:'monospace', marginTop:2, wordBreak:'break-all' }}>{JSON.stringify(r.filters)}</div>
+
+                      {(s.rules || []).map((r, rIdx) => (
+                        <div key={r.id} style={{ marginBottom:8, padding:'10px 12px', background:'rgba(255,255,255,0.03)', borderRadius:8, border:'1px solid rgba(255,255,255,0.06)' }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+                            <span style={{ fontSize:12, fontWeight:700, color:'#ddd' }}>{r.name}</span>
+                            <span style={{ ...pill(r.logic==='AND' ? 'rgba(0,188,212,0.12)' : 'rgba(123,47,190,0.15)', r.logic==='AND' ? '#00BCD4' : '#7B2FBE'), fontSize:10 }}>{r.logic}</span>
+                            {r.service_codes?.length > 0 && (
+                              <span style={{ fontSize:10, color:'#888' }}>· services: {r.service_codes.join(', ')}</span>
+                            )}
+                            <button onClick={() => delRule.mutate({ surchargeId:s.id, ruleId:r.id })} style={{ marginLeft:'auto', background:'none', border:'none', cursor:'pointer', color:'#444', padding:'2px 4px' }}><Trash2 size={11}/></button>
                           </div>
-                          <button
-                            onClick={() => delRule.mutate({ surchargeId: s.id, ruleId: r.id })}
-                            style={{ background:'none', border:'none', cursor:'pointer', color:'#555', padding:'2px 4px', flexShrink:0 }}
-                          ><Trash2 size={12}/></button>
+                          {/* Conditions */}
+                          <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                            {(r.filters || []).map((cond, ci) => (
+                              <div key={ci} style={{ display:'flex', alignItems:'center', gap:6 }}>
+                                {ci > 0 && <span style={{ fontSize:10, color: r.logic==='AND' ? '#00BCD4' : '#7B2FBE', fontWeight:700, minWidth:24 }}>{r.logic}</span>}
+                                {ci === 0 && <span style={{ minWidth:24 }}/>}
+                                <span style={{ fontSize:11, color:'#888' }}>{fieldLabel(cond.field)}</span>
+                                <span style={{ fontSize:11, color:'#E91E8C', fontWeight:600 }}>{opLabel(cond.op).replace(/\s+\(.*\)/, '')}</span>
+                                <span style={{ fontSize:11, color:'#fff', fontFamily:'monospace', background:'rgba(255,255,255,0.06)', padding:'1px 6px', borderRadius:4 }}>{formatCondValue(cond.op, cond.value)}</span>
+                                <button
+                                  onClick={() => {
+                                    const newFilters = (r.filters||[]).filter((_,i) => i !== ci);
+                                    patchRuleFilters.mutate({ surchargeId:s.id, ruleId:r.id, filters:newFilters });
+                                  }}
+                                  style={{ background:'none', border:'none', cursor:'pointer', color:'#444', padding:'1px 3px', marginLeft:'auto' }}
+                                ><X size={10}/></button>
+                              </div>
+                            ))}
+                            {/* Add condition to existing rule */}
+                            <AddConditionRow
+                              onAdd={(cond) => {
+                                const newFilters = [...(r.filters||[]), cond];
+                                patchRuleFilters.mutate({ surchargeId:s.id, ruleId:r.id, filters:newFilters });
+                              }}
+                            />
+                          </div>
                         </div>
                       ))}
-                      {/* Add rule */}
-                      <div style={{ display:'grid', gridTemplateColumns:'1fr 2fr auto', gap:8, marginTop:10 }}>
-                        <div className="pill-input-wrap" style={{ height:30 }}>
-                          <input value={ruleForm.name} onChange={e => setRuleForm(f=>({...f,name:e.target.value}))} placeholder="Rule name" style={{ fontSize:12 }}/>
+
+                      {/* New rule builder */}
+                      {isAddingRule && (
+                        <div style={{ marginTop:10, padding:'12px', background:'rgba(233,30,140,0.04)', borderRadius:8, border:'1px solid rgba(233,30,140,0.2)' }}>
+                          <div style={{ display:'grid', gridTemplateColumns:'1fr auto', gap:10, marginBottom:10 }}>
+                            <div>
+                              <label style={{ fontSize:10, color:'#AAAAAA', display:'block', marginBottom:3 }}>Rule name</label>
+                              <div className="pill-input-wrap" style={{ height:30 }}>
+                                <input value={newRuleName} onChange={e => setNewRuleName(e.target.value)} placeholder="e.g. Large parcel rule" autoFocus style={{ fontSize:12 }}/>
+                              </div>
+                            </div>
+                            <div>
+                              <label style={{ fontSize:10, color:'#AAAAAA', display:'block', marginBottom:3 }}>Logic</label>
+                              <div style={{ display:'flex', height:30, borderRadius:6, overflow:'hidden', border:'1px solid rgba(255,255,255,0.1)' }}>
+                                {['AND','OR'].map(l => (
+                                  <button key={l} onClick={() => setNewRuleLogic(l)} style={{ flex:1, border:'none', cursor:'pointer', fontSize:11, fontWeight:700, background: newRuleLogic===l ? (l==='AND'?'rgba(0,188,212,0.25)':'rgba(123,47,190,0.3)') : 'rgba(255,255,255,0.04)', color: newRuleLogic===l ? (l==='AND'?'#00BCD4':'#7B2FBE') : '#555' }}>{l}</button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Conditions being built */}
+                          {newRuleConditions.length > 0 && (
+                            <div style={{ marginBottom:10, display:'flex', flexDirection:'column', gap:4 }}>
+                              {newRuleConditions.map((cond, ci) => (
+                                <div key={ci} style={{ display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
+                                  {ci > 0 && <span style={{ color: newRuleLogic==='AND' ? '#00BCD4' : '#7B2FBE', fontWeight:700, minWidth:24 }}>{newRuleLogic}</span>}
+                                  {ci === 0 && <span style={{ minWidth:24 }}/>}
+                                  <span style={{ color:'#888' }}>{fieldLabel(cond.field)}</span>
+                                  <span style={{ color:'#E91E8C', fontWeight:600 }}>{opLabel(cond.op).replace(/\s+\(.*\)/, '')}</span>
+                                  <span style={{ fontFamily:'monospace', color:'#fff', background:'rgba(255,255,255,0.06)', padding:'1px 6px', borderRadius:4 }}>{formatCondValue(cond.op, cond.value)}</span>
+                                  <button onClick={() => setNewRuleConditions(cs => cs.filter((_,i) => i!==ci))} style={{ background:'none', border:'none', cursor:'pointer', color:'#555', marginLeft:'auto' }}><X size={10}/></button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Add condition row */}
+                          <AddConditionRow onAdd={(cond) => setNewRuleConditions(cs => [...cs, cond])} label="Add condition"/>
+
+                          <div style={{ display:'flex', gap:8, marginTop:10 }}>
+                            <button
+                              onClick={() => {
+                                if (!newRuleName.trim()) return;
+                                addRule.mutate({ surchargeId:s.id, name:newRuleName, logic:newRuleLogic, filters:newRuleConditions });
+                              }}
+                              disabled={addRule.isPending || !newRuleName.trim()}
+                              style={{ fontSize:12, padding:'5px 14px', borderRadius:6, border:'1px solid rgba(233,30,140,0.4)', background:'rgba(233,30,140,0.2)', color:'#E91E8C', cursor:'pointer', fontWeight:700 }}
+                            ><Check size={11}/> Create Rule</button>
+                            <button onClick={() => { setAddingRuleTo(null); setNewRuleName(''); setNewRuleLogic('AND'); setNewRuleConditions([]); }} className="btn-ghost" style={{ fontSize:12, padding:'0 10px' }}>Cancel</button>
+                          </div>
                         </div>
-                        <div className="pill-input-wrap" style={{ height:30 }}>
-                          <input value={ruleForm.filters} onChange={e => setRuleForm(f=>({...f,filters:e.target.value}))} placeholder='[{"field":"ship_to_country_iso","op":"not_in","value":["GB"]}]' style={{ fontSize:11, fontFamily:'monospace' }}/>
-                        </div>
-                        <button
-                          onClick={() => { try { addRule.mutate(s.id); } catch { alert('Invalid JSON in filters'); } }}
-                          disabled={addRule.isPending || !ruleForm.name.trim()}
-                          style={{ height:30, padding:'0 12px', background:'rgba(233,30,140,0.15)', border:'1px solid rgba(233,30,140,0.35)', borderRadius:8, color:'#E91E8C', fontSize:12, fontWeight:700, cursor:'pointer' }}
-                        ><Check size={12}/></button>
-                      </div>
+                      )}
                     </div>
                   )}
                 </div>
