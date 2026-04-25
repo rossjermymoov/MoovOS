@@ -394,10 +394,138 @@ function InternationalRateOverlay({ service, onClose, onRateUpdate, onRateDelete
   );
 }
 
-// ─── Service block — horizontal zone layout ───────────────────
-function ServiceBlock({ service, onRateUpdate, onRateDelete }) {
-  const [overlayOpen, setOverlay] = useState(false);
+// ─── Inline add-rate form ─────────────────────────────────────
+// Renders zone rows with empty price inputs. Used when a service has no
+// pricing yet, and as an expandable "add zone" row on existing services.
+function AddRateForm({ service, customerId, onSaved, onCancel }) {
+  const emptyRow = () => ({ zone_name: '', weight_class_name: 'Parcel', price: '', price_sub: '' });
+  const [rows, setRows] = useState([emptyRow()]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState(null);
 
+  const addRow    = () => setRows(r => [...r, emptyRow()]);
+  const removeRow = (i) => setRows(r => r.filter((_, idx) => idx !== i));
+  const updateRow = (i, field, val) => setRows(r => r.map((row, idx) => idx === i ? { ...row, [field]: val } : row));
+
+  const validRows = rows.filter(r => r.zone_name.trim() && r.price !== '' && !isNaN(parseFloat(r.price)));
+
+  async function save() {
+    if (!validRows.length) return;
+    setSaving(true); setError(null);
+    try {
+      await Promise.all(validRows.map(r =>
+        api.post(`/customer-rates/${customerId}`, {
+          courier_id:        service.courier_id || 0,
+          courier_code:      service.courier_code || '',
+          courier_name:      service.courier_name || '',
+          service_id:        service.service_id,
+          service_code:      service.service_code,
+          service_name:      service.service_name,
+          zone_name:         r.zone_name.trim(),
+          weight_class_name: r.weight_class_name.trim() || 'Parcel',
+          price:             parseFloat(r.price),
+          price_sub:         r.price_sub !== '' && !isNaN(parseFloat(r.price_sub)) ? parseFloat(r.price_sub) : null,
+        })
+      ));
+      setRows([emptyRow()]);
+      onSaved();
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const fi = (extra = {}) => ({
+    background: '#0D0E2A', border: '1px solid rgba(255,255,255,0.12)',
+    borderRadius: 6, padding: '5px 9px', color: '#fff',
+    fontSize: 12, outline: 'none', boxSizing: 'border-box', ...extra,
+  });
+
+  return (
+    <div style={{ padding: '8px 0 4px' }}>
+      {/* Column headers */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 5 }}>
+        <div style={{ width: 110, fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Zone</div>
+        <div style={{ width: 90,  fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Weight class</div>
+        <div style={{ width: 82,  fontSize: 10, color: '#00C853', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>1st parcel</div>
+        <div style={{ width: 82,  fontSize: 10, color: '#FFC107', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>2nd+</div>
+      </div>
+
+      {rows.map((row, i) => (
+        <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 5, alignItems: 'center' }}>
+          <input
+            placeholder="Zone A"
+            value={row.zone_name}
+            onChange={e => updateRow(i, 'zone_name', e.target.value)}
+            style={fi({ width: 110 })}
+          />
+          <input
+            placeholder="Parcel"
+            value={row.weight_class_name}
+            onChange={e => updateRow(i, 'weight_class_name', e.target.value)}
+            style={fi({ width: 90 })}
+          />
+          <input
+            placeholder="£"
+            value={row.price}
+            onChange={e => updateRow(i, 'price', e.target.value)}
+            style={fi({ width: 82, textAlign: 'right', color: '#00C853', fontFamily: 'monospace', border: '1px solid rgba(0,200,83,0.3)' })}
+          />
+          <input
+            placeholder="£ sub"
+            value={row.price_sub}
+            onChange={e => updateRow(i, 'price_sub', e.target.value)}
+            style={fi({ width: 82, textAlign: 'right', color: '#FFC107', fontFamily: 'monospace', border: '1px solid rgba(255,193,7,0.2)' })}
+          />
+          {rows.length > 1 && (
+            <button onClick={() => removeRow(i)}
+              style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', padding: '2px 4px', flexShrink: 0, display: 'flex' }}
+              onMouseEnter={e => e.currentTarget.style.color = '#E91E8C'}
+              onMouseLeave={e => e.currentTarget.style.color = '#444'}>
+              <X size={12} />
+            </button>
+          )}
+        </div>
+      ))}
+
+      <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
+        <button onClick={addRow}
+          style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 5, color: '#AAAAAA', fontSize: 11, padding: '3px 10px', cursor: 'pointer' }}
+          onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.25)'}
+          onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'}>
+          + Add row
+        </button>
+        <button onClick={save} disabled={saving || !validRows.length}
+          style={{
+            background: validRows.length ? 'rgba(0,200,83,0.12)' : 'transparent',
+            border: `1px solid ${validRows.length ? '#00C853' : 'rgba(255,255,255,0.07)'}`,
+            borderRadius: 5, color: validRows.length ? '#00C853' : '#444',
+            fontSize: 11, fontWeight: 700, padding: '3px 14px',
+            cursor: validRows.length ? 'pointer' : 'default',
+          }}>
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+        {onCancel && (
+          <button onClick={onCancel}
+            style={{ background: 'none', border: 'none', color: '#444', fontSize: 11, cursor: 'pointer', padding: '3px 8px' }}
+            onMouseEnter={e => e.currentTarget.style.color = '#AAAAAA'}
+            onMouseLeave={e => e.currentTarget.style.color = '#444'}>
+            Cancel
+          </button>
+        )}
+        {error && <span style={{ fontSize: 11, color: '#E91E8C' }}>{error}</span>}
+      </div>
+    </div>
+  );
+}
+
+// ─── Service block — horizontal zone layout ───────────────────
+function ServiceBlock({ service, customerId, onRateUpdate, onRateDelete, onRateCreated }) {
+  const [overlayOpen, setOverlay]   = useState(false);
+  const [addingZone, setAddingZone] = useState(false);
+
+  const isEmpty     = service.rates.length === 0;
   const isIntl      = service.service_type === 'international';
   const multiWeight = [...new Set(service.rates.map(r => r.weight_class_name))].length > 1;
 
@@ -433,20 +561,27 @@ function ServiceBlock({ service, onRateUpdate, onRateDelete }) {
   return (
     <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', padding: '10px 18px 14px' }}>
       {/* Service name header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: isEmpty ? 8 : 10 }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: '#AAAAAA', textTransform: 'uppercase', letterSpacing: '0.06em', flex: 1 }}>
           {service.service_name}
         </span>
         <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#555', background: 'rgba(255,255,255,0.04)', padding: '1px 6px', borderRadius: 3, border: '1px solid rgba(255,255,255,0.07)' }}>
           {service.service_code}
         </span>
+        {/* "Add zone" toggle — only shown when service already has rates */}
+        {!isEmpty && !addingZone && (
+          <button onClick={() => setAddingZone(true)}
+            style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, color: '#555', fontSize: 10, fontWeight: 700, padding: '2px 8px', cursor: 'pointer', flexShrink: 0 }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(0,200,83,0.4)'; e.currentTarget.style.color = '#00C853'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = '#555'; }}>
+            + zone
+          </button>
+        )}
       </div>
 
-      {/* Zone chips */}
-      {service.rates.length === 0 ? (
-        <div style={{ fontSize: 12, color: '#444', fontStyle: 'italic' }}>No pricing found</div>
-      ) : (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+      {/* Existing zone chips */}
+      {!isEmpty && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: addingZone ? 12 : 0 }}>
           {service.rates.map((rate) => (
             <div key={rate.id} style={{
               display: 'inline-flex', alignItems: 'center', gap: 8,
@@ -465,12 +600,29 @@ function ServiceBlock({ service, onRateUpdate, onRateDelete }) {
           ))}
         </div>
       )}
+
+      {/* No pricing yet — always show form. Existing service — show form when + zone clicked */}
+      {(isEmpty || addingZone) && (
+        <>
+          {isEmpty && (
+            <div style={{ fontSize: 11, color: '#555', fontStyle: 'italic', marginBottom: 10 }}>
+              No pricing found — enter rates below
+            </div>
+          )}
+          <AddRateForm
+            service={service}
+            customerId={customerId}
+            onSaved={() => { setAddingZone(false); onRateCreated(); }}
+            onCancel={isEmpty ? null : () => setAddingZone(false)}
+          />
+        </>
+      )}
     </div>
   );
 }
 
 // ─── Courier group ────────────────────────────────────────────
-function CourierGroup({ courierName, services, onRateUpdate, onRateDelete }) {
+function CourierGroup({ courierName, services, customerId, onRateUpdate, onRateDelete, onRateCreated }) {
   const [open, setOpen] = useState(true);
   const totalRates = services.reduce((a, s) => a + s.rate_count, 0);
   const hasIntl    = services.some(s => s.service_type === 'international');
@@ -484,7 +636,14 @@ function CourierGroup({ courierName, services, onRateUpdate, onRateDelete }) {
         <span style={{ fontSize: 11, color: '#AAAAAA' }}>{services.length} service{services.length !== 1 ? 's' : ''} · {totalRates.toLocaleString()} rates</span>
       </div>
       {open && services.map(svc => (
-        <ServiceBlock key={svc.service_id} service={svc} onRateUpdate={onRateUpdate} onRateDelete={onRateDelete} />
+        <ServiceBlock
+          key={svc.service_id}
+          service={svc}
+          customerId={customerId}
+          onRateUpdate={onRateUpdate}
+          onRateDelete={onRateDelete}
+          onRateCreated={onRateCreated}
+        />
       ))}
     </div>
   );
@@ -982,6 +1141,7 @@ export default function CustomerPricingTab({ customer }) {
           service_id:   s.courier_service_id,
           service_code: s.service_code,
           service_name: meta?.name || s.service_code,
+          courier_id:   meta?.courier_id || 0,
           courier_code: carrier?.courier_code || '',
           courier_name: meta?.courier_name || carrier?.courier_name || '',
           service_type: meta?.service_type || 'domestic',
@@ -1056,8 +1216,10 @@ export default function CustomerPricingTab({ customer }) {
           key={courierName}
           courierName={courierName}
           services={svcs}
+          customerId={customer.id}
           onRateUpdate={handlePriceUpdate}
           onRateDelete={handlePriceDelete}
+          onRateCreated={() => qc.invalidateQueries(['customer-rates', customer.id])}
         />
       ))}
     </div>
