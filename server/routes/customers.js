@@ -421,6 +421,47 @@ router.post('/:id/contacts', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// PATCH /api/customers/:id/contacts/:contactId
+// ─────────────────────────────────────────────────────────────
+router.patch('/:id/contacts/:contactId', async (req, res, next) => {
+  const client = await (await import('../db/index.js')).getClient();
+  try {
+    const { id, contactId } = req.params;
+    const allowed = ['full_name', 'job_title', 'phone_number', 'email_address', 'is_main_contact', 'is_finance_contact'];
+    const sets = []; const vals = [];
+    for (const k of allowed) {
+      if (req.body[k] !== undefined) { vals.push(req.body[k]); sets.push(`${k}=$${vals.length}`); }
+    }
+    if (!sets.length) return res.json({});
+
+    await client.query('BEGIN');
+    // Enforce single-main and single-finance flags
+    if (req.body.is_main_contact)    await client.query('UPDATE customer_contacts SET is_main_contact=false    WHERE customer_id=$1 AND id!=$2', [id, contactId]);
+    if (req.body.is_finance_contact) await client.query('UPDATE customer_contacts SET is_finance_contact=false WHERE customer_id=$1 AND id!=$2', [id, contactId]);
+
+    vals.push(contactId);
+    const { rows } = await client.query(
+      `UPDATE customer_contacts SET ${sets.join(',')} WHERE id=$${vals.length} AND customer_id=$${vals.length + 1} RETURNING *`,
+      [...vals, id]
+    );
+    await client.query('COMMIT');
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { await client.query('ROLLBACK'); next(err); }
+  finally { client.release(); }
+});
+
+// ─────────────────────────────────────────────────────────────
+// DELETE /api/customers/:id/contacts/:contactId
+// ─────────────────────────────────────────────────────────────
+router.delete('/:id/contacts/:contactId', async (req, res, next) => {
+  try {
+    await query('DELETE FROM customer_contacts WHERE id=$1 AND customer_id=$2', [req.params.contactId, req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────
 // GET /api/customers/:id/communications
 // ─────────────────────────────────────────────────────────────
 router.get('/:id/communications', async (req, res, next) => {

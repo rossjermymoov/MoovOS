@@ -378,35 +378,139 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
 }
 
 // ─── Contacts tab ────────────────────────────────────────────
-function ContactsTab({ contacts = [] }) {
+const BLANK_CONTACT = { full_name: '', job_title: '', phone_number: '', email_address: '', is_main_contact: false, is_finance_contact: false };
+
+function ContactsTab({ customerId, contacts = [], onRefresh }) {
+  const [editingId, setEditingId]   = useState(null);
+  const [editForm,  setEditForm]    = useState({});
+  const [adding,    setAdding]      = useState(false);
+  const [addForm,   setAddForm]     = useState(BLANK_CONTACT);
+  const [delConfirm, setDelConfirm] = useState(null); // contact id pending delete
+
+  const qc = useQueryClient();
+  const invalidate = () => { qc.invalidateQueries(['customer', customerId]); onRefresh?.(); };
+
+  const patchContact = useMutation({
+    mutationFn: ({ id, data }) => fetch(`/api/customers/${customerId}/contacts/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+    }).then(r => r.json()),
+    onSuccess: () => { setEditingId(null); invalidate(); },
+  });
+
+  const deleteContact = useMutation({
+    mutationFn: (id) => fetch(`/api/customers/${customerId}/contacts/${id}`, { method: 'DELETE' }).then(r => r.json()),
+    onSuccess: () => { setDelConfirm(null); invalidate(); },
+  });
+
+  const addContact = useMutation({
+    mutationFn: (data) => fetch(`/api/customers/${customerId}/contacts`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+    }).then(r => r.json()),
+    onSuccess: () => { setAdding(false); setAddForm(BLANK_CONTACT); invalidate(); },
+  });
+
+  const startEdit = (ct) => { setEditingId(ct.id); setEditForm({ full_name: ct.full_name, job_title: ct.job_title || '', phone_number: ct.phone_number || '', email_address: ct.email_address, is_main_contact: ct.is_main_contact, is_finance_contact: ct.is_finance_contact }); };
+
+  const inputStyle = { background: '#1A1A2E', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, color: '#fff', fontSize: 13, padding: '5px 10px', width: '100%' };
+  const flagBtn = (active, label) => ({
+    fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
+    background: active ? 'rgba(0,200,83,0.2)' : 'rgba(255,255,255,0.06)',
+    border: active ? '1px solid rgba(0,200,83,0.4)' : '1px solid rgba(255,255,255,0.1)',
+    color: active ? '#00C853' : '#888',
+  });
+
   return (
     <div className="moov-card" style={{ overflow: 'hidden' }}>
       <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ fontSize: 15, fontWeight: 600, color: '#7B2FBE' }}>Contacts</h3>
-        <button className="btn-ghost" style={{ fontSize: 13 }}>+ Add Contact</button>
+        {!adding && <button className="btn-ghost" style={{ fontSize: 13 }} onClick={() => setAdding(true)}>+ Add Contact</button>}
       </div>
-      {contacts.length === 0 ? (
+
+      {/* Add form */}
+      {adding && (
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(123,47,190,0.06)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
+            {[['full_name','Full Name *'],['job_title','Job Title'],['phone_number','Phone'],['email_address','Email *']].map(([k,lbl]) => (
+              <div key={k}><label style={{ fontSize: 11, color: '#AAAAAA', display: 'block', marginBottom: 3 }}>{lbl}</label>
+                <input style={inputStyle} value={addForm[k]} onChange={e => setAddForm(f => ({ ...f, [k]: e.target.value }))} placeholder={lbl.replace(' *','')} />
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button style={flagBtn(addForm.is_main_contact, 'Main')} onClick={() => setAddForm(f => ({ ...f, is_main_contact: !f.is_main_contact }))}>Main Contact</button>
+            <button style={flagBtn(addForm.is_finance_contact, 'Finance')} onClick={() => setAddForm(f => ({ ...f, is_finance_contact: !f.is_finance_contact }))}>Finance Contact</button>
+            <div style={{ flex: 1 }} />
+            <button onClick={() => addContact.mutate(addForm)} disabled={addContact.isPending || !addForm.full_name || !addForm.email_address} className="btn-primary" style={{ fontSize: 12, height: 30, padding: '0 14px' }}><Check size={12} style={{ marginRight: 4 }} />Save</button>
+            <button onClick={() => { setAdding(false); setAddForm(BLANK_CONTACT); }} className="btn-ghost" style={{ fontSize: 12, height: 30, padding: '0 12px' }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {contacts.length === 0 && !adding ? (
         <div style={{ padding: 32, textAlign: 'center', color: '#AAAAAA', fontSize: 13 }}>No contacts added yet</div>
       ) : (
         <table className="moov-table">
           <thead>
-            <tr><th>Name</th><th>Role</th><th>Phone</th><th>Email</th><th>Flags</th></tr>
+            <tr><th>Name</th><th>Role</th><th>Phone</th><th>Email</th><th>Flags</th><th style={{ width: 80 }}></th></tr>
           </thead>
           <tbody>
-            {contacts.map(ct => (
-              <tr key={ct.id}>
-                <td style={{ fontWeight: 600 }}>{ct.full_name}</td>
-                <td style={{ color: '#AAAAAA' }}>{ct.job_title || '—'}</td>
-                <td style={{ color: '#AAAAAA' }}>{ct.phone_number || '—'}</td>
-                <td style={{ color: '#00BCD4' }}>{ct.email_address}</td>
-                <td>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    {ct.is_main_contact    && <span style={{ background: 'rgba(0,200,83,0.15)',    color: '#00C853', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4 }}>Main</span>}
-                    {ct.is_finance_contact && <span style={{ background: 'rgba(123,47,190,0.2)',   color: '#7B2FBE', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4 }}>Finance</span>}
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {contacts.map(ct => {
+              const isEditing = editingId === ct.id;
+              const isPendingDelete = delConfirm === ct.id;
+              return (
+                <tr key={ct.id}>
+                  {isEditing ? (
+                    <>
+                      <td><input style={inputStyle} value={editForm.full_name}    onChange={e => setEditForm(f=>({...f, full_name: e.target.value}))} /></td>
+                      <td><input style={inputStyle} value={editForm.job_title}    onChange={e => setEditForm(f=>({...f, job_title: e.target.value}))} placeholder="Job title" /></td>
+                      <td><input style={inputStyle} value={editForm.phone_number} onChange={e => setEditForm(f=>({...f, phone_number: e.target.value}))} placeholder="Phone" /></td>
+                      <td><input style={inputStyle} value={editForm.email_address} onChange={e => setEditForm(f=>({...f, email_address: e.target.value}))} /></td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 5 }}>
+                          <button style={flagBtn(editForm.is_main_contact)} onClick={() => setEditForm(f=>({...f, is_main_contact: !f.is_main_contact}))}>Main</button>
+                          <button style={flagBtn(editForm.is_finance_contact)} onClick={() => setEditForm(f=>({...f, is_finance_contact: !f.is_finance_contact}))}>Finance</button>
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button onClick={() => patchContact.mutate({ id: ct.id, data: editForm })} disabled={patchContact.isPending} title="Save" style={{ background: 'rgba(0,200,83,0.15)', border: '1px solid rgba(0,200,83,0.3)', borderRadius: 5, padding: '4px 6px', cursor: 'pointer', color: '#00C853' }}><Check size={13} /></button>
+                          <button onClick={() => setEditingId(null)} title="Cancel" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 5, padding: '4px 6px', cursor: 'pointer', color: '#AAAAAA' }}><X size={13} /></button>
+                        </div>
+                      </td>
+                    </>
+                  ) : isPendingDelete ? (
+                    <>
+                      <td colSpan={5} style={{ color: '#E91E8C', fontSize: 13 }}>Delete <strong>{ct.full_name}</strong>? This cannot be undone.</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button onClick={() => deleteContact.mutate(ct.id)} disabled={deleteContact.isPending} style={{ background: 'rgba(233,30,140,0.2)', border: '1px solid rgba(233,30,140,0.4)', borderRadius: 5, padding: '4px 8px', cursor: 'pointer', color: '#E91E8C', fontSize: 12, fontWeight: 700 }}>Delete</button>
+                          <button onClick={() => setDelConfirm(null)} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 5, padding: '4px 6px', cursor: 'pointer', color: '#AAAAAA' }}><X size={13} /></button>
+                        </div>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td style={{ fontWeight: 600 }}>{ct.full_name}</td>
+                      <td style={{ color: '#AAAAAA' }}>{ct.job_title || '—'}</td>
+                      <td style={{ color: '#AAAAAA' }}>{ct.phone_number || '—'}</td>
+                      <td style={{ color: '#00BCD4' }}>{ct.email_address}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          {ct.is_main_contact    && <span style={{ background: 'rgba(0,200,83,0.15)',  color: '#00C853', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4 }}>Main</span>}
+                          {ct.is_finance_contact && <span style={{ background: 'rgba(123,47,190,0.2)', color: '#7B2FBE', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4 }}>Finance</span>}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button onClick={() => startEdit(ct)} title="Edit" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#AAAAAA', padding: '4px 5px' }}><Pencil size={13} /></button>
+                          <button onClick={() => setDelConfirm(ct.id)} title="Delete" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#E91E8C', padding: '4px 5px' }}><Trash2 size={13} /></button>
+                        </div>
+                      </td>
+                    </>
+                  )}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}
@@ -657,7 +761,7 @@ export default function CustomerRecord() {
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState('');
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: ['customer', id],
     queryFn:  () => customersApi.get(id),
   });
@@ -831,7 +935,7 @@ export default function CustomerRecord() {
       </div>
 
       {activeTab === 'overview'  && <OverviewTab c={c} onSaved={handleCustomerSaved} onDeleteRequest={() => { setDeleteModal(true); setDeleteConfirm(''); }} />}
-      {activeTab === 'contacts'  && <ContactsTab contacts={contacts} />}
+      {activeTab === 'contacts'  && <ContactsTab customerId={id} contacts={contacts} onRefresh={refetch} />}
       {activeTab === 'volume'    && <VolumeTab snapshots={volume_snapshots} />}
       {activeTab === 'financial' && <FinancialTab c={c} creditPct={creditPct} />}
       {activeTab === 'comms'     && <CustomerCommsTab customerId={id} />}
