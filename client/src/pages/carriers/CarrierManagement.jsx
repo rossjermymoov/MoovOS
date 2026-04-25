@@ -1173,6 +1173,7 @@ function CustomerRcTemplatesTab({ courierCode, courierName }) {
   const [openSvcs,      setOpenSvcs]      = useState(new Set()); // domestic service keys expanded
   const [openIntlSvcs,  setOpenIntlSvcs]  = useState(new Set()); // intl service keys expanded
   const [globalIntlPct, setGlobalIntlPct] = useState('');        // "apply to all intl" input
+  const [includeBespoke, setIncludeBespoke] = useState(false);   // load bespoke services too
 
   const { data: templates = [], isLoading } = useQuery({
     queryKey: ['pricing-templates', courierCode],
@@ -1258,7 +1259,8 @@ function CustomerRcTemplatesTab({ courierCode, courierName }) {
   const loadFromCarrier = async (tpl) => {
     setLoadingCarrier(tpl.id);
     try {
-      const svc = await fetch(`/api/pricing/carrier-services?courier_code=${courierCode}`).then(r => r.json());
+      const url = `/api/pricing/carrier-services?courier_code=${courierCode}${includeBespoke ? '&include_bespoke=true' : ''}`;
+      const svc = await fetch(url).then(r => r.json());
       const current = getRates(tpl);
       const existing = new Set(current.map(r => `${r.service_code}__${r.zone_name}`));
       const newRows = svc
@@ -1457,7 +1459,7 @@ function CustomerRcTemplatesTab({ courierCode, courierName }) {
                   <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', padding: '14px 14px 16px' }}>
 
                     {/* Load from carrier */}
-                    <div style={{ marginBottom: 18 }}>
+                    <div style={{ marginBottom: 18, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                       <button onClick={() => loadFromCarrier(tpl)} disabled={loadingCarrier === tpl.id}
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 6,
                           background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.35)',
@@ -1467,8 +1469,19 @@ function CustomerRcTemplatesTab({ courierCode, courierName }) {
                         <RefreshCw size={12} style={{ animation: loadingCarrier === tpl.id ? 'spin 1s linear infinite' : 'none' }} />
                         {loadingCarrier === tpl.id ? 'Loading…' : `Load all ${courierName} services`}
                       </button>
-                      <span style={{ fontSize: 11, color: '#555', marginLeft: 10 }}>
-                        Loads every service &amp; zone from the master rate card — existing rows are preserved.
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none' }}>
+                        <input
+                          type="checkbox"
+                          checked={includeBespoke}
+                          onChange={e => setIncludeBespoke(e.target.checked)}
+                          style={{ accentColor: '#FB923C', width: 14, height: 14 }}
+                        />
+                        <span style={{ fontSize: 12, color: includeBespoke ? '#FB923C' : '#555', fontWeight: includeBespoke ? 600 : 400 }}>
+                          Include bespoke services
+                        </span>
+                      </label>
+                      <span style={{ fontSize: 11, color: '#444' }}>
+                        Existing rows are preserved.
                       </span>
                     </div>
 
@@ -1939,6 +1952,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                 <th>Service</th>
                 <th>Code</th>
                 <th>Type</th>
+                <th>Bespoke</th>
                 <th>Fuel Group</th>
                 <th>Zones</th>
                 <th></th>
@@ -1993,6 +2007,22 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                           color: tc ? tc.fg : '#555',
                         }}>
                         {tc ? tc.label : '—'}
+                      </span>
+                    </td>
+
+                    {/* Bespoke toggle */}
+                    <td onClick={e => e.stopPropagation()}>
+                      <span
+                        onClick={() => updateServiceField.mutate({ id: svc.id, is_bespoke: !svc.is_bespoke })}
+                        title={svc.is_bespoke ? 'Bespoke — excluded from standard templates. Click to make standard.' : 'Standard — click to mark as bespoke'}
+                        style={{
+                          display: 'inline-block', padding: '2px 9px', borderRadius: 9999,
+                          fontSize: 11, fontWeight: 700, cursor: 'pointer', userSelect: 'none',
+                          background: svc.is_bespoke ? 'rgba(251,146,60,0.12)' : 'rgba(255,255,255,0.04)',
+                          color: svc.is_bespoke ? '#FB923C' : '#444',
+                          border: svc.is_bespoke ? '1px solid rgba(251,146,60,0.3)' : '1px solid rgba(255,255,255,0.06)',
+                        }}>
+                        {svc.is_bespoke ? 'Bespoke' : '—'}
                       </span>
                     </td>
 

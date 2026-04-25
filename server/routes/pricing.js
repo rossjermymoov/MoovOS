@@ -112,17 +112,19 @@ router.put('/templates/:id', async (req, res, next) => {
 
 router.get('/carrier-services', async (req, res, next) => {
   try {
-    const { courier_code } = req.query;
+    const { courier_code, include_bespoke } = req.query;
     if (!courier_code) return res.status(400).json({ error: 'courier_code required' });
+    const showBespoke = include_bespoke === 'true';
 
     const r = await query(`
       SELECT
         cs.service_code,
-        cs.name                          AS service_name,
+        cs.name                             AS service_name,
         cs.service_type,
+        cs.is_bespoke,
         (cs.service_type = 'international') AS is_international,
-        z.name                           AS zone_name,
-        z.id                             AS zone_id,
+        z.name                              AS zone_name,
+        z.id                                AS zone_id,
         (
           SELECT wb.price_first
           FROM weight_bands wb
@@ -143,8 +145,9 @@ router.get('/carrier-services', async (req, res, next) => {
       JOIN courier_services cs ON cs.courier_id = co.id
       JOIN zones z              ON z.courier_service_id = cs.id
       WHERE co.code ILIKE $1
+        AND ($2 OR cs.is_bespoke = false)
       ORDER BY cs.service_type, cs.service_code, z.name
-    `, [courier_code]);
+    `, [courier_code, showBespoke]);
 
     res.json(r.rows);
   } catch (err) { next(err); }

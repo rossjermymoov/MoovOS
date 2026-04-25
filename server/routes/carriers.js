@@ -215,7 +215,7 @@ router.put('/couriers/:id/services/reorder', async (req, res, next) => {
 // PATCH /api/carriers/services/:id
 router.patch('/services/:id', async (req, res, next) => {
   try {
-    const allowed = ['service_code', 'name', 'fuel_surcharge_pct', 'service_type', 'fuel_group_id'];
+    const allowed = ['service_code', 'name', 'fuel_surcharge_pct', 'service_type', 'fuel_group_id', 'is_bespoke'];
     const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));
     if (!updates.length) return res.status(400).json({ error: 'No valid fields to update' });
     const setClauses = updates.map(([k], i) => `${k} = $${i + 2}`).join(', ');
