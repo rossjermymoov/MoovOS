@@ -13,6 +13,7 @@ import QueriesPage from './pages/queries/QueriesPage';
 import TicketDetailPage from './pages/queries/TicketDetailPage';
 import CustomerSimPage from './pages/customer/CustomerSimPage';
 import KatanaPage from './pages/katana/KatanaPage';
+import PricingPage from './pages/pricing/PricingPage';
 
 // Placeholder pages for other sections (to be built)
 const Placeholder = ({ name }) => (
@@ -36,7 +37,7 @@ export default function App() {
           <Route path=":id" element={<CustomerRecord />} />
         </Route>
 
-        <Route path="pricing"   element={<Placeholder name="Pricing & Rate Cards" />} />
+        <Route path="pricing"   element={<PricingPage />} />
         <Route path="tracking"  element={<TrackingPage />} />
         <Route path="finance"   element={<FinancePage />} />
         <Route path="queries">
