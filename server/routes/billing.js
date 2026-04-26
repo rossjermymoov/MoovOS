@@ -1735,6 +1735,8 @@ router.post('/full-reprice', async (req, res, next) => {
       no_customer:        0,
       errors:             0,
       changed:            0,   // courier price actually changed
+      error_details:      [],  // { charge_id, message } for each error
+      no_rate_details:    [],  // { charge_id, service_code, reason } for no-rate cases
     };
 
     for (const row of charges) {
@@ -1766,8 +1768,12 @@ router.post('/full-reprice', async (req, res, next) => {
         const weightPerParcel  = parseFloat(row.parcel_weight_kg) ||
           (parcelQty > 0 && totalWt ? totalWt / parcelQty : totalWt) || null;
 
-        const { rate } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, row.ship_to_postcode, row.ship_to_country_iso || 'GB');
-        if (!rate) { summary.no_rate++; continue; }
+        const { rate, reason: noRateReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, row.ship_to_postcode, row.ship_to_country_iso || 'GB');
+        if (!rate) {
+          summary.no_rate++;
+          summary.no_rate_details.push({ charge_id: row.charge_id, service_code: dcServiceId, weight_kg: weightPerParcel, reason: noRateReason });
+          continue;
+        }
 
         const pricingMode = await getParcelPricingMode(customerId);
         const newPrice    = parseFloat(calcTotal(rate, parcelQty, pricingMode).toFixed(2));
@@ -1850,7 +1856,10 @@ router.post('/full-reprice', async (req, res, next) => {
           } catch { /* non-fatal */ }
         }
 
-      } catch { summary.errors++; }
+      } catch (err) {
+        summary.errors++;
+        summary.error_details.push({ charge_id: row.charge_id, message: err.message });
+      }
     }
 
     res.json(summary);
