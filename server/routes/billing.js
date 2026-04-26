@@ -245,135 +245,91 @@ function bandMaxKg(rate) {
   return Infinity; // flat-rate band — sorts last (lowest priority)
 }
 
-// zoneForPostcode — resolve zone name from service code + destination postcode.
+// zoneForPostcode — resolve zone name from service code + destination postcode + iso.
 //
-// Uses dc_zones as the primary source — this is the carrier rate card data
-// imported directly from DespatchCloud and covers all legacy services.
-// Falls back to the zones/zone_postcode_rules tables for new-model services
-// that haven't been imported into dc_zones.
+// Uses the carrier model exclusively: zones, zone_postcode_rules, zone_country_codes.
 //
-// Outward code matching (same logic in both sources):
-//   - Exact:   outward = element  (e.g. "IV1")
-//   - Prefix:  outward LIKE element||'%' where element is letters-only
-//              (e.g. "IV" matches "IV1", "IV2", etc.)
+// Outward code matching:
+//   - Exact:  postcode_prefix = outward          (e.g. "IV1")
+//   - Prefix: outward LIKE prefix||'%' AND prefix is letters-only
+//             (e.g. prefix "IV" matches outward "IV1", "IV2", etc.)
 //
-// Zone resolution order:
-//   1. dc_zones — included_postcodes match → that zone (filtered by iso)
-//   2. dc_zones — no included list AND outward not in excluded_postcodes → catch-all (filtered by iso)
-//   3. zones/zone_postcode_rules — include rule match (new-model services)
-//   4. zones/zone_postcode_rules — catch-all (has excludes, this postcode not excluded)
-//   5. zones/zone_postcode_rules — universal zone (no rules at all)
+// Country filtering via zone_country_codes:
+//   A zone matches the destination country if:
+//     - It has an entry for the given iso in zone_country_codes, OR
+//     - It has no zone_country_codes entries at all (applies to all countries)
 //
-// IMPORTANT: iso filtering is mandatory. If dc_zones has no rows for this
-// service + iso combination, zone resolution returns null (hard error). This
-// prevents international/wrong-country zone rows silently matching UK postcodes.
+// Resolution priority:
+//   1. Zones with an explicit include rule matching the outward code
+//   2. Zones that are catch-all: have exclude rules but this postcode isn't excluded
+//   3. Zones with no postcode rules at all (flat-rate / universal zones)
 async function zoneForPostcode(serviceCode, postcode, iso = 'GB') {
   if (!postcode || !serviceCode) return null;
 
-  const outward   = postcode.trim().toUpperCase().split(/\s+/)[0];
-  const isoUpper  = (iso || 'GB').trim().toUpperCase();
+  const outward  = postcode.trim().toUpperCase().split(/\s+/)[0];
+  const isoUpper = (iso || 'GB').trim().toUpperCase();
 
-  // Guard: if there are NO dc_zones rows at all for this service+iso, fail fast
-  // rather than silently falling through to a wrong catch-all from another country.
-  const isoCheckRes = await query(`
-    SELECT 1 FROM dc_zones WHERE service_code ILIKE $1 AND iso = $2 LIMIT 1
-  `, [serviceCode, isoUpper]);
-  if (!isoCheckRes.rows.length) {
-    // No zones configured for this country — return null so caller can surface error
-    return null;
-  }
-
-  // Helper: does an array column contain a match for this outward code?
-  // Exact match OR letter-only prefix (e.g. "IV" matches "IV1", "IV2")
-  const ARRAY_MATCH = `EXISTS (
-    SELECT 1 FROM unnest($2::text[]) p
-    WHERE p = $3 OR ($3 LIKE p || '%' AND p ~ '^[A-Z]+$')
+  // Country filter — zone must either have this iso in its country codes,
+  // or have no country codes configured (applies to all countries)
+  const COUNTRY_FILTER = `(
+    EXISTS (SELECT 1 FROM zone_country_codes zcc WHERE zcc.zone_id = z.id AND zcc.country_iso = $3)
+    OR NOT EXISTS (SELECT 1 FROM zone_country_codes zcc WHERE zcc.zone_id = z.id)
   )`;
 
-  // ── 1. dc_zones: explicit include (iso-filtered) ──────────────────────────
-  const dcInclRes = await query(`
-    SELECT zone_name
-    FROM dc_zones
-    WHERE service_code ILIKE $1
-      AND iso = $4
-      AND included_postcodes IS NOT NULL
-      AND EXISTS (
-        SELECT 1 FROM unnest(included_postcodes) p
-        WHERE p = $2 OR ($2 LIKE p || '%' AND p ~ '^[A-Z]+$')
-      )
-    ORDER BY zone_name
-    LIMIT 1
-  `, [serviceCode, outward, outward, isoUpper]);
-  if (dcInclRes.rows.length) return dcInclRes.rows[0].zone_name;
-
-  // ── 2. dc_zones: catch-all (no include list, outward not excluded, iso-filtered) ──
-  const dcCatchRes = await query(`
-    SELECT zone_name
-    FROM dc_zones
-    WHERE service_code ILIKE $1
-      AND iso = $3
-      AND included_postcodes IS NULL
-      AND (
-        excluded_postcodes IS NULL
-        OR NOT EXISTS (
-          SELECT 1 FROM unnest(excluded_postcodes) p
-          WHERE p = $2 OR ($2 LIKE p || '%' AND p ~ '^[A-Z]+$')
-        )
-      )
-    ORDER BY zone_name
-    LIMIT 1
-  `, [serviceCode, outward, isoUpper]);
-  if (dcCatchRes.rows.length) return dcCatchRes.rows[0].zone_name;
-
-  // ── 3–5. zones/zone_postcode_rules (new-model services) ──────────────────
-  const MATCH_CLAUSE = `(
+  // Postcode prefix match — exact OR letter-only prefix (e.g. "IV" matches "IV1")
+  const PREFIX_MATCH = `(
     pr.postcode_prefix = $2
     OR ($2 LIKE pr.postcode_prefix || '%' AND pr.postcode_prefix ~ '^[A-Z]+$')
   )`;
 
+  // ── 1. Explicit include rule matches this postcode ────────────────────────
   const inclRes = await query(`
     SELECT z.name AS zone_name
     FROM zones z
     JOIN courier_services cs ON cs.id = z.courier_service_id
-    JOIN zone_postcode_rules pr ON pr.zone_id = z.id
+    JOIN zone_postcode_rules pr ON pr.zone_id = z.id AND pr.rule_type = 'include'
     WHERE cs.service_code ILIKE $1
-      AND pr.rule_type = 'include'
-      AND ${MATCH_CLAUSE}
+      AND ${PREFIX_MATCH}
+      AND ${COUNTRY_FILTER}
+    ORDER BY z.name
     LIMIT 1
-  `, [serviceCode, outward]);
+  `, [serviceCode, outward, isoUpper]);
   if (inclRes.rows.length) return inclRes.rows[0].zone_name;
 
-  const EXCL_MATCH = MATCH_CLAUSE.replace(/pr\./g, 'pr3.');
+  // ── 2. Catch-all zone: has excludes but this postcode isn't excluded ──────
   const catchRes = await query(`
     SELECT z.name AS zone_name
     FROM zones z
     JOIN courier_services cs ON cs.id = z.courier_service_id
     WHERE cs.service_code ILIKE $1
+      AND ${COUNTRY_FILTER}
       AND EXISTS (
-        SELECT 1 FROM zone_postcode_rules pr2
-        WHERE pr2.zone_id = z.id AND pr2.rule_type = 'exclude'
+        SELECT 1 FROM zone_postcode_rules
+        WHERE zone_id = z.id AND rule_type = 'exclude'
       )
       AND NOT EXISTS (
-        SELECT 1 FROM zone_postcode_rules pr3
-        WHERE pr3.zone_id = z.id AND pr3.rule_type = 'exclude'
-          AND ${EXCL_MATCH}
+        SELECT 1 FROM zone_postcode_rules pr
+        WHERE pr.zone_id = z.id AND pr.rule_type = 'exclude'
+          AND ${PREFIX_MATCH}
       )
+    ORDER BY z.name
     LIMIT 1
-  `, [serviceCode, outward]);
+  `, [serviceCode, outward, isoUpper]);
   if (catchRes.rows.length) return catchRes.rows[0].zone_name;
 
+  // ── 3. Universal zone: no postcode rules at all ───────────────────────────
   const univRes = await query(`
     SELECT z.name AS zone_name
     FROM zones z
     JOIN courier_services cs ON cs.id = z.courier_service_id
     WHERE cs.service_code ILIKE $1
+      AND ${COUNTRY_FILTER}
       AND NOT EXISTS (
-        SELECT 1 FROM zone_postcode_rules pr
-        WHERE pr.zone_id = z.id
+        SELECT 1 FROM zone_postcode_rules WHERE zone_id = z.id
       )
     ORDER BY z.name
     LIMIT 1
-  `, [serviceCode]);
+  `, [serviceCode, outward, isoUpper]);
   if (univRes.rows.length) return univRes.rows[0].zone_name;
 
   return null;
@@ -492,7 +448,7 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
     zoneName = distinctZones[0];
   } else {
     const resolved = await zoneForPostcode(serviceCode, postcode, iso);
-    if (!resolved) return { rate: null, reason: `no matching zone for postcode "${postcode}" (iso: ${iso}) — check dc_zones has rows for this service + country` };
+    if (!resolved) return { rate: null, reason: `no matching zone for postcode "${postcode}" (iso: ${iso})` };
     zoneName = resolved;
   }
 
@@ -513,16 +469,14 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
     return { rate: null, reason: 'no matching price' };
   }
 
-  // ── Step 4: carrier cost from weight_bands (master rate card) ────────────────
+  // ── Step 3: carrier cost from weight_bands (direct carrier model lookup) ────────
   const costRes = await query(`
     SELECT wb.price_first AS carrier_cost, wb.price_sub AS carrier_cost_sub
     FROM weight_bands wb
-    JOIN zones z              ON z.id  = wb.zone_id
-    JOIN courier_services cs  ON cs.id = z.courier_service_id
-    JOIN carrier_rate_cards crc ON crc.id = wb.carrier_rate_card_id
+    JOIN zones z             ON z.id  = wb.zone_id
+    JOIN courier_services cs ON cs.id = z.courier_service_id
     WHERE cs.service_code ILIKE $1
       AND z.name           ILIKE $2
-      AND crc.is_master         = true
       AND wb.min_weight_kg      < $3
       AND wb.max_weight_kg      >= $3
     ORDER BY wb.max_weight_kg ASC
@@ -2617,43 +2571,46 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ─── GET /api/billing/dc-zones/missing-gb ────────────────────────────────────
-// Returns every service code in dc_zones that has NO rows with iso = 'GB'.
-// These services will fail zone resolution for any UK domestic shipment.
-router.get('/dc-zones/missing-gb', async (_req, res, next) => {
+// ─── GET /api/billing/zones/missing-country ──────────────────────────────────
+// Returns every courier service that has zones with NO zone_country_codes rows.
+// These services use universal zones (match any country) — which may be correct
+// for domestic-only services, but worth surfacing for review.
+router.get('/zones/missing-country', async (_req, res, next) => {
   try {
     const result = await query(`
-      SELECT DISTINCT
-        service_code,
-        courier_code,
-        MAX(service_name) AS service_name,
-        array_agg(DISTINCT iso ORDER BY iso) AS isos_present,
-        COUNT(*) AS zone_count
-      FROM dc_zones
-      WHERE service_code NOT IN (
-        SELECT DISTINCT service_code FROM dc_zones WHERE iso = 'GB'
+      SELECT
+        cs.service_code,
+        c.name AS courier_name,
+        cs.service_name,
+        COUNT(z.id) AS zones_without_country_codes
+      FROM courier_services cs
+      JOIN couriers c ON c.id = cs.courier_id
+      JOIN zones z ON z.courier_service_id = cs.id
+      WHERE NOT EXISTS (
+        SELECT 1 FROM zone_country_codes zcc WHERE zcc.zone_id = z.id
       )
-      GROUP BY service_code, courier_code
-      ORDER BY courier_code, service_code
+      GROUP BY cs.service_code, c.name, cs.service_name
+      ORDER BY c.name, cs.service_code
     `);
     res.json({
-      services_missing_gb: result.rows,
+      services: result.rows,
       count: result.rows.length,
-      note: 'These services have no dc_zones rows with iso = GB. Any UK domestic shipment using these services will fail zone resolution.'
+      note: 'These services have zones with no country codes — zones will match any destination country (universal). This is correct for domestic-only services.'
     });
   } catch (err) { next(err); }
 });
 
 // ─── GET /api/billing/customers/:id/rate-diagnostic ──────────────────────────
-// Shows the customer's full rate card, dc_weight_classes, and simulates the
-// lookup for a given weight/service so we can see exactly which band & price
-// the billing engine will pick.
-// Query params: service_code (required), weight_kg (default 5)
+// Shows the customer's rate card and carrier weight bands, and simulates the
+// lookup for a given weight/service/postcode so we can see exactly which band
+// & price the billing engine will pick.
+// Query params: service_code (required), weight_kg (default 5),
+//               postcode (default 'SW1A'), iso (default 'GB')
 //
 router.get('/customers/:id/rate-diagnostic', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { service_code, weight_kg = 5 } = req.query;
+    const { service_code, weight_kg = 5, postcode = 'SW1A', iso = 'GB' } = req.query;
     const wkg = parseFloat(weight_kg);
 
     // 1. Customer info
@@ -2665,55 +2622,81 @@ router.get('/customers/:id/rate-diagnostic', async (req, res, next) => {
     // 2. All customer_rates rows (optionally filtered by service_code)
     const ratesCond = service_code ? `AND service_code ILIKE $2` : '';
     const ratesRes  = await query(`
-      SELECT service_code, zone_name, weight_class_name, price, price_sub
+      SELECT service_code, zone_name, weight_class_name,
+             min_weight_kg, max_weight_kg, price, price_sub
       FROM customer_rates
       WHERE customer_id = $1 ${ratesCond}
-      ORDER BY service_code, zone_name, weight_class_name
+      ORDER BY service_code, zone_name, min_weight_kg NULLS LAST
     `, service_code ? [id, service_code] : [id]);
 
-    // 3. All dc_weight_classes rows for the relevant service codes
+    // 3. Carrier weight bands (from carrier model) for the relevant service codes
     const serviceCodes = service_code
       ? [service_code]
       : [...new Set(ratesRes.rows.map(r => r.service_code))];
 
-    const wcRes = serviceCodes.length
+    const bandsRes = serviceCodes.length
       ? await query(`
-          SELECT service_code, weight_class_name, min_weight_kg, max_weight_kg
-          FROM dc_weight_classes
-          WHERE service_code ILIKE ANY($1::text[])
-          ORDER BY service_code, min_weight_kg
+          SELECT cs.service_code, z.name AS zone_name,
+                 wb.name AS band_name,
+                 wb.min_weight_kg, wb.max_weight_kg,
+                 wb.price_first AS carrier_cost, wb.price_sub AS carrier_cost_sub
+          FROM weight_bands wb
+          JOIN zones z             ON z.id  = wb.zone_id
+          JOIN courier_services cs ON cs.id = z.courier_service_id
+          WHERE cs.service_code ILIKE ANY($1::text[])
+          ORDER BY cs.service_code, z.name, wb.min_weight_kg NULLS LAST
         `, [serviceCodes])
       : { rows: [] };
 
-    // 4. Simulate the lookup for the given weight
+    // 4. Simulate the full lookup for the given weight + postcode
     let simulation = null;
     if (service_code) {
-      const wcMatch = await query(`
-        SELECT weight_class_name
-        FROM dc_weight_classes
-        WHERE service_code ILIKE $1
-          AND min_weight_kg < $2
-          AND max_weight_kg >= $2
-        ORDER BY max_weight_kg ASC
-        LIMIT 1
-      `, [service_code, wkg]);
-
-      const matchedClass = wcMatch.rows[0]?.weight_class_name || null;
-
-      // Zones for this customer + service
+      // Zone resolution
       const zonesRes = await query(`
         SELECT DISTINCT zone_name FROM customer_rates
         WHERE customer_id = $1 AND service_code ILIKE $2
       `, [id, service_code]);
-      const zones = zonesRes.rows.map(r => r.zone_name);
+      const distinctZones = zonesRes.rows.map(r => r.zone_name);
 
-      // Price rows matching the weight class (all zones)
-      const priceRows = matchedClass ? await query(`
-        SELECT zone_name, weight_class_name, price, price_sub
+      let resolvedZone = null;
+      let zoneResolutionNote = null;
+      if (distinctZones.length === 1) {
+        resolvedZone = distinctZones[0];
+        zoneResolutionNote = `Single zone — no postcode lookup needed: "${resolvedZone}"`;
+      } else {
+        resolvedZone = await zoneForPostcode(service_code, postcode, iso);
+        zoneResolutionNote = resolvedZone
+          ? `Postcode "${postcode}" (iso: ${iso}) resolved to zone: "${resolvedZone}"`
+          : `⚠️  No zone matched for postcode "${postcode}" (iso: ${iso}) — check zone_postcode_rules and zone_country_codes for this service`;
+      }
+
+      // Sell price from customer_rates (numeric weight matching)
+      const priceRes = resolvedZone ? await query(`
+        SELECT id, zone_name, weight_class_name, min_weight_kg, max_weight_kg, price, price_sub
         FROM customer_rates
-        WHERE customer_id = $1 AND service_code ILIKE $2 AND weight_class_name = $3
-        ORDER BY zone_name
-      `, [id, service_code, matchedClass]) : { rows: [] };
+        WHERE customer_id = $1
+          AND service_code ILIKE $2
+          AND zone_name    ILIKE $3
+          AND min_weight_kg     < $4
+          AND max_weight_kg     >= $4
+        ORDER BY max_weight_kg ASC
+        LIMIT 1
+      `, [id, service_code, resolvedZone, wkg]) : { rows: [] };
+
+      // Carrier cost from weight_bands (direct carrier model)
+      const costRes = resolvedZone ? await query(`
+        SELECT wb.name AS band_name, wb.price_first AS carrier_cost, wb.price_sub AS carrier_cost_sub,
+               wb.min_weight_kg, wb.max_weight_kg
+        FROM weight_bands wb
+        JOIN zones z             ON z.id  = wb.zone_id
+        JOIN courier_services cs ON cs.id = z.courier_service_id
+        WHERE cs.service_code ILIKE $1
+          AND z.name           ILIKE $2
+          AND wb.min_weight_kg      < $3
+          AND wb.max_weight_kg      >= $3
+        ORDER BY wb.max_weight_kg ASC
+        LIMIT 1
+      `, [service_code, resolvedZone, wkg]) : { rows: [] };
 
       // Fuel config
       const fuelRes = await query(`
@@ -2726,26 +2709,31 @@ router.get('/customers/:id/rate-diagnostic', async (req, res, next) => {
         WHERE cs.service_code ILIKE $1 LIMIT 1
       `, [service_code, id]);
 
+      const priceRow = priceRes.rows[0] || null;
+      const costRow  = costRes.rows[0]  || null;
+
       simulation = {
-        input:         { service_code, weight_kg: wkg },
-        matched_class: matchedClass,
-        available_zones: zones,
-        price_rows_for_class: priceRows.rows,
-        note: priceRows.rows.length > 1
-          ? '⚠️  Multiple price rows for this weight class — engine picks FIRST (LIMIT 1). Check for duplicate/conflicting rates.'
-          : priceRows.rows.length === 0 && matchedClass
-            ? '⚠️  Weight class matched in dc_weight_classes but NO corresponding customer_rates row — will return no rate.'
-            : priceRows.rows.length === 0
-              ? '⚠️  No matching weight class in dc_weight_classes for this weight.'
-              : '✓ Single rate found',
+        input:           { service_code, weight_kg: wkg, postcode, iso },
+        available_zones: distinctZones,
+        zone_resolution: zoneResolutionNote,
+        resolved_zone:   resolvedZone,
+        matched_sell_rate: priceRow,
+        matched_carrier_band: costRow,
+        note: !resolvedZone
+          ? '⚠️  Zone resolution failed — no rate can be returned.'
+          : !priceRow
+            ? `⚠️  Zone resolved to "${resolvedZone}" but no customer_rates row covers ${wkg} kg — check min/max_weight_kg bounds are populated (run migration 102 if needed).`
+            : !costRow
+              ? `✓ Sell rate found (£${priceRow.price}) but no carrier cost band found — weight_bands may be missing for this zone.`
+              : `✓ Sell: £${priceRow.price} | Carrier cost: £${costRow.carrier_cost}`,
         fuel: fuelRes.rows[0] || null,
       };
     }
 
     res.json({
-      customer:         custRes.rows[0],
-      customer_rates:   ratesRes.rows,
-      dc_weight_classes: wcRes.rows,
+      customer:        custRes.rows[0],
+      customer_rates:  ratesRes.rows,
+      carrier_bands:   bandsRes.rows,
       simulation,
     });
   } catch (err) { next(err); }
