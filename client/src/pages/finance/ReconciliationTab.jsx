@@ -73,22 +73,39 @@ function parseDhlCsv(text) {
   let parsed = 0;
   let skipped = 0;
 
-  for (const line of lines) {
-    const cols = parseCsvLine(line);
-    if (cols.length < 6) { skipped++; continue; }
+  // ── Step 1: find column indices from header row ──────────────────────────
+  // DHL may add/remove columns between invoice versions — always derive
+  // positions from the header rather than hardcoding index numbers.
+  let colValue    = 5;   // fallback: "Value"
+  let colRef      = 11;  // fallback: "Reference"
+  let colService  = 20;  // fallback: "Service Desc"
 
-    const valueRaw = (cols[5] || '').replace(/[£,\s]/g, '');
+  if (lines.length > 0) {
+    const header = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
+    const vi = header.findIndex(h => h === 'value');
+    const ri = header.findIndex(h => h === 'reference');
+    const si = header.findIndex(h => h.includes('service desc') || h === 'service');
+    if (vi !== -1) colValue   = vi;
+    if (ri !== -1) colRef     = ri;
+    if (si !== -1) colService = si;
+  }
+
+  // ── Step 2: process data rows ─────────────────────────────────────────────
+  for (let i = 1; i < lines.length; i++) {
+    const cols = parseCsvLine(lines[i]);
+
+    const valueRaw = (cols[colValue] || '').replace(/[£,\s]/g, '');
     const value    = parseFloat(valueRaw);
-    const ref      = (cols[11] || '').trim();
-    // DHL puts the service description in col 20 (Service Desc)
-    const serviceDesc = (cols[20] || '').trim().toUpperCase();
+    const ref      = (cols[colRef]     || '').trim();
+    const svcDesc  = (cols[colService] || '').trim().toUpperCase();
 
     if (isNaN(value) || value === 0) { skipped++; continue; }
 
-    // Surcharge rows — DHL puts "FUEL SURCHARGE" / "HGV SURCHARGE" in col 20,
-    // and leaves the Reference column (col 11) blank.
-    if (!ref.startsWith('MP-') && serviceDesc.includes('SURCHARGE')) {
-      surcharges.push({ description: (cols[20] || '').trim(), value });
+    // Surcharge rows — no MP- reference and service description contains "SURCHARGE"
+    // (DHL always puts fuel/HGV surcharges at the bottom but we detect by content,
+    // not position, so the row number doesn't matter)
+    if (!ref.startsWith('MP-') && svcDesc.includes('SURCHARGE')) {
+      surcharges.push({ description: (cols[colService] || '').trim(), value });
       parsed++;
       continue;
     }
