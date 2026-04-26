@@ -48,6 +48,7 @@ router.post('/bulk-lookup', async (req, res) => {
         s.courier,
         s.collection_date,
         s.parcel_count,
+        s.total_weight_kg       AS declared_weight_kg,
         cu.id                   AS customer_id,
         cu.business_name        AS customer_name,
         cu.account_number       AS customer_account,
@@ -60,20 +61,26 @@ router.post('/bulk-lookup', async (req, res) => {
             AND sc.cancelled = false
         ), 0)                   AS fuel_cost_price,
         -- Total cost across ALL charge types for this shipment (base + fuel + surcharges)
+        -- Surcharges marked reconciliation_excluded=true are omitted — these are charges
+        -- we apply to the customer but do not expect the carrier to bill us for.
         COALESCE(c.cost_price, 0) + COALESCE((
           SELECT SUM(sc.cost_price)
           FROM charges sc
+          LEFT JOIN surcharges sx ON sx.id = sc.surcharge_id
           WHERE sc.shipment_id = c.shipment_id
             AND sc.charge_type IN ('fuel', 'surcharge')
             AND sc.cancelled = false
+            AND (sx.id IS NULL OR sx.reconciliation_excluded = false)
         ), 0)                   AS total_cost_price,
         -- Total sell across ALL charge types for this shipment
         COALESCE(c.price, 0) + COALESCE((
           SELECT SUM(sc.price)
           FROM charges sc
+          LEFT JOIN surcharges sx ON sx.id = sc.surcharge_id
           WHERE sc.shipment_id = c.shipment_id
             AND sc.charge_type IN ('fuel', 'surcharge')
             AND sc.cancelled = false
+            AND (sx.id IS NULL OR sx.reconciliation_excluded = false)
         ), 0)                   AS total_sell_price
       FROM charges c
       LEFT JOIN shipments s  ON s.id  = c.shipment_id
@@ -104,10 +111,11 @@ router.post('/bulk-lookup', async (req, res) => {
         charge_id:               row.charge_id,
         base_cost_price:         row.base_cost_price   != null ? parseFloat(row.base_cost_price)   : null,
         base_sell_price:         row.base_sell_price   != null ? parseFloat(row.base_sell_price)   : null,
-        fuel_cost_price:         row.fuel_cost_price   != null ? parseFloat(row.fuel_cost_price)   : 0,
-        total_cost_price:        row.total_cost_price  != null ? parseFloat(row.total_cost_price)  : null,
-        total_sell_price:        row.total_sell_price  != null ? parseFloat(row.total_sell_price)  : null,
-        parcel_count:            row.parcel_count       != null ? parseInt(row.parcel_count, 10)    : 1,
+        fuel_cost_price:         row.fuel_cost_price    != null ? parseFloat(row.fuel_cost_price)   : 0,
+        total_cost_price:        row.total_cost_price   != null ? parseFloat(row.total_cost_price)  : null,
+        total_sell_price:        row.total_sell_price   != null ? parseFloat(row.total_sell_price)  : null,
+        parcel_count:            row.parcel_count        != null ? parseInt(row.parcel_count, 10)    : 1,
+        declared_weight_kg:      row.declared_weight_kg != null ? parseFloat(row.declared_weight_kg) : null,
         service_name:            row.service_name,
         collection_date:         row.collection_date,
         verified:                row.verified,

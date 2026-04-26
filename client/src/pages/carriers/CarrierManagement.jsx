@@ -2224,6 +2224,20 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                 ['Charge Per', <select value={surchargeForm.charge_per} onChange={e => setSurchargeForm(f=>({...f,charge_per:e.target.value}))} style={{ width:'100%', height:34, background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, color:'#fff', fontSize:13, padding:'0 10px' }}><option value="shipment">Per Shipment</option><option value="parcel">Per Parcel</option></select>],
               ].map(([l, el]) => <div key={l}><label style={{ fontSize:11, color:'#AAAAAA', display:'block', marginBottom:4 }}>{l}</label>{el}</div>)}
             </div>
+            <div style={{ marginBottom:10 }}>
+              <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', userSelect:'none' }}>
+                <input
+                  type="checkbox"
+                  checked={surchargeForm.reconciliation_excluded || false}
+                  onChange={e => setSurchargeForm(f => ({ ...f, reconciliation_excluded: e.target.checked }))}
+                  style={{ width:15, height:15, accentColor:'#F44336', cursor:'pointer' }}
+                />
+                <span style={{ fontSize:12, color: surchargeForm.reconciliation_excluded ? '#F44336' : '#888' }}>
+                  Exclude from carrier reconciliation
+                </span>
+                <span style={{ fontSize:11, color:'#555' }}>— we charge the customer but don't pay the carrier</span>
+              </label>
+            </div>
             <div style={{ marginBottom:12 }}>
               <label style={{ fontSize:11, color:'#AAAAAA', display:'block', marginBottom:4 }}>Description (optional)</label>
               <div className="pill-input-wrap"><input value={surchargeForm.description} onChange={e => setSurchargeForm(f=>({...f,description:e.target.value}))} placeholder="e.g. Applied for deliveries to remote postcodes" style={{ fontSize:13 }}/></div>
@@ -2265,12 +2279,12 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
 
                     {/* Value + firing mode — click to edit */}
                     <div
-                      onClick={() => { if (!isEditing) { setEditingSurcharge(s.id); setEditSForm({ default_value: String(s.default_value||0), applies_when: s.applies_when, charge_per: s.charge_per, calc_type: s.calc_type, active: s.active }); } }}
+                      onClick={() => { if (!isEditing) { setEditingSurcharge(s.id); setEditSForm({ default_value: String(s.default_value||0), applies_when: s.applies_when, charge_per: s.charge_per, calc_type: s.calc_type, active: s.active, reconciliation_excluded: s.reconciliation_excluded || false }); } }}
                       style={{ cursor:'pointer', textAlign:'right', padding:'4px 8px', borderRadius:6, background: isEditing ? 'rgba(233,30,140,0.08)' : 'transparent', border: isEditing ? '1px solid rgba(233,30,140,0.25)' : '1px solid transparent' }}
                       title="Click to edit"
                     >
                       <div style={{ fontSize:14, fontWeight:700, color:'#E91E8C', fontFamily:'monospace' }}>{valStr}</div>
-                      <div style={{ fontSize:10, color:'#888' }}>per {s.charge_per} · {s.applies_when === 'always' ? '⚡ auto' : '📋 reconciliation'}</div>
+                      <div style={{ fontSize:10, color:'#888' }}>per {s.charge_per} · {s.applies_when === 'always' ? '⚡ auto' : '📋 reconciliation'}{s.reconciliation_excluded && <span style={{ marginLeft:5, color:'#F44336', fontWeight:700 }}>· excl. recon</span>}</div>
                     </div>
 
                     {/* Controls */}
@@ -2292,6 +2306,16 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                           ['Charge Per', <select value={editSForm.charge_per} onChange={e => setEditSForm(f=>({...f,charge_per:e.target.value}))} style={{ width:'100%', height:30, background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:6, color:'#fff', fontSize:12, padding:'0 8px' }}><option value="shipment">Per Shipment</option><option value="parcel">Per Parcel</option></select>],
                         ].map(([l, el]) => <div key={l}><label style={{ fontSize:10, color:'#AAAAAA', display:'block', marginBottom:3 }}>{l}</label>{el}</div>)}
                       </div>
+                      <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', userSelect:'none', marginBottom:10 }}>
+                        <input
+                          type="checkbox"
+                          checked={editSForm.reconciliation_excluded || false}
+                          onChange={e => setEditSForm(f => ({ ...f, reconciliation_excluded: e.target.checked }))}
+                          style={{ width:15, height:15, accentColor:'#F44336', cursor:'pointer' }}
+                        />
+                        <span style={{ fontSize:12, color: editSForm.reconciliation_excluded ? '#F44336' : '#888' }}>Exclude from carrier reconciliation</span>
+                        <span style={{ fontSize:11, color:'#555' }}>— we charge the customer but don't pay the carrier</span>
+                      </label>
                       <div style={{ display:'flex', gap:8 }}>
                         <button onClick={() => patchSurcharge.mutate({ id:s.id, ...editSForm, default_value: parseFloat(editSForm.default_value)||0 })} disabled={patchSurcharge.isPending} className="btn-primary" style={{ height:28, fontSize:12, background:'rgba(233,30,140,0.2)', border:'1px solid rgba(233,30,140,0.4)', color:'#E91E8C' }}><Check size={11}/> Save</button>
                         <button onClick={() => setEditingSurcharge(null)} className="btn-ghost" style={{ height:28, fontSize:12, padding:'0 10px' }}>Cancel</button>
