@@ -500,8 +500,12 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
   }
 
   // ── Step 3: carrier cost from weight_bands (direct carrier model lookup) ────────
-  const costRes = await query(`
-    SELECT wb.price_first AS carrier_cost, wb.price_sub AS carrier_cost_sub
+  // Try numeric bounds first, fall back to single-band match if bounds are NULL.
+  let costRow = null;
+
+  const numericCostRes = await query(`
+    SELECT wb.price_first AS carrier_cost, wb.price_sub AS carrier_cost_sub,
+           wb.min_weight_kg, wb.max_weight_kg
     FROM weight_bands wb
     JOIN zones z             ON z.id  = wb.zone_id
     JOIN courier_services cs ON cs.id = z.courier_service_id
@@ -513,9 +517,32 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
     LIMIT 1
   `, [serviceCode, zoneName, weightKg ?? 0]);
 
-  const carrierCost    = costRes.rows.length ? parseFloat(costRes.rows[0].carrier_cost) : null;
-  const carrierCostSub = costRes.rows.length && costRes.rows[0].carrier_cost_sub != null
-    ? parseFloat(costRes.rows[0].carrier_cost_sub)
+  if (numericCostRes.rows.length) {
+    costRow = numericCostRes.rows[0];
+  } else {
+    // Fallback: get all bands for this zone and match by weight, or use single band
+    const allBandsRes = await query(`
+      SELECT wb.price_first AS carrier_cost, wb.price_sub AS carrier_cost_sub,
+             wb.min_weight_kg, wb.max_weight_kg
+      FROM weight_bands wb
+      JOIN zones z             ON z.id  = wb.zone_id
+      JOIN courier_services cs ON cs.id = z.courier_service_id
+      WHERE cs.service_code ILIKE $1
+        AND z.name           ILIKE $2
+      ORDER BY wb.min_weight_kg NULLS LAST
+    `, [serviceCode, zoneName]);
+
+    if (allBandsRes.rows.length === 1) {
+      costRow = allBandsRes.rows[0];
+    } else if (allBandsRes.rows.length > 1) {
+      // Multiple bands with NULL bounds — pick the one that covers the weight via rateCoversWeight
+      costRow = allBandsRes.rows.find(r => rateCoversWeight(r, weightKg)) || null;
+    }
+  }
+
+  const carrierCost    = costRow ? parseFloat(costRow.carrier_cost) : null;
+  const carrierCostSub = costRow && costRow.carrier_cost_sub != null
+    ? parseFloat(costRow.carrier_cost_sub)
     : null;
 
   return {
