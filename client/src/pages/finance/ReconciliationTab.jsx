@@ -93,6 +93,16 @@ function parseDhlCsv(text) {
     if (si !== -1) colService = si;
   }
 
+  // Columns W–AE (0-indexed 22–30) contain per-shipment special surcharges:
+  //   Z  (25) = long length surcharge
+  //   AB (27) = weight surcharge per kg (the £/kg over threshold we bill)
+  //   Others may be present (residential, remote area, etc.)
+  // These ARE in the invoice line itself and must be summed per shipment.
+  // Fuel and HGV surcharges are NOT here — they're invoice-level totals at the
+  // bottom (no MP- ref) and are allocated post-lookup.
+  const SURCHARGE_COL_START = 22; // W
+  const SURCHARGE_COL_END   = 30; // AE
+
   // ── Step 2: process data rows ─────────────────────────────────────────────
   for (let i = 1; i < lines.length; i++) {
     const cols = parseCsvLine(lines[i]);
@@ -105,7 +115,7 @@ function parseDhlCsv(text) {
     if (isNaN(value) || value === 0) { skipped++; continue; }
 
     // Invoice-level surcharge rows — no MP- reference, description contains "SURCHARGE"
-    // These are the totals we use to allocate surcharges proportionally per shipment.
+    // These are the FUEL and HGV totals; allocated per-shipment post-lookup.
     if (!ref.startsWith('MP-') && svcDesc.includes('SURCHARGE')) {
       surcharges.push({ description: (cols[colService] || '').trim(), value });
       parsed++;
@@ -113,17 +123,26 @@ function parseDhlCsv(text) {
     }
 
     // Normal shipment row — must have MP- reference.
-    // carrier_surcharges and carrier_total are set to 0/base here;
-    // they are recalculated post-lookup once we know parcel_count from the DB.
     if (ref.startsWith('MP-')) {
       const invoiceServiceName = (cols[colService] || '').trim();
+
+      // Sum per-shipment surcharges from columns W–AE (weight, length, etc.)
+      // Fuel and HGV are NOT in these columns — those are invoice-level totals.
+      let csvSurcharges = 0;
+      for (let col = SURCHARGE_COL_START; col <= SURCHARGE_COL_END; col++) {
+        const raw = (cols[col] || '').replace(/[£,\s]/g, '');
+        const n   = parseFloat(raw);
+        if (!isNaN(n) && n !== 0) csvSurcharges += Math.abs(n);
+      }
+
       shipmentMap[ref] = shipmentMap[ref] || [];
       shipmentMap[ref].push({
-        reference:            ref,
-        carrier_cost:         value,   // base freight only (surcharges allocated post-lookup)
-        carrier_surcharges:   0,       // populated after DB lookup
-        carrier_total:        value,   // populated after DB lookup
-        invoice_service_name: invoiceServiceName,
+        reference:              ref,
+        carrier_cost:           value,          // base freight
+        carrier_csv_surcharges: csvSurcharges,  // W-AE: weight, length, etc.
+        carrier_surcharges:     csvSurcharges,  // will have fuel+HGV added post-lookup
+        carrier_total:          value + csvSurcharges, // updated post-lookup
+        invoice_service_name:   invoiceServiceName,
       });
       parsed++;
     } else {
@@ -781,7 +800,11 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           return { ...s, group, bestCharge };
         });
 
-        // Second pass: calculate carrier_total with allocated surcharges per shipment
+        // Second pass: add fuel/HGV allocation on top of per-shipment W-AE surcharges
+        // carrier_csv_surcharges = weight, length, etc. already read from CSV columns W-AE
+        // carrier_fuel_alloc     = proportional share of invoice FUEL SURCHARGE total
+        // carrier_hgv_alloc      = parcel_count × £0.13
+        // carrier_total          = base + csv_surcharges + fuel + HGV
         rows.forEach(row => {
           const fuelAlloc = totalInvoiceBase > 0
             ? (row.carrier_cost / totalInvoiceBase) * invoiceFuelTotal
@@ -790,11 +813,12 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           const hgvAlloc = invoiceHgvTotal > 0
             ? parcelCount * HGV_RATE_PER_PARCEL
             : 0;
-          row.carrier_fuel_alloc    = fuelAlloc;
-          row.carrier_hgv_alloc     = hgvAlloc;
-          row.carrier_surcharges    = fuelAlloc + hgvAlloc;
-          row.carrier_total         = row.carrier_cost + row.carrier_surcharges;
-          row.status                = getStatus(row.carrier_total, row.bestCharge || null);
+          row.carrier_fuel_alloc = fuelAlloc;
+          row.carrier_hgv_alloc  = hgvAlloc;
+          // carrier_csv_surcharges already set by parser; add fuel + HGV on top
+          row.carrier_surcharges = (row.carrier_csv_surcharges || 0) + fuelAlloc + hgvAlloc;
+          row.carrier_total      = row.carrier_cost + row.carrier_surcharges;
+          row.status             = getStatus(row.carrier_total, row.bestCharge || null);
         });
 
         setResults(rows);
@@ -1284,6 +1308,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                           {invoiceHasSurcharge && (
                             <div style={{ fontSize: 10, color: '#666', marginTop: 1 }}>
                               {gbp(row.carrier_cost)} base
+                              {(row.carrier_csv_surcharges || 0) > 0.005 && ` + ${gbp(row.carrier_csv_surcharges)} charges`}
                               {row.carrier_fuel_alloc > 0.005 && ` + ${gbp(row.carrier_fuel_alloc)} fuel`}
                               {row.carrier_hgv_alloc  > 0.005 && ` + ${gbp(row.carrier_hgv_alloc)} HGV`}
                             </div>
