@@ -114,52 +114,76 @@ function parseDhlCsv(text) {
   for (let i = 1; i < lines.length; i++) {
     const cols = parseCsvLine(lines[i]);
 
-    const valueRaw = (cols[colValue] || '').replace(/[£,\s]/g, '');
-    const value    = parseFloat(valueRaw);
-    const ref      = (cols[colRef]     || '').trim();
-    const svcDesc  = (cols[colService] || '').trim().toUpperCase();
+    const ref     = (cols[colRef]     || '').trim();
+    const svcDesc = (cols[colService] || '').trim().toUpperCase();
 
-    if (isNaN(value) || value === 0) { skipped++; continue; }
+    // ── Parse monetary value — handles £1,234.56, 1234.56, and bracket notation (1234.56) ──
+    const rawVal     = (cols[colValue] || '').replace(/[£,\s]/g, '');
+    const isBracketed = rawVal.startsWith('(') && rawVal.endsWith(')');
+    const value      = isBracketed
+      ? -parseFloat(rawVal.slice(1, -1))
+      : parseFloat(rawVal);
 
-    // Invoice-level surcharge rows — no MP- reference, description contains "SURCHARGE"
-    // These are the FUEL and HGV totals; allocated per-shipment post-lookup.
-    if (!ref.startsWith('MP-') && svcDesc.includes('SURCHARGE')) {
-      surcharges.push({ description: (cols[colService] || '').trim(), value });
-      parsed++;
+    // ── Invoice-level surcharge rows — check BEFORE the value=0 skip ──────────
+    // DHL puts FUEL SURCHARGE and HGV SURCHARGE as rows with no MP- reference.
+    // The description may be in colService OR in any other column.
+    // We scan the entire row text so we catch it regardless of column position.
+    // We also accept negative values (bracket notation) and store as positive.
+    if (!ref.startsWith('MP-')) {
+      const rowText = cols.join(' ').toUpperCase();
+      const isSurchargeRow =
+        rowText.includes('SURCHARGE') ||
+        rowText.includes('FUEL LEVY')  ||
+        rowText.includes('FUEL CHARGE') ||
+        (rowText.includes('FUEL') && rowText.includes('HGV') === false && !ref.startsWith('MP-')) ||
+        rowText.includes('HGV');
+
+      if (isSurchargeRow && !isNaN(value) && value !== 0) {
+        // Find the best description — prefer colService, fall back to any non-empty cell
+        const desc = (cols[colService] || '').trim()
+          || cols.find(c => {
+               const t = c.trim().toUpperCase();
+               return t.includes('SURCHARGE') || t.includes('FUEL') || t.includes('HGV');
+             })?.trim()
+          || 'Surcharge';
+        surcharges.push({ description: desc, value: Math.abs(value) });
+        parsed++;
+      } else {
+        skipped++;
+      }
       continue;
     }
 
-    // Normal shipment row — must have MP- reference.
-    if (ref.startsWith('MP-')) {
-      const invoiceServiceName = (cols[colService] || '').trim();
+    // Shipment rows — must have a valid non-zero value
+    if (isNaN(value) || value === 0) { skipped++; continue; }
 
-      // Sum per-shipment surcharges from columns W–AE (weight, length, etc.)
-      // Fuel and HGV are NOT in these columns — those are invoice-level totals.
-      let csvSurcharges = 0;
-      for (let col = SURCHARGE_COL_START; col <= SURCHARGE_COL_END; col++) {
-        const raw = (cols[col] || '').replace(/[£,\s]/g, '');
-        const n   = parseFloat(raw);
-        if (!isNaN(n) && n !== 0) csvSurcharges += Math.abs(n);
-      }
+    // Normal shipment row (ref starts with MP- — confirmed above)
+    const invoiceServiceName = (cols[colService] || '').trim();
 
-      // Billed (chargeable) weight from invoice — may differ from declared weight
-      const billedWeightRaw = colWeight >= 0 ? (cols[colWeight] || '').replace(/[,\s]/g, '') : '';
-      const billedWeightKg  = billedWeightRaw !== '' ? parseFloat(billedWeightRaw) : null;
-
-      shipmentMap[ref] = shipmentMap[ref] || [];
-      shipmentMap[ref].push({
-        reference:              ref,
-        carrier_cost:           value,          // Value column = TOTAL freight (W-AE are a breakdown of this, not additive)
-        carrier_csv_surcharges: csvSurcharges,  // W-AE informational breakdown only — already inside carrier_cost
-        carrier_surcharges:     0,              // fuel+HGV allocated post-lookup; csv_surcharges NOT added here
-        carrier_total:          value,          // updated post-lookup (carrier_cost + fuel_alloc + hgv_alloc)
-        billed_weight_kg:       isNaN(billedWeightKg) ? null : billedWeightKg,
-        invoice_service_name:   invoiceServiceName,
-      });
-      parsed++;
-    } else {
-      skipped++;
+    // Sum per-shipment surcharges from columns W–AE (weight, length, etc.)
+    // Fuel and HGV are NOT in these columns — those are invoice-level totals.
+    let csvSurcharges = 0;
+    for (let col = SURCHARGE_COL_START; col <= SURCHARGE_COL_END; col++) {
+      const raw = (cols[col] || '').replace(/[£,\s]/g, '');
+      const n   = parseFloat(raw);
+      if (!isNaN(n) && n !== 0) csvSurcharges += Math.abs(n);
     }
+
+    // Billed (chargeable) weight from invoice — may differ from declared weight
+    const billedWeightRaw = colWeight >= 0 ? (cols[colWeight] || '').replace(/[,\s]/g, '') : '';
+    const billedWeightKg  = billedWeightRaw !== '' ? parseFloat(billedWeightRaw) : null;
+
+    shipmentMap[ref] = shipmentMap[ref] || [];
+    shipmentMap[ref].push({
+      reference:              ref,
+      carrier_cost:           value,          // Value column = TOTAL freight (W-AE are a breakdown of this, not additive)
+      carrier_csv_surcharges: csvSurcharges,  // W-AE informational breakdown only — already inside carrier_cost
+      carrier_surcharges:     0,              // fuel+HGV allocated post-lookup; csv_surcharges NOT added here
+      carrier_total:          value,          // updated post-lookup (carrier_cost + fuel_alloc + hgv_alloc)
+      billed_weight_kg:       isNaN(billedWeightKg) ? null : billedWeightKg,
+      invoice_service_name:   invoiceServiceName,
+    });
+    parsed++;
   }
 
   // Flatten to array, preserving duplicates — each invoice line is one result row.
