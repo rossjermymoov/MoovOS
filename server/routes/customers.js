@@ -66,7 +66,16 @@ function buildCustomerListQuery(filters = {}) {
       sp.full_name AS salesperson_name,
       (SELECT full_name FROM customer_contacts cc WHERE cc.customer_id = c.id AND cc.is_main_contact = true LIMIT 1) AS main_contact_name,
       (SELECT COUNT(*) FROM customer_communications cc WHERE cc.customer_id = c.id)::int AS comm_count,
-      (c.outstanding_balance / NULLIF(c.credit_limit, 0) * 100)::numeric(5,1) AS credit_utilisation_pct
+      (
+        COALESCE((
+          SELECT SUM(ch.total_price)
+          FROM charges ch
+          WHERE ch.customer_id = c.id
+            AND ch.verified = TRUE
+            AND ch.billed = FALSE
+            AND ch.cancelled = FALSE
+        ), 0) / NULLIF(c.credit_limit, 0) * 100
+      )::numeric(5,1) AS credit_utilisation_pct
     FROM customers c
     LEFT JOIN staff am ON am.id = c.account_manager_id
     LEFT JOIN staff sp ON sp.id = c.salesperson_id
@@ -113,7 +122,16 @@ router.get('/:id', async (req, res, next) => {
           am.full_name AS account_manager_name,
           sp.full_name AS salesperson_name,
           ob.full_name AS onboarding_person_name,
-          (c.outstanding_balance / NULLIF(c.credit_limit, 0) * 100)::numeric(5,1) AS credit_utilisation_pct
+          (
+        COALESCE((
+          SELECT SUM(ch.total_price)
+          FROM charges ch
+          WHERE ch.customer_id = c.id
+            AND ch.verified = TRUE
+            AND ch.billed = FALSE
+            AND ch.cancelled = FALSE
+        ), 0) / NULLIF(c.credit_limit, 0) * 100
+      )::numeric(5,1) AS credit_utilisation_pct
         FROM customers c
         LEFT JOIN staff am ON am.id = c.account_manager_id
         LEFT JOIN staff sp ON sp.id = c.salesperson_id
