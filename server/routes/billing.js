@@ -1489,6 +1489,7 @@ router.get('/charges', async (req, res, next) => {
       charge_type = 'courier',
       customer_id, unassigned, search,
       billed, verified, cancelled,
+      awaiting_reconciliation,           // 'true' | 'false'
       date_from, date_to,
       parcel_type,   // 'single' | 'multi' | '' (all)
       unpriced,      // 'true' = price IS NULL
@@ -1505,6 +1506,7 @@ router.get('/charges', async (req, res, next) => {
     if (verified !== undefined) { conds.push(`c.verified  = $${idx++}`); vals.push(verified === 'true'); }
     if (cancelled !== undefined) { conds.push(`c.cancelled = $${idx++}`); vals.push(cancelled === 'true'); }
     else if (unassigned !== 'true') { conds.push('c.cancelled = false'); } // unassigned view shows all
+    if (awaiting_reconciliation !== undefined) { conds.push(`c.awaiting_reconciliation = $${idx++}`); vals.push(awaiting_reconciliation === 'true'); }
     if (date_from) { conds.push(`c.created_at >= $${idx++}`); vals.push(date_from); }
     if (date_to)   { conds.push(`c.created_at <  $${idx++}`); vals.push(date_to); }
     if (parcel_type === 'single') { conds.push(`c.parcel_qty = 1`); }
@@ -1568,17 +1570,23 @@ router.get('/charges', async (req, res, next) => {
       `, [...vals, parseInt(limit), parseInt(offset)]),
 
       query(`
-        SELECT COUNT(*)::int AS total FROM charges c
+        SELECT
+          COUNT(*)::int AS total,
+          COALESCE(SUM(c.price), 0)::numeric(12,2)      AS total_sell,
+          COALESCE(SUM(c.cost_price), 0)::numeric(12,2) AS total_cost
+        FROM charges c
         LEFT JOIN customers cu ON cu.id = c.customer_id
         ${where}
       `, vals),
     ]);
 
     res.json({
-      charges: dataRes.rows,
-      total:   countRes.rows[0].total,
-      limit:   parseInt(limit),
-      offset:  parseInt(offset),
+      charges:    dataRes.rows,
+      total:      countRes.rows[0].total,
+      total_sell: parseFloat(countRes.rows[0].total_sell),
+      total_cost: parseFloat(countRes.rows[0].total_cost),
+      limit:      parseInt(limit),
+      offset:     parseInt(offset),
     });
   } catch (err) { next(err); }
 });

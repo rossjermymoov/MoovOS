@@ -767,12 +767,11 @@ function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
   const [offset, setOffset]         = useState(0);
 
   const params = {
-    charge_type:  'courier',
-    billed:       'false',
-    verified:     'true',
-    cancelled:    'false',
-    customer_id:  custFilter || undefined,
-    search:       search    || undefined,
+    charge_type:              'courier',
+    awaiting_reconciliation:  'true',
+    cancelled:                'false',
+    customer_id:              custFilter || undefined,
+    search:                   search    || undefined,
     limit,
     offset,
   };
@@ -784,9 +783,11 @@ function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
     keepPreviousData: true,
   });
 
-  const charges    = data?.charges || [];
-  const total      = data?.total   || 0;
-  const totalPages = Math.ceil(total / limit);
+  const charges    = data?.charges    || [];
+  const total      = data?.total      || 0;
+  const totalSell  = data?.total_sell ?? null;
+  const totalCost  = data?.total_cost ?? null;
+  const totalPages  = Math.ceil(total / limit);
   const currentPage = Math.floor(offset / limit) + 1;
 
   const th = { fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase',
@@ -795,44 +796,46 @@ function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
   const td = { padding: '10px 12px', fontSize: 13, color: '#CCC', verticalAlign: 'middle',
     borderBottom: '1px solid rgba(255,255,255,0.04)' };
 
+  const margin = totalSell > 0 ? ((totalSell - totalCost) / totalSell * 100).toFixed(1) : null;
+
   return (
     <div>
       {/* Summary strip */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
         <div style={{
-          background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+          background: 'rgba(255,193,7,0.05)', border: '1px solid rgba(255,193,7,0.2)',
           borderRadius: 10, padding: '14px 18px', minWidth: 140, flex: 1,
         }}>
           <div style={{ fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Awaiting</div>
           <div style={{ fontSize: 22, fontWeight: 800, color: '#FFC107' }}>{total}</div>
-          <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>Verified, not yet reconciled</div>
+          <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>Charges pending reconciliation</div>
         </div>
         <div style={{
-          background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+          background: 'rgba(0,200,83,0.04)', border: '1px solid rgba(0,200,83,0.15)',
           borderRadius: 10, padding: '14px 18px', minWidth: 140, flex: 1,
         }}>
-          <div style={{ fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Total Value</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#00C853' }}>
-            {gbp(charges.reduce((s, c) => {
-              const lines = Array.isArray(c.charge_lines) ? c.charge_lines : [];
-              return s + parseFloat(c.price || 0) + lines.reduce((a, l) => a + parseFloat(l.price || 0), 0);
-            }, 0))}
-          </div>
-          <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>Sell value (current page)</div>
+          <div style={{ fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Total Sell</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#00C853' }}>{totalSell != null ? gbp(totalSell) : '—'}</div>
+          <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>All charges (excl. surcharges)</div>
         </div>
         <div style={{
-          background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+          background: 'rgba(179,157,219,0.04)', border: '1px solid rgba(179,157,219,0.15)',
           borderRadius: 10, padding: '14px 18px', minWidth: 140, flex: 1,
         }}>
           <div style={{ fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Total Cost</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#B39DDB' }}>
-            {gbp(charges.reduce((s, c) => {
-              const lines = Array.isArray(c.charge_lines) ? c.charge_lines : [];
-              return s + parseFloat(c.cost_price || 0) + lines.reduce((a, l) => a + parseFloat(l.cost_price ?? l.price ?? 0), 0);
-            }, 0))}
-          </div>
-          <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>Carrier cost (current page)</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#B39DDB' }}>{totalCost != null ? gbp(totalCost) : '—'}</div>
+          <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>All charges (excl. surcharges)</div>
         </div>
+        {margin != null && (
+          <div style={{
+            background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: 10, padding: '14px 18px', minWidth: 140, flex: 1,
+          }}>
+            <div style={{ fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Margin</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: parseFloat(margin) >= 15 ? '#00C853' : parseFloat(margin) >= 5 ? '#FFC107' : '#F44336' }}>{margin}%</div>
+            <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>Base courier charges</div>
+          </div>
+        )}
       </div>
 
       {/* Filters */}
