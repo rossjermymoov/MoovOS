@@ -2558,9 +2558,9 @@ router.get('/per-kg-debug/:ref', async (req, res, next) => {
         s.parcel_weight_kg,
         s.ship_to_postcode,
         s.ship_to_country_iso
-      FROM shipments s
-      JOIN charges c ON c.shipment_id = s.id
-      WHERE s.platform_shipment_id = $1
+      FROM charges c
+      LEFT JOIN shipments s ON s.id = c.shipment_id
+      WHERE c.order_id = $1
         AND c.charge_type = 'courier'
         AND c.cancelled = false
       ORDER BY c.id DESC
