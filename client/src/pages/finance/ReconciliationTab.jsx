@@ -726,7 +726,9 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
         for (const m of r.data) map[m.invoice_name] = m.internal_name;
         setMappings(map);
       })
-      .catch(() => {});
+      .catch(e => {
+        console.error('[ReconciliationTab] Failed to load service mappings:', e?.response?.data || e.message);
+      });
   }, [carrier.code, showMappings]); // reload after mappings modal closes
 
   // Fetch all carrier services once to auto-resolve service codes (e.g. DHLPCUK220 → DHL Ecommerce Parcel)
@@ -1004,7 +1006,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
         <ServiceMappingManager
           courier={carrier.code}
           carrierLabel={carrier.label}
-          unmappedNames={invoiceServiceNames.filter(n => !mappings[n])}
+          unmappedNames={invoiceServiceNames.filter(n => !mappings[n] && !serviceCodeMap[n?.trim()])}
           onClose={() => setShowMappings(false)}
         />
       )}
@@ -1027,8 +1029,8 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
             </div>
           )}
 
-          {/* Unmapped service names warning */}
-          {invoiceServiceNames.some(n => !mappings[n]) && (
+          {/* Unmapped service names warning — exclude names already auto-resolved via serviceCodeMap */}
+          {invoiceServiceNames.some(n => !mappings[n] && !serviceCodeMap[n?.trim()]) && (
             <div style={{
               background: 'rgba(0,188,212,0.05)', border: '1px solid rgba(0,188,212,0.2)',
               borderRadius: 10, padding: '10px 16px', marginBottom: 12,
@@ -1036,7 +1038,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
             }}>
               <ArrowRight size={14} style={{ color: '#00BCD4', flexShrink: 0 }} />
               <span style={{ fontSize: 12, color: '#888' }}>
-                Unmapped service names: {invoiceServiceNames.filter(n => !mappings[n]).map(n => (
+                Unmapped service names: {invoiceServiceNames.filter(n => !mappings[n] && !serviceCodeMap[n?.trim()]).map(n => (
                   <span key={n} style={{ background: 'rgba(0,188,212,0.1)', border: '1px solid rgba(0,188,212,0.25)', color: '#00BCD4', borderRadius: 4, padding: '1px 6px', marginLeft: 6, fontFamily: 'monospace', fontSize: 11 }}>{n}</span>
                 ))}
               </span>
