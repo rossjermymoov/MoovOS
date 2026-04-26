@@ -37,16 +37,17 @@ router.post('/bulk-lookup', async (req, res) => {
         c.cost_price,
         c.price             AS sell_price,
         c.service_name,
-        c.courier,
-        c.collection_date,
         c.awaiting_reconciliation,
         c.verified,
         c.billed,
         c.cancelled,
+        s.courier,
+        s.collection_date,
         cu.id               AS customer_id,
         cu.business_name    AS customer_name,
         cu.account_number   AS customer_account
       FROM charges c
+      LEFT JOIN shipments s  ON s.id  = c.shipment_id
       LEFT JOIN customers cu ON cu.id = c.customer_id
       WHERE c.order_id   = ANY($1)
         AND c.charge_type = 'courier'
