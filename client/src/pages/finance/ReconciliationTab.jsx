@@ -83,6 +83,7 @@ function parseDhlCsv(text) {
   let colRef      = 11;  // fallback: "Reference"
   let colService  = 20;  // fallback: "Service Desc"
   let colWeight   = -1;  // billed/chargeable weight — detected from header
+  let colPieces   = -1;  // piece/item count per consignment — detected from header
 
   if (lines.length > 0) {
     const header = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
@@ -93,11 +94,16 @@ function parseDhlCsv(text) {
     const wi = header.findIndex(h => h.includes('chargeable') && h.includes('weight'))
             ?? header.findIndex(h => h.includes('billed') && h.includes('weight'));
     const wi2 = header.findIndex(h => h.includes('weight') && !h.includes('over'));
+    // Piece/item count column — DHL may call it "pieces", "no. pieces", "qty", "quantity", "items"
+    const pi = header.findIndex(h =>
+      h.includes('piece') || h === 'qty' || h === 'quantity' || h === 'items' || h.includes('no. of piece')
+    );
     if (vi  !== -1) colValue   = vi;
     if (ri  !== -1) colRef     = ri;
     if (si  !== -1) colService = si;
     if (wi  !== -1) colWeight  = wi;
     else if (wi2 !== -1) colWeight = wi2;
+    if (pi  !== -1) colPieces = pi;
   }
 
   // Columns W–AE (0-indexed 22–30) contain per-shipment special surcharges:
@@ -173,6 +179,10 @@ function parseDhlCsv(text) {
     const billedWeightRaw = colWeight >= 0 ? (cols[colWeight] || '').replace(/[,\s]/g, '') : '';
     const billedWeightKg  = billedWeightRaw !== '' ? parseFloat(billedWeightRaw) : null;
 
+    // Piece count per consignment — DHL charge HGV per piece, not per line
+    const piecesRaw   = colPieces >= 0 ? (cols[colPieces] || '').replace(/[,\s]/g, '') : '';
+    const csvPieces   = piecesRaw !== '' && !isNaN(parseInt(piecesRaw, 10)) ? parseInt(piecesRaw, 10) : 1;
+
     shipmentMap[ref] = shipmentMap[ref] || [];
     shipmentMap[ref].push({
       reference:              ref,
@@ -181,6 +191,7 @@ function parseDhlCsv(text) {
       carrier_surcharges:     0,              // fuel+HGV allocated post-lookup; csv_surcharges NOT added here
       carrier_total:          value,          // updated post-lookup (carrier_cost + fuel_alloc + hgv_alloc)
       billed_weight_kg:       isNaN(billedWeightKg) ? null : billedWeightKg,
+      csv_piece_count:        csvPieces,      // piece count from invoice — used for HGV allocation
       invoice_service_name:   invoiceServiceName,
     });
     parsed++;
@@ -849,9 +860,11 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           const fuelAlloc = totalInvoiceBase > 0
             ? (row.carrier_cost / totalInvoiceBase) * invoiceFuelTotal
             : 0;
-          const parcelCount = row.bestCharge?.parcel_count ?? 1;
+          // Use piece count from the invoice CSV — DHL charge HGV per piece, not per DB parcel.
+          // csv_piece_count is 1 if the column wasn't found in the CSV (safe fallback).
+          const pieceCount = row.csv_piece_count ?? row.bestCharge?.parcel_count ?? 1;
           const hgvAlloc = invoiceHgvTotal > 0
-            ? parcelCount * HGV_RATE_PER_PARCEL
+            ? pieceCount * HGV_RATE_PER_PARCEL
             : 0;
           row.carrier_fuel_alloc = fuelAlloc;
           row.carrier_hgv_alloc  = hgvAlloc;
@@ -889,8 +902,10 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
     : [];
 
   const ourFuelCostTotal   = matchedWithCost.reduce((s, r) => s + (r.bestCharge.fuel_cost_price || 0), 0);
-  const totalMatchedParcels = matchedWithCost.reduce((s, r) => s + (r.bestCharge.parcel_count  || 1), 0);
-  const ourHgvCalcTotal    = totalMatchedParcels * HGV_RATE_PER_PARCEL;
+  // Use CSV piece counts for HGV total — same source DHL use to calculate the surcharge.
+  // Fall back to DB parcel_count only when piece count column wasn't in the CSV.
+  const totalMatchedPieces = matchedWithCost.reduce((s, r) => s + (r.csv_piece_count ?? r.bestCharge.parcel_count ?? 1), 0);
+  const ourHgvCalcTotal    = totalMatchedPieces * HGV_RATE_PER_PARCEL;
   const invoiceSurchargeTotal = surcharges.reduce((s, r) => s + r.value, 0);
 
   // ── Filter ──
@@ -1449,7 +1464,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                             ourNote  = 'stored fuel charges';
                           } else if (isHgv) {
                             ourValue = ourHgvCalcTotal;
-                            ourNote  = `${totalMatchedParcels} item${totalMatchedParcels !== 1 ? 's' : ''} × £${HGV_RATE_PER_PARCEL.toFixed(2)}`;
+                            ourNote  = `${totalMatchedPieces} piece${totalMatchedPieces !== 1 ? 's' : ''} × £${HGV_RATE_PER_PARCEL.toFixed(2)}`;
                           }
 
                           const diff = ourValue != null ? sc.value - ourValue : null;
