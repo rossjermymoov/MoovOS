@@ -16,7 +16,6 @@ import {
 import { carriersApi } from '../../api/carriers';
 import { getCourierLogo } from '../../utils/courierLogos';
 import { carrierRateCardsApi } from '../../api/carrierRateCards';
-import carrierDataApi from '../../api/carrierData';
 import axios from 'axios';
 
 const api = axios.create({ baseURL: '/api' });
@@ -3240,9 +3239,6 @@ function ServiceDetail({ serviceId, carrierName, onBack }) {
             }
           </div>
 
-          {/* DC reference data — authoritative postcode lists & weight bounds from DC platform */}
-          <DcZoneViewer serviceCode={svc.service_code} />
-
           {/* Congestion surcharges */}
           {(svc.congestion_surcharges||[]).length > 0 && (
             <div className="moov-card" style={{ padding:18 }}>
@@ -3268,271 +3264,6 @@ function ServiceDetail({ serviceId, carrierName, onBack }) {
 
 // ─── ROOT — main page ─────────────────────────────────────────────────────────
 
-// ─── Lightweight CSV parser (handles quoted fields with commas/newlines) ──────
-
-function parseCsv(text) {
-  const rows = [];
-  let row = [], field = '', inQuotes = false;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (inQuotes) {
-      if (ch === '"' && text[i + 1] === '"') { field += '"'; i++; }
-      else if (ch === '"') inQuotes = false;
-      else field += ch;
-    } else {
-      if (ch === '"') inQuotes = true;
-      else if (ch === ',') { row.push(field); field = ''; }
-      else if (ch === '\n' || (ch === '\r' && text[i+1] === '\n')) {
-        if (ch === '\r') i++;
-        row.push(field); field = '';
-        if (row.some(c => c !== '')) rows.push(row);
-        row = [];
-      } else field += ch;
-    }
-  }
-  if (field || row.length) { row.push(field); if (row.some(c => c !== '')) rows.push(row); }
-  return rows;
-}
-
-function csvToObjects(text) {
-  const rows = parseCsv(text);
-  if (rows.length < 2) return [];
-  const headers = rows[0].map(h => h.trim());
-  return rows.slice(1).map(row => {
-    const obj = {};
-    headers.forEach((h, i) => { obj[h] = (row[i] || '').trim(); });
-    return obj;
-  });
-}
-
-// ─── DC Data Import Modal ─────────────────────────────────────────────────────
-
-function DcImportModal({ onClose }) {
-  const [wFile, setWFile]     = useState(null);
-  const [zFile, setZFile]     = useState(null);
-  const [status, setStatus]   = useState(null); // null | 'running' | { wResult, zResult } | 'error'
-  const [errMsg, setErrMsg]   = useState('');
-  const wRef = useRef(null);
-  const zRef = useRef(null);
-
-  const readFile = (file) => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = e => resolve(e.target.result);
-    reader.onerror = reject;
-    reader.readAsText(file);
-  });
-
-  const runImport = async () => {
-    if (!wFile && !zFile) return;
-    setStatus('running');
-    setErrMsg('');
-    try {
-      const results = {};
-
-      if (wFile) {
-        const text = await readFile(wFile);
-        const rows = csvToObjects(text);
-        results.wResult = await carrierDataApi.importWeightClasses(rows);
-      }
-      if (zFile) {
-        const text = await readFile(zFile);
-        const rows = csvToObjects(text);
-        results.zResult = await carrierDataApi.importZones(rows);
-      }
-
-      setStatus(results);
-    } catch (err) {
-      setErrMsg(err.response?.data?.error || err.message || 'Import failed');
-      setStatus('error');
-    }
-  };
-
-  const done = status && status !== 'running' && status !== 'error';
-
-  return (
-    <div style={{
-      position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:9999,
-      display:'flex', alignItems:'center', justifyContent:'center',
-    }} onClick={onClose}>
-      <div style={{
-        background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:14,
-        padding:28, width:500, maxWidth:'90vw',
-      }} onClick={e => e.stopPropagation()}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
-          <h2 style={{ margin:0, fontSize:17, fontWeight:700, color:'#00C853' }}>Import DC Reference Data</h2>
-          <button onClick={onClose} style={{ background:'none', border:'none', color:'#AAAAAA', cursor:'pointer', fontSize:20 }}>×</button>
-        </div>
-
-        <p style={{ fontSize:12, color:'#888', margin:'0 0 20px' }}>
-          Import the weight_classes and zones CSV exports from the DC platform.
-          Existing records are updated; new ones are inserted.
-        </p>
-
-        {/* Weight classes */}
-        <div style={{ marginBottom:16 }}>
-          <label style={{ fontSize:12, fontWeight:700, color:'#AAAAAA', display:'block', marginBottom:6 }}>
-            Weight Classes CSV
-          </label>
-          <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-            <input ref={wRef} type="file" accept=".csv" style={{ display:'none' }}
-              onChange={e => setWFile(e.target.files[0] || null)} />
-            <button onClick={() => wRef.current?.click()} className="btn-ghost" style={{ height:32, padding:'0 14px', fontSize:12 }}>
-              <Upload size={12}/> Choose file
-            </button>
-            {wFile
-              ? <span style={{ fontSize:12, color:'#00C853' }}>✓ {wFile.name}</span>
-              : <span style={{ fontSize:12, color:'#555' }}>No file selected</span>
-            }
-          </div>
-        </div>
-
-        {/* Zones */}
-        <div style={{ marginBottom:24 }}>
-          <label style={{ fontSize:12, fontWeight:700, color:'#AAAAAA', display:'block', marginBottom:6 }}>
-            Zones CSV
-          </label>
-          <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-            <input ref={zRef} type="file" accept=".csv" style={{ display:'none' }}
-              onChange={e => setZFile(e.target.files[0] || null)} />
-            <button onClick={() => zRef.current?.click()} className="btn-ghost" style={{ height:32, padding:'0 14px', fontSize:12 }}>
-              <Upload size={12}/> Choose file
-            </button>
-            {zFile
-              ? <span style={{ fontSize:12, color:'#00C853' }}>✓ {zFile.name}</span>
-              : <span style={{ fontSize:12, color:'#555' }}>No file selected</span>
-            }
-          </div>
-        </div>
-
-        {/* Result / error */}
-        {done && (
-          <div style={{ background:'rgba(0,200,83,0.08)', border:'1px solid rgba(0,200,83,0.25)', borderRadius:8, padding:'10px 14px', marginBottom:16, fontSize:12, color:'#00C853' }}>
-            {status.wResult && <div>Weight classes: {status.wResult.inserted} inserted, {status.wResult.updated} updated</div>}
-            {status.zResult && <div>Zones: {status.zResult.inserted} inserted, {status.zResult.updated} updated</div>}
-          </div>
-        )}
-        {status === 'error' && (
-          <div style={{ background:'rgba(233,30,140,0.08)', border:'1px solid rgba(233,30,140,0.3)', borderRadius:8, padding:'10px 14px', marginBottom:16, fontSize:12, color:'#E91E8C' }}>
-            {errMsg}
-          </div>
-        )}
-
-        <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
-          <button onClick={onClose} className="btn-ghost" style={{ height:34, padding:'0 16px' }}>
-            {done ? 'Close' : 'Cancel'}
-          </button>
-          {!done && (
-            <button
-              onClick={runImport}
-              disabled={(!wFile && !zFile) || status === 'running'}
-              className="btn-primary"
-              style={{ height:34, padding:'0 20px' }}
-            >
-              {status === 'running' ? 'Importing…' : 'Import'}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── DC Zone Postcode Viewer ──────────────────────────────────────────────────
-// Shown in ServiceDetail > Zone Config tab — displays the authoritative
-// postcode coverage pulled from dc_zones for this service.
-
-function DcZoneViewer({ serviceCode }) {
-  const { data: dcZones = [], isLoading } = useQuery({
-    queryKey: ['dc-zones', serviceCode],
-    queryFn: () => carrierDataApi.getZones(serviceCode),
-    enabled: !!serviceCode,
-  });
-  const { data: dcBands = [], isLoading: bandsLoading } = useQuery({
-    queryKey: ['dc-weight-classes', serviceCode],
-    queryFn: () => carrierDataApi.getWeightClasses(serviceCode),
-    enabled: !!serviceCode,
-  });
-
-  if (isLoading || bandsLoading) return <div style={{ color:'#AAAAAA', fontSize:12, padding:8 }}>Loading DC reference data…</div>;
-  if (!dcZones.length && !dcBands.length) {
-    return (
-      <div style={{ color:'#555', fontSize:12, padding:'10px 0' }}>
-        No DC reference data imported yet. Use the Import DC Data button in the page header.
-      </div>
-    );
-  }
-
-  // Group zones by zone_name
-  const byZone = {};
-  dcZones.forEach(z => {
-    if (!byZone[z.zone_name]) byZone[z.zone_name] = [];
-    byZone[z.zone_name].push(z);
-  });
-
-  return (
-    <div style={{ marginTop:20 }}>
-      {/* Weight bands */}
-      {dcBands.length > 0 && (
-        <div className="moov-card" style={{ padding:16, marginBottom:14 }}>
-          <h4 style={{ fontSize:13, fontWeight:700, color:'#fff', margin:'0 0 12px' }}>
-            DC Weight Bands <span style={{ fontSize:11, color:'#555', fontWeight:400 }}>({dcBands.length} bands)</span>
-          </h4>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(180px, 1fr))', gap:6 }}>
-            {dcBands.map(b => (
-              <div key={b.id} style={{
-                background:'rgba(0,200,83,0.04)', border:'1px solid rgba(0,200,83,0.12)',
-                borderRadius:6, padding:'5px 10px', display:'flex', justifyContent:'space-between', alignItems:'center',
-              }}>
-                <span style={{ fontSize:11, color:'#888' }}>{b.weight_class_name || '—'}</span>
-                <span style={{ fontSize:11, color:'#00C853', fontFamily:'monospace', fontWeight:700 }}>
-                  {b.min_weight_kg}–{b.max_weight_kg} kg
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Zone postcode coverage */}
-      {Object.keys(byZone).length > 0 && (
-        <div className="moov-card" style={{ padding:16 }}>
-          <h4 style={{ fontSize:13, fontWeight:700, color:'#fff', margin:'0 0 12px' }}>
-            DC Zone Coverage
-          </h4>
-          {Object.entries(byZone).map(([zoneName, rows]) => (
-            <div key={zoneName} style={{ marginBottom:14 }}>
-              <div style={{ fontSize:12, fontWeight:700, color:'#7B2FBE', marginBottom:6 }}>{zoneName}</div>
-              {rows.map(z => (
-                <div key={`${z.dc_zone_id}-${z.iso}`} style={{ marginBottom:8 }}>
-                  <span style={{ fontSize:11, fontWeight:700, color:'#FFC107', marginRight:8 }}>{z.iso}</span>
-                  {z.included_postcodes?.length > 0 && (
-                    <div style={{ marginTop:4 }}>
-                      <span style={{ fontSize:10, color:'#00C853', fontWeight:700, marginRight:6 }}>INCLUDED:</span>
-                      <span style={{ fontSize:10, color:'#888', fontFamily:'monospace', lineHeight:1.8 }}>
-                        {z.included_postcodes.join(', ')}
-                      </span>
-                    </div>
-                  )}
-                  {z.excluded_postcodes?.length > 0 && (
-                    <div style={{ marginTop:4 }}>
-                      <span style={{ fontSize:10, color:'#E91E8C', fontWeight:700, marginRight:6 }}>EXCLUDED:</span>
-                      <span style={{ fontSize:10, color:'#888', fontFamily:'monospace', lineHeight:1.8 }}>
-                        {z.excluded_postcodes.join(', ')}
-                      </span>
-                    </div>
-                  )}
-                  {!z.included_postcodes?.length && !z.excluded_postcodes?.length && (
-                    <span style={{ fontSize:11, color:'#555' }}>All postcodes for {z.iso}</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 const TABS = ['Carriers & Contacts', 'Rules Engine'];
 const OPERATORS = ['equals','not_equals','greater_than','less_than','greater_than_or_equal','less_than_or_equal','in','not_in','starts_with','contains'];
@@ -3647,7 +3378,6 @@ export default function CarrierManagement() {
   const [selectedService, setSelectedService] = useState(null); // service id
   const [addingCourier, setAddingCourier]     = useState(false);
   const [courierForm, setCourierForm]         = useState({ code:'', name:'' });
-  const [showDcImport, setShowDcImport]       = useState(false);
 
   const { data: couriers = [], isLoading, refetch } = useQuery({
     queryKey: ['couriers'],
@@ -3696,15 +3426,11 @@ export default function CarrierManagement() {
   // ── Level 1: carrier grid + tabs
   return (
     <div style={{ maxWidth:1100, margin:'0 auto' }}>
-      {showDcImport && <DcImportModal onClose={() => setShowDcImport(false)} />}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:24 }}>
         <div>
           <h1 style={{ fontSize:24, fontWeight:700, color:'#00C853', margin:0 }}>Carrier Management</h1>
           <p style={{ fontSize:13, color:'#AAAAAA', marginTop:4 }}>Contacts, rate cards, zones, weight bands and pricing rules</p>
         </div>
-        <button onClick={() => setShowDcImport(true)} className="btn-ghost" style={{ height:34, padding:'0 14px', fontSize:12, display:'flex', alignItems:'center', gap:6 }}>
-          <Upload size={13}/> Import DC Data
-        </button>
       </div>
 
       {/* Tabs */}
