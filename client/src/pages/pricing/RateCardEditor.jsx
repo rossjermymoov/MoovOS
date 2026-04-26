@@ -70,6 +70,14 @@ const STATUS_COLOR = {
   sent:             '#A78BFA',
 };
 
+const STATUS_LABEL = {
+  draft:            'Draft',
+  pending_approval: 'Pending Approval',
+  approved:         'Approved',
+  rejected:         'Rejected',
+  sent:             'Sent',
+};
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function RateCardEditor() {
@@ -80,6 +88,7 @@ export default function RateCardEditor() {
   const [rates, setRates] = useState([]);
   const [intlMarkup, setIntlMarkup] = useState('');
   const [fuelMarkup, setFuelMarkup] = useState('');
+  const [surchargeMarkups, setSurchargeMarkups] = useState([]);
   const [weeklyParcels, setWeeklyParcels] = useState('');
   const [dirty, setDirty] = useState(false);
   const [submitStaff, setSubmitStaff] = useState('');
@@ -110,6 +119,7 @@ export default function RateCardEditor() {
     setRates((rc.rates || []).map(r => ({ ...r })));
     setIntlMarkup(rc.intl_markup_pct ?? '');
     setFuelMarkup(rc.fuel_markup_pct ?? '');
+    setSurchargeMarkups((rc.surcharge_markups || []).map(s => ({ ...s })));
     setWeeklyParcels(rc.weekly_parcels ?? '');
     setDomesticPct(rc.domestic_pct ?? 95);
     setDirty(false);
@@ -119,10 +129,11 @@ export default function RateCardEditor() {
   const updateMut = useMutation({
     mutationFn: () => api.updateRateCard(id, {
       rates,
-      intl_markup_pct: num(intlMarkup),
-      fuel_markup_pct: num(fuelMarkup),
-      weekly_parcels:  weeklyParcels ? parseInt(weeklyParcels) : null,
-      domestic_pct:    domesticPct,
+      surcharge_markups: surchargeMarkups,
+      intl_markup_pct:   num(intlMarkup),
+      fuel_markup_pct:   num(fuelMarkup),
+      weekly_parcels:    weeklyParcels ? parseInt(weeklyParcels) : null,
+      domestic_pct:      domesticPct,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['rate-card-detail', id] });
@@ -365,7 +376,7 @@ export default function RateCardEditor() {
               <span style={{ fontSize: 12, fontWeight: 700, color: statusColor,
                 background: `${statusColor}18`, border: `1px solid ${statusColor}44`,
                 borderRadius: 20, padding: '2px 10px' }}>
-                {rc.status?.replace('_', ' ')}
+                {STATUS_LABEL[rc.status] || rc.status}
               </span>
             </div>
             <div style={{ fontSize: 12, color: '#555', marginTop: 2 }}>
@@ -447,16 +458,74 @@ export default function RateCardEditor() {
         {/* ── Left: Rates ────────────────────────────────────────────────────── */}
         <div>
 
-          {/* Global overrides row */}
-          <div style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center',
-            background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 9, padding: '11px 16px' }}>
-            <div style={{ fontSize: 11, color: '#888', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: 4 }}>Overrides</div>
-            <label style={{ fontSize: 12, color: '#666', display: 'flex', alignItems: 'center', gap: 7 }}>
-              Fuel markup %
-              <input value={fuelMarkup} onChange={e => { setFuelMarkup(e.target.value); markDirty(); }}
-                disabled={!isEditable}
-                style={{ ...inputStyle, width: 70, padding: '4px 8px' }} placeholder="—" />
-            </label>
+          {/* ── Surcharge Overrides ───────────────────────────────────────── */}
+          <div style={{ marginBottom: 16, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, overflow: 'hidden' }}>
+            <div style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.07)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 11, color: '#888', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Surcharge Overrides
+              </span>
+              {isEditable && (
+                <button onClick={() => { setSurchargeMarkups(p => [...p, { surcharge_name: '', markup_pct: '' }]); markDirty(); }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(99,102,241,0.12)',
+                    border: '1px solid rgba(99,102,241,0.3)', borderRadius: 6, padding: '4px 10px',
+                    color: '#A5B4FC', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                  <Plus size={11} /> Add Surcharge
+                </button>
+              )}
+            </div>
+            <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+              {/* Fuel markup — always visible, with warning if blank */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ flex: '0 0 160px', fontSize: 12, color: '#AAA', fontWeight: 600 }}>Fuel surcharge markup</div>
+                <div style={{ position: 'relative', flex: '0 0 90px' }}>
+                  <input value={fuelMarkup} onChange={e => { setFuelMarkup(e.target.value); markDirty(); }}
+                    disabled={!isEditable} type="number" step="0.1" placeholder="e.g. 5"
+                    style={{ ...inputStyle, width: '100%', padding: '5px 28px 5px 9px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700,
+                      borderColor: fuelMarkup === '' || fuelMarkup == null ? 'rgba(245,158,11,0.5)' : 'rgba(255,255,255,0.1)',
+                      background: fuelMarkup === '' || fuelMarkup == null ? 'rgba(245,158,11,0.06)' : 'rgba(255,255,255,0.06)' }} />
+                  <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: '#666', pointerEvents: 'none' }}>%</span>
+                </div>
+                {(fuelMarkup === '' || fuelMarkup == null) && (
+                  <span style={{ fontSize: 11, color: '#F59E0B', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <AlertCircle size={12} /> Enter a fuel markup % — leave blank to pass cost through at zero margin
+                  </span>
+                )}
+              </div>
+
+              {/* Dynamic surcharge markup rows */}
+              {surchargeMarkups.map((s, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {isEditable ? (
+                    <input value={s.surcharge_name} placeholder="Surcharge name (e.g. Remote Area)"
+                      onChange={e => { setSurchargeMarkups(p => p.map((x, j) => j === i ? { ...x, surcharge_name: e.target.value } : x)); markDirty(); }}
+                      style={{ ...inputStyle, flex: '0 0 160px', padding: '5px 9px', fontSize: 12 }} />
+                  ) : (
+                    <div style={{ flex: '0 0 160px', fontSize: 12, color: '#AAA', fontWeight: 600 }}>{s.surcharge_name || '—'}</div>
+                  )}
+                  <div style={{ position: 'relative', flex: '0 0 90px' }}>
+                    <input value={s.markup_pct ?? ''} type="number" step="0.1" placeholder="0"
+                      disabled={!isEditable}
+                      onChange={e => { setSurchargeMarkups(p => p.map((x, j) => j === i ? { ...x, markup_pct: e.target.value } : x)); markDirty(); }}
+                      style={{ ...inputStyle, width: '100%', padding: '5px 28px 5px 9px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700 }} />
+                    <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: '#666', pointerEvents: 'none' }}>%</span>
+                  </div>
+                  {isEditable && (
+                    <button onClick={() => { setSurchargeMarkups(p => p.filter((_, j) => j !== i)); markDirty(); }}
+                      style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', padding: 4 }}>
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              {surchargeMarkups.length === 0 && (
+                <div style={{ fontSize: 11, color: '#444', fontStyle: 'italic' }}>
+                  No additional surcharge overrides — click Add Surcharge to define markups for remote area, out of area, residential, etc.
+                </div>
+              )}
+            </div>
           </div>
 
           {/* ── DOMESTIC SERVICES ──────────────────────────────────────────── */}
