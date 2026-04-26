@@ -728,6 +728,237 @@ function WebhookPayloadModal({ charge, onClose }) {
   );
 }
 
+// ─── Placeholder tab ─────────────────────────────────────────────────────────
+
+function PlaceholderTab({ title, description, color }) {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      minHeight: 320, gap: 16, opacity: 0.6,
+    }}>
+      <div style={{
+        width: 56, height: 56, borderRadius: '50%',
+        background: `${color}18`, border: `1px solid ${color}44`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <div style={{ width: 18, height: 18, borderRadius: 3, background: color, opacity: 0.7 }} />
+      </div>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#CCC', marginBottom: 6 }}>{title}</div>
+        <div style={{ fontSize: 13, color: '#666', maxWidth: 380 }}>{description}</div>
+      </div>
+      <div style={{
+        fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+        color, background: `${color}14`, border: `1px solid ${color}33`,
+        borderRadius: 20, padding: '4px 14px',
+      }}>
+        Coming soon
+      </div>
+    </div>
+  );
+}
+
+// ─── Awaiting Reconciliation tab ─────────────────────────────────────────────
+
+function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
+  const [custFilter, setCustFilter] = useState('');
+  const [search, setSearch]         = useState('');
+  const [limit, setLimit]           = useState(50);
+  const [offset, setOffset]         = useState(0);
+
+  const params = {
+    charge_type:  'courier',
+    billed:       'false',
+    verified:     'true',
+    cancelled:    'false',
+    customer_id:  custFilter || undefined,
+    search:       search    || undefined,
+    limit,
+    offset,
+  };
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['billing-charges-awaiting', params],
+    queryFn:  () => billingApi.getCharges(params),
+    staleTime: 10_000,
+    keepPreviousData: true,
+  });
+
+  const charges    = data?.charges || [];
+  const total      = data?.total   || 0;
+  const totalPages = Math.ceil(total / limit);
+  const currentPage = Math.floor(offset / limit) + 1;
+
+  const th = { fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase',
+    letterSpacing: '0.06em', padding: '10px 12px', whiteSpace: 'nowrap',
+    borderBottom: '1px solid rgba(255,255,255,0.06)' };
+  const td = { padding: '10px 12px', fontSize: 13, color: '#CCC', verticalAlign: 'middle',
+    borderBottom: '1px solid rgba(255,255,255,0.04)' };
+
+  return (
+    <div>
+      {/* Summary strip */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
+        <div style={{
+          background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: 10, padding: '14px 18px', minWidth: 140, flex: 1,
+        }}>
+          <div style={{ fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Awaiting</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#FFC107' }}>{total}</div>
+          <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>Verified, not yet reconciled</div>
+        </div>
+        <div style={{
+          background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: 10, padding: '14px 18px', minWidth: 140, flex: 1,
+        }}>
+          <div style={{ fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Total Value</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#00C853' }}>
+            {gbp(charges.reduce((s, c) => {
+              const lines = Array.isArray(c.charge_lines) ? c.charge_lines : [];
+              return s + parseFloat(c.price || 0) + lines.reduce((a, l) => a + parseFloat(l.price || 0), 0);
+            }, 0))}
+          </div>
+          <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>Sell value (current page)</div>
+        </div>
+        <div style={{
+          background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: 10, padding: '14px 18px', minWidth: 140, flex: 1,
+        }}>
+          <div style={{ fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Total Cost</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#B39DDB' }}>
+            {gbp(charges.reduce((s, c) => {
+              const lines = Array.isArray(c.charge_lines) ? c.charge_lines : [];
+              return s + parseFloat(c.cost_price || 0) + lines.reduce((a, l) => a + parseFloat(l.cost_price ?? l.price ?? 0), 0);
+            }, 0))}
+          </div>
+          <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>Carrier cost (current page)</div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: 180 }}>
+          <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#555' }} />
+          <input
+            value={search}
+            onChange={e => { setSearch(e.target.value); setOffset(0); }}
+            placeholder="Search order, customer…"
+            style={{
+              width: '100%', paddingLeft: 30, paddingRight: 10, height: 34,
+              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 8, color: '#CCC', fontSize: 13,
+            }}
+          />
+        </div>
+        <select
+          value={custFilter}
+          onChange={e => { setCustFilter(e.target.value); setOffset(0); }}
+          className="pill-select"
+          style={{ minWidth: 180 }}
+        >
+          <option value="">All customers</option>
+          {customers.map(c => (
+            <option key={c.id} value={c.id}>{c.business_name}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Table */}
+      <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 800 }}>
+            <thead>
+              <tr>
+                <th style={th}>Carrier</th>
+                <th style={th}>Order Ref</th>
+                <th style={th}>Customer</th>
+                <th style={th}>Destination</th>
+                <th style={th}>Job Date</th>
+                <th style={th}>Zone</th>
+                <th style={{ ...th, textAlign: 'right' }}>Sell</th>
+                <th style={{ ...th, textAlign: 'right' }}>Cost</th>
+                <th style={{ ...th, textAlign: 'right' }}>Margin</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                <tr><td colSpan={9} style={{ ...td, textAlign: 'center', color: '#555', padding: 40 }}>Loading…</td></tr>
+              ) : charges.length === 0 ? (
+                <tr><td colSpan={9} style={{ ...td, textAlign: 'center', color: '#555', padding: 40 }}>No charges awaiting reconciliation</td></tr>
+              ) : charges.map(charge => {
+                const lines     = Array.isArray(charge.charge_lines) ? charge.charge_lines : [];
+                const sellTotal = parseFloat(charge.price || 0) + lines.reduce((s, l) => s + parseFloat(l.price || 0), 0);
+                const costTotal = parseFloat(charge.cost_price || 0) + lines.reduce((s, l) => s + parseFloat(l.cost_price ?? l.price ?? 0), 0);
+                const margin    = sellTotal > 0 ? ((sellTotal - costTotal) / sellTotal * 100).toFixed(1) : null;
+                const logo      = getCourierLogo(charge.courier);
+                return (
+                  <tr key={charge.id} style={{ background: 'transparent' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                    <td style={td}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {logo
+                          ? <img src={logo} alt="" style={{ height: 18, width: 'auto', maxWidth: 40, objectFit: 'contain', opacity: 0.9 }} />
+                          : <span style={{ fontSize: 11, color: '#555' }}>{charge.courier || '—'}</span>}
+                      </div>
+                    </td>
+                    <td style={td}>
+                      <span style={{ color: '#A5B4FC', fontWeight: 600, fontSize: 12 }}>{charge.order_id || '—'}</span>
+                    </td>
+                    <td style={td}>
+                      <div style={{ fontSize: 12, color: '#CCC' }}>{charge.customer_name || '—'}</div>
+                      <div style={{ fontSize: 11, color: '#555' }}>{charge.customer_account || ''}</div>
+                    </td>
+                    <td style={td}>
+                      <div style={{ fontSize: 12 }}>{charge.ship_to_name || '—'}</div>
+                      <div style={{ fontSize: 11, color: '#555' }}>{charge.ship_to_postcode || ''}</div>
+                    </td>
+                    <td style={{ ...td, fontSize: 12, color: '#888' }}>{fmt(charge.created_at)}</td>
+                    <td style={{ ...td, fontSize: 12, color: '#888' }}>
+                      {charge.zone_name || '—'}
+                      {charge.weight_class_name && <div style={{ fontSize: 11, color: '#555' }}>{charge.weight_class_name}</div>}
+                    </td>
+                    <td style={{ ...td, textAlign: 'right', color: '#00C853', fontWeight: 700 }}>{gbp(sellTotal)}</td>
+                    <td style={{ ...td, textAlign: 'right', color: '#B39DDB', fontWeight: 600 }}>{gbp(costTotal)}</td>
+                    <td style={{ ...td, textAlign: 'right' }}>
+                      {margin != null
+                        ? <span style={{ color: parseFloat(margin) >= 15 ? '#00C853' : parseFloat(margin) >= 5 ? '#FFC107' : '#F44336', fontWeight: 700 }}>{margin}%</span>
+                        : <span style={{ color: '#555' }}>—</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        {total > limit && (
+          <div style={{
+            padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+          }}>
+            <span style={{ fontSize: 12, color: '#666' }}>{offset + 1}–{Math.min(offset + limit, total)} of {total}</span>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <select value={limit} onChange={e => { setLimit(parseInt(e.target.value)); setOffset(0); }} className="pill-select" style={{ width: 80 }}>
+                {[25, 50, 100].map(s => <option key={s} value={s}>{s} / page</option>)}
+              </select>
+              <button className="btn-ghost" onClick={() => setOffset(Math.max(0, offset - limit))} disabled={offset === 0} style={{ padding: '6px 10px' }}><ChevronLeft size={14} /></button>
+              <span style={{ fontSize: 12, color: '#888' }}>{currentPage} / {totalPages}</span>
+              <button className="btn-ghost" onClick={() => setOffset(offset + limit)} disabled={offset + limit >= total} style={{ padding: '6px 10px' }}><ChevronRight size={14} /></button>
+            </div>
+          </div>
+        )}
+        {total <= limit && total > 0 && (
+          <div style={{ padding: '10px 16px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+            <span style={{ fontSize: 12, color: '#555' }}>{total} charge{total !== 1 ? 's' : ''}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 const PAGE_SIZES = [25, 50, 100];
@@ -765,6 +996,7 @@ export default function FinancePage() {
   const [fullRepriceResult, setFullRepriceResult] = useState(null);
   const [purgeRunning, setPurgeRunning] = useState(false);
   const [relinkRunning, setRelinkRunning] = useState(false);
+  const [activeTab, setActiveTab] = useState('created');
 
   // Customer dropdown data
   const { data: custData } = useQuery({
@@ -1016,6 +1248,41 @@ export default function FinancePage() {
           </button>
         </div>
       </div>
+
+      {/* ── Tab bar ────────────────────────────────────────────────────── */}
+      <div style={{
+        display: 'flex', gap: 2, marginBottom: 24,
+        borderBottom: '1px solid rgba(255,255,255,0.08)',
+      }}>
+        {[
+          { key: 'created',          label: 'Created' },
+          { key: 'awaiting',         label: 'Awaiting Reconciliation' },
+          { key: 'reconciliation',   label: 'Reconciliation' },
+          { key: 'billed',           label: 'Billed' },
+          { key: 'credits',          label: 'Credits' },
+        ].map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              padding: '10px 18px', fontSize: 13, fontWeight: 600,
+              color: activeTab === tab.key ? '#00C853' : '#666',
+              borderBottom: activeTab === tab.key
+                ? '2px solid #00C853'
+                : '2px solid transparent',
+              marginBottom: -1,
+              transition: 'color 0.15s, border-color 0.15s',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Tab: Created ───────────────────────────────────────────────── */}
+      {activeTab === 'created' && (<>
 
       {/* Batch reprice result banner */}
       {batchResult && (
@@ -1572,6 +1839,40 @@ export default function FinancePage() {
           </div>
         )}
       </div>
+
+      </>)}
+
+      {/* ── Tab: Awaiting Reconciliation ───────────────────────────────── */}
+      {activeTab === 'awaiting' && (
+        <AwaitingReconciliationTab customers={customers} gbp={gbp} fmt={fmt} getCourierLogo={getCourierLogo} />
+      )}
+
+      {/* ── Tab: Reconciliation ────────────────────────────────────────── */}
+      {activeTab === 'reconciliation' && (
+        <PlaceholderTab
+          title="Reconciliation"
+          description="Upload a carrier invoice CSV, match lines against your charges and flag discrepancies."
+          color="#7C3AED"
+        />
+      )}
+
+      {/* ── Tab: Billed ────────────────────────────────────────────────── */}
+      {activeTab === 'billed' && (
+        <PlaceholderTab
+          title="Billed"
+          description="All completed invoices sent to customers."
+          color="#0EA5E9"
+        />
+      )}
+
+      {/* ── Tab: Credits ───────────────────────────────────────────────── */}
+      {activeTab === 'credits' && (
+        <PlaceholderTab
+          title="Credits"
+          description="Credit requests raised against billed invoices, awaiting approval."
+          color="#F59E0B"
+        />
+      )}
 
       {/* Pricing debug modal */}
       {debugCharge && (
