@@ -826,6 +826,93 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData, 
   }
 }
 
+// ─── repriceSurchargesForShipment ─────────────────────────────────────────────
+// Re-evaluates all existing surcharge charge rows for a shipment using the
+// CURRENT surcharge settings (charge_per, default_value, overrides).
+// Called after a base-price reprice so that "per parcel" surcharges reflect
+// the actual parcel count rather than the stale value from initial ingestion.
+//
+// Returns { updated, unchanged, not_found } counts.
+async function repriceSurchargesForShipment(shipmentId, customerId, dcServiceId, parcelQty, baseSellPrice) {
+  const counts = { updated: 0, unchanged: 0, not_found: 0 };
+  try {
+    if (!shipmentId || !customerId) return counts;
+
+    // Resolve courier_id from service code
+    let courierId = null;
+    if (dcServiceId) {
+      const { rows: csRows } = await query(
+        `SELECT courier_id FROM courier_services WHERE service_code ILIKE $1 LIMIT 1`,
+        [dcServiceId]
+      );
+      if (csRows.length) courierId = csRows[0].courier_id;
+    }
+    if (!courierId) return counts;
+
+    // Get active surcharges for this courier
+    const { rows: surcharges } = await query(`
+      SELECT s.id, s.name, s.calc_type, s.charge_per, s.default_value
+      FROM surcharges s
+      WHERE s.active = true
+        AND s.courier_id = $1
+        AND (s.applies_when = 'always' OR s.applies_when IS NULL)
+        AND (s.effective_date IS NULL OR s.effective_date <= CURRENT_DATE)
+    `, [courierId]);
+
+    for (const surcharge of surcharges) {
+      // Find the existing surcharge charge for this shipment
+      const { rows: existing } = await query(
+        `SELECT id, price FROM charges
+         WHERE shipment_id = $1 AND surcharge_id = $2 AND cancelled = false`,
+        [shipmentId, surcharge.id]
+      );
+      if (!existing.length) { counts.not_found++; continue; }
+
+      // Customer override takes precedence
+      const { rows: overrides } = await query(
+        `SELECT override_value FROM customer_surcharge_overrides
+         WHERE customer_id=$1 AND surcharge_id=$2 AND active=true`,
+        [customerId, surcharge.id]
+      );
+      const effectiveValue = overrides.length
+        ? parseFloat(overrides[0].override_value)
+        : parseFloat(surcharge.default_value);
+
+      // Recalculate using current charge_per / calc_type
+      let newPrice;
+      if (surcharge.calc_type === 'percentage') {
+        newPrice = parseFloat(((baseSellPrice || 0) * effectiveValue / 100).toFixed(2));
+      } else if (surcharge.charge_per === 'parcel') {
+        newPrice = parseFloat((effectiveValue * (parcelQty || 1)).toFixed(2));
+      } else {
+        newPrice = effectiveValue;
+      }
+
+      // Cost side: re-use default_value as carrier cost
+      const carrierDefault = parseFloat(surcharge.default_value || 0);
+      let newCost;
+      if (surcharge.calc_type === 'percentage') {
+        newCost = parseFloat(((baseSellPrice || 0) * carrierDefault / 100).toFixed(2));
+      } else if (surcharge.charge_per === 'parcel') {
+        newCost = parseFloat((carrierDefault * (parcelQty || 1)).toFixed(2));
+      } else {
+        newCost = carrierDefault;
+      }
+
+      if (parseFloat(existing[0].price) === newPrice) { counts.unchanged++; continue; }
+
+      await query(
+        `UPDATE charges SET price = $1, cost_price = $2, updated_at = NOW() WHERE id = $3`,
+        [newPrice, newCost, existing[0].id]
+      );
+      counts.updated++;
+    }
+  } catch (err) {
+    console.warn('[repriceSurcharges] error:', err.message);
+  }
+  return counts;
+}
+
 // ─── calcTotal — applies sub-parcel or multi-parcel pricing ──────────────────
 // mode 'sub'   (default): price + (qty-1) × price_sub
 // mode 'multi':           qty × price_sub  (all boxes at the cheaper rate)
@@ -1901,6 +1988,15 @@ router.post('/full-reprice', async (req, res, next) => {
           } catch { /* non-fatal */ }
         }
 
+        // Recalculate surcharge charges (e.g. HGV per-parcel after charge_per setting change)
+        if (row.shipment_id) {
+          try {
+            await repriceSurchargesForShipment(
+              row.shipment_id, customerId, dcServiceId, parcelQty, newPrice
+            );
+          } catch { /* non-fatal */ }
+        }
+
       } catch (err) {
         summary.errors++;
         summary.error_details.push({ charge_id: row.charge_id, message: err.message });
@@ -2853,6 +2949,20 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
       fuelNote = fuelErr.message;
     }
 
+    // ── Recalculate surcharge charges for this shipment ───────────────────────
+    let surchargesResult = { updated: 0, unchanged: 0, not_found: 0 };
+    try {
+      const scShipRes = await query(`SELECT shipment_id FROM charges WHERE id = $1`, [id]);
+      const scShipId  = scShipRes.rows[0]?.shipment_id;
+      if (scShipId) {
+        surchargesResult = await repriceSurchargesForShipment(
+          scShipId, customerId, dcServiceId, parcelQty, totalPrice
+        );
+      }
+    } catch (scErr) {
+      console.warn('[reprice] surcharge update failed:', scErr.message);
+    }
+
     res.json({
       ok:               true,
       price:            totalPrice,
@@ -2861,6 +2971,7 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
       weight_class_name: rate.weight_class_name,
       fuel_updated:     fuelUpdated,
       fuel_note:        fuelNote,
+      surcharges:       surchargesResult,
     });
   } catch (err) { next(err); }
 });
