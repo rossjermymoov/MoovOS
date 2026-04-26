@@ -142,14 +142,15 @@ function parseDhlCsv(text) {
 // `group` is the server response object: { total_cost_price, has_null_cost, has_return, ... }
 const TOLERANCE_ABS = 0.005;
 
-function getStatus(carrierCost, group) {
-  if (!group) {
+// charge here is a single bestCharge object from the server
+function getStatus(carrierCost, charge) {
+  if (!charge) {
     return { code: 'red', label: 'Not Found', color: '#F44336', icon: 'x' };
   }
-  if (group.has_null_cost) {
+  if (charge.total_cost_price == null) {
     return { code: 'amber', label: 'No Cost Recorded', color: '#FFC107', icon: 'warn' };
   }
-  const diff = Math.abs(parseFloat(carrierCost) - group.total_cost_price);
+  const diff = Math.abs(parseFloat(carrierCost) - charge.total_cost_price);
   if (diff <= TOLERANCE_ABS) {
     return { code: 'green', label: 'Match', color: '#00C853', icon: 'check' };
   }
@@ -508,16 +509,16 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           if (group) {
             const pool = available[s.reference];
             if (pool && pool.length > 0) {
-              // Pick the charge whose cost_price is closest to this invoice line
+              // Pick the charge whose total_cost_price is closest to this invoice line
               pool.sort((a, b) =>
-                Math.abs((a.cost_price ?? Infinity) - s.carrier_cost) -
-                Math.abs((b.cost_price ?? Infinity) - s.carrier_cost)
+                Math.abs((a.total_cost_price ?? Infinity) - s.carrier_cost) -
+                Math.abs((b.total_cost_price ?? Infinity) - s.carrier_cost)
               );
               bestCharge = pool.shift(); // claim it — can't be used by another line
             }
           }
 
-          const status = getStatus(s.carrier_cost, bestCharge ? { ...group, charges: [bestCharge], has_null_cost: bestCharge.cost_price == null, total_cost_price: bestCharge.cost_price } : null);
+          const status = getStatus(s.carrier_cost, bestCharge || null);
           return { ...s, group, bestCharge, status };
         });
 
@@ -745,8 +746,8 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
               </div>
               <div style={{ fontSize: 22, fontWeight: 800, color: '#00C853' }}>
                 {gbp(results
-                  .filter(r => r.bestCharge?.cost_price != null)
-                  .reduce((s, r) => s + r.bestCharge.cost_price, 0)
+                  .filter(r => r.bestCharge?.total_cost_price != null)
+                  .reduce((s, r) => s + r.bestCharge.total_cost_price, 0)
                 )}
               </div>
               <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>From matched charges</div>
@@ -846,13 +847,15 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                     const isSelected = selected.has(row.lineKey);
                     const g    = row.group;
                     const bc   = row.bestCharge;
-                    const diff = bc?.cost_price != null
-                      ? parseFloat(row.carrier_cost) - bc.cost_price
+                    const diff = bc?.total_cost_price != null
+                      ? parseFloat(row.carrier_cost) - bc.total_cost_price
                       : null;
                     const diffColor = diff == null ? '#555'
                       : diff > 0.005 ? '#F44336'
                       : diff < -0.005 ? '#00C853'
                       : '#888';
+                    const hasSurcharge = bc?.total_cost_price != null && bc?.base_cost_price != null
+                      && Math.abs(bc.total_cost_price - bc.base_cost_price) > 0.005;
 
                     return (
                       <tr
@@ -914,12 +917,12 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                           </span>
                         </td>
                         <td style={{ ...td, textAlign: 'right' }}>
-                          <span style={{ color: bc?.cost_price != null ? '#CCC' : '#555' }}>
-                            {bc?.cost_price != null ? gbp(bc.cost_price) : '—'}
+                          <span style={{ color: bc?.total_cost_price != null ? '#CCC' : '#555' }}>
+                            {bc?.total_cost_price != null ? gbp(bc.total_cost_price) : '—'}
                           </span>
-                          {bc?.service_name && (
+                          {hasSurcharge && (
                             <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>
-                              {bc.service_name}
+                              base {gbp(bc.base_cost_price)} + surcharges
                             </div>
                           )}
                         </td>

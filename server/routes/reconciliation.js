@@ -32,19 +32,35 @@ router.post('/bulk-lookup', async (req, res) => {
     // order_id on charges stores the customer-facing shipment reference (e.g. MP-XXXXXXXX).
     const result = await query(`
       SELECT
-        c.id                AS charge_id,
-        c.order_id          AS reference,
-        c.cost_price,
-        c.price             AS sell_price,
+        c.id                    AS charge_id,
+        c.order_id              AS reference,
+        c.cost_price            AS base_cost_price,
+        c.price                 AS base_sell_price,
         c.service_name,
         c.awaiting_reconciliation,
         c.verified,
         c.billed,
         s.courier,
         s.collection_date,
-        cu.id               AS customer_id,
-        cu.business_name    AS customer_name,
-        cu.account_number   AS customer_account
+        cu.id                   AS customer_id,
+        cu.business_name        AS customer_name,
+        cu.account_number       AS customer_account,
+        -- Total cost across ALL charge types for this shipment (base + fuel + surcharges)
+        COALESCE(c.cost_price, 0) + COALESCE((
+          SELECT SUM(sc.cost_price)
+          FROM charges sc
+          WHERE sc.shipment_id = c.shipment_id
+            AND sc.charge_type IN ('fuel', 'surcharge')
+            AND sc.cancelled = false
+        ), 0)                   AS total_cost_price,
+        -- Total sell across ALL charge types for this shipment
+        COALESCE(c.price, 0) + COALESCE((
+          SELECT SUM(sc.price)
+          FROM charges sc
+          WHERE sc.shipment_id = c.shipment_id
+            AND sc.charge_type IN ('fuel', 'surcharge')
+            AND sc.cancelled = false
+        ), 0)                   AS total_sell_price
       FROM charges c
       LEFT JOIN shipments s  ON s.id  = c.shipment_id
       LEFT JOIN customers cu ON cu.id = c.customer_id
@@ -72,8 +88,10 @@ router.post('/bulk-lookup', async (req, res) => {
       }
       groupByRef[row.reference].charges.push({
         charge_id:               row.charge_id,
-        cost_price:              row.cost_price != null ? parseFloat(row.cost_price) : null,
-        sell_price:              row.sell_price != null ? parseFloat(row.sell_price) : null,
+        base_cost_price:         row.base_cost_price   != null ? parseFloat(row.base_cost_price)   : null,
+        base_sell_price:         row.base_sell_price   != null ? parseFloat(row.base_sell_price)   : null,
+        total_cost_price:        row.total_cost_price  != null ? parseFloat(row.total_cost_price)  : null,
+        total_sell_price:        row.total_sell_price  != null ? parseFloat(row.total_sell_price)  : null,
         service_name:            row.service_name,
         collection_date:         row.collection_date,
         verified:                row.verified,
