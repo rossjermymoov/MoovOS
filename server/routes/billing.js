@@ -1836,7 +1836,14 @@ router.post('/full-reprice', async (req, res, next) => {
                 if (upd.rows.length) {
                   summary.fuel_updated++;
                 } else {
-                  summary.fuel_no_charge_row++;
+                  // No existing fuel charge — create one
+                  await query(`
+                    INSERT INTO charges
+                      (shipment_id, customer_id, charge_type, service_name,
+                       price, cost_price, price_auto, parcel_qty)
+                    VALUES ($1, $2, 'fuel', $3, $4, $5, true, 1)
+                  `, [row.shipment_id, customerId, row.s_service_name || serviceName, newFuelPrice, newFuelCost]);
+                  summary.fuel_updated++;
                 }
               }
             }
@@ -2537,73 +2544,108 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
     const pricingMode = await getParcelPricingMode(row.customer_id);
     const totalPrice  = parseFloat(calcTotal(rate, parcelQty, pricingMode).toFixed(2));
 
-    // rate_id on charges is UUID — we don't store the raw row id (integer).
-    // zone_name + weight_class_name are the human-readable references that matter.
+    // Calculate cost_price total (same rounding as webhook handler)
+    const costTotal = rate.cost_price != null
+      ? (() => {
+          const n = parcelQty || 1;
+          const raw = rate.cost_price_sub != null && n > 1
+            ? rate.cost_price + (n - 1) * rate.cost_price_sub
+            : rate.cost_price * n;
+          return Math.round(raw * 100) / 100;
+        })()
+      : null;
+
     await query(`
       UPDATE charges
       SET price                = $1,
-          zone_name            = $2,
-          weight_class_name    = $3,
+          cost_price           = $2,
+          zone_name            = $3,
+          weight_class_name    = $4,
           price_auto           = true,
           price_failure_reason = NULL,
           updated_at           = NOW()
-      WHERE id = $4
-    `, [totalPrice, rate.zone_name, rate.weight_class_name, id]);
+      WHERE id = $5
+    `, [totalPrice, costTotal, rate.zone_name, rate.weight_class_name, id]);
 
     // ── Recalculate fuel charge for this shipment ──────────────────────────────
-    // The fuel charge is based on the courier sell price, so it must be updated
-    // whenever the courier price changes — otherwise old % rates persist.
     let fuelUpdated = false;
+    let fuelNote    = null;
     try {
       const shipmentRes = await query(
-        `SELECT shipment_id FROM charges WHERE id = $1`, [id]
+        `SELECT shipment_id, service_name FROM charges WHERE id = $1`, [id]
       );
-      const shipmentId = shipmentRes.rows[0]?.shipment_id;
+      const shipmentId   = shipmentRes.rows[0]?.shipment_id;
+      const chgSvcName   = shipmentRes.rows[0]?.service_name;
 
       if (shipmentId && dcServiceId && customerId) {
-        // Look up the current fuel sell % for this customer/service
         const fuelRes = await query(`
-          SELECT fg.standard_sell_pct,
+          SELECT fg.id AS fuel_group_id,
+                 fg.standard_sell_pct, fg.fuel_surcharge_pct AS carrier_pct,
                  cfgp.sell_pct AS customer_sell_pct
           FROM courier_services cs
-          JOIN fuel_groups fg ON fg.id = cs.fuel_group_id
+          LEFT JOIN fuel_groups fg ON fg.id = cs.fuel_group_id
           LEFT JOIN customer_fuel_group_pricing cfgp
                  ON cfgp.fuel_group_id = fg.id AND cfgp.customer_id = $2
           WHERE cs.service_code ILIKE $1
           LIMIT 1
         `, [dcServiceId, customerId]);
 
-        if (fuelRes.rows.length) {
-          const fg      = fuelRes.rows[0];
-          const sellPct = parseFloat(fg.customer_sell_pct ?? fg.standard_sell_pct ?? 0);
+        if (!fuelRes.rows.length || fuelRes.rows[0].fuel_group_id == null) {
+          fuelNote = 'no_fuel_group';
+        } else {
+          const fg       = fuelRes.rows[0];
+          const sellPct  = parseFloat(fg.customer_sell_pct ?? fg.standard_sell_pct ?? 0);
+          const costPct  = parseFloat(fg.carrier_pct ?? 0);
 
           if (sellPct > 0) {
-            const newFuelPrice = parseFloat((totalPrice * sellPct / 100).toFixed(2));
+            const newFuelPrice = Math.round(totalPrice * sellPct / 100 * 100) / 100;
+            const newFuelCost  = costPct > 0 && costTotal != null
+              ? Math.round(costTotal * costPct / 100 * 100) / 100
+              : null;
 
+            // Try to update existing fuel charge first
             const updFuel = await query(`
               UPDATE charges
               SET price      = $1,
+                  cost_price = COALESCE($2, cost_price),
                   updated_at = NOW()
-              WHERE shipment_id  = $2
-                AND charge_type  = 'fuel'
-                AND cancelled    = false
+              WHERE shipment_id = $3
+                AND charge_type = 'fuel'
+                AND cancelled   = false
               RETURNING id
-            `, [newFuelPrice, shipmentId]);
+            `, [newFuelPrice, newFuelCost, shipmentId]);
 
-            fuelUpdated = updFuel.rows.length > 0;
+            if (updFuel.rows.length > 0) {
+              fuelUpdated = true;
+            } else {
+              // No fuel charge exists — create one
+              await query(`
+                INSERT INTO charges
+                  (shipment_id, customer_id, charge_type, service_name,
+                   price, cost_price, price_auto, parcel_qty)
+                VALUES ($1, $2, 'fuel', $3, $4, $5, true, 1)
+              `, [shipmentId, customerId, chgSvcName || serviceName, newFuelPrice, newFuelCost]);
+              fuelUpdated = true;
+              fuelNote    = 'created';
+            }
+          } else {
+            fuelNote = 'zero_sell_pct';
           }
         }
       }
     } catch (fuelErr) {
       console.warn('[reprice] fuel update failed:', fuelErr.message);
+      fuelNote = fuelErr.message;
     }
 
     res.json({
-      ok: true,
-      price: totalPrice,
-      zone_name: rate.zone_name,
+      ok:               true,
+      price:            totalPrice,
+      cost_price:       costTotal,
+      zone_name:        rate.zone_name,
       weight_class_name: rate.weight_class_name,
-      fuel_updated: fuelUpdated,
+      fuel_updated:     fuelUpdated,
+      fuel_note:        fuelNote,
     });
   } catch (err) { next(err); }
 });
