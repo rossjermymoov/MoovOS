@@ -258,15 +258,30 @@ function bandMaxKg(rate) {
 //              (e.g. "IV" matches "IV1", "IV2", etc.)
 //
 // Zone resolution order:
-//   1. dc_zones — included_postcodes match → that zone
-//   2. dc_zones — no included list AND outward not in excluded_postcodes → catch-all (Mainland)
+//   1. dc_zones — included_postcodes match → that zone (filtered by iso)
+//   2. dc_zones — no included list AND outward not in excluded_postcodes → catch-all (filtered by iso)
 //   3. zones/zone_postcode_rules — include rule match (new-model services)
 //   4. zones/zone_postcode_rules — catch-all (has excludes, this postcode not excluded)
 //   5. zones/zone_postcode_rules — universal zone (no rules at all)
-async function zoneForPostcode(serviceCode, postcode) {
+//
+// IMPORTANT: iso filtering is mandatory. If dc_zones has no rows for this
+// service + iso combination, zone resolution returns null (hard error). This
+// prevents international/wrong-country zone rows silently matching UK postcodes.
+async function zoneForPostcode(serviceCode, postcode, iso = 'GB') {
   if (!postcode || !serviceCode) return null;
 
-  const outward = postcode.trim().toUpperCase().split(/\s+/)[0];
+  const outward   = postcode.trim().toUpperCase().split(/\s+/)[0];
+  const isoUpper  = (iso || 'GB').trim().toUpperCase();
+
+  // Guard: if there are NO dc_zones rows at all for this service+iso, fail fast
+  // rather than silently falling through to a wrong catch-all from another country.
+  const isoCheckRes = await query(`
+    SELECT 1 FROM dc_zones WHERE service_code ILIKE $1 AND iso = $2 LIMIT 1
+  `, [serviceCode, isoUpper]);
+  if (!isoCheckRes.rows.length) {
+    // No zones configured for this country — return null so caller can surface error
+    return null;
+  }
 
   // Helper: does an array column contain a match for this outward code?
   // Exact match OR letter-only prefix (e.g. "IV" matches "IV1", "IV2")
@@ -275,25 +290,28 @@ async function zoneForPostcode(serviceCode, postcode) {
     WHERE p = $3 OR ($3 LIKE p || '%' AND p ~ '^[A-Z]+$')
   )`;
 
-  // ── 1. dc_zones: explicit include ─────────────────────────────────────────
+  // ── 1. dc_zones: explicit include (iso-filtered) ──────────────────────────
   const dcInclRes = await query(`
     SELECT zone_name
     FROM dc_zones
     WHERE service_code ILIKE $1
+      AND iso = $4
       AND included_postcodes IS NOT NULL
       AND EXISTS (
         SELECT 1 FROM unnest(included_postcodes) p
         WHERE p = $2 OR ($2 LIKE p || '%' AND p ~ '^[A-Z]+$')
       )
+    ORDER BY zone_name
     LIMIT 1
-  `, [serviceCode, outward]);
+  `, [serviceCode, outward, outward, isoUpper]);
   if (dcInclRes.rows.length) return dcInclRes.rows[0].zone_name;
 
-  // ── 2. dc_zones: catch-all (no include list, outward not excluded) ────────
+  // ── 2. dc_zones: catch-all (no include list, outward not excluded, iso-filtered) ──
   const dcCatchRes = await query(`
     SELECT zone_name
     FROM dc_zones
     WHERE service_code ILIKE $1
+      AND iso = $3
       AND included_postcodes IS NULL
       AND (
         excluded_postcodes IS NULL
@@ -302,8 +320,9 @@ async function zoneForPostcode(serviceCode, postcode) {
           WHERE p = $2 OR ($2 LIKE p || '%' AND p ~ '^[A-Z]+$')
         )
       )
+    ORDER BY zone_name
     LIMIT 1
-  `, [serviceCode, outward]);
+  `, [serviceCode, outward, isoUpper]);
   if (dcCatchRes.rows.length) return dcCatchRes.rows[0].zone_name;
 
   // ── 3–5. zones/zone_postcode_rules (new-model services) ──────────────────
@@ -372,7 +391,7 @@ function filterByZoneName(rows, zoneName) {
 
 // ── New model: customer_service_pricing → carrier rate card weight bands ──────
 // Match: customer + service_code only. No service name.
-async function lookupViaServicePricing(customerId, serviceCode, weightKg, postcode) {
+async function lookupViaServicePricing(customerId, serviceCode, weightKg, postcode, iso = 'GB') {
   if (!serviceCode) return null;
 
   const res = await query(`
@@ -425,10 +444,10 @@ async function lookupViaServicePricing(customerId, serviceCode, weightKg, postco
   if (distinctZones.length === 1) {
     zoneRows = rows;
   } else {
-    const zoneName = await zoneForPostcode(serviceCode, postcode);
-    if (!zoneName) return { rate: null, reason: `No matching zone for postcode "${postcode || 'none'}"` };
+    const zoneName = await zoneForPostcode(serviceCode, postcode, iso);
+    if (!zoneName) return { rate: null, reason: `No matching zone for postcode "${postcode || 'none'}" (iso: ${iso})` };
     zoneRows = filterByZoneName(rows, zoneName);
-    if (!zoneRows.length) return { rate: null, reason: `No matching zone for postcode "${postcode}"` };
+    if (!zoneRows.length) return { rate: null, reason: `No matching zone for postcode "${postcode}" (iso: ${iso})` };
   }
 
   // ── Step 2: weight band within zone ──────────────────────────────────────
@@ -453,7 +472,7 @@ async function lookupViaServicePricing(customerId, serviceCode, weightKg, postco
 //      No match → error: 'no matching price'
 //
 // No guessing, no fallbacks. Every failure mode returns a specific error.
-async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcode) {
+async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcode, iso = 'GB') {
   if (!serviceCode) return { rate: null, reason: 'no matching weight band' };
 
   // ── Step 1: weight band from carrier rate card ───────────────────────────────
@@ -488,8 +507,8 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
   if (distinctZones.length === 1) {
     zoneName = distinctZones[0];
   } else {
-    const resolved = await zoneForPostcode(serviceCode, postcode);
-    if (!resolved) return { rate: null, reason: 'no matching zone' };
+    const resolved = await zoneForPostcode(serviceCode, postcode, iso);
+    if (!resolved) return { rate: null, reason: `no matching zone for postcode "${postcode}" (iso: ${iso}) — check dc_zones has rows for this service + country` };
     zoneName = resolved;
   }
 
@@ -545,14 +564,15 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
 
 // ── Main lookup — tries new model first, falls back to legacy ─────────────────
 // serviceName is accepted for backwards-compat but NEVER used for matching.
-async function lookupRateWithReason(customerId, serviceCode, _serviceName, weightKg, postcode) {
+// iso defaults to 'GB' for domestic; pass ship_to_country_iso for correct zone lookup.
+async function lookupRateWithReason(customerId, serviceCode, _serviceName, weightKg, postcode, iso = 'GB') {
   if (!customerId) return { rate: null, reason: 'No matching customer' };
   if (!serviceCode) return { rate: null, reason: 'No service code' };
 
-  const newResult = await lookupViaServicePricing(customerId, serviceCode, weightKg, postcode);
+  const newResult = await lookupViaServicePricing(customerId, serviceCode, weightKg, postcode, iso);
   if (newResult !== null) return newResult;
 
-  return lookupViaCustomerRates(customerId, serviceCode, weightKg, postcode);
+  return lookupViaCustomerRates(customerId, serviceCode, weightKg, postcode, iso);
 }
 
 function normaliseWeightBand(rawName) {
@@ -1098,8 +1118,8 @@ router.post('/webhook', async (req, res, next) => {
       return res.json({ ok: true, action: 'duplicate', shipment_id: shipmentId });
     }
 
-    // Look up rate card — pass destination postcode for zone resolution on flat-rate services
-    const { rate, reason: priceFailReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, shipToPostcode);
+    // Look up rate card — pass destination postcode + country for zone resolution
+    const { rate, reason: priceFailReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, shipToPostcode, shipToCountry || 'GB');
     const pricingMode = rate ? await getParcelPricingMode(customerId) : 'sub';
     const unitPrice   = rate ? rate.price : null;
     const totalPrice  = unitPrice != null
@@ -1704,8 +1724,8 @@ router.post('/batch-reprice', async (req, res, next) => {
           );
         }
 
-        // Look up rate with reason — pass postcode for zone resolution on flat-rate services
-        const { rate, reason: failReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, row.ship_to_postcode);
+        // Look up rate with reason — pass postcode + country for zone resolution
+        const { rate, reason: failReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, row.ship_to_postcode, row.ship_to_country_iso || 'GB');
         if (!rate) {
           summary.no_rate++;
           await query(`UPDATE charges SET price_failure_reason = $1, updated_at = NOW() WHERE id = $2`,
@@ -1798,7 +1818,7 @@ router.post('/full-reprice', async (req, res, next) => {
         const weightPerParcel  = parseFloat(row.parcel_weight_kg) ||
           (parcelQty > 0 && totalWt ? totalWt / parcelQty : totalWt) || null;
 
-        const { rate } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, row.ship_to_postcode);
+        const { rate } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, row.ship_to_postcode, row.ship_to_country_iso || 'GB');
         if (!rate) { summary.no_rate++; continue; }
 
         const pricingMode = await getParcelPricingMode(customerId);
@@ -2528,7 +2548,7 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
       await query(`UPDATE charges SET customer_id = $1, updated_at = NOW() WHERE id = $2`, [customerId, id]);
     }
 
-    const { rate, reason: failReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, row.ship_to_postcode);
+    const { rate, reason: failReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, row.ship_to_postcode, row.ship_to_country_iso || 'GB');
     if (!rate) {
       await query(`UPDATE charges SET price_failure_reason = $1, updated_at = NOW() WHERE id = $2`,
         [failReason, id]);
@@ -2605,6 +2625,33 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
       zone_name: rate.zone_name,
       weight_class_name: rate.weight_class_name,
       fuel_updated: fuelUpdated,
+    });
+  } catch (err) { next(err); }
+});
+
+// ─── GET /api/billing/dc-zones/missing-gb ────────────────────────────────────
+// Returns every service code in dc_zones that has NO rows with iso = 'GB'.
+// These services will fail zone resolution for any UK domestic shipment.
+router.get('/dc-zones/missing-gb', async (_req, res, next) => {
+  try {
+    const result = await query(`
+      SELECT DISTINCT
+        service_code,
+        courier_code,
+        MAX(service_name) AS service_name,
+        array_agg(DISTINCT iso ORDER BY iso) AS isos_present,
+        COUNT(*) AS zone_count
+      FROM dc_zones
+      WHERE service_code NOT IN (
+        SELECT DISTINCT service_code FROM dc_zones WHERE iso = 'GB'
+      )
+      GROUP BY service_code, courier_code
+      ORDER BY courier_code, service_code
+    `);
+    res.json({
+      services_missing_gb: result.rows,
+      count: result.rows.length,
+      note: 'These services have no dc_zones rows with iso = GB. Any UK domestic shipment using these services will fail zone resolution.'
     });
   } catch (err) { next(err); }
 });
