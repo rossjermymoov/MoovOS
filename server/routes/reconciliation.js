@@ -32,10 +32,10 @@ router.post('/bulk-lookup', async (req, res) => {
     // order_id on charges stores the customer-facing shipment reference (e.g. MP-XXXXXXXX).
     const result = await query(`
       SELECT
-        c.id                            AS charge_id,
-        c.order_id                      AS reference,
+        c.id                AS charge_id,
+        c.order_id          AS reference,
         c.cost_price,
-        c.price                         AS sell_price,
+        c.price             AS sell_price,
         c.service_name,
         c.courier,
         c.collection_date,
@@ -43,32 +43,14 @@ router.post('/bulk-lookup', async (req, res) => {
         c.verified,
         c.billed,
         c.cancelled,
-        cu.id                           AS customer_id,
-        cu.business_name                AS customer_name,
-        cu.account_number               AS customer_account,
-        COALESCE(
-          SUM(CASE WHEN cl.id IS NOT NULL
-                   THEN cl.cost_price::numeric
-                   ELSE 0 END),
-          0
-        )                               AS surcharge_cost_total,
-        COALESCE(
-          SUM(CASE WHEN cl.id IS NOT NULL
-                   THEN cl.price::numeric
-                   ELSE 0 END),
-          0
-        )                               AS surcharge_sell_total
+        cu.id               AS customer_id,
+        cu.business_name    AS customer_name,
+        cu.account_number   AS customer_account
       FROM charges c
-      LEFT JOIN customers   cu ON cu.id   = c.customer_id
-      LEFT JOIN charge_lines cl ON cl.charge_id = c.id
+      LEFT JOIN customers cu ON cu.id = c.customer_id
       WHERE c.order_id   = ANY($1)
         AND c.charge_type = 'courier'
         AND c.cancelled   = false
-      GROUP BY
-        c.id, c.order_id, c.cost_price, c.price, c.service_name,
-        c.courier, c.collection_date, c.awaiting_reconciliation,
-        c.verified, c.billed, c.cancelled,
-        cu.id, cu.business_name, cu.account_number
       ORDER BY c.order_id
     `, [refs]);
 
