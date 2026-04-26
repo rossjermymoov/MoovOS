@@ -448,24 +448,37 @@ function FileDropZone({ carrier, onParsed, onBack }) {
 
 // ─── Service Mapping Manager ──────────────────────────────────────────────────
 
-function ServiceMappingManager({ courier, onClose }) {
-  const [mappings,   setMappings]   = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [addInvoice, setAddInvoice] = useState('');
-  const [addInternal,setAddInternal]= useState('');
-  const [saving,     setSaving]     = useState(false);
-  const [error,      setError]      = useState(null);
+function ServiceMappingManager({ courier, carrierLabel, unmappedNames, onClose }) {
+  const [mappings,    setMappings]    = useState([]);
+  const [services,    setServices]    = useState([]);   // our internal services for this courier
+  const [loadingMap,  setLoadingMap]  = useState(true);
+  const [addInvoice,  setAddInvoice]  = useState(unmappedNames?.[0] || '');
+  const [addInternal, setAddInternal] = useState('');
+  const [saving,      setSaving]      = useState(false);
+  const [error,       setError]       = useState(null);
 
-  async function load() {
-    setLoading(true);
+  async function loadMappings() {
+    setLoadingMap(true);
     try {
       const r = await api.get('/reconciliation/service-mappings', { params: { courier } });
       setMappings(r.data);
     } catch { /* ignore */ }
-    setLoading(false);
+    setLoadingMap(false);
   }
 
-  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    loadMappings();
+    // Fetch our services for this courier (filter by courier name keyword)
+    api.get('/carriers/services').then(r => {
+      const all = r.data || [];
+      const keyword = (carrierLabel || '').split(' ')[0].toLowerCase(); // e.g. "dhl"
+      const filtered = all.filter(s =>
+        s.courier_name?.toLowerCase().includes(keyword) ||
+        s.courier_code?.toLowerCase().includes(keyword)
+      );
+      setServices(filtered.length > 0 ? filtered : all);
+    }).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function save() {
     if (!addInvoice.trim() || !addInternal.trim()) return;
@@ -474,8 +487,9 @@ function ServiceMappingManager({ courier, onClose }) {
       await api.post('/reconciliation/service-mappings', {
         courier, invoice_name: addInvoice.trim(), internal_name: addInternal.trim(),
       });
-      setAddInvoice(''); setAddInternal('');
-      await load();
+      setAddInvoice('');
+      setAddInternal('');
+      await loadMappings();
     } catch (e) {
       setError(e.response?.data?.error || e.message);
     }
@@ -489,6 +503,9 @@ function ServiceMappingManager({ courier, onClose }) {
     } catch { /* ignore */ }
   }
 
+  const mappedInvoiceNames = new Set(mappings.map(m => m.invoice_name));
+  const stillUnmapped = (unmappedNames || []).filter(n => !mappedInvoiceNames.has(n));
+
   return (
     <div style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 999,
@@ -496,74 +513,133 @@ function ServiceMappingManager({ courier, onClose }) {
     }} onClick={onClose}>
       <div style={{
         background: '#1A1A2E', border: '1px solid rgba(255,255,255,0.12)',
-        borderRadius: 14, padding: 28, width: 560, maxHeight: '80vh',
+        borderRadius: 14, padding: 28, width: 600, maxHeight: '85vh',
         overflow: 'auto', position: 'relative',
       }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
           <Settings size={16} style={{ color: '#00BCD4' }} />
           <span style={{ fontWeight: 700, fontSize: 15, color: '#CCC' }}>Service Name Mappings</span>
-          <span style={{ fontSize: 12, color: '#555', marginLeft: 4 }}>— {courier}</span>
+          <span style={{ fontSize: 12, color: '#555', marginLeft: 4 }}>— {carrierLabel}</span>
           <button onClick={onClose} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>✕</button>
         </div>
         <p style={{ fontSize: 12, color: '#666', marginBottom: 20, lineHeight: 1.6 }}>
-          Carrier invoice service names (e.g. "HomeServe Sign Mand") rarely match your internal service names.
-          Map them here — mappings are saved and applied automatically to all future reconciliations for this carrier.
+          Map the service names on the carrier invoice to your internal services.
+          Mappings are saved and applied automatically to future reconciliations.
         </p>
 
-        {/* Add row */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr auto', gap: 8, marginBottom: 16, alignItems: 'center' }}>
-          <div style={{ border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, background: 'rgba(255,255,255,0.04)', padding: '0 10px' }}>
-            <input
-              value={addInvoice} onChange={e => setAddInvoice(e.target.value)}
-              placeholder="Invoice service name (exact)"
-              style={{ background: 'none', border: 'none', color: '#CCC', fontSize: 12, width: '100%', height: 34, outline: 'none' }}
-            />
+        {/* Unmapped names from this invoice — quick-select chips */}
+        {stillUnmapped.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+              From this invoice — click to map
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {stillUnmapped.map(n => (
+                <button key={n} onClick={() => { setAddInvoice(n); setAddInternal(''); }}
+                  style={{
+                    background: addInvoice === n ? 'rgba(0,188,212,0.15)' : 'rgba(255,255,255,0.04)',
+                    border: `1px solid ${addInvoice === n ? 'rgba(0,188,212,0.5)' : 'rgba(255,255,255,0.12)'}`,
+                    borderRadius: 20, padding: '4px 12px', cursor: 'pointer',
+                    fontSize: 12, color: addInvoice === n ? '#00BCD4' : '#888',
+                    fontFamily: 'monospace',
+                  }}>
+                  {n}
+                </button>
+              ))}
+            </div>
           </div>
-          <ArrowRight size={14} style={{ color: '#555' }} />
-          <div style={{ border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, background: 'rgba(255,255,255,0.04)', padding: '0 10px' }}>
-            <input
-              value={addInternal} onChange={e => setAddInternal(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && save()}
-              placeholder="Your internal name"
-              style={{ background: 'none', border: 'none', color: '#CCC', fontSize: 12, width: '100%', height: 34, outline: 'none' }}
-            />
+        )}
+
+        {/* Add mapping form */}
+        <div style={{
+          background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: 10, padding: 16, marginBottom: 20,
+        }}>
+          <div style={{ fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>
+            Add mapping
           </div>
-          <button
-            onClick={save} disabled={saving || !addInvoice.trim() || !addInternal.trim()}
-            style={{
-              background: '#00C853', border: 'none', borderRadius: 8, color: '#000',
-              fontWeight: 700, fontSize: 12, padding: '0 14px', height: 34, cursor: 'pointer',
-              opacity: !addInvoice.trim() || !addInternal.trim() ? 0.4 : 1,
-            }}
-          >
-            {saving ? '…' : <Plus size={14} />}
-          </button>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr auto', gap: 10, alignItems: 'center' }}>
+
+            {/* Invoice name — editable, pre-filled from chip selection */}
+            <div>
+              <div style={{ fontSize: 10, color: '#555', marginBottom: 4 }}>Invoice service name (exact)</div>
+              <div style={{ border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, background: 'rgba(255,255,255,0.04)', padding: '0 10px' }}>
+                <input
+                  value={addInvoice} onChange={e => setAddInvoice(e.target.value)}
+                  placeholder="e.g. HomeServe Sign Mand"
+                  style={{ background: 'none', border: 'none', color: '#CCC', fontSize: 12, width: '100%', height: 34, outline: 'none', fontFamily: 'monospace' }}
+                />
+              </div>
+            </div>
+
+            <ArrowRight size={14} style={{ color: '#444' }} />
+
+            {/* Internal name — dropdown of our services */}
+            <div>
+              <div style={{ fontSize: 10, color: '#555', marginBottom: 4 }}>
+                Your service{services.length === 0 ? ' (loading…)' : ''}
+              </div>
+              <select
+                value={addInternal} onChange={e => setAddInternal(e.target.value)}
+                style={{
+                  width: '100%', height: 34,
+                  background: '#0E0E1A', border: '1px solid rgba(255,255,255,0.12)',
+                  borderRadius: 8, color: addInternal ? '#CCC' : '#555',
+                  fontSize: 12, padding: '0 10px', outline: 'none', cursor: 'pointer',
+                }}
+              >
+                <option value="">— Select service —</option>
+                {services.map(s => (
+                  <option key={s.id} value={s.service_name}>
+                    {s.service_name} ({s.service_code})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              onClick={save} disabled={saving || !addInvoice.trim() || !addInternal.trim()}
+              style={{
+                background: '#00C853', border: 'none', borderRadius: 8, color: '#000',
+                fontWeight: 700, fontSize: 12, padding: '0 16px', height: 34, cursor: 'pointer',
+                opacity: !addInvoice.trim() || !addInternal.trim() ? 0.4 : 1, marginTop: 20,
+              }}
+            >
+              {saving ? '…' : 'Save'}
+            </button>
+          </div>
+          {error && <div style={{ fontSize: 12, color: '#F44336', marginTop: 8 }}>{error}</div>}
         </div>
-        {error && <div style={{ fontSize: 12, color: '#F44336', marginBottom: 12 }}>{error}</div>}
 
         {/* Existing mappings */}
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: '20px 0', color: '#555', fontSize: 13 }}>Loading…</div>
+        <div style={{ fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+          Saved mappings
+        </div>
+        {loadingMap ? (
+          <div style={{ textAlign: 'center', padding: '16px 0', color: '#555', fontSize: 13 }}>Loading…</div>
         ) : mappings.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '20px 0', color: '#444', fontSize: 13 }}>No mappings yet</div>
+          <div style={{ textAlign: 'center', padding: '16px 0', color: '#444', fontSize: 13 }}>No mappings yet</div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr>
-                <th style={{ textAlign: 'left', color: '#666', fontWeight: 600, padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>Invoice Name</th>
+                <th style={{ textAlign: 'left', color: '#555', fontWeight: 600, padding: '6px 0 8px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>Invoice Name</th>
                 <th style={{ width: 24 }}></th>
-                <th style={{ textAlign: 'left', color: '#666', fontWeight: 600, padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>Internal Name</th>
+                <th style={{ textAlign: 'left', color: '#555', fontWeight: 600, padding: '6px 0 8px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>Internal Service</th>
                 <th style={{ width: 32, borderBottom: '1px solid rgba(255,255,255,0.07)' }}></th>
               </tr>
             </thead>
             <tbody>
               {mappings.map(m => (
                 <tr key={m.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                  <td style={{ padding: '8px 0', color: '#888', fontFamily: 'monospace' }}>{m.invoice_name}</td>
+                  <td style={{ padding: '9px 0', color: '#888', fontFamily: 'monospace' }}>{m.invoice_name}</td>
                   <td style={{ textAlign: 'center' }}><ArrowRight size={11} style={{ color: '#444' }} /></td>
-                  <td style={{ padding: '8px 0', color: '#CCC', fontWeight: 600 }}>{m.internal_name}</td>
+                  <td style={{ padding: '9px 0', color: '#00BCD4', fontWeight: 600 }}>{m.internal_name}</td>
                   <td style={{ textAlign: 'right' }}>
-                    <button onClick={() => del(m.id)} style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', padding: 0 }}>
+                    <button onClick={() => del(m.id)} style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', padding: 0 }}
+                      title="Remove mapping">
                       <Trash2 size={11} />
                     </button>
                   </td>
@@ -691,6 +767,16 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
         red:   results.filter(r => r.status.code === 'red').length,
       }
     : null;
+
+  // ── Surcharge totals (for reconciliation rows) ──
+  // Our stored surcharge component = total_cost_price minus base_cost_price, summed across
+  // all matched charges. Invoice surcharge total = sum of surcharge rows from the CSV.
+  const ourSurchargeTotal = results
+    ? results
+        .filter(r => r.bestCharge?.total_cost_price != null && r.bestCharge?.base_cost_price != null)
+        .reduce((sum, r) => sum + Math.max(0, r.bestCharge.total_cost_price - r.bestCharge.base_cost_price), 0)
+    : 0;
+  const invoiceSurchargeTotal = surcharges.reduce((s, r) => s + r.value, 0);
 
   // ── Filter ──
   const displayed = results
@@ -826,7 +912,12 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
 
       {/* Results */}
       {showMappings && (
-        <ServiceMappingManager courier={carrier.code} onClose={() => setShowMappings(false)} />
+        <ServiceMappingManager
+          courier={carrier.code}
+          carrierLabel={carrier.label}
+          unmappedNames={invoiceServiceNames.filter(n => !mappings[n])}
+          onClose={() => setShowMappings(false)}
+        />
       )}
 
       {results && counts && !loading && (
@@ -866,29 +957,6 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
               >
                 Map now
               </button>
-            </div>
-          )}
-
-          {/* Surcharges banner */}
-          {surcharges.length > 0 && (
-            <div style={{
-              background: 'rgba(255,193,7,0.06)', border: '1px solid rgba(255,193,7,0.25)',
-              borderRadius: 10, padding: '10px 16px', marginBottom: 16,
-              display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-            }}>
-              <AlertTriangle size={14} style={{ color: '#FFC107', flexShrink: 0 }} />
-              <span style={{ fontSize: 13, color: '#FFC107', fontWeight: 600 }}>
-                {surcharges.length} surcharge row{surcharges.length !== 1 ? 's' : ''} detected in CSV
-              </span>
-              <span style={{ fontSize: 12, color: '#888' }}>—</span>
-              {surcharges.map((s, i) => (
-                <span key={i} style={{ fontSize: 12, color: '#999' }}>
-                  {s.description}: <span style={{ color: '#FFC107', fontWeight: 700 }}>{gbp(s.value)}</span>
-                </span>
-              ))}
-              <span style={{ fontSize: 11, color: '#666', marginLeft: 4 }}>
-                (surcharges are shown for reference — not matched to individual shipments)
-              </span>
             </div>
           )}
 
@@ -1042,7 +1110,14 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {displayed.length === 0 && (
+                  {displayed.length === 0 && filter === 'all' && surcharges.length === 0 && (
+                    <tr>
+                      <td colSpan={8} style={{ ...td, textAlign: 'center', color: '#555', padding: '40px 12px' }}>
+                        No results to show
+                      </td>
+                    </tr>
+                  )}
+                  {displayed.length === 0 && filter !== 'all' && (
                     <tr>
                       <td colSpan={8} style={{ ...td, textAlign: 'center', color: '#555', padding: '40px 12px' }}>
                         No results to show
@@ -1167,6 +1242,106 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                       </tr>
                     );
                   })}
+
+                  {/* ── Surcharge rows — shown when filter is 'all' ── */}
+                  {filter === 'all' && surcharges.length > 0 && (() => {
+                    const surchargeDiff = invoiceSurchargeTotal - ourSurchargeTotal;
+                    const surchargeStatus = Math.abs(surchargeDiff) <= TOLERANCE_ABS
+                      ? { code: 'green', label: 'Match',       color: '#00C853', icon: 'check' }
+                      : { code: 'red',   label: 'Discrepancy', color: '#F44336', icon: 'x'     };
+                    return (
+                      <>
+                        {/* Section divider */}
+                        <tr>
+                          <td colSpan={8} style={{
+                            padding: '8px 12px 6px',
+                            fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                            letterSpacing: '0.07em', color: '#555',
+                            background: 'rgba(255,255,255,0.02)',
+                            borderTop: '2px solid rgba(255,255,255,0.08)',
+                            borderBottom: '1px solid rgba(255,255,255,0.05)',
+                          }}>
+                            Invoice Surcharges
+                          </td>
+                        </tr>
+
+                        {surcharges.map((sc, i) => {
+                          const isFirst = i === 0;
+                          return (
+                            <tr key={`sc-${i}`} style={{ background: 'rgba(255,193,7,0.02)' }}>
+                              {/* Checkbox placeholder */}
+                              <td style={{ ...td, textAlign: 'center', width: 36 }}>
+                                <input type="checkbox" disabled style={{ opacity: 0.2 }} />
+                              </td>
+
+                              {/* Reference — surcharge badge */}
+                              <td style={td}>
+                                <span style={{
+                                  fontSize: 9, fontWeight: 700, letterSpacing: '0.05em',
+                                  textTransform: 'uppercase',
+                                  background: 'rgba(255,193,7,0.12)',
+                                  border: '1px solid rgba(255,193,7,0.3)',
+                                  color: '#FFC107', borderRadius: 20, padding: '2px 8px',
+                                }}>
+                                  SURCHARGE
+                                </span>
+                              </td>
+
+                              {/* Customer — n/a */}
+                              <td style={{ ...td, color: '#444' }}>—</td>
+
+                              {/* Service — surcharge description */}
+                              <td style={td}>
+                                <span style={{ fontSize: 12, color: '#888' }}>{sc.description}</span>
+                              </td>
+
+                              {/* Invoice Cost */}
+                              <td style={{ ...td, textAlign: 'right' }}>
+                                <span style={{ fontWeight: 700, color: '#B39DDB' }}>
+                                  {gbp(sc.value)}
+                                </span>
+                              </td>
+
+                              {/* Our Cost — only on first row (it's a total comparison) */}
+                              <td style={{ ...td, textAlign: 'right' }}>
+                                {isFirst ? (
+                                  <>
+                                    <span style={{ color: '#CCC' }}>{gbp(ourSurchargeTotal)}</span>
+                                    {surcharges.length > 1 && (
+                                      <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>
+                                        all surcharges
+                                      </div>
+                                    )}
+                                  </>
+                                ) : (
+                                  <span style={{ color: '#444' }}>—</span>
+                                )}
+                              </td>
+
+                              {/* Difference — only on first row */}
+                              <td style={{ ...td, textAlign: 'right' }}>
+                                {isFirst ? (
+                                  <span style={{
+                                    color: Math.abs(surchargeDiff) > 0.005 ? '#F44336' : '#888',
+                                    fontWeight: Math.abs(surchargeDiff) > 0.005 ? 700 : 400,
+                                  }}>
+                                    {surchargeDiff > 0 ? '+' : ''}{gbp(surchargeDiff)}
+                                  </span>
+                                ) : (
+                                  <span style={{ color: '#444' }}>—</span>
+                                )}
+                              </td>
+
+                              {/* Status — only on first row */}
+                              <td style={{ ...td, textAlign: 'center' }}>
+                                {isFirst ? <StatusBadge status={surchargeStatus} /> : null}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </>
+                    );
+                  })()}
                 </tbody>
               </table>
             </div>
