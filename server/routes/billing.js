@@ -349,9 +349,11 @@ async function lookupViaServicePricing(customerId, serviceCode, weightKg, postco
   const res = await query(`
     SELECT
       csp.pricing_type, csp.markup_pct, csp.fixed_fee,
-      wb.price_first  AS cost_price,
-      wb.price_sub    AS cost_price_sub,
+      wb.price_first              AS cost_price,
+      wb.price_sub                AS cost_price_sub,
       wb.min_weight_kg, wb.max_weight_kg,
+      wb.cost_per_kg,
+      wb.cost_per_kg_threshold_kg,
       z.name          AS zone_name,
       cs.service_code AS svc_code,
       wb.id           AS band_id
@@ -374,19 +376,32 @@ async function lookupViaServicePricing(customerId, serviceCode, weightKg, postco
     return parseFloat(cost || 0) * (1 + parseFloat(row.markup_pct || 0) / 100);
   };
 
-  const buildRate = (r) => ({
-    price:             Math.round(applyMarkup(r.cost_price, r) * 10000) / 10000,
-    // price_sub: sell price for each subsequent parcel (same markup applied to cost_price_sub)
-    price_sub:         r.cost_price_sub != null
-                         ? Math.round(applyMarkup(r.cost_price_sub, r) * 10000) / 10000
-                         : null,
-    cost_price:        parseFloat(r.cost_price || 0),
-    zone_name:         r.zone_name,
-    weight_class_name: r.min_weight_kg != null ? `${r.min_weight_kg}–${r.max_weight_kg} kg` : 'All weights',
-    pricing_type:      r.pricing_type,
-    markup_pct:        r.markup_pct,
-    fixed_fee:         r.fixed_fee,
-  });
+  // applyPerKg — adds per-kg overage charge (ceiling kg) to a base cost.
+  // carrier charges per kg or part thereof above the threshold.
+  const applyPerKg = (baseCost, r, wKg) => {
+    if (r.cost_per_kg == null || wKg == null) return baseCost;
+    const threshold = parseFloat(r.cost_per_kg_threshold_kg) || 30;
+    if (wKg <= threshold) return baseCost;
+    const overageKg = Math.ceil(wKg - threshold);
+    return baseCost + overageKg * parseFloat(r.cost_per_kg);
+  };
+
+  const buildRate = (r, wKg) => {
+    const costWithPerKg = applyPerKg(parseFloat(r.cost_price || 0), r, wKg);
+    return {
+      price:             Math.round(applyMarkup(costWithPerKg, r) * 10000) / 10000,
+      // price_sub: sell price for each subsequent parcel — per-kg does NOT apply to sub parcels
+      price_sub:         r.cost_price_sub != null
+                           ? Math.round(applyMarkup(r.cost_price_sub, r) * 10000) / 10000
+                           : null,
+      cost_price:        costWithPerKg,
+      zone_name:         r.zone_name,
+      weight_class_name: r.min_weight_kg != null ? `${r.min_weight_kg}–${r.max_weight_kg} kg` : 'All weights',
+      pricing_type:      r.pricing_type,
+      markup_pct:        r.markup_pct,
+      fixed_fee:         r.fixed_fee,
+    };
+  };
 
   // ── Step 1: zone from postcode ────────────────────────────────────────────
   const distinctZones = [...new Set(rows.map(r => r.zone_name))];
@@ -405,10 +420,10 @@ async function lookupViaServicePricing(customerId, serviceCode, weightKg, postco
   if (weightKg != null) {
     const band = zoneRows.filter(r => rateCoversWeight(r, weightKg)).sort((a, b) => bandMaxKg(a) - bandMaxKg(b))[0];
     if (!band) return { rate: null, reason: `No weight band covers ${weightKg} kg in zone "${zoneRows[0].zone_name}"` };
-    return { rate: buildRate(band), reason: null };
+    return { rate: buildRate(band, weightKg), reason: null };
   }
 
-  return { rate: buildRate(zoneRows[0]), reason: null };
+  return { rate: buildRate(zoneRows[0], weightKg), reason: null };
 }
 
 // ── Legacy model: customer_rates ──────────────────────────────────────────────
@@ -455,7 +470,8 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
 
   const allPriceRes = await query(`
     SELECT id, price, price_sub, zone_name, weight_class_name,
-           min_weight_kg, max_weight_kg
+           min_weight_kg, max_weight_kg,
+           per_kg_rate, per_kg_threshold_kg
     FROM customer_rates
     WHERE customer_id       = $1
       AND service_code ILIKE $2
@@ -474,12 +490,24 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
     return { rate: null, reason: `no weight band covers ${weightKg} kg for service ${serviceCode} zone "${zoneName}"` };
   }
 
+  // Apply per-kg overage to sell price if configured on the customer rate
+  let sellPrice = parseFloat(priceRow.price);
+  if (priceRow.per_kg_rate != null && weightKg != null) {
+    const threshold = parseFloat(priceRow.per_kg_threshold_kg) || 30;
+    if (weightKg > threshold) {
+      const overageKg = Math.ceil(weightKg - threshold);
+      sellPrice += overageKg * parseFloat(priceRow.per_kg_rate);
+    }
+  }
+
   // ── Step 3: carrier cost — numeric weight band matching ─────────────────────
   // Same principle: match on numeric bounds only, name is irrelevant.
+  // Also applies per-kg overage from weight_bands if configured.
 
   const allCostRes = await query(`
     SELECT wb.price_first AS carrier_cost, wb.price_sub AS carrier_cost_sub,
-           wb.min_weight_kg, wb.max_weight_kg
+           wb.min_weight_kg, wb.max_weight_kg,
+           wb.cost_per_kg, wb.cost_per_kg_threshold_kg
     FROM weight_bands wb
     JOIN zones z             ON z.id  = wb.zone_id
     JOIN courier_services cs ON cs.id = z.courier_service_id
@@ -490,14 +518,23 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
 
   const costRow = allCostRes.rows.find(r => rateCoversWeight(r, weightKg)) || null;
 
-  const carrierCost    = costRow ? parseFloat(costRow.carrier_cost) : null;
+  let carrierCost = costRow ? parseFloat(costRow.carrier_cost) : null;
+  // Apply per-kg overage to carrier cost (carrier charges per kg or part thereof above threshold)
+  if (carrierCost != null && costRow.cost_per_kg != null && weightKg != null) {
+    const threshold = parseFloat(costRow.cost_per_kg_threshold_kg) || 30;
+    if (weightKg > threshold) {
+      const overageKg = Math.ceil(weightKg - threshold);
+      carrierCost += overageKg * parseFloat(costRow.cost_per_kg);
+    }
+  }
+
   const carrierCostSub = costRow && costRow.carrier_cost_sub != null
     ? parseFloat(costRow.carrier_cost_sub)
     : null;
 
   return {
     rate: {
-      price:             parseFloat(priceRow.price),
+      price:             sellPrice,
       price_sub:         priceRow.price_sub != null ? parseFloat(priceRow.price_sub) : null,
       zone_name:         priceRow.zone_name,
       weight_class_name: priceRow.weight_class_name,
