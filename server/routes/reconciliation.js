@@ -47,9 +47,18 @@ router.post('/bulk-lookup', async (req, res) => {
         c.billed,
         s.courier,
         s.collection_date,
+        s.parcel_count,
         cu.id                   AS customer_id,
         cu.business_name        AS customer_name,
         cu.account_number       AS customer_account,
+        -- Fuel cost component only (for fuel surcharge reconciliation)
+        COALESCE((
+          SELECT SUM(sc.cost_price)
+          FROM charges sc
+          WHERE sc.shipment_id = c.shipment_id
+            AND sc.charge_type = 'fuel'
+            AND sc.cancelled = false
+        ), 0)                   AS fuel_cost_price,
         -- Total cost across ALL charge types for this shipment (base + fuel + surcharges)
         COALESCE(c.cost_price, 0) + COALESCE((
           SELECT SUM(sc.cost_price)
@@ -95,8 +104,10 @@ router.post('/bulk-lookup', async (req, res) => {
         charge_id:               row.charge_id,
         base_cost_price:         row.base_cost_price   != null ? parseFloat(row.base_cost_price)   : null,
         base_sell_price:         row.base_sell_price   != null ? parseFloat(row.base_sell_price)   : null,
+        fuel_cost_price:         row.fuel_cost_price   != null ? parseFloat(row.fuel_cost_price)   : 0,
         total_cost_price:        row.total_cost_price  != null ? parseFloat(row.total_cost_price)  : null,
         total_sell_price:        row.total_sell_price  != null ? parseFloat(row.total_sell_price)  : null,
+        parcel_count:            row.parcel_count       != null ? parseInt(row.parcel_count, 10)    : 1,
         service_name:            row.service_name,
         collection_date:         row.collection_date,
         verified:                row.verified,

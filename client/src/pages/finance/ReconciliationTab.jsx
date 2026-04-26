@@ -138,9 +138,10 @@ function parseDhlCsv(text) {
 
 // ─── Status helpers ───────────────────────────────────────────────────────────
 
-// Exact match only — carrier invoice must equal our total cost price to the penny.
-// A half-penny tolerance (0.005) guards against floating-point rounding.
-// `group` is the server response object: { total_cost_price, has_null_cost, has_return, ... }
+// DHL invoice format: per-shipment lines show BASE freight only.
+// Fuel/HGV surcharges appear as invoice-level totals at the bottom (no MP- ref).
+// Therefore we compare carrier invoice line → our base_cost_price (not total).
+// Surcharge rows are compared separately as invoice totals vs our surcharge component total.
 const TOLERANCE_ABS = 0.005;
 
 // charge here is a single bestCharge object from the server
@@ -148,10 +149,11 @@ function getStatus(carrierCost, charge) {
   if (!charge) {
     return { code: 'red', label: 'Not Found', color: '#F44336', icon: 'x' };
   }
-  if (charge.total_cost_price == null) {
+  // Use base_cost_price for per-shipment comparison — DHL invoice lines are base freight only
+  if (charge.base_cost_price == null) {
     return { code: 'amber', label: 'No Cost Recorded', color: '#FFC107', icon: 'warn' };
   }
-  const diff = Math.abs(parseFloat(carrierCost) - charge.total_cost_price);
+  const diff = Math.abs(parseFloat(carrierCost) - charge.base_cost_price);
   if (diff <= TOLERANCE_ABS) {
     return { code: 'green', label: 'Match', color: '#00C853', icon: 'check' };
   }
@@ -662,8 +664,9 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
   const [filter,       setFilter]       = useState('all');
   const [selected,     setSelected]     = useState(new Set());
   const [refreshCount, setRefreshCount] = useState(0);
-  const [mappings,     setMappings]     = useState({});  // invoice_name → internal_name
-  const [showMappings, setShowMappings] = useState(false);
+  const [mappings,       setMappings]       = useState({});  // invoice_name → internal_name (manual)
+  const [serviceCodeMap, setServiceCodeMap] = useState({});  // service_code → service_name (auto)
+  const [showMappings,   setShowMappings]   = useState(false);
 
   const { shipments, surcharges } = parseResult;
 
@@ -676,7 +679,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
   // Collect distinct invoice service names from this CSV
   const invoiceServiceNames = [...new Set(shipments.map(s => s.invoice_service_name).filter(Boolean))];
 
-  // ── Load service mappings ─────────────────────────────────────────────────
+  // ── Load service mappings + build service code lookup ────────────────────
   useEffect(() => {
     api.get('/reconciliation/service-mappings', { params: { courier: carrier.code } })
       .then(r => {
@@ -686,6 +689,17 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
       })
       .catch(() => {});
   }, [carrier.code, showMappings]); // reload after mappings modal closes
+
+  // Fetch all carrier services once to auto-resolve service codes (e.g. DHLPCUK220 → DHL Ecommerce Parcel)
+  useEffect(() => {
+    api.get('/carriers/services').then(r => {
+      const codeMap = {};
+      for (const s of (r.data || [])) {
+        if (s.service_code) codeMap[s.service_code.trim()] = s.service_name;
+      }
+      setServiceCodeMap(codeMap);
+    }).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Lookup — runs on mount and whenever refreshCount increments ──────────
   // useEffect (not an inline call) ensures the fetch is never stale and the
@@ -735,10 +749,11 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           if (group) {
             const pool = available[s.reference];
             if (pool && pool.length > 0) {
-              // Pick the charge whose total_cost_price is closest to this invoice line
+              // Pick the charge whose base_cost_price is closest to this invoice line
+              // (DHL invoice lines = base freight; surcharges are invoice-level totals)
               pool.sort((a, b) =>
-                Math.abs((a.total_cost_price ?? Infinity) - s.carrier_cost) -
-                Math.abs((b.total_cost_price ?? Infinity) - s.carrier_cost)
+                Math.abs((a.base_cost_price ?? Infinity) - s.carrier_cost) -
+                Math.abs((b.base_cost_price ?? Infinity) - s.carrier_cost)
               );
               bestCharge = pool.shift(); // claim it — can't be used by another line
             }
@@ -768,14 +783,20 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
       }
     : null;
 
-  // ── Surcharge totals (for reconciliation rows) ──
-  // Our stored surcharge component = total_cost_price minus base_cost_price, summed across
-  // all matched charges. Invoice surcharge total = sum of surcharge rows from the CSV.
-  const ourSurchargeTotal = results
-    ? results
-        .filter(r => r.bestCharge?.total_cost_price != null && r.bestCharge?.base_cost_price != null)
-        .reduce((sum, r) => sum + Math.max(0, r.bestCharge.total_cost_price - r.bestCharge.base_cost_price), 0)
-    : 0;
+  // ── Surcharge reconciliation totals ──
+  // DHL invoices: per-shipment lines = base freight only; surcharges are invoice-level totals.
+  // FUEL: compare invoice fuel total vs sum of stored fuel charge cost_prices across matched.
+  // HGV: compare invoice HGV total vs total_parcels × HGV_RATE_PER_PARCEL.
+  // Fuel cannot be reconciled per-shipment (it's a proportional allocation of invoice total).
+  const HGV_RATE_PER_PARCEL = 0.13; // £0.13 per parcel — update when DHL changes rate
+
+  const matchedWithCost = results
+    ? results.filter(r => r.bestCharge?.base_cost_price != null)
+    : [];
+
+  const ourFuelCostTotal   = matchedWithCost.reduce((s, r) => s + (r.bestCharge.fuel_cost_price || 0), 0);
+  const totalMatchedParcels = matchedWithCost.reduce((s, r) => s + (r.bestCharge.parcel_count  || 1), 0);
+  const ourHgvCalcTotal    = totalMatchedParcels * HGV_RATE_PER_PARCEL;
   const invoiceSurchargeTotal = surcharges.reduce((s, r) => s + r.value, 0);
 
   // ── Filter ──
@@ -1008,7 +1029,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
               <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>Carrier charges (excl. surcharges)</div>
             </div>
 
-            {/* Our cost total (matched only) */}
+            {/* Our cost total (matched only — base freight, excl. surcharges) */}
             <div style={{
               flex: 1, minWidth: 140,
               background: 'rgba(0,200,83,0.04)',
@@ -1020,11 +1041,11 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
               </div>
               <div style={{ fontSize: 22, fontWeight: 800, color: '#00C853' }}>
                 {gbp(results
-                  .filter(r => r.bestCharge?.total_cost_price != null)
-                  .reduce((s, r) => s + r.bestCharge.total_cost_price, 0)
+                  .filter(r => r.bestCharge?.base_cost_price != null)
+                  .reduce((s, r) => s + r.bestCharge.base_cost_price, 0)
                 )}
               </div>
-              <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>From matched charges</div>
+              <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>Base freight, matched charges</div>
             </div>
           </div>
 
@@ -1188,27 +1209,38 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                           )}
                         </td>
                         <td style={td}>
-                          {/* Show invoice service name + mapped internal name */}
-                          {row.invoice_service_name ? (
-                            <div>
-                              <span style={{ fontSize: 11, color: '#555', fontFamily: 'monospace' }}>
-                                {row.invoice_service_name}
-                              </span>
-                              {mappings[row.invoice_service_name] ? (
-                                <div style={{ fontSize: 11, color: '#00BCD4', marginTop: 1, display: 'flex', alignItems: 'center', gap: 3 }}>
-                                  <ArrowRight size={9} /> {mappings[row.invoice_service_name]}
-                                </div>
-                              ) : (
-                                <div
-                                  onClick={e => { e.stopPropagation(); setShowMappings(true); }}
-                                  style={{ fontSize: 10, color: '#444', marginTop: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}
-                                  title="Click to add mapping"
-                                >
-                                  <Plus size={9} /> map
-                                </div>
-                              )}
-                            </div>
-                          ) : (
+                          {row.invoice_service_name ? (() => {
+                            // Resolution priority:
+                            // 1. serviceCodeMap — auto-resolve if invoice name is a service code (e.g. DHLPCUK220 → DHL Ecommerce Parcel)
+                            // 2. mappings — manual mapping saved by user (e.g. "HomeServe Sign Mand" → our service)
+                            // 3. Unmapped — show "+ map" link
+                            const autoResolved  = serviceCodeMap[row.invoice_service_name.trim()];
+                            const manualMapped  = mappings[row.invoice_service_name];
+                            const resolvedName  = autoResolved || manualMapped;
+                            return (
+                              <div>
+                                <span style={{ fontSize: 11, color: '#555', fontFamily: 'monospace' }}>
+                                  {row.invoice_service_name}
+                                </span>
+                                {resolvedName ? (
+                                  <div style={{ fontSize: 11, color: autoResolved ? '#81C784' : '#00BCD4', marginTop: 1, display: 'flex', alignItems: 'center', gap: 3 }}>
+                                    <ArrowRight size={9} /> {resolvedName}
+                                    {autoResolved && (
+                                      <span style={{ fontSize: 9, color: '#555', marginLeft: 3 }}>auto</span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div
+                                    onClick={e => { e.stopPropagation(); setShowMappings(true); }}
+                                    style={{ fontSize: 10, color: '#444', marginTop: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}
+                                    title="Click to add mapping"
+                                  >
+                                    <Plus size={9} /> map
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })() : (
                             <span style={{ fontSize: 12, color: '#555' }}>—</span>
                           )}
                         </td>
@@ -1245,10 +1277,6 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
 
                   {/* ── Surcharge rows — shown when filter is 'all' ── */}
                   {filter === 'all' && surcharges.length > 0 && (() => {
-                    const surchargeDiff = invoiceSurchargeTotal - ourSurchargeTotal;
-                    const surchargeStatus = Math.abs(surchargeDiff) <= TOLERANCE_ABS
-                      ? { code: 'green', label: 'Match',       color: '#00C853', icon: 'check' }
-                      : { code: 'red',   label: 'Discrepancy', color: '#F44336', icon: 'x'     };
                     return (
                       <>
                         {/* Section divider */}
@@ -1261,12 +1289,37 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                             borderTop: '2px solid rgba(255,255,255,0.08)',
                             borderBottom: '1px solid rgba(255,255,255,0.05)',
                           }}>
-                            Invoice Surcharges
+                            Invoice Surcharges — reconciled at invoice level
                           </td>
                         </tr>
 
                         {surcharges.map((sc, i) => {
-                          const isFirst = i === 0;
+                          const descUpper = sc.description.toUpperCase();
+                          const isFuel = descUpper.includes('FUEL');
+                          const isHgv  = descUpper.includes('HGV');
+
+                          // Determine our comparison value and how we calculated it
+                          let ourValue = null;
+                          let ourNote  = null;
+                          if (isFuel) {
+                            ourValue = ourFuelCostTotal;
+                            ourNote  = 'stored fuel charges';
+                          } else if (isHgv) {
+                            ourValue = ourHgvCalcTotal;
+                            ourNote  = `${totalMatchedParcels} item${totalMatchedParcels !== 1 ? 's' : ''} × £${HGV_RATE_PER_PARCEL.toFixed(2)}`;
+                          }
+
+                          const diff = ourValue != null ? sc.value - ourValue : null;
+                          const diffColor = diff == null ? '#555'
+                            : Math.abs(diff) <= TOLERANCE_ABS ? '#888'
+                            : diff > 0 ? '#F44336'
+                            : '#00C853';
+                          const surchargeStatus = ourValue == null
+                            ? { code: 'amber', label: 'No Comparison', color: '#FFC107', icon: 'warn' }
+                            : Math.abs(diff) <= TOLERANCE_ABS
+                              ? { code: 'green', label: 'Match',       color: '#00C853', icon: 'check' }
+                              : { code: 'red',   label: 'Discrepancy', color: '#F44336', icon: 'x'     };
+
                           return (
                             <tr key={`sc-${i}`} style={{ background: 'rgba(255,193,7,0.02)' }}>
                               {/* Checkbox placeholder */}
@@ -1274,16 +1327,17 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                                 <input type="checkbox" disabled style={{ opacity: 0.2 }} />
                               </td>
 
-                              {/* Reference — surcharge badge */}
+                              {/* Reference — surcharge type badge */}
                               <td style={td}>
                                 <span style={{
                                   fontSize: 9, fontWeight: 700, letterSpacing: '0.05em',
                                   textTransform: 'uppercase',
-                                  background: 'rgba(255,193,7,0.12)',
-                                  border: '1px solid rgba(255,193,7,0.3)',
-                                  color: '#FFC107', borderRadius: 20, padding: '2px 8px',
+                                  background: isFuel ? 'rgba(255,152,0,0.12)' : isHgv ? 'rgba(156,39,176,0.12)' : 'rgba(255,193,7,0.12)',
+                                  border: `1px solid ${isFuel ? 'rgba(255,152,0,0.3)' : isHgv ? 'rgba(156,39,176,0.3)' : 'rgba(255,193,7,0.3)'}`,
+                                  color: isFuel ? '#FF9800' : isHgv ? '#CE93D8' : '#FFC107',
+                                  borderRadius: 20, padding: '2px 8px',
                                 }}>
-                                  SURCHARGE
+                                  {isFuel ? 'FUEL' : isHgv ? 'HGV' : 'SURCHARGE'}
                                 </span>
                               </td>
 
@@ -1302,39 +1356,41 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                                 </span>
                               </td>
 
-                              {/* Our Cost — only on first row (it's a total comparison) */}
+                              {/* Our Cost */}
                               <td style={{ ...td, textAlign: 'right' }}>
-                                {isFirst ? (
+                                {ourValue != null ? (
                                   <>
-                                    <span style={{ color: '#CCC' }}>{gbp(ourSurchargeTotal)}</span>
-                                    {surcharges.length > 1 && (
+                                    <span style={{ color: '#CCC' }}>{gbp(ourValue)}</span>
+                                    {ourNote && (
                                       <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>
-                                        all surcharges
+                                        {ourNote}
                                       </div>
                                     )}
                                   </>
                                 ) : (
-                                  <span style={{ color: '#444' }}>—</span>
+                                  <span style={{ fontSize: 11, color: '#444', fontStyle: 'italic' }}>
+                                    no comparison
+                                  </span>
                                 )}
                               </td>
 
-                              {/* Difference — only on first row */}
+                              {/* Difference */}
                               <td style={{ ...td, textAlign: 'right' }}>
-                                {isFirst ? (
+                                {diff != null ? (
                                   <span style={{
-                                    color: Math.abs(surchargeDiff) > 0.005 ? '#F44336' : '#888',
-                                    fontWeight: Math.abs(surchargeDiff) > 0.005 ? 700 : 400,
+                                    color: diffColor,
+                                    fontWeight: Math.abs(diff) > TOLERANCE_ABS ? 700 : 400,
                                   }}>
-                                    {surchargeDiff > 0 ? '+' : ''}{gbp(surchargeDiff)}
+                                    {diff > 0 ? '+' : ''}{gbp(diff)}
                                   </span>
                                 ) : (
                                   <span style={{ color: '#444' }}>—</span>
                                 )}
                               </td>
 
-                              {/* Status — only on first row */}
+                              {/* Status */}
                               <td style={{ ...td, textAlign: 'center' }}>
-                                {isFirst ? <StatusBadge status={surchargeStatus} /> : null}
+                                <StatusBadge status={surchargeStatus} />
                               </td>
                             </tr>
                           );
