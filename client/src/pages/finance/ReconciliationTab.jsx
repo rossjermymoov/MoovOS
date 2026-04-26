@@ -75,18 +75,20 @@ function parseDhlCsv(text) {
 
   for (const line of lines) {
     const cols = parseCsvLine(line);
-    if (cols.length < 12) { skipped++; continue; }
+    if (cols.length < 6) { skipped++; continue; }
 
     const valueRaw = (cols[5] || '').replace(/[£,\s]/g, '');
     const value    = parseFloat(valueRaw);
     const ref      = (cols[11] || '').trim();
-    const desc     = ((cols[3] || cols[2] || cols[1] || '')).trim().toUpperCase();
+    // DHL puts the service description in col 20 (Service Desc)
+    const serviceDesc = (cols[20] || '').trim().toUpperCase();
 
     if (isNaN(value) || value === 0) { skipped++; continue; }
 
-    // Surcharge rows (no MP- reference or description contains SURCHARGE)
-    if (desc.includes('SURCHARGE') && !ref.startsWith('MP-')) {
-      surcharges.push({ description: (cols[3] || cols[2] || cols[1] || '').trim(), value });
+    // Surcharge rows — DHL puts "FUEL SURCHARGE" / "HGV SURCHARGE" in col 20,
+    // and leaves the Reference column (col 11) blank.
+    if (!ref.startsWith('MP-') && serviceDesc.includes('SURCHARGE')) {
+      surcharges.push({ description: (cols[20] || '').trim(), value });
       parsed++;
       continue;
     }
