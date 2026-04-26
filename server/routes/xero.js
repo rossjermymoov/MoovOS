@@ -30,13 +30,13 @@ const XERO_TOKEN_URL  = 'https://identity.xero.com/connect/token';
 const XERO_CONN_URL   = 'https://api.xero.com/connections';
 const XERO_API_BASE   = 'https://api.xero.com/api.xro/2.0';
 
-// New granular scopes required for apps created on/after March 2, 2026
+// Granular scopes required for apps created on/after March 2, 2026
 const SCOPES = [
-  'openid',
-  'offline_access',
-  'accounting.contacts.read',       // search + read Xero contacts
-  'accounting.invoices.read',       // read invoice payment status
-  'accounting.invoices',            // create + update invoices
+  'openid', 'profile', 'email',     // required for user identity
+  'offline_access',                  // required for refresh tokens
+  'accounting.contacts.read',        // search + read Xero contacts
+  'accounting.invoices.read',        // read invoice payment status
+  'accounting.invoices',             // create + update invoices
 ].join(' ');
 
 // ─── Token helpers ────────────────────────────────────────────────────────────
