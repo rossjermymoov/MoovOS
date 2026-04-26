@@ -49,6 +49,29 @@ router.post('/bulk-lookup', async (req, res) => {
         s.collection_date,
         s.parcel_count,
         s.total_weight_kg       AS declared_weight_kg,
+        -- Weight band boundaries used when this charge was priced.
+        -- Used in reconciliation to flag weight discrepancies only when the carrier's
+        -- billed weight falls OUTSIDE the band (i.e. a different rate would apply).
+        (
+          SELECT cr.min_weight_kg
+          FROM customer_rates cr
+          WHERE cr.customer_id = c.customer_id
+            AND cr.service_name = c.service_name
+            AND s.total_weight_kg > COALESCE(cr.min_weight_kg, 0)
+            AND s.total_weight_kg <= cr.max_weight_kg
+            AND cr.min_weight_kg IS NOT NULL
+          LIMIT 1
+        )                       AS band_min_weight_kg,
+        (
+          SELECT cr.max_weight_kg
+          FROM customer_rates cr
+          WHERE cr.customer_id = c.customer_id
+            AND cr.service_name = c.service_name
+            AND s.total_weight_kg > COALESCE(cr.min_weight_kg, 0)
+            AND s.total_weight_kg <= cr.max_weight_kg
+            AND cr.min_weight_kg IS NOT NULL
+          LIMIT 1
+        )                       AS band_max_weight_kg,
         cu.id                   AS customer_id,
         cu.business_name        AS customer_name,
         cu.account_number       AS customer_account,
@@ -115,7 +138,9 @@ router.post('/bulk-lookup', async (req, res) => {
         total_cost_price:        row.total_cost_price   != null ? parseFloat(row.total_cost_price)  : null,
         total_sell_price:        row.total_sell_price   != null ? parseFloat(row.total_sell_price)  : null,
         parcel_count:            row.parcel_count        != null ? parseInt(row.parcel_count, 10)    : 1,
-        declared_weight_kg:      row.declared_weight_kg != null ? parseFloat(row.declared_weight_kg) : null,
+        declared_weight_kg:      row.declared_weight_kg  != null ? parseFloat(row.declared_weight_kg)  : null,
+        band_min_weight_kg:      row.band_min_weight_kg  != null ? parseFloat(row.band_min_weight_kg)  : null,
+        band_max_weight_kg:      row.band_max_weight_kg  != null ? parseFloat(row.band_max_weight_kg)  : null,
         service_name:            row.service_name,
         collection_date:         row.collection_date,
         verified:                row.verified,
