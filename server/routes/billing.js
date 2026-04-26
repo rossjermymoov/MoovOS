@@ -1737,6 +1737,122 @@ router.post('/batch-reprice', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── POST /api/billing/full-reprice ──────────────────────────────────────────
+// Re-price ALL non-cancelled, non-billed courier charges (not just unpriced).
+// For each charge: re-run the rate lookup and update price + zone + weight class.
+// Then recalculate and update any fuel charge on the same shipment.
+// Safe to run at any time — skips already-billed charges to avoid altering invoices.
+//
+router.post('/full-reprice', async (req, res, next) => {
+  try {
+    const { rows: charges } = await query(`
+      SELECT c.id AS charge_id, c.customer_id, c.parcel_qty, c.price AS current_price,
+             s.id AS shipment_id,
+             s.dc_service_id, s.service_name AS s_service_name,
+             s.total_weight_kg, s.parcel_count, s.parcel_weight_kg,
+             s.customer_account, s.ship_to_postcode, s.raw_payload
+      FROM charges c
+      LEFT JOIN shipments s ON s.id = c.shipment_id
+      WHERE c.charge_type = 'courier'
+        AND c.cancelled   = false
+        AND c.billed      = false
+      ORDER BY c.created_at ASC
+    `);
+
+    const summary = {
+      total:        charges.length,
+      repriced:     0,
+      fuel_updated: 0,
+      no_rate:      0,
+      no_customer:  0,
+      errors:       0,
+      changed:      0,   // courier price actually changed
+    };
+
+    for (const row of charges) {
+      try {
+        const rawPayload     = typeof row.raw_payload === 'string' ? safeJson(row.raw_payload) || {} : (row.raw_payload || {});
+        const innerPayload   = unwrapPayload(rawPayload);
+        const extracted      = extractShipmentFields(innerPayload);
+
+        let customerId = row.customer_id;
+        if (!customerId) {
+          const acctNum = row.customer_account || extracted.accountNumber;
+          if (acctNum) {
+            const cr  = await query('SELECT id FROM customers WHERE account_number = $1', [acctNum]);
+            const cr2 = cr.rows.length ? null : await query('SELECT id FROM customers WHERE dc_customer_id = $1', [acctNum]);
+            customerId = cr.rows[0]?.id || cr2?.rows[0]?.id || null;
+          }
+          if (!customerId && extracted.customerDcId) {
+            const cr3 = await query('SELECT id FROM customers WHERE dc_customer_id = $1', [extracted.customerDcId]);
+            customerId = cr3.rows[0]?.id || null;
+          }
+        }
+
+        if (!customerId) { summary.no_customer++; continue; }
+
+        const dcServiceId      = row.dc_service_id || extracted.dcServiceId;
+        const serviceName      = row.s_service_name || extracted.serviceName;
+        const parcelQty        = row.parcel_qty || row.parcel_count || extracted.parcelCount || 1;
+        const totalWt          = parseFloat(row.total_weight_kg) || extracted.totalWeightKg || null;
+        const weightPerParcel  = parseFloat(row.parcel_weight_kg) ||
+          (parcelQty > 0 && totalWt ? totalWt / parcelQty : totalWt) || null;
+
+        const { rate } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, row.ship_to_postcode);
+        if (!rate) { summary.no_rate++; continue; }
+
+        const pricingMode = await getParcelPricingMode(customerId);
+        const newPrice    = parseFloat(calcTotal(rate, parcelQty, pricingMode).toFixed(2));
+
+        await query(`
+          UPDATE charges
+          SET price             = $1,
+              zone_name         = $2,
+              weight_class_name = $3,
+              price_auto        = true,
+              price_failure_reason = NULL,
+              updated_at        = NOW()
+          WHERE id = $4
+        `, [newPrice, rate.zone_name, rate.weight_class_name, row.charge_id]);
+
+        summary.repriced++;
+        if (parseFloat(row.current_price) !== newPrice) summary.changed++;
+
+        // Recalculate fuel charge for this shipment
+        if (row.shipment_id && dcServiceId) {
+          try {
+            const fuelRes = await query(`
+              SELECT fg.standard_sell_pct, cfgp.sell_pct AS customer_sell_pct
+              FROM courier_services cs
+              JOIN fuel_groups fg ON fg.id = cs.fuel_group_id
+              LEFT JOIN customer_fuel_group_pricing cfgp
+                     ON cfgp.fuel_group_id = fg.id AND cfgp.customer_id = $2
+              WHERE cs.service_code ILIKE $1 LIMIT 1
+            `, [dcServiceId, customerId]);
+
+            if (fuelRes.rows.length) {
+              const sellPct = parseFloat(fuelRes.rows[0].customer_sell_pct ?? fuelRes.rows[0].standard_sell_pct ?? 0);
+              if (sellPct > 0) {
+                const newFuelPrice = parseFloat((newPrice * sellPct / 100).toFixed(2));
+                const upd = await query(`
+                  UPDATE charges
+                  SET price = $1, updated_at = NOW()
+                  WHERE shipment_id = $2 AND charge_type = 'fuel' AND cancelled = false
+                  RETURNING id
+                `, [newFuelPrice, row.shipment_id]);
+                if (upd.rows.length) summary.fuel_updated++;
+              }
+            }
+          } catch { /* non-fatal — fuel update failure doesn't fail the charge */ }
+        }
+
+      } catch { summary.errors++; }
+    }
+
+    res.json(summary);
+  } catch (err) { next(err); }
+});
+
 // ─── POST /api/billing/remove-surcharge-by-name ──────────────────────────────
 // Removes surcharge charge rows whose service_name matches a pattern.
 // Used to clean up incorrectly-applied surcharges (e.g. cost-side fuel

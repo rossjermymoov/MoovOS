@@ -761,6 +761,8 @@ export default function FinancePage() {
   const [payloadCharge, setPayloadCharge] = useState(null);
   const [batchResult, setBatchResult] = useState(null);
   const [batchRunning, setBatchRunning] = useState(false);
+  const [fullRepriceRunning, setFullRepriceRunning] = useState(false);
+  const [fullRepriceResult, setFullRepriceResult] = useState(null);
   const [purgeRunning, setPurgeRunning] = useState(false);
   const [relinkRunning, setRelinkRunning] = useState(false);
 
@@ -915,6 +917,22 @@ export default function FinancePage() {
     }
   }
 
+  async function runFullReprice() {
+    if (!confirm('This will reprice ALL unbilled courier charges using your current rate cards, and recalculate fuel on each one. This cannot be undone. Continue?')) return;
+    setFullRepriceRunning(true);
+    setFullRepriceResult(null);
+    try {
+      const result = await billingApi.fullReprice();
+      setFullRepriceResult(result);
+      qc.invalidateQueries(['billing-charges']);
+      qc.invalidateQueries(['billing-stats']);
+    } catch (err) {
+      setFullRepriceResult({ error: err.message });
+    } finally {
+      setFullRepriceRunning(false);
+    }
+  }
+
   const th = { fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase',
     letterSpacing: '0.06em', padding: '10px 12px', whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.06)' };
 
@@ -975,6 +993,21 @@ export default function FinancePage() {
             </button>
           )}
           <button
+            onClick={runFullReprice}
+            disabled={fullRepriceRunning}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: fullRepriceRunning ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.12)',
+              border: '1px solid rgba(99,102,241,0.4)',
+              borderRadius: 8, color: '#A5B4FC',
+              padding: '7px 14px', cursor: fullRepriceRunning ? 'not-allowed' : 'pointer',
+              fontSize: 13, fontWeight: 700,
+            }}
+          >
+            <RefreshCw size={14} style={fullRepriceRunning ? { animation: 'spin 1s linear infinite' } : {}} />
+            {fullRepriceRunning ? 'Repricing all…' : 'Reprice All'}
+          </button>
+          <button
             className="btn-ghost"
             onClick={() => refetch()}
             style={{ display: 'flex', alignItems: 'center', gap: 6 }}
@@ -1032,6 +1065,42 @@ export default function FinancePage() {
             </div>
           )}
           <button onClick={() => setBatchResult(null)}
+            style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', padding: 2 }}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* Full reprice result banner */}
+      {fullRepriceResult && (
+        <div style={{
+          background: fullRepriceResult.error ? 'rgba(244,67,54,0.08)' : 'rgba(99,102,241,0.08)',
+          border: `1px solid ${fullRepriceResult.error ? 'rgba(244,67,54,0.3)' : 'rgba(99,102,241,0.35)'}`,
+          borderRadius: 10, padding: '12px 16px', marginBottom: 16,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        }}>
+          {fullRepriceResult.error ? (
+            <span style={{ color: '#F44336', fontSize: 13 }}>Error: {fullRepriceResult.error}</span>
+          ) : (
+            <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ color: '#A5B4FC', fontWeight: 700 }}>✓ Full reprice complete</span>
+              <span style={{ color: '#00C853' }}>{fullRepriceResult.repriced} courier charges updated</span>
+              {fullRepriceResult.changed > 0 && (
+                <span style={{ color: '#FFC107' }}>{fullRepriceResult.changed} prices actually changed</span>
+              )}
+              {fullRepriceResult.fuel_updated > 0 && (
+                <span style={{ color: '#34D399' }}>{fullRepriceResult.fuel_updated} fuel charges recalculated</span>
+              )}
+              {fullRepriceResult.no_rate > 0 && (
+                <span style={{ color: '#F59E0B' }}>{fullRepriceResult.no_rate} no rate found</span>
+              )}
+              {fullRepriceResult.errors > 0 && (
+                <span style={{ color: '#EF4444' }}>{fullRepriceResult.errors} errors</span>
+              )}
+              <span style={{ color: '#555' }}>of {fullRepriceResult.total} total</span>
+            </div>
+          )}
+          <button onClick={() => setFullRepriceResult(null)}
             style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', padding: 2 }}>
             <X size={14} />
           </button>
