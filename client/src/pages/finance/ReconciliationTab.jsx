@@ -68,17 +68,25 @@ function parseCsvLine(line) {
 
 function parseDhlCsv(text) {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-  const shipmentMap = {};   // reference → { reference, carrier_cost, line_count }
-  const surcharges  = [];   // { description, value }
+  const shipmentMap = {};   // reference → [{ reference, carrier_cost, carrier_surcharges, carrier_total, ... }]
+  const surcharges  = [];   // invoice-level surcharge totals { description, value }
   let parsed = 0;
   let skipped = 0;
 
   // ── Step 1: find column indices from header row ──────────────────────────
   // DHL may add/remove columns between invoice versions — always derive
   // positions from the header rather than hardcoding index numbers.
-  let colValue    = 5;   // fallback: "Value"
+  let colValue    = 5;   // fallback: "Value" (base freight)
   let colRef      = 11;  // fallback: "Reference"
   let colService  = 20;  // fallback: "Service Desc"
+
+  // DHL per-shipment surcharge columns are W–AE (0-indexed 22–30).
+  // These contain itemised surcharge amounts (fuel, HGV, residential, etc.)
+  // that are added on top of the base freight for each shipment.
+  // We sum all non-zero values across these columns to get the per-shipment
+  // surcharge total, then carrier_total = base + surcharges.
+  const SURCHARGE_COLS_START = 22; // W
+  const SURCHARGE_COLS_END   = 30; // AE
 
   if (lines.length > 0) {
     const header = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
@@ -101,9 +109,8 @@ function parseDhlCsv(text) {
 
     if (isNaN(value) || value === 0) { skipped++; continue; }
 
-    // Surcharge rows — no MP- reference and service description contains "SURCHARGE"
-    // (DHL always puts fuel/HGV surcharges at the bottom but we detect by content,
-    // not position, so the row number doesn't matter)
+    // Invoice-level surcharge rows — no MP- reference, description contains "SURCHARGE"
+    // These are the aggregated totals (sum of respective W–AE column across all shipments).
     if (!ref.startsWith('MP-') && svcDesc.includes('SURCHARGE')) {
       surcharges.push({ description: (cols[colService] || '').trim(), value });
       parsed++;
@@ -115,8 +122,23 @@ function parseDhlCsv(text) {
     // so we keep every row individually (no summing).
     if (ref.startsWith('MP-')) {
       const invoiceServiceName = (cols[colService] || '').trim();
+
+      // Sum per-shipment surcharges from columns W–AE
+      let carrierSurcharges = 0;
+      for (let col = SURCHARGE_COLS_START; col <= SURCHARGE_COLS_END; col++) {
+        const raw = (cols[col] || '').replace(/[£,\s]/g, '');
+        const n   = parseFloat(raw);
+        if (!isNaN(n) && n !== 0) carrierSurcharges += Math.abs(n);
+      }
+
       shipmentMap[ref] = shipmentMap[ref] || [];
-      shipmentMap[ref].push({ reference: ref, carrier_cost: value, invoice_service_name: invoiceServiceName });
+      shipmentMap[ref].push({
+        reference:            ref,
+        carrier_cost:         value,                    // base freight only
+        carrier_surcharges:   carrierSurcharges,        // sum of columns W–AE
+        carrier_total:        value + carrierSurcharges, // what DHL actually charges
+        invoice_service_name: invoiceServiceName,
+      });
       parsed++;
     } else {
       skipped++;
@@ -138,22 +160,22 @@ function parseDhlCsv(text) {
 
 // ─── Status helpers ───────────────────────────────────────────────────────────
 
-// DHL invoice format: per-shipment lines show BASE freight only.
-// Fuel/HGV surcharges appear as invoice-level totals at the bottom (no MP- ref).
-// Therefore we compare carrier invoice line → our base_cost_price (not total).
-// Surcharge rows are compared separately as invoice totals vs our surcharge component total.
+// Per-shipment comparison uses carrier_total (base + columns W–AE surcharges) vs our
+// total_cost_price (base + stored fuel/surcharge charges). This gives a true like-for-like
+// match — both sides include the same surcharge components.
+// Invoice-level FUEL/HGV rows at the bottom are reconciled separately.
 const TOLERANCE_ABS = 0.005;
 
-// charge here is a single bestCharge object from the server
-function getStatus(carrierCost, charge) {
+// carrierTotal = row.carrier_total (base + W-AE surcharges from invoice)
+// charge = bestCharge from DB (has base_cost_price, total_cost_price)
+function getStatus(carrierTotal, charge) {
   if (!charge) {
     return { code: 'red', label: 'Not Found', color: '#F44336', icon: 'x' };
   }
-  // Use base_cost_price for per-shipment comparison — DHL invoice lines are base freight only
-  if (charge.base_cost_price == null) {
+  if (charge.total_cost_price == null) {
     return { code: 'amber', label: 'No Cost Recorded', color: '#FFC107', icon: 'warn' };
   }
-  const diff = Math.abs(parseFloat(carrierCost) - charge.base_cost_price);
+  const diff = Math.abs(parseFloat(carrierTotal) - charge.total_cost_price);
   if (diff <= TOLERANCE_ABS) {
     return { code: 'green', label: 'Match', color: '#00C853', icon: 'check' };
   }
@@ -594,8 +616,8 @@ function ServiceMappingManager({ courier, carrierLabel, unmappedNames, onClose }
               >
                 <option value="">— Select service —</option>
                 {services.map(s => (
-                  <option key={s.id} value={s.service_name}>
-                    {s.service_name} ({s.service_code})
+                  <option key={s.id} value={s.name}>
+                    {s.name} ({s.service_code})
                   </option>
                 ))}
               </select>
@@ -695,7 +717,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
     api.get('/carriers/services').then(r => {
       const codeMap = {};
       for (const s of (r.data || [])) {
-        if (s.service_code) codeMap[s.service_code.trim()] = s.service_name;
+        if (s.service_code) codeMap[s.service_code.trim()] = s.name;
       }
       setServiceCodeMap(codeMap);
     }).catch(() => {});
@@ -749,17 +771,17 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           if (group) {
             const pool = available[s.reference];
             if (pool && pool.length > 0) {
-              // Pick the charge whose base_cost_price is closest to this invoice line
-              // (DHL invoice lines = base freight; surcharges are invoice-level totals)
+              // Pick the charge whose total_cost_price is closest to the invoice carrier_total
+              // (carrier_total = base + per-shipment W-AE surcharges from invoice)
               pool.sort((a, b) =>
-                Math.abs((a.base_cost_price ?? Infinity) - s.carrier_cost) -
-                Math.abs((b.base_cost_price ?? Infinity) - s.carrier_cost)
+                Math.abs((a.total_cost_price ?? Infinity) - s.carrier_total) -
+                Math.abs((b.total_cost_price ?? Infinity) - s.carrier_total)
               );
               bestCharge = pool.shift(); // claim it — can't be used by another line
             }
           }
 
-          const status = getStatus(s.carrier_cost, bestCharge || null);
+          const status = getStatus(s.carrier_total, bestCharge || null);
           return { ...s, group, bestCharge, status };
         });
 
@@ -1024,9 +1046,9 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                 Invoice Total
               </div>
               <div style={{ fontSize: 22, fontWeight: 800, color: '#B39DDB' }}>
-                {gbp(shipments.reduce((s, r) => s + r.carrier_cost, 0))}
+                {gbp(shipments.reduce((s, r) => s + r.carrier_total, 0))}
               </div>
-              <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>Carrier charges (excl. surcharges)</div>
+              <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>Base + per-shipment surcharges</div>
             </div>
 
             {/* Our cost total (matched only — base freight, excl. surcharges) */}
@@ -1149,14 +1171,17 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                     const isSelected = selected.has(row.lineKey);
                     const g    = row.group;
                     const bc   = row.bestCharge;
+                    // carrier_total = base + per-shipment surcharges from invoice columns W–AE
                     const diff = bc?.total_cost_price != null
-                      ? parseFloat(row.carrier_cost) - bc.total_cost_price
+                      ? row.carrier_total - bc.total_cost_price
                       : null;
                     const diffColor = diff == null ? '#555'
                       : diff > 0.005 ? '#F44336'
                       : diff < -0.005 ? '#00C853'
                       : '#888';
-                    const hasSurcharge = bc?.total_cost_price != null && bc?.base_cost_price != null
+                    // Show surcharge breakdown if either side has surcharges
+                    const invoiceHasSurcharge = (row.carrier_surcharges || 0) > 0.005;
+                    const ourHasSurcharge = bc?.total_cost_price != null && bc?.base_cost_price != null
                       && Math.abs(bc.total_cost_price - bc.base_cost_price) > 0.005;
 
                     return (
@@ -1246,16 +1271,21 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                         </td>
                         <td style={{ ...td, textAlign: 'right' }}>
                           <span style={{ fontWeight: 700, color: '#B39DDB' }}>
-                            {gbp(row.carrier_cost)}
+                            {gbp(row.carrier_total)}
                           </span>
+                          {invoiceHasSurcharge && (
+                            <div style={{ fontSize: 10, color: '#666', marginTop: 1 }}>
+                              base {gbp(row.carrier_cost)} + {gbp(row.carrier_surcharges)}
+                            </div>
+                          )}
                         </td>
                         <td style={{ ...td, textAlign: 'right' }}>
                           <span style={{ color: bc?.total_cost_price != null ? '#CCC' : '#555' }}>
                             {bc?.total_cost_price != null ? gbp(bc.total_cost_price) : '—'}
                           </span>
-                          {hasSurcharge && (
+                          {ourHasSurcharge && (
                             <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>
-                              base {gbp(bc.base_cost_price)} + surcharges
+                              base {gbp(bc.base_cost_price)} + {gbp(bc.total_cost_price - bc.base_cost_price)}
                             </div>
                           )}
                         </td>
