@@ -877,9 +877,11 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           const fuelAlloc = totalInvoiceBase > 0
             ? (row.carrier_cost / totalInvoiceBase) * invoiceFuelTotal
             : 0;
-          // Use piece count from the invoice CSV — DHL charge HGV per piece, not per DB parcel.
-          // csv_piece_count is 1 if the column wasn't found in the CSV (safe fallback).
-          const pieceCount = row.csv_piece_count ?? row.bestCharge?.parcel_count ?? 1;
+          // Use DB parcel_count as the authoritative piece count for our HGV cost calculation.
+          // This is the same value the billing engine used when it priced the HGV surcharge.
+          // csv_piece_count is kept for display but not used here — it can't be reliably
+          // detected from every DHL CSV layout.
+          const pieceCount = row.bestCharge?.parcel_count ?? 1;
           const hgvAlloc = invoiceHgvTotal > 0
             ? pieceCount * HGV_RATE_PER_PARCEL
             : 0;
@@ -919,9 +921,8 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
     : [];
 
   const ourFuelCostTotal   = matchedWithCost.reduce((s, r) => s + (r.bestCharge.fuel_cost_price || 0), 0);
-  // Use CSV piece counts for HGV total — same source DHL use to calculate the surcharge.
-  // Fall back to DB parcel_count only when piece count column wasn't in the CSV.
-  const totalMatchedPieces = matchedWithCost.reduce((s, r) => s + (r.csv_piece_count ?? r.bestCharge.parcel_count ?? 1), 0);
+  // Use DB parcel_count for HGV total — same value the billing engine used when pricing.
+  const totalMatchedPieces = matchedWithCost.reduce((s, r) => s + (r.bestCharge?.parcel_count ?? 1), 0);
   const ourHgvCalcTotal    = totalMatchedPieces * HGV_RATE_PER_PARCEL;
   const invoiceSurchargeTotal = surcharges.reduce((s, r) => s + r.value, 0);
 
