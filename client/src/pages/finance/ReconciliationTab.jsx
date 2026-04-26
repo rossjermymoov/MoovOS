@@ -111,8 +111,10 @@ function parseDhlCsv(text) {
 
 // ─── Status helpers ───────────────────────────────────────────────────────────
 
-const TOLERANCE_ABS = 0.05; // 5p
-const TOLERANCE_PCT = 0.05; // 5%
+// Exact match only — carrier invoice must equal our cost price to the penny.
+// A half-penny tolerance (0.005) guards against floating-point rounding of
+// database numeric values, but anything ≥ 1p is a discrepancy.
+const TOLERANCE_ABS = 0.005;
 
 function getStatus(carrierCost, charge) {
   if (!charge) {
@@ -122,12 +124,8 @@ function getStatus(carrierCost, charge) {
     return { code: 'amber', label: 'No Cost Recorded', color: '#FFC107', icon: 'warn' };
   }
   const diff = Math.abs(parseFloat(carrierCost) - parseFloat(charge.cost_price));
-  const pct  = parseFloat(carrierCost) > 0 ? diff / parseFloat(carrierCost) : 0;
   if (diff <= TOLERANCE_ABS) {
     return { code: 'green', label: 'Match', color: '#00C853', icon: 'check' };
-  }
-  if (pct < TOLERANCE_PCT) {
-    return { code: 'amber', label: 'Minor Discrepancy', color: '#FFC107', icon: 'warn' };
   }
   return { code: 'red', label: 'Discrepancy', color: '#F44336', icon: 'x' };
 }
@@ -625,7 +623,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
             {[
               { code: 'all',   label: 'Total',       count: results.length,  color: '#888',    bg: 'rgba(255,255,255,0.03)' },
               { code: 'green', label: 'Matched',      count: counts.green,    color: '#00C853', bg: 'rgba(0,200,83,0.04)'   },
-              { code: 'amber', label: 'Discrepancy',  count: counts.amber,    color: '#FFC107', bg: 'rgba(255,193,7,0.04)'  },
+              { code: 'amber', label: 'No Cost',      count: counts.amber,    color: '#FFC107', bg: 'rgba(255,193,7,0.04)'  },
               { code: 'red',   label: 'Problem',      count: counts.red,      color: '#F44336', bg: 'rgba(244,67,54,0.04)'  },
             ].map(stat => (
               <button
@@ -718,9 +716,9 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           <div style={{ display: 'flex', gap: 2, marginBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
             {[
               { code: 'all',   label: `All (${results.length})` },
-              { code: 'red',   label: `Problems (${counts.red})`,      color: '#F44336' },
-              { code: 'amber', label: `Discrepancies (${counts.amber})`, color: '#FFC107' },
-              { code: 'green', label: `Matched (${counts.green})`,      color: '#00C853' },
+              { code: 'red',   label: `Problems (${counts.red})`,   color: '#F44336' },
+              { code: 'amber', label: `No Cost (${counts.amber})`,  color: '#FFC107' },
+              { code: 'green', label: `Matched (${counts.green})`,  color: '#00C853' },
             ].map(f => (
               <button
                 key={f.code}
