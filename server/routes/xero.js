@@ -272,9 +272,9 @@ router.get('/contacts/search', async (req, res, next) => {
 router.get('/customers/match-status', async (req, res, next) => {
   try {
     const result = await query(
-      `SELECT id, company_name, xero_contact_id
+      `SELECT id, business_name, xero_contact_id
        FROM customers
-       ORDER BY company_name ASC`
+       ORDER BY business_name ASC`
     );
     res.json({ customers: result.rows });
   } catch (err) {
@@ -318,14 +318,14 @@ router.post('/customers/auto-match', async (req, res, next) => {
 
     // Get all unlinked MoovOS customers
     const { rows: customers } = await query(
-      `SELECT id, company_name FROM customers WHERE xero_contact_id IS NULL ORDER BY company_name`
+      `SELECT id, business_name FROM customers WHERE xero_contact_id IS NULL ORDER BY business_name`
     );
 
     const suggestions = [];
     const matched = [];
 
     for (const cust of customers) {
-      const name = (cust.company_name || '').toLowerCase().trim();
+      const name = (cust.business_name || '').toLowerCase().trim();
 
       // Score each Xero contact
       let best = null;
@@ -346,12 +346,12 @@ router.post('/customers/auto-match', async (req, res, next) => {
           `UPDATE customers SET xero_contact_id = $1 WHERE id = $2`,
           [best.ContactID, cust.id]
         );
-        matched.push({ customer_id: cust.id, customer_name: cust.company_name, xero_name: best.Name, score: bestScore });
+        matched.push({ customer_id: cust.id, customer_name: cust.business_name, xero_name: best.Name, score: bestScore });
       } else if (best && bestScore >= 0.5) {
         // Medium confidence — suggest but don't auto-apply
         suggestions.push({
           customer_id:   cust.id,
-          customer_name: cust.company_name,
+          customer_name: cust.business_name,
           xero_id:       best.ContactID,
           xero_name:     best.Name,
           score:         bestScore,
@@ -402,7 +402,7 @@ router.get('/customers/:id/credit-status', async (req, res, next) => {
 
     // Customer record
     const { rows } = await query(
-      `SELECT id, company_name, credit_limit, xero_contact_id, is_on_stop, account_status
+      `SELECT id, business_name, credit_limit, xero_contact_id, is_on_stop, account_status
        FROM customers WHERE id = $1`,
       [customerId]
     );
@@ -417,8 +417,9 @@ router.get('/customers/:id/credit-status', async (req, res, next) => {
               COUNT(*)::int AS count
        FROM charges
        WHERE customer_id = $1
-         AND invoice_id IS NULL
-         AND cancelled = false
+         AND verified = TRUE
+         AND billed = FALSE
+         AND cancelled = FALSE
          AND price IS NOT NULL`,
       [customerId]
     );
@@ -495,7 +496,7 @@ router.post('/invoices/:id/push', async (req, res, next) => {
 
     // Load invoice + customer + line items
     const { rows: invRows } = await query(
-      `SELECT i.*, c.company_name, c.xero_contact_id
+      `SELECT i.*, c.business_name, c.xero_contact_id
        FROM invoices i
        JOIN customers c ON c.id = i.customer_id
        WHERE i.id = $1`,
