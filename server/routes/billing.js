@@ -2435,11 +2435,167 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
       WHERE id = $4
     `, [totalPrice, rate.zone_name, rate.weight_class_name, id]);
 
+    // ── Recalculate fuel charge for this shipment ──────────────────────────────
+    // The fuel charge is based on the courier sell price, so it must be updated
+    // whenever the courier price changes — otherwise old % rates persist.
+    let fuelUpdated = false;
+    try {
+      const shipmentRes = await query(
+        `SELECT shipment_id FROM charges WHERE id = $1`, [id]
+      );
+      const shipmentId = shipmentRes.rows[0]?.shipment_id;
+
+      if (shipmentId && dcServiceId && customerId) {
+        // Look up the current fuel sell % for this customer/service
+        const fuelRes = await query(`
+          SELECT fg.standard_sell_pct,
+                 cfgp.sell_pct AS customer_sell_pct
+          FROM courier_services cs
+          JOIN fuel_groups fg ON fg.id = cs.fuel_group_id
+          LEFT JOIN customer_fuel_group_pricing cfgp
+                 ON cfgp.fuel_group_id = fg.id AND cfgp.customer_id = $2
+          WHERE cs.service_code ILIKE $1
+          LIMIT 1
+        `, [dcServiceId, customerId]);
+
+        if (fuelRes.rows.length) {
+          const fg      = fuelRes.rows[0];
+          const sellPct = parseFloat(fg.customer_sell_pct ?? fg.standard_sell_pct ?? 0);
+
+          if (sellPct > 0) {
+            const newFuelPrice = parseFloat((totalPrice * sellPct / 100).toFixed(2));
+
+            const updFuel = await query(`
+              UPDATE charges
+              SET price      = $1,
+                  updated_at = NOW()
+              WHERE shipment_id  = $2
+                AND charge_type  = 'fuel'
+                AND cancelled    = false
+              RETURNING id
+            `, [newFuelPrice, shipmentId]);
+
+            fuelUpdated = updFuel.rows.length > 0;
+          }
+        }
+      }
+    } catch (fuelErr) {
+      console.warn('[reprice] fuel update failed:', fuelErr.message);
+    }
+
     res.json({
       ok: true,
       price: totalPrice,
       zone_name: rate.zone_name,
       weight_class_name: rate.weight_class_name,
+      fuel_updated: fuelUpdated,
+    });
+  } catch (err) { next(err); }
+});
+
+// ─── GET /api/billing/customers/:id/rate-diagnostic ──────────────────────────
+// Shows the customer's full rate card, dc_weight_classes, and simulates the
+// lookup for a given weight/service so we can see exactly which band & price
+// the billing engine will pick.
+// Query params: service_code (required), weight_kg (default 5)
+//
+router.get('/customers/:id/rate-diagnostic', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { service_code, weight_kg = 5 } = req.query;
+    const wkg = parseFloat(weight_kg);
+
+    // 1. Customer info
+    const custRes = await query(
+      `SELECT id, business_name, account_number FROM customers WHERE id = $1`, [id]
+    );
+    if (!custRes.rows.length) return res.status(404).json({ error: 'Customer not found' });
+
+    // 2. All customer_rates rows (optionally filtered by service_code)
+    const ratesCond = service_code ? `AND service_code ILIKE $2` : '';
+    const ratesRes  = await query(`
+      SELECT service_code, zone_name, weight_class_name, price, price_sub
+      FROM customer_rates
+      WHERE customer_id = $1 ${ratesCond}
+      ORDER BY service_code, zone_name, weight_class_name
+    `, service_code ? [id, service_code] : [id]);
+
+    // 3. All dc_weight_classes rows for the relevant service codes
+    const serviceCodes = service_code
+      ? [service_code]
+      : [...new Set(ratesRes.rows.map(r => r.service_code))];
+
+    const wcRes = serviceCodes.length
+      ? await query(`
+          SELECT service_code, weight_class_name, min_weight_kg, max_weight_kg
+          FROM dc_weight_classes
+          WHERE service_code ILIKE ANY($1::text[])
+          ORDER BY service_code, min_weight_kg
+        `, [serviceCodes])
+      : { rows: [] };
+
+    // 4. Simulate the lookup for the given weight
+    let simulation = null;
+    if (service_code) {
+      const wcMatch = await query(`
+        SELECT weight_class_name
+        FROM dc_weight_classes
+        WHERE service_code ILIKE $1
+          AND min_weight_kg < $2
+          AND max_weight_kg >= $2
+        ORDER BY max_weight_kg ASC
+        LIMIT 1
+      `, [service_code, wkg]);
+
+      const matchedClass = wcMatch.rows[0]?.weight_class_name || null;
+
+      // Zones for this customer + service
+      const zonesRes = await query(`
+        SELECT DISTINCT zone_name FROM customer_rates
+        WHERE customer_id = $1 AND service_code ILIKE $2
+      `, [id, service_code]);
+      const zones = zonesRes.rows.map(r => r.zone_name);
+
+      // Price rows matching the weight class (all zones)
+      const priceRows = matchedClass ? await query(`
+        SELECT zone_name, weight_class_name, price, price_sub
+        FROM customer_rates
+        WHERE customer_id = $1 AND service_code ILIKE $2 AND weight_class_name = $3
+        ORDER BY zone_name
+      `, [id, service_code, matchedClass]) : { rows: [] };
+
+      // Fuel config
+      const fuelRes = await query(`
+        SELECT fg.name, fg.standard_sell_pct, fg.fuel_surcharge_pct AS carrier_pct,
+               cfgp.sell_pct AS customer_sell_pct
+        FROM courier_services cs
+        JOIN fuel_groups fg ON fg.id = cs.fuel_group_id
+        LEFT JOIN customer_fuel_group_pricing cfgp
+               ON cfgp.fuel_group_id = fg.id AND cfgp.customer_id = $2
+        WHERE cs.service_code ILIKE $1 LIMIT 1
+      `, [service_code, id]);
+
+      simulation = {
+        input:         { service_code, weight_kg: wkg },
+        matched_class: matchedClass,
+        available_zones: zones,
+        price_rows_for_class: priceRows.rows,
+        note: priceRows.rows.length > 1
+          ? '⚠️  Multiple price rows for this weight class — engine picks FIRST (LIMIT 1). Check for duplicate/conflicting rates.'
+          : priceRows.rows.length === 0 && matchedClass
+            ? '⚠️  Weight class matched in dc_weight_classes but NO corresponding customer_rates row — will return no rate.'
+            : priceRows.rows.length === 0
+              ? '⚠️  No matching weight class in dc_weight_classes for this weight.'
+              : '✓ Single rate found',
+        fuel: fuelRes.rows[0] || null,
+      };
+    }
+
+    res.json({
+      customer:         custRes.rows[0],
+      customer_rates:   ratesRes.rows,
+      dc_weight_classes: wcRes.rows,
+      simulation,
     });
   } catch (err) { next(err); }
 });
