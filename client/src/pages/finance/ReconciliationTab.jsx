@@ -94,10 +94,21 @@ function parseDhlCsv(text) {
     const wi = header.findIndex(h => h.includes('chargeable') && h.includes('weight'))
             ?? header.findIndex(h => h.includes('billed') && h.includes('weight'));
     const wi2 = header.findIndex(h => h.includes('weight') && !h.includes('over'));
-    // Piece/item count column — DHL may call it "pieces", "no. pieces", "qty", "quantity", "items"
+    // Piece/item count column — DHL uses various names, detect as broadly as possible.
+    // Log all headers to console so we can identify the exact column name from the actual CSV.
+    console.log('[DHL CSV] headers:', header.map((h, i) => `${i}:${h}`).join(', '));
     const pi = header.findIndex(h =>
-      h.includes('piece') || h === 'qty' || h === 'quantity' || h === 'items' || h.includes('no. of piece')
+      h.includes('piece')   ||   // "pieces", "piece count", "no. pieces", "no of pieces"
+      h.includes('parcel')  ||   // "parcels", "parcel count", "no. of parcels", "parcel qty"
+      h.includes('item')    ||   // "items", "item count", "no. items"
+      h.includes('unit')    ||   // "units", "unit count"
+      h === 'qty'           ||
+      h === 'quantity'      ||
+      h === 'count'         ||
+      h === 'no'            ||   // bare "no" (DHL sometimes uses this for piece count)
+      h === 'num'
     );
+    console.log('[DHL CSV] colPieces detected at index:', pi, pi >= 0 ? `("${header[pi]}")` : '(not found — HGV will use 1 per row)');
     if (vi  !== -1) colValue   = vi;
     if (ri  !== -1) colRef     = ri;
     if (si  !== -1) colService = si;
