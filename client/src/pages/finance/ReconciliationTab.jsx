@@ -82,15 +82,22 @@ function parseDhlCsv(text) {
   let colValue    = 5;   // fallback: "Value" (base freight)
   let colRef      = 11;  // fallback: "Reference"
   let colService  = 20;  // fallback: "Service Desc"
+  let colWeight   = -1;  // billed/chargeable weight — detected from header
 
   if (lines.length > 0) {
     const header = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
     const vi = header.findIndex(h => h === 'value');
     const ri = header.findIndex(h => h === 'reference');
     const si = header.findIndex(h => h.includes('service desc') || h === 'service');
-    if (vi !== -1) colValue   = vi;
-    if (ri !== -1) colRef     = ri;
-    if (si !== -1) colService = si;
+    // DHL uses various weight column names; prefer "chargeable weight", fall back to first "weight" match
+    const wi = header.findIndex(h => h.includes('chargeable') && h.includes('weight'))
+            ?? header.findIndex(h => h.includes('billed') && h.includes('weight'));
+    const wi2 = header.findIndex(h => h.includes('weight') && !h.includes('over'));
+    if (vi  !== -1) colValue   = vi;
+    if (ri  !== -1) colRef     = ri;
+    if (si  !== -1) colService = si;
+    if (wi  !== -1) colWeight  = wi;
+    else if (wi2 !== -1) colWeight = wi2;
   }
 
   // Columns W–AE (0-indexed 22–30) contain per-shipment special surcharges:
@@ -135,13 +142,18 @@ function parseDhlCsv(text) {
         if (!isNaN(n) && n !== 0) csvSurcharges += Math.abs(n);
       }
 
+      // Billed (chargeable) weight from invoice — may differ from declared weight
+      const billedWeightRaw = colWeight >= 0 ? (cols[colWeight] || '').replace(/[,\s]/g, '') : '';
+      const billedWeightKg  = billedWeightRaw !== '' ? parseFloat(billedWeightRaw) : null;
+
       shipmentMap[ref] = shipmentMap[ref] || [];
       shipmentMap[ref].push({
         reference:              ref,
-        carrier_cost:           value,          // base freight
-        carrier_csv_surcharges: csvSurcharges,  // W-AE: weight, length, etc.
-        carrier_surcharges:     csvSurcharges,  // will have fuel+HGV added post-lookup
-        carrier_total:          value + csvSurcharges, // updated post-lookup
+        carrier_cost:           value,          // Value column = TOTAL freight (W-AE are a breakdown of this, not additive)
+        carrier_csv_surcharges: csvSurcharges,  // W-AE informational breakdown only — already inside carrier_cost
+        carrier_surcharges:     0,              // fuel+HGV allocated post-lookup; csv_surcharges NOT added here
+        carrier_total:          value,          // updated post-lookup (carrier_cost + fuel_alloc + hgv_alloc)
+        billed_weight_kg:       isNaN(billedWeightKg) ? null : billedWeightKg,
         invoice_service_name:   invoiceServiceName,
       });
       parsed++;
@@ -800,11 +812,13 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           return { ...s, group, bestCharge };
         });
 
-        // Second pass: add fuel/HGV allocation on top of per-shipment W-AE surcharges
-        // carrier_csv_surcharges = weight, length, etc. already read from CSV columns W-AE
+        // Second pass: add fuel/HGV allocation to each shipment row.
+        // carrier_csv_surcharges = W-AE breakdown columns — these are ALREADY inside carrier_cost
+        //                          (the invoice Value column is the total; W-AE just show what makes it up)
+        //                          Store for informational display only — do NOT add to total.
         // carrier_fuel_alloc     = proportional share of invoice FUEL SURCHARGE total
         // carrier_hgv_alloc      = parcel_count × £0.13
-        // carrier_total          = base + csv_surcharges + fuel + HGV
+        // carrier_total          = carrier_cost + fuel_alloc + hgv_alloc   (W-AE already inside carrier_cost)
         rows.forEach(row => {
           const fuelAlloc = totalInvoiceBase > 0
             ? (row.carrier_cost / totalInvoiceBase) * invoiceFuelTotal
@@ -815,8 +829,8 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
             : 0;
           row.carrier_fuel_alloc = fuelAlloc;
           row.carrier_hgv_alloc  = hgvAlloc;
-          // carrier_csv_surcharges already set by parser; add fuel + HGV on top
-          row.carrier_surcharges = (row.carrier_csv_surcharges || 0) + fuelAlloc + hgvAlloc;
+          // W-AE (carrier_csv_surcharges) intentionally excluded — already in carrier_cost
+          row.carrier_surcharges = fuelAlloc + hgvAlloc;
           row.carrier_total      = row.carrier_cost + row.carrier_surcharges;
           row.status             = getStatus(row.carrier_total, row.bestCharge || null);
         });
@@ -1178,6 +1192,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                     <th style={{ ...th, textAlign: 'left' }}>Reference</th>
                     <th style={{ ...th, textAlign: 'left' }}>Customer</th>
                     <th style={{ ...th, textAlign: 'left' }}>Service</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Weight</th>
                     <th style={{ ...th, textAlign: 'right' }}>Invoice Cost</th>
                     <th style={{ ...th, textAlign: 'right' }}>Our Cost</th>
                     <th style={{ ...th, textAlign: 'right' }}>Difference</th>
@@ -1187,14 +1202,14 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                 <tbody>
                   {displayed.length === 0 && filter === 'all' && surcharges.length === 0 && (
                     <tr>
-                      <td colSpan={8} style={{ ...td, textAlign: 'center', color: '#555', padding: '40px 12px' }}>
+                      <td colSpan={9} style={{ ...td, textAlign: 'center', color: '#555', padding: '40px 12px' }}>
                         No results to show
                       </td>
                     </tr>
                   )}
                   {displayed.length === 0 && filter !== 'all' && (
                     <tr>
-                      <td colSpan={8} style={{ ...td, textAlign: 'center', color: '#555', padding: '40px 12px' }}>
+                      <td colSpan={9} style={{ ...td, textAlign: 'center', color: '#555', padding: '40px 12px' }}>
                         No results to show
                       </td>
                     </tr>
@@ -1211,8 +1226,8 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                       : diff > 0.005 ? '#F44336'
                       : diff < -0.005 ? '#00C853'
                       : '#888';
-                    // Show surcharge breakdown if either side has surcharges
-                    const invoiceHasSurcharge = (row.carrier_surcharges || 0) > 0.005;
+                    // Show breakdown sub-line if there are fuel/HGV allocs OR W-AE informational surcharges
+                    const invoiceHasSurcharge = (row.carrier_surcharges || 0) > 0.005 || (row.carrier_csv_surcharges || 0) > 0.005;
                     const ourHasSurcharge = bc?.total_cost_price != null && bc?.base_cost_price != null
                       && Math.abs(bc.total_cost_price - bc.base_cost_price) > 0.005;
 
@@ -1301,14 +1316,51 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                             <span style={{ fontSize: 12, color: '#555' }}>—</span>
                           )}
                         </td>
+                        {/* Weight — declared (ours) vs billed (DHL invoice) */}
+                        <td style={{ ...td, textAlign: 'right' }}>
+                          {(() => {
+                            const declared = bc?.declared_weight_kg;
+                            const billed   = row.billed_weight_kg;
+                            const hasBoth  = declared != null && billed != null;
+                            const diff     = hasBoth ? billed - declared : null;
+                            const discrepancy = diff != null && Math.abs(diff) >= 0.1;
+                            return (
+                              <div>
+                                {billed != null ? (
+                                  <span style={{
+                                    fontWeight: discrepancy ? 700 : 400,
+                                    color: discrepancy ? '#F44336' : '#CCC',
+                                  }}>
+                                    {billed.toFixed(2)} kg
+                                  </span>
+                                ) : (
+                                  <span style={{ color: '#555' }}>—</span>
+                                )}
+                                {declared != null && (
+                                  <div style={{ fontSize: 10, color: discrepancy ? '#F44336' : '#555', marginTop: 1 }}>
+                                    {declared.toFixed(2)} kg declared
+                                    {discrepancy && (
+                                      <span style={{ marginLeft: 4, fontWeight: 700 }}>
+                                        +{(diff).toFixed(2)}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </td>
+
                         <td style={{ ...td, textAlign: 'right' }}>
                           <span style={{ fontWeight: 700, color: '#B39DDB' }}>
                             {gbp(row.carrier_total)}
                           </span>
                           {invoiceHasSurcharge && (
                             <div style={{ fontSize: 10, color: '#666', marginTop: 1 }}>
-                              {gbp(row.carrier_cost)} base
-                              {(row.carrier_csv_surcharges || 0) > 0.005 && ` + ${gbp(row.carrier_csv_surcharges)} charges`}
+                              {gbp(row.carrier_cost)} freight
+                              {(row.carrier_csv_surcharges || 0) > 0.005 && (
+                                <span style={{ color: '#555' }}> (incl. {gbp(row.carrier_csv_surcharges)} surcharges)</span>
+                              )}
                               {row.carrier_fuel_alloc > 0.005 && ` + ${gbp(row.carrier_fuel_alloc)} fuel`}
                               {row.carrier_hgv_alloc  > 0.005 && ` + ${gbp(row.carrier_hgv_alloc)} HGV`}
                             </div>
@@ -1346,7 +1398,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                       <>
                         {/* Section divider */}
                         <tr>
-                          <td colSpan={8} style={{
+                          <td colSpan={9} style={{
                             padding: '8px 12px 6px',
                             fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
                             letterSpacing: '0.07em', color: '#555',
@@ -1413,6 +1465,9 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                               <td style={td}>
                                 <span style={{ fontSize: 12, color: '#888' }}>{sc.description}</span>
                               </td>
+
+                              {/* Weight — n/a for invoice-level surcharges */}
+                              <td style={{ ...td, textAlign: 'right', color: '#444' }}>—</td>
 
                               {/* Invoice Cost */}
                               <td style={{ ...td, textAlign: 'right' }}>
