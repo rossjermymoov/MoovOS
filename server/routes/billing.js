@@ -1114,7 +1114,7 @@ router.post('/webhook', async (req, res, next) => {
         const costTotal = rate.cost_price_sub != null && n > 1
           ? rate.cost_price + (n - 1) * rate.cost_price_sub
           : rate.cost_price * n;
-        return parseFloat(costTotal.toFixed(2));
+        return Math.round(costTotal * 100) / 100;
       })() : null,
       rate?.zone_name || null,
       rate?.weight_class_name || null,
@@ -1726,13 +1726,15 @@ router.post('/full-reprice', async (req, res, next) => {
     `);
 
     const summary = {
-      total:        charges.length,
-      repriced:     0,
-      fuel_updated: 0,
-      no_rate:      0,
-      no_customer:  0,
-      errors:       0,
-      changed:      0,   // courier price actually changed
+      total:              charges.length,
+      repriced:           0,
+      fuel_updated:       0,
+      fuel_no_group:      0,   // courier service has no fuel group configured
+      fuel_no_charge_row: 0,   // no existing fuel charge row to update
+      no_rate:            0,
+      no_customer:        0,
+      errors:             0,
+      changed:            0,   // courier price actually changed
     };
 
     for (const row of charges) {
@@ -1773,9 +1775,10 @@ router.post('/full-reprice', async (req, res, next) => {
         const costTotal = rate.cost_price != null
           ? (() => {
               const n = parcelQty || 1;
-              return rate.cost_price_sub != null && n > 1
-                ? parseFloat((rate.cost_price + (n - 1) * rate.cost_price_sub).toFixed(4))
-                : parseFloat((rate.cost_price * n).toFixed(4));
+              const raw = rate.cost_price_sub != null && n > 1
+                ? rate.cost_price + (n - 1) * rate.cost_price_sub
+                : rate.cost_price * n;
+              return Math.round(raw * 100) / 100;
             })()
           : null;
 
@@ -1798,28 +1801,46 @@ router.post('/full-reprice', async (req, res, next) => {
         if (row.shipment_id && dcServiceId) {
           try {
             const fuelRes = await query(`
-              SELECT fg.standard_sell_pct, cfgp.sell_pct AS customer_sell_pct
+              SELECT fg.id AS fuel_group_id,
+                     fg.standard_sell_pct, fg.fuel_surcharge_pct AS carrier_pct,
+                     cfgp.sell_pct AS customer_sell_pct
               FROM courier_services cs
-              JOIN fuel_groups fg ON fg.id = cs.fuel_group_id
+              LEFT JOIN fuel_groups fg ON fg.id = cs.fuel_group_id
               LEFT JOIN customer_fuel_group_pricing cfgp
                      ON cfgp.fuel_group_id = fg.id AND cfgp.customer_id = $2
               WHERE cs.service_code ILIKE $1 LIMIT 1
             `, [dcServiceId, customerId]);
 
-            if (fuelRes.rows.length) {
-              const sellPct = parseFloat(fuelRes.rows[0].customer_sell_pct ?? fuelRes.rows[0].standard_sell_pct ?? 0);
+            if (!fuelRes.rows.length || fuelRes.rows[0].fuel_group_id == null) {
+              summary.fuel_no_group++;
+            } else {
+              const fg       = fuelRes.rows[0];
+              const sellPct  = parseFloat(fg.customer_sell_pct ?? fg.standard_sell_pct ?? 0);
+              const costPct  = parseFloat(fg.carrier_pct ?? 0);
+
               if (sellPct > 0) {
-                const newFuelPrice = parseFloat((newPrice * sellPct / 100).toFixed(2));
+                const newFuelPrice = Math.round(newPrice * sellPct / 100 * 100) / 100;
+                const newFuelCost  = costPct > 0 && costTotal != null
+                  ? Math.round(costTotal * costPct / 100 * 100) / 100
+                  : null;
+
                 const upd = await query(`
                   UPDATE charges
-                  SET price = $1, updated_at = NOW()
-                  WHERE shipment_id = $2 AND charge_type = 'fuel' AND cancelled = false
+                  SET price      = $1,
+                      cost_price = COALESCE($2, cost_price),
+                      updated_at = NOW()
+                  WHERE shipment_id = $3 AND charge_type = 'fuel' AND cancelled = false
                   RETURNING id
-                `, [newFuelPrice, row.shipment_id]);
-                if (upd.rows.length) summary.fuel_updated++;
+                `, [newFuelPrice, newFuelCost, row.shipment_id]);
+
+                if (upd.rows.length) {
+                  summary.fuel_updated++;
+                } else {
+                  summary.fuel_no_charge_row++;
+                }
               }
             }
-          } catch { /* non-fatal — fuel update failure doesn't fail the charge */ }
+          } catch { /* non-fatal */ }
         }
 
       } catch { summary.errors++; }
