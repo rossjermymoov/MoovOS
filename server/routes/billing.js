@@ -1770,16 +1770,26 @@ router.post('/full-reprice', async (req, res, next) => {
         const pricingMode = await getParcelPricingMode(customerId);
         const newPrice    = parseFloat(calcTotal(rate, parcelQty, pricingMode).toFixed(2));
 
+        const costTotal = rate.cost_price != null
+          ? (() => {
+              const n = parcelQty || 1;
+              return rate.cost_price_sub != null && n > 1
+                ? parseFloat((rate.cost_price + (n - 1) * rate.cost_price_sub).toFixed(4))
+                : parseFloat((rate.cost_price * n).toFixed(4));
+            })()
+          : null;
+
         await query(`
           UPDATE charges
           SET price             = $1,
-              zone_name         = $2,
-              weight_class_name = $3,
+              cost_price        = $2,
+              zone_name         = $3,
+              weight_class_name = $4,
               price_auto        = true,
               price_failure_reason = NULL,
               updated_at        = NOW()
-          WHERE id = $4
-        `, [newPrice, rate.zone_name, rate.weight_class_name, row.charge_id]);
+          WHERE id = $5
+        `, [newPrice, costTotal, rate.zone_name, rate.weight_class_name, row.charge_id]);
 
         summary.repriced++;
         if (parseFloat(row.current_price) !== newPrice) summary.changed++;
