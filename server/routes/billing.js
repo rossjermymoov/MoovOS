@@ -220,29 +220,25 @@ function extractUpperBound(weightClassName) {
 // rateCoversWeight — uses numeric bounds when present, then falls back to
 // weight_class_name text parsing.  Only treats a band as "covers any weight"
 // (flat-rate) if BOTH bounds are NULL AND the name is genuinely unparseable.
+// Does this band's numeric bounds cover the given weight?
+// Matching is purely numeric: min_weight_kg < weight <= max_weight_kg.
+// The band name is never used for matching — it's a display label only.
+// If bounds are NULL the band is treated as a flat-rate catch-all (covers all weights).
 function rateCoversWeight(rate, weightKg) {
   const minKg = parseFloat(rate.min_weight_kg);
   const maxKg = parseFloat(rate.max_weight_kg);
   if (!isNaN(minKg) && !isNaN(maxKg)) {
     return weightKg > minKg && weightKg <= maxKg;
   }
-  // Numeric bounds absent — try weight_class_name text (e.g. "5KG" = up to 5 kg).
-  // Returns null only for truly unparseable names like "Parcel".
-  const named = coversWeightOrUnknown(rate.weight_class_name, weightKg);
-  if (named !== null) return named;
-  // Genuinely unparseable name with no numeric bounds = flat-rate, any weight qualifies.
-  return rate.min_weight_kg == null && rate.max_weight_kg == null;
+  // No numeric bounds — flat-rate band, covers any weight.
+  return true;
 }
 
-// Return the effective upper-weight-bound of a band.
-// Used when multiple bands match to pick the tightest fit (smallest max wins).
+// Return the effective upper-weight-bound of a band (for tightest-fit ordering).
 function bandMaxKg(rate) {
   const maxKg = parseFloat(rate.max_weight_kg);
   if (!isNaN(maxKg)) return maxKg;
-  // No numeric bound — extract from weight_class_name (e.g. "5KG" → 5)
-  const fromName = extractUpperBound(rate.weight_class_name);
-  if (fromName !== null) return fromName;
-  return Infinity; // flat-rate band — sorts last (lowest priority)
+  return Infinity; // no upper bound — sorts last
 }
 
 // zoneForPostcode — resolve zone name from service code + destination postcode + iso.
@@ -451,59 +447,37 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
     zoneName = resolved;
   }
 
-  // ── Step 2: sell price ───────────────────────────────────────────────────────
-  // First try numeric weight bounds (fast, authoritative).
-  // Fall back to text-based weight_class_name matching if bounds are NULL
-  // (handles customers whose rates haven't had migration 104 applied yet,
-  // and flat-rate services with a single band covering all weights).
+  // ── Step 2: sell price — numeric weight band matching ───────────────────────
+  // Match on min_weight_kg / max_weight_kg bounds only.
+  // The weight_class_name is a display label and is never used for matching.
+  // If bounds are NULL on all rows for this zone (flat-rate service, single band),
+  // the single row is used — but only when there is exactly one.
 
-  let priceRow = null;
-
-  // 2a: numeric match
-  const numericRes = await query(`
-    SELECT id, price, price_sub, zone_name, weight_class_name
+  const allPriceRes = await query(`
+    SELECT id, price, price_sub, zone_name, weight_class_name,
+           min_weight_kg, max_weight_kg
     FROM customer_rates
     WHERE customer_id       = $1
       AND service_code ILIKE $2
       AND zone_name    ILIKE $3
-      AND min_weight_kg     < $4
-      AND max_weight_kg     >= $4
-    ORDER BY max_weight_kg ASC
-    LIMIT 1
-  `, [customerId, serviceCode, zoneName, weightKg ?? 0]);
+    ORDER BY max_weight_kg ASC NULLS LAST
+  `, [customerId, serviceCode, zoneName]);
 
-  if (numericRes.rows.length) {
-    priceRow = numericRes.rows[0];
-  } else {
-    // 2b: text-based fallback — use weight_class_name parser
-    const allRes = await query(`
-      SELECT id, price, price_sub, zone_name, weight_class_name
-      FROM customer_rates
-      WHERE customer_id       = $1
-        AND service_code ILIKE $2
-        AND zone_name    ILIKE $3
-      ORDER BY weight_class_name
-    `, [customerId, serviceCode, zoneName]);
-
-    // Find first row whose weight_class_name text covers the requested weight
-    priceRow = allRes.rows.find(r => coversWeight(r.weight_class_name, weightKg)) || null;
-
-    // If text matching also fails but there's exactly one row (flat rate, no banding)
-    // use it regardless — a single rate covers all weights by definition
-    if (!priceRow && allRes.rows.length === 1) {
-      priceRow = allRes.rows[0];
-    }
-  }
-
-  if (!priceRow) {
+  if (!allPriceRes.rows.length) {
     return { rate: null, reason: 'no matching price' };
   }
 
-  // ── Step 3: carrier cost from weight_bands (direct carrier model lookup) ────────
-  // Try numeric bounds first, fall back to single-band match if bounds are NULL.
-  let costRow = null;
+  // Find the tightest band whose numeric bounds cover the weight
+  const priceRow = allPriceRes.rows.find(r => rateCoversWeight(r, weightKg)) || null;
 
-  const numericCostRes = await query(`
+  if (!priceRow) {
+    return { rate: null, reason: `no weight band covers ${weightKg} kg for service ${serviceCode} zone "${zoneName}"` };
+  }
+
+  // ── Step 3: carrier cost — numeric weight band matching ─────────────────────
+  // Same principle: match on numeric bounds only, name is irrelevant.
+
+  const allCostRes = await query(`
     SELECT wb.price_first AS carrier_cost, wb.price_sub AS carrier_cost_sub,
            wb.min_weight_kg, wb.max_weight_kg
     FROM weight_bands wb
@@ -511,34 +485,10 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
     JOIN courier_services cs ON cs.id = z.courier_service_id
     WHERE cs.service_code ILIKE $1
       AND z.name           ILIKE $2
-      AND wb.min_weight_kg      < $3
-      AND wb.max_weight_kg      >= $3
-    ORDER BY wb.max_weight_kg ASC
-    LIMIT 1
-  `, [serviceCode, zoneName, weightKg ?? 0]);
+    ORDER BY wb.max_weight_kg ASC NULLS LAST
+  `, [serviceCode, zoneName]);
 
-  if (numericCostRes.rows.length) {
-    costRow = numericCostRes.rows[0];
-  } else {
-    // Fallback: get all bands for this zone and match by weight, or use single band
-    const allBandsRes = await query(`
-      SELECT wb.price_first AS carrier_cost, wb.price_sub AS carrier_cost_sub,
-             wb.min_weight_kg, wb.max_weight_kg
-      FROM weight_bands wb
-      JOIN zones z             ON z.id  = wb.zone_id
-      JOIN courier_services cs ON cs.id = z.courier_service_id
-      WHERE cs.service_code ILIKE $1
-        AND z.name           ILIKE $2
-      ORDER BY wb.min_weight_kg NULLS LAST
-    `, [serviceCode, zoneName]);
-
-    if (allBandsRes.rows.length === 1) {
-      costRow = allBandsRes.rows[0];
-    } else if (allBandsRes.rows.length > 1) {
-      // Multiple bands with NULL bounds — pick the one that covers the weight via rateCoversWeight
-      costRow = allBandsRes.rows.find(r => rateCoversWeight(r, weightKg)) || null;
-    }
-  }
+  const costRow = allCostRes.rows.find(r => rateCoversWeight(r, weightKg)) || null;
 
   const carrierCost    = costRow ? parseFloat(costRow.carrier_cost) : null;
   const carrierCostSub = costRow && costRow.carrier_cost_sub != null
