@@ -384,6 +384,111 @@ function nameMatchScore(a, b) {
 // ─── Invoices ─────────────────────────────────────────────────────────────────
 
 // POST /api/xero/invoices/:id/push
+// ─── Credit status ────────────────────────────────────────────────────────────
+
+// Xero returns dates as /Date(ms+offset)/ — parse to YYYY-MM-DD
+function parseXeroDate(d) {
+  if (!d) return null;
+  const m = String(d).match(/\/Date\((\d+)([+-]\d+)?\)\//);
+  if (m) return new Date(parseInt(m[1])).toISOString().split('T')[0];
+  return String(d).slice(0, 10); // already ISO-ish
+}
+
+// GET /api/xero/customers/:id/credit-status
+// Returns live credit exposure: Xero outstanding invoices + MoovOS unbilled charges vs credit limit
+router.get('/customers/:id/credit-status', async (req, res, next) => {
+  try {
+    const customerId = req.params.id;
+
+    // Customer record
+    const { rows } = await query(
+      `SELECT id, company_name, credit_limit, xero_contact_id, is_on_stop, account_status
+       FROM customers WHERE id = $1`,
+      [customerId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Customer not found' });
+    const customer = rows[0];
+
+    const creditLimit = parseFloat(customer.credit_limit) || 0;
+
+    // MoovOS unbilled charges (not yet on any invoice, not cancelled)
+    const { rows: unbilledRows } = await query(
+      `SELECT COALESCE(SUM(price), 0)::numeric(12,2) AS total,
+              COUNT(*)::int AS count
+       FROM charges
+       WHERE customer_id = $1
+         AND invoice_id IS NULL
+         AND cancelled = false
+         AND price IS NOT NULL`,
+      [customerId]
+    );
+    const moovosUnbilled     = parseFloat(unbilledRows[0]?.total || 0);
+    const moovosUnbilledCount = unbilledRows[0]?.count || 0;
+
+    // Xero outstanding invoices (AUTHORISED = approved but unpaid)
+    let xeroOutstanding = 0;
+    let xeroInvoices    = [];
+    let xeroConnected   = false;
+
+    if (customer.xero_contact_id) {
+      try {
+        const token = await getStoredToken();
+        if (token) {
+          xeroConnected = true;
+          const data = await xeroRequest(
+            'GET',
+            `/Invoices?ContactIDs=${customer.xero_contact_id}&Statuses=AUTHORISED&order=DueDate+ASC`
+          );
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+
+          xeroInvoices = (data.Invoices || []).map(inv => {
+            const dueDateStr = parseXeroDate(inv.DueDate);
+            const isOverdue  = dueDateStr ? new Date(dueDateStr) < today : false;
+            return {
+              id:          inv.InvoiceID,
+              number:      inv.InvoiceNumber,
+              date:        parseXeroDate(inv.Date),
+              due_date:    dueDateStr,
+              amount_due:  parseFloat(inv.AmountDue || 0),
+              total:       parseFloat(inv.Total || 0),
+              is_overdue:  isOverdue,
+            };
+          });
+
+          xeroOutstanding = xeroInvoices.reduce((s, inv) => s + inv.amount_due, 0);
+        }
+      } catch (e) {
+        console.warn('[xero] credit-status: Xero unavailable —', e.message);
+      }
+    }
+
+    const totalExposure   = xeroOutstanding + moovosUnbilled;
+    const utilisationPct  = creditLimit > 0 ? (totalExposure / creditLimit) * 100 : 0;
+    const creditStatus    = utilisationPct >= 100 ? 'over_limit'
+                          : utilisationPct >= 90  ? 'warning'
+                          : 'ok';
+
+    res.json({
+      credit_limit:          creditLimit,
+      xero_outstanding:      Math.round(xeroOutstanding * 100) / 100,
+      moovos_unbilled:       Math.round(moovosUnbilled * 100) / 100,
+      moovos_unbilled_count: moovosUnbilledCount,
+      total_exposure:        Math.round(totalExposure * 100) / 100,
+      utilisation_pct:       Math.round(utilisationPct * 10) / 10,
+      credit_status:         creditStatus,
+      xero_connected:        xeroConnected,
+      xero_linked:           !!customer.xero_contact_id,
+      is_on_stop:            customer.is_on_stop,
+      invoices:              xeroInvoices,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Invoices ─────────────────────────────────────────────────────────────────
+
 router.post('/invoices/:id/push', async (req, res, next) => {
   try {
     const invId = parseInt(req.params.id);

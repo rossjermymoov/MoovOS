@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, AlertTriangle, Phone, Mail, MapPin, Building2,
   Users, MessageSquare, TrendingUp, DollarSign, Zap, Info,
-  Pencil, X, Check, ShieldCheck, Trash2, Bug, ChevronDown, ChevronRight,
+  Pencil, X, Check, ShieldCheck, Trash2, Bug, ChevronDown, ChevronRight, RefreshCw,
 } from 'lucide-react';
 import { customersApi } from '../../api/customers';
 import { customerRateCardsApi } from '../../api/customerRateCards';
@@ -772,44 +772,259 @@ function daysAgo(dateStr) {
 }
 
 // ─── Financial tab ────────────────────────────────────────────
-function FinancialTab({ c, creditPct }) {
+function FinancialTab({ c }) {
+  const queryClient = useQueryClient();
+  const [stopReason, setStopReason] = useState('');
+  const [showStopForm, setShowStopForm] = useState(false);
+
+  const { data: credit, isLoading: creditLoading, refetch: refetchCredit } = useQuery({
+    queryKey: ['xero-credit-status', c.id],
+    queryFn: () => fetch(`/api/xero/customers/${c.id}/credit-status`).then(r => r.json()),
+    refetchInterval: 5 * 60 * 1000, // refresh every 5 min
+  });
+
+  const onStopMutation = useMutation({
+    mutationFn: ({ reason }) =>
+      fetch(`/api/customers/${c.id}/on-stop`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      }).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['customer', c.id]);
+      queryClient.invalidateQueries(['xero-credit-status', c.id]);
+      setShowStopForm(false);
+      setStopReason('');
+    },
+  });
+
+  const liftStopMutation = useMutation({
+    mutationFn: () =>
+      fetch(`/api/customers/${c.id}/on-stop`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: 'Lifted via Financial tab' }),
+      }).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['customer', c.id]);
+      queryClient.invalidateQueries(['xero-credit-status', c.id]);
+    },
+  });
+
+  const pct    = credit?.utilisation_pct ?? 0;
+  const status = credit?.credit_status ?? 'ok';
+  const barCol = status === 'over_limit' ? '#EF4444' : status === 'warning' ? '#F59E0B' : '#00C853';
+
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+      {/* ── Credit exposure card ── */}
       <div className="moov-card" style={{ padding: 20 }}>
-        <h3 style={{ fontSize: 13, fontWeight: 700, color: '#7B2FBE', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Credit Position</h3>
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-            <span style={{ fontSize: 12, color: '#AAAAAA' }}>Credit Utilisation</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: creditPct >= 90 ? '#E91E8C' : creditPct >= 80 ? '#FFC107' : '#00C853' }}>{creditPct.toFixed(1)}%</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <h3 style={{ fontSize: 13, fontWeight: 700, color: '#7B2FBE', textTransform: 'uppercase', letterSpacing: 1, margin: 0 }}>Credit Exposure</h3>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {credit && !credit.xero_linked && (
+              <span style={{ fontSize: 11, color: '#F59E0B', background: 'rgba(245,158,11,0.1)', padding: '2px 8px', borderRadius: 4, border: '1px solid rgba(245,158,11,0.2)' }}>
+                Not linked to Xero
+              </span>
+            )}
+            <button onClick={() => refetchCredit()} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', padding: 4 }} title="Refresh">
+              <RefreshCw size={13} />
+            </button>
           </div>
-          <CreditUtilisationBar pct={creditPct} />
-          {creditPct >= 80 && (
-            <div style={{ marginTop: 8, fontSize: 12, color: creditPct >= 90 ? '#E91E8C' : '#FFC107', display: 'flex', gap: 6, alignItems: 'center' }}>
-              <Info size={12} />
-              {creditPct >= 100 ? 'Credit limit reached — On Stop recommended' : creditPct >= 90 ? 'Escalated alert — urgent review recommended' : 'Approaching credit limit'}
+        </div>
+
+        {creditLoading ? (
+          <div style={{ color: '#555', fontSize: 13 }}>Loading…</div>
+        ) : (
+          <>
+            {/* Utilisation bar */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontSize: 12, color: '#AAA' }}>Credit utilisation</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: barCol }}>{pct.toFixed(1)}%</span>
+              </div>
+              {/* Segmented bar: Xero outstanding + MoovOS unbilled */}
+              <div style={{ height: 10, borderRadius: 5, background: 'rgba(255,255,255,0.08)', overflow: 'hidden', position: 'relative' }}>
+                {credit?.credit_limit > 0 && (
+                  <>
+                    {/* Xero outstanding segment */}
+                    <div style={{
+                      position: 'absolute', left: 0, top: 0, bottom: 0,
+                      width: `${Math.min((credit.xero_outstanding / credit.credit_limit) * 100, 100)}%`,
+                      background: barCol, transition: 'width 0.4s',
+                    }} />
+                    {/* MoovOS unbilled segment stacked on top */}
+                    <div style={{
+                      position: 'absolute', top: 0, bottom: 0,
+                      left: `${Math.min((credit.xero_outstanding / credit.credit_limit) * 100, 100)}%`,
+                      width: `${Math.min((credit.moovos_unbilled / credit.credit_limit) * 100, 100 - Math.min((credit.xero_outstanding / credit.credit_limit) * 100, 100))}%`,
+                      background: barCol, opacity: 0.45, transition: 'all 0.4s',
+                    }} />
+                  </>
+                )}
+              </div>
+              {/* Bar legend */}
+              <div style={{ display: 'flex', gap: 16, marginTop: 6, fontSize: 11, color: '#666' }}>
+                <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: barCol, marginRight: 4 }} />Xero outstanding</span>
+                <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: barCol, opacity: 0.45, marginRight: 4 }} />MoovOS unbilled</span>
+              </div>
+            </div>
+
+            {/* Exposure breakdown */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
+              {[
+                { label: 'Xero outstanding', val: gbp(credit?.xero_outstanding ?? 0), color: '#EEE' },
+                { label: `Unbilled (${credit?.moovos_unbilled_count ?? 0} charges)`, val: gbp(credit?.moovos_unbilled ?? 0), color: '#EEE' },
+                { label: 'Total exposure',   val: gbp(credit?.total_exposure ?? 0),   color: barCol, bold: true },
+                { label: 'Credit limit',     val: gbp(credit?.credit_limit ?? 0),     color: '#AAA' },
+              ].map(({ label, val, color, bold }) => (
+                <div key={label} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 4 }}>{label}</div>
+                  <div style={{ fontSize: 15, fontWeight: bold ? 700 : 600, color }}>{val}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Warning banner */}
+            {status === 'over_limit' && (
+              <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#EF4444', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <AlertTriangle size={14} />
+                <strong>Credit limit exceeded</strong> — this customer should be placed on stop.
+              </div>
+            )}
+            {status === 'warning' && (
+              <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#F59E0B', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <AlertTriangle size={14} />
+                <strong>Approaching credit limit</strong> — {(100 - pct).toFixed(1)}% remaining.
+              </div>
+            )}
+
+            {/* Account status + on-stop controls */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+              <div style={{ display: 'flex', gap: 16, alignItems: 'center', fontSize: 12 }}>
+                <span style={{ color: '#666' }}>Status:</span>
+                <AccountStatusBadge status={c.account_status} />
+                {c.is_on_stop && c.on_stop_applied_at && (
+                  <span style={{ color: '#666' }}>since {format(new Date(c.on_stop_applied_at), 'dd MMM yyyy')}</span>
+                )}
+                {c.is_on_stop && c.on_stop_reason && (
+                  <span style={{ color: '#888', fontStyle: 'italic' }}>"{c.on_stop_reason}"</span>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {c.is_on_stop ? (
+                  <button
+                    onClick={() => liftStopMutation.mutate()}
+                    disabled={liftStopMutation.isPending}
+                    style={{ background: 'rgba(0,200,83,0.1)', border: '1px solid rgba(0,200,83,0.3)', color: '#00C853', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Lift On Stop
+                  </button>
+                ) : (
+                  status !== 'ok' && !showStopForm && (
+                    <button
+                      onClick={() => setShowStopForm(true)}
+                      style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#EF4444', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      Apply On Stop
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+
+            {/* On-stop reason form */}
+            {showStopForm && (
+              <div style={{ marginTop: 12, background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, padding: 14 }}>
+                <div style={{ fontSize: 12, color: '#AAA', marginBottom: 8 }}>Reason for placing on stop:</div>
+                <textarea
+                  value={stopReason}
+                  onChange={e => setStopReason(e.target.value)}
+                  placeholder="e.g. Credit limit exceeded — awaiting payment of overdue invoices"
+                  rows={2}
+                  style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#EEE', fontSize: 12, padding: '8px 10px', resize: 'vertical', boxSizing: 'border-box' }}
+                />
+                <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
+                  <button onClick={() => { setShowStopForm(false); setStopReason(''); }} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: '#888', borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: 'pointer' }}>Cancel</button>
+                  <button
+                    onClick={() => onStopMutation.mutate({ reason: stopReason })}
+                    disabled={!stopReason.trim() || onStopMutation.isPending}
+                    style={{ background: '#EF4444', border: 'none', color: '#FFF', borderRadius: 6, padding: '5px 14px', fontSize: 12, fontWeight: 700, cursor: stopReason.trim() ? 'pointer' : 'not-allowed', opacity: stopReason.trim() ? 1 : 0.5 }}
+                  >
+                    {onStopMutation.isPending ? 'Applying…' : 'Confirm On Stop'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* ── Outstanding Xero invoices ── */}
+      {credit?.xero_linked && (
+        <div className="moov-card" style={{ padding: 20 }}>
+          <h3 style={{ fontSize: 13, fontWeight: 700, color: '#7B2FBE', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 14 }}>
+            Outstanding Invoices
+            {credit.invoices?.length > 0 && (
+              <span style={{ marginLeft: 8, fontSize: 11, background: 'rgba(239,68,68,0.15)', color: '#EF4444', padding: '2px 7px', borderRadius: 4, fontWeight: 700, textTransform: 'none', letterSpacing: 0 }}>
+                {credit.invoices.length}
+              </span>
+            )}
+          </h3>
+
+          {!credit.xero_connected && (
+            <div style={{ fontSize: 13, color: '#666', fontStyle: 'italic' }}>Xero not connected — go to Settings → Xero to connect.</div>
+          )}
+
+          {credit.xero_connected && credit.invoices?.length === 0 && (
+            <div style={{ fontSize: 13, color: '#555', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ color: '#00C853' }}>✓</span> No outstanding invoices in Xero.
             </div>
           )}
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <ERow label="Outstanding Balance" value={<span style={{ color: parseFloat(c.outstanding_balance) > 0 ? '#E91E8C' : '#00C853', fontWeight: 700 }}>{gbp(c.outstanding_balance)}</span>} />
-          <ERow label="Credit Limit"        value={gbp(c.credit_limit)} />
-          <ERow label="Payment Terms"       value={`${c.payment_terms_days} days`} />
-        </div>
-      </div>
-      <div className="moov-card" style={{ padding: 20 }}>
-        <h3 style={{ fontSize: 13, fontWeight: 700, color: '#7B2FBE', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Account Status</h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <ERow label="Account Status" value={<AccountStatusBadge status={c.account_status} />} />
-          {c.is_on_stop && (
-            <>
-              <ERow label="On Stop Since" value={c.on_stop_applied_at ? format(new Date(c.on_stop_applied_at), 'dd MMM yyyy, HH:mm') : '—'} />
-              <ERow label="Reason"        value={c.on_stop_reason || '—'} />
-            </>
+
+          {credit.xero_connected && credit.invoices?.length > 0 && (
+            <table className="moov-table" style={{ width: '100%' }}>
+              <thead>
+                <tr>
+                  <th>Invoice</th>
+                  <th>Date</th>
+                  <th>Due</th>
+                  <th style={{ textAlign: 'right' }}>Amount due</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {credit.invoices.map(inv => (
+                  <tr key={inv.id}>
+                    <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{inv.number || '—'}</td>
+                    <td style={{ fontSize: 12 }}>{inv.date || '—'}</td>
+                    <td style={{ fontSize: 12, color: inv.is_overdue ? '#EF4444' : '#AAA' }}>
+                      {inv.due_date || '—'}
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: inv.is_overdue ? '#EF4444' : '#EEE' }}>
+                      {gbp(inv.amount_due)}
+                    </td>
+                    <td>
+                      {inv.is_overdue
+                        ? <span style={{ fontSize: 11, background: 'rgba(239,68,68,0.15)', color: '#EF4444', padding: '2px 7px', borderRadius: 4, fontWeight: 700 }}>Overdue</span>
+                        : <span style={{ fontSize: 11, background: 'rgba(245,158,11,0.12)', color: '#F59E0B', padding: '2px 7px', borderRadius: 4, fontWeight: 700 }}>Outstanding</span>
+                      }
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
-        <div style={{ marginTop: 16, padding: 12, background: 'rgba(255,255,255,0.03)', borderRadius: 8, fontSize: 12, color: '#AAAAAA', lineHeight: 1.6 }}>
-          Invoices, credits, and payment history are pulled from Xero via API.{' '}
-          <span style={{ color: '#00BCD4', cursor: 'pointer' }}>View in Finance module →</span>
+      )}
+
+      {/* ── Payment terms ── */}
+      <div className="moov-card" style={{ padding: 16 }}>
+        <div style={{ display: 'flex', gap: 24, fontSize: 12 }}>
+          <span><span style={{ color: '#666' }}>Payment terms: </span><span style={{ color: '#CCC', fontWeight: 600 }}>{c.payment_terms_days} days</span></span>
+          <span><span style={{ color: '#666' }}>Billing: </span><span style={{ color: '#CCC', fontWeight: 600 }}>{c.billing_cycle || '—'}</span></span>
+          {c.bond_amount_held > 0 && <span><span style={{ color: '#666' }}>Bond held: </span><span style={{ color: '#CCC', fontWeight: 600 }}>{gbp(c.bond_amount_held)}</span></span>}
         </div>
       </div>
     </div>
@@ -1248,7 +1463,7 @@ export default function CustomerRecord() {
       {activeTab === 'overview'  && <OverviewTab c={c} onSaved={handleCustomerSaved} onDeleteRequest={() => { setDeleteModal(true); setDeleteConfirm(''); }} />}
       {activeTab === 'contacts'  && <ContactsTab customerId={id} contacts={contacts} onRefresh={refetch} />}
       {activeTab === 'volume'    && <PerformanceTab customerId={c.id} />}
-      {activeTab === 'financial' && <FinancialTab c={c} creditPct={creditPct} />}
+      {activeTab === 'financial' && <FinancialTab c={c} />}
       {activeTab === 'comms'     && <CustomerCommsTab customerId={id} />}
       {activeTab === 'pricing'   && (
         <CustomerPricingTab customer={c}
