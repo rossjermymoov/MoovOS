@@ -9,6 +9,7 @@ import { billingApi } from '../../api/billing';
 import { customersApi } from '../../api/customers';
 import { format, parseISO } from 'date-fns';
 import { getCourierLogo } from '../../utils/courierLogos';
+import ReconciliationTab from './ReconciliationTab';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -1852,11 +1853,7 @@ export default function FinancePage() {
 
       {/* ── Tab: Reconciliation ────────────────────────────────────────── */}
       {activeTab === 'reconciliation' && (
-        <PlaceholderTab
-          title="Reconciliation"
-          description="Upload a carrier invoice CSV, match lines against your charges and flag discrepancies."
-          color="#7C3AED"
-        />
+        <ReconciliationTab />
       )}
 
       {/* ── Tab: Billed ────────────────────────────────────────────────── */}
