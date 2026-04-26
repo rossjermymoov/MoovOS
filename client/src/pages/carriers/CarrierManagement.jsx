@@ -2836,88 +2836,170 @@ function RateMatrix({ zones }) {
 // ─── LEVEL 3 — Zone config (accordion per zone) ───────────────────────────────
 
 function WeightBandsTable({ zoneId, bands, onRefresh }) {
-  const [adding, setAdding]       = useState(false);
-  const [editId, setEditId]       = useState(null);
-  const [editVal, setEditVal]     = useState('');
-  const [form, setForm]           = useState({ name:'', min_weight_kg:'', max_weight_kg:'', price_first:'', price_sub:'', cost_per_kg:'', cost_per_kg_threshold_kg:'30' });
+  const [adding,    setAdding]    = useState(false);
+  const [bandType,  setBandType]  = useState(null);   // null | 'flat' | 'per_kg'
+  const [editId,    setEditId]    = useState(null);
+  const [editVal,   setEditVal]   = useState('');
+  const [form,      setForm]      = useState({ name:'', min_weight_kg:'', max_weight_kg:'', price_first:'', price_sub:'', cost_per_kg:'' });
   const [confirmId, setConfirmId] = useState(null);
 
+  function openAdding() { setAdding(true); setBandType(null); setForm({ name:'', min_weight_kg:'', max_weight_kg:'', price_first:'', price_sub:'', cost_per_kg:'' }); }
+  function cancelAdding() { setAdding(false); setBandType(null); }
+
   const addBand = useMutation({
-    mutationFn: () => carriersApi.createWeightBand({
-      ...form,
-      zone_id: zoneId,
-      cost_per_kg:              form.cost_per_kg              !== '' ? parseFloat(form.cost_per_kg)              : null,
-      cost_per_kg_threshold_kg: form.cost_per_kg_threshold_kg !== '' ? parseFloat(form.cost_per_kg_threshold_kg) : 30,
-    }),
-    onSuccess: () => {
-      setAdding(false);
-      setForm({ name:'', min_weight_kg:'', max_weight_kg:'', price_first:'', price_sub:'', cost_per_kg:'', cost_per_kg_threshold_kg:'30' });
-      onRefresh();
+    mutationFn: () => {
+      const payload = { zone_id: zoneId, name: form.name?.trim() || null };
+      payload.min_weight_kg = parseFloat(form.min_weight_kg);
+      payload.max_weight_kg = parseFloat(form.max_weight_kg);
+      if (bandType === 'per_kg') {
+        // Pure per-kg band: no flat rate. Threshold = min weight of the band.
+        payload.price_first               = 0;
+        payload.price_sub                 = null;
+        payload.cost_per_kg               = parseFloat(form.cost_per_kg);
+        payload.cost_per_kg_threshold_kg  = parseFloat(form.min_weight_kg); // per-kg kicks in from band start
+      } else {
+        // Flat rate band
+        payload.price_first = parseFloat(form.price_first);
+        payload.price_sub   = form.price_sub !== '' ? parseFloat(form.price_sub) : null;
+        payload.cost_per_kg = null;
+      }
+      return carriersApi.createWeightBand(payload);
     },
+    onSuccess: () => { cancelAdding(); onRefresh(); },
   });
   const renameBand = useMutation({
     mutationFn: ({ id, name }) => carriersApi.updateWeightBand(id, { name }),
     onSuccess: () => { setEditId(null); setEditVal(''); onRefresh(); },
-  });
-  const updateBand = useMutation({
-    mutationFn: ({ id, ...data }) => carriersApi.updateWeightBand(id, data),
-    onSuccess: () => onRefresh(),
   });
   const delBand = useMutation({
     mutationFn: (id) => carriersApi.deleteWeightBand(id),
     onSuccess: () => { setConfirmId(null); onRefresh(); },
   });
 
+  // A band is "per-kg only" if it has a per-kg rate but no meaningful flat rate
+  const isPerKgBand = b => b.cost_per_kg != null && (b.price_first == null || parseFloat(b.price_first) === 0);
+
   return (
     <div style={{ marginTop:8 }}>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
         <span style={{ fontSize:12, fontWeight:700, color:'#AAAAAA', textTransform:'uppercase', letterSpacing:'0.05em' }}>Cost Price Bands</span>
-        <button onClick={() => setAdding(a=>!a)} style={{ background:'none', border:'none', color:'#00C853', cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', gap:4 }}>
-          <Plus size={12}/> Add Band
-        </button>
+        {!adding && (
+          <button onClick={openAdding} style={{ background:'none', border:'none', color:'#00C853', cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', gap:4 }}>
+            <Plus size={12}/> Add Band
+          </button>
+        )}
       </div>
+
+      {/* ── Add band form ─────────────────────────────────────────────────── */}
       {adding && (
-        <div style={{ marginBottom:10 }}>
-          <div style={{ display:'grid', gridTemplateColumns:'1.4fr 1fr 1fr 1fr 1fr auto', gap:8, marginBottom:6 }}>
-            <div className="pill-input-wrap" style={{ height:32 }}>
-              <input placeholder="Name (e.g. Parcel)" value={form.name} onChange={e => setForm(f=>({...f,name:e.target.value}))} style={{ fontSize:12 }}/>
-            </div>
-            {[['Min kg','min_weight_kg'],['Max kg','max_weight_kg'],['Cost 1st £','price_first'],['Cost Sub £','price_sub']].map(([ph,key]) => (
-              <div key={key} className="pill-input-wrap" style={{ height:32 }}>
-                <input type="number" step="0.001" placeholder={ph} value={form[key]} onChange={e => setForm(f=>({...f,[key]:e.target.value}))} style={{ fontSize:12 }}/>
+        <div style={{ border:'1px solid rgba(255,255,255,0.08)', borderRadius:10, padding:14, marginBottom:12, background:'rgba(255,255,255,0.02)' }}>
+
+          {/* Step 1 — Type picker */}
+          {!bandType && (
+            <div>
+              <div style={{ fontSize:12, color:'#888', marginBottom:10 }}>How is this band priced?</div>
+              <div style={{ display:'flex', gap:8 }}>
+                <button
+                  onClick={() => setBandType('flat')}
+                  style={{ flex:1, background:'rgba(0,200,83,0.06)', border:'1px solid rgba(0,200,83,0.25)', borderRadius:8, padding:'12px 10px', cursor:'pointer', textAlign:'left' }}
+                >
+                  <div style={{ fontSize:12, fontWeight:700, color:'#00C853', marginBottom:4 }}>Flat rate</div>
+                  <div style={{ fontSize:11, color:'#666' }}>Fixed £ per parcel — optionally different for additional parcels</div>
+                </button>
+                <button
+                  onClick={() => setBandType('per_kg')}
+                  style={{ flex:1, background:'rgba(0,188,212,0.06)', border:'1px solid rgba(0,188,212,0.25)', borderRadius:8, padding:'12px 10px', cursor:'pointer', textAlign:'left' }}
+                >
+                  <div style={{ fontSize:12, fontWeight:700, color:'#00BCD4', marginBottom:4 }}>£ per kg</div>
+                  <div style={{ fontSize:11, color:'#666' }}>Charge per kg above a minimum weight (e.g. DHL back-kilo)</div>
+                </button>
               </div>
-            ))}
-            <div/>
-          </div>
-          <div style={{ display:'grid', gridTemplateColumns:'1.4fr 1fr 1fr auto', gap:8 }}>
-            <div style={{ fontSize:11, color:'#555', display:'flex', alignItems:'center', paddingLeft:4 }}>
-              Per-kg rate (optional — for carriers like DHL that charge per kg above a threshold)
+              <button onClick={cancelAdding} style={{ marginTop:10, background:'none', border:'none', color:'#555', cursor:'pointer', fontSize:12 }}>Cancel</button>
             </div>
-            <div className="pill-input-wrap" style={{ height:32 }}>
-              <input type="number" step="0.0001" placeholder="£/kg above threshold" value={form.cost_per_kg}
-                onChange={e => setForm(f=>({...f,cost_per_kg:e.target.value}))} style={{ fontSize:12, color:'#00BCD4' }}/>
+          )}
+
+          {/* Step 2a — Flat rate fields */}
+          {bandType === 'flat' && (
+            <div>
+              <div style={{ fontSize:11, color:'#00C853', fontWeight:700, marginBottom:10, display:'flex', alignItems:'center', gap:6 }}>
+                <span style={{ background:'rgba(0,200,83,0.1)', border:'1px solid rgba(0,200,83,0.3)', borderRadius:20, padding:'1px 8px' }}>Flat rate</span>
+                <button onClick={() => setBandType(null)} style={{ background:'none', border:'none', color:'#555', cursor:'pointer', fontSize:11, marginLeft:'auto' }}>← Change type</button>
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1.6fr 1fr 1fr 1fr 1fr auto', gap:8 }}>
+                <div className="pill-input-wrap" style={{ height:32 }}>
+                  <input placeholder="Name (e.g. Parcel)" value={form.name} onChange={e => setForm(f=>({...f,name:e.target.value}))} style={{ fontSize:12 }}/>
+                </div>
+                {[['Min kg','min_weight_kg'],['Max kg','max_weight_kg'],['Cost 1st £','price_first'],['Cost Sub £','price_sub']].map(([ph,key]) => (
+                  <div key={key} className="pill-input-wrap" style={{ height:32 }}>
+                    <input type="number" step="0.001" placeholder={ph} value={form[key]} onChange={e => setForm(f=>({...f,[key]:e.target.value}))} style={{ fontSize:12 }}/>
+                  </div>
+                ))}
+                <button onClick={() => addBand.mutate()} disabled={addBand.isPending || !form.min_weight_kg || !form.max_weight_kg || !form.price_first} className="btn-primary" style={{ height:32 }}>
+                  {addBand.isPending ? '…' : <Check size={12}/>}
+                </button>
+              </div>
+              <div style={{ fontSize:11, color:'#555', marginTop:6, paddingLeft:2 }}>
+                Cost Sub is optional — used for 2nd+ parcel pricing on multi-parcel shipments.
+              </div>
+              {addBand.isError && <div style={{ fontSize:11, color:'#F44336', marginTop:6 }}>{addBand.error?.message}</div>}
             </div>
-            <div className="pill-input-wrap" style={{ height:32 }}>
-              <input type="number" step="0.001" placeholder="Threshold kg (default 30)" value={form.cost_per_kg_threshold_kg}
-                onChange={e => setForm(f=>({...f,cost_per_kg_threshold_kg:e.target.value}))} style={{ fontSize:12, color:'#00BCD4' }}/>
+          )}
+
+          {/* Step 2b — Per-kg fields */}
+          {bandType === 'per_kg' && (
+            <div>
+              <div style={{ fontSize:11, color:'#00BCD4', fontWeight:700, marginBottom:10, display:'flex', alignItems:'center', gap:6 }}>
+                <span style={{ background:'rgba(0,188,212,0.1)', border:'1px solid rgba(0,188,212,0.3)', borderRadius:20, padding:'1px 8px' }}>£ per kg</span>
+                <button onClick={() => setBandType(null)} style={{ background:'none', border:'none', color:'#555', cursor:'pointer', fontSize:11, marginLeft:'auto' }}>← Change type</button>
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1.6fr 1fr 1fr 1fr auto', gap:8 }}>
+                <div className="pill-input-wrap" style={{ height:32 }}>
+                  <input placeholder="Name (e.g. Heavy)" value={form.name} onChange={e => setForm(f=>({...f,name:e.target.value}))} style={{ fontSize:12 }}/>
+                </div>
+                <div className="pill-input-wrap" style={{ height:32 }}>
+                  <input type="number" step="0.001" placeholder="Min kg" value={form.min_weight_kg}
+                    onChange={e => setForm(f=>({...f,min_weight_kg:e.target.value}))} style={{ fontSize:12 }}/>
+                </div>
+                <div className="pill-input-wrap" style={{ height:32 }}>
+                  <input type="number" step="0.001" placeholder="Max kg" value={form.max_weight_kg}
+                    onChange={e => setForm(f=>({...f,max_weight_kg:e.target.value}))} style={{ fontSize:12 }}/>
+                </div>
+                <div className="pill-input-wrap" style={{ height:32 }}>
+                  <input type="number" step="0.0001" placeholder="£ per kg" value={form.cost_per_kg}
+                    onChange={e => setForm(f=>({...f,cost_per_kg:e.target.value}))} style={{ fontSize:12, color:'#00BCD4' }}/>
+                </div>
+                <button onClick={() => addBand.mutate()} disabled={addBand.isPending || !form.min_weight_kg || !form.max_weight_kg || !form.cost_per_kg} className="btn-primary" style={{ height:32 }}>
+                  {addBand.isPending ? '…' : <Check size={12}/>}
+                </button>
+              </div>
+              <div style={{ fontSize:11, color:'#555', marginTop:6, paddingLeft:2 }}>
+                Charged per kg (or part thereof) above the minimum weight of this band.
+                {form.min_weight_kg && form.cost_per_kg
+                  ? <span style={{ color:'#00BCD4', marginLeft:4 }}>
+                      e.g. {parseFloat(form.min_weight_kg)+5}kg → {Math.ceil(5)} × £{parseFloat(form.cost_per_kg||0).toFixed(4)} = £{(Math.ceil(5) * parseFloat(form.cost_per_kg||0)).toFixed(2)}
+                    </span>
+                  : null}
+              </div>
+              {addBand.isError && <div style={{ fontSize:11, color:'#F44336', marginTop:6 }}>{addBand.error?.message}</div>}
             </div>
-            <button onClick={() => addBand.mutate()} className="btn-primary" style={{ height:32 }}><Check size={12}/></button>
-          </div>
+          )}
         </div>
       )}
+
       {confirmId && <div style={{ marginBottom:8 }}><Confirm message="Delete weight band?" onConfirm={() => delBand.mutate(confirmId)} onCancel={() => setConfirmId(null)}/></div>}
+
+      {/* ── Bands table ──────────────────────────────────────────────────── */}
       <table className="moov-table" style={{ fontSize:12 }}>
         <thead>
           <tr>
-            <th>Name</th><th>Min kg</th><th>Max kg</th><th>Cost 1st</th><th>Cost Sub</th>
-            <th title="Per-kg rate above threshold (e.g. DHL back-kilo charge)">£/kg above</th>
-            <th></th>
+            <th>Name</th><th>Min kg</th><th>Max kg</th><th>Pricing</th><th></th>
           </tr>
         </thead>
         <tbody>
-          {bands.length === 0 && <tr><td colSpan={7} style={{ textAlign:'center', color:'#555' }}>No bands</td></tr>}
-          {bands.map(b => {
-            const threshold = b.cost_per_kg_threshold_kg != null ? parseFloat(b.cost_per_kg_threshold_kg) : 30;
+          {bands.length === 0 && <tr><td colSpan={5} style={{ textAlign:'center', color:'#555' }}>No bands</td></tr>}
+          {bands.sort((a,b) => parseFloat(a.min_weight_kg) - parseFloat(b.min_weight_kg)).map(b => {
+            const perKg = isPerKgBand(b);
+            const threshold = b.cost_per_kg_threshold_kg != null ? parseFloat(b.cost_per_kg_threshold_kg) : parseFloat(b.min_weight_kg);
             return (
               <tr key={b.id}>
                 <td>
@@ -2934,23 +3016,33 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
                         style={{ background:'none', border:'none', color:'#555', cursor:'pointer', padding:0 }}>✕</button>
                     </div>
                   ) : (
-                    <span onClick={() => { setEditId(b.id); setEditVal(b.name || ''); }}
-                      style={{ cursor:'pointer', color: b.name ? '#fff' : '#444', fontStyle: b.name ? 'normal' : 'italic' }}
-                      title="Click to name this band">
-                      {b.name || 'unnamed'}
-                    </span>
+                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                      <span onClick={() => { setEditId(b.id); setEditVal(b.name || ''); }}
+                        style={{ cursor:'pointer', color: b.name ? '#fff' : '#444', fontStyle: b.name ? 'normal' : 'italic' }}
+                        title="Click to name this band">
+                        {b.name || 'unnamed'}
+                      </span>
+                      {perKg && (
+                        <span style={{ fontSize:9, fontWeight:700, background:'rgba(0,188,212,0.1)', border:'1px solid rgba(0,188,212,0.3)', color:'#00BCD4', borderRadius:20, padding:'1px 6px', textTransform:'uppercase', letterSpacing:'0.05em' }}>£/kg</span>
+                      )}
+                    </div>
                   )}
                 </td>
-                <td>{parseFloat(b.min_weight_kg).toFixed(3)}</td>
-                <td>{parseFloat(b.max_weight_kg).toFixed(3)}</td>
-                <td style={{ color:'#00C853' }}>£{parseFloat(b.price_first).toFixed(2)}</td>
-                <td style={{ color:'#FFC107' }}>{b.price_sub ? `£${parseFloat(b.price_sub).toFixed(2)}` : <span style={{ color:'#555' }}>—</span>}</td>
-                <td style={{ color: b.cost_per_kg ? '#00BCD4' : '#555' }}>
-                  {b.cost_per_kg
-                    ? <span title={`£${parseFloat(b.cost_per_kg).toFixed(4)} per kg (or part thereof) above ${threshold} kg`}>
-                        £{parseFloat(b.cost_per_kg).toFixed(4)} &gt;{threshold}kg
-                      </span>
-                    : '—'}
+                <td style={{ fontFamily:'monospace', color:'#AAAAAA' }}>{parseFloat(b.min_weight_kg).toFixed(3)}</td>
+                <td style={{ fontFamily:'monospace', color:'#AAAAAA' }}>{parseFloat(b.max_weight_kg).toFixed(3)}</td>
+                <td>
+                  {perKg ? (
+                    <span style={{ color:'#00BCD4', fontFamily:'monospace', fontSize:12 }}
+                      title={`£${parseFloat(b.cost_per_kg).toFixed(4)} per kg above ${threshold}kg`}>
+                      £{parseFloat(b.cost_per_kg).toFixed(4)}/kg above {threshold}kg
+                    </span>
+                  ) : (
+                    <span style={{ fontFamily:'monospace', fontSize:12 }}>
+                      <span style={{ color:'#00C853' }}>£{parseFloat(b.price_first).toFixed(2)}</span>
+                      {b.price_sub ? <span style={{ color:'#FFC107', marginLeft:6 }}>sub £{parseFloat(b.price_sub).toFixed(2)}</span> : null}
+                      {b.cost_per_kg ? <span style={{ color:'#00BCD4', marginLeft:6 }}>+£{parseFloat(b.cost_per_kg).toFixed(4)}/kg&gt;{threshold}kg</span> : null}
+                    </span>
+                  )}
                 </td>
                 <td style={{ textAlign:'right' }}>
                   <button onClick={() => setConfirmId(b.id)} style={{ background:'none', border:'none', color:'#555', cursor:'pointer' }}><Trash2 size={11}/></button>
