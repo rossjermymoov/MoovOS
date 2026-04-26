@@ -364,7 +364,6 @@ async function lookupViaServicePricing(customerId, serviceCode, weightKg, postco
     JOIN courier_services   cs  ON cs.id  = csp.service_id
     JOIN zones              z   ON z.courier_service_id = cs.id
     JOIN weight_bands       wb  ON wb.zone_id = z.id
-                                AND wb.carrier_rate_card_id = crc.id
     WHERE csp.customer_id = $1
       AND cs.service_code ILIKE $2
     ORDER BY z.name, wb.min_weight_kg NULLS LAST
@@ -452,8 +451,16 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
     zoneName = resolved;
   }
 
-  // ── Step 2: sell price — match directly on numeric weight bounds ─────────────
-  const priceRes = await query(`
+  // ── Step 2: sell price ───────────────────────────────────────────────────────
+  // First try numeric weight bounds (fast, authoritative).
+  // Fall back to text-based weight_class_name matching if bounds are NULL
+  // (handles customers whose rates haven't had migration 104 applied yet,
+  // and flat-rate services with a single band covering all weights).
+
+  let priceRow = null;
+
+  // 2a: numeric match
+  const numericRes = await query(`
     SELECT id, price, price_sub, zone_name, weight_class_name
     FROM customer_rates
     WHERE customer_id       = $1
@@ -465,7 +472,30 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
     LIMIT 1
   `, [customerId, serviceCode, zoneName, weightKg ?? 0]);
 
-  if (!priceRes.rows.length) {
+  if (numericRes.rows.length) {
+    priceRow = numericRes.rows[0];
+  } else {
+    // 2b: text-based fallback — use weight_class_name parser
+    const allRes = await query(`
+      SELECT id, price, price_sub, zone_name, weight_class_name
+      FROM customer_rates
+      WHERE customer_id       = $1
+        AND service_code ILIKE $2
+        AND zone_name    ILIKE $3
+      ORDER BY weight_class_name
+    `, [customerId, serviceCode, zoneName]);
+
+    // Find first row whose weight_class_name text covers the requested weight
+    priceRow = allRes.rows.find(r => coversWeight(r.weight_class_name, weightKg)) || null;
+
+    // If text matching also fails but there's exactly one row (flat rate, no banding)
+    // use it regardless — a single rate covers all weights by definition
+    if (!priceRow && allRes.rows.length === 1) {
+      priceRow = allRes.rows[0];
+    }
+  }
+
+  if (!priceRow) {
     return { rate: null, reason: 'no matching price' };
   }
 
@@ -488,13 +518,12 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
     ? parseFloat(costRes.rows[0].carrier_cost_sub)
     : null;
 
-  const rateRow = priceRes.rows[0];
   return {
     rate: {
-      price:             parseFloat(rateRow.price),
-      price_sub:         rateRow.price_sub != null ? parseFloat(rateRow.price_sub) : null,
-      zone_name:         rateRow.zone_name,
-      weight_class_name: rateRow.weight_class_name,
+      price:             parseFloat(priceRow.price),
+      price_sub:         priceRow.price_sub != null ? parseFloat(priceRow.price_sub) : null,
+      zone_name:         priceRow.zone_name,
+      weight_class_name: priceRow.weight_class_name,
       cost_price:        carrierCost,
       cost_price_sub:    carrierCostSub,
     },
