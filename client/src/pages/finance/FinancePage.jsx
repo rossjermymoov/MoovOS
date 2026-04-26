@@ -20,6 +20,10 @@ function fmt(dt) {
   if (!dt) return '—';
   try { return format(parseISO(dt), 'd MMM yyyy'); } catch { return dt; }
 }
+function fmtTime(dt) {
+  if (!dt) return '';
+  try { return format(parseISO(dt), 'HH:mm'); } catch { return ''; }
+}
 
 // ─── Stats card ───────────────────────────────────────────────────────────────
 
@@ -917,7 +921,10 @@ function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
                       <div style={{ fontSize: 12 }}>{charge.ship_to_name || '—'}</div>
                       <div style={{ fontSize: 11, color: '#555' }}>{charge.ship_to_postcode || ''}</div>
                     </td>
-                    <td style={{ ...td, fontSize: 12, color: '#888' }}>{fmt(charge.created_at)}</td>
+                    <td style={{ ...td, fontSize: 12, color: '#888' }}>
+                      <div>{fmt(charge.created_at)}</div>
+                      <div style={{ fontSize: 11, color: '#555' }}>{fmtTime(charge.created_at)}</div>
+                    </td>
                     <td style={{ ...td, fontSize: 12, color: '#888' }}>
                       {charge.zone_name || '—'}
                       {charge.weight_class_name && <div style={{ fontSize: 11, color: '#555' }}>{charge.weight_class_name}</div>}
@@ -1654,7 +1661,8 @@ export default function FinancePage() {
                 >
                   {/* Date */}
                   <td style={{ ...td, color: '#888', fontSize: 12, whiteSpace: 'nowrap' }}>
-                    {fmt(charge.created_at)}
+                    <div>{fmt(charge.created_at)}</div>
+                    <div style={{ fontSize: 11, color: '#555' }}>{fmtTime(charge.created_at)}</div>
                   </td>
 
                   {/* Customer */}
