@@ -165,6 +165,91 @@ function SubPriceCell({ rateId, initialSubPrice, onSaved }) {
   );
 }
 
+// ─── Inline editable per-kg rate cell (cyan) ──────────────────
+function PerKgCell({ rateId, initialPerKgRate, onSaved }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal]         = useState(initialPerKgRate != null ? String(parseFloat(initialPerKgRate).toFixed(2)) : '');
+  const inputRef = useRef(null);
+
+  const hasValue = initialPerKgRate != null;
+
+  function startEdit() { setEditing(true); setTimeout(() => inputRef.current?.select(), 0); }
+
+  function commit() {
+    const trimmed = val.trim();
+    if (trimmed === '' || trimmed === '-') {
+      onSaved(rateId, null);
+      setEditing(false);
+      return;
+    }
+    const parsed = parseFloat(trimmed);
+    if (isNaN(parsed) || parsed < 0) {
+      setVal(hasValue ? String(parseFloat(initialPerKgRate).toFixed(2)) : '');
+      setEditing(false);
+      return;
+    }
+    onSaved(rateId, parsed);
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        onBlur={commit}
+        placeholder="£/kg"
+        onKeyDown={e => {
+          if (e.key === 'Enter') commit();
+          if (e.key === 'Escape') { setVal(hasValue ? String(parseFloat(initialPerKgRate).toFixed(2)) : ''); setEditing(false); }
+        }}
+        style={{ ...inp, width: 72, textAlign: 'right', color: '#00BCD4', fontWeight: 700, fontFamily: 'monospace', border: '1px solid rgba(0,188,212,0.6)', background: 'rgba(0,188,212,0.08)' }}
+      />
+    );
+  }
+
+  if (hasValue) {
+    return (
+      <span
+        onClick={startEdit}
+        title="Per-kg rate above threshold — click to edit, clear to remove"
+        style={{
+          fontSize: 11, fontWeight: 700, color: '#00BCD4',
+          cursor: 'pointer', padding: '2px 7px', borderRadius: 5,
+          border: '1px solid rgba(0,188,212,0.35)',
+          background: 'rgba(0,188,212,0.08)',
+          fontFamily: 'monospace', display: 'inline-block',
+          transition: 'border-color 0.12s, background 0.12s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(0,188,212,0.7)'; e.currentTarget.style.background = 'rgba(0,188,212,0.15)'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,188,212,0.35)'; e.currentTarget.style.background = 'rgba(0,188,212,0.08)'; }}
+      >
+        £{parseFloat(initialPerKgRate).toFixed(2)}/kg
+      </span>
+    );
+  }
+
+  // No per-kg rate set — show a faint add button
+  return (
+    <span
+      onClick={startEdit}
+      title="Add per-kg rate (above weight threshold)"
+      style={{
+        fontSize: 11, color: '#333', cursor: 'pointer',
+        padding: '2px 7px', borderRadius: 5,
+        border: '1px dashed rgba(0,188,212,0.15)',
+        fontFamily: 'monospace',
+        transition: 'color 0.12s, border-color 0.12s',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.color = '#00BCD4'; e.currentTarget.style.borderColor = 'rgba(0,188,212,0.4)'; }}
+      onMouseLeave={e => { e.currentTarget.style.color = '#333'; e.currentTarget.style.borderColor = 'rgba(0,188,212,0.15)'; }}
+    >
+      + £/kg
+    </span>
+  );
+}
+
 // ─── NL search parser ─────────────────────────────────────────
 function parseNLQuery(query) {
   const q = query.toLowerCase();
@@ -212,7 +297,7 @@ function weightClassCoversKg(weightClassName, weightKg) {
 }
 
 // ─── International rate overlay ───────────────────────────────
-function InternationalRateOverlay({ service, customerId, activeCardId, onClose, onRateUpdate, onRateDelete, onRateCreated }) {
+function InternationalRateOverlay({ service, customerId, activeCardId, onClose, onRateUpdate, onRateDelete, onRateCreated, onPerKgUpdate }) {
   const [searchText, setSearchText] = useState('');
   const [parsed, setParsed]         = useState({ weightKg: null, zoneTerm: null });
   const [markup, setMarkup]         = useState('');
@@ -449,8 +534,9 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
           <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
             <PriceCell rateId={exactMatch.id} initialPrice={exactMatch.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
             <SubPriceCell rateId={exactMatch.id} initialSubPrice={exactMatch.price_sub} onSaved={onRateUpdate} />
+            <PerKgCell rateId={exactMatch.id} initialPerKgRate={exactMatch.per_kg_rate} onSaved={onPerKgUpdate} />
           </div>
-          <div style={{ fontSize: 12, color: '#444', marginTop: 4 }}>Click a price to edit · amber = 2nd+ parcels</div>
+          <div style={{ fontSize: 12, color: '#444', marginTop: 4 }}>Click a price to edit · amber = 2nd+ parcels · cyan = per-kg above threshold</div>
         </div>
       )}
 
@@ -488,6 +574,7 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
                             ? <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
                                 <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
                                 <SubPriceCell rateId={rate.id} initialSubPrice={rate.price_sub} onSaved={onRateUpdate} />
+                                <PerKgCell rateId={rate.id} initialPerKgRate={rate.per_kg_rate} onSaved={onPerKgUpdate} />
                               </div>
                             : <span style={{ color: '#333', fontSize: 12 }}>—</span>}
                         </td>
@@ -504,7 +591,8 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
                 <tr style={{ background: '#0A0B1E', position: 'sticky', top: 0, zIndex: 10 }}>
                   <th style={{ textAlign: 'left', padding: '12px 20px 12px 28px', color: '#AAAAAA', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>Zone</th>
                   <th style={{ textAlign: 'right', padding: '12px 20px', color: '#00C853', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>1st parcel</th>
-                  <th style={{ textAlign: 'right', padding: '12px 28px 12px 20px', color: '#FFC107', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>2nd+</th>
+                  <th style={{ textAlign: 'right', padding: '12px 20px', color: '#FFC107', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>2nd+</th>
+                  <th style={{ textAlign: 'right', padding: '12px 28px 12px 20px', color: '#00BCD4', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>£/kg</th>
                 </tr>
               </thead>
               <tbody>
@@ -514,8 +602,11 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
                     <td style={{ textAlign: 'right', padding: '8px 20px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
                       <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
                     </td>
-                    <td style={{ textAlign: 'right', padding: '8px 28px 8px 20px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                    <td style={{ textAlign: 'right', padding: '8px 20px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
                       <SubPriceCell rateId={rate.id} initialSubPrice={rate.price_sub} onSaved={onRateUpdate} />
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '8px 28px 8px 20px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                      <PerKgCell rateId={rate.id} initialPerKgRate={rate.per_kg_rate} onSaved={onPerKgUpdate} />
                     </td>
                   </tr>
                 ))}
@@ -606,7 +697,7 @@ function NewPriceCell({ service, customerId, zoneName, weightClassName, onCreate
 // price use PriceCell (edit/delete).  Zones with no price use NewPriceCell
 // (click → type → auto-creates the rate row).  Zone names and weight classes
 // are read-only — they come from the carrier, not the customer.
-function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateDelete, onRateCreated }) {
+function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateDelete, onRateCreated, onPerKgUpdate }) {
   const [overlayOpen, setOverlay] = useState(false);
   const isIntl = service.service_type === 'international';
 
@@ -666,6 +757,7 @@ function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateD
             onRateUpdate={onRateUpdate}
             onRateDelete={onRateDelete}
             onRateCreated={onRateCreated}
+            onPerKgUpdate={onPerKgUpdate}
           />
         )}
       </>
@@ -726,6 +818,7 @@ function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateD
                       <>
                         <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
                         <SubPriceCell rateId={rate.id} initialSubPrice={rate.price_sub} onSaved={onRateUpdate} />
+                        <PerKgCell rateId={rate.id} initialPerKgRate={rate.per_kg_rate} onSaved={onPerKgUpdate} />
                       </>
                     ) : (
                       <NewPriceCell
@@ -748,7 +841,7 @@ function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateD
 }
 
 // ─── Courier group ────────────────────────────────────────────
-function CourierGroup({ courierName, services, customerId, activeCardId, onRateUpdate, onRateDelete, onRateCreated }) {
+function CourierGroup({ courierName, services, customerId, activeCardId, onRateUpdate, onRateDelete, onRateCreated, onPerKgUpdate }) {
   const [open, setOpen] = useState(true);
   const totalRates = services.reduce((a, s) => a + s.rate_count, 0);
   const hasIntl    = services.some(s => s.service_type === 'international');
@@ -770,6 +863,7 @@ function CourierGroup({ courierName, services, customerId, activeCardId, onRateU
           onRateUpdate={onRateUpdate}
           onRateDelete={onRateDelete}
           onRateCreated={onRateCreated}
+          onPerKgUpdate={onPerKgUpdate}
         />
       ))}
     </div>
@@ -1296,6 +1390,10 @@ export default function CustomerPricingTab({ customer }) {
     else        await api.patch(`/customer-rates/rate/${rateId}`, { price });
     qc.invalidateQueries(['customer-rates', customer.id]);
   }
+  async function handlePerKgUpdate(rateId, perKgRate) {
+    await api.patch(`/customer-rates/rate/${rateId}`, { per_kg_rate: perKgRate });
+    qc.invalidateQueries(['customer-rates', customer.id]);
+  }
   async function handlePriceDelete(rateId) {
     await api.delete(`/customer-rates/rate/${rateId}`);
     qc.invalidateQueries(['customer-rates', customer.id]);
@@ -1353,6 +1451,7 @@ export default function CustomerPricingTab({ customer }) {
           onRateUpdate={handlePriceUpdate}
           onRateDelete={handlePriceDelete}
           onRateCreated={() => qc.invalidateQueries(['customer-rates', customer.id])}
+          onPerKgUpdate={handlePerKgUpdate}
         />
       ))}
     </div>

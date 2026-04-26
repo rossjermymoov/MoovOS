@@ -13,14 +13,14 @@ import { query } from '../db/index.js';
 
 const router = express.Router();
 
-// ─── PATCH /rate/:rateId — update price and/or price_sub ──────
+// ─── PATCH /rate/:rateId — update price, price_sub, and/or per_kg fields ──────
 router.patch('/rate/:rateId', async (req, res, next) => {
   try {
     const { rateId } = req.params;
-    const { price, price_sub } = req.body;
+    const { price, price_sub, per_kg_rate, per_kg_threshold_kg } = req.body;
 
-    if (price == null && price_sub === undefined) {
-      return res.status(400).json({ error: 'price or price_sub is required' });
+    if (price == null && price_sub === undefined && per_kg_rate === undefined && per_kg_threshold_kg === undefined) {
+      return res.status(400).json({ error: 'price, price_sub, per_kg_rate, or per_kg_threshold_kg is required' });
     }
 
     const sets   = [];
@@ -34,6 +34,15 @@ router.patch('/rate/:rateId', async (req, res, next) => {
       // Allow explicit null to clear a sub price
       values.push(price_sub === null ? null : parseFloat(price_sub));
       sets.push(`price_sub = $${values.length}`);
+    }
+    if (per_kg_rate !== undefined) {
+      // Allow explicit null to clear per-kg rate
+      values.push(per_kg_rate === null ? null : parseFloat(per_kg_rate));
+      sets.push(`per_kg_rate = $${values.length}`);
+    }
+    if (per_kg_threshold_kg !== undefined) {
+      values.push(per_kg_threshold_kg === null ? null : parseFloat(per_kg_threshold_kg));
+      sets.push(`per_kg_threshold_kg = $${values.length}`);
     }
 
     values.push(rateId);
@@ -204,7 +213,8 @@ router.get('/:customerId', async (req, res, next) => {
     // weight_class_name (e.g. "2KG"→2, "5KG"→5, "10KG"→10) so that "2KG" sorts
     // before "5KG" before "10KG", rather than alphabetically ("10KG" first).
     const ratesRes = await query(`
-      SELECT id, service_id, zone_name, weight_class_name, price, price_sub
+      SELECT id, service_id, zone_name, weight_class_name, price, price_sub,
+             per_kg_rate, per_kg_threshold_kg
       FROM customer_rates
       WHERE customer_id = $1
       ORDER BY
@@ -222,11 +232,13 @@ router.get('/:customerId', async (req, res, next) => {
     for (const row of ratesRes.rows) {
       if (!ratesByService[row.service_id]) ratesByService[row.service_id] = [];
       ratesByService[row.service_id].push({
-        id:                row.id,
-        zone_name:         row.zone_name,
-        weight_class_name: row.weight_class_name,
-        price:             row.price,
-        price_sub:         row.price_sub,
+        id:                  row.id,
+        zone_name:           row.zone_name,
+        weight_class_name:   row.weight_class_name,
+        price:               row.price,
+        price_sub:           row.price_sub,
+        per_kg_rate:         row.per_kg_rate,
+        per_kg_threshold_kg: row.per_kg_threshold_kg,
       });
     }
 
