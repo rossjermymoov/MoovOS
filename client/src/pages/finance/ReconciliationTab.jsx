@@ -66,6 +66,9 @@ function parseCsvLine(line) {
   return cols;
 }
 
+// Per-shipment surcharge rates — used post-lookup to allocate invoice-level surcharges
+const HGV_RATE_PER_PARCEL = 0.13; // £0.13 per parcel — update when DHL changes rate
+
 function parseDhlCsv(text) {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   const shipmentMap = {};   // reference → [{ reference, carrier_cost, carrier_surcharges, carrier_total, ... }]
@@ -79,14 +82,6 @@ function parseDhlCsv(text) {
   let colValue    = 5;   // fallback: "Value" (base freight)
   let colRef      = 11;  // fallback: "Reference"
   let colService  = 20;  // fallback: "Service Desc"
-
-  // DHL per-shipment surcharge columns are W–AE (0-indexed 22–30).
-  // These contain itemised surcharge amounts (fuel, HGV, residential, etc.)
-  // that are added on top of the base freight for each shipment.
-  // We sum all non-zero values across these columns to get the per-shipment
-  // surcharge total, then carrier_total = base + surcharges.
-  const SURCHARGE_COLS_START = 22; // W
-  const SURCHARGE_COLS_END   = 30; // AE
 
   if (lines.length > 0) {
     const header = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
@@ -110,7 +105,7 @@ function parseDhlCsv(text) {
     if (isNaN(value) || value === 0) { skipped++; continue; }
 
     // Invoice-level surcharge rows — no MP- reference, description contains "SURCHARGE"
-    // These are the aggregated totals (sum of respective W–AE column across all shipments).
+    // These are the totals we use to allocate surcharges proportionally per shipment.
     if (!ref.startsWith('MP-') && svcDesc.includes('SURCHARGE')) {
       surcharges.push({ description: (cols[colService] || '').trim(), value });
       parsed++;
@@ -118,25 +113,16 @@ function parseDhlCsv(text) {
     }
 
     // Normal shipment row — must have MP- reference.
-    // DHL bills outbound and return as SEPARATE lines with the same reference,
-    // so we keep every row individually (no summing).
+    // carrier_surcharges and carrier_total are set to 0/base here;
+    // they are recalculated post-lookup once we know parcel_count from the DB.
     if (ref.startsWith('MP-')) {
       const invoiceServiceName = (cols[colService] || '').trim();
-
-      // Sum per-shipment surcharges from columns W–AE
-      let carrierSurcharges = 0;
-      for (let col = SURCHARGE_COLS_START; col <= SURCHARGE_COLS_END; col++) {
-        const raw = (cols[col] || '').replace(/[£,\s]/g, '');
-        const n   = parseFloat(raw);
-        if (!isNaN(n) && n !== 0) carrierSurcharges += Math.abs(n);
-      }
-
       shipmentMap[ref] = shipmentMap[ref] || [];
       shipmentMap[ref].push({
         reference:            ref,
-        carrier_cost:         value,                    // base freight only
-        carrier_surcharges:   carrierSurcharges,        // sum of columns W–AE
-        carrier_total:        value + carrierSurcharges, // what DHL actually charges
+        carrier_cost:         value,   // base freight only (surcharges allocated post-lookup)
+        carrier_surcharges:   0,       // populated after DB lookup
+        carrier_total:        value,   // populated after DB lookup
         invoice_service_name: invoiceServiceName,
       });
       parsed++;
@@ -764,25 +750,51 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           lines.sort((a, b) => a.carrier_cost - b.carrier_cost);
         }
 
+        // ── Post-lookup surcharge allocation ──────────────────────────────────
+        // DHL invoice surcharges are invoice-level totals with no per-shipment breakdown.
+        // Fuel is allocated proportionally to each shipment's share of the total net cost.
+        // HGV is calculated as parcel_count × £0.13 per shipment (from DB).
+        const invoiceFuelTotal = surcharges
+          .filter(s => s.description.toUpperCase().includes('FUEL'))
+          .reduce((sum, s) => sum + s.value, 0);
+        const invoiceHgvTotal = surcharges
+          .filter(s => s.description.toUpperCase().includes('HGV'))
+          .reduce((sum, s) => sum + s.value, 0);
+
+        // Total base cost across ALL invoice shipments (denominator for proportional fuel)
+        const totalInvoiceBase = shipments.reduce((sum, s) => sum + s.carrier_cost, 0);
+
+        // First pass: assign bestCharge (matching against base cost for now)
         const rows = shipments.map(s => {
           const group = groupMap[s.reference] || null;
-
           let bestCharge = null;
           if (group) {
             const pool = available[s.reference];
             if (pool && pool.length > 0) {
-              // Pick the charge whose total_cost_price is closest to the invoice carrier_total
-              // (carrier_total = base + per-shipment W-AE surcharges from invoice)
               pool.sort((a, b) =>
-                Math.abs((a.total_cost_price ?? Infinity) - s.carrier_total) -
-                Math.abs((b.total_cost_price ?? Infinity) - s.carrier_total)
+                Math.abs((a.base_cost_price ?? Infinity) - s.carrier_cost) -
+                Math.abs((b.base_cost_price ?? Infinity) - s.carrier_cost)
               );
-              bestCharge = pool.shift(); // claim it — can't be used by another line
+              bestCharge = pool.shift();
             }
           }
+          return { ...s, group, bestCharge };
+        });
 
-          const status = getStatus(s.carrier_total, bestCharge || null);
-          return { ...s, group, bestCharge, status };
+        // Second pass: calculate carrier_total with allocated surcharges per shipment
+        rows.forEach(row => {
+          const fuelAlloc = totalInvoiceBase > 0
+            ? (row.carrier_cost / totalInvoiceBase) * invoiceFuelTotal
+            : 0;
+          const parcelCount = row.bestCharge?.parcel_count ?? 1;
+          const hgvAlloc = invoiceHgvTotal > 0
+            ? parcelCount * HGV_RATE_PER_PARCEL
+            : 0;
+          row.carrier_fuel_alloc    = fuelAlloc;
+          row.carrier_hgv_alloc     = hgvAlloc;
+          row.carrier_surcharges    = fuelAlloc + hgvAlloc;
+          row.carrier_total         = row.carrier_cost + row.carrier_surcharges;
+          row.status                = getStatus(row.carrier_total, row.bestCharge || null);
         });
 
         setResults(rows);
@@ -806,12 +818,8 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
     : null;
 
   // ── Surcharge reconciliation totals ──
-  // DHL invoices: per-shipment lines = base freight only; surcharges are invoice-level totals.
   // FUEL: compare invoice fuel total vs sum of stored fuel charge cost_prices across matched.
-  // HGV: compare invoice HGV total vs total_parcels × HGV_RATE_PER_PARCEL.
-  // Fuel cannot be reconciled per-shipment (it's a proportional allocation of invoice total).
-  const HGV_RATE_PER_PARCEL = 0.13; // £0.13 per parcel — update when DHL changes rate
-
+  // HGV: compare invoice HGV total vs total_parcels × HGV_RATE_PER_PARCEL (defined above).
   const matchedWithCost = results
     ? results.filter(r => r.bestCharge?.base_cost_price != null)
     : [];
@@ -1275,7 +1283,9 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                           </span>
                           {invoiceHasSurcharge && (
                             <div style={{ fontSize: 10, color: '#666', marginTop: 1 }}>
-                              base {gbp(row.carrier_cost)} + {gbp(row.carrier_surcharges)}
+                              {gbp(row.carrier_cost)} base
+                              {row.carrier_fuel_alloc > 0.005 && ` + ${gbp(row.carrier_fuel_alloc)} fuel`}
+                              {row.carrier_hgv_alloc  > 0.005 && ` + ${gbp(row.carrier_hgv_alloc)} HGV`}
                             </div>
                           )}
                         </td>
