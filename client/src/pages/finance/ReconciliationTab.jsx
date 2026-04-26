@@ -9,7 +9,7 @@
  *   5. Bulk approve / flag actions
  */
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { Upload, X, CheckCircle, AlertTriangle, XCircle, RefreshCw, ChevronRight, FileText } from 'lucide-react';
 import { getCourierLogo } from '../../utils/courierLogos';
@@ -130,19 +130,19 @@ function parseDhlCsv(text) {
 
 // ─── Status helpers ───────────────────────────────────────────────────────────
 
-// Exact match only — carrier invoice must equal our cost price to the penny.
-// A half-penny tolerance (0.005) guards against floating-point rounding of
-// database numeric values, but anything ≥ 1p is a discrepancy.
+// Exact match only — carrier invoice must equal our total cost price to the penny.
+// A half-penny tolerance (0.005) guards against floating-point rounding.
+// `group` is the server response object: { total_cost_price, has_null_cost, has_return, ... }
 const TOLERANCE_ABS = 0.005;
 
-function getStatus(carrierCost, charge) {
-  if (!charge) {
+function getStatus(carrierCost, group) {
+  if (!group) {
     return { code: 'red', label: 'Not Found', color: '#F44336', icon: 'x' };
   }
-  if (charge.cost_price == null) {
+  if (group.has_null_cost) {
     return { code: 'amber', label: 'No Cost Recorded', color: '#FFC107', icon: 'warn' };
   }
-  const diff = Math.abs(parseFloat(carrierCost) - parseFloat(charge.cost_price));
+  const diff = Math.abs(parseFloat(carrierCost) - group.total_cost_price);
   if (diff <= TOLERANCE_ABS) {
     return { code: 'green', label: 'Match', color: '#00C853', icon: 'check' };
   }
@@ -438,51 +438,51 @@ function FileDropZone({ carrier, onParsed, onBack }) {
 // ─── Step 3: Results table ────────────────────────────────────────────────────
 
 function ResultsTable({ carrier, parseResult, fileName, onBack }) {
-  const [results,   setResults]   = useState(null);   // null = not yet fetched
-  const [loading,   setLoading]   = useState(false);
-  const [error,     setError]     = useState(null);
-  const [filter,    setFilter]    = useState('all');  // 'all' | 'green' | 'amber' | 'red'
-  const [selected,  setSelected]  = useState(new Set());
+  const [results,      setResults]      = useState(null);
+  const [loading,      setLoading]      = useState(false);
+  const [error,        setError]        = useState(null);
+  const [filter,       setFilter]       = useState('all');
+  const [selected,     setSelected]     = useState(new Set());
+  const [refreshCount, setRefreshCount] = useState(0);
 
   const { shipments, surcharges } = parseResult;
 
-  // ── Lookup on mount ──
-  const hasLookedUp = useRef(false);
-  const runLookup = useCallback(async () => {
-    if (hasLookedUp.current) return;
-    hasLookedUp.current = true;
-    setLoading(true);
-    setError(null);
-    try {
-      const refs = shipments.map(s => s.reference);
-      const resp = await api.post('/reconciliation/bulk-lookup', { courier: carrier.code, references: refs });
-      const { matched, unmatched } = resp.data;
+  // ── Lookup — runs on mount and whenever refreshCount increments ──────────
+  // useEffect (not an inline call) ensures the fetch is never stale and the
+  // Refresh button always hits the DB fresh (important after cost price edits).
+  useEffect(() => {
+    let cancelled = false;
+    async function doLookup() {
+      setLoading(true);
+      setError(null);
+      setResults(null);
+      try {
+        const refs = shipments.map(s => s.reference);
+        const resp = await api.post('/reconciliation/bulk-lookup', { courier: carrier.code, references: refs });
+        if (cancelled) return;
+        const { matched } = resp.data;
 
-      // Build a map from reference → charge
-      const chargeMap = {};
-      for (const ch of matched) chargeMap[ch.reference] = ch;
+        // Build a map from reference → grouped result (server already grouped by ref)
+        const groupMap = {};
+        for (const g of matched) groupMap[g.reference] = g;
 
-      // Merge carrier invoice rows with charge data
-      const rows = shipments.map(s => {
-        const charge = chargeMap[s.reference] || null;
-        const status = getStatus(s.carrier_cost, charge);
-        return { ...s, charge, status };
-      });
+        // Merge each invoice row with its DB group
+        const rows = shipments.map(s => {
+          const group  = groupMap[s.reference] || null;
+          const status = getStatus(s.carrier_cost, group);
+          return { ...s, group, status };
+        });
 
-      // Also add rows for unmatched (shouldn't happen often — these are in the DB but not in invoice)
-      setResults(rows);
-    } catch (e) {
-      setError(e.response?.data?.error || e.message);
-      hasLookedUp.current = false;
-    } finally {
-      setLoading(false);
+        setResults(rows);
+      } catch (e) {
+        if (!cancelled) setError(e.response?.data?.error || e.message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
-  }, [carrier.code, shipments]);
-
-  // Run lookup automatically
-  if (!hasLookedUp.current && !loading && !error) {
-    runLookup();
-  }
+    doLookup();
+    return () => { cancelled = true; };
+  }, [refreshCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Stats ──
   const counts = results
@@ -561,7 +561,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
         </div>
         {!loading && results && (
           <button
-            onClick={() => { hasLookedUp.current = false; setResults(null); runLookup(); }}
+            onClick={() => setRefreshCount(c => c + 1)}
             style={{
               marginLeft: 'auto', background: 'none',
               border: '1px solid rgba(255,255,255,0.12)',
@@ -697,8 +697,8 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
               </div>
               <div style={{ fontSize: 22, fontWeight: 800, color: '#00C853' }}>
                 {gbp(results
-                  .filter(r => r.charge?.cost_price != null)
-                  .reduce((s, r) => s + parseFloat(r.charge.cost_price), 0)
+                  .filter(r => r.group && !r.group.has_null_cost)
+                  .reduce((s, r) => s + r.group.total_cost_price, 0)
                 )}
               </div>
               <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>From matched charges</div>
@@ -796,12 +796,13 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                   )}
                   {displayed.map(row => {
                     const isSelected = selected.has(row.reference);
-                    const diff = row.charge?.cost_price != null
-                      ? parseFloat(row.carrier_cost) - parseFloat(row.charge.cost_price)
+                    const g    = row.group;
+                    const diff = g && !g.has_null_cost
+                      ? parseFloat(row.carrier_cost) - g.total_cost_price
                       : null;
                     const diffColor = diff == null ? '#555'
-                      : diff > 0.05 ? '#F44336'
-                      : diff < -0.05 ? '#00C853'
+                      : diff > 0.005 ? '#F44336'
+                      : diff < -0.005 ? '#00C853'
                       : '#888';
 
                     return (
@@ -823,26 +824,39 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                           />
                         </td>
                         <td style={td}>
-                          <span style={{
-                            fontFamily: 'monospace', fontSize: 12,
-                            color: '#00C853', fontWeight: 700,
-                          }}>
-                            {row.reference}
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <span style={{
+                              fontFamily: 'monospace', fontSize: 12,
+                              color: '#00C853', fontWeight: 700,
+                            }}>
+                              {row.reference}
+                            </span>
+                            {g?.has_return && (
+                              <span style={{
+                                fontSize: 9, fontWeight: 700, letterSpacing: '0.05em',
+                                textTransform: 'uppercase',
+                                background: 'rgba(0,188,212,0.12)',
+                                border: '1px solid rgba(0,188,212,0.3)',
+                                color: '#00BCD4', borderRadius: 20, padding: '1px 6px',
+                              }}>
+                                + return ({g.charge_count})
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td style={td}>
-                          <span style={{ fontSize: 12, color: row.charge?.customer_name ? '#CCC' : '#555' }}>
-                            {row.charge?.customer_name || '—'}
+                          <span style={{ fontSize: 12, color: g?.customer_name ? '#CCC' : '#555' }}>
+                            {g?.customer_name || '—'}
                           </span>
-                          {row.charge?.customer_account && (
+                          {g?.customer_account && (
                             <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>
-                              {row.charge.customer_account}
+                              {g.customer_account}
                             </div>
                           )}
                         </td>
                         <td style={td}>
                           <span style={{ fontSize: 12, color: '#888' }}>
-                            {row.charge?.service_name || '—'}
+                            {g?.service_name || '—'}
                           </span>
                         </td>
                         <td style={{ ...td, textAlign: 'right' }}>
@@ -851,13 +865,18 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                           </span>
                         </td>
                         <td style={{ ...td, textAlign: 'right' }}>
-                          <span style={{ color: row.charge?.cost_price != null ? '#CCC' : '#555' }}>
-                            {gbp(row.charge?.cost_price)}
+                          <span style={{ color: g && !g.has_null_cost ? '#CCC' : '#555' }}>
+                            {g && !g.has_null_cost ? gbp(g.total_cost_price) : '—'}
                           </span>
+                          {g?.has_return && !g.has_null_cost && (
+                            <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>
+                              combined {g.charge_count} charges
+                            </div>
+                          )}
                         </td>
                         <td style={{ ...td, textAlign: 'right' }}>
                           {diff != null ? (
-                            <span style={{ color: diffColor, fontWeight: Math.abs(diff) > 0.05 ? 700 : 400 }}>
+                            <span style={{ color: diffColor, fontWeight: Math.abs(diff) > 0.005 ? 700 : 400 }}>
                               {diff > 0 ? '+' : ''}{gbp(diff)}
                             </span>
                           ) : (
@@ -965,6 +984,7 @@ export default function ReconciliationTab() {
 
       {step === 'results' && carrier && parseResult && (
         <ResultsTable
+          key={fileName}
           carrier={carrier}
           parseResult={parseResult}
           fileName={fileName}
