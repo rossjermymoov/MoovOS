@@ -749,9 +749,10 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
   const [filter,       setFilter]       = useState('all');
   const [selected,     setSelected]     = useState(new Set());
   const [refreshCount, setRefreshCount] = useState(0);
-  const [mappings,       setMappings]       = useState({});  // invoice_name → internal_name (manual)
-  const [serviceCodeMap, setServiceCodeMap] = useState({});  // service_code → service_name (auto)
-  const [showMappings,   setShowMappings]   = useState(false);
+  const [mappings,          setMappings]          = useState({});  // invoice_name → internal_name (manual)
+  const [serviceCodeMap,    setServiceCodeMap]    = useState({});  // service_code → service_name (auto)
+  const [showMappings,      setShowMappings]      = useState(false);
+  const [acceptedSurcharges, setAcceptedSurcharges] = useState(new Set()); // accepted known-variance surcharges
 
   const { shipments, surcharges } = parseResult;
 
@@ -1488,19 +1489,24 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                             ourNote  = `${totalMatchedPieces} piece${totalMatchedPieces !== 1 ? 's' : ''} × £${HGV_RATE_PER_PARCEL.toFixed(2)}`;
                           }
 
+                          const scKey = `${sc.description}-${i}`;
+                          const isAccepted = acceptedSurcharges.has(scKey);
+
                           const diff = ourValue != null ? sc.value - ourValue : null;
                           const diffColor = diff == null ? '#555'
                             : Math.abs(diff) <= TOLERANCE_ABS ? '#888'
                             : diff > 0 ? '#F44336'
                             : '#00C853';
-                          const surchargeStatus = ourValue == null
-                            ? { code: 'amber', label: 'No Comparison', color: '#FFC107', icon: 'warn' }
-                            : Math.abs(diff) <= TOLERANCE_ABS
-                              ? { code: 'green', label: 'Match',       color: '#00C853', icon: 'check' }
-                              : { code: 'red',   label: 'Discrepancy', color: '#F44336', icon: 'x'     };
+                          const surchargeStatus = isAccepted
+                            ? { code: 'amber', label: 'Accepted',     color: '#FFC107', icon: 'warn' }
+                            : ourValue == null
+                              ? { code: 'amber', label: 'No Comparison', color: '#FFC107', icon: 'warn' }
+                              : Math.abs(diff) <= TOLERANCE_ABS
+                                ? { code: 'green', label: 'Match',       color: '#00C853', icon: 'check' }
+                                : { code: 'red',   label: 'Discrepancy', color: '#F44336', icon: 'x'     };
 
                           return (
-                            <tr key={`sc-${i}`} style={{ background: 'rgba(255,193,7,0.02)' }}>
+                            <tr key={`sc-${i}`} style={{ background: isAccepted ? 'rgba(255,193,7,0.03)' : 'rgba(255,193,7,0.02)' }}>
                               {/* Checkbox placeholder */}
                               <td style={{ ...td, textAlign: 'center', width: 36 }}>
                                 <input type="checkbox" disabled style={{ opacity: 0.2 }} />
@@ -1542,10 +1548,15 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                               <td style={{ ...td, textAlign: 'right' }}>
                                 {ourValue != null ? (
                                   <>
-                                    <span style={{ color: '#CCC' }}>{gbp(ourValue)}</span>
+                                    <span style={{ color: isAccepted ? '#FFC107' : '#CCC' }}>{gbp(ourValue)}</span>
                                     {ourNote && (
                                       <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>
                                         {ourNote}
+                                      </div>
+                                    )}
+                                    {isAccepted && isFuel && (
+                                      <div style={{ fontSize: 9, color: '#FFC107', marginTop: 2, fontStyle: 'italic' }}>
+                                        known variance
                                       </div>
                                     )}
                                   </>
@@ -1570,9 +1581,44 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                                 )}
                               </td>
 
-                              {/* Status */}
+                              {/* Status + Accept */}
                               <td style={{ ...td, textAlign: 'center' }}>
-                                <StatusBadge status={surchargeStatus} />
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                                  <StatusBadge status={surchargeStatus} />
+                                  {surchargeStatus.code === 'red' && !isAccepted && (
+                                    <button
+                                      onClick={() => setAcceptedSurcharges(prev => new Set([...prev, scKey]))}
+                                      title="Accept this as a known variance (e.g. fuel discrepancy due to underdeclared weights)"
+                                      style={{
+                                        fontSize: 9, fontWeight: 700, letterSpacing: '0.05em',
+                                        textTransform: 'uppercase',
+                                        background: 'rgba(255,193,7,0.1)',
+                                        border: '1px solid rgba(255,193,7,0.35)',
+                                        color: '#FFC107',
+                                        borderRadius: 20, padding: '2px 7px',
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      Accept
+                                    </button>
+                                  )}
+                                  {isAccepted && (
+                                    <button
+                                      onClick={() => setAcceptedSurcharges(prev => { const s = new Set(prev); s.delete(scKey); return s; })}
+                                      title="Undo — revert to Discrepancy"
+                                      style={{
+                                        fontSize: 9, fontWeight: 600, letterSpacing: '0.04em',
+                                        background: 'transparent',
+                                        border: '1px solid rgba(255,255,255,0.1)',
+                                        color: '#555',
+                                        borderRadius: 20, padding: '2px 7px',
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      Undo
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           );
