@@ -2532,6 +2532,167 @@ router.get('/charges/:id/debug', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── GET /api/billing/per-kg-debug/:ref ──────────────────────────────────────
+// Diagnose per-kg rate application for an MP- reference.
+// Returns: stored weight, per_kg_rate in DB, threshold, overage calc, and what
+// the reprice WOULD produce — without changing anything.
+
+router.get('/per-kg-debug/:ref', async (req, res, next) => {
+  try {
+    const { ref } = req.params;
+
+    // 1. Find the shipment + courier charge by MP reference
+    const shipRes = await query(`
+      SELECT
+        c.id           AS charge_id,
+        c.price        AS current_price,
+        c.cost_price   AS current_cost,
+        c.customer_id,
+        c.parcel_qty,
+        s.id           AS shipment_id,
+        s.platform_shipment_id,
+        s.dc_service_id,
+        s.service_name,
+        s.total_weight_kg,
+        s.parcel_count,
+        s.parcel_weight_kg,
+        s.ship_to_postcode,
+        s.ship_to_country_iso
+      FROM shipments s
+      JOIN charges c ON c.shipment_id = s.id
+      WHERE s.platform_shipment_id = $1
+        AND c.charge_type = 'courier'
+        AND c.cancelled = false
+      ORDER BY c.id DESC
+      LIMIT 1
+    `, [ref]);
+
+    if (!shipRes.rows.length) {
+      return res.status(404).json({ error: `No courier charge found for reference ${ref}` });
+    }
+    const row = shipRes.rows[0];
+
+    const parcelQty = row.parcel_qty || row.parcel_count || 1;
+    const totalWt   = parseFloat(row.total_weight_kg) || null;
+    const weightPerParcel = parseFloat(row.parcel_weight_kg) ||
+      (parcelQty > 0 && totalWt ? totalWt / parcelQty : totalWt) || null;
+
+    const customerId  = row.customer_id;
+    const serviceCode = row.dc_service_id;
+
+    const out = {
+      reference:      ref,
+      charge_id:      row.charge_id,
+      current_price:  row.current_price,
+      current_cost:   row.current_cost,
+      customer_id:    customerId,
+      service_code:   serviceCode,
+      weight: {
+        parcel_weight_kg_stored: row.parcel_weight_kg != null ? parseFloat(row.parcel_weight_kg) : null,
+        total_weight_kg_stored:  row.total_weight_kg  != null ? parseFloat(row.total_weight_kg)  : null,
+        parcel_qty:              parcelQty,
+        weight_used_for_lookup:  weightPerParcel,
+        note: row.parcel_weight_kg != null
+          ? 'used parcel_weight_kg column directly'
+          : (totalWt ? `derived: ${totalWt} / ${parcelQty} = ${weightPerParcel}` : 'weight is null'),
+      },
+    };
+
+    if (!customerId || !serviceCode || weightPerParcel == null) {
+      out.error = 'Cannot run rate lookup — missing customer_id, service_code, or weight';
+      return res.json(out);
+    }
+
+    // 2. Resolve zone
+    const postcode = row.ship_to_postcode;
+    const zoneRes  = await query(`
+      SELECT DISTINCT zone_name FROM customer_rates
+      WHERE customer_id = $1 AND service_code ILIKE $2
+    `, [customerId, serviceCode]);
+    const distinctZones = zoneRes.rows.map(r => r.zone_name);
+    let zoneName = distinctZones.length === 1 ? distinctZones[0] : null;
+    if (!zoneName && distinctZones.length > 1) {
+      zoneName = await zoneForPostcode(serviceCode, postcode);
+    }
+    out.zone_resolved = zoneName;
+
+    // 3. Fetch the matching customer_rates row — including per_kg columns
+    const rateRes = await query(`
+      SELECT id, zone_name, weight_class_name, price, price_sub,
+             per_kg_rate, per_kg_threshold_kg,
+             min_weight_kg, max_weight_kg
+      FROM customer_rates
+      WHERE customer_id  = $1
+        AND service_code ILIKE $2
+        AND zone_name     ILIKE $3
+        AND min_weight_kg < $4
+        AND max_weight_kg >= $4
+      ORDER BY max_weight_kg ASC
+      LIMIT 1
+    `, [customerId, serviceCode, zoneName || '%', weightPerParcel]);
+
+    if (!rateRes.rows.length) {
+      out.error = `No customer_rates row covers weight ${weightPerParcel} kg for zone "${zoneName}"`;
+      return res.json(out);
+    }
+
+    const rate = rateRes.rows[0];
+    out.rate_row = {
+      id:                  rate.id,
+      zone_name:           rate.zone_name,
+      weight_class_name:   rate.weight_class_name,
+      min_weight_kg:       rate.min_weight_kg != null ? parseFloat(rate.min_weight_kg) : null,
+      max_weight_kg:       rate.max_weight_kg != null ? parseFloat(rate.max_weight_kg) : null,
+      price:               parseFloat(rate.price),
+      price_sub:           rate.price_sub != null ? parseFloat(rate.price_sub) : null,
+      per_kg_rate:         rate.per_kg_rate         != null ? parseFloat(rate.per_kg_rate)         : null,
+      per_kg_threshold_kg: rate.per_kg_threshold_kg != null ? parseFloat(rate.per_kg_threshold_kg) : 30,
+    };
+
+    // 4. Simulate per-kg calculation
+    const perKgRate      = rate.per_kg_rate != null ? parseFloat(rate.per_kg_rate) : null;
+    const threshold      = rate.per_kg_threshold_kg != null ? parseFloat(rate.per_kg_threshold_kg) : 30;
+    const basePrice      = parseFloat(rate.price);
+    const overageKg      = weightPerParcel > threshold ? Math.ceil(weightPerParcel - threshold) : 0;
+    const perKgCharge    = perKgRate != null && overageKg > 0 ? overageKg * perKgRate : 0;
+    const expectedPrice  = parseFloat((basePrice + perKgCharge).toFixed(4));
+
+    out.per_kg_calc = {
+      per_kg_rate_in_db:      perKgRate,
+      threshold_kg:           threshold,
+      weight_used:            weightPerParcel,
+      exceeds_threshold:      weightPerParcel > threshold,
+      overage_kg_raw:         weightPerParcel > threshold ? weightPerParcel - threshold : 0,
+      overage_kg_ceiling:     overageKg,
+      per_kg_charge:          perKgCharge,
+      base_price:             basePrice,
+      expected_sell_price:    expectedPrice,
+      diagnosis: perKgRate == null
+        ? '⚠ per_kg_rate is NULL — column exists but no value set for this rate row. Set it in the customer rate card (cyan £/kg button) or via SQL.'
+        : weightPerParcel <= threshold
+          ? `⚠ weight ${weightPerParcel} kg does not exceed threshold ${threshold} kg — no per-kg charge applies`
+          : `✓ per-kg should add £${perKgCharge.toFixed(2)} (${overageKg} kg × £${perKgRate}/kg)`,
+    };
+
+    // 5. What would reprice actually produce right now?
+    const { rate: liveRate, reason: liveReason } = await lookupRateWithReason(
+      customerId, serviceCode, row.service_name, weightPerParcel, postcode, row.ship_to_country_iso || 'GB'
+    );
+    const pricingMode = await getParcelPricingMode(customerId);
+    out.reprice_simulation = liveRate
+      ? {
+          would_set_price:     parseFloat(calcTotal(liveRate, parcelQty, pricingMode).toFixed(2)),
+          rate_price_returned: liveRate.price,
+          rate_cost_returned:  liveRate.cost_price,
+          zone:                liveRate.zone_name,
+          weight_class:        liveRate.weight_class_name,
+        }
+      : { would_fail: true, reason: liveReason };
+
+    return res.json(out);
+  } catch (err) { next(err); }
+});
+
 // ─── POST /api/billing/charges/:id/reprice ────────────────────────────────────
 // Re-run lookupRate with current data; if a rate is found, update the charge.
 
