@@ -2804,13 +2804,19 @@ function RateMatrix({ zones }) {
 // ─── LEVEL 3 — Zone config (accordion per zone) ───────────────────────────────
 
 function WeightBandsTable({ zoneId, bands, onRefresh }) {
-  const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ min_weight_kg:'', max_weight_kg:'', price_first:'', price_sub:'' });
+  const [adding, setAdding]     = useState(false);
+  const [editId, setEditId]     = useState(null);
+  const [editVal, setEditVal]   = useState('');
+  const [form, setForm]         = useState({ name:'', min_weight_kg:'', max_weight_kg:'', price_first:'', price_sub:'' });
   const [confirmId, setConfirmId] = useState(null);
 
   const addBand = useMutation({
     mutationFn: () => carriersApi.createWeightBand({ ...form, zone_id: zoneId }),
-    onSuccess: () => { setAdding(false); setForm({ min_weight_kg:'', max_weight_kg:'', price_first:'', price_sub:'' }); onRefresh(); },
+    onSuccess: () => { setAdding(false); setForm({ name:'', min_weight_kg:'', max_weight_kg:'', price_first:'', price_sub:'' }); onRefresh(); },
+  });
+  const renameBand = useMutation({
+    mutationFn: ({ id, name }) => carriersApi.updateWeightBand(id, { name }),
+    onSuccess: () => { setEditId(null); setEditVal(''); onRefresh(); },
   });
   const delBand = useMutation({
     mutationFn: (id) => carriersApi.deleteWeightBand(id),
@@ -2826,7 +2832,10 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
         </button>
       </div>
       {adding && (
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr auto', gap:8, marginBottom:10 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1.4fr 1fr 1fr 1fr 1fr auto', gap:8, marginBottom:10 }}>
+          <div className="pill-input-wrap" style={{ height:32 }}>
+            <input placeholder="Name (e.g. Parcel)" value={form.name} onChange={e => setForm(f=>({...f,name:e.target.value}))} style={{ fontSize:12 }}/>
+          </div>
           {[['Min kg','min_weight_kg'],['Max kg','max_weight_kg'],['Cost 1st £','price_first'],['Cost Sub £','price_sub']].map(([ph,key]) => (
             <div key={key} className="pill-input-wrap" style={{ height:32 }}>
               <input type="number" step="0.001" placeholder={ph} value={form[key]} onChange={e => setForm(f=>({...f,[key]:e.target.value}))} style={{ fontSize:12 }}/>
@@ -2837,11 +2846,32 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
       )}
       {confirmId && <div style={{ marginBottom:8 }}><Confirm message="Delete weight band?" onConfirm={() => delBand.mutate(confirmId)} onCancel={() => setConfirmId(null)}/></div>}
       <table className="moov-table" style={{ fontSize:12 }}>
-        <thead><tr><th>Min kg</th><th>Max kg</th><th>Cost 1st</th><th>Cost Sub</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Min kg</th><th>Max kg</th><th>Cost 1st</th><th>Cost Sub</th><th></th></tr></thead>
         <tbody>
-          {bands.length === 0 && <tr><td colSpan={5} style={{ textAlign:'center', color:'#555' }}>No bands</td></tr>}
+          {bands.length === 0 && <tr><td colSpan={6} style={{ textAlign:'center', color:'#555' }}>No bands</td></tr>}
           {bands.map(b => (
             <tr key={b.id}>
+              <td>
+                {editId === b.id ? (
+                  <div style={{ display:'flex', gap:4, alignItems:'center' }}>
+                    <div className="pill-input-wrap" style={{ height:26, flex:1 }}>
+                      <input autoFocus value={editVal} onChange={e => setEditVal(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') renameBand.mutate({ id: b.id, name: editVal }); if (e.key === 'Escape') { setEditId(null); setEditVal(''); } }}
+                        style={{ fontSize:11 }}/>
+                    </div>
+                    <button onClick={() => renameBand.mutate({ id: b.id, name: editVal })}
+                      style={{ background:'none', border:'none', color:'#00C853', cursor:'pointer', padding:0 }}><Check size={11}/></button>
+                    <button onClick={() => { setEditId(null); setEditVal(''); }}
+                      style={{ background:'none', border:'none', color:'#555', cursor:'pointer', padding:0 }}>✕</button>
+                  </div>
+                ) : (
+                  <span onClick={() => { setEditId(b.id); setEditVal(b.name || ''); }}
+                    style={{ cursor:'pointer', color: b.name ? '#fff' : '#444', fontStyle: b.name ? 'normal' : 'italic' }}
+                    title="Click to name this band">
+                    {b.name || 'unnamed'}
+                  </span>
+                )}
+              </td>
               <td>{parseFloat(b.min_weight_kg).toFixed(3)}</td>
               <td>{parseFloat(b.max_weight_kg).toFixed(3)}</td>
               <td style={{ color:'#00C853' }}>£{parseFloat(b.price_first).toFixed(2)}</td>
