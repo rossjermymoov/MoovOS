@@ -502,13 +502,13 @@ function ReviewModal({ approval, onClose, onDone, staffList }) {
   );
 }
 
-// ─── Prospect Row ─────────────────────────────────────────────────────────────
+// ─── Prospect Card ────────────────────────────────────────────────────────────
 
 function ProspectRow({ prospect, staffList, navigate }) {
-  const [expanded, setExpanded]   = useState(false);
+  const [expanded, setExpanded]     = useState(false);
   const [submitStaff, setSubmitStaff] = useState('');
-  const [editing, setEditing]     = useState(false);
-  const [editForm, setEditForm]   = useState({});
+  const [editing, setEditing]       = useState(false);
+  const [editForm, setEditForm]     = useState({});
   const [confirmDel, setConfirmDel] = useState(false);
   const qc = useQueryClient();
 
@@ -520,10 +520,7 @@ function ProspectRow({ prospect, staffList, navigate }) {
 
   const patchMut = useMutation({
     mutationFn: (body) => pricingApi.patchProspect(prospect.id, body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['pricing-prospects'] });
-      setEditing(false);
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['pricing-prospects'] }); setEditing(false); },
   });
 
   const deleteMut = useMutation({
@@ -542,175 +539,217 @@ function ProspectRow({ prospect, staffList, navigate }) {
     },
   });
 
-  const topRC = (prospect.rate_cards || [])[0];
+  const topRC    = (prospect.rate_cards || [])[0];
   const couriers = [...new Set((prospect.rate_cards || []).map(r => r.courier_code))].join(', ');
 
+  const cardBase = {
+    background: expanded ? 'rgba(99,102,241,0.04)' : 'rgba(255,255,255,0.015)',
+    border: `1px solid ${expanded ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.07)'}`,
+    borderRadius: 12, marginBottom: 8, overflow: 'hidden',
+    transition: 'border-color 0.15s',
+  };
+
+  const btnBase = {
+    display: 'inline-flex', alignItems: 'center', gap: 6,
+    borderRadius: 8, fontWeight: 700, cursor: 'pointer', border: '1px solid',
+    transition: 'opacity 0.15s',
+  };
+
   return (
-    <>
-      {/* Edit inline form */}
+    <div style={cardBase}>
+
+      {/* ── Edit form ── */}
       {editing && (
-        <div style={{ background: 'rgba(99,102,241,0.05)', borderBottom: '1px solid rgba(99,102,241,0.2)',
-          padding: '12px 16px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '0 12px', marginBottom: 10 }}>
+        <div style={{ background: 'rgba(99,102,241,0.06)', borderBottom: '1px solid rgba(99,102,241,0.18)', padding: '16px 20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '0 14px', marginBottom: 12 }}>
             {[
-              { key: 'company_name', label: 'Company Name', placeholder: '' },
-              { key: 'contact_name', label: 'Contact Name', placeholder: '' },
-              { key: 'contact_email', label: 'Email', placeholder: '' },
-              { key: 'contact_phone', label: 'Phone', placeholder: '' },
+              { key: 'company_name', label: 'Company Name' },
+              { key: 'contact_name', label: 'Contact Name' },
+              { key: 'contact_email', label: 'Email' },
+              { key: 'contact_phone', label: 'Phone' },
             ].map(({ key, label }) => (
               <div key={key}>
-                <label style={{ fontSize: 10, color: '#888', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>{label}</label>
+                <label style={{ fontSize: 10, color: '#888', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>{label}</label>
                 <input value={editForm[key] ?? ''} onChange={e => setEditForm(p => ({ ...p, [key]: e.target.value }))}
-                  style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.07)',
-                    border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, padding: '6px 9px',
-                    color: '#fff', fontSize: 12, outline: 'none' }} />
+                  style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 7, padding: '8px 11px', color: '#fff', fontSize: 13, outline: 'none' }} />
               </div>
             ))}
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button onClick={() => setEditing(false)}
-              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: 6, padding: '6px 14px', color: '#777', fontSize: 12, cursor: 'pointer' }}>
-              Cancel
-            </button>
+            <button onClick={() => setEditing(false)} style={{ ...btnBase, padding: '8px 18px', fontSize: 13, background: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.12)', color: '#888' }}>Cancel</button>
             <button onClick={() => patchMut.mutate(editForm)} disabled={patchMut.isPending}
-              style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid #6366F1',
-                borderRadius: 6, padding: '6px 16px', color: '#A5B4FC', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              style={{ ...btnBase, padding: '8px 20px', fontSize: 13, background: 'rgba(99,102,241,0.18)', borderColor: '#6366F1', color: '#A5B4FC' }}>
               Save Changes
             </button>
           </div>
         </div>
       )}
 
-      {/* Delete confirm */}
+      {/* ── Delete confirm ── */}
       {confirmDel && (
-        <div style={{ background: 'rgba(239,68,68,0.07)', borderBottom: '1px solid rgba(239,68,68,0.2)',
-          padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: '#F87171' }}>
+        <div style={{ background: 'rgba(239,68,68,0.07)', borderBottom: '1px solid rgba(239,68,68,0.2)', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 14, fontSize: 13, color: '#F87171' }}>
+          <AlertCircle size={15} />
           <span>Delete <strong>{prospect.company_name}</strong>? This removes the prospect and all their rate cards.</span>
-          <button onClick={() => deleteMut.mutate()} disabled={deleteMut.isPending}
-            style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)',
-              borderRadius: 6, padding: '5px 14px', color: '#EF4444', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            Yes, Delete
-          </button>
-          <button onClick={() => setConfirmDel(false)}
-            style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer' }}>
-            Cancel
-          </button>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            <button onClick={() => setConfirmDel(false)} style={{ ...btnBase, padding: '7px 16px', fontSize: 12, background: 'none', borderColor: 'rgba(255,255,255,0.1)', color: '#666' }}>Cancel</button>
+            <button onClick={() => deleteMut.mutate()} disabled={deleteMut.isPending}
+              style={{ ...btnBase, padding: '7px 18px', fontSize: 12, background: 'rgba(239,68,68,0.18)', borderColor: 'rgba(239,68,68,0.5)', color: '#EF4444' }}>
+              Yes, Delete
+            </button>
+          </div>
         </div>
       )}
 
-      <div onClick={() => setExpanded(p => !p)}
-        style={{
-          display: 'grid', gridTemplateColumns: '1.8fr 1.2fr 130px 120px 100px 80px 60px 40px',
-          padding: '10px 16px', alignItems: 'center', cursor: 'pointer',
-          borderBottom: expanded ? 'none' : '1px solid rgba(255,255,255,0.05)',
-          background: expanded ? 'rgba(99,102,241,0.04)' : 'transparent',
-        }}>
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#DDD' }}>{prospect.company_name}</div>
-          <div style={{ fontSize: 11, color: '#666' }}>{prospect.contact_name}</div>
+      {/* ── Main row ── */}
+      <div style={{ padding: '16px 20px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+
+          {/* Left: name + contact */}
+          <div style={{ flex: '0 0 220px' }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#EEE', lineHeight: 1.2, marginBottom: 3 }}>{prospect.company_name}</div>
+            <div style={{ fontSize: 12, color: '#666' }}>{prospect.contact_name}</div>
+          </div>
+
+          {/* Centre: meta chips */}
+          <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+            <StatusBadge status={prospect.status} />
+            {couriers && couriers.split(', ').map(c => (
+              <span key={c} style={{ fontSize: 12, fontWeight: 700, color: '#888', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '3px 10px' }}>{c}</span>
+            ))}
+            {topRC?.projected_weekly_revenue && (
+              <span style={{ fontSize: 13, fontWeight: 800, color: '#A5B4FC', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: 6, padding: '3px 10px' }}>
+                {gbp(topRC.projected_weekly_revenue)}/wk
+              </span>
+            )}
+            {prospect.assigned_to_name && (
+              <span style={{ fontSize: 12, color: '#666' }}>→ {prospect.assigned_to_name}</span>
+            )}
+          </div>
+
+          {/* Right: actions */}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => { setEditForm({ company_name: prospect.company_name, contact_name: prospect.contact_name, contact_email: prospect.contact_email || '', contact_phone: prospect.contact_phone || '' }); setEditing(true); setConfirmDel(false); }}
+              style={{ ...btnBase, padding: '8px 16px', fontSize: 12, background: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.12)', color: '#AAA' }}>
+              <Edit2 size={13} /> Edit
+            </button>
+            <button
+              onClick={() => { setConfirmDel(true); setEditing(false); }}
+              style={{ ...btnBase, padding: '8px 16px', fontSize: 12, background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.25)', color: '#EF4444' }}>
+              <Trash2 size={13} /> Delete
+            </button>
+            <button
+              onClick={() => setExpanded(p => !p)}
+              style={{ ...btnBase, padding: '8px 12px', fontSize: 12, background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.08)', color: '#666' }}>
+              {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+            </button>
+          </div>
         </div>
-        <div style={{ fontSize: 11, color: '#666' }}>{prospect.contact_email || '—'}</div>
-        <div><StatusBadge status={prospect.status} /></div>
-        <div style={{ fontSize: 12, color: '#888' }}>{couriers || '—'}</div>
-        <div style={{ fontSize: 12, color: '#A5B4FC', fontWeight: 700 }}>
-          {topRC?.projected_weekly_revenue ? gbp(topRC.projected_weekly_revenue) : '—'}
-        </div>
-        <div style={{ fontSize: 11, color: '#555' }}>{prospect.assigned_to_name || '—'}</div>
-        {/* Edit / Delete */}
-        <div style={{ display: 'flex', gap: 5 }} onClick={e => e.stopPropagation()}>
-          <button title="Edit"
-            onClick={() => { setEditForm({ company_name: prospect.company_name, contact_name: prospect.contact_name, contact_email: prospect.contact_email || '', contact_phone: prospect.contact_phone || '' }); setEditing(true); setConfirmDel(false); }}
-            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-              borderRadius: 5, padding: '3px 7px', color: '#888', cursor: 'pointer' }}>
-            <Edit2 size={11} />
-          </button>
-          <button title="Delete"
-            onClick={() => { setConfirmDel(true); setEditing(false); }}
-            style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
-              borderRadius: 5, padding: '3px 7px', color: '#EF4444', cursor: 'pointer' }}>
-            <Trash2 size={11} />
-          </button>
-        </div>
-        <div style={{ color: '#555' }}>{expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</div>
+
+        {/* Contact details strip */}
+        {(prospect.contact_email || prospect.contact_phone) && (
+          <div style={{ display: 'flex', gap: 20, marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+            {prospect.contact_email && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#555' }}>
+                <Mail size={12} /> {prospect.contact_email}
+              </span>
+            )}
+            {prospect.contact_phone && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#555' }}>
+                <Phone size={12} /> {prospect.contact_phone}
+              </span>
+            )}
+            <span style={{ fontSize: 12, color: '#444', marginLeft: 'auto' }}>Added {fmtD(prospect.created_at)}</span>
+          </div>
+        )}
       </div>
 
+      {/* ── Rate cards (expanded) ── */}
       {expanded && (
-        <div style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)', padding: '10px 16px 14px' }}>
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', background: 'rgba(0,0,0,0.15)', padding: '14px 20px 16px' }}>
           {rcLoading ? (
-            <div style={{ color: '#555', fontSize: 12 }}>Loading…</div>
+            <div style={{ color: '#555', fontSize: 13 }}>Loading rate cards…</div>
           ) : rateCards.length === 0 ? (
-            <div style={{ color: '#555', fontSize: 12 }}>No rate cards yet.</div>
+            <div style={{ color: '#555', fontSize: 13 }}>No rate cards yet.</div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {rateCards.map(rc => {
                 const approvalStatus = rc.latest_approval?.status;
+                const rateCount = (rc.rates || []).length;
                 return (
-                  <div key={rc.id} style={{ display: 'flex', alignItems: 'center', gap: 10,
-                    background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
-                    borderRadius: 8, padding: '9px 13px' }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, color: '#DDD', fontWeight: 600 }}>
+                  <div key={rc.id} style={{
+                    background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: 10, padding: '14px 16px',
+                    display: 'flex', alignItems: 'center', gap: 16,
+                  }}>
+                    {/* RC details */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#DDD', marginBottom: 4 }}>
                         {rc.courier_name || rc.courier_code}
-                        {rc.template_name && <span style={{ fontSize: 11, color: '#555', marginLeft: 8 }}>({rc.template_name})</span>}
+                        {rc.template_name && (
+                          <span style={{ fontSize: 11, color: '#555', fontWeight: 400, marginLeft: 8 }}>({rc.template_name})</span>
+                        )}
                       </div>
-                      <div style={{ fontSize: 11, color: '#666', marginTop: 2 }}>
-                        {(rc.rates || []).length} rates
-                        {rc.weekly_parcels ? ` · ${rc.weekly_parcels.toLocaleString('en-GB')} pcls/wk` : ''}
-                        {rc.projected_weekly_profit ? ` · ${gbp(rc.projected_weekly_profit)}/wk profit` : ''}
+                      <div style={{ display: 'flex', gap: 14, fontSize: 12, color: '#666' }}>
+                        <span>{rateCount} rates</span>
+                        {rc.weekly_parcels    && <span>{rc.weekly_parcels.toLocaleString('en-GB')} pcls/wk</span>}
+                        {rc.projected_weekly_profit && <span style={{ color: '#34D399', fontWeight: 700 }}>{gbp(rc.projected_weekly_profit)}/wk profit</span>}
                       </div>
                     </div>
-                    <StatusBadge status={rc.status} />
 
-                    {/* Edit button — opens rate card editor */}
-                    {(rc.status === 'draft' || rc.status === 'rejected') && (
-                      <button onClick={() => navigate(`/pricing/rate-card/${rc.id}`)}
-                        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-                          borderRadius: 6, padding: '5px 12px', color: '#AAA', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                        Edit Rates
-                      </button>
-                    )}
+                    {/* Status + approval badge */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                      <StatusBadge status={rc.status} />
+                      {approvalStatus && (
+                        <span style={{
+                          fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 6,
+                          background: approvalStatus === 'approved' ? 'rgba(52,211,153,0.12)' : approvalStatus === 'rejected' ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.1)',
+                          color:      approvalStatus === 'approved' ? '#34D399'                : approvalStatus === 'rejected' ? '#EF4444'                : '#F59E0B',
+                          border:     `1px solid ${approvalStatus === 'approved' ? 'rgba(52,211,153,0.3)' : approvalStatus === 'rejected' ? 'rgba(239,68,68,0.3)' : 'rgba(245,158,11,0.2)'}`,
+                        }}>
+                          {approvalStatus === 'approved' ? '✓ Approved' : approvalStatus === 'rejected' ? '✗ Rejected' : '⏳ Pending'}
+                        </span>
+                      )}
+                    </div>
 
-                    {rc.status === 'draft' && (
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <select value={submitStaff} onChange={e => setSubmitStaff(e.target.value)}
-                          style={{ ...selectStyle, padding: '4px 8px', fontSize: 11, width: 130 }}>
-                          <option value="">Your name…</option>
-                          {staffList.filter(s => s.is_active).map(s => (
-                            <option key={s.id} value={s.id}>{s.full_name}</option>
-                          ))}
-                        </select>
-                        <button onClick={() => submitMut.mutate(rc.id)} disabled={!submitStaff || submitMut.isPending}
-                          style={{ display: 'flex', alignItems: 'center', gap: 5,
-                            background: 'rgba(99,102,241,0.15)', border: '1px solid #6366F1',
-                            borderRadius: 6, padding: '5px 12px',
-                            color: '#A5B4FC', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                            opacity: !submitStaff ? 0.5 : 1 }}>
-                          <Send size={11} /> Submit
+                    {/* Action buttons */}
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+                      {(rc.status === 'draft' || rc.status === 'rejected') && (
+                        <button onClick={() => navigate(`/pricing/rate-card/${rc.id}`)}
+                          style={{ ...btnBase, padding: '9px 18px', fontSize: 13, background: 'rgba(255,255,255,0.07)', borderColor: 'rgba(255,255,255,0.15)', color: '#CCC' }}>
+                          <Edit2 size={13} /> Edit Rates
                         </button>
-                      </div>
-                    )}
-                    {approvalStatus && (
-                      <span style={{ fontSize: 11, fontWeight: 700,
-                        color: approvalStatus === 'approved' ? '#34D399' : approvalStatus === 'rejected' ? '#EF4444' : '#F59E0B' }}>
-                        {approvalStatus === 'approved' ? '✓ Approved' : approvalStatus === 'rejected' ? '✗ Rejected' : '⏳ Pending'}
-                      </span>
-                    )}
+                      )}
+                      {rc.status !== 'draft' && (
+                        <button onClick={() => navigate(`/pricing/rate-card/${rc.id}`)}
+                          style={{ ...btnBase, padding: '9px 18px', fontSize: 13, background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.08)', color: '#666' }}>
+                          View
+                        </button>
+                      )}
+                      {rc.status === 'draft' && (
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <select value={submitStaff} onChange={e => setSubmitStaff(e.target.value)}
+                            style={{ ...selectStyle, padding: '8px 10px', fontSize: 13, width: 150, borderRadius: 8 }}>
+                            <option value="">Your name…</option>
+                            {staffList.filter(s => s.is_active).map(s => (
+                              <option key={s.id} value={s.id}>{s.full_name}</option>
+                            ))}
+                          </select>
+                          <button onClick={() => submitMut.mutate(rc.id)} disabled={!submitStaff || submitMut.isPending}
+                            style={{ ...btnBase, padding: '9px 20px', fontSize: 13, background: 'rgba(99,102,241,0.18)', borderColor: '#6366F1', color: '#A5B4FC', opacity: !submitStaff ? 0.4 : 1 }}>
+                            <Send size={13} /> Submit for Approval
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })}
             </div>
           )}
-          {(prospect.contact_email || prospect.contact_phone) && (
-            <div style={{ marginTop: 8, display: 'flex', gap: 16, fontSize: 11, color: '#444' }}>
-              {prospect.contact_email && <span><Mail size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />{prospect.contact_email}</span>}
-              {prospect.contact_phone && <span><Phone size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />{prospect.contact_phone}</span>}
-              <span>Added {fmtD(prospect.created_at)}</span>
-            </div>
-          )}
         </div>
       )}
-    </>
+    </div>
   );
 }
 
@@ -800,15 +839,8 @@ export default function PricingPage() {
         </div>
       </div>
 
-      {/* Table */}
-      <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.8fr 1.2fr 130px 120px 100px 80px 60px 40px',
-          padding: '8px 16px', background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-          {['Company', 'Email', 'Status', 'Carrier(s)', 'Proj./wk', 'Assigned', '', ''].map(h => (
-            <div key={h} style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</div>
-          ))}
-        </div>
-
+      {/* Prospect list */}
+      <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, overflow: 'hidden', padding: 8 }}>
         {isLoading ? (
           <div style={{ padding: '40px 0', textAlign: 'center', color: '#555', fontSize: 13 }}>
             <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite', marginRight: 8, verticalAlign: 'middle' }} />
