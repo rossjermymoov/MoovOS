@@ -464,34 +464,18 @@ async function lookupViaServicePricing(customerId, serviceCode, weightKg, postco
 // Match: customer + service_code only. No service name.
 //
 // Pricing flow:
-//   1. dc_weight_classes (carrier rate card) → weight band name for this weight.
-//      No match → error: 'no matching weight band'
-//   2. Postcode → zone name. Single-zone services skip this lookup.
+//   1. Postcode → zone name. Single-zone services skip this lookup.
 //      No match → error: 'no matching zone'
-//   3. customer_rates: customer + service + zone + band name → sell price.
-//      No match → error: 'no matching price'
+//   2. customer_rates: customer + service + zone + numeric weight → sell price.
+//      Uses min_weight_kg / max_weight_kg on the customer_rates row directly.
+//      No dc_weight_classes lookup — the bridge table is not needed.
+//      No match → error: 'no matching weight band'
 //
 // No guessing, no fallbacks. Every failure mode returns a specific error.
 async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcode, iso = 'GB') {
   if (!serviceCode) return { rate: null, reason: 'no matching weight band' };
 
-  // ── Step 1: weight band from carrier rate card ───────────────────────────────
-  const wcRes = await query(`
-    SELECT weight_class_name
-    FROM dc_weight_classes
-    WHERE service_code ILIKE $1
-      AND min_weight_kg < $2
-      AND max_weight_kg >= $2
-    ORDER BY max_weight_kg ASC
-    LIMIT 1
-  `, [serviceCode, weightKg ?? 0]);
-
-  if (!wcRes.rows.length) {
-    return { rate: null, reason: 'no matching weight band' };
-  }
-  const weightClassName = wcRes.rows[0].weight_class_name;
-
-  // ── Step 2: zone from postcode ───────────────────────────────────────────────
+  // ── Step 1: zone from postcode ───────────────────────────────────────────────
   const zonesRes = await query(`
     SELECT DISTINCT zone_name
     FROM customer_rates
@@ -512,16 +496,18 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
     zoneName = resolved;
   }
 
-  // ── Step 3: sell price from customer rate card ───────────────────────────────
+  // ── Step 2: sell price — match directly on numeric weight bounds ─────────────
   const priceRes = await query(`
     SELECT id, price, price_sub, zone_name, weight_class_name
     FROM customer_rates
     WHERE customer_id       = $1
       AND service_code ILIKE $2
       AND zone_name    ILIKE $3
-      AND weight_class_name = $4
+      AND min_weight_kg     < $4
+      AND max_weight_kg     >= $4
+    ORDER BY max_weight_kg ASC
     LIMIT 1
-  `, [customerId, serviceCode, zoneName, weightClassName]);
+  `, [customerId, serviceCode, zoneName, weightKg ?? 0]);
 
   if (!priceRes.rows.length) {
     return { rate: null, reason: 'no matching price' };
@@ -2248,24 +2234,6 @@ router.get('/charges/:id/debug', async (req, res, next) => {
       return res.json(trace);
     }
 
-    // Resolve weight band from carrier rate card (dc_weight_classes)
-    const wcRes = await query(`
-      SELECT weight_class_name, min_weight_kg, max_weight_kg
-      FROM dc_weight_classes
-      WHERE service_code ILIKE $1
-        AND min_weight_kg < $2 AND max_weight_kg >= $2
-      ORDER BY max_weight_kg ASC LIMIT 1
-    `, [dcServiceId || '', weightPerParcel ?? 0]);
-    const resolvedBand = wcRes.rows.length ? wcRes.rows[0].weight_class_name : null;
-
-    // All distinct weight bands in dc_weight_classes for this service
-    const allBandsRes = await query(`
-      SELECT DISTINCT weight_class_name, min_weight_kg, max_weight_kg
-      FROM dc_weight_classes
-      WHERE service_code ILIKE $1
-      ORDER BY min_weight_kg ASC NULLS LAST
-    `, [dcServiceId || '']);
-
     // Resolve zone from postcode
     const distinctZones = [...new Set(allRatesRes.rows.map(r => r.zone_name))];
     let resolvedZone = null;
@@ -2275,13 +2243,31 @@ router.get('/charges/:id/debug', async (req, res, next) => {
       resolvedZone = await zoneForPostcode(dcServiceId, postcode);
     }
 
+    // All distinct weight bands for this service from customer_rates
+    const allBandsRes = await query(`
+      SELECT DISTINCT weight_class_name, min_weight_kg, max_weight_kg
+      FROM customer_rates
+      WHERE service_code ILIKE $1
+        AND min_weight_kg IS NOT NULL
+        AND max_weight_kg IS NOT NULL
+      ORDER BY min_weight_kg ASC NULLS LAST
+    `, [dcServiceId || '']);
+
+    // Resolve weight band directly from customer_rates numeric bounds
+    const resolvedBandRow = allBandsRes.rows.find(b =>
+      b.min_weight_kg != null && b.max_weight_kg != null &&
+      parseFloat(b.min_weight_kg) < (weightPerParcel ?? 0) &&
+      parseFloat(b.max_weight_kg) >= (weightPerParcel ?? 0)
+    );
+    const resolvedBand = resolvedBandRow ? resolvedBandRow.weight_class_name : null;
+
     // Build zone checks (✓/✗)
     const zoneChecks = distinctZones.map(z => ({
       zone_name: z,
       matched: z === resolvedZone,
     }));
 
-    // Build weight band checks (✓/✗) — use bands from dc_weight_classes
+    // Build weight band checks (✓/✗)
     const bandChecks = allBandsRes.rows.map(b => ({
       weight_class_name: b.weight_class_name,
       min_weight_kg: b.min_weight_kg != null ? parseFloat(b.min_weight_kg) : null,
@@ -2314,9 +2300,11 @@ router.get('/charges/:id/debug', async (req, res, next) => {
       WHERE customer_id = $1
         AND service_code ILIKE $2
         AND zone_name ILIKE $3
-        AND weight_class_name = $4
+        AND min_weight_kg < $4
+        AND max_weight_kg >= $4
+      ORDER BY max_weight_kg ASC
       LIMIT 1
-    `, [customerId, dcServiceId || '', resolvedZone, resolvedBand]);
+    `, [customerId, dcServiceId || '', resolvedZone, weightPerParcel ?? 0]);
 
     if (!priceRes.rows.length) {
       trace.steps.push({
