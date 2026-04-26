@@ -166,17 +166,18 @@ router.post('/:customerId/sub-rates', async (req, res, next) => {
 });
 
 // ─── GET /zones/:serviceCode — zone/weight-band template ─────
-// Returns the distinct (zone_name, weight_class_name) pairs that exist
-// in customer_rates for this service across ALL customers.  This is used
-// as the canonical zone template when setting up a new customer's rate card
-// so that zones match the carrier's structure rather than being entered manually.
+// Returns the distinct (zone_name, weight_class_name) pairs for a service.
+// Primary source: existing customer_rates rows across ALL customers (used when
+// the service already has rates set up for at least one customer).
+// Fallback: zones table (linked via courier_services) with a default "Parcel"
+// weight class — used for brand-new services that have never had customer rates.
 // Must be declared BEFORE /:customerId so Express does not treat "zones" as an id.
 router.get('/zones/:serviceCode', async (req, res, next) => {
   try {
     const { serviceCode } = req.params;
-    // has_sub_price = true when ANY customer has a sub price for this zone/weight combo.
-    // Used by the frontend to show an amber sub-price slot alongside unpriced zones.
-    const result = await query(`
+
+    // Primary: existing customer_rates for this service (any customer)
+    const ratesResult = await query(`
       SELECT   zone_name, weight_class_name,
                BOOL_OR(price_sub IS NOT NULL) AS has_sub_price
       FROM     customer_rates
@@ -184,7 +185,25 @@ router.get('/zones/:serviceCode', async (req, res, next) => {
       GROUP BY zone_name, weight_class_name
       ORDER BY zone_name, weight_class_name
     `, [serviceCode]);
-    res.json(result.rows);
+
+    if (ratesResult.rows.length > 0) {
+      return res.json(ratesResult.rows);
+    }
+
+    // Fallback: zones defined for this service in the zones table.
+    // These are the zones the user added via Carriers → service → Zones.
+    // Weight class defaults to "Parcel" since no rate history exists yet.
+    const zonesResult = await query(`
+      SELECT   z.name AS zone_name,
+               'Parcel' AS weight_class_name,
+               false    AS has_sub_price
+      FROM     zones z
+      JOIN     courier_services cs ON cs.id = z.courier_service_id
+      WHERE    cs.service_code ILIKE $1
+      ORDER BY z.name
+    `, [serviceCode]);
+
+    res.json(zonesResult.rows);
   } catch (err) { next(err); }
 });
 
