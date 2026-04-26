@@ -68,12 +68,13 @@ function buildCustomerListQuery(filters = {}) {
       (SELECT COUNT(*) FROM customer_communications cc WHERE cc.customer_id = c.id)::int AS comm_count,
       (
         COALESCE((
-          SELECT SUM(ch.total_price)
+          SELECT SUM(ch.price)
           FROM charges ch
           WHERE ch.customer_id = c.id
             AND ch.verified = TRUE
             AND ch.billed = FALSE
             AND ch.cancelled = FALSE
+            AND ch.price IS NOT NULL
         ), 0) / NULLIF(c.credit_limit, 0) * 100
       )::numeric(5,1) AS credit_utilisation_pct
     FROM customers c
@@ -124,12 +125,13 @@ router.get('/:id', async (req, res, next) => {
           ob.full_name AS onboarding_person_name,
           (
         COALESCE((
-          SELECT SUM(ch.total_price)
+          SELECT SUM(ch.price)
           FROM charges ch
           WHERE ch.customer_id = c.id
             AND ch.verified = TRUE
             AND ch.billed = FALSE
             AND ch.cancelled = FALSE
+            AND ch.price IS NOT NULL
         ), 0) / NULLIF(c.credit_limit, 0) * 100
       )::numeric(5,1) AS credit_utilisation_pct
         FROM customers c
