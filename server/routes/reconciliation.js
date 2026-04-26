@@ -54,52 +54,37 @@ router.post('/bulk-lookup', async (req, res) => {
       ORDER BY c.order_id, c.created_at
     `, [refs]);
 
-    // Group all charges by reference — a reference can appear more than once
-    // when a return shipment shares the same order_id as the outbound.
+    // Group charges by reference — a reference can appear more than once when a
+    // return shipment shares the same order_id as its outbound.
+    // Returns typically appear on the NEXT invoice, so we return all charges and
+    // let the client pick the best-matching one per invoice line.
     const groupByRef = {};
     for (const row of result.rows) {
       if (!groupByRef[row.reference]) {
         groupByRef[row.reference] = {
-          reference:    row.reference,
+          reference:        row.reference,
           customer_name:    row.customer_name,
           customer_account: row.customer_account,
           customer_id:      row.customer_id,
-          service_name:     row.service_name,
           courier:          row.courier,
-          collection_date:  row.collection_date,
           charges:          [],
-          total_cost_price: 0,
-          total_sell_price: 0,
-          has_null_cost:    false,
         };
       }
-      const g = groupByRef[row.reference];
-      g.charges.push({
-        charge_id:   row.charge_id,
-        cost_price:  row.cost_price,
-        sell_price:  row.sell_price,
-        service_name: row.service_name,
-        collection_date: row.collection_date,
-        verified:    row.verified,
-        billed:      row.billed,
+      groupByRef[row.reference].charges.push({
+        charge_id:               row.charge_id,
+        cost_price:              row.cost_price != null ? parseFloat(row.cost_price) : null,
+        sell_price:              row.sell_price != null ? parseFloat(row.sell_price) : null,
+        service_name:            row.service_name,
+        collection_date:         row.collection_date,
+        verified:                row.verified,
+        billed:                  row.billed,
         awaiting_reconciliation: row.awaiting_reconciliation,
       });
-      if (row.cost_price == null) {
-        g.has_null_cost = true;
-      } else {
-        g.total_cost_price += parseFloat(row.cost_price);
-      }
-      if (row.sell_price != null) {
-        g.total_sell_price += parseFloat(row.sell_price);
-      }
     }
 
-    // Finalise — round totals to avoid float drift
     for (const g of Object.values(groupByRef)) {
-      g.charge_count    = g.charges.length;
-      g.has_return      = g.charge_count > 1;
-      g.total_cost_price = Math.round(g.total_cost_price * 100) / 100;
-      g.total_sell_price = Math.round(g.total_sell_price * 100) / 100;
+      g.charge_count = g.charges.length;
+      g.has_return   = g.charge_count > 1;
     }
 
     // Partition into matched / unmatched

@@ -110,21 +110,28 @@ function parseDhlCsv(text) {
       continue;
     }
 
-    // Normal shipment row — must have MP- reference
+    // Normal shipment row — must have MP- reference.
+    // DHL bills outbound and return as SEPARATE lines with the same reference,
+    // so we keep every row individually (no summing).
     if (ref.startsWith('MP-')) {
-      if (shipmentMap[ref]) {
-        shipmentMap[ref].carrier_cost += value;
-        shipmentMap[ref].line_count++;
-      } else {
-        shipmentMap[ref] = { reference: ref, carrier_cost: value, line_count: 1 };
-      }
+      shipmentMap[ref] = shipmentMap[ref] || [];
+      shipmentMap[ref].push({ reference: ref, carrier_cost: value });
       parsed++;
     } else {
       skipped++;
     }
   }
 
-  const shipments = Object.values(shipmentMap);
+  // Flatten to array, preserving duplicates — each invoice line is one result row.
+  // Attach a lineKey (reference + line index within that reference) so the
+  // matching algorithm can tell the two rows apart.
+  const shipments = [];
+  for (const [ref, lines] of Object.entries(shipmentMap)) {
+    lines.forEach((line, i) => {
+      shipments.push({ ...line, lineKey: lines.length > 1 ? `${ref}::${i}` : ref });
+    });
+  }
+
   return { shipments, surcharges, parsed, skipped };
 }
 
@@ -447,6 +454,12 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
 
   const { shipments, surcharges } = parseResult;
 
+  // Count how many invoice lines share each reference (for the return badge)
+  const byRef = {};
+  for (const s of shipments) {
+    byRef[s.reference] = (byRef[s.reference] || 0) + 1;
+  }
+
   // ── Lookup — runs on mount and whenever refreshCount increments ──────────
   // useEffect (not an inline call) ensures the fetch is never stale and the
   // Refresh button always hits the DB fresh (important after cost price edits).
@@ -462,15 +475,50 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
         if (cancelled) return;
         const { matched } = resp.data;
 
-        // Build a map from reference → grouped result (server already grouped by ref)
+        // Build a map from reference → group (contains array of DB charges)
         const groupMap = {};
         for (const g of matched) groupMap[g.reference] = g;
 
-        // Merge each invoice row with its DB group
+        // For each reference that has multiple invoice lines AND multiple DB charges,
+        // greedily assign each invoice line to its best-matching (closest cost_price)
+        // DB charge, so that outbound→outbound and return→return even when both
+        // appear on the same invoice.
+        //
+        // "Available" charges per reference — clone so we can remove matched ones.
+        const available = {};
+        for (const g of matched) {
+          available[g.reference] = [...g.charges];
+        }
+
+        // Sort invoice lines per reference by carrier_cost so we assign cheapest
+        // to cheapest DB charge (consistent, avoids ambiguity).
+        const invoiceByRef = {};
+        for (const s of shipments) {
+          invoiceByRef[s.reference] = invoiceByRef[s.reference] || [];
+          invoiceByRef[s.reference].push(s);
+        }
+        for (const lines of Object.values(invoiceByRef)) {
+          lines.sort((a, b) => a.carrier_cost - b.carrier_cost);
+        }
+
         const rows = shipments.map(s => {
-          const group  = groupMap[s.reference] || null;
-          const status = getStatus(s.carrier_cost, group);
-          return { ...s, group, status };
+          const group = groupMap[s.reference] || null;
+
+          let bestCharge = null;
+          if (group) {
+            const pool = available[s.reference];
+            if (pool && pool.length > 0) {
+              // Pick the charge whose cost_price is closest to this invoice line
+              pool.sort((a, b) =>
+                Math.abs((a.cost_price ?? Infinity) - s.carrier_cost) -
+                Math.abs((b.cost_price ?? Infinity) - s.carrier_cost)
+              );
+              bestCharge = pool.shift(); // claim it — can't be used by another line
+            }
+          }
+
+          const status = getStatus(s.carrier_cost, bestCharge ? { ...group, charges: [bestCharge], has_null_cost: bestCharge.cost_price == null, total_cost_price: bestCharge.cost_price } : null);
+          return { ...s, group, bestCharge, status };
         });
 
         setResults(rows);
@@ -697,8 +745,8 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
               </div>
               <div style={{ fontSize: 22, fontWeight: 800, color: '#00C853' }}>
                 {gbp(results
-                  .filter(r => r.group && !r.group.has_null_cost)
-                  .reduce((s, r) => s + r.group.total_cost_price, 0)
+                  .filter(r => r.bestCharge?.cost_price != null)
+                  .reduce((s, r) => s + r.bestCharge.cost_price, 0)
                 )}
               </div>
               <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>From matched charges</div>
@@ -795,10 +843,11 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                     </tr>
                   )}
                   {displayed.map(row => {
-                    const isSelected = selected.has(row.reference);
+                    const isSelected = selected.has(row.lineKey);
                     const g    = row.group;
-                    const diff = g && !g.has_null_cost
-                      ? parseFloat(row.carrier_cost) - g.total_cost_price
+                    const bc   = row.bestCharge;
+                    const diff = bc?.cost_price != null
+                      ? parseFloat(row.carrier_cost) - bc.cost_price
                       : null;
                     const diffColor = diff == null ? '#555'
                       : diff > 0.005 ? '#F44336'
@@ -807,18 +856,18 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
 
                     return (
                       <tr
-                        key={row.reference}
+                        key={row.lineKey}
                         style={{
                           background: isSelected ? 'rgba(0,200,83,0.04)' : undefined,
                           cursor: 'pointer',
                         }}
-                        onClick={() => toggleRow(row.reference)}
+                        onClick={() => toggleRow(row.lineKey)}
                       >
                         <td style={{ ...td, textAlign: 'center', width: 36 }}>
                           <input
                             type="checkbox"
                             checked={isSelected}
-                            onChange={() => toggleRow(row.reference)}
+                            onChange={() => toggleRow(row.lineKey)}
                             onClick={e => e.stopPropagation()}
                             style={{ cursor: 'pointer', accentColor: '#00C853' }}
                           />
@@ -831,7 +880,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                             }}>
                               {row.reference}
                             </span>
-                            {g?.has_return && (
+                            {byRef[row.reference] > 1 && (
                               <span style={{
                                 fontSize: 9, fontWeight: 700, letterSpacing: '0.05em',
                                 textTransform: 'uppercase',
@@ -839,7 +888,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                                 border: '1px solid rgba(0,188,212,0.3)',
                                 color: '#00BCD4', borderRadius: 20, padding: '1px 6px',
                               }}>
-                                + return ({g.charge_count})
+                                return
                               </span>
                             )}
                           </div>
@@ -865,12 +914,12 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                           </span>
                         </td>
                         <td style={{ ...td, textAlign: 'right' }}>
-                          <span style={{ color: g && !g.has_null_cost ? '#CCC' : '#555' }}>
-                            {g && !g.has_null_cost ? gbp(g.total_cost_price) : '—'}
+                          <span style={{ color: bc?.cost_price != null ? '#CCC' : '#555' }}>
+                            {bc?.cost_price != null ? gbp(bc.cost_price) : '—'}
                           </span>
-                          {g?.has_return && !g.has_null_cost && (
+                          {bc?.service_name && (
                             <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>
-                              combined {g.charge_count} charges
+                              {bc.service_name}
                             </div>
                           )}
                         </td>
