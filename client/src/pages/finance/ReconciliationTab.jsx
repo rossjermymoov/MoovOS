@@ -1357,32 +1357,42 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                             <span style={{ fontSize: 12, color: '#555' }}>—</span>
                           )}
                         </td>
-                        {/* Weight — declared (ours) vs billed (DHL invoice) */}
+                        {/* Weight — billed (DHL invoice) / declared (our DB) */}
                         <td style={{ ...td, textAlign: 'right' }}>
                           {(() => {
-                            const declared = bc?.declared_weight_kg;
-                            const billed   = row.billed_weight_kg;
-                            const hasBoth  = declared != null && billed != null;
-                            const diff     = hasBoth ? billed - declared : null;
+                            const declared    = bc?.declared_weight_kg;
+                            const billed      = row.billed_weight_kg;
+                            const hasBoth     = declared != null && billed != null;
+                            const diff        = hasBoth ? billed - declared : null;
                             const discrepancy = diff != null && Math.abs(diff) >= 0.1;
                             return (
                               <div>
+                                {/* Billed weight from DHL invoice */}
                                 {billed != null ? (
-                                  <span style={{
-                                    fontWeight: discrepancy ? 700 : 400,
-                                    color: discrepancy ? '#F44336' : '#CCC',
-                                  }}>
+                                  <span style={{ fontWeight: 600, color: discrepancy ? '#F44336' : '#CCC' }}>
                                     {billed.toFixed(2)} kg
                                   </span>
+                                ) : declared != null ? (
+                                  <span style={{ color: '#888' }}>—</span>
                                 ) : (
                                   <span style={{ color: '#555' }}>—</span>
                                 )}
+                                {/* Declared weight from our DB — always shown when available */}
                                 {declared != null && (
-                                  <div style={{ fontSize: 10, color: discrepancy ? '#F44336' : '#555', marginTop: 1 }}>
+                                  <div style={{
+                                    fontSize: 11, marginTop: 2,
+                                    color: discrepancy ? '#FFC107' : '#888',
+                                    fontWeight: discrepancy ? 700 : 400,
+                                  }}>
                                     {declared.toFixed(2)} kg declared
-                                    {discrepancy && (
-                                      <span style={{ marginLeft: 4, fontWeight: 700 }}>
-                                        +{(diff).toFixed(2)}
+                                    {discrepancy && diff > 0 && (
+                                      <span style={{ marginLeft: 5, color: '#F44336', fontWeight: 700 }}>
+                                        ▲{diff.toFixed(2)}
+                                      </span>
+                                    )}
+                                    {discrepancy && diff < 0 && (
+                                      <span style={{ marginLeft: 5, color: '#00C853', fontWeight: 700 }}>
+                                        ▼{Math.abs(diff).toFixed(2)}
                                       </span>
                                     )}
                                   </div>
