@@ -1569,16 +1569,24 @@ router.get('/charges/stats', async (req, res, next) => {
 
     const r = await query(`
       WITH courier_stats AS (
+        -- Counts are courier-only (one row per shipment)
         SELECT
           COUNT(*)::int                                                              AS total_charges,
           SUM(CASE WHEN c.price IS NULL THEN 1 ELSE 0 END)::int                    AS unpriced,
           SUM(CASE WHEN c.billed  THEN 1 ELSE 0 END)::int                          AS billed,
           SUM(CASE WHEN NOT c.billed AND c.price IS NOT NULL THEN 1 ELSE 0 END)::int AS pending,
-          SUM(CASE WHEN c.awaiting_reconciliation AND NOT c.billed THEN 1 ELSE 0 END)::int AS awaiting_reconciliation,
+          SUM(CASE WHEN c.awaiting_reconciliation AND NOT c.billed THEN 1 ELSE 0 END)::int AS awaiting_reconciliation
+        FROM charges c
+        ${courierWhere}
+      ),
+      value_stats AS (
+        -- Revenue totals include all charge types (courier + surcharge + fuel)
+        -- so that changes to surcharge prices are immediately reflected in KPIs
+        SELECT
           COALESCE(SUM(c.price), 0)::numeric(12,2)                                 AS total_value,
           COALESCE(SUM(CASE WHEN NOT c.billed THEN c.price ELSE 0 END), 0)::numeric(12,2) AS unbilled_value
         FROM charges c
-        ${courierWhere}
+        ${allWhere}
       ),
       profit_stats AS (
         SELECT
@@ -1591,6 +1599,8 @@ router.get('/charges/stats', async (req, res, next) => {
       )
       SELECT
         cs.*,
+        vs.total_value,
+        vs.unbilled_value,
         ps.gross_sell,
         ps.gross_cost,
         (ps.gross_sell - ps.gross_cost)::numeric(12,2)                         AS profit,
@@ -1598,7 +1608,7 @@ router.get('/charges/stats', async (req, res, next) => {
              THEN ROUND((ps.gross_sell - ps.gross_cost) / ps.gross_sell * 100, 1)
              ELSE 0
         END::numeric(6,1)                                                       AS profit_pct
-      FROM courier_stats cs, profit_stats ps
+      FROM courier_stats cs, value_stats vs, profit_stats ps
     `, vals);
 
     res.json(r.rows[0]);

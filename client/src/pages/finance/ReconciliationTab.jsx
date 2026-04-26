@@ -190,9 +190,14 @@ function parseDhlCsv(text) {
     const billedWeightRaw = colWeight >= 0 ? (cols[colWeight] || '').replace(/[,\s]/g, '') : '';
     const billedWeightKg  = billedWeightRaw !== '' ? parseFloat(billedWeightRaw) : null;
 
-    // Piece count per consignment — DHL charge HGV per piece, not per line
+    // Piece count per consignment — DHL charge HGV per piece, not per line.
+    // If the column wasn't detected (colPieces === -1), use null so the fallback
+    // to bestCharge.parcel_count kicks in at reconciliation time.
     const piecesRaw   = colPieces >= 0 ? (cols[colPieces] || '').replace(/[,\s]/g, '') : '';
-    const csvPieces   = piecesRaw !== '' && !isNaN(parseInt(piecesRaw, 10)) ? parseInt(piecesRaw, 10) : 1;
+    const csvPieces   = piecesRaw !== '' && !isNaN(parseInt(piecesRaw, 10))
+      ? parseInt(piecesRaw, 10)
+      : colPieces >= 0 ? 1   // column found but empty/unparseable → 1
+      : null;                // column not found at all → null, use DB parcel_count
 
     shipmentMap[ref] = shipmentMap[ref] || [];
     shipmentMap[ref].push({
