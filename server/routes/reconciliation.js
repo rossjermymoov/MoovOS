@@ -5,6 +5,11 @@
  *   Body: { courier: string, references: string[] }
  *   Looks up charges by order_id and returns cost/sell prices for comparison
  *   against a carrier invoice CSV.
+ *
+ * GET  /api/reconciliation/service-mappings?courier=DHL
+ * POST /api/reconciliation/service-mappings
+ *   Body: { courier, invoice_name, internal_name, notes? }
+ * DELETE /api/reconciliation/service-mappings/:id
  */
 
 import express from 'express';
@@ -127,6 +132,65 @@ router.post('/bulk-lookup', async (req, res) => {
     });
   } catch (err) {
     console.error('[reconciliation] bulk-lookup error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Service name mappings ────────────────────────────────────────────────────
+// Maps carrier invoice service names (e.g. "HomeServe Sign Mand") to human-readable
+// internal names (e.g. "DHL Next Day"). Stored per courier.
+
+// GET /api/reconciliation/service-mappings?courier=DHL
+router.get('/service-mappings', async (req, res) => {
+  try {
+    const { courier } = req.query;
+    const rows = courier
+      ? await query(
+          'SELECT * FROM reconciliation_service_mappings WHERE courier = $1 ORDER BY invoice_name',
+          [courier]
+        )
+      : await query(
+          'SELECT * FROM reconciliation_service_mappings ORDER BY courier, invoice_name'
+        );
+    return res.json(rows.rows);
+  } catch (err) {
+    console.error('[reconciliation] service-mappings GET error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/reconciliation/service-mappings
+router.post('/service-mappings', async (req, res) => {
+  try {
+    const { courier, invoice_name, internal_name, notes } = req.body;
+    if (!courier)       return res.status(400).json({ error: 'courier is required' });
+    if (!invoice_name)  return res.status(400).json({ error: 'invoice_name is required' });
+    if (!internal_name) return res.status(400).json({ error: 'internal_name is required' });
+
+    const result = await query(
+      `INSERT INTO reconciliation_service_mappings (courier, invoice_name, internal_name, notes)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (courier, invoice_name)
+       DO UPDATE SET internal_name = EXCLUDED.internal_name,
+                     notes         = EXCLUDED.notes,
+                     updated_at    = NOW()
+       RETURNING *`,
+      [courier.trim(), invoice_name.trim(), internal_name.trim(), notes?.trim() || null]
+    );
+    return res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error('[reconciliation] service-mappings POST error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/reconciliation/service-mappings/:id
+router.delete('/service-mappings/:id', async (req, res) => {
+  try {
+    await query('DELETE FROM reconciliation_service_mappings WHERE id = $1', [req.params.id]);
+    return res.json({ deleted: true });
+  } catch (err) {
+    console.error('[reconciliation] service-mappings DELETE error:', err);
     return res.status(500).json({ error: err.message });
   }
 });

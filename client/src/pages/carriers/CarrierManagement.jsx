@@ -919,10 +919,12 @@ function DomesticServiceBands({ svc, cardId, onUpdateBand }) {
 }
 
 function BandRow({ band, onUpdate }) {
-  const [editFirst, setEditFirst] = useState(false);
-  const [editSub,   setEditSub]   = useState(false);
-  const [valFirst,  setValFirst]  = useState(parseFloat(band.price_first).toFixed(2));
-  const [valSub,    setValSub]    = useState(band.price_sub ? parseFloat(band.price_sub).toFixed(2) : '');
+  const [editFirst,   setEditFirst]   = useState(false);
+  const [editSub,     setEditSub]     = useState(false);
+  const [editPerKg,   setEditPerKg]   = useState(false);
+  const [valFirst,    setValFirst]    = useState(parseFloat(band.price_first).toFixed(2));
+  const [valSub,      setValSub]      = useState(band.price_sub ? parseFloat(band.price_sub).toFixed(2) : '');
+  const [valPerKg,    setValPerKg]    = useState(band.cost_per_kg ? parseFloat(band.cost_per_kg).toFixed(4) : '');
 
   function commitFirst() {
     const v = parseFloat(valFirst);
@@ -936,6 +938,23 @@ function BandRow({ band, onUpdate }) {
     else setValSub(band.price_sub ? parseFloat(band.price_sub).toFixed(2) : '');
     setEditSub(false);
   }
+  function commitPerKg() {
+    const v = valPerKg.trim();
+    if (v === '' || v === '0') {
+      onUpdate({ cost_per_kg: null });
+      setValPerKg('');
+    } else {
+      const n = parseFloat(v);
+      if (!isNaN(n) && n >= 0) {
+        onUpdate({ cost_per_kg: n, cost_per_kg_threshold_kg: band.cost_per_kg_threshold_kg ?? 30 });
+      } else {
+        setValPerKg(band.cost_per_kg ? parseFloat(band.cost_per_kg).toFixed(4) : '');
+      }
+    }
+    setEditPerKg(false);
+  }
+
+  const threshold = band.cost_per_kg_threshold_kg != null ? parseFloat(band.cost_per_kg_threshold_kg) : 30;
 
   return (
     <tr style={{ borderBottom:'1px solid rgba(255,255,255,0.03)' }}>
@@ -962,6 +981,19 @@ function BandRow({ band, onUpdate }) {
           <span onClick={() => setEditSub(true)} title="Click to edit"
             style={{ fontFamily:'monospace', fontSize:12, color: band.price_sub ? '#FFC107' : '#333', cursor:'pointer', padding:'2px 8px', borderRadius:9999, border:'1px solid rgba(255,255,255,0.06)' }}>
             {band.price_sub ? `£${parseFloat(band.price_sub).toFixed(2)}` : '—'}
+          </span>
+        )}
+      </td>
+      <td style={{ padding:'5px 8px', textAlign:'right' }}>
+        {editPerKg ? (
+          <input value={valPerKg} onChange={e => setValPerKg(e.target.value)}
+            onBlur={commitPerKg} onKeyDown={e => { if (e.key==='Enter') commitPerKg(); if (e.key==='Escape') { setValPerKg(band.cost_per_kg ? parseFloat(band.cost_per_kg).toFixed(4):''); setEditPerKg(false); }}}
+            autoFocus placeholder="0.0000"
+            style={{ width:80, textAlign:'right', fontFamily:'monospace', fontSize:12, color:'#00BCD4', fontWeight:700, background:'rgba(0,188,212,0.08)', border:'1px solid rgba(0,188,212,0.4)', borderRadius:9999, padding:'2px 8px' }}/>
+        ) : (
+          <span onClick={() => setEditPerKg(true)} title={band.cost_per_kg ? `£${parseFloat(band.cost_per_kg).toFixed(4)}/kg above ${threshold}kg — click to edit` : 'Click to set per-kg rate'}
+            style={{ fontFamily:'monospace', fontSize:12, color: band.cost_per_kg ? '#00BCD4' : '#333', cursor:'pointer', padding:'2px 8px', borderRadius:9999, border:'1px solid rgba(255,255,255,0.06)' }}>
+            {band.cost_per_kg ? `£${parseFloat(band.cost_per_kg).toFixed(4)} >${threshold}kg` : '—'}
           </span>
         )}
       </td>
@@ -2804,19 +2836,32 @@ function RateMatrix({ zones }) {
 // ─── LEVEL 3 — Zone config (accordion per zone) ───────────────────────────────
 
 function WeightBandsTable({ zoneId, bands, onRefresh }) {
-  const [adding, setAdding]     = useState(false);
-  const [editId, setEditId]     = useState(null);
-  const [editVal, setEditVal]   = useState('');
-  const [form, setForm]         = useState({ name:'', min_weight_kg:'', max_weight_kg:'', price_first:'', price_sub:'' });
+  const [adding, setAdding]       = useState(false);
+  const [editId, setEditId]       = useState(null);
+  const [editVal, setEditVal]     = useState('');
+  const [form, setForm]           = useState({ name:'', min_weight_kg:'', max_weight_kg:'', price_first:'', price_sub:'', cost_per_kg:'', cost_per_kg_threshold_kg:'30' });
   const [confirmId, setConfirmId] = useState(null);
 
   const addBand = useMutation({
-    mutationFn: () => carriersApi.createWeightBand({ ...form, zone_id: zoneId }),
-    onSuccess: () => { setAdding(false); setForm({ name:'', min_weight_kg:'', max_weight_kg:'', price_first:'', price_sub:'' }); onRefresh(); },
+    mutationFn: () => carriersApi.createWeightBand({
+      ...form,
+      zone_id: zoneId,
+      cost_per_kg:              form.cost_per_kg              !== '' ? parseFloat(form.cost_per_kg)              : null,
+      cost_per_kg_threshold_kg: form.cost_per_kg_threshold_kg !== '' ? parseFloat(form.cost_per_kg_threshold_kg) : 30,
+    }),
+    onSuccess: () => {
+      setAdding(false);
+      setForm({ name:'', min_weight_kg:'', max_weight_kg:'', price_first:'', price_sub:'', cost_per_kg:'', cost_per_kg_threshold_kg:'30' });
+      onRefresh();
+    },
   });
   const renameBand = useMutation({
     mutationFn: ({ id, name }) => carriersApi.updateWeightBand(id, { name }),
     onSuccess: () => { setEditId(null); setEditVal(''); onRefresh(); },
+  });
+  const updateBand = useMutation({
+    mutationFn: ({ id, ...data }) => carriersApi.updateWeightBand(id, data),
+    onSuccess: () => onRefresh(),
   });
   const delBand = useMutation({
     mutationFn: (id) => carriersApi.deleteWeightBand(id),
@@ -2832,55 +2877,87 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
         </button>
       </div>
       {adding && (
-        <div style={{ display:'grid', gridTemplateColumns:'1.4fr 1fr 1fr 1fr 1fr auto', gap:8, marginBottom:10 }}>
-          <div className="pill-input-wrap" style={{ height:32 }}>
-            <input placeholder="Name (e.g. Parcel)" value={form.name} onChange={e => setForm(f=>({...f,name:e.target.value}))} style={{ fontSize:12 }}/>
-          </div>
-          {[['Min kg','min_weight_kg'],['Max kg','max_weight_kg'],['Cost 1st £','price_first'],['Cost Sub £','price_sub']].map(([ph,key]) => (
-            <div key={key} className="pill-input-wrap" style={{ height:32 }}>
-              <input type="number" step="0.001" placeholder={ph} value={form[key]} onChange={e => setForm(f=>({...f,[key]:e.target.value}))} style={{ fontSize:12 }}/>
+        <div style={{ marginBottom:10 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1.4fr 1fr 1fr 1fr 1fr auto', gap:8, marginBottom:6 }}>
+            <div className="pill-input-wrap" style={{ height:32 }}>
+              <input placeholder="Name (e.g. Parcel)" value={form.name} onChange={e => setForm(f=>({...f,name:e.target.value}))} style={{ fontSize:12 }}/>
             </div>
-          ))}
-          <button onClick={() => addBand.mutate()} className="btn-primary" style={{ height:32 }}><Check size={12}/></button>
+            {[['Min kg','min_weight_kg'],['Max kg','max_weight_kg'],['Cost 1st £','price_first'],['Cost Sub £','price_sub']].map(([ph,key]) => (
+              <div key={key} className="pill-input-wrap" style={{ height:32 }}>
+                <input type="number" step="0.001" placeholder={ph} value={form[key]} onChange={e => setForm(f=>({...f,[key]:e.target.value}))} style={{ fontSize:12 }}/>
+              </div>
+            ))}
+            <div/>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1.4fr 1fr 1fr auto', gap:8 }}>
+            <div style={{ fontSize:11, color:'#555', display:'flex', alignItems:'center', paddingLeft:4 }}>
+              Per-kg rate (optional — for carriers like DHL that charge per kg above a threshold)
+            </div>
+            <div className="pill-input-wrap" style={{ height:32 }}>
+              <input type="number" step="0.0001" placeholder="£/kg above threshold" value={form.cost_per_kg}
+                onChange={e => setForm(f=>({...f,cost_per_kg:e.target.value}))} style={{ fontSize:12, color:'#00BCD4' }}/>
+            </div>
+            <div className="pill-input-wrap" style={{ height:32 }}>
+              <input type="number" step="0.001" placeholder="Threshold kg (default 30)" value={form.cost_per_kg_threshold_kg}
+                onChange={e => setForm(f=>({...f,cost_per_kg_threshold_kg:e.target.value}))} style={{ fontSize:12, color:'#00BCD4' }}/>
+            </div>
+            <button onClick={() => addBand.mutate()} className="btn-primary" style={{ height:32 }}><Check size={12}/></button>
+          </div>
         </div>
       )}
       {confirmId && <div style={{ marginBottom:8 }}><Confirm message="Delete weight band?" onConfirm={() => delBand.mutate(confirmId)} onCancel={() => setConfirmId(null)}/></div>}
       <table className="moov-table" style={{ fontSize:12 }}>
-        <thead><tr><th>Name</th><th>Min kg</th><th>Max kg</th><th>Cost 1st</th><th>Cost Sub</th><th></th></tr></thead>
+        <thead>
+          <tr>
+            <th>Name</th><th>Min kg</th><th>Max kg</th><th>Cost 1st</th><th>Cost Sub</th>
+            <th title="Per-kg rate above threshold (e.g. DHL back-kilo charge)">£/kg above</th>
+            <th></th>
+          </tr>
+        </thead>
         <tbody>
-          {bands.length === 0 && <tr><td colSpan={6} style={{ textAlign:'center', color:'#555' }}>No bands</td></tr>}
-          {bands.map(b => (
-            <tr key={b.id}>
-              <td>
-                {editId === b.id ? (
-                  <div style={{ display:'flex', gap:4, alignItems:'center' }}>
-                    <div className="pill-input-wrap" style={{ height:26, flex:1 }}>
-                      <input autoFocus value={editVal} onChange={e => setEditVal(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') renameBand.mutate({ id: b.id, name: editVal }); if (e.key === 'Escape') { setEditId(null); setEditVal(''); } }}
-                        style={{ fontSize:11 }}/>
+          {bands.length === 0 && <tr><td colSpan={7} style={{ textAlign:'center', color:'#555' }}>No bands</td></tr>}
+          {bands.map(b => {
+            const threshold = b.cost_per_kg_threshold_kg != null ? parseFloat(b.cost_per_kg_threshold_kg) : 30;
+            return (
+              <tr key={b.id}>
+                <td>
+                  {editId === b.id ? (
+                    <div style={{ display:'flex', gap:4, alignItems:'center' }}>
+                      <div className="pill-input-wrap" style={{ height:26, flex:1 }}>
+                        <input autoFocus value={editVal} onChange={e => setEditVal(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') renameBand.mutate({ id: b.id, name: editVal }); if (e.key === 'Escape') { setEditId(null); setEditVal(''); } }}
+                          style={{ fontSize:11 }}/>
+                      </div>
+                      <button onClick={() => renameBand.mutate({ id: b.id, name: editVal })}
+                        style={{ background:'none', border:'none', color:'#00C853', cursor:'pointer', padding:0 }}><Check size={11}/></button>
+                      <button onClick={() => { setEditId(null); setEditVal(''); }}
+                        style={{ background:'none', border:'none', color:'#555', cursor:'pointer', padding:0 }}>✕</button>
                     </div>
-                    <button onClick={() => renameBand.mutate({ id: b.id, name: editVal })}
-                      style={{ background:'none', border:'none', color:'#00C853', cursor:'pointer', padding:0 }}><Check size={11}/></button>
-                    <button onClick={() => { setEditId(null); setEditVal(''); }}
-                      style={{ background:'none', border:'none', color:'#555', cursor:'pointer', padding:0 }}>✕</button>
-                  </div>
-                ) : (
-                  <span onClick={() => { setEditId(b.id); setEditVal(b.name || ''); }}
-                    style={{ cursor:'pointer', color: b.name ? '#fff' : '#444', fontStyle: b.name ? 'normal' : 'italic' }}
-                    title="Click to name this band">
-                    {b.name || 'unnamed'}
-                  </span>
-                )}
-              </td>
-              <td>{parseFloat(b.min_weight_kg).toFixed(3)}</td>
-              <td>{parseFloat(b.max_weight_kg).toFixed(3)}</td>
-              <td style={{ color:'#00C853' }}>£{parseFloat(b.price_first).toFixed(2)}</td>
-              <td style={{ color:'#FFC107' }}>{b.price_sub ? `£${parseFloat(b.price_sub).toFixed(2)}` : <span style={{ color:'#555' }}>—</span>}</td>
-              <td style={{ textAlign:'right' }}>
-                <button onClick={() => setConfirmId(b.id)} style={{ background:'none', border:'none', color:'#555', cursor:'pointer' }}><Trash2 size={11}/></button>
-              </td>
-            </tr>
-          ))}
+                  ) : (
+                    <span onClick={() => { setEditId(b.id); setEditVal(b.name || ''); }}
+                      style={{ cursor:'pointer', color: b.name ? '#fff' : '#444', fontStyle: b.name ? 'normal' : 'italic' }}
+                      title="Click to name this band">
+                      {b.name || 'unnamed'}
+                    </span>
+                  )}
+                </td>
+                <td>{parseFloat(b.min_weight_kg).toFixed(3)}</td>
+                <td>{parseFloat(b.max_weight_kg).toFixed(3)}</td>
+                <td style={{ color:'#00C853' }}>£{parseFloat(b.price_first).toFixed(2)}</td>
+                <td style={{ color:'#FFC107' }}>{b.price_sub ? `£${parseFloat(b.price_sub).toFixed(2)}` : <span style={{ color:'#555' }}>—</span>}</td>
+                <td style={{ color: b.cost_per_kg ? '#00BCD4' : '#555' }}>
+                  {b.cost_per_kg
+                    ? <span title={`£${parseFloat(b.cost_per_kg).toFixed(4)} per kg (or part thereof) above ${threshold} kg`}>
+                        £{parseFloat(b.cost_per_kg).toFixed(4)} &gt;{threshold}kg
+                      </span>
+                    : '—'}
+                </td>
+                <td style={{ textAlign:'right' }}>
+                  <button onClick={() => setConfirmId(b.id)} style={{ background:'none', border:'none', color:'#555', cursor:'pointer' }}><Trash2 size={11}/></button>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

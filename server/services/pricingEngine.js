@@ -135,7 +135,8 @@ async function lookupCostPrice(serviceId, zoneId, weightKg, isFirstParcel) {
 
   // Check custom rate cards first
   const custom = await query(
-    `SELECT price_first, price_sub FROM custom_cost_rate_cards
+    `SELECT price_first, price_sub, cost_per_kg, cost_per_kg_threshold_kg
+     FROM custom_cost_rate_cards
      WHERE courier_service_id = $1 AND zone_id = $2
        AND min_weight_kg <= $3 AND max_weight_kg >= $3
        AND (active_from IS NULL OR active_from <= $4)
@@ -144,24 +145,40 @@ async function lookupCostPrice(serviceId, zoneId, weightKg, isFirstParcel) {
     [serviceId, zoneId, weightKg, today]
   );
 
-  let priceFirst, priceSub;
+  let priceFirst, priceSub, costPerKg, costPerKgThreshold;
   if (custom.rows.length) {
-    priceFirst = parseFloat(custom.rows[0].price_first);
-    priceSub   = custom.rows[0].price_sub != null ? parseFloat(custom.rows[0].price_sub) : null;
+    const row = custom.rows[0];
+    priceFirst         = parseFloat(row.price_first);
+    priceSub           = row.price_sub           != null ? parseFloat(row.price_sub)           : null;
+    costPerKg          = row.cost_per_kg          != null ? parseFloat(row.cost_per_kg)          : null;
+    costPerKgThreshold = row.cost_per_kg_threshold_kg != null ? parseFloat(row.cost_per_kg_threshold_kg) : 30;
   } else {
     // Standard weight band
     const band = await query(
-      `SELECT price_first, price_sub FROM weight_bands
+      `SELECT price_first, price_sub, cost_per_kg, cost_per_kg_threshold_kg
+       FROM weight_bands
        WHERE zone_id = $1 AND min_weight_kg <= $2 AND max_weight_kg >= $2
        LIMIT 1`,
       [zoneId, weightKg]
     );
     if (!band.rows.length) return null;
-    priceFirst = parseFloat(band.rows[0].price_first);
-    priceSub   = band.rows[0].price_sub != null ? parseFloat(band.rows[0].price_sub) : null;
+    const row = band.rows[0];
+    priceFirst         = parseFloat(row.price_first);
+    priceSub           = row.price_sub           != null ? parseFloat(row.price_sub)           : null;
+    costPerKg          = row.cost_per_kg          != null ? parseFloat(row.cost_per_kg)          : null;
+    costPerKgThreshold = row.cost_per_kg_threshold_kg != null ? parseFloat(row.cost_per_kg_threshold_kg) : 30;
   }
 
-  return isFirstParcel ? priceFirst : (priceSub ?? priceFirst);
+  // Base rate: first parcel uses price_first; subsequent parcels use price_sub (if set)
+  let basePrice = isFirstParcel ? priceFirst : (priceSub ?? priceFirst);
+
+  // Per-kg surcharge above threshold (e.g. DHL: fixed up to 30 kg, then £x/kg or part thereof)
+  if (costPerKg != null && weightKg > costPerKgThreshold) {
+    const kgsOver = Math.ceil(weightKg - costPerKgThreshold);
+    basePrice += kgsOver * costPerKg;
+  }
+
+  return basePrice;
 }
 
 // ─── Sell price calculation ───────────────────────────────────────────────────

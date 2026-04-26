@@ -140,7 +140,7 @@ router.get('/services/:id', async (req, res, next) => {
       `SELECT z.*,
          COALESCE(json_agg(DISTINCT jsonb_build_object('id',zcc.id,'country_iso',zcc.country_iso)) FILTER (WHERE zcc.id IS NOT NULL), '[]') AS country_codes,
          COALESCE(json_agg(DISTINCT jsonb_build_object('id',zpr.id,'postcode_prefix',zpr.postcode_prefix,'rule_type',zpr.rule_type)) FILTER (WHERE zpr.id IS NOT NULL), '[]') AS postcode_rules,
-         COALESCE(json_agg(DISTINCT jsonb_build_object('id',wb.id,'name',wb.name,'min_weight_kg',wb.min_weight_kg,'max_weight_kg',wb.max_weight_kg,'price_first',wb.price_first,'price_sub',wb.price_sub)) FILTER (WHERE wb.id IS NOT NULL), '[]') AS weight_bands
+         COALESCE(json_agg(DISTINCT jsonb_build_object('id',wb.id,'name',wb.name,'min_weight_kg',wb.min_weight_kg,'max_weight_kg',wb.max_weight_kg,'price_first',wb.price_first,'price_sub',wb.price_sub,'cost_per_kg',wb.cost_per_kg,'cost_per_kg_threshold_kg',wb.cost_per_kg_threshold_kg)) FILTER (WHERE wb.id IS NOT NULL), '[]') AS weight_bands
        FROM zones z
        LEFT JOIN zone_country_codes zcc ON zcc.zone_id = z.id
        LEFT JOIN zone_postcode_rules zpr ON zpr.zone_id = z.id
@@ -391,14 +391,21 @@ router.delete('/zones/postcode-rules/:id', async (req, res, next) => {
 // POST /api/carriers/weight-bands
 router.post('/weight-bands', async (req, res, next) => {
   try {
-    const { zone_id, min_weight_kg, max_weight_kg, price_first, price_sub, name } = req.body;
+    const { zone_id, min_weight_kg, max_weight_kg, price_first, price_sub, name,
+            cost_per_kg, cost_per_kg_threshold_kg } = req.body;
     if (!zone_id)         return res.status(400).json({ error: 'zone_id is required' });
     if (min_weight_kg == null) return res.status(400).json({ error: 'min_weight_kg is required' });
     if (max_weight_kg == null) return res.status(400).json({ error: 'max_weight_kg is required' });
     if (price_first == null)   return res.status(400).json({ error: 'price_first is required' });
     const result = await query(
-      'INSERT INTO weight_bands (zone_id, name, min_weight_kg, max_weight_kg, price_first, price_sub) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
-      [zone_id, name?.trim() || null, min_weight_kg, max_weight_kg, price_first, price_sub || null]
+      `INSERT INTO weight_bands
+         (zone_id, name, min_weight_kg, max_weight_kg, price_first, price_sub,
+          cost_per_kg, cost_per_kg_threshold_kg)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [zone_id, name?.trim() || null, min_weight_kg, max_weight_kg, price_first,
+       price_sub || null,
+       cost_per_kg != null ? cost_per_kg : null,
+       cost_per_kg_threshold_kg != null ? cost_per_kg_threshold_kg : 30]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) { next(err); }
@@ -407,7 +414,8 @@ router.post('/weight-bands', async (req, res, next) => {
 // PATCH /api/carriers/weight-bands/:id
 router.patch('/weight-bands/:id', async (req, res, next) => {
   try {
-    const allowed = ['name', 'min_weight_kg', 'max_weight_kg', 'price_first', 'price_sub'];
+    const allowed = ['name', 'min_weight_kg', 'max_weight_kg', 'price_first', 'price_sub',
+                     'cost_per_kg', 'cost_per_kg_threshold_kg'];
     const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));
     if (!updates.length) return res.status(400).json({ error: 'No valid fields to update' });
     const setClauses = updates.map(([k], i) => `${k} = $${i + 2}`).join(', ');
@@ -592,15 +600,22 @@ router.delete('/rules/conditions/:id', async (req, res, next) => {
 
 router.post('/custom-cost-rates', async (req, res, next) => {
   try {
-    const { courier_service_id, zone_id, name, min_weight_kg, max_weight_kg, price_first, price_sub, active_from, active_to } = req.body;
+    const { courier_service_id, zone_id, name, min_weight_kg, max_weight_kg, price_first, price_sub,
+            active_from, active_to, cost_per_kg, cost_per_kg_threshold_kg } = req.body;
     if (!courier_service_id) return res.status(400).json({ error: 'courier_service_id is required' });
     if (!zone_id)            return res.status(400).json({ error: 'zone_id is required' });
     if (min_weight_kg == null) return res.status(400).json({ error: 'min_weight_kg is required' });
     if (max_weight_kg == null) return res.status(400).json({ error: 'max_weight_kg is required' });
     if (price_first == null)   return res.status(400).json({ error: 'price_first is required' });
     const result = await query(
-      'INSERT INTO custom_cost_rate_cards (courier_service_id, zone_id, name, min_weight_kg, max_weight_kg, price_first, price_sub, active_from, active_to) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *',
-      [courier_service_id, zone_id, name || null, min_weight_kg, max_weight_kg, price_first, price_sub || null, active_from || null, active_to || null]
+      `INSERT INTO custom_cost_rate_cards
+         (courier_service_id, zone_id, name, min_weight_kg, max_weight_kg, price_first, price_sub,
+          active_from, active_to, cost_per_kg, cost_per_kg_threshold_kg)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [courier_service_id, zone_id, name || null, min_weight_kg, max_weight_kg, price_first,
+       price_sub || null, active_from || null, active_to || null,
+       cost_per_kg != null ? cost_per_kg : null,
+       cost_per_kg_threshold_kg != null ? cost_per_kg_threshold_kg : 30]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) { next(err); }
@@ -608,7 +623,8 @@ router.post('/custom-cost-rates', async (req, res, next) => {
 
 router.patch('/custom-cost-rates/:id', async (req, res, next) => {
   try {
-    const allowed = ['name', 'min_weight_kg', 'max_weight_kg', 'price_first', 'price_sub', 'active_from', 'active_to'];
+    const allowed = ['name', 'min_weight_kg', 'max_weight_kg', 'price_first', 'price_sub',
+                     'active_from', 'active_to', 'cost_per_kg', 'cost_per_kg_threshold_kg'];
     const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));
     if (!updates.length) return res.status(400).json({ error: 'No valid fields to update' });
     const setClauses = updates.map(([k], i) => `${k} = $${i + 2}`).join(', ');
