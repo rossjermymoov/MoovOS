@@ -962,49 +962,43 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           return { ...s, group, bestCharge, accountCustomer };
         });
 
-        // ── Second match pass: find DB charges for returns via customer_id ────
-        // Return rows get group = null because the DHL return reference on the
-        // invoice doesn't match any order_id in our DB. But we've now resolved
-        // the customer (via localAccountMap). Search every remaining available
-        // charge pool for an unconsumed charge belonging to that customer.
+        // ── Second match pass: exact service-code match for unmatched rows ─────
+        // For invoice rows that identified a customer but have no bestCharge,
+        // look for a DB charge for that customer with the exact matching service.
         //
-        // IMPORTANT: when the invoice row is a return (service code "1" or name
-        // contains "return"), we MUST prefer DB charges whose service_name also
-        // contains "return". Without this filter the sort picks the closest cost
-        // match which is typically an unconsumed normal outbound charge, not the
-        // actual return service charge.
+        // Matching rule: invoice service code → serviceCodeMap → internal service
+        // name → charge.service_name (case-insensitive exact). No cost proximity.
+        // No substring guessing. If nothing matches exactly, bestCharge stays null
+        // and the row is flagged as unmatched. This is a financial system — we do
+        // not guess.
         for (const row of rows) {
-          if (row.bestCharge) continue;              // already matched
+          if (row.bestCharge) continue;
           const cid = row.accountCustomer?.customer_id;
-          if (!cid) continue;                        // customer still unknown
+          if (!cid) continue;
 
-          // Detect if this invoice row represents a return service
-          const mappedInvoiceName = (mappings[row.invoice_service_name] || '').toLowerCase();
-          const isReturnRow = row.invoice_service_code === '1'
-            || mappedInvoiceName.includes('return')
-            || (row.invoice_service_name || '').toLowerCase().includes('return');
+          // Resolve the internal service name from the invoice service code.
+          // serviceCodeMap is built from /carriers/services — it maps e.g. "1" →
+          // "DHL Return" exactly as stored in our services table.
+          // No service code = no match possible.
+          const invoiceSvcCode = (row.invoice_service_code || '').trim();
+          if (!invoiceSvcCode) continue;
+          const resolvedServiceName = serviceCodeMap[invoiceSvcCode];
+          if (!resolvedServiceName) continue; // unknown service code — error, not a guess
+
+          const target = resolvedServiceName.trim().toLowerCase();
 
           for (const [ref, pool] of Object.entries(available)) {
             if (!pool.length) continue;
             const g = groupMap[ref];
             if (!g || String(g.customer_id) !== String(cid)) continue;
 
-            // Prefer return-typed charges when matching a return invoice row.
-            // Fall back to the full pool only if no return charge exists —
-            // this avoids consuming a normal outbound charge by mistake.
-            const returnCandidates = isReturnRow
-              ? pool.filter(c => (c.service_name || '').toLowerCase().includes('return'))
-              : [];
-            const candidates = returnCandidates.length > 0 ? returnCandidates : (isReturnRow ? [] : pool);
-            if (!candidates.length) continue;
-
-            candidates.sort((a, b) =>
-              Math.abs((a.base_cost_price ?? Infinity) - row.carrier_cost) -
-              Math.abs((b.base_cost_price ?? Infinity) - row.carrier_cost)
+            // Exact service_name match only
+            const idx = pool.findIndex(c =>
+              (c.service_name || '').trim().toLowerCase() === target
             );
-            const chosen = candidates[0];
-            pool.splice(pool.indexOf(chosen), 1);   // remove from available pool
-            row.bestCharge = chosen;
+            if (idx === -1) continue;
+
+            row.bestCharge = pool.splice(idx, 1)[0];
             if (!row.group) row.group = g;
             break;
           }
@@ -1035,32 +1029,23 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           row.carrier_surcharges = fuelAlloc + hgvAlloc;
           row.carrier_total      = row.carrier_cost + row.carrier_surcharges;
 
-          // Return service detection — service code "1" or mapped name contains "return".
-          // Returns are DHL-initiated; we compare against the carrier rate for service "1"
-          // rather than a DB charge lookup (which won't exist until processed).
-          const mappedName = mappings[row.invoice_service_name] || '';
-          const isReturn = row.invoice_service_code === '1'
-            || mappedName.toLowerCase().includes('return');
+          // Return service detection — service code "1" only.
+          // We do not infer return status from service name substrings.
+          // Service code "1" is DHL's return service; it is configured in our
+          // services table and must be mapped explicitly if DHL uses a different code.
+          const isReturn = row.invoice_service_code === '1';
 
           if (isReturn) {
-            row.is_return = true;
+            row.is_return         = true;
+            row.carrier_rate_cost = null;
             if (row.bestCharge) {
               // Return charge found in DB — compare against stored cost price
               // exactly like a normal outbound shipment.
-              row.carrier_rate_cost = null;
               row.status = getStatus(row.carrier_total, row.bestCharge);
             } else {
-              // No DB charge — fall back to static carrier rate comparison.
-              const returnRate = carrierRates['1'] || null;
-              row.carrier_rate_cost = returnRate?.price_first ?? null;
-              if (returnRate?.price_first != null) {
-                const diff = Math.abs(row.carrier_cost - returnRate.price_first);
-                row.status = diff <= TOLERANCE_ABS
-                  ? { code: 'green', label: 'Match',       color: '#00C853', icon: 'check' }
-                  : { code: 'red',   label: 'Discrepancy', color: '#F44336', icon: 'x'    };
-              } else {
-                row.status = { code: 'amber', label: 'No Rate Found', color: '#FFC107', icon: 'warn' };
-              }
+              // No DB charge found for this return — flag as unmatched.
+              // We do not guess against a static carrier rate.
+              row.status = { code: 'red', label: 'No Charge Found', color: '#F44336', icon: 'x' };
             }
           } else {
             row.is_return = false;
