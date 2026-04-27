@@ -63,8 +63,12 @@ router.post('/bulk-lookup', async (req, res) => {
               AND cr.max_weight_kg IS NOT NULL
           )
         )                       AS has_weight_bands,
-        -- Band boundaries for the declared weight (only meaningful when has_weight_bands=true).
-        -- Uses max_weight_kg IS NOT NULL (handles 0-30kg bands where min may be stored as 0 or NULL).
+        -- Band used for pricing this shipment (only meaningful when has_weight_bands=true).
+        -- Priority: band whose range contains the declared weight (exact match).
+        -- Fallback: highest available band — handles overweight declarations where the
+        -- declared weight exceeds the band ceiling but was still priced on that band
+        -- (e.g. declared 45 kg on a 0-30 kg rate card → falls back to max_weight_kg=30,
+        -- so billed 45 > 30 correctly flags).
         (
           SELECT cr.min_weight_kg
           FROM customer_rates cr
@@ -73,9 +77,12 @@ router.post('/bulk-lookup', async (req, res) => {
               LOWER(cr.service_code) = LOWER(s.dc_service_id)
               OR cr.service_name = c.service_name
             )
-            AND s.total_weight_kg > COALESCE(cr.min_weight_kg, 0)
-            AND s.total_weight_kg <= cr.max_weight_kg
             AND cr.max_weight_kg IS NOT NULL
+          ORDER BY
+            CASE WHEN s.total_weight_kg > COALESCE(cr.min_weight_kg, 0)
+                      AND s.total_weight_kg <= cr.max_weight_kg
+                 THEN 0 ELSE 1 END,
+            cr.max_weight_kg DESC
           LIMIT 1
         )                       AS band_min_weight_kg,
         (
@@ -86,9 +93,12 @@ router.post('/bulk-lookup', async (req, res) => {
               LOWER(cr.service_code) = LOWER(s.dc_service_id)
               OR cr.service_name = c.service_name
             )
-            AND s.total_weight_kg > COALESCE(cr.min_weight_kg, 0)
-            AND s.total_weight_kg <= cr.max_weight_kg
             AND cr.max_weight_kg IS NOT NULL
+          ORDER BY
+            CASE WHEN s.total_weight_kg > COALESCE(cr.min_weight_kg, 0)
+                      AND s.total_weight_kg <= cr.max_weight_kg
+                 THEN 0 ELSE 1 END,
+            cr.max_weight_kg DESC
           LIMIT 1
         )                       AS band_max_weight_kg,
         cu.id                   AS customer_id,
@@ -105,6 +115,9 @@ router.post('/bulk-lookup', async (req, res) => {
         -- Total cost across ALL charge types for this shipment (base + fuel + surcharges)
         -- Surcharges marked reconciliation_excluded=true are omitted — these are charges
         -- we apply to the customer but do not expect the carrier to bill us for.
+        -- Two exclusion paths:
+        --   1. surcharge_id FK → surcharges.reconciliation_excluded = true  (modern charges)
+        --   2. surcharge_id IS NULL but service_name matches an excluded surcharge (legacy charges)
         COALESCE(c.cost_price, 0) + COALESCE((
           SELECT SUM(sc.cost_price)
           FROM charges sc
@@ -112,7 +125,17 @@ router.post('/bulk-lookup', async (req, res) => {
           WHERE sc.shipment_id = c.shipment_id
             AND sc.charge_type IN ('fuel', 'surcharge')
             AND sc.cancelled = false
-            AND (sx.id IS NULL OR sx.reconciliation_excluded = false)
+            AND NOT (
+              -- Excluded via FK link
+              (sx.id IS NOT NULL AND sx.reconciliation_excluded = true)
+              OR
+              -- Excluded via name match (surcharge_id not set on older charge rows)
+              (sc.charge_type = 'surcharge' AND sc.surcharge_id IS NULL AND EXISTS (
+                SELECT 1 FROM surcharges exc_s
+                WHERE exc_s.name = sc.service_name
+                  AND exc_s.reconciliation_excluded = true
+              ))
+            )
         ), 0)                   AS total_cost_price,
         -- Total sell across ALL charge types for this shipment
         COALESCE(c.price, 0) + COALESCE((
@@ -122,7 +145,15 @@ router.post('/bulk-lookup', async (req, res) => {
           WHERE sc.shipment_id = c.shipment_id
             AND sc.charge_type IN ('fuel', 'surcharge')
             AND sc.cancelled = false
-            AND (sx.id IS NULL OR sx.reconciliation_excluded = false)
+            AND NOT (
+              (sx.id IS NOT NULL AND sx.reconciliation_excluded = true)
+              OR
+              (sc.charge_type = 'surcharge' AND sc.surcharge_id IS NULL AND EXISTS (
+                SELECT 1 FROM surcharges exc_s
+                WHERE exc_s.name = sc.service_name
+                  AND exc_s.reconciliation_excluded = true
+              ))
+            )
         ), 0)                   AS total_sell_price
       FROM charges c
       LEFT JOIN shipments s  ON s.id  = c.shipment_id
