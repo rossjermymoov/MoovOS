@@ -49,11 +49,18 @@ router.post('/bulk-lookup', async (req, res) => {
         s.collection_date,
         s.parcel_count,
         s.total_weight_kg       AS declared_weight_kg,
-        -- Weight band boundaries used when this charge was priced.
-        -- Joined via s.dc_service_id (service code string) → customer_rates.service_code,
-        -- which is more reliable than matching by service_name text.
-        -- Used in reconciliation to flag weight discrepancies only when the carrier's
-        -- billed weight falls OUTSIDE the band (i.e. a different rate would apply).
+        -- Whether this customer/service uses weight bands at all.
+        -- False = flat rate (any weight → same price, weight diff is irrelevant).
+        -- Checked via dc_service_id → customer_rates.service_code match.
+        (
+          SELECT EXISTS(
+            SELECT 1 FROM customer_rates cr
+            WHERE cr.customer_id = c.customer_id
+              AND LOWER(cr.service_code) = LOWER(s.dc_service_id)
+              AND cr.min_weight_kg IS NOT NULL
+          )
+        )                       AS has_weight_bands,
+        -- Band boundaries for the declared weight (only meaningful when has_weight_bands=true).
         (
           SELECT cr.min_weight_kg
           FROM customer_rates cr
@@ -141,6 +148,7 @@ router.post('/bulk-lookup', async (req, res) => {
         total_sell_price:        row.total_sell_price   != null ? parseFloat(row.total_sell_price)  : null,
         parcel_count:            row.parcel_count        != null ? parseInt(row.parcel_count, 10)    : 1,
         declared_weight_kg:      row.declared_weight_kg  != null ? parseFloat(row.declared_weight_kg)  : null,
+        has_weight_bands:        row.has_weight_bands    === true || row.has_weight_bands === 't',
         band_min_weight_kg:      row.band_min_weight_kg  != null ? parseFloat(row.band_min_weight_kg)  : null,
         band_max_weight_kg:      row.band_max_weight_kg  != null ? parseFloat(row.band_max_weight_kg)  : null,
         service_name:            row.service_name,

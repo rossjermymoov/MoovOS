@@ -1378,16 +1378,18 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                         {/* Weight — billed (DHL invoice) / declared (our DB) */}
                         <td style={{ ...td, textAlign: 'right' }}>
                           {(() => {
-                            const declared    = bc?.declared_weight_kg;
-                            const billed      = row.billed_weight_kg;
-                            const bandMin     = bc?.band_min_weight_kg;
-                            const bandMax     = bc?.band_max_weight_kg;
-                            const hasBoth     = declared != null && billed != null;
-                            const diff        = hasBoth ? billed - declared : null;
-                            // Only flag when billed weight falls OUTSIDE the band used for pricing
-                            // (means a different rate would apply). If band data unavailable, fall
-                            // back to raw ±0.1 kg threshold.
-                            const discrepancy = hasBoth && (
+                            const declared        = bc?.declared_weight_kg;
+                            const billed          = row.billed_weight_kg;
+                            const bandMin         = bc?.band_min_weight_kg;
+                            const bandMax         = bc?.band_max_weight_kg;
+                            const hasWeightBands  = bc?.has_weight_bands;
+                            const hasBoth         = declared != null && billed != null;
+                            const diff            = hasBoth ? billed - declared : null;
+                            // Only flag when the service uses weight bands AND the carrier's
+                            // billed weight falls OUTSIDE the band used for pricing (different
+                            // rate would apply). Flat-rate services: never flag (any weight = same
+                            // price). Unknown/no-match: suppress rather than false-positive.
+                            const discrepancy = hasBoth && hasWeightBands && (
                               bandMax != null
                                 ? (billed <= (bandMin ?? 0) || billed > bandMax)
                                 : Math.abs(diff) >= 0.1
