@@ -307,10 +307,9 @@ router.post('/bulk-lookup', async (req, res) => {
           WHERE c.customer_id = ANY($1::uuid[])
             AND c.charge_type = 'courier'
             AND c.cancelled   = false
-            AND (c.order_id IS NULL OR c.order_id != ALL($2))
           ORDER BY c.created_at DESC
           LIMIT 200
-        `, [custIds, refs]);
+        `, [custIds]);
 
         console.log(`[recon] charges_by_customer query returned ${extraRes.rows.length} rows for ${custIds.length} customers`);
         for (const row of extraRes.rows) {
