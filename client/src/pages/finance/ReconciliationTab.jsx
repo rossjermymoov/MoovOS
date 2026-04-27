@@ -1389,10 +1389,12 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                             // billed weight falls OUTSIDE the band used for pricing (different
                             // rate would apply). Flat-rate services: never flag (any weight = same
                             // price). Unknown/no-match: suppress rather than false-positive.
-                            const discrepancy = hasBoth && hasWeightBands && (
-                              bandMax != null
-                                ? (billed <= (bandMin ?? 0) || billed > bandMax)
-                                : Math.abs(diff) >= 0.1
+                            // Only flag when band data is available AND billed weight
+                            // falls outside the band used for pricing.
+                            // If band lookup returned null (service/weight not matched),
+                            // suppress rather than false-positive on raw diff.
+                            const discrepancy = hasBoth && hasWeightBands && bandMax != null && (
+                              billed <= (bandMin ?? 0) || billed > bandMax
                             );
                             return (
                               <div>
@@ -1406,20 +1408,19 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                                 ) : (
                                   <span style={{ color: '#555' }}>—</span>
                                 )}
-                                {/* Declared weight from our DB — always shown when available */}
-                                {declared != null && (
+                                {/* Declared weight — only shown when there's a real discrepancy */}
+                                {discrepancy && declared != null && (
                                   <div style={{
                                     fontSize: 11, marginTop: 2,
-                                    color: discrepancy ? '#FFC107' : '#888',
-                                    fontWeight: discrepancy ? 700 : 400,
+                                    color: '#FFC107', fontWeight: 700,
                                   }}>
                                     {declared.toFixed(2)} kg declared
-                                    {discrepancy && diff > 0 && (
+                                    {diff > 0 && (
                                       <span style={{ marginLeft: 5, color: '#F44336', fontWeight: 700 }}>
                                         ▲{diff.toFixed(2)}
                                       </span>
                                     )}
-                                    {discrepancy && diff < 0 && (
+                                    {diff < 0 && (
                                       <span style={{ marginLeft: 5, color: '#00C853', fontWeight: 700 }}>
                                         ▼{Math.abs(diff).toFixed(2)}
                                       </span>
