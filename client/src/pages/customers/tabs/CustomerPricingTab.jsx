@@ -1231,9 +1231,24 @@ function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesCh
         {logo && <img src={logo} alt={carrier.courier_name} style={{ height: 15, objectFit: 'contain', flexShrink: 0 }} />}
         <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', flex: 1 }}>{carrier.courier_name}</span>
 
-        {/* Account number — inline editable */}
+        {/* Rate card selector */}
+        {carrier.available_cards?.length > 1 ? (
+          <select
+            value={String(carrier.active_card_id || '')}
+            onChange={e => changeCard.mutate(e.target.value)}
+            style={{ ...inp, fontSize: 11, width: 180 }}
+          >
+            {carrier.available_cards.map(card => (
+              <option key={card.id} value={String(card.id)}>{card.name}{card.is_master ? ' (Master)' : ''}</option>
+            ))}
+          </select>
+        ) : (
+          <span style={{ fontSize: 11, color: '#555' }}>{carrier.available_cards?.[0]?.name || 'Master'}</span>
+        )}
+
+        {/* Account number — inline editable, optional */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 10, color: '#555', textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0 }}>Account</span>
+          <span style={{ fontSize: 10, color: '#555', textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0 }}>Acct No.</span>
           {acctEditing ? (
             <input
               ref={acctRef}
@@ -1265,21 +1280,6 @@ function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesCh
             </span>
           )}
         </div>
-
-        {/* Rate card selector */}
-        {carrier.available_cards?.length > 1 ? (
-          <select
-            value={String(carrier.active_card_id || '')}
-            onChange={e => changeCard.mutate(e.target.value)}
-            style={{ ...inp, fontSize: 11, width: 180 }}
-          >
-            {carrier.available_cards.map(card => (
-              <option key={card.id} value={String(card.id)}>{card.name}{card.is_master ? ' (Master)' : ''}</option>
-            ))}
-          </select>
-        ) : (
-          <span style={{ fontSize: 11, color: '#555' }}>{carrier.available_cards?.[0]?.name || 'Master'}</span>
-        )}
       </div>
 
       {/* Fuel Groups */}
