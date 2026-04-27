@@ -115,44 +115,41 @@ router.post('/bulk-lookup', async (req, res) => {
         -- Total cost across ALL charge types for this shipment (base + fuel + surcharges)
         -- Surcharges marked reconciliation_excluded=true are omitted — these are charges
         -- we apply to the customer but do not expect the carrier to bill us for.
-        -- Two exclusion paths:
-        --   1. surcharge_id FK → surcharges.reconciliation_excluded = true  (modern charges)
-        --   2. surcharge_id IS NULL but service_name matches an excluded surcharge (legacy charges)
+        -- Uses EXISTS subqueries (not LEFT JOIN) to avoid NULL propagation:
+        --   LEFT JOIN + NOT (NULL OR ...) = NULL which silently drops rows from SUM.
         COALESCE(c.cost_price, 0) + COALESCE((
           SELECT SUM(sc.cost_price)
           FROM charges sc
-          LEFT JOIN surcharges sx ON sx.id = sc.surcharge_id
           WHERE sc.shipment_id = c.shipment_id
             AND sc.charge_type IN ('fuel', 'surcharge')
             AND sc.cancelled = false
-            AND NOT (
-              -- Excluded via FK link
-              (sx.id IS NOT NULL AND sx.reconciliation_excluded = true)
-              OR
-              -- Excluded via name match (surcharge_id not set on older charge rows)
-              (sc.charge_type = 'surcharge' AND sc.surcharge_id IS NULL AND EXISTS (
-                SELECT 1 FROM surcharges exc_s
-                WHERE exc_s.name = sc.service_name
-                  AND exc_s.reconciliation_excluded = true
-              ))
+            AND NOT EXISTS (
+              SELECT 1 FROM surcharges sx
+              WHERE sx.reconciliation_excluded = true
+                AND (
+                  -- Modern charges: linked via surcharge_id FK
+                  sx.id = sc.surcharge_id
+                  OR
+                  -- Legacy charges: surcharge_id not set, match by name
+                  (sc.surcharge_id IS NULL AND sx.name = sc.service_name)
+                )
             )
         ), 0)                   AS total_cost_price,
         -- Total sell across ALL charge types for this shipment
         COALESCE(c.price, 0) + COALESCE((
           SELECT SUM(sc.price)
           FROM charges sc
-          LEFT JOIN surcharges sx ON sx.id = sc.surcharge_id
           WHERE sc.shipment_id = c.shipment_id
             AND sc.charge_type IN ('fuel', 'surcharge')
             AND sc.cancelled = false
-            AND NOT (
-              (sx.id IS NOT NULL AND sx.reconciliation_excluded = true)
-              OR
-              (sc.charge_type = 'surcharge' AND sc.surcharge_id IS NULL AND EXISTS (
-                SELECT 1 FROM surcharges exc_s
-                WHERE exc_s.name = sc.service_name
-                  AND exc_s.reconciliation_excluded = true
-              ))
+            AND NOT EXISTS (
+              SELECT 1 FROM surcharges sx
+              WHERE sx.reconciliation_excluded = true
+                AND (
+                  sx.id = sc.surcharge_id
+                  OR
+                  (sc.surcharge_id IS NULL AND sx.name = sc.service_name)
+                )
             )
         ), 0)                   AS total_sell_price
       FROM charges c
