@@ -312,7 +312,9 @@ router.post('/bulk-lookup', async (req, res) => {
           LIMIT 200
         `, [custIds, refs]);
 
+        console.log(`[recon] charges_by_customer query returned ${extraRes.rows.length} rows for ${custIds.length} customers`);
         for (const row of extraRes.rows) {
+          console.log(`[recon]   cid=${row.customer_id} ref=${row.reference} service_name="${row.service_name}" cost=${row.base_cost_price}`);
           const cid = String(row.customer_id);
           if (!charges_by_customer[cid]) charges_by_customer[cid] = [];
           charges_by_customer[cid].push({

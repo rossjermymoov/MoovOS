@@ -999,21 +999,29 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           const liveNameToCode    = svcNameToCodeRef.current;
 
           const invoiceSvcName = (row.invoice_service_name || '').trim();
-          // friendlyName: the mapped internal service name (e.g. "DHL Return").
-          // This is what the billing engine writes to charges.service_name via
-          // friendly_service_name — so this is the value we match against.
+          // invoice code "1" → mapping → "DHL Return" (friendly label the user set)
+          // → serviceNameToCode → "DHL-1" (service code from courier_services)
+          // charges.service_name may store either the service code or the friendly
+          // name depending on what DeliveryConnect writes in friendly_service_name.
+          // We match against both so we find the charge regardless of which is stored.
           const friendlyName = (liveMappings[invoiceSvcName] || invoiceSvcName).trim().toLowerCase();
+          const resolvedCode = (liveNameToCode[liveMappings[invoiceSvcName] || invoiceSvcName] || '').trim().toLowerCase();
 
           if (!friendlyName) continue;
+
+          // Match charge.service_name against EITHER the service code ("DHL-1") OR
+          // the friendly name ("DHL Return") — both are exact, known values.
+          const matches = (c) => {
+            const sn = (c.service_name || '').trim().toLowerCase();
+            return sn === friendlyName || (resolvedCode !== '' && sn === resolvedCode);
+          };
 
           // First: search charges_by_customer — charges for this customer whose
           // order_id was NOT in the invoice refs (e.g. return bookings stored
           // under their own MP- reference, not on the DHL invoice).
           const customerPool = charges_by_customer?.[String(cid)];
           if (customerPool?.length) {
-            const idx = customerPool.findIndex(c =>
-              (c.service_name || '').trim().toLowerCase() === friendlyName
-            );
+            const idx = customerPool.findIndex(matches);
             if (idx !== -1) {
               row.bestCharge = customerPool.splice(idx, 1)[0];
               continue;
@@ -1026,9 +1034,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
             const g = groupMap[ref];
             if (!g || String(g.customer_id) !== String(cid)) continue;
 
-            const idx = pool.findIndex(c =>
-              (c.service_name || '').trim().toLowerCase() === friendlyName
-            );
+            const idx = pool.findIndex(matches);
             if (idx === -1) continue;
 
             row.bestCharge = pool.splice(idx, 1)[0];
