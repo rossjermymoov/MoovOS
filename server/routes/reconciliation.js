@@ -96,6 +96,15 @@ router.post('/bulk-lookup', async (req, res) => {
             AND sc.charge_type = 'fuel'
             AND sc.cancelled = false
         ), 0)                   AS fuel_cost_price,
+        -- HGV cost component (billing engine sets cost_price = parcel_count × rate)
+        COALESCE((
+          SELECT SUM(sc.cost_price)
+          FROM charges sc
+          WHERE sc.shipment_id = c.shipment_id
+            AND sc.charge_type = 'surcharge'
+            AND sc.cancelled = false
+            AND UPPER(sc.service_name) LIKE '%HGV%'
+        ), 0)                   AS hgv_cost_price,
         -- Total cost = base freight + all non-courier charge cost_prices.
         -- Surcharges we don't pay the carrier (e.g. EPS) have cost_price = 0
         -- on the charge row, so they naturally contribute nothing here.
