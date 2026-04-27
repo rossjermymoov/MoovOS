@@ -141,22 +141,19 @@ function parseDhlCsv(text) {
       ? -parseFloat(rawVal.slice(1, -1))
       : parseFloat(rawVal);
 
-    // ── Invoice-level surcharge rows — check BEFORE the value=0 skip ──────────
-    // DHL puts FUEL SURCHARGE and HGV SURCHARGE as rows with no MP- reference.
-    // The description may be in colService OR in any other column.
-    // We scan the entire row text so we catch it regardless of column position.
-    // We also accept negative values (bracket notation) and store as positive.
-    if (!ref.startsWith('MP-')) {
+    // ── Invoice-level surcharge rows — no reference, just a description and value ──
+    // DHL puts FUEL SURCHARGE and HGV SURCHARGE as rows with an EMPTY reference column.
+    // Shipment rows always have a reference (MP-, numeric, alphanumeric — anything non-empty).
+    if (!ref) {
       const rowText = cols.join(' ').toUpperCase();
       const isSurchargeRow =
         rowText.includes('SURCHARGE') ||
         rowText.includes('FUEL LEVY')  ||
         rowText.includes('FUEL CHARGE') ||
-        (rowText.includes('FUEL') && rowText.includes('HGV') === false && !ref.startsWith('MP-')) ||
+        rowText.includes('FUEL')        ||
         rowText.includes('HGV');
 
       if (isSurchargeRow && !isNaN(value) && value !== 0) {
-        // Find the best description — prefer colService, fall back to any non-empty cell
         const desc = (cols[colService] || '').trim()
           || cols.find(c => {
                const t = c.trim().toUpperCase();
