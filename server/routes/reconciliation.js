@@ -268,17 +268,24 @@ router.post('/bulk-lookup', async (req, res) => {
       }
     }
 
-    // ── Fetch charges for account-identified customers not matched by ref ─────
-    // Return rows on a DHL invoice have a DHL-assigned reference that doesn't
-    // exist as an order_id in our DB. The charge exists under a different
-    // reference (e.g. the return booking's own MP- number). We fetch all
-    // unmatched courier charges for identified customers so the frontend can
-    // match them by service code.
+    // ── Fetch charges for all customers on this invoice ──────────────────────
+    // Return rows have a DHL-assigned reference that doesn't exist as an
+    // order_id in our DB. The charge lives under the return booking's own
+    // MP- reference (not on the invoice). We fetch all unmatched courier charges
+    // for EVERY customer we identified on this invoice — both those matched by
+    // shipment reference AND those identified by account number — so the frontend
+    // can find return charges by exact service code match.
+    //
+    // Critically: we do NOT restrict to customers_by_account. A customer like PWS
+    // may be identified from matched outbound rows (localAccountMap on the frontend)
+    // without having their DHL account number stored in the DB. We still need their
+    // charges. Use all customer_ids from matched groups.
     let charges_by_customer = {};
-    if (Object.keys(customers_by_account).length > 0) {
-      const custIds = [...new Set(
-        Object.values(customers_by_account).map(c => c.customer_id).filter(Boolean)
-      )];
+    {
+      const custIds = [...new Set([
+        ...matched.map(g => g.customer_id),
+        ...Object.values(customers_by_account).map(c => c.customer_id),
+      ].filter(Boolean))];
       if (custIds.length > 0) {
         const extraRes = await query(`
           SELECT
