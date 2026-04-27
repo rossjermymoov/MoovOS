@@ -47,7 +47,7 @@ router.post('/bulk-lookup', async (req, res) => {
         c.billed,
         s.courier,
         s.collection_date,
-        c.parcel_count,
+        s.parcel_count,
         s.total_weight_kg       AS declared_weight_kg,
         -- Does this customer/service use weight bands at all?
         -- False = flat-rate (any weight → same price, never flag weight diff).
@@ -127,7 +127,7 @@ router.post('/bulk-lookup', async (req, res) => {
               AND  sc.cancelled   = false
           ), 0)                 AS total_sell_price
       FROM charges c
-      LEFT JOIN shipments s  ON s.id  = c.shipment_id
+      LEFT JOIN shipments s  ON s.platform_shipment_id = c.voila_shipment_id
       LEFT JOIN customers cu ON cu.id = c.customer_id
       WHERE c.order_id   = ANY($1)
         AND c.charge_type = 'courier'
