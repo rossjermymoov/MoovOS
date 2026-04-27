@@ -79,17 +79,25 @@ function parseDhlCsv(text) {
   // ── Step 1: find column indices from header row ──────────────────────────
   // DHL may add/remove columns between invoice versions — always derive
   // positions from the header rather than hardcoding index numbers.
-  let colValue    = 5;   // fallback: "Value" (base freight)
-  let colRef      = 11;  // fallback: "Reference"
-  let colService  = 20;  // fallback: "Service Desc"
-  let colWeight   = -1;  // billed/chargeable weight — detected from header
-  let colPieces   = -1;  // piece/item count per consignment — detected from header
+  let colValue       = 5;   // fallback: "Value" (base freight)
+  let colRef         = 11;  // fallback: "Reference"
+  let colService     = 20;  // fallback: "Service Desc"
+  let colConsignment = 2;   // fallback: column C = consignment/tracking number (outbound DHL tracking)
+  let colServiceCode = 7;   // fallback: column H = service code (e.g. "1" for return)
+  let colWeight      = -1;  // billed/chargeable weight — detected from header
+  let colPieces      = -1;  // piece/item count per consignment — detected from header
 
   if (lines.length > 0) {
     const header = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
-    const vi = header.findIndex(h => h === 'value');
-    const ri = header.findIndex(h => h === 'reference');
-    const si = header.findIndex(h => h.includes('service desc') || h === 'service');
+    const vi  = header.findIndex(h => h === 'value');
+    const ri  = header.findIndex(h => h === 'reference');
+    const si  = header.findIndex(h => h.includes('service desc') || h === 'service');
+    const ci  = header.findIndex(h =>
+      h.includes('consignment') || h.includes('tracking') || h === 'waybill' || h === 'awb'
+    );
+    const sci = header.findIndex(h =>
+      h === 'service code' || h === 'service_code' || h === 'svc code' || h === 'svc'
+    );
     // DHL uses various weight column names; prefer "chargeable weight", fall back to first "weight" match
     const wi = header.findIndex(h => h.includes('chargeable') && h.includes('weight'))
             ?? header.findIndex(h => h.includes('billed') && h.includes('weight'));
@@ -109,12 +117,14 @@ function parseDhlCsv(text) {
       h === 'num'
     );
     console.log('[DHL CSV] colPieces detected at index:', pi, pi >= 0 ? `("${header[pi]}")` : '(not found — HGV will use 1 per row)');
-    if (vi  !== -1) colValue   = vi;
-    if (ri  !== -1) colRef     = ri;
-    if (si  !== -1) colService = si;
-    if (wi  !== -1) colWeight  = wi;
+    if (vi  !== -1) colValue       = vi;
+    if (ri  !== -1) colRef         = ri;
+    if (si  !== -1) colService     = si;
+    if (ci  !== -1) colConsignment = ci;
+    if (sci !== -1) colServiceCode = sci;
+    if (wi  !== -1) colWeight      = wi;
     else if (wi2 !== -1) colWeight = wi2;
-    if (pi  !== -1) colPieces = pi;
+    if (pi  !== -1) colPieces      = pi;
   }
 
   // Columns W–AE (0-indexed 22–30) contain per-shipment special surcharges:
@@ -173,8 +183,10 @@ function parseDhlCsv(text) {
       continue;
     }
 
-    // Normal shipment row (ref starts with MP- — confirmed above)
-    const invoiceServiceName = (cols[colService] || '').trim();
+    // Normal shipment row
+    const invoiceServiceName = (cols[colService]     || '').trim();
+    const consignmentNumber  = (cols[colConsignment] || '').trim();
+    const invoiceServiceCode = (cols[colServiceCode] || '').trim();
 
     // Sum per-shipment surcharges from columns W–AE (weight, length, etc.)
     // Fuel and HGV are NOT in these columns — those are invoice-level totals.
@@ -201,6 +213,8 @@ function parseDhlCsv(text) {
     shipmentMap[ref] = shipmentMap[ref] || [];
     shipmentMap[ref].push({
       reference:              ref,
+      consignment_number:     consignmentNumber  || null,
+      invoice_service_code:   invoiceServiceCode || null,
       carrier_cost:           value,
       carrier_csv_surcharges: csvSurcharges,
       carrier_surcharges:     0,
@@ -405,7 +419,7 @@ function FileDropZone({ carrier, onParsed, onBack }) {
       const text   = await file.text();
       const result = parseDhlCsv(text);
       if (result.shipments.length === 0) {
-        setError('No MP- references found in this CSV. Check the file is a DHL Parcel UK invoice.');
+        setError('No shipment rows found in this CSV. Check the file is a DHL Parcel UK invoice.');
         setParsing(false);
         return;
       }
@@ -507,7 +521,7 @@ function FileDropZone({ carrier, onParsed, onBack }) {
               Drop your CSV here, or click to browse
             </div>
             <div style={{ fontSize: 12, color: '#666' }}>
-              DHL Parcel UK invoice CSV — shipment references must start with <code style={{ color: '#888', background: 'rgba(255,255,255,0.06)', padding: '1px 5px', borderRadius: 3 }}>MP-</code>
+              DHL Parcel UK invoice CSV
             </div>
           </div>
         )}
@@ -755,6 +769,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
   const [refreshCount, setRefreshCount] = useState(0);
   const [mappings,          setMappings]          = useState({});  // invoice_name → internal_name (manual)
   const [serviceCodeMap,    setServiceCodeMap]    = useState({});  // service_code → service_name (auto)
+  const [carrierRates,      setCarrierRates]      = useState({});  // service_code → price_first (for returns etc.)
   const [showMappings,      setShowMappings]      = useState(false);
   const [acceptedSurcharges, setAcceptedSurcharges] = useState(new Set()); // accepted known-variance surcharges
 
@@ -793,6 +808,20 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
     }).catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Fetch carrier cost rates (used for return service comparison — service code "1" etc.)
+  useEffect(() => {
+    const courierKeyword = carrier.label.split(' ')[0]; // e.g. "DHL"
+    api.get('/reconciliation/carrier-service-rates', { params: { courier: courierKeyword } })
+      .then(r => {
+        const rateMap = {};
+        for (const row of (r.data || [])) {
+          if (row.service_code) rateMap[row.service_code.trim()] = row;
+        }
+        setCarrierRates(rateMap);
+      })
+      .catch(() => {}); // non-critical — silently skip if endpoint not available
+  }, [carrier.code]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Lookup — runs on mount and whenever refreshCount increments ──────────
   // useEffect (not an inline call) ensures the fetch is never stale and the
   // Refresh button always hits the DB fresh (important after cost price edits).
@@ -803,14 +832,31 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
       setError(null);
       setResults(null);
       try {
-        const refs = shipments.map(s => s.reference);
-        const resp = await api.post('/reconciliation/bulk-lookup', { courier: carrier.code, references: refs });
+        const refs           = shipments.map(s => s.reference);
+        const trackingNumbers = shipments
+          .map(s => s.consignment_number)
+          .filter(Boolean);
+
+        const resp = await api.post('/reconciliation/bulk-lookup', {
+          courier:          carrier.code,
+          references:       refs,
+          tracking_numbers: trackingNumbers,
+        });
         if (cancelled) return;
         const { matched } = resp.data;
 
         // Build a map from reference → group (contains array of DB charges)
         const groupMap = {};
         for (const g of matched) groupMap[g.reference] = g;
+
+        // Build a map from tracking code → group for primary-key matching.
+        // If a consignment number matches, it takes priority over the reference.
+        const trackingMap = {};
+        for (const g of matched) {
+          for (const tc of (g.tracking_codes || [])) {
+            if (tc) trackingMap[tc] = g;
+          }
+        }
 
         // For each reference that has multiple invoice lines AND multiple DB charges,
         // greedily assign each invoice line to its best-matching (closest cost_price)
@@ -849,11 +895,19 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
         const totalInvoiceBase = shipments.reduce((sum, s) => sum + s.carrier_cost, 0);
 
         // First pass: assign bestCharge (matching against base cost for now)
+        // Tracking number (column C) is the primary key — more reliable than reference
+        // because it uniquely identifies the outbound shipment even when references repeat.
         const rows = shipments.map(s => {
-          const group = groupMap[s.reference] || null;
+          // Resolve which DB group this invoice line belongs to:
+          // 1. Match by consignment number (outbound tracking) — most reliable
+          // 2. Fall back to reference (order_id)
+          const group = (s.consignment_number && trackingMap[s.consignment_number])
+            || groupMap[s.reference]
+            || null;
+
           let bestCharge = null;
           if (group) {
-            const pool = available[s.reference];
+            const pool = available[group.reference];
             if (pool && pool.length > 0) {
               pool.sort((a, b) =>
                 Math.abs((a.base_cost_price ?? Infinity) - s.carrier_cost) -
@@ -887,7 +941,31 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           // W-AE (carrier_csv_surcharges) intentionally excluded — already in carrier_cost
           row.carrier_surcharges = fuelAlloc + hgvAlloc;
           row.carrier_total      = row.carrier_cost + row.carrier_surcharges;
-          row.status             = getStatus(row.carrier_total, row.bestCharge || null);
+
+          // Return service detection — service code "1" or mapped name contains "return".
+          // Returns are DHL-initiated; we compare against the carrier rate for service "1"
+          // rather than a DB charge lookup (which won't exist until processed).
+          const mappedName = mappings[row.invoice_service_name] || '';
+          const isReturn = row.invoice_service_code === '1'
+            || mappedName.toLowerCase().includes('return');
+
+          if (isReturn) {
+            const returnRate = carrierRates['1'] || null;
+            row.is_return         = true;
+            row.carrier_rate_cost = returnRate?.price_first ?? null;
+            // For returns, status is based on invoice value vs carrier rate
+            if (returnRate?.price_first != null) {
+              const diff = Math.abs(row.carrier_cost - returnRate.price_first);
+              row.status = diff <= TOLERANCE_ABS
+                ? { code: 'green', label: 'Match',       color: '#00C853', icon: 'check' }
+                : { code: 'red',   label: 'Discrepancy', color: '#F44336', icon: 'x'    };
+            } else {
+              row.status = { code: 'amber', label: 'No Rate Found', color: '#FFC107', icon: 'warn' };
+            }
+          } else {
+            row.is_return = false;
+            row.status    = getStatus(row.carrier_total, row.bestCharge || null);
+          }
         });
 
         setResults(rows);
@@ -918,11 +996,16 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
     : [];
 
   const ourFuelCostTotal   = matchedWithCost.reduce((s, r) => s + (r.bestCharge.fuel_cost_price || 0), 0);
-  // HGV: sum parcel_qty from the DB across all matched shipments × rate.
-  // parcel_qty is set on the charge row at webhook time — it is the authoritative
-  // source and already correct for multi-parcel shipments.
+  // HGV: total parcel count across all matched shipments.
+  // Use same priority as the per-row hgvAlloc calculation:
+  //   1. csv_piece_count  — from the invoice itself (what DHL actually charged HGV on)
+  //   2. bestCharge.parcel_count — from shipments.parcel_count in DB (set by webhook)
+  //   3. 1 — safe fallback
   const totalMatchedPieces = results
-    ? results.filter(r => r.bestCharge).reduce((s, r) => s + (r.bestCharge.parcel_count || 1), 0)
+    ? results.filter(r => r.bestCharge).reduce(
+        (s, r) => s + (r.csv_piece_count ?? r.bestCharge?.parcel_count ?? 1),
+        0
+      )
     : 0;
   const ourHgvCalcTotal    = totalMatchedPieces * HGV_RATE_PER_PARCEL;
   const invoiceSurchargeTotal = surcharges.reduce((s, r) => s + r.value, 0);
@@ -1279,9 +1362,10 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                     const g    = row.group;
                     const bc   = row.bestCharge;
                     // carrier_total = base + per-shipment surcharges from invoice columns W–AE
-                    const diff = bc?.total_cost_price != null
-                      ? row.carrier_total - bc.total_cost_price
-                      : null;
+                    // For returns, compare carrier_cost vs carrier_rate_cost (no DB charge expected)
+                    const diff = row.is_return
+                      ? (row.carrier_rate_cost != null ? row.carrier_cost - row.carrier_rate_cost : null)
+                      : (bc?.total_cost_price != null ? row.carrier_total - bc.total_cost_price : null);
                     const diffColor = diff == null ? '#555'
                       : diff > 0.005 ? '#F44336'
                       : diff < -0.005 ? '#00C853'
@@ -1317,7 +1401,18 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                             }}>
                               {row.reference}
                             </span>
-                            {byRef[row.reference] > 1 && (
+                            {row.is_return && (
+                              <span style={{
+                                fontSize: 9, fontWeight: 700, letterSpacing: '0.05em',
+                                textTransform: 'uppercase',
+                                background: 'rgba(156,39,176,0.12)',
+                                border: '1px solid rgba(156,39,176,0.3)',
+                                color: '#CE93D8', borderRadius: 20, padding: '1px 6px',
+                              }}>
+                                return
+                              </span>
+                            )}
+                            {!row.is_return && byRef[row.reference] > 1 && (
                               <span style={{
                                 fontSize: 9, fontWeight: 700, letterSpacing: '0.05em',
                                 textTransform: 'uppercase',
@@ -1325,7 +1420,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                                 border: '1px solid rgba(0,188,212,0.3)',
                                 color: '#00BCD4', borderRadius: 20, padding: '1px 6px',
                               }}>
-                                return
+                                dup
                               </span>
                             )}
                           </div>
@@ -1425,13 +1520,26 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                           )}
                         </td>
                         <td style={{ ...td, textAlign: 'right' }}>
-                          <span style={{ color: bc?.total_cost_price != null ? '#CCC' : '#555' }}>
-                            {bc?.total_cost_price != null ? gbp(bc.total_cost_price) : '—'}
-                          </span>
-                          {ourHasSurcharge && (
-                            <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>
-                              base {gbp(bc.base_cost_price)} + {gbp(bc.total_cost_price - bc.base_cost_price)}
-                            </div>
+                          {row.is_return ? (
+                            row.carrier_rate_cost != null ? (
+                              <>
+                                <span style={{ color: '#CCC' }}>{gbp(row.carrier_rate_cost)}</span>
+                                <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>carrier rate</div>
+                              </>
+                            ) : (
+                              <span style={{ fontSize: 11, color: '#444', fontStyle: 'italic' }}>no rate found</span>
+                            )
+                          ) : (
+                            <>
+                              <span style={{ color: bc?.total_cost_price != null ? '#CCC' : '#555' }}>
+                                {bc?.total_cost_price != null ? gbp(bc.total_cost_price) : '—'}
+                              </span>
+                              {ourHasSurcharge && (
+                                <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>
+                                  base {gbp(bc.base_cost_price)} + {gbp(bc.total_cost_price - bc.base_cost_price)}
+                                </div>
+                              )}
+                            </>
                           )}
                         </td>
                         <td style={{ ...td, textAlign: 'right' }}>

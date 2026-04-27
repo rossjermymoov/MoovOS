@@ -21,7 +21,7 @@ const router = express.Router();
 
 router.post('/bulk-lookup', async (req, res) => {
   try {
-    const { courier, references } = req.body;
+    const { courier, references, tracking_numbers } = req.body;
 
     if (!Array.isArray(references) || references.length === 0) {
       return res.status(400).json({ error: 'references must be a non-empty array' });
@@ -32,6 +32,11 @@ router.post('/bulk-lookup', async (req, res) => {
 
     // Normalise references — trim whitespace
     const refs = references.map(r => String(r).trim()).filter(Boolean);
+
+    // Tracking numbers (consignment numbers from CSV column C) — optional, used as primary key
+    const trackingNums = Array.isArray(tracking_numbers)
+      ? tracking_numbers.map(t => String(t).trim()).filter(Boolean)
+      : [];
 
     // Look up charges whose order_id matches any of the references.
     // order_id on charges stores the customer-facing shipment reference (e.g. MP-XXXXXXXX).
@@ -47,8 +52,11 @@ router.post('/bulk-lookup', async (req, res) => {
         c.billed,
         s.courier,
         s.collection_date,
-        c.parcel_qty            AS parcel_count,
+        -- parcel_count: prefer shipments.parcel_count (set by webhook, always correct)
+        -- over charges.parcel_qty (often left at default 1).
+        COALESCE(s.parcel_count, c.parcel_qty, 1) AS parcel_count,
         s.total_weight_kg       AS declared_weight_kg,
+        s.tracking_codes,
         -- Does this customer/service use weight bands at all?
         -- False = flat-rate (any weight → same price, never flag weight diff).
         -- Match: service_code ILIKE dc_service_id  (primary, mirrors billing engine)
@@ -129,11 +137,18 @@ router.post('/bulk-lookup', async (req, res) => {
       FROM charges c
       LEFT JOIN shipments s  ON s.reference = c.order_id
       LEFT JOIN customers cu ON cu.id = c.customer_id
-      WHERE c.order_id   = ANY($1)
+      WHERE (
+        c.order_id = ANY($1)
+        OR c.order_id IN (
+          SELECT st.reference FROM shipments st
+          WHERE $2::text[] <> '{}'
+            AND st.tracking_codes && $2::text[]
+        )
+      )
         AND c.charge_type = 'courier'
         AND c.cancelled   = false
       ORDER BY c.order_id, c.created_at
-    `, [refs]);
+    `, [refs, trackingNums]);
 
     // DEBUG — log parcel_qty for any row where it's > 1 so we can confirm it's coming through
     const multiParcel = result.rows.filter(r => r.parcel_count > 1);
@@ -156,6 +171,7 @@ router.post('/bulk-lookup', async (req, res) => {
           customer_account: row.customer_account,
           customer_id:      row.customer_id,
           courier:          row.courier,
+          tracking_codes:   row.tracking_codes || [],
           charges:          [],
         };
       }
@@ -279,6 +295,54 @@ router.get('/debug/:reference', async (req, res) => {
     });
   } catch (err) {
     console.error('[reconciliation] debug error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /carrier-service-rates ───────────────────────────────────────────────
+// Returns the cost price for specific carrier services (e.g. return service code "1").
+// Used by the reconciliation client to compare invoice values for return rows.
+// Query params: courier (required), service_code (optional — omit for all services)
+// Returns: [{ service_code, service_name, price_first }]
+
+router.get('/carrier-service-rates', async (req, res) => {
+  try {
+    const { courier, service_code } = req.query;
+    if (!courier) return res.status(400).json({ error: 'courier is required' });
+
+    const params = [courier];
+    let serviceFilter = '';
+    if (service_code) {
+      params.push(service_code.trim());
+      serviceFilter = `AND cs.service_code = $${params.length}`;
+    }
+
+    const result = await query(`
+      SELECT
+        cs.service_code,
+        cs.name              AS service_name,
+        MIN(wb.price_first)  AS price_first
+      FROM courier_services cs
+      JOIN zones             z  ON z.courier_service_id = cs.id
+      JOIN weight_bands      wb ON wb.zone_id = z.id
+      JOIN carrier_rate_cards rc ON rc.id = wb.carrier_rate_card_id
+      JOIN couriers          cu ON cu.id = cs.courier_id
+      WHERE (cu.code ILIKE $1 OR cu.name ILIKE $1)
+        AND rc.is_active = true
+        AND wb.price_first IS NOT NULL
+        AND wb.price_first > 0
+        ${serviceFilter}
+      GROUP BY cs.service_code, cs.name
+      ORDER BY cs.service_code
+    `, params);
+
+    return res.json(result.rows.map(r => ({
+      service_code:  r.service_code,
+      service_name:  r.service_name,
+      price_first:   r.price_first != null ? parseFloat(r.price_first) : null,
+    })));
+  } catch (err) {
+    console.error('[reconciliation] carrier-service-rates error:', err);
     return res.status(500).json({ error: err.message });
   }
 });
