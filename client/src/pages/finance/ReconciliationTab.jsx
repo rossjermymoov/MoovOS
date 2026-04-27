@@ -962,7 +962,33 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           return { ...s, group, bestCharge, accountCustomer };
         });
 
-        // Second pass: add fuel/HGV allocation to each shipment row.
+        // ── Second match pass: find DB charges for returns via customer_id ────
+        // Return rows get group = null because the DHL return reference on the
+        // invoice doesn't match any order_id in our DB. But we've now resolved
+        // the customer (via localAccountMap). Search every remaining available
+        // charge pool for an unconsumed charge belonging to that customer —
+        // this picks up return charges that live under the outbound reference
+        // or any other reference we've already fetched.
+        for (const row of rows) {
+          if (row.bestCharge) continue;              // already matched
+          const cid = row.accountCustomer?.customer_id;
+          if (!cid) continue;                        // customer still unknown
+          for (const [ref, pool] of Object.entries(available)) {
+            if (!pool.length) continue;
+            const g = groupMap[ref];
+            if (!g || String(g.customer_id) !== String(cid)) continue;
+            pool.sort((a, b) =>
+              Math.abs((a.base_cost_price ?? Infinity) - row.carrier_cost) -
+              Math.abs((b.base_cost_price ?? Infinity) - row.carrier_cost)
+            );
+            row.bestCharge = pool.shift();
+            // Carry the group info so customer displays correctly
+            if (!row.group) row.group = g;
+            break;
+          }
+        }
+
+        // Third pass: add fuel/HGV allocation to each shipment row.
         // carrier_csv_surcharges = W-AE breakdown columns — these are ALREADY inside carrier_cost
         //                          (the invoice Value column is the total; W-AE just show what makes it up)
         //                          Store for informational display only — do NOT add to total.
@@ -995,17 +1021,24 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
             || mappedName.toLowerCase().includes('return');
 
           if (isReturn) {
-            const returnRate = carrierRates['1'] || null;
-            row.is_return         = true;
-            row.carrier_rate_cost = returnRate?.price_first ?? null;
-            // For returns, status is based on invoice value vs carrier rate
-            if (returnRate?.price_first != null) {
-              const diff = Math.abs(row.carrier_cost - returnRate.price_first);
-              row.status = diff <= TOLERANCE_ABS
-                ? { code: 'green', label: 'Match',       color: '#00C853', icon: 'check' }
-                : { code: 'red',   label: 'Discrepancy', color: '#F44336', icon: 'x'    };
+            row.is_return = true;
+            if (row.bestCharge) {
+              // Return charge found in DB — compare against stored cost price
+              // exactly like a normal outbound shipment.
+              row.carrier_rate_cost = null;
+              row.status = getStatus(row.carrier_total, row.bestCharge);
             } else {
-              row.status = { code: 'amber', label: 'No Rate Found', color: '#FFC107', icon: 'warn' };
+              // No DB charge — fall back to static carrier rate comparison.
+              const returnRate = carrierRates['1'] || null;
+              row.carrier_rate_cost = returnRate?.price_first ?? null;
+              if (returnRate?.price_first != null) {
+                const diff = Math.abs(row.carrier_cost - returnRate.price_first);
+                row.status = diff <= TOLERANCE_ABS
+                  ? { code: 'green', label: 'Match',       color: '#00C853', icon: 'check' }
+                  : { code: 'red',   label: 'Discrepancy', color: '#F44336', icon: 'x'    };
+              } else {
+                row.status = { code: 'amber', label: 'No Rate Found', color: '#FFC107', icon: 'warn' };
+              }
             }
           } else {
             row.is_return = false;
@@ -1407,8 +1440,9 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                     const g    = row.group;
                     const bc   = row.bestCharge;
                     // carrier_total = base + per-shipment surcharges from invoice columns W–AE
-                    // For returns, compare carrier_cost vs carrier_rate_cost (no DB charge expected)
-                    const diff = row.is_return
+                    // Returns with a matched DB charge compare like normal outbound rows.
+                    // Returns with no DB charge compare carrier_cost vs static carrier rate.
+                    const diff = (row.is_return && !bc)
                       ? (row.carrier_rate_cost != null ? row.carrier_cost - row.carrier_rate_cost : null)
                       : (bc?.total_cost_price != null ? row.carrier_total - bc.total_cost_price : null);
                     const diffColor = diff == null ? '#555'
@@ -1579,7 +1613,8 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                           )}
                         </td>
                         <td style={{ ...td, textAlign: 'right' }}>
-                          {row.is_return ? (
+                          {row.is_return && !bc ? (
+                            // Return with no DB charge — show static carrier rate or "no rate found"
                             row.carrier_rate_cost != null ? (
                               <>
                                 <span style={{ color: '#CCC' }}>{gbp(row.carrier_rate_cost)}</span>
@@ -1589,6 +1624,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                               <span style={{ fontSize: 11, color: '#444', fontStyle: 'italic' }}>no rate found</span>
                             )
                           ) : (
+                            // Normal outbound OR return that matched a DB charge
                             <>
                               <span style={{ color: bc?.total_cost_price != null ? '#CCC' : '#555' }}>
                                 {bc?.total_cost_price != null ? gbp(bc.total_cost_price) : '—'}
