@@ -50,9 +50,10 @@ router.get('/:customerId', async (req, res, next) => {
         c.code         AS courier_code,
         mc.id          AS master_card_id,
         mc.name        AS master_card_name,
-        ccl.id         AS link_id,
+        ccl.id             AS link_id,
         ccl.carrier_rate_card_id AS active_card_id,
-        arc.name       AS active_card_name,
+        ccl.account_number AS account_number,
+        arc.name           AS active_card_name,
         json_agg(
           jsonb_build_object('id', ac.id, 'name', ac.name, 'is_master', ac.is_master)
           ORDER BY ac.is_master DESC, ac.name
@@ -95,6 +96,7 @@ router.get('/:customerId', async (req, res, next) => {
       courier_name:  row.courier_name,
       courier_code:  row.courier_code,
       active:        !!row.link_id,
+      account_number:   row.account_number ?? null,
       master_card_id:   row.master_card_id,
       master_card_name: row.master_card_name,
       active_card_id:   row.active_card_id ?? row.master_card_id,
@@ -138,20 +140,37 @@ router.post('/:customerId', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ─── PATCH /:customerId/:courierId — change rate card ────────────────────────
+// ─── PATCH /:customerId/:courierId — change rate card and/or account number ──
 
 router.patch('/:customerId/:courierId', async (req, res, next) => {
   try {
     const { customerId, courierId } = req.params;
-    const { carrier_rate_card_id } = req.body;
-    if (!carrier_rate_card_id) return res.status(400).json({ error: 'carrier_rate_card_id required' });
+    const { carrier_rate_card_id, account_number } = req.body;
+
+    if (carrier_rate_card_id == null && account_number === undefined) {
+      return res.status(400).json({ error: 'carrier_rate_card_id or account_number required' });
+    }
+
+    // Build SET clause dynamically — only update what was provided
+    const sets   = ['updated_at = NOW()'];
+    const params = [customerId, courierId];
+
+    if (carrier_rate_card_id != null) {
+      params.push(carrier_rate_card_id);
+      sets.push(`carrier_rate_card_id = $${params.length}`);
+    }
+    if (account_number !== undefined) {
+      // Empty string → NULL (clear the account number)
+      params.push(account_number === '' ? null : account_number.trim());
+      sets.push(`account_number = $${params.length}`);
+    }
 
     const { rows } = await query(`
       UPDATE customer_carrier_links
-      SET carrier_rate_card_id = $3, updated_at = NOW()
+      SET ${sets.join(', ')}
       WHERE customer_id = $1 AND courier_id = $2
       RETURNING *
-    `, [customerId, courierId, carrier_rate_card_id]);
+    `, params);
 
     if (!rows.length) return res.status(404).json({ error: 'Carrier link not found — activate carrier first' });
     res.json(rows[0]);

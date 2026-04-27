@@ -1175,10 +1175,15 @@ function SurchargeOverrideRow({ surcharge, override, customerId, onChanged }) {
   );
 }
 
-// ─── Per-active-carrier section (fuel + surcharges) ───────────
+// ─── Per-active-carrier section (account number + fuel + surcharges) ──────────
 function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesChange }) {
   const [fuelOpen,  setFuelOpen]  = useState(false);
   const [surchOpen, setSurchOpen] = useState(true);  // open by default so surcharges are visible
+  // Account number inline editing
+  const [acctEditing, setAcctEditing] = useState(false);
+  const [acctVal, setAcctVal]         = useState(carrier.account_number || '');
+  const [acctSaving, setAcctSaving]   = useState(false);
+  const acctRef = useRef(null);
 
   const logo    = getCourierLogo(carrier.courier_code);
   // Only show fuel section for active (linked) carriers
@@ -1200,15 +1205,68 @@ function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesCh
     onSuccess:  () => qc.invalidateQueries(['customer-carrier-links', customerId]),
   });
 
-  // Don't render section at all if nothing to show
-  if (!hasFuel && !hasSurcharges && (carrier.available_cards?.length ?? 0) <= 1) return null;
+  async function saveAcctNumber() {
+    const trimmed = acctVal.trim();
+    if (trimmed === (carrier.account_number || '')) { setAcctEditing(false); return; }
+    setAcctSaving(true);
+    try {
+      await api.patch(`/customer-carrier-links/${customerId}/${carrier.courier_id}`, { account_number: trimmed });
+      qc.invalidateQueries(['customer-carrier-links', customerId]);
+    } finally {
+      setAcctSaving(false);
+      setAcctEditing(false);
+    }
+  }
+
+  function startAcctEdit() {
+    setAcctVal(carrier.account_number || '');
+    setAcctEditing(true);
+    setTimeout(() => acctRef.current?.select(), 0);
+  }
 
   return (
     <div className="moov-card" style={{ marginBottom: 10, overflow: 'hidden' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', background: 'rgba(0,200,83,0.03)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', background: 'rgba(0,200,83,0.03)', borderBottom: '1px solid rgba(255,255,255,0.05)', flexWrap: 'wrap' }}>
         {logo && <img src={logo} alt={carrier.courier_name} style={{ height: 15, objectFit: 'contain', flexShrink: 0 }} />}
         <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', flex: 1 }}>{carrier.courier_name}</span>
+
+        {/* Account number — inline editable */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 10, color: '#555', textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0 }}>Account</span>
+          {acctEditing ? (
+            <input
+              ref={acctRef}
+              value={acctVal}
+              onChange={e => setAcctVal(e.target.value)}
+              onBlur={saveAcctNumber}
+              onKeyDown={e => { if (e.key === 'Enter') saveAcctNumber(); if (e.key === 'Escape') { setAcctEditing(false); setAcctVal(carrier.account_number || ''); } }}
+              placeholder="e.g. 123456789"
+              style={{ ...inp, width: 130, fontSize: 11, fontFamily: 'monospace', color: '#00BCD4', border: '1px solid rgba(0,188,212,0.5)', background: 'rgba(0,188,212,0.08)' }}
+              disabled={acctSaving}
+            />
+          ) : (
+            <span
+              onClick={startAcctEdit}
+              title="Click to set account number"
+              style={{
+                fontSize: 11, fontFamily: 'monospace', fontWeight: 600,
+                color: carrier.account_number ? '#00BCD4' : '#333',
+                cursor: 'pointer', padding: '3px 10px', borderRadius: 5,
+                border: `1px solid ${carrier.account_number ? 'rgba(0,188,212,0.35)' : 'rgba(255,255,255,0.08)'}`,
+                background: carrier.account_number ? 'rgba(0,188,212,0.08)' : 'rgba(255,255,255,0.02)',
+                transition: 'border-color 0.12s, background 0.12s',
+                minWidth: 80, display: 'inline-block', textAlign: 'center',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(0,188,212,0.6)'; e.currentTarget.style.background = 'rgba(0,188,212,0.12)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = carrier.account_number ? 'rgba(0,188,212,0.35)' : 'rgba(255,255,255,0.08)'; e.currentTarget.style.background = carrier.account_number ? 'rgba(0,188,212,0.08)' : 'rgba(255,255,255,0.02)'; }}
+            >
+              {carrier.account_number || '+ Add'}
+            </span>
+          )}
+        </div>
+
+        {/* Rate card selector */}
         {carrier.available_cards?.length > 1 ? (
           <select
             value={String(carrier.active_card_id || '')}
