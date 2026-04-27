@@ -1744,7 +1744,7 @@ router.post('/batch-reprice', async (req, res, next) => {
              s.id AS shipment_id,
              s.dc_service_id, s.service_name AS s_service_name,
              s.total_weight_kg, s.parcel_count,
-             s.customer_account, s.ship_to_postcode, s.raw_payload
+             s.customer_account, s.ship_to_postcode, s.ship_to_country_iso, s.raw_payload
       FROM charges c
       LEFT JOIN shipments s ON s.id = c.shipment_id
       WHERE c.price IS NULL
@@ -1866,7 +1866,7 @@ router.post('/full-reprice', async (req, res, next) => {
              s.id AS shipment_id,
              s.dc_service_id, s.service_name AS s_service_name,
              s.total_weight_kg, s.parcel_count, s.parcel_weight_kg,
-             s.customer_account, s.ship_to_postcode, s.raw_payload
+             s.customer_account, s.ship_to_postcode, s.ship_to_country_iso, s.raw_payload
       FROM charges c
       LEFT JOIN shipments s ON s.id = c.shipment_id
       WHERE c.charge_type = 'courier'
@@ -2818,7 +2818,7 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
       SELECT c.customer_id, c.parcel_qty,
              s.dc_service_id, s.service_name AS s_service_name,
              s.total_weight_kg, s.parcel_count, s.parcel_weight_kg,
-             s.customer_account, s.ship_to_postcode, s.raw_payload
+             s.customer_account, s.ship_to_postcode, s.ship_to_country_iso, s.raw_payload
       FROM charges c
       LEFT JOIN shipments s ON s.id = c.shipment_id
       WHERE c.id = $1
