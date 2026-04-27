@@ -281,7 +281,7 @@ router.post('/bulk-lookup', async (req, res) => {
                  cu.business_name AS customer_name
           FROM charges c
           JOIN customers cu ON cu.id = c.customer_id
-          WHERE c.customer_id = ANY($1::int[])
+          WHERE c.customer_id = ANY($1::uuid[])
             AND c.charge_type = 'courier'
             AND c.cancelled = false
           ORDER BY c.created_at DESC
