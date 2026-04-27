@@ -51,34 +51,44 @@ router.post('/bulk-lookup', async (req, res) => {
         s.total_weight_kg       AS declared_weight_kg,
         -- Whether this customer/service uses weight bands at all.
         -- False = flat rate (any weight → same price, weight diff is irrelevant).
-        -- Checked via dc_service_id → customer_rates.service_code match.
+        -- Matches on service_code (via dc_service_id) OR service_name as fallback.
         (
           SELECT EXISTS(
             SELECT 1 FROM customer_rates cr
             WHERE cr.customer_id = c.customer_id
-              AND LOWER(cr.service_code) = LOWER(s.dc_service_id)
-              AND cr.min_weight_kg IS NOT NULL
+              AND (
+                LOWER(cr.service_code) = LOWER(s.dc_service_id)
+                OR cr.service_name = c.service_name
+              )
+              AND cr.max_weight_kg IS NOT NULL
           )
         )                       AS has_weight_bands,
         -- Band boundaries for the declared weight (only meaningful when has_weight_bands=true).
+        -- Uses max_weight_kg IS NOT NULL (handles 0-30kg bands where min may be stored as 0 or NULL).
         (
           SELECT cr.min_weight_kg
           FROM customer_rates cr
           WHERE cr.customer_id = c.customer_id
-            AND LOWER(cr.service_code) = LOWER(s.dc_service_id)
+            AND (
+              LOWER(cr.service_code) = LOWER(s.dc_service_id)
+              OR cr.service_name = c.service_name
+            )
             AND s.total_weight_kg > COALESCE(cr.min_weight_kg, 0)
             AND s.total_weight_kg <= cr.max_weight_kg
-            AND cr.min_weight_kg IS NOT NULL
+            AND cr.max_weight_kg IS NOT NULL
           LIMIT 1
         )                       AS band_min_weight_kg,
         (
           SELECT cr.max_weight_kg
           FROM customer_rates cr
           WHERE cr.customer_id = c.customer_id
-            AND LOWER(cr.service_code) = LOWER(s.dc_service_id)
+            AND (
+              LOWER(cr.service_code) = LOWER(s.dc_service_id)
+              OR cr.service_name = c.service_name
+            )
             AND s.total_weight_kg > COALESCE(cr.min_weight_kg, 0)
             AND s.total_weight_kg <= cr.max_weight_kg
-            AND cr.min_weight_kg IS NOT NULL
+            AND cr.max_weight_kg IS NOT NULL
           LIMIT 1
         )                       AS band_max_weight_kg,
         cu.id                   AS customer_id,
