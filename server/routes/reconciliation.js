@@ -47,7 +47,7 @@ router.post('/bulk-lookup', async (req, res) => {
         c.billed,
         s.courier,
         s.collection_date,
-        s.parcel_count,
+        c.parcel_count,
         s.total_weight_kg       AS declared_weight_kg,
         -- Does this customer/service use weight bands at all?
         -- False = flat-rate (any weight → same price, never flag weight diff).

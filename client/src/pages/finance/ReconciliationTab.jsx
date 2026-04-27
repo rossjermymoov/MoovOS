@@ -919,12 +919,13 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
     : [];
 
   const ourFuelCostTotal   = matchedWithCost.reduce((s, r) => s + (r.bestCharge.fuel_cost_price || 0), 0);
-  // HGV: sum hgv_cost_price from ALL matched shipments (not just those with a base cost price).
-  // An amber shipment (no base cost recorded) can still have an HGV charge row in the DB —
-  // excluding it on matchedWithCost would cause an under-count.
-  const ourHgvCalcTotal    = results
-    ? results.filter(r => r.bestCharge).reduce((s, r) => s + (r.bestCharge.hgv_cost_price || 0), 0)
+  // HGV: sum parcel_count from all matched shipments × rate.
+  // parcel_count is on the charge row itself (c.parcel_count, set at webhook time).
+  // Use all results with a bestCharge so amber shipments aren't excluded.
+  const totalMatchedPieces = results
+    ? results.filter(r => r.bestCharge).reduce((s, r) => s + (r.bestCharge.parcel_count || 1), 0)
     : 0;
+  const ourHgvCalcTotal    = totalMatchedPieces * HGV_RATE_PER_PARCEL;
   const invoiceSurchargeTotal = surcharges.reduce((s, r) => s + r.value, 0);
 
   // ── Filter ──
@@ -1481,7 +1482,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                             ourNote  = 'stored fuel charges';
                           } else if (isHgv) {
                             ourValue = ourHgvCalcTotal;
-                            ourNote  = 'stored HGV charges (parcel count × rate)';
+                            ourNote  = `${totalMatchedPieces} parcel${totalMatchedPieces !== 1 ? 's' : ''} × £${HGV_RATE_PER_PARCEL.toFixed(2)}`;
                           }
 
                           const scKey = `${sc.description}-${i}`;
