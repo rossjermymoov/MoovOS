@@ -314,18 +314,24 @@ async function zoneForPostcode(serviceCode, postcode, iso = 'GB') {
   if (catchRes.rows.length) return catchRes.rows[0].zone_name;
 
   // ── 3. Universal zone: no postcode rules at all ───────────────────────────
+  // Note: outward ($2) is not used here — pass only serviceCode + isoUpper to
+  // avoid Postgres "could not determine data type of parameter $2" error.
+  const COUNTRY_FILTER_2 = `(
+    EXISTS (SELECT 1 FROM zone_country_codes zcc WHERE zcc.zone_id = z.id AND zcc.country_iso = $2)
+    OR NOT EXISTS (SELECT 1 FROM zone_country_codes zcc WHERE zcc.zone_id = z.id)
+  )`;
   const univRes = await query(`
     SELECT z.name AS zone_name
     FROM zones z
     JOIN courier_services cs ON cs.id = z.courier_service_id
     WHERE cs.service_code ILIKE $1
-      AND ${COUNTRY_FILTER}
+      AND ${COUNTRY_FILTER_2}
       AND NOT EXISTS (
         SELECT 1 FROM zone_postcode_rules WHERE zone_id = z.id
       )
     ORDER BY z.name
     LIMIT 1
-  `, [serviceCode, outward, isoUpper]);
+  `, [serviceCode, isoUpper]);
   if (univRes.rows.length) return univRes.rows[0].zone_name;
 
   return null;
