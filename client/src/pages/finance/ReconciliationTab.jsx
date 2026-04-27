@@ -918,12 +918,11 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
     : [];
 
   const ourFuelCostTotal   = matchedWithCost.reduce((s, r) => s + (r.bestCharge.fuel_cost_price || 0), 0);
-  // HGV: sum piece count across all matched shipments × rate.
-  // Use csv_piece_count (from the invoice) first — that's what DHL actually charged HGV on.
-  // Fall back to DB parcel_count (set at webhook time), then 1.
-  // This must match the per-row allocation logic exactly.
+  // HGV: sum parcel_qty from the DB across all matched shipments × rate.
+  // parcel_qty is set on the charge row at webhook time — it is the authoritative
+  // source and already correct for multi-parcel shipments.
   const totalMatchedPieces = results
-    ? results.filter(r => r.bestCharge).reduce((s, r) => s + (r.csv_piece_count ?? r.bestCharge?.parcel_count ?? 1), 0)
+    ? results.filter(r => r.bestCharge).reduce((s, r) => s + (r.bestCharge.parcel_count || 1), 0)
     : 0;
   const ourHgvCalcTotal    = totalMatchedPieces * HGV_RATE_PER_PARCEL;
   const invoiceSurchargeTotal = surcharges.reduce((s, r) => s + r.value, 0);

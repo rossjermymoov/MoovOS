@@ -135,6 +135,14 @@ router.post('/bulk-lookup', async (req, res) => {
       ORDER BY c.order_id, c.created_at
     `, [refs]);
 
+    // DEBUG — log parcel_qty for any row where it's > 1 so we can confirm it's coming through
+    const multiParcel = result.rows.filter(r => r.parcel_count > 1);
+    if (multiParcel.length) {
+      console.log('[recon debug] multi-parcel charges:', multiParcel.map(r => ({ ref: r.reference, parcel_count: r.parcel_count })));
+    } else {
+      console.log('[recon debug] all parcel_count values:', result.rows.map(r => r.parcel_count));
+    }
+
     // Group charges by reference — a reference can appear more than once when a
     // return shipment shares the same order_id as its outbound.
     // Returns typically appear on the NEXT invoice, so we return all charges and
