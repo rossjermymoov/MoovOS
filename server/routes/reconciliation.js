@@ -96,66 +96,26 @@ router.post('/bulk-lookup', async (req, res) => {
             AND sc.charge_type = 'fuel'
             AND sc.cancelled = false
         ), 0)                   AS fuel_cost_price,
-        -- Total cost = base freight + fuel (always) + non-excluded surcharges.
-        -- Fuel is kept in a SEPARATE subquery so the surcharge exclusion filter
-        -- can never accidentally drop fuel rows (fuel charges often have
-        -- surcharge_id IS NULL, which the name-match path could catch if a
-        -- surcharge happened to share the same service_name).
+        -- Total cost = base freight + all non-courier charge cost_prices.
+        -- Surcharges we don't pay the carrier (e.g. EPS) have cost_price = 0
+        -- on the charge row, so they naturally contribute nothing here.
+        -- No exclusion flags needed — the data model handles it.
         COALESCE(c.cost_price, 0)
         + COALESCE((
-            -- Fuel: always included — carriers always bill us for this.
             SELECT SUM(sc.cost_price)
             FROM   charges sc
             WHERE  sc.shipment_id = c.shipment_id
-              AND  sc.charge_type = 'fuel'
+              AND  sc.charge_type IN ('fuel', 'surcharge')
               AND  sc.cancelled   = false
-          ), 0)
-        + COALESCE((
-            -- Surcharges: include unless marked reconciliation_excluded.
-            -- surcharge_id FK match (preferred), OR name/code match (fallback).
-            SELECT SUM(sc.cost_price)
-            FROM   charges sc
-            WHERE  sc.shipment_id = c.shipment_id
-              AND  sc.charge_type = 'surcharge'
-              AND  sc.cancelled   = false
-              AND  NOT EXISTS (
-                     SELECT 1 FROM surcharges sx
-                     WHERE sx.reconciliation_excluded = true
-                       AND (
-                         sx.id = sc.surcharge_id
-                         OR (sc.surcharge_id IS NULL AND (
-                               TRIM(sx.name) ILIKE TRIM(sc.service_name)
-                            OR TRIM(sx.code) ILIKE TRIM(sc.service_name)
-                         ))
-                       )
-                   )
           ), 0)                 AS total_cost_price,
-        -- Total sell — same structure as total_cost_price, using price not cost_price.
+        -- Total sell = base sell + all non-courier sell prices (including EPS).
         COALESCE(c.price, 0)
         + COALESCE((
             SELECT SUM(sc.price)
             FROM   charges sc
             WHERE  sc.shipment_id = c.shipment_id
-              AND  sc.charge_type = 'fuel'
+              AND  sc.charge_type IN ('fuel', 'surcharge')
               AND  sc.cancelled   = false
-          ), 0)
-        + COALESCE((
-            SELECT SUM(sc.price)
-            FROM   charges sc
-            WHERE  sc.shipment_id = c.shipment_id
-              AND  sc.charge_type = 'surcharge'
-              AND  sc.cancelled   = false
-              AND  NOT EXISTS (
-                     SELECT 1 FROM surcharges sx
-                     WHERE sx.reconciliation_excluded = true
-                       AND (
-                         sx.id = sc.surcharge_id
-                         OR (sc.surcharge_id IS NULL AND (
-                               TRIM(sx.name) ILIKE TRIM(sc.service_name)
-                            OR TRIM(sx.code) ILIKE TRIM(sc.service_name)
-                         ))
-                       )
-                   )
           ), 0)                 AS total_sell_price
       FROM charges c
       LEFT JOIN shipments s  ON s.id  = c.shipment_id

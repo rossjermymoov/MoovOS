@@ -763,16 +763,18 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData, 
         price = effectiveValue;
       }
 
-      // Carrier cost = default_value (the base rate before any customer markup).
-      // For pass-through surcharges this equals the sell price; for marked-up ones it's lower.
-      const carrierSurchargePrice = parseFloat(surcharge.default_value || 0);
+      // Carrier cost uses surcharge.cost_price — explicitly what the carrier charges us.
+      // For pass-through surcharges cost_price = default_value (e.g. HGV 13p = 13p).
+      // For surcharges we charge customers but don't pay the carrier (e.g. EPS),
+      // cost_price = 0 so reconciliation naturally ignores them.
+      const carrierCostRate = parseFloat(surcharge.cost_price ?? surcharge.default_value ?? 0);
       let carrierSurchargeCost;
       if (surcharge.calc_type === 'percentage') {
-        carrierSurchargeCost = parseFloat(((parseFloat(basePrice) || 0) * carrierSurchargePrice / 100).toFixed(2));
+        carrierSurchargeCost = parseFloat(((parseFloat(basePrice) || 0) * carrierCostRate / 100).toFixed(2));
       } else if (surcharge.charge_per === 'parcel') {
-        carrierSurchargeCost = parseFloat((carrierSurchargePrice * (shipmentData.parcel_count || 1)).toFixed(2));
+        carrierSurchargeCost = parseFloat((carrierCostRate * (shipmentData.parcel_count || 1)).toFixed(2));
       } else {
-        carrierSurchargeCost = carrierSurchargePrice;
+        carrierSurchargeCost = carrierCostRate;
       }
 
       await query(`
