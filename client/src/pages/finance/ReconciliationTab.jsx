@@ -872,7 +872,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           account_numbers:  accountNumbers,
         });
         if (cancelled) return;
-        const { matched, customers_by_account } = resp.data;
+        const { matched, customers_by_account, charges_by_customer } = resp.data;
 
         // Build a map from reference → group (contains array of DB charges)
         const groupMap = {};
@@ -1002,26 +1002,27 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           const friendlyName   = liveMappings[invoiceSvcName] || invoiceSvcName;
           const resolvedCode   = liveNameToCode[friendlyName] || liveNameToCode[invoiceSvcName];
 
-          // DEBUG — log every step of the resolution chain
-          console.log('[recon DEBUG] second pass row:', {
-            reference:      row.reference,
-            invoiceSvcName,
-            mappedTo:       liveMappings[invoiceSvcName] ?? '(no mapping)',
-            friendlyName,
-            resolvedCode:   resolvedCode ?? '(not found in serviceNameToCode)',
-            serviceNameToCodeKeys: Object.keys(liveNameToCode),
-          });
-          // Log what's in available pools for this customer
-          for (const [ref, pool] of Object.entries(available)) {
-            const g = groupMap[ref];
-            if (!g || String(g.customer_id) !== String(cid)) continue;
-            console.log(`[recon DEBUG]   pool ref="${ref}" charges:`, pool.map(c => `service_name="${c.service_name}" cost=${c.base_cost_price}`));
-          }
-
           if (!resolvedCode) continue; // no known service code — flag as unmatched, do not guess
 
           const target = resolvedCode.trim().toLowerCase();
 
+          // First: search charges_by_customer — these are DB charges for this
+          // customer whose order_id was NOT in the invoice refs (e.g. return bookings
+          // stored under their own MP- reference). This is the primary pool for returns.
+          const customerPool = charges_by_customer?.[String(cid)];
+          if (customerPool?.length) {
+            const idx = customerPool.findIndex(c =>
+              (c.service_name || '').trim().toLowerCase() === target
+            );
+            if (idx !== -1) {
+              row.bestCharge = customerPool.splice(idx, 1)[0];
+              continue;
+            }
+          }
+
+          // Fallback: search available pools (charges fetched by reference match).
+          // This covers edge cases where a return charge shares a reference with
+          // its outbound shipment and therefore IS in the available pool.
           for (const [ref, pool] of Object.entries(available)) {
             if (!pool.length) continue;
             const g = groupMap[ref];

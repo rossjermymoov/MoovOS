@@ -268,40 +268,64 @@ router.post('/bulk-lookup', async (req, res) => {
       }
     }
 
-    // ── DEBUG: dump all courier charges for account-identified customers ──────
-    // This reveals what service_name is actually stored in the DB for return
-    // charges so we can confirm the match chain is correct.
+    // ── Fetch charges for account-identified customers not matched by ref ─────
+    // Return rows on a DHL invoice have a DHL-assigned reference that doesn't
+    // exist as an order_id in our DB. The charge exists under a different
+    // reference (e.g. the return booking's own MP- number). We fetch all
+    // unmatched courier charges for identified customers so the frontend can
+    // match them by service code.
+    let charges_by_customer = {};
     if (Object.keys(customers_by_account).length > 0) {
       const custIds = [...new Set(
         Object.values(customers_by_account).map(c => c.customer_id).filter(Boolean)
       )];
       if (custIds.length > 0) {
-        const debugRes = await query(`
-          SELECT c.id, c.order_id, c.service_name, c.cost_price, c.charge_type, c.cancelled,
-                 cu.business_name AS customer_name
+        const extraRes = await query(`
+          SELECT
+            c.id              AS charge_id,
+            c.order_id        AS reference,
+            c.customer_id,
+            c.service_name,
+            c.cost_price      AS base_cost_price,
+            COALESCE(c.cost_price, 0) + COALESCE((
+              SELECT SUM(sc.cost_price)
+              FROM charges sc
+              WHERE sc.shipment_id = c.shipment_id
+                AND sc.charge_type IN ('fuel','surcharge')
+                AND sc.cancelled = false
+            ), 0)             AS total_cost_price,
+            COALESCE(s.parcel_count, c.parcel_qty, 1) AS parcel_count
           FROM charges c
-          JOIN customers cu ON cu.id = c.customer_id
+          LEFT JOIN shipments s ON s.reference = c.order_id
           WHERE c.customer_id = ANY($1::uuid[])
             AND c.charge_type = 'courier'
-            AND c.cancelled = false
+            AND c.cancelled   = false
+            AND c.order_id    != ALL($2)
           ORDER BY c.created_at DESC
-          LIMIT 50
-        `, [custIds]);
-        console.log('[recon DEBUG] charges for account-identified customers:');
-        for (const r of debugRes.rows) {
-          console.log(`  customer="${r.customer_name}" order_id="${r.order_id}" service_name="${r.service_name}" cost=${r.cost_price}`);
+          LIMIT 200
+        `, [custIds, refs]);
+
+        for (const row of extraRes.rows) {
+          const cid = String(row.customer_id);
+          if (!charges_by_customer[cid]) charges_by_customer[cid] = [];
+          charges_by_customer[cid].push({
+            charge_id:        row.charge_id,
+            reference:        row.reference,
+            service_name:     row.service_name,
+            base_cost_price:  row.base_cost_price  != null ? parseFloat(row.base_cost_price)  : null,
+            total_cost_price: row.total_cost_price  != null ? parseFloat(row.total_cost_price) : null,
+            parcel_count:     row.parcel_count       != null ? parseInt(row.parcel_count, 10)   : 1,
+          });
         }
-        console.log('[recon DEBUG] customers_by_account keys:', Object.keys(customers_by_account));
-        console.log('[recon DEBUG] refs on invoice (first 10):', refs.slice(0, 10));
       }
     }
-    // ── END DEBUG ─────────────────────────────────────────────────────────────
 
     return res.json({
       ok: true,
       matched,
       unmatched,
       customers_by_account,
+      charges_by_customer,
       total:           refs.length,
       matched_count:   matched.length,
       unmatched_count: unmatched.length,
