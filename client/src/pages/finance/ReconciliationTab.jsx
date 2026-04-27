@@ -171,8 +171,20 @@ function parseDhlCsv(text) {
       continue;
     }
 
-    // Shipment rows — must have a valid non-zero value
-    if (isNaN(value) || value === 0) { skipped++; continue; }
+    // DHL sometimes emits a £0 second line for the same reference on multi-parcel
+    // shipments. Don't skip it — merge its piece count into the existing entry.
+    if (value === 0 || isNaN(value)) {
+      if (shipmentMap[ref] && colPieces >= 0) {
+        const piecesRaw = (cols[colPieces] || '').replace(/[,\s]/g, '');
+        const extraPieces = parseInt(piecesRaw, 10);
+        if (!isNaN(extraPieces) && extraPieces > 0) {
+          const existing = shipmentMap[ref][shipmentMap[ref].length - 1];
+          existing.csv_piece_count = (existing.csv_piece_count || 1) + extraPieces;
+        }
+      }
+      skipped++;
+      continue;
+    }
 
     // Normal shipment row (ref starts with MP- — confirmed above)
     const invoiceServiceName = (cols[colService] || '').trim();
@@ -202,12 +214,12 @@ function parseDhlCsv(text) {
     shipmentMap[ref] = shipmentMap[ref] || [];
     shipmentMap[ref].push({
       reference:              ref,
-      carrier_cost:           value,          // Value column = TOTAL freight (W-AE are a breakdown of this, not additive)
-      carrier_csv_surcharges: csvSurcharges,  // W-AE informational breakdown only — already inside carrier_cost
-      carrier_surcharges:     0,              // fuel+HGV allocated post-lookup; csv_surcharges NOT added here
-      carrier_total:          value,          // updated post-lookup (carrier_cost + fuel_alloc + hgv_alloc)
+      carrier_cost:           value,
+      carrier_csv_surcharges: csvSurcharges,
+      carrier_surcharges:     0,
+      carrier_total:          value,
       billed_weight_kg:       isNaN(billedWeightKg) ? null : billedWeightKg,
-      csv_piece_count:        csvPieces,      // piece count from invoice — used for HGV allocation
+      csv_piece_count:        csvPieces,
       invoice_service_name:   invoiceServiceName,
     });
     parsed++;
