@@ -1375,56 +1375,32 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                             <span style={{ fontSize: 12, color: '#555' }}>—</span>
                           )}
                         </td>
-                        {/* Weight — billed (DHL invoice) / declared (our DB) */}
+                        {/* Weight — billed (DHL invoice) vs service max weight band */}
                         <td style={{ ...td, textAlign: 'right' }}>
                           {(() => {
-                            const declared        = bc?.declared_weight_kg;
-                            const billed          = row.billed_weight_kg;
-                            const bandMin         = bc?.band_min_weight_kg;
-                            const bandMax         = bc?.band_max_weight_kg;
-                            const hasWeightBands  = bc?.has_weight_bands;
-                            const hasBoth         = declared != null && billed != null;
-                            const diff            = hasBoth ? billed - declared : null;
-                            // Only flag when the service uses weight bands AND the carrier's
-                            // billed weight falls OUTSIDE the band used for pricing (different
-                            // rate would apply). Flat-rate services: never flag (any weight = same
-                            // price). Unknown/no-match: suppress rather than false-positive.
-                            // Only flag when band data is available AND billed weight
-                            // falls outside the band used for pricing.
-                            // If band lookup returned null (service/weight not matched),
-                            // suppress rather than false-positive on raw diff.
-                            const discrepancy = hasBoth && hasWeightBands && bandMax != null && (
-                              billed <= (bandMin ?? 0) || billed > bandMax
-                            );
+                            const billed         = row.billed_weight_kg;
+                            const bandMax        = bc?.band_max_weight_kg;
+                            const hasWeightBands = bc?.has_weight_bands;
+                            // Flag only when:
+                            //   • the service uses weight bands (not flat-rate)
+                            //   • we have a band ceiling from the customer's rate card
+                            //   • DHL invoiced MORE than that ceiling
+                            const over = hasWeightBands && bandMax != null && billed != null && billed > bandMax;
                             return (
                               <div>
-                                {/* Billed weight from DHL invoice */}
                                 {billed != null ? (
-                                  <span style={{ fontWeight: 600, color: discrepancy ? '#F44336' : '#CCC' }}>
+                                  <span style={{ fontWeight: 600, color: over ? '#F44336' : '#CCC' }}>
                                     {billed.toFixed(2)} kg
                                   </span>
-                                ) : declared != null ? (
-                                  <span style={{ color: '#888' }}>—</span>
                                 ) : (
                                   <span style={{ color: '#555' }}>—</span>
                                 )}
-                                {/* Declared weight — only shown when there's a real discrepancy */}
-                                {discrepancy && declared != null && (
-                                  <div style={{
-                                    fontSize: 11, marginTop: 2,
-                                    color: '#FFC107', fontWeight: 700,
-                                  }}>
-                                    {declared.toFixed(2)} kg declared
-                                    {diff > 0 && (
-                                      <span style={{ marginLeft: 5, color: '#F44336', fontWeight: 700 }}>
-                                        ▲{diff.toFixed(2)}
-                                      </span>
-                                    )}
-                                    {diff < 0 && (
-                                      <span style={{ marginLeft: 5, color: '#00C853', fontWeight: 700 }}>
-                                        ▼{Math.abs(diff).toFixed(2)}
-                                      </span>
-                                    )}
+                                {over && (
+                                  <div style={{ fontSize: 11, marginTop: 2, color: '#FFC107', fontWeight: 700 }}>
+                                    {bandMax.toFixed(2)} kg service max
+                                    <span style={{ marginLeft: 5, color: '#F44336' }}>
+                                      ▲{(billed - bandMax).toFixed(2)} over
+                                    </span>
                                   </div>
                                 )}
                               </div>
