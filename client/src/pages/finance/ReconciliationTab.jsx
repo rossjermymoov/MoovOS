@@ -774,7 +774,8 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
   const [selected,     setSelected]     = useState(new Set());
   const [refreshCount, setRefreshCount] = useState(0);
   const [mappings,          setMappings]          = useState({});  // invoice_name → internal_name (manual)
-  const [serviceCodeMap,    setServiceCodeMap]    = useState({});  // service_code → service_name (auto)
+  const [serviceCodeMap,    setServiceCodeMap]    = useState({});  // service_code → service_name (auto, for display)
+  const [serviceNameToCode, setServiceNameToCode] = useState({});  // service_name → service_code (reverse, for charge matching)
   const [carrierRates,      setCarrierRates]      = useState({});  // service_code → price_first (for returns etc.)
   const [showMappings,      setShowMappings]      = useState(false);
   const [acceptedSurcharges, setAcceptedSurcharges] = useState(new Set()); // accepted known-variance surcharges
@@ -803,14 +804,23 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
       });
   }, [carrier.code, showMappings]); // reload after mappings modal closes
 
-  // Fetch all carrier services once to auto-resolve service codes (e.g. DHLPCUK220 → DHL Ecommerce Parcel)
+  // Fetch all carrier services and build two maps:
+  //   serviceCodeMap:    service_code → service_name  (used for display: auto-resolve invoice code to friendly name)
+  //   serviceNameToCode: service_name → service_code  (used for charge matching: resolve friendly name back to code)
+  // Both are needed because service mappings store the friendly name ("DHL Return") but
+  // DB charges are stored by service code ("DHL-1"). We must match on the code, not the name.
   useEffect(() => {
     api.get('/carriers/services').then(r => {
-      const codeMap = {};
+      const codeMap    = {};
+      const nameToCode = {};
       for (const s of (r.data || [])) {
-        if (s.service_code) codeMap[s.service_code.trim()] = s.name;
+        const code = (s.service_code || '').trim();
+        const name = (s.name        || '').trim();
+        if (code) codeMap[code]    = name;
+        if (name) nameToCode[name] = code;
       }
       setServiceCodeMap(codeMap);
+      setServiceNameToCode(nameToCode);
     }).catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -976,17 +986,25 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           const cid = row.accountCustomer?.customer_id;
           if (!cid) continue;
 
-          // Resolve the internal service name via the user-defined service mappings.
-          // mappings[invoice_service_name] is the authoritative translation —
-          // e.g. invoice service name "1" → internal name "DHL Return".
-          // serviceCodeMap is a secondary lookup for when the invoice name is
-          // already our internal service code (e.g. "DHLPCUK220").
-          // No resolved name = no match possible — we do not guess.
+          // Resolve to the internal SERVICE CODE for this invoice row.
+          // Chain: invoice service name → service mappings → friendly name → service code.
+          // DB charges are stored by service code (e.g. "DHL-1"), not friendly name
+          // ("DHL Return"), so we must match on the code.
+          //
+          // Step 1: get the friendly name from service mappings
+          //   mappings["1"] = "DHL Return"
+          // Step 2: reverse-look up the service code from the friendly name
+          //   serviceNameToCode["DHL Return"] = "DHL-1"
+          // Step 3: match charge.service_name === "DHL-1" exactly
+          //
+          // If the invoice service name IS already a service code (e.g. "DHLPCUK220"),
+          // serviceNameToCode won't find it — fall back to treating it as the code directly.
           const invoiceSvcName = (row.invoice_service_name || '').trim();
-          const resolvedServiceName = mappings[invoiceSvcName] || serviceCodeMap[invoiceSvcName];
-          if (!resolvedServiceName) continue;
+          const friendlyName   = mappings[invoiceSvcName] || invoiceSvcName;
+          const resolvedCode   = serviceNameToCode[friendlyName] || serviceNameToCode[invoiceSvcName];
+          if (!resolvedCode) continue; // no known service code — flag as unmatched, do not guess
 
-          const target = resolvedServiceName.trim().toLowerCase();
+          const target = resolvedCode.trim().toLowerCase();
 
           for (const [ref, pool] of Object.entries(available)) {
             if (!pool.length) continue;
