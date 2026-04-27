@@ -21,7 +21,7 @@ const router = express.Router();
 
 router.post('/bulk-lookup', async (req, res) => {
   try {
-    const { courier, references, tracking_numbers } = req.body;
+    const { courier, references, tracking_numbers, account_numbers } = req.body;
 
     if (!Array.isArray(references) || references.length === 0) {
       return res.status(400).json({ error: 'references must be a non-empty array' });
@@ -36,6 +36,12 @@ router.post('/bulk-lookup', async (req, res) => {
     // Tracking numbers (consignment numbers from CSV column C) — optional, used as primary key
     const trackingNums = Array.isArray(tracking_numbers)
       ? tracking_numbers.map(t => String(t).trim()).filter(Boolean)
+      : [];
+
+    // DHL account numbers (column A) — optional, used to identify customer for
+    // unmatched rows (returns, adjustments) that have no matching shipment reference.
+    const acctNums = Array.isArray(account_numbers)
+      ? account_numbers.map(a => String(a).trim()).filter(Boolean)
       : [];
 
     // Look up charges whose order_id matches any of the references.
@@ -212,10 +218,39 @@ router.post('/bulk-lookup', async (req, res) => {
       }
     }
 
+    // ── Account number → customer lookup ─────────────────────────────────────
+    // For invoice rows that have no matching shipment (e.g. DHL returns, credit
+    // notes), look up the customer by the DHL account number from column A.
+    // The DHL account number is stored in customers.account_number OR
+    // customers.dc_customer_id depending on how the customer was onboarded.
+    let customers_by_account = {};
+    if (acctNums.length > 0) {
+      const custRes = await query(`
+        SELECT id AS customer_id, business_name AS customer_name,
+               COALESCE(account_number, dc_customer_id) AS lookup_key
+        FROM customers
+        WHERE account_number = ANY($1)
+           OR dc_customer_id = ANY($1)
+      `, [acctNums]);
+
+      for (const row of custRes.rows) {
+        // Map each account number that matched to this customer
+        for (const acct of acctNums) {
+          if (acct === row.lookup_key) {
+            customers_by_account[acct] = {
+              customer_id:   row.customer_id,
+              customer_name: row.customer_name,
+            };
+          }
+        }
+      }
+    }
+
     return res.json({
       ok: true,
       matched,
       unmatched,
+      customers_by_account,
       total:           refs.length,
       matched_count:   matched.length,
       unmatched_count: unmatched.length,

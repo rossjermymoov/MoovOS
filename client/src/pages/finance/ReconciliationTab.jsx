@@ -187,6 +187,10 @@ function parseDhlCsv(text) {
     const invoiceServiceName = (cols[colService]     || '').trim();
     const consignmentNumber  = (cols[colConsignment] || '').trim();
     const invoiceServiceCode = (cols[colServiceCode] || '').trim();
+    // Column A (index 0) always contains the DHL account number — every DHL
+    // customer has a unique account number so this identifies the customer even
+    // when the shipment reference doesn't match anything in our DB (e.g. returns).
+    const accountNumber      = (cols[0]              || '').trim();
 
     // Sum per-shipment surcharges from columns W–AE (weight, length, etc.)
     // Fuel and HGV are NOT in these columns — those are invoice-level totals.
@@ -202,19 +206,21 @@ function parseDhlCsv(text) {
     const billedWeightKg  = billedWeightRaw !== '' ? parseFloat(billedWeightRaw) : null;
 
     // Piece count per consignment — DHL charge HGV per piece, not per line.
-    // If the column wasn't detected (colPieces === -1), use null so the fallback
-    // to bestCharge.parcel_count kicks in at reconciliation time.
+    // If the column wasn't detected (colPieces === -1), OR the cell is empty,
+    // use null so the fallback to bestCharge.parcel_count kicks in.
+    // IMPORTANT: do NOT default to 1 when the cell is empty — that would mask
+    // the correct DB parcel_count (e.g. 31 would become 1).
     const piecesRaw   = colPieces >= 0 ? (cols[colPieces] || '').replace(/[,\s]/g, '') : '';
     const csvPieces   = piecesRaw !== '' && !isNaN(parseInt(piecesRaw, 10))
       ? parseInt(piecesRaw, 10)
-      : colPieces >= 0 ? 1   // column found but empty/unparseable → 1
-      : null;                // column not found at all → null, use DB parcel_count
+      : null;  // empty cell OR column not found → null, fall back to DB parcel_count
 
     shipmentMap[ref] = shipmentMap[ref] || [];
     shipmentMap[ref].push({
       reference:              ref,
       consignment_number:     consignmentNumber  || null,
       invoice_service_code:   invoiceServiceCode || null,
+      account_number:         accountNumber      || null,
       carrier_cost:           value,
       carrier_csv_surcharges: csvSurcharges,
       carrier_surcharges:     0,
@@ -836,14 +842,20 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
         const trackingNumbers = shipments
           .map(s => s.consignment_number)
           .filter(Boolean);
+        // Unique DHL account numbers from column A — lets us identify customers
+        // for return rows that have no matching shipment reference in the DB.
+        const accountNumbers = [...new Set(
+          shipments.map(s => s.account_number).filter(Boolean)
+        )];
 
         const resp = await api.post('/reconciliation/bulk-lookup', {
           courier:          carrier.code,
           references:       refs,
           tracking_numbers: trackingNumbers,
+          account_numbers:  accountNumbers,
         });
         if (cancelled) return;
-        const { matched } = resp.data;
+        const { matched, customers_by_account } = resp.data;
 
         // Build a map from reference → group (contains array of DB charges)
         const groupMap = {};
@@ -901,9 +913,15 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           // Resolve which DB group this invoice line belongs to:
           // 1. Match by consignment number (outbound tracking) — most reliable
           // 2. Fall back to reference (order_id)
+          // 3. For returns/unmatched: account number tells us the customer
           const group = (s.consignment_number && trackingMap[s.consignment_number])
             || groupMap[s.reference]
             || null;
+          // Customer info for rows that don't match any charge (e.g. DHL returns):
+          // resolve from account_number → customer lookup returned by the backend.
+          const accountCustomer = (!group && s.account_number && customers_by_account)
+            ? (customers_by_account[s.account_number] || null)
+            : null;
 
           let bestCharge = null;
           if (group) {
@@ -916,7 +934,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
               bestCharge = pool.shift();
             }
           }
-          return { ...s, group, bestCharge };
+          return { ...s, group, bestCharge, accountCustomer };
         });
 
         // Second pass: add fuel/HGV allocation to each shipment row.
@@ -927,8 +945,10 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
         // carrier_hgv_alloc      = parcel_count × £0.13
         // carrier_total          = carrier_cost + fuel_alloc + hgv_alloc   (W-AE already inside carrier_cost)
         rows.forEach(row => {
+          // Round fuel allocation to 2dp — raw float division introduces sub-penny
+          // errors that break the 0.5p tolerance when summed against the DB value.
           const fuelAlloc = totalInvoiceBase > 0
-            ? (row.carrier_cost / totalInvoiceBase) * invoiceFuelTotal
+            ? Math.round((row.carrier_cost / totalInvoiceBase) * invoiceFuelTotal * 100) / 100
             : 0;
           // Piece count priority: csv_piece_count (from invoice, what DHL actually charged HGV on)
           // → bestCharge.parcel_count (DB fallback) → 1.
@@ -1426,14 +1446,28 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                           </div>
                         </td>
                         <td style={td}>
-                          <span style={{ fontSize: 12, color: g?.customer_name ? '#CCC' : '#555' }}>
-                            {g?.customer_name || '—'}
-                          </span>
-                          {g?.customer_account && (
-                            <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>
-                              {g.customer_account}
-                            </div>
-                          )}
+                          {/* Customer: prefer matched DB group, fall back to account number lookup */}
+                          {(() => {
+                            const custName = g?.customer_name || row.accountCustomer?.customer_name;
+                            const custAcct = g?.customer_account;
+                            return (
+                              <>
+                                <span style={{ fontSize: 12, color: custName ? '#CCC' : '#555' }}>
+                                  {custName || '—'}
+                                </span>
+                                {!g && row.accountCustomer && (
+                                  <div style={{ fontSize: 9, color: '#B39DDB', marginTop: 1 }}>
+                                    via account {row.account_number}
+                                  </div>
+                                )}
+                                {custAcct && (
+                                  <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>
+                                    {custAcct}
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
                         </td>
                         <td style={td}>
                           {row.invoice_service_name ? (() => {
