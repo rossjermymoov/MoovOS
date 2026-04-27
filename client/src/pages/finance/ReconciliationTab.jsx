@@ -870,6 +870,28 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           }
         }
 
+        // Build account number → customer map from the MATCHED outbound rows on
+        // this invoice. Every shipment on a DHL invoice has the customer's DHL
+        // account number in column A. For outbound rows that DID match we already
+        // know the customer — so we derive the mapping from the invoice itself
+        // rather than waiting for account numbers to be entered in the UI.
+        // This lets returns (same account number, no matching reference) resolve
+        // their customer immediately with no extra DB data required.
+        const localAccountMap = {};
+        for (const s of shipments) {
+          if (!s.account_number) continue;
+          if (localAccountMap[s.account_number]) continue; // already resolved
+          const g = (s.consignment_number && trackingMap[s.consignment_number])
+            || groupMap[s.reference]
+            || null;
+          if (g && g.customer_name) {
+            localAccountMap[s.account_number] = {
+              customer_id:   g.customer_id,
+              customer_name: g.customer_name,
+            };
+          }
+        }
+
         // For each reference that has multiple invoice lines AND multiple DB charges,
         // greedily assign each invoice line to its best-matching (closest cost_price)
         // DB charge, so that outbound→outbound and return→return even when both
@@ -918,9 +940,12 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
             || groupMap[s.reference]
             || null;
           // Customer info for rows that don't match any charge (e.g. DHL returns):
-          // resolve from account_number → customer lookup returned by the backend.
-          const accountCustomer = (!group && s.account_number && customers_by_account)
-            ? (customers_by_account[s.account_number] || null)
+          // 1. localAccountMap — derived from matched outbound rows on this invoice
+          //    (works immediately, no manual data entry required)
+          // 2. customers_by_account — from backend DB lookup (works once account
+          //    numbers have been entered in the carrier pricing UI)
+          const accountCustomer = (!group && s.account_number)
+            ? (localAccountMap[s.account_number] || customers_by_account?.[s.account_number] || null)
             : null;
 
           let bestCharge = null;
