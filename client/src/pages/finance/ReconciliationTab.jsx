@@ -986,22 +986,26 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           const cid = row.accountCustomer?.customer_id;
           if (!cid) continue;
 
-          // Resolve to the internal SERVICE CODE for this invoice row.
-          // Chain: invoice service name → service mappings → friendly name → service code.
-          // DB charges are stored by service code (e.g. "DHL-1"), not friendly name
-          // ("DHL Return"), so we must match on the code.
-          //
-          // Step 1: get the friendly name from service mappings
-          //   mappings["1"] = "DHL Return"
-          // Step 2: reverse-look up the service code from the friendly name
-          //   serviceNameToCode["DHL Return"] = "DHL-1"
-          // Step 3: match charge.service_name === "DHL-1" exactly
-          //
-          // If the invoice service name IS already a service code (e.g. "DHLPCUK220"),
-          // serviceNameToCode won't find it — fall back to treating it as the code directly.
           const invoiceSvcName = (row.invoice_service_name || '').trim();
           const friendlyName   = mappings[invoiceSvcName] || invoiceSvcName;
           const resolvedCode   = serviceNameToCode[friendlyName] || serviceNameToCode[invoiceSvcName];
+
+          // DEBUG — log every step of the resolution chain
+          console.log('[recon DEBUG] second pass row:', {
+            reference:      row.reference,
+            invoiceSvcName,
+            mappedTo:       mappings[invoiceSvcName] ?? '(no mapping)',
+            friendlyName,
+            resolvedCode:   resolvedCode ?? '(not found in serviceNameToCode)',
+            serviceNameToCodeKeys: Object.keys(serviceNameToCode),
+          });
+          // Log what's in available pools for this customer
+          for (const [ref, pool] of Object.entries(available)) {
+            const g = groupMap[ref];
+            if (!g || String(g.customer_id) !== String(cid)) continue;
+            console.log(`[recon DEBUG]   pool ref="${ref}" charges:`, pool.map(c => `service_name="${c.service_name}" cost=${c.base_cost_price}`));
+          }
+
           if (!resolvedCode) continue; // no known service code — flag as unmatched, do not guess
 
           const target = resolvedCode.trim().toLowerCase();

@@ -225,19 +225,41 @@ router.post('/bulk-lookup', async (req, res) => {
     // customers.dc_customer_id depending on how the customer was onboarded.
     let customers_by_account = {};
     if (acctNums.length > 0) {
+      // Look up by carrier account number stored on customer_carrier_links.
+      // This is the preferred lookup — DHL account numbers are set per customer
+      // per carrier via the carrier section in CustomerPricingTab.
       const custRes = await query(`
-        SELECT id AS customer_id, business_name AS customer_name,
-               COALESCE(account_number, dc_customer_id) AS lookup_key
-        FROM customers
-        WHERE account_number = ANY($1)
-           OR dc_customer_id = ANY($1)
+        SELECT cu.id   AS customer_id,
+               cu.business_name AS customer_name,
+               ccl.account_number AS lookup_key
+        FROM customer_carrier_links ccl
+        JOIN customers cu ON cu.id = ccl.customer_id
+        WHERE ccl.account_number = ANY($1)
       `, [acctNums]);
 
       for (const row of custRes.rows) {
-        // Map each account number that matched to this customer
-        for (const acct of acctNums) {
-          if (acct === row.lookup_key) {
-            customers_by_account[acct] = {
+        if (row.lookup_key) {
+          customers_by_account[row.lookup_key] = {
+            customer_id:   row.customer_id,
+            customer_name: row.customer_name,
+          };
+        }
+      }
+
+      // Fallback: also try customers.account_number / dc_customer_id for
+      // customers that haven't had carrier account numbers set yet.
+      const unmapped = acctNums.filter(a => !customers_by_account[a]);
+      if (unmapped.length > 0) {
+        const fallbackRes = await query(`
+          SELECT id AS customer_id, business_name AS customer_name,
+                 COALESCE(account_number, dc_customer_id) AS lookup_key
+          FROM customers
+          WHERE account_number = ANY($1)
+             OR dc_customer_id = ANY($1)
+        `, [unmapped]);
+        for (const row of fallbackRes.rows) {
+          if (row.lookup_key && !customers_by_account[row.lookup_key]) {
+            customers_by_account[row.lookup_key] = {
               customer_id:   row.customer_id,
               customer_name: row.customer_name,
             };
@@ -245,6 +267,35 @@ router.post('/bulk-lookup', async (req, res) => {
         }
       }
     }
+
+    // ── DEBUG: dump all courier charges for account-identified customers ──────
+    // This reveals what service_name is actually stored in the DB for return
+    // charges so we can confirm the match chain is correct.
+    if (Object.keys(customers_by_account).length > 0) {
+      const custIds = [...new Set(
+        Object.values(customers_by_account).map(c => c.customer_id).filter(Boolean)
+      )];
+      if (custIds.length > 0) {
+        const debugRes = await query(`
+          SELECT c.id, c.order_id, c.service_name, c.cost_price, c.charge_type, c.cancelled,
+                 cu.business_name AS customer_name
+          FROM charges c
+          JOIN customers cu ON cu.id = c.customer_id
+          WHERE c.customer_id = ANY($1::int[])
+            AND c.charge_type = 'courier'
+            AND c.cancelled = false
+          ORDER BY c.created_at DESC
+          LIMIT 50
+        `, [custIds]);
+        console.log('[recon DEBUG] charges for account-identified customers:');
+        for (const r of debugRes.rows) {
+          console.log(`  customer="${r.customer_name}" order_id="${r.order_id}" service_name="${r.service_name}" cost=${r.cost_price}`);
+        }
+        console.log('[recon DEBUG] customers_by_account keys:', Object.keys(customers_by_account));
+        console.log('[recon DEBUG] refs on invoice (first 10):', refs.slice(0, 10));
+      }
+    }
+    // ── END DEBUG ─────────────────────────────────────────────────────────────
 
     return res.json({
       ok: true,
