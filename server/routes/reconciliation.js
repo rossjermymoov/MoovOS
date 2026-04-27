@@ -112,7 +112,7 @@ router.post('/bulk-lookup', async (req, res) => {
           ), 0)
         + COALESCE((
             -- Surcharges: include unless marked reconciliation_excluded.
-            -- surcharge_id FK match (modern) OR name match (legacy, surcharge_id IS NULL).
+            -- surcharge_id FK match (preferred), OR name/code match (fallback).
             SELECT SUM(sc.cost_price)
             FROM   charges sc
             WHERE  sc.shipment_id = c.shipment_id
@@ -123,8 +123,10 @@ router.post('/bulk-lookup', async (req, res) => {
                      WHERE sx.reconciliation_excluded = true
                        AND (
                          sx.id = sc.surcharge_id
-                         OR (sc.surcharge_id IS NULL
-                             AND TRIM(sx.name) ILIKE TRIM(sc.service_name))
+                         OR (sc.surcharge_id IS NULL AND (
+                               TRIM(sx.name) ILIKE TRIM(sc.service_name)
+                            OR TRIM(sx.code) ILIKE TRIM(sc.service_name)
+                         ))
                        )
                    )
           ), 0)                 AS total_cost_price,
@@ -148,8 +150,10 @@ router.post('/bulk-lookup', async (req, res) => {
                      WHERE sx.reconciliation_excluded = true
                        AND (
                          sx.id = sc.surcharge_id
-                         OR (sc.surcharge_id IS NULL
-                             AND TRIM(sx.name) ILIKE TRIM(sc.service_name))
+                         OR (sc.surcharge_id IS NULL AND (
+                               TRIM(sx.name) ILIKE TRIM(sc.service_name)
+                            OR TRIM(sx.code) ILIKE TRIM(sc.service_name)
+                         ))
                        )
                    )
           ), 0)                 AS total_sell_price
