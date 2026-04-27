@@ -127,7 +127,7 @@ router.post('/bulk-lookup', async (req, res) => {
               AND  sc.cancelled   = false
           ), 0)                 AS total_sell_price
       FROM charges c
-      LEFT JOIN shipments s  ON s.id = c.shipment_id
+      LEFT JOIN shipments s  ON s.reference = c.order_id
       LEFT JOIN customers cu ON cu.id = c.customer_id
       WHERE c.order_id   = ANY($1)
         AND c.charge_type = 'courier'
