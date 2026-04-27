@@ -976,14 +976,15 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           const cid = row.accountCustomer?.customer_id;
           if (!cid) continue;
 
-          // Resolve the internal service name from the invoice service code.
-          // serviceCodeMap is built from /carriers/services — it maps e.g. "1" →
-          // "DHL Return" exactly as stored in our services table.
-          // No service code = no match possible.
-          const invoiceSvcCode = (row.invoice_service_code || '').trim();
-          if (!invoiceSvcCode) continue;
-          const resolvedServiceName = serviceCodeMap[invoiceSvcCode];
-          if (!resolvedServiceName) continue; // unknown service code — error, not a guess
+          // Resolve the internal service name via the user-defined service mappings.
+          // mappings[invoice_service_name] is the authoritative translation —
+          // e.g. invoice service name "1" → internal name "DHL Return".
+          // serviceCodeMap is a secondary lookup for when the invoice name is
+          // already our internal service code (e.g. "DHLPCUK220").
+          // No resolved name = no match possible — we do not guess.
+          const invoiceSvcName = (row.invoice_service_name || '').trim();
+          const resolvedServiceName = mappings[invoiceSvcName] || serviceCodeMap[invoiceSvcName];
+          if (!resolvedServiceName) continue;
 
           const target = resolvedServiceName.trim().toLowerCase();
 
