@@ -1088,6 +1088,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
             const resolvedCode = svcNameToCodeRef.current[mappedName] || null;
             const rateEntry    = resolvedCode ? liveRates[resolvedCode] : null;
             row.carrier_rate_cost = rateEntry?.price_first ?? null;
+            console.log('[recon return]', { svcCode, mappedName, resolvedCode, rateEntry, carrier_rate_cost: row.carrier_rate_cost, carrierRateKeys: Object.keys(liveRates), svcNameToCodeKeys: Object.keys(svcNameToCodeRef.current).filter(k => k.toLowerCase().includes('dhl')) });
 
             if (row.carrier_rate_cost != null) {
               const diff = row.carrier_cost - row.carrier_rate_cost;
