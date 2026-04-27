@@ -156,6 +156,7 @@ router.post('/bulk-lookup', async (req, res) => {
         base_cost_price:         row.base_cost_price   != null ? parseFloat(row.base_cost_price)   : null,
         base_sell_price:         row.base_sell_price   != null ? parseFloat(row.base_sell_price)   : null,
         fuel_cost_price:         row.fuel_cost_price    != null ? parseFloat(row.fuel_cost_price)   : 0,
+        hgv_cost_price:          row.hgv_cost_price     != null ? parseFloat(row.hgv_cost_price)    : 0,
         total_cost_price:        row.total_cost_price   != null ? parseFloat(row.total_cost_price)  : null,
         total_sell_price:        row.total_sell_price   != null ? parseFloat(row.total_sell_price)  : null,
         parcel_count:            row.parcel_count        != null ? parseInt(row.parcel_count, 10)    : 1,
