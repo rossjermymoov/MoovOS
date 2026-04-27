@@ -921,8 +921,12 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
     : [];
 
   const ourFuelCostTotal   = matchedWithCost.reduce((s, r) => s + (r.bestCharge.fuel_cost_price || 0), 0);
-  // Use DB parcel_count for HGV total — same value the billing engine used when pricing.
-  const totalMatchedPieces = matchedWithCost.reduce((s, r) => s + (r.bestCharge?.parcel_count ?? 1), 0);
+  // HGV: count pieces across ALL invoice rows (matched or not) — same logic as per-row allocation.
+  // Unmatched rows default to 1 parcel. Using only matchedWithCost understates the total
+  // when some invoice lines have no DB record or null base_cost_price.
+  const totalMatchedPieces = results
+    ? results.reduce((s, r) => s + (r.bestCharge?.parcel_count ?? 1), 0)
+    : 0;
   const ourHgvCalcTotal    = totalMatchedPieces * HGV_RATE_PER_PARCEL;
   const invoiceSurchargeTotal = surcharges.reduce((s, r) => s + r.value, 0);
 
