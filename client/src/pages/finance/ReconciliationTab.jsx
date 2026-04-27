@@ -966,23 +966,45 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
         // Return rows get group = null because the DHL return reference on the
         // invoice doesn't match any order_id in our DB. But we've now resolved
         // the customer (via localAccountMap). Search every remaining available
-        // charge pool for an unconsumed charge belonging to that customer —
-        // this picks up return charges that live under the outbound reference
-        // or any other reference we've already fetched.
+        // charge pool for an unconsumed charge belonging to that customer.
+        //
+        // IMPORTANT: when the invoice row is a return (service code "1" or name
+        // contains "return"), we MUST prefer DB charges whose service_name also
+        // contains "return". Without this filter the sort picks the closest cost
+        // match which is typically an unconsumed normal outbound charge, not the
+        // actual return service charge.
         for (const row of rows) {
           if (row.bestCharge) continue;              // already matched
           const cid = row.accountCustomer?.customer_id;
           if (!cid) continue;                        // customer still unknown
+
+          // Detect if this invoice row represents a return service
+          const mappedInvoiceName = (mappings[row.invoice_service_name] || '').toLowerCase();
+          const isReturnRow = row.invoice_service_code === '1'
+            || mappedInvoiceName.includes('return')
+            || (row.invoice_service_name || '').toLowerCase().includes('return');
+
           for (const [ref, pool] of Object.entries(available)) {
             if (!pool.length) continue;
             const g = groupMap[ref];
             if (!g || String(g.customer_id) !== String(cid)) continue;
-            pool.sort((a, b) =>
+
+            // Prefer return-typed charges when matching a return invoice row.
+            // Fall back to the full pool only if no return charge exists —
+            // this avoids consuming a normal outbound charge by mistake.
+            const returnCandidates = isReturnRow
+              ? pool.filter(c => (c.service_name || '').toLowerCase().includes('return'))
+              : [];
+            const candidates = returnCandidates.length > 0 ? returnCandidates : (isReturnRow ? [] : pool);
+            if (!candidates.length) continue;
+
+            candidates.sort((a, b) =>
               Math.abs((a.base_cost_price ?? Infinity) - row.carrier_cost) -
               Math.abs((b.base_cost_price ?? Infinity) - row.carrier_cost)
             );
-            row.bestCharge = pool.shift();
-            // Carry the group info so customer displays correctly
+            const chosen = candidates[0];
+            pool.splice(pool.indexOf(chosen), 1);   // remove from available pool
+            row.bestCharge = chosen;
             if (!row.group) row.group = g;
             break;
           }
