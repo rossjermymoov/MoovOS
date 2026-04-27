@@ -777,6 +777,11 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
   const [serviceCodeMap,    setServiceCodeMap]    = useState({});  // service_code → service_name (auto, for display)
   const [serviceNameToCode, setServiceNameToCode] = useState({});  // service_name → service_code (reverse, for charge matching)
   const [carrierRates,      setCarrierRates]      = useState({});  // service_code → price_first (for returns etc.)
+
+  // Refs so async closures (doLookup) always read the latest mappings values
+  // rather than the stale empty {} captured at mount time.
+  const mappingsRef      = useRef({});
+  const svcNameToCodeRef = useRef({});
   const [showMappings,      setShowMappings]      = useState(false);
   const [acceptedSurcharges, setAcceptedSurcharges] = useState(new Set()); // accepted known-variance surcharges
 
@@ -797,6 +802,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
       .then(r => {
         const map = {};
         for (const m of r.data) map[m.invoice_name] = m.internal_name;
+        mappingsRef.current = map;
         setMappings(map);
       })
       .catch(e => {
@@ -819,6 +825,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
         if (code) codeMap[code]    = name;
         if (name) nameToCode[name] = code;
       }
+      svcNameToCodeRef.current = nameToCode;
       setServiceCodeMap(codeMap);
       setServiceNameToCode(nameToCode);
     }).catch(() => {});
@@ -986,18 +993,23 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           const cid = row.accountCustomer?.customer_id;
           if (!cid) continue;
 
+          // Use refs — not state — so we always get the latest mappings values
+          // even if they loaded after doLookup's closure was created.
+          const liveMappings      = mappingsRef.current;
+          const liveNameToCode    = svcNameToCodeRef.current;
+
           const invoiceSvcName = (row.invoice_service_name || '').trim();
-          const friendlyName   = mappings[invoiceSvcName] || invoiceSvcName;
-          const resolvedCode   = serviceNameToCode[friendlyName] || serviceNameToCode[invoiceSvcName];
+          const friendlyName   = liveMappings[invoiceSvcName] || invoiceSvcName;
+          const resolvedCode   = liveNameToCode[friendlyName] || liveNameToCode[invoiceSvcName];
 
           // DEBUG — log every step of the resolution chain
           console.log('[recon DEBUG] second pass row:', {
             reference:      row.reference,
             invoiceSvcName,
-            mappedTo:       mappings[invoiceSvcName] ?? '(no mapping)',
+            mappedTo:       liveMappings[invoiceSvcName] ?? '(no mapping)',
             friendlyName,
             resolvedCode:   resolvedCode ?? '(not found in serviceNameToCode)',
-            serviceNameToCodeKeys: Object.keys(serviceNameToCode),
+            serviceNameToCodeKeys: Object.keys(liveNameToCode),
           });
           // Log what's in available pools for this customer
           for (const [ref, pool] of Object.entries(available)) {
