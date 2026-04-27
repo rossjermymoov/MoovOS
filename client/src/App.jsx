@@ -1,5 +1,7 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import AppShell from './components/layout/AppShell';
+import LoginPage from './pages/auth/LoginPage';
 import CustomerList from './pages/customers/CustomerList';
 import CustomerRecord from './pages/customers/CustomerRecord';
 import CustomerNew from './pages/customers/CustomerNew';
@@ -26,10 +28,46 @@ const Placeholder = ({ name }) => (
   </div>
 );
 
-export default function App() {
+// ─── RequireAuth ─────────────────────────────────────────────────────────────
+// Renders children if authenticated (or bypass mode is active).
+// Otherwise redirects to /login, preserving the attempted URL.
+
+function RequireAuth({ children }) {
+  const { user, loading, bypass } = useAuth();
+  const location = useLocation();
+
+  if (loading) {
+    // Blank screen while checking token — brief flicker is acceptable
+    return (
+      <div style={{ background: '#0A0B1E', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ color: '#AAAAAA', fontSize: 14 }}>Loading…</span>
+      </div>
+    );
+  }
+
+  if (!bypass && !user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return children;
+}
+
+// ─── AppRoutes ────────────────────────────────────────────────────────────────
+
+function AppRoutes() {
   return (
     <Routes>
-      <Route element={<AppShell />}>
+      {/* Public */}
+      <Route path="/login" element={<LoginPage />} />
+
+      {/* Protected — wrapped in RequireAuth */}
+      <Route
+        element={
+          <RequireAuth>
+            <AppShell />
+          </RequireAuth>
+        }
+      >
         <Route path="/" element={<Placeholder name="Dashboard" />} />
 
         {/* Customers — nested so "new" is always resolved before ":id" */}
@@ -63,5 +101,13 @@ export default function App() {
         <Route path="*"         element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppRoutes />
+    </AuthProvider>
   );
 }

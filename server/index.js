@@ -28,6 +28,7 @@ import katanaRouter from './routes/katana.js';
 import pricingRouter from './routes/pricing.js';
 import xeroRouter from './routes/xero.js';
 import reconciliationRouter from './routes/reconciliation.js';
+import authRouter from './routes/auth.js';
 
 dotenv.config();
 
@@ -45,6 +46,7 @@ app.use(express.json({ limit: '10mb' })); // larger limit for CSV import payload
 app.use(morgan(isProd ? 'combined' : 'dev'));
 
 // ─── API Routes ──────────────────────────────────────────────
+app.use('/api/auth',                  authRouter);
 app.use('/api/customers',             customersRouter);
 app.use('/api/staff',                 staffRouter);
 app.use('/api/carriers',              carriersRouter);
