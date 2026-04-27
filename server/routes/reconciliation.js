@@ -226,6 +226,79 @@ router.post('/bulk-lookup', async (req, res) => {
   }
 });
 
+// ─── GET /debug/:reference ────────────────────────────────────────────────────
+// Diagnostic endpoint — shows exactly what the DB contains for a shipment so
+// we can see why band lookup or cost totals might not match expectations.
+// Usage: /api/reconciliation/debug/MP-0000037027
+
+router.get('/debug/:reference', async (req, res) => {
+  try {
+    const ref = req.params.reference.trim();
+
+    // 1. The charge row itself
+    const chargeRes = await query(`
+      SELECT c.id, c.order_id, c.charge_type, c.service_name,
+             c.cost_price, c.price, c.customer_id, c.shipment_id,
+             s.dc_service_id, s.total_weight_kg, s.courier
+      FROM charges c
+      LEFT JOIN shipments s ON s.id = c.shipment_id
+      WHERE c.order_id = $1 AND c.charge_type = 'courier' AND c.cancelled = false
+    `, [ref]);
+
+    if (!chargeRes.rows.length) {
+      return res.json({ error: 'No courier charge found for this reference', reference: ref });
+    }
+
+    const charge = chargeRes.rows[0];
+
+    // 2. All customer_rates rows for this customer
+    const ratesRes = await query(`
+      SELECT service_code, service_name, min_weight_kg, max_weight_kg, base_price
+      FROM customer_rates
+      WHERE customer_id = $1
+      ORDER BY service_code, min_weight_kg
+    `, [charge.customer_id]);
+
+    // 3. All charge rows for this shipment (fuel, surcharges)
+    const allChargesRes = await query(`
+      SELECT sc.id, sc.charge_type, sc.service_name, sc.cost_price, sc.price,
+             sc.surcharge_id, sc.cancelled,
+             sx.name AS surcharge_name, sx.reconciliation_excluded
+      FROM charges sc
+      LEFT JOIN surcharges sx ON sx.id = sc.surcharge_id
+      WHERE sc.shipment_id = $1
+      ORDER BY sc.charge_type, sc.created_at
+    `, [charge.shipment_id]);
+
+    // 4. ILIKE match check — does service_code match dc_service_id?
+    const ilikeRes = await query(`
+      SELECT service_code, service_name, max_weight_kg,
+             TRIM(service_code) ILIKE TRIM($2) AS code_matches,
+             TRIM(service_name) ILIKE TRIM($3) AS name_matches
+      FROM customer_rates
+      WHERE customer_id = $1 AND max_weight_kg IS NOT NULL
+    `, [charge.customer_id, charge.dc_service_id || '', charge.service_name || '']);
+
+    return res.json({
+      reference: ref,
+      charge: {
+        customer_id:   charge.customer_id,
+        shipment_id:   charge.shipment_id,
+        service_name:  charge.service_name,
+        dc_service_id: charge.dc_service_id,
+        total_weight_kg: charge.total_weight_kg,
+        cost_price:    charge.cost_price,
+      },
+      customer_rates: ratesRes.rows,
+      all_charges:    allChargesRes.rows,
+      ilike_check:    ilikeRes.rows,
+    });
+  } catch (err) {
+    console.error('[reconciliation] debug error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Service name mappings ────────────────────────────────────────────────────
 // Maps carrier invoice service names (e.g. "HomeServe Sign Mand") to human-readable
 // internal names (e.g. "DHL Next Day"). Stored per courier.
