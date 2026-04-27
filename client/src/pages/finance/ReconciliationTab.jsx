@@ -999,13 +999,12 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           const liveNameToCode    = svcNameToCodeRef.current;
 
           const invoiceSvcName = (row.invoice_service_name || '').trim();
-          // invoice code "1" → mapping → "DHL Return" (friendly label the user set)
-          // → serviceNameToCode → "DHL-1" (service code from courier_services)
-          // charges.service_name may store either the service code or the friendly
-          // name depending on what DeliveryConnect writes in friendly_service_name.
-          // We match against both so we find the charge regardless of which is stored.
-          const friendlyName = (liveMappings[invoiceSvcName] || invoiceSvcName).trim().toLowerCase();
-          const resolvedCode = (liveNameToCode[liveMappings[invoiceSvcName] || invoiceSvcName] || '').trim().toLowerCase();
+          const invoiceSvcCode = (row.invoice_service_code || '').trim();
+          // The user maps by service CODE (e.g. "1") not service description ("Premiere24").
+          // Try the service code first, then the description as fallback.
+          const mappedName   = liveMappings[invoiceSvcCode] || liveMappings[invoiceSvcName] || invoiceSvcName;
+          const friendlyName = mappedName.trim().toLowerCase();
+          const resolvedCode = (liveNameToCode[mappedName] || '').trim().toLowerCase();
 
           if (!friendlyName) continue;
 
