@@ -2270,7 +2270,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
 
                     {/* Value + firing mode — click to edit */}
                     <div
-                      onClick={() => { if (!isEditing) { setEditingSurcharge(s.id); setEditSForm({ default_value: String(s.default_value||0), cost_price: String(s.cost_price ?? s.default_value ?? 0), applies_when: s.applies_when, charge_per: s.charge_per, calc_type: s.calc_type, active: s.active }); } }}
+                      onClick={() => { if (!isEditing) { setEditingSurcharge(s.id); setEditSForm({ name: s.name, default_value: String(s.default_value||0), cost_price: String(s.cost_price ?? s.default_value ?? 0), applies_when: s.applies_when, charge_per: s.charge_per, calc_type: s.calc_type, active: s.active }); } }}
                       style={{ cursor:'pointer', textAlign:'right', padding:'4px 8px', borderRadius:6, background: isEditing ? 'rgba(233,30,140,0.08)' : 'transparent', border: isEditing ? '1px solid rgba(233,30,140,0.25)' : '1px solid transparent' }}
                       title="Click to edit"
                     >
@@ -2296,6 +2296,10 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                   {/* ── Inline edit panel ── */}
                   {isEditing && (
                     <div style={{ borderTop:'1px solid rgba(233,30,140,0.15)', padding:'12px 14px', background:'rgba(233,30,140,0.04)' }}>
+                      <div style={{ marginBottom:10 }}>
+                        <label style={{ fontSize:10, color:'#AAAAAA', display:'block', marginBottom:3 }}>Name</label>
+                        <div className="pill-input-wrap" style={{ height:30 }}><input value={editSForm.name||''} onChange={e => setEditSForm(f=>({...f,name:e.target.value}))} style={{ fontSize:12 }}/></div>
+                      </div>
                       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:10, marginBottom:10 }}>
                         {[
                           ['Type', <select value={editSForm.calc_type} onChange={e => setEditSForm(f=>({...f,calc_type:e.target.value}))} style={{ width:'100%', height:30, background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:6, color:'#fff', fontSize:12, padding:'0 8px' }}><option value="flat">Flat £</option><option value="percentage">Percentage %</option></select>],
@@ -2308,7 +2312,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                         {[['Charge Per', <select value={editSForm.charge_per} onChange={e => setEditSForm(f=>({...f,charge_per:e.target.value}))} style={{ width:'100%', height:30, background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:6, color:'#fff', fontSize:12, padding:'0 8px' }}><option value="shipment">Per Shipment</option><option value="parcel">Per Parcel</option></select>]].map(([l,el]) => <div key={l}><label style={{ fontSize:10, color:'#AAAAAA', display:'block', marginBottom:3 }}>{l}</label>{el}</div>)}
                       </div>
                       <div style={{ display:'flex', gap:8 }}>
-                        <button onClick={() => patchSurcharge.mutate({ id:s.id, ...editSForm, default_value: parseFloat(editSForm.default_value)||0, cost_price: parseFloat(editSForm.cost_price)||0 })} disabled={patchSurcharge.isPending} className="btn-primary" style={{ height:28, fontSize:12, background:'rgba(233,30,140,0.2)', border:'1px solid rgba(233,30,140,0.4)', color:'#E91E8C' }}><Check size={11}/> Save</button>
+                        <button onClick={() => patchSurcharge.mutate({ id:s.id, ...editSForm, name: editSForm.name?.trim(), default_value: parseFloat(editSForm.default_value)||0, cost_price: parseFloat(editSForm.cost_price)||0 })} disabled={patchSurcharge.isPending} className="btn-primary" style={{ height:28, fontSize:12, background:'rgba(233,30,140,0.2)', border:'1px solid rgba(233,30,140,0.4)', color:'#E91E8C' }}><Check size={11}/> Save</button>
                         <button onClick={() => setEditingSurcharge(null)} className="btn-ghost" style={{ height:28, fontSize:12, padding:'0 10px' }}>Cancel</button>
                       </div>
                     </div>
