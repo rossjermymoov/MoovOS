@@ -141,25 +141,15 @@ function parseDhlCsv(text) {
       ? -parseFloat(rawVal.slice(1, -1))
       : parseFloat(rawVal);
 
-    // ── Invoice-level surcharge rows — no reference, just a description and value ──
-    // DHL puts FUEL SURCHARGE and HGV SURCHARGE as rows with an EMPTY reference column.
-    // Shipment rows always have a reference (MP-, numeric, alphanumeric — anything non-empty).
+    // ── Invoice-level surcharge rows ─────────────────────────────────────────────
+    // DHL surcharge rows have an empty reference AND columns G–O (indices 6–14)
+    // are all blank. The surcharge name is always in column U (index 20).
+    // Shipment rows always have a non-empty reference.
     if (!ref) {
-      const rowText = cols.join(' ').toUpperCase();
-      const isSurchargeRow =
-        rowText.includes('SURCHARGE') ||
-        rowText.includes('FUEL LEVY')  ||
-        rowText.includes('FUEL CHARGE') ||
-        rowText.includes('FUEL')        ||
-        rowText.includes('HGV');
-
-      if (isSurchargeRow && !isNaN(value) && value !== 0) {
-        const desc = (cols[colService] || '').trim()
-          || cols.find(c => {
-               const t = c.trim().toUpperCase();
-               return t.includes('SURCHARGE') || t.includes('FUEL') || t.includes('HGV');
-             })?.trim()
-          || 'Surcharge';
+      const colsGtoO = cols.slice(6, 15);
+      const isSurchargeRow = colsGtoO.every(c => !c.trim()) && !isNaN(value) && value !== 0;
+      if (isSurchargeRow) {
+        const desc = (cols[20] || '').trim() || 'Surcharge';
         surcharges.push({ description: desc, value: Math.abs(value) });
         parsed++;
       } else {
