@@ -778,10 +778,11 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
   const [serviceNameToCode, setServiceNameToCode] = useState({});  // service_name → service_code (reverse, for charge matching)
   const [carrierRates,      setCarrierRates]      = useState({});  // service_code → price_first (for returns etc.)
 
-  // Refs so async closures (doLookup) always read the latest mappings values
+  // Refs so async closures (doLookup) always read the latest values
   // rather than the stale empty {} captured at mount time.
   const mappingsRef      = useRef({});
   const svcNameToCodeRef = useRef({});
+  const carrierRatesRef  = useRef({});
   const [showMappings,      setShowMappings]      = useState(false);
   const [acceptedSurcharges, setAcceptedSurcharges] = useState(new Set()); // accepted known-variance surcharges
 
@@ -840,6 +841,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
         for (const row of (r.data || [])) {
           if (row.service_code) rateMap[row.service_code.trim()] = row;
         }
+        carrierRatesRef.current = rateMap;
         setCarrierRates(rateMap);
       })
       .catch(() => {}); // non-critical — silently skip if endpoint not available
@@ -1074,16 +1076,28 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           const isReturn = row.invoice_service_code === '1';
 
           if (isReturn) {
-            row.is_return         = true;
-            row.carrier_rate_cost = null;
-            if (row.bestCharge) {
-              // Return charge found in DB — compare against stored cost price
-              // exactly like a normal outbound shipment.
-              row.status = getStatus(row.carrier_total, row.bestCharge);
+            row.is_return = true;
+            // Return to sender — never booked in our system, no DB charge exists or is expected.
+            // Resolve the service code via the mapping chain and look up the contracted
+            // carrier rate (what we pay DHL for this service) from the carrier rate card.
+            // Compare that against the DHL invoice line amount.
+            const liveRates    = carrierRatesRef.current;
+            const svcCode      = (row.invoice_service_code || '').trim();
+            const svcName      = (row.invoice_service_name || '').trim();
+            const mappedName   = mappingsRef.current[svcCode] || mappingsRef.current[svcName] || svcName;
+            const resolvedCode = svcNameToCodeRef.current[mappedName] || null;
+            const rateEntry    = resolvedCode ? liveRates[resolvedCode] : null;
+            row.carrier_rate_cost = rateEntry?.price_first ?? null;
+
+            if (row.carrier_rate_cost != null) {
+              const diff = row.carrier_cost - row.carrier_rate_cost;
+              row.status = Math.abs(diff) <= 0.01
+                ? { code: 'green', label: 'Matched',     color: '#00C853', icon: 'check'    }
+                : diff > 0
+                ? { code: 'red',   label: 'Overcharged', color: '#F44336', icon: 'x'        }
+                : { code: 'amber', label: 'Credit',       color: '#FF9800', icon: 'triangle' };
             } else {
-              // No DB charge found for this return — flag as unmatched.
-              // We do not guess against a static carrier rate.
-              row.status = { code: 'red', label: 'No Charge Found', color: '#F44336', icon: 'x' };
+              row.status = { code: 'red', label: 'No Rate Found', color: '#F44336', icon: 'x' };
             }
           } else {
             row.is_return = false;
