@@ -999,20 +999,20 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           const liveNameToCode    = svcNameToCodeRef.current;
 
           const invoiceSvcName = (row.invoice_service_name || '').trim();
-          const friendlyName   = liveMappings[invoiceSvcName] || invoiceSvcName;
-          const resolvedCode   = liveNameToCode[friendlyName] || liveNameToCode[invoiceSvcName];
+          // friendlyName: the mapped internal service name (e.g. "DHL Return").
+          // This is what the billing engine writes to charges.service_name via
+          // friendly_service_name — so this is the value we match against.
+          const friendlyName = (liveMappings[invoiceSvcName] || invoiceSvcName).trim().toLowerCase();
 
-          if (!resolvedCode) continue; // no known service code — flag as unmatched, do not guess
+          if (!friendlyName) continue;
 
-          const target = resolvedCode.trim().toLowerCase();
-
-          // First: search charges_by_customer — these are DB charges for this
-          // customer whose order_id was NOT in the invoice refs (e.g. return bookings
-          // stored under their own MP- reference). This is the primary pool for returns.
+          // First: search charges_by_customer — charges for this customer whose
+          // order_id was NOT in the invoice refs (e.g. return bookings stored
+          // under their own MP- reference, not on the DHL invoice).
           const customerPool = charges_by_customer?.[String(cid)];
           if (customerPool?.length) {
             const idx = customerPool.findIndex(c =>
-              (c.service_name || '').trim().toLowerCase() === target
+              (c.service_name || '').trim().toLowerCase() === friendlyName
             );
             if (idx !== -1) {
               row.bestCharge = customerPool.splice(idx, 1)[0];
@@ -1020,17 +1020,14 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
             }
           }
 
-          // Fallback: search available pools (charges fetched by reference match).
-          // This covers edge cases where a return charge shares a reference with
-          // its outbound shipment and therefore IS in the available pool.
+          // Fallback: search available pools (charges already fetched by reference).
           for (const [ref, pool] of Object.entries(available)) {
             if (!pool.length) continue;
             const g = groupMap[ref];
             if (!g || String(g.customer_id) !== String(cid)) continue;
 
-            // Exact service_name match only
             const idx = pool.findIndex(c =>
-              (c.service_name || '').trim().toLowerCase() === target
+              (c.service_name || '').trim().toLowerCase() === friendlyName
             );
             if (idx === -1) continue;
 
