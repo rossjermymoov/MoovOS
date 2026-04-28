@@ -328,6 +328,26 @@ router.post('/bulk-lookup', async (req, res) => {
       }
     }
 
+    // ── Carrier cost price lookup ─────────────────────────────────────────────
+    // For unmatched return rows we need the carrier's cost price (what we pay DHL)
+    // to compare against the invoice — separate from the customer sell price.
+    // Query weight_bands for all services so the frontend can use cost_price
+    // for the reconciliation comparison and sell_price for the customer bill.
+    const carrierCostsRes = await query(`
+      SELECT cs.service_code, MIN(wb.price_first) AS cost_price
+      FROM weight_bands wb
+      JOIN zones z             ON z.id  = wb.zone_id
+      JOIN courier_services cs ON cs.id = z.courier_service_id
+      WHERE wb.price_first IS NOT NULL AND wb.price_first > 0
+      GROUP BY cs.service_code
+    `);
+    const carrier_service_costs = {};
+    for (const row of carrierCostsRes.rows) {
+      if (row.service_code) {
+        carrier_service_costs[row.service_code.trim()] = parseFloat(row.cost_price);
+      }
+    }
+
     // ── Customer rate lookup ──────────────────────────────────────────────────
     // For unmatched invoice rows (returns, extras not booked in the system),
     // fetch each identified customer's sell prices from customer_rates so the
@@ -367,6 +387,7 @@ router.post('/bulk-lookup', async (req, res) => {
       unmatched,
       customers_by_account,
       charges_by_customer,
+      carrier_service_costs,
       customer_rates_by_customer,
       total:           refs.length,
       matched_count:   matched.length,

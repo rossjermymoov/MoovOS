@@ -874,7 +874,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           account_numbers:  accountNumbers,
         });
         if (cancelled) return;
-        const { matched, customers_by_account, charges_by_customer, customer_rates_by_customer } = resp.data;
+        const { matched, customers_by_account, charges_by_customer, carrier_service_costs, customer_rates_by_customer } = resp.data;
 
         // Build a map from reference → group (contains array of DB charges)
         const groupMap = {};
@@ -1077,25 +1077,35 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
 
           if (isReturn) {
             row.is_return = true;
-            // Return to sender — never booked in our system, no DB charge exists or is expected.
-            // Resolve the service code via the mapping chain and look up the contracted
-            // carrier rate (what we pay DHL for this service) from the carrier rate card.
-            // Compare that against the DHL invoice line amount.
+            // Return to sender — never booked in our system, no DB charge exists or ever will.
+            // Resolve via the mapping chain: invoice code → friendly name → service code.
             const svcCode      = (row.invoice_service_code || '').trim();
             const svcName      = (row.invoice_service_name || '').trim();
             const mappedName   = mappingsRef.current[svcCode] || mappingsRef.current[svcName] || svcName;
             const resolvedCode = svcNameToCodeRef.current[mappedName] || null;
-            // Look up the customer's sell price for this service from customer_rates.
-            // This is the price we charge the customer — used both as the cost comparison
-            // and as the billable amount to add to their invoice.
+
+            // Cost price = what we pay the carrier (from carrier rate card, e.g. £14.21 for DHL-1).
+            // This is the correct comparison target against the DHL invoice amount.
+            const costPrice   = resolvedCode ? (carrier_service_costs?.[resolvedCode] ?? null) : null;
+
+            // Sell price = what we charge the customer (from customer_rates, e.g. £14.91 for DHL-1).
+            // Stored separately for billing — not used for the invoice comparison.
             const cid         = row.accountCustomer?.customer_id;
             const custRates   = cid ? (customer_rates_by_customer?.[String(cid)] || {}) : {};
             const rateEntry   = resolvedCode ? (custRates[resolvedCode] || null) : null;
-            row.carrier_rate_cost = rateEntry?.price ?? null;
-            row.customer_sell     = rateEntry?.price ?? null;
+            row.customer_sell = rateEntry?.price ?? null;
+
+            // Expected carrier total = cost × (1 + fuel%) + HGV per parcel
+            // Matches the same fuel/HGV methodology applied to outbound rows.
+            const effectiveFuelRate = totalInvoiceBase > 0 ? invoiceFuelTotal / totalInvoiceBase : 0;
+            row.carrier_rate_cost   = costPrice != null
+              ? parseFloat((costPrice * (1 + effectiveFuelRate) + HGV_RATE_PER_PARCEL).toFixed(2))
+              : null;
 
             if (row.carrier_rate_cost != null) {
-              const diff = row.carrier_cost - row.carrier_rate_cost;
+              // Compare carrier_total (what DHL billed, incl. fuel+HGV) vs carrier_rate_cost
+              // (our expected total incl. fuel+HGV) — apples to apples.
+              const diff = row.carrier_total - row.carrier_rate_cost;
               row.status = Math.abs(diff) <= 0.01
                 ? { code: 'green', label: 'Matched',     color: '#00C853', icon: 'check'    }
                 : diff > 0
@@ -1507,7 +1517,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                     // Returns with a matched DB charge compare like normal outbound rows.
                     // Returns with no DB charge compare carrier_cost vs static carrier rate.
                     const diff = (row.is_return && !bc)
-                      ? (row.carrier_rate_cost != null ? row.carrier_cost - row.carrier_rate_cost : null)
+                      ? (row.carrier_rate_cost != null ? row.carrier_total - row.carrier_rate_cost : null)
                       : (bc?.total_cost_price != null ? row.carrier_total - bc.total_cost_price : null);
                     const diffColor = diff == null ? '#555'
                       : diff > 0.005 ? '#F44336'
