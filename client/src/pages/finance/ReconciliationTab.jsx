@@ -1448,12 +1448,24 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                 Our Cost Total
               </div>
               <div style={{ fontSize: 22, fontWeight: 800, color: '#00C853' }}>
-                {gbp(results
-                  .filter(r => r.bestCharge?.base_cost_price != null)
-                  .reduce((s, r) => s + r.bestCharge.base_cost_price, 0)
-                )}
+                {gbp(results.reduce((s, r) => {
+                  const bc = r.bestCharge;
+                  // Return with no DB charge — use carrier rate cost (base+fuel+HGV from rate card)
+                  if (r.is_return && !bc) {
+                    return s + (r.carrier_rate_cost ?? 0);
+                  }
+                  // Over-threshold outbound (or return with DB charge) — use effective_cost
+                  if (r.effective_cost != null) {
+                    return s + r.effective_cost;
+                  }
+                  // Normal matched row — use stored total (base + fuel + HGV)
+                  if (bc?.total_cost_price != null) {
+                    return s + bc.total_cost_price;
+                  }
+                  return s;
+                }, 0))}
               </div>
-              <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>Base freight, matched charges</div>
+              <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>Matched charges incl. fuel &amp; HGV</div>
             </div>
           </div>
 
