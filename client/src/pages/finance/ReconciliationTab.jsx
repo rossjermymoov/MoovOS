@@ -1097,9 +1097,15 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
 
             // Expected carrier total = cost × (1 + fuel%) + HGV per parcel
             // Matches the same fuel/HGV methodology applied to outbound rows.
-            const effectiveFuelRate = totalInvoiceBase > 0 ? invoiceFuelTotal / totalInvoiceBase : 0;
-            row.carrier_rate_cost   = costPrice != null
-              ? parseFloat((costPrice * (1 + effectiveFuelRate) + HGV_RATE_PER_PARCEL).toFixed(2))
+            const effectiveFuelRate  = totalInvoiceBase > 0 ? invoiceFuelTotal / totalInvoiceBase : 0;
+            const rateFuelAlloc      = costPrice != null
+              ? parseFloat((costPrice * effectiveFuelRate).toFixed(2))
+              : null;
+            row.carrier_rate_base    = costPrice;           // bare cost (e.g. £14.21)
+            row.carrier_rate_fuel    = rateFuelAlloc;       // fuel component (e.g. £1.09)
+            row.carrier_rate_hgv     = HGV_RATE_PER_PARCEL; // HGV component (£0.13)
+            row.carrier_rate_cost    = costPrice != null
+              ? parseFloat((costPrice + (rateFuelAlloc ?? 0) + HGV_RATE_PER_PARCEL).toFixed(2))
               : null;
 
             if (row.carrier_rate_cost != null) {
@@ -1153,8 +1159,10 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
   //   1. csv_piece_count  — from the invoice itself (what DHL actually charged HGV on)
   //   2. bestCharge.parcel_count — from shipments.parcel_count in DB (set by webhook)
   //   3. 1 — safe fallback
+  // Include return rows (no DB charge, never booked) as well as normal matched rows —
+  // returns still attract the HGV surcharge and their parcel count must be accounted for.
   const totalMatchedPieces = results
-    ? results.filter(r => r.bestCharge).reduce(
+    ? results.filter(r => r.bestCharge || r.is_return).reduce(
         (s, r) => s + (r.csv_piece_count ?? r.bestCharge?.parcel_count ?? 1),
         0
       )
@@ -1688,11 +1696,15 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                         </td>
                         <td style={{ ...td, textAlign: 'right' }}>
                           {row.is_return && !bc ? (
-                            // Return with no DB charge — show static carrier rate or "no rate found"
+                            // Return with no DB charge — show carrier rate with base+fuel+HGV breakdown
                             row.carrier_rate_cost != null ? (
                               <>
                                 <span style={{ color: '#CCC' }}>{gbp(row.carrier_rate_cost)}</span>
-                                <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>carrier rate</div>
+                                <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>
+                                  {gbp(row.carrier_rate_base)} base
+                                  {row.carrier_rate_fuel > 0.005 && ` + ${gbp(row.carrier_rate_fuel)} fuel`}
+                                  {` + ${gbp(row.carrier_rate_hgv)} HGV`}
+                                </div>
                               </>
                             ) : (
                               <span style={{ fontSize: 11, color: '#444', fontStyle: 'italic' }}>no rate found</span>
