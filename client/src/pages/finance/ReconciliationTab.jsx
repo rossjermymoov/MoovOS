@@ -11,6 +11,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import * as XLSX from 'xlsx';
 import { Upload, X, CheckCircle, AlertTriangle, XCircle, RefreshCw, ChevronRight, FileText, ArrowRight, Settings, Plus, Trash2 } from 'lucide-react';
 import { getCourierLogo } from '../../utils/courierLogos';
 
@@ -788,6 +789,9 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
   const carrierRatesRef  = useRef({});
   const [showMappings,      setShowMappings]      = useState(false);
   const [acceptedSurcharges, setAcceptedSurcharges] = useState(new Set()); // accepted known-variance surcharges
+  const [costOverrides,     setCostOverrides]     = useState({});         // lineKey → override cost string (for unmatched rows)
+  const [disputedLines,     setDisputedLines]     = useState(new Set());  // lineKey set — flagged as disputed with DHL
+  const [matchedCollapsed,  setMatchedCollapsed]  = useState(true);       // matched section collapsed by default
 
   const { shipments, surcharges } = parseResult;
 
@@ -1228,6 +1232,44 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
     }
   }
 
+  // Split all displayed rows into unmatched (needs attention) and matched (green)
+  const unmatchedRows = displayed.filter(r => r.status.code !== 'green');
+  const matchedRows   = displayed.filter(r => r.status.code === 'green');
+
+  function exportUnmatched() {
+    const rows = unmatchedRows.map(row => {
+      const bc = row.bestCharge;
+      const ourCost = (row.is_return && !bc)
+        ? row.carrier_rate_cost
+        : (row.effective_cost ?? bc?.total_cost_price ?? null);
+      const inv      = row.carrier_total;
+      const override = costOverrides[row.lineKey] !== undefined
+        ? (parseFloat(costOverrides[row.lineKey]) || null)
+        : null;
+      const custName = bc?.customer_name || row.accountCustomer?.customer_name || '';
+      return {
+        'Reference':          row.reference,
+        'Customer':           custName,
+        'Service':            row.invoice_service_name || '',
+        'Weight (kg)':        row.billed_weight_kg ?? '',
+        'Invoice Cost (£)':   inv != null   ? parseFloat(inv.toFixed(2))   : '',
+        'Our Cost (£)':       ourCost != null ? parseFloat(ourCost.toFixed(2)) : '',
+        'Difference (£)':     ourCost != null ? parseFloat((inv - ourCost).toFixed(2)) : '',
+        'Status':             row.status.label,
+        'Override Cost (£)':  override != null ? override : '',
+        'Disputed':           disputedLines.has(row.lineKey) ? 'Yes' : 'No',
+        'Notes':              '',
+      };
+    });
+    const ws = XLSX.utils.json_to_sheet(rows);
+    // Set column widths
+    ws['!cols'] = [14,25,22,11,15,12,13,14,15,10,20].map(w => ({ wch: w }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Unmatched');
+    const today = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `unmatched-${carrier.code}-${today}.xlsx`);
+  }
+
   const th = {
     fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase',
     letterSpacing: '0.06em', padding: '10px 12px', whiteSpace: 'nowrap',
@@ -1495,34 +1537,6 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
             </div>
           )}
 
-          {/* Filter tabs */}
-          <div style={{ display: 'flex', gap: 2, marginBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-            {[
-              { code: 'all',   label: `All (${results.length})` },
-              { code: 'red',   label: `Problems (${counts.red})`,   color: '#F44336' },
-              { code: 'amber', label: `No Cost (${counts.amber})`,  color: '#FFC107' },
-              { code: 'green', label: `Matched (${counts.green})`,  color: '#00C853' },
-            ].map(f => (
-              <button
-                key={f.code}
-                onClick={() => { setFilter(f.code); setSelected(new Set()); }}
-                style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  padding: '8px 16px', fontSize: 12, fontWeight: 600,
-                  color: filter === f.code ? (f.color || '#CCC') : '#555',
-                  borderBottom: filter === f.code
-                    ? `2px solid ${f.color || '#CCC'}`
-                    : '2px solid transparent',
-                  marginBottom: -1,
-                  transition: 'color 0.15s',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-
           {/* Table */}
           <div style={{
             background: 'rgba(255,255,255,0.02)',
@@ -1549,24 +1563,260 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                     <th style={{ ...th, textAlign: 'right' }}>Our Cost</th>
                     <th style={{ ...th, textAlign: 'right' }}>Difference</th>
                     <th style={{ ...th, textAlign: 'center' }}>Status</th>
+                    <th style={{ ...th, textAlign: 'left' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {displayed.length === 0 && filter === 'all' && surcharges.length === 0 && (
+                  {displayed.length === 0 && surcharges.length === 0 && (
                     <tr>
-                      <td colSpan={9} style={{ ...td, textAlign: 'center', color: '#555', padding: '40px 12px' }}>
+                      <td colSpan={10} style={{ ...td, textAlign: 'center', color: '#555', padding: '40px 12px' }}>
                         No results to show
                       </td>
                     </tr>
                   )}
-                  {displayed.length === 0 && filter !== 'all' && (
+                  {/* ── Unmatched section header ── */}
+                  {unmatchedRows.length > 0 && (
                     <tr>
-                      <td colSpan={9} style={{ ...td, textAlign: 'center', color: '#555', padding: '40px 12px' }}>
-                        No results to show
+                      <td colSpan={10} style={{
+                        padding: '10px 14px',
+                        background: 'rgba(244,67,54,0.06)',
+                        borderBottom: '1px solid rgba(244,67,54,0.15)',
+                        borderTop: displayed.length > 0 ? undefined : 'none',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#F44336' }}>
+                            ⚠ Needs Attention — {unmatchedRows.length} line{unmatchedRows.length !== 1 ? 's' : ''}
+                          </span>
+                          <button
+                            onClick={exportUnmatched}
+                            style={{
+                              marginLeft: 'auto',
+                              fontSize: 11, fontWeight: 700,
+                              background: 'rgba(0,200,83,0.1)',
+                              border: '1px solid rgba(0,200,83,0.3)',
+                              color: '#00C853',
+                              borderRadius: 6, padding: '4px 12px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Export to Excel
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )}
-                  {displayed.map(row => {
+
+                  {/* ── Unmatched rows ── */}
+                  {unmatchedRows.map(row => {
+                    const isDisputed = disputedLines.has(row.lineKey);
+                    const overrideVal = costOverrides[row.lineKey];
+                    const isSelected = selected.has(row.lineKey);
+                    const g    = row.group;
+                    const bc   = row.bestCharge;
+                    const diff = (row.is_return && !bc)
+                      ? (row.carrier_rate_cost != null ? row.carrier_total - row.carrier_rate_cost : null)
+                      : (row.effective_cost != null ? row.carrier_total - row.effective_cost
+                          : bc?.total_cost_price != null ? row.carrier_total - bc.total_cost_price : null);
+                    const diffColor = diff == null ? '#555'
+                      : diff > 0.01 ? '#F44336'
+                      : diff < -0.01 ? '#00C853'
+                      : '#888';
+                    const invoiceHasSurcharge = (row.carrier_surcharges || 0) > 0.005 || (row.carrier_csv_surcharges || 0) > 0.005;
+                    const ourHasSurcharge = (bc?.total_cost_price != null && bc?.base_cost_price != null
+                      && Math.abs(bc.total_cost_price - bc.base_cost_price) > 0.005)
+                      || (row.per_kg_extra > 0.005);
+                    const rowBg = isDisputed
+                      ? 'rgba(255,193,7,0.04)'
+                      : isSelected ? 'rgba(244,67,54,0.04)' : undefined;
+                    return (
+                      <tr key={row.lineKey} style={{ background: rowBg, cursor: 'pointer' }}
+                          onClick={() => toggleRow(row.lineKey)}>
+                        <td style={{ ...td, textAlign: 'center', width: 36 }}>
+                          <input type="checkbox" checked={isSelected}
+                            onChange={() => toggleRow(row.lineKey)}
+                            onClick={e => e.stopPropagation()}
+                            style={{ cursor: 'pointer', accentColor: '#F44336' }} />
+                        </td>
+                        <td style={td}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#F44336', fontWeight: 700 }}>
+                              {row.reference}
+                            </span>
+                            {row.is_return && (
+                              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', background: 'rgba(156,39,176,0.12)', border: '1px solid rgba(156,39,176,0.3)', color: '#CE93D8', borderRadius: 20, padding: '1px 6px' }}>return</span>
+                            )}
+                          </div>
+                        </td>
+                        <td style={td}>
+                          {(() => {
+                            const custName = g?.customer_name || row.accountCustomer?.customer_name;
+                            const custAcct = g?.customer_account;
+                            return (
+                              <>
+                                <span style={{ fontSize: 12, color: custName ? '#CCC' : '#555' }}>{custName || '—'}</span>
+                                {!g && row.accountCustomer && (
+                                  <div style={{ fontSize: 9, color: '#B39DDB', marginTop: 1 }}>via account {row.account_number}</div>
+                                )}
+                                {custAcct && <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>{custAcct}</div>}
+                              </>
+                            );
+                          })()}
+                        </td>
+                        <td style={td}>
+                          {row.invoice_service_name ? (() => {
+                            const autoResolved = serviceCodeMap[row.invoice_service_name.trim()];
+                            const manualMapped = mappings[row.invoice_service_name];
+                            const resolvedName = autoResolved || manualMapped;
+                            return (
+                              <div>
+                                <span style={{ fontSize: 11, color: '#555', fontFamily: 'monospace' }}>{row.invoice_service_name}</span>
+                                {resolvedName ? (
+                                  <div style={{ fontSize: 11, color: autoResolved ? '#81C784' : '#00BCD4', marginTop: 1, display: 'flex', alignItems: 'center', gap: 3 }}>
+                                    <ArrowRight size={9} /> {resolvedName}
+                                    {autoResolved && <span style={{ fontSize: 9, color: '#555', marginLeft: 3 }}>auto</span>}
+                                  </div>
+                                ) : (
+                                  <div onClick={e => { e.stopPropagation(); setShowMappings(true); }}
+                                    style={{ fontSize: 10, color: '#444', marginTop: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}>
+                                    <Plus size={9} /> map
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })() : <span style={{ fontSize: 12, color: '#555' }}>—</span>}
+                        </td>
+                        <td style={{ ...td, textAlign: 'right' }}>
+                          {row.billed_weight_kg != null ? (
+                            <span style={{ fontWeight: 600, color: '#CCC' }}>{row.billed_weight_kg.toFixed(2)} kg</span>
+                          ) : <span style={{ color: '#555' }}>—</span>}
+                        </td>
+                        <td style={{ ...td, textAlign: 'right' }}>
+                          <span style={{ fontWeight: 700, color: '#B39DDB' }}>{gbp(row.carrier_total)}</span>
+                          {invoiceHasSurcharge && (
+                            <div style={{ fontSize: 10, color: '#666', marginTop: 1 }}>
+                              {gbp(row.carrier_cost)} freight
+                              {row.carrier_fuel_alloc > 0.005 && ` + ${gbp(row.carrier_fuel_alloc)} fuel`}
+                              {row.carrier_hgv_alloc  > 0.005 && ` + ${gbp(row.carrier_hgv_alloc)} HGV`}
+                            </div>
+                          )}
+                        </td>
+                        <td style={{ ...td, textAlign: 'right' }}>
+                          {row.is_return && !bc ? (
+                            row.carrier_rate_cost != null ? (
+                              <>
+                                <span style={{ color: '#CCC' }}>{gbp(row.carrier_rate_cost)}</span>
+                                <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>
+                                  {gbp(row.carrier_rate_base)} base
+                                  {row.carrier_rate_fuel > 0.005 && ` + ${gbp(row.carrier_rate_fuel)} fuel`}
+                                  {` + ${gbp(row.carrier_rate_hgv)} HGV`}
+                                </div>
+                              </>
+                            ) : <span style={{ fontSize: 11, color: '#444', fontStyle: 'italic' }}>no rate found</span>
+                          ) : (
+                            <>
+                              <span style={{ color: (row.effective_cost ?? bc?.total_cost_price) != null ? '#CCC' : '#555' }}>
+                                {row.effective_cost != null ? gbp(row.effective_cost)
+                                  : bc?.total_cost_price != null ? gbp(bc.total_cost_price) : '—'}
+                              </span>
+                              {ourHasSurcharge && (
+                                <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>
+                                  base {gbp(bc.base_cost_price)}
+                                  {row.per_kg_extra > 0.005 && <span style={{ color: '#81C784' }}>{` + ${gbp(row.per_kg_extra)} per-kg`}</span>}
+                                  {row.effective_fuel != null ? ` + ${gbp(row.effective_fuel)} fuel`
+                                    : (bc.total_cost_price != null && bc.base_cost_price != null
+                                        && Math.abs(bc.total_cost_price - bc.base_cost_price) > 0.005
+                                        && ` + ${gbp(bc.total_cost_price - bc.base_cost_price)}`)}
+                                  {` + ${gbp(bc.hgv_cost_price || 0)} HGV`}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </td>
+                        <td style={{ ...td, textAlign: 'right' }}>
+                          {diff != null ? (
+                            <span style={{ color: diffColor, fontWeight: Math.abs(diff) > 0.01 ? 700 : 400 }}>
+                              {diff > 0 ? '+' : ''}{gbp(diff)}
+                            </span>
+                          ) : <span style={{ color: '#444' }}>—</span>}
+                        </td>
+                        <td style={{ ...td, textAlign: 'center' }}>
+                          <StatusBadge status={isDisputed ? { code: 'amber', label: 'Disputed', color: '#FFC107', icon: 'warn' } : row.status} />
+                        </td>
+                        {/* Actions */}
+                        <td style={{ ...td }} onClick={e => e.stopPropagation()}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 130 }}>
+                            {/* Cost override input */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                              <span style={{ fontSize: 10, color: '#555', whiteSpace: 'nowrap' }}>£</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                placeholder={row.carrier_total?.toFixed(2) ?? ''}
+                                value={overrideVal ?? ''}
+                                onChange={e => setCostOverrides(prev => ({ ...prev, [row.lineKey]: e.target.value }))}
+                                style={{
+                                  width: 80, fontSize: 12, fontFamily: 'monospace',
+                                  background: overrideVal ? 'rgba(0,200,83,0.08)' : 'rgba(255,255,255,0.05)',
+                                  border: `1px solid ${overrideVal ? 'rgba(0,200,83,0.4)' : 'rgba(255,255,255,0.1)'}`,
+                                  borderRadius: 5, padding: '3px 6px', color: '#CCC',
+                                  outline: 'none',
+                                }}
+                                title="Override cost for this line"
+                              />
+                            </div>
+                            {/* Dispute toggle */}
+                            <button
+                              onClick={() => setDisputedLines(prev => {
+                                const s = new Set(prev);
+                                s.has(row.lineKey) ? s.delete(row.lineKey) : s.add(row.lineKey);
+                                return s;
+                              })}
+                              style={{
+                                fontSize: 10, fontWeight: 700, letterSpacing: '0.04em',
+                                textTransform: 'uppercase',
+                                background: isDisputed ? 'rgba(255,193,7,0.12)' : 'rgba(255,255,255,0.04)',
+                                border: `1px solid ${isDisputed ? 'rgba(255,193,7,0.4)' : 'rgba(255,255,255,0.1)'}`,
+                                color: isDisputed ? '#FFC107' : '#666',
+                                borderRadius: 5, padding: '3px 8px',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {isDisputed ? '⚑ Disputed' : 'Dispute'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {/* ── Matched section header (collapsible) ── */}
+                  {matchedRows.length > 0 && (
+                    <tr
+                      onClick={() => setMatchedCollapsed(c => !c)}
+                      style={{ cursor: 'pointer', userSelect: 'none', background: 'rgba(0,200,83,0.03)' }}
+                    >
+                      <td colSpan={10} style={{
+                        padding: '10px 14px',
+                        borderTop: unmatchedRows.length > 0 ? '2px solid rgba(255,255,255,0.08)' : undefined,
+                        borderBottom: matchedCollapsed ? 'none' : '1px solid rgba(0,200,83,0.12)',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{
+                            display: 'inline-block',
+                            transform: matchedCollapsed ? 'rotate(0deg)' : 'rotate(90deg)',
+                            transition: 'transform 0.15s',
+                            color: '#00C853', fontSize: 12,
+                          }}>▶</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#00C853' }}>
+                            ✓ Matched — {matchedRows.length} line{matchedRows.length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+
+                  {/* ── Matched rows (expanded) ── */}
+                  {!matchedCollapsed && matchedRows.map(row => {
                     const isSelected = selected.has(row.lineKey);
                     const g    = row.group;
                     const bc   = row.bestCharge;
@@ -1799,17 +2049,19 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                         <td style={{ ...td, textAlign: 'center' }}>
                           <StatusBadge status={row.status} />
                         </td>
+                        {/* No actions for matched rows */}
+                        <td style={td} />
                       </tr>
                     );
                   })}
 
-                  {/* ── Surcharge rows — shown when filter is 'all' ── */}
-                  {filter === 'all' && surcharges.length > 0 && (() => {
+                  {/* ── Surcharge rows ── */}
+                  {surcharges.length > 0 && (() => {
                     return (
                       <>
                         {/* Section divider */}
                         <tr>
-                          <td colSpan={9} style={{
+                          <td colSpan={10} style={{
                             padding: '8px 12px 6px',
                             fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
                             letterSpacing: '0.07em', color: '#555',
@@ -1968,6 +2220,8 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                                   )}
                                 </div>
                               </td>
+                              {/* No actions for surcharge rows */}
+                              <td style={td} />
                             </tr>
                           );
                         })}
