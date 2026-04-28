@@ -1129,21 +1129,6 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
               // all carrier rate lookups. service_name is a display label and must not be used.
               const bcSvcCode = (bc.dc_service_id || '').trim() || null;
               const pkr       = bcSvcCode ? (carrier_per_kg_rates?.[bcSvcCode] ?? null) : null;
-              if (row.reference === 'MP-0000037200') {
-                console.log('[37200 debug]', {
-                  billed_weight_kg:  row.billed_weight_kg,
-                  base_cost_price:   bc.base_cost_price,
-                  fuel_cost_price:   bc.fuel_cost_price,
-                  hgv_cost_price:    bc.hgv_cost_price,
-                  total_cost_price:  bc.total_cost_price,
-                  bcSvcCode,
-                  pkr,
-                  carrier_cost:      row.carrier_cost,
-                  carrier_fuel_alloc: row.carrier_fuel_alloc,
-                  carrier_hgv_alloc:  row.carrier_hgv_alloc,
-                  carrier_total:      row.carrier_total,
-                });
-              }
               if (pkr && row.billed_weight_kg != null) {
                 const threshold  = pkr.threshold_kg || 30;
                 const overageKg  = Math.max(0, row.billed_weight_kg - threshold);
@@ -1153,9 +1138,22 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
               } else {
                 row.per_kg_extra = 0;
               }
-              row.effective_cost = bc.total_cost_price != null
-                ? parseFloat((bc.total_cost_price + row.per_kg_extra).toFixed(2))
-                : null;
+              if (row.per_kg_extra > 0 && bc.base_cost_price != null) {
+                // The stored fuel charge was calculated at booking time on the flat band
+                // rate, but DHL's invoice fuel is proportional to the full freight including
+                // per-kg overage. Recalculate fuel on the adjusted freight base so both
+                // sides use the same proportional rate and the comparison is exact.
+                const effectiveFuelRate = totalInvoiceBase > 0 ? invoiceFuelTotal / totalInvoiceBase : 0;
+                const freightBase       = bc.base_cost_price + row.per_kg_extra;
+                const recalcFuel        = parseFloat((freightBase * effectiveFuelRate).toFixed(2));
+                row.effective_fuel      = recalcFuel;
+                row.effective_cost      = parseFloat((freightBase + recalcFuel + (bc.hgv_cost_price || 0)).toFixed(2));
+              } else {
+                row.effective_fuel = null;
+                row.effective_cost = bc.total_cost_price != null
+                  ? parseFloat((bc.total_cost_price + row.per_kg_extra).toFixed(2))
+                  : null;
+              }
             } else {
               row.per_kg_extra   = 0;
               row.effective_cost = null;
@@ -1761,12 +1759,16 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                               {ourHasSurcharge && (
                                 <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>
                                   base {gbp(bc.base_cost_price)}
-                                  {bc.total_cost_price != null && bc.base_cost_price != null
-                                    && Math.abs(bc.total_cost_price - bc.base_cost_price) > 0.005
-                                    && ` + ${gbp(bc.total_cost_price - bc.base_cost_price)}`}
                                   {row.per_kg_extra > 0.005 && (
                                     <span style={{ color: '#81C784' }}>{` + ${gbp(row.per_kg_extra)} per-kg`}</span>
                                   )}
+                                  {row.effective_fuel != null
+                                    ? ` + ${gbp(row.effective_fuel)} fuel`
+                                    : (bc.total_cost_price != null && bc.base_cost_price != null
+                                        && Math.abs(bc.total_cost_price - bc.base_cost_price) > 0.005
+                                        && ` + ${gbp(bc.total_cost_price - bc.base_cost_price)}`)
+                                  }
+                                  {` + ${gbp(bc.hgv_cost_price || 0)} HGV`}
                                 </div>
                               )}
                             </>
