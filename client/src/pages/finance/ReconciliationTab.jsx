@@ -874,7 +874,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           account_numbers:  accountNumbers,
         });
         if (cancelled) return;
-        const { matched, customers_by_account, charges_by_customer } = resp.data;
+        const { matched, customers_by_account, charges_by_customer, customer_rates_by_customer } = resp.data;
 
         // Build a map from reference → group (contains array of DB charges)
         const groupMap = {};
@@ -1081,14 +1081,18 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
             // Resolve the service code via the mapping chain and look up the contracted
             // carrier rate (what we pay DHL for this service) from the carrier rate card.
             // Compare that against the DHL invoice line amount.
-            const liveRates    = carrierRatesRef.current;
             const svcCode      = (row.invoice_service_code || '').trim();
             const svcName      = (row.invoice_service_name || '').trim();
             const mappedName   = mappingsRef.current[svcCode] || mappingsRef.current[svcName] || svcName;
             const resolvedCode = svcNameToCodeRef.current[mappedName] || null;
-            const rateEntry    = resolvedCode ? liveRates[resolvedCode] : null;
-            row.carrier_rate_cost = rateEntry?.price_first ?? null;
-            console.log('[recon return]', { svcCode, mappedName, resolvedCode, rateEntry, carrier_rate_cost: row.carrier_rate_cost, carrierRateKeys: Object.keys(liveRates), svcNameToCodeKeys: Object.keys(svcNameToCodeRef.current).filter(k => k.toLowerCase().includes('dhl')) });
+            // Look up the customer's sell price for this service from customer_rates.
+            // This is the price we charge the customer — used both as the cost comparison
+            // and as the billable amount to add to their invoice.
+            const cid         = row.accountCustomer?.customer_id;
+            const custRates   = cid ? (customer_rates_by_customer?.[String(cid)] || {}) : {};
+            const rateEntry   = resolvedCode ? (custRates[resolvedCode] || null) : null;
+            row.carrier_rate_cost = rateEntry?.price ?? null;
+            row.customer_sell     = rateEntry?.price ?? null;
 
             if (row.carrier_rate_cost != null) {
               const diff = row.carrier_cost - row.carrier_rate_cost;

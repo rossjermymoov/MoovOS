@@ -328,12 +328,46 @@ router.post('/bulk-lookup', async (req, res) => {
       }
     }
 
+    // ── Customer rate lookup ──────────────────────────────────────────────────
+    // For unmatched invoice rows (returns, extras not booked in the system),
+    // fetch each identified customer's sell prices from customer_rates so the
+    // frontend can use them for comparison and billing without needing a charge row.
+    // Keyed: { [customer_id]: { [service_code]: { price, price_sub, service_name } } }
+    const customer_rates_by_customer = {};
+    const allCustIdsForRates = [...new Set([
+      ...matched.map(g => g.customer_id),
+      ...Object.values(customers_by_account).map(c => c.customer_id),
+    ].filter(Boolean))];
+
+    if (allCustIdsForRates.length > 0) {
+      const ratesRes = await query(`
+        SELECT DISTINCT ON (customer_id, service_code)
+          customer_id, service_code, service_name, price, price_sub
+        FROM customer_rates
+        WHERE customer_id = ANY($1::uuid[])
+          AND price IS NOT NULL
+        ORDER BY customer_id, service_code, max_weight_kg ASC NULLS LAST
+      `, [allCustIdsForRates]);
+
+      for (const row of ratesRes.rows) {
+        const cid  = String(row.customer_id);
+        const code = (row.service_code || '').trim();
+        if (!customer_rates_by_customer[cid]) customer_rates_by_customer[cid] = {};
+        customer_rates_by_customer[cid][code] = {
+          service_name: row.service_name,
+          price:        row.price     != null ? parseFloat(row.price)     : null,
+          price_sub:    row.price_sub != null ? parseFloat(row.price_sub) : null,
+        };
+      }
+    }
+
     return res.json({
       ok: true,
       matched,
       unmatched,
       customers_by_account,
       charges_by_customer,
+      customer_rates_by_customer,
       total:           refs.length,
       matched_count:   matched.length,
       unmatched_count: unmatched.length,
