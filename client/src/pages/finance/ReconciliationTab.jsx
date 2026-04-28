@@ -1129,6 +1129,21 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
               // all carrier rate lookups. service_name is a display label and must not be used.
               const bcSvcCode = (bc.dc_service_id || '').trim() || null;
               const pkr       = bcSvcCode ? (carrier_per_kg_rates?.[bcSvcCode] ?? null) : null;
+              if (row.reference === 'MP-0000037200') {
+                console.log('[37200 debug]', {
+                  billed_weight_kg:  row.billed_weight_kg,
+                  base_cost_price:   bc.base_cost_price,
+                  fuel_cost_price:   bc.fuel_cost_price,
+                  hgv_cost_price:    bc.hgv_cost_price,
+                  total_cost_price:  bc.total_cost_price,
+                  bcSvcCode,
+                  pkr,
+                  carrier_cost:      row.carrier_cost,
+                  carrier_fuel_alloc: row.carrier_fuel_alloc,
+                  carrier_hgv_alloc:  row.carrier_hgv_alloc,
+                  carrier_total:      row.carrier_total,
+                });
+              }
               if (pkr && row.billed_weight_kg != null) {
                 const threshold  = pkr.threshold_kg || 30;
                 const overageKg  = Math.max(0, row.billed_weight_kg - threshold);
