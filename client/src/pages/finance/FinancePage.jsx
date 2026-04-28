@@ -27,16 +27,21 @@ function fmtTime(dt) {
 
 // ─── Stats card ───────────────────────────────────────────────────────────────
 
-function StatCard({ label, value, sub, color = '#AAAAAA', bg = 'rgba(255,255,255,0.04)' }) {
+function StatCard({ label, value, sub, color = '#AAAAAA', bg = 'rgba(255,255,255,0.04)', onClick }) {
   return (
-    <div style={{
-      background: bg,
-      border: `1px solid ${color}33`,
-      borderRadius: 10,
-      padding: '14px 18px',
-      minWidth: 140,
-      flex: 1,
-    }}>
+    <div
+      onClick={onClick}
+      style={{
+        background: bg,
+        border: `1px solid ${color}33`,
+        borderRadius: 10,
+        padding: '14px 18px',
+        minWidth: 140,
+        flex: 1,
+        cursor: onClick ? 'pointer' : 'default',
+        transition: 'background 0.15s, border-color 0.15s',
+      }}
+    >
       <div style={{ fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{label}</div>
       <div style={{ fontSize: 22, fontWeight: 800, color }}>{value}</div>
       {sub && <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>{sub}</div>}
@@ -1048,6 +1053,7 @@ export default function FinancePage() {
     cancelled: 'false',
     date_from: filters.date_from || undefined,
     date_to: filters.date_to || undefined,
+    unpriced: showUnpriced ? 'true' : undefined, // server-side filter so all pages are unpriced
     limit,
     offset,
   };
@@ -1063,8 +1069,8 @@ export default function FinancePage() {
   const totalPages  = Math.ceil(total / limit);
   const currentPage = Math.floor(offset / limit) + 1;
 
-  // Filter to unpriced locally if toggle is on
-  const displayCharges = showUnpriced ? charges.filter(c => c.price == null) : charges;
+  // Server already filters to unpriced when showUnpriced is true — no local filter needed
+  const displayCharges = charges;
 
   // Mutations
   const patch = useMutation({
@@ -1450,9 +1456,10 @@ export default function FinancePage() {
         <StatCard
           label="Unpriced"
           value={stats?.unpriced ?? '—'}
-          sub="Needs manual price"
+          sub={showUnpriced ? 'Showing unpriced only' : 'Click to filter'}
           color="#FFC107"
-          bg="rgba(255,193,7,0.05)"
+          bg={showUnpriced ? 'rgba(255,193,7,0.12)' : 'rgba(255,193,7,0.05)'}
+          onClick={() => { setShowUnpriced(v => !v); setOffset(0); }}
         />
         <StatCard
           label="Pending Billing"
