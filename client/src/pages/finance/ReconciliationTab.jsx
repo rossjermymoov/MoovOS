@@ -1211,6 +1211,40 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
   const ourHgvCalcTotal    = totalMatchedPieces * HGV_RATE_PER_PARCEL;
   const invoiceSurchargeTotal = surcharges.reduce((s, r) => s + r.value, 0);
 
+  // ── Sell price & margin totals ──────────────────────────────────────────────
+  // Use all rows that have a matched DB charge (regardless of RAG status).
+  const totalSellValue = results
+    ? results.reduce((s, r) => s + (r.bestCharge?.total_sell_price ?? 0), 0)
+    : 0;
+  // Mirror the Our Cost Total logic for the cost side
+  const totalCostForMargin = results
+    ? results.reduce((s, r) => {
+        const bc = r.bestCharge;
+        if (r.is_return && !bc) return s + (r.carrier_rate_cost ?? 0);
+        if (r.effective_cost != null) return s + r.effective_cost;
+        return s + (bc?.total_cost_price ?? 0);
+      }, 0)
+    : 0;
+  const totalMarginValue = totalSellValue - totalCostForMargin;
+  const marginPct        = totalSellValue > 0 ? (totalMarginValue / totalSellValue) * 100 : 0;
+
+  // ── Per-customer breakdown ──────────────────────────────────────────────────
+  const customerBreakdown = results
+    ? Object.values(
+        results
+          .filter(r => r.bestCharge != null)
+          .reduce((acc, r) => {
+            const bc       = r.bestCharge;
+            const custName = r.group?.customer_name || r.accountCustomer?.customer_name || 'Unknown Customer';
+            if (!acc[custName]) acc[custName] = { name: custName, count: 0, cost: 0, sell: 0 };
+            acc[custName].count++;
+            acc[custName].cost += r.effective_cost ?? bc.total_cost_price ?? 0;
+            acc[custName].sell += bc.total_sell_price ?? 0;
+            return acc;
+          }, {})
+      ).sort((a, b) => b.sell - a.sell)
+    : [];
+
   // ── Filter ──
   const displayed = results
     ? (filter === 'all' ? results : results.filter(r => r.status.code === filter))
@@ -1508,6 +1542,47 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                 }, 0))}
               </div>
               <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>Matched charges incl. fuel &amp; HGV</div>
+            </div>
+
+            {/* Total sell value */}
+            <div style={{
+              flex: 1, minWidth: 140,
+              background: 'rgba(255,193,7,0.04)',
+              border: '1px solid rgba(255,193,7,0.2)',
+              borderRadius: 10, padding: '14px 18px',
+            }}>
+              <div style={{ fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                Total Sell Value
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#FFC107' }}>
+                {gbp(totalSellValue)}
+              </div>
+              <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>What we bill customers</div>
+            </div>
+
+            {/* Gross margin */}
+            <div style={{
+              flex: 1, minWidth: 140,
+              background: 'rgba(0,188,212,0.04)',
+              border: '1px solid rgba(0,188,212,0.15)',
+              borderRadius: 10, padding: '14px 18px',
+            }}>
+              <div style={{ fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                Gross Margin
+              </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                <span style={{ fontSize: 22, fontWeight: 800, color: totalMarginValue >= 0 ? '#00BCD4' : '#F44336' }}>
+                  {gbp(totalMarginValue)}
+                </span>
+                <span style={{
+                  fontSize: 12, fontWeight: 700,
+                  color: totalMarginValue >= 0 ? '#00BCD4' : '#F44336',
+                  opacity: 0.8,
+                }}>
+                  {marginPct.toFixed(1)}%
+                </span>
+              </div>
+              <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>Sell minus carrier cost</div>
             </div>
           </div>
 
@@ -2049,8 +2124,32 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                         <td style={{ ...td, textAlign: 'center' }}>
                           <StatusBadge status={row.status} />
                         </td>
-                        {/* No actions for matched rows */}
-                        <td style={td} />
+                        {/* Sell price + margin for matched rows */}
+                        <td style={td}>
+                          {bc?.total_sell_price != null && (
+                            <div style={{ minWidth: 100 }}>
+                              <span style={{ fontSize: 13, fontWeight: 700, color: '#FFC107' }}>
+                                {gbp(bc.total_sell_price)}
+                              </span>
+                              {(() => {
+                                const cost = row.effective_cost ?? bc.total_cost_price;
+                                const sell = bc.total_sell_price;
+                                if (cost == null || sell == null || sell === 0) return null;
+                                const margin = sell - cost;
+                                const pct    = (margin / sell) * 100;
+                                return (
+                                  <span style={{
+                                    marginLeft: 6, fontSize: 10, fontWeight: 700,
+                                    color: pct >= 0 ? '#00BCD4' : '#F44336',
+                                  }}>
+                                    {pct.toFixed(0)}%
+                                  </span>
+                                );
+                              })()}
+                              <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>sell price</div>
+                            </div>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
@@ -2247,6 +2346,101 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
               </div>
             )}
           </div>
+
+          {/* ── Per-customer billing breakdown ── */}
+          {customerBreakdown.length > 0 && (
+            <div style={{
+              marginTop: 20,
+              background: 'rgba(255,255,255,0.02)',
+              border: '1px solid rgba(255,255,255,0.07)',
+              borderRadius: 12, overflow: 'hidden',
+            }}>
+              {/* Header */}
+              <div style={{
+                padding: '12px 18px',
+                borderBottom: '1px solid rgba(255,255,255,0.06)',
+                display: 'flex', alignItems: 'center', gap: 10,
+              }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#CCC', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  By Customer
+                </span>
+                <span style={{ fontSize: 11, color: '#555' }}>
+                  — {customerBreakdown.length} customer{customerBreakdown.length !== 1 ? 's' : ''} · billing preview based on matched charges
+                </span>
+              </div>
+
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={{ ...th, textAlign: 'left' }}>Customer</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Shipments</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Carrier Cost</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Sell Value</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Margin</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Margin %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {customerBreakdown.map((c, i) => {
+                    const margin    = c.sell - c.cost;
+                    const custPct   = c.sell > 0 ? (margin / c.sell) * 100 : 0;
+                    const isNeg     = margin < 0;
+                    return (
+                      <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        <td style={{ ...td, fontWeight: 600 }}>{c.name}</td>
+                        <td style={{ ...td, textAlign: 'right', color: '#888' }}>{c.count}</td>
+                        <td style={{ ...td, textAlign: 'right', color: '#00C853' }}>{gbp(c.cost)}</td>
+                        <td style={{ ...td, textAlign: 'right', color: '#FFC107', fontWeight: 700 }}>{gbp(c.sell)}</td>
+                        <td style={{ ...td, textAlign: 'right', color: isNeg ? '#F44336' : '#00BCD4', fontWeight: 700 }}>
+                          {gbp(margin)}
+                        </td>
+                        <td style={{ ...td, textAlign: 'right' }}>
+                          <span style={{
+                            display: 'inline-block',
+                            fontSize: 11, fontWeight: 700,
+                            background: isNeg ? 'rgba(244,67,54,0.1)' : 'rgba(0,188,212,0.1)',
+                            border: `1px solid ${isNeg ? 'rgba(244,67,54,0.3)' : 'rgba(0,188,212,0.3)'}`,
+                            color: isNeg ? '#F44336' : '#00BCD4',
+                            borderRadius: 20, padding: '2px 8px',
+                          }}>
+                            {custPct.toFixed(1)}%
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {/* Totals row */}
+                  <tr style={{ background: 'rgba(255,255,255,0.02)', borderTop: '2px solid rgba(255,255,255,0.08)' }}>
+                    <td style={{ ...td, fontWeight: 700, color: '#888' }}>Total</td>
+                    <td style={{ ...td, textAlign: 'right', color: '#888', fontWeight: 700 }}>
+                      {customerBreakdown.reduce((s, c) => s + c.count, 0)}
+                    </td>
+                    <td style={{ ...td, textAlign: 'right', color: '#00C853', fontWeight: 700 }}>
+                      {gbp(customerBreakdown.reduce((s, c) => s + c.cost, 0))}
+                    </td>
+                    <td style={{ ...td, textAlign: 'right', color: '#FFC107', fontWeight: 700 }}>
+                      {gbp(totalSellValue)}
+                    </td>
+                    <td style={{ ...td, textAlign: 'right', color: totalMarginValue >= 0 ? '#00BCD4' : '#F44336', fontWeight: 700 }}>
+                      {gbp(totalMarginValue)}
+                    </td>
+                    <td style={{ ...td, textAlign: 'right' }}>
+                      <span style={{
+                        display: 'inline-block',
+                        fontSize: 11, fontWeight: 700,
+                        background: marginPct >= 0 ? 'rgba(0,188,212,0.12)' : 'rgba(244,67,54,0.1)',
+                        border: `1px solid ${marginPct >= 0 ? 'rgba(0,188,212,0.35)' : 'rgba(244,67,54,0.3)'}`,
+                        color: marginPct >= 0 ? '#00BCD4' : '#F44336',
+                        borderRadius: 20, padding: '2px 8px',
+                      }}>
+                        {marginPct.toFixed(1)}%
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
         </>
       )}
     </div>
