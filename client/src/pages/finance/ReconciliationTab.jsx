@@ -1128,7 +1128,8 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
               // Use dc_service_id (the unique carrier service code, e.g. "DHLPUKC-220") for
               // all carrier rate lookups. service_name is a display label and must not be used.
               const bcSvcCode = (bc.dc_service_id || '').trim() || null;
-              const pkr       = bcSvcCode ? (carrier_per_kg_rates?.[bcSvcCode] ?? null) : null;
+              const pkrList   = bcSvcCode ? (carrier_per_kg_rates?.[bcSvcCode] || []) : [];
+              const pkr       = pkrList.find(e => Math.abs(e.zone_base_price - bc.base_cost_price) < 0.01) || null;
               if (pkr && row.billed_weight_kg != null) {
                 const threshold  = pkr.threshold_kg || 30;
                 const overageKg  = Math.max(0, row.billed_weight_kg - threshold);

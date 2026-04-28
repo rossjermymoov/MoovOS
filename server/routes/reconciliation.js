@@ -322,31 +322,51 @@ router.post('/bulk-lookup', async (req, res) => {
     // to compare against the invoice — separate from the customer sell price.
     // Query weight_bands for all services so the frontend can use cost_price
     // for the reconciliation comparison and sell_price for the customer bill.
-    const carrierCostsRes = await query(`
-      SELECT cs.service_code,
-             MIN(wb.price_first) FILTER (WHERE wb.price_first IS NOT NULL AND wb.price_first > 0) AS cost_price,
-             MAX(wb.cost_per_kg)              AS cost_per_kg,
-             MAX(wb.cost_per_kg_threshold_kg) AS cost_per_kg_threshold_kg
+    // Flat base rates for return row lookup (minimum price_first per service code).
+    const flatCostRes = await query(`
+      SELECT cs.service_code, MIN(wb.price_first) AS cost_price
       FROM weight_bands wb
       JOIN zones z             ON z.id  = wb.zone_id
       JOIN courier_services cs ON cs.id = z.courier_service_id
-      WHERE (wb.price_first IS NOT NULL AND wb.price_first > 0)
-         OR (wb.cost_per_kg  IS NOT NULL AND wb.cost_per_kg  > 0)
+      WHERE wb.price_first IS NOT NULL AND wb.price_first > 0
       GROUP BY cs.service_code
     `);
     const carrier_service_costs = {};
-    const carrier_per_kg_rates  = {};
-    for (const row of carrierCostsRes.rows) {
+    for (const row of flatCostRes.rows) {
       if (row.service_code) {
-        const code = row.service_code.trim();
-        carrier_service_costs[code] = parseFloat(row.cost_price);
-        if (row.cost_per_kg != null) {
-          carrier_per_kg_rates[code] = {
-            cost_per_kg:  parseFloat(row.cost_per_kg),
-            threshold_kg: parseFloat(row.cost_per_kg_threshold_kg || 30),
-          };
-        }
+        carrier_service_costs[row.service_code.trim()] = parseFloat(row.cost_price);
       }
+    }
+
+    // Per-kg rates per service + zone, keyed by service_code.
+    // Each entry is an array of { zone_base_price, cost_per_kg, threshold_kg } so the
+    // frontend can match the correct zone rate against bc.base_cost_price rather than
+    // using MAX() which would pick the wrong (highest) zone rate.
+    const perKgRes = await query(`
+      SELECT cs.service_code,
+             MIN(wb_flat.price_first)           AS zone_base_price,
+             MAX(wb_pkg.cost_per_kg)            AS cost_per_kg,
+             MAX(wb_pkg.cost_per_kg_threshold_kg) AS cost_per_kg_threshold_kg
+      FROM courier_services cs
+      JOIN zones z             ON z.courier_service_id = cs.id
+      JOIN weight_bands wb_pkg ON wb_pkg.zone_id = z.id
+                               AND wb_pkg.cost_per_kg IS NOT NULL
+                               AND wb_pkg.cost_per_kg > 0
+      JOIN weight_bands wb_flat ON wb_flat.zone_id = z.id
+                                AND wb_flat.price_first IS NOT NULL
+                                AND wb_flat.price_first > 0
+      GROUP BY cs.service_code, z.id
+    `);
+    const carrier_per_kg_rates = {};
+    for (const row of perKgRes.rows) {
+      if (!row.service_code || row.cost_per_kg == null) continue;
+      const code = row.service_code.trim();
+      if (!carrier_per_kg_rates[code]) carrier_per_kg_rates[code] = [];
+      carrier_per_kg_rates[code].push({
+        zone_base_price: parseFloat(row.zone_base_price),
+        cost_per_kg:     parseFloat(row.cost_per_kg),
+        threshold_kg:    parseFloat(row.cost_per_kg_threshold_kg || 30),
+      });
     }
 
     // ── Customer rate lookup ──────────────────────────────────────────────────
