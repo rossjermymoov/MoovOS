@@ -1137,12 +1137,13 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
               const pkr       = bcSvcCode ? (carrier_per_kg_rates?.[bcSvcCode] ?? null) : null;
               if (row.billed_weight_kg > 25) {
                 console.log('[per-kg debug v2]', {
-                  ref:               row.reference,
-                  bc_service_name:   bc.service_name,
+                  ref:                   row.reference,
+                  bc_service_name:       bc.service_name,
                   bcSvcCode,
                   pkr,
-                  pkr_keys:          Object.keys(carrier_per_kg_rates || {}),
-                  billed_weight_kg:  row.billed_weight_kg,
+                  full_carrier_per_kg:   carrier_per_kg_rates,
+                  full_carrier_costs:    carrier_service_costs,
+                  billed_weight_kg:      row.billed_weight_kg,
                 });
               }
               if (pkr && row.billed_weight_kg != null) {
