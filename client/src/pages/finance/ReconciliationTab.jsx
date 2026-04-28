@@ -253,16 +253,19 @@ function parseDhlCsv(text) {
 // Invoice-level FUEL/HGV rows at the bottom are reconciled separately.
 const TOLERANCE_ABS = 0.005;
 
-// carrierTotal = row.carrier_total (base + W-AE surcharges from invoice)
-// charge = bestCharge from DB (has base_cost_price, total_cost_price)
-function getStatus(carrierTotal, charge) {
+// carrierTotal   = row.carrier_total (base + W-AE surcharges from invoice)
+// charge         = bestCharge from DB (has base_cost_price, total_cost_price)
+// overrideCost   = row.effective_cost — pass when per-kg overage has been added so the
+//                  comparison is against the adjusted expected cost, not the stored total.
+function getStatus(carrierTotal, charge, overrideCost = null) {
   if (!charge) {
     return { code: 'red', label: 'Not Found', color: '#F44336', icon: 'x' };
   }
-  if (charge.total_cost_price == null) {
+  const compareCost = overrideCost ?? charge.total_cost_price;
+  if (compareCost == null) {
     return { code: 'amber', label: 'No Cost Recorded', color: '#FFC107', icon: 'warn' };
   }
-  const diff = Math.abs(parseFloat(carrierTotal) - charge.total_cost_price);
+  const diff = Math.abs(parseFloat(carrierTotal) - compareCost);
   if (diff <= TOLERANCE_ABS) {
     return { code: 'green', label: 'Match', color: '#00C853', icon: 'check' };
   }
@@ -874,7 +877,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           account_numbers:  accountNumbers,
         });
         if (cancelled) return;
-        const { matched, customers_by_account, charges_by_customer, carrier_service_costs, customer_rates_by_customer } = resp.data;
+        const { matched, customers_by_account, charges_by_customer, carrier_service_costs, carrier_per_kg_rates, customer_rates_by_customer } = resp.data;
 
         // Build a map from reference → group (contains array of DB charges)
         const groupMap = {};
@@ -1122,7 +1125,30 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
             }
           } else {
             row.is_return = false;
-            row.status    = getStatus(row.carrier_total, row.bestCharge || null);
+            const bc = row.bestCharge || null;
+            // Per-kg overage: if DHL billed above the contracted threshold weight
+            // (e.g. 46 kg on a 0–30 kg rate card), add the excess at the carrier's
+            // per-kg rate so the comparison is done at the invoiced weight.
+            if (bc) {
+              const bcSvcCode = svcNameToCodeRef.current[(bc.service_name || '').trim()] || null;
+              const pkr       = bcSvcCode ? (carrier_per_kg_rates?.[bcSvcCode] ?? null) : null;
+              if (pkr && row.billed_weight_kg != null) {
+                const threshold  = pkr.threshold_kg || 30;
+                const overageKg  = Math.max(0, row.billed_weight_kg - threshold);
+                row.per_kg_extra = overageKg > 0
+                  ? parseFloat((overageKg * pkr.cost_per_kg).toFixed(2))
+                  : 0;
+              } else {
+                row.per_kg_extra = 0;
+              }
+              row.effective_cost = bc.total_cost_price != null
+                ? parseFloat((bc.total_cost_price + row.per_kg_extra).toFixed(2))
+                : null;
+            } else {
+              row.per_kg_extra   = 0;
+              row.effective_cost = null;
+            }
+            row.status = getStatus(row.carrier_total, bc, row.effective_cost);
           }
         });
 
@@ -1526,15 +1552,18 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                     // Returns with no DB charge compare carrier_cost vs static carrier rate.
                     const diff = (row.is_return && !bc)
                       ? (row.carrier_rate_cost != null ? row.carrier_total - row.carrier_rate_cost : null)
-                      : (bc?.total_cost_price != null ? row.carrier_total - bc.total_cost_price : null);
+                      : (row.effective_cost != null ? row.carrier_total - row.effective_cost
+                          : bc?.total_cost_price != null ? row.carrier_total - bc.total_cost_price : null);
                     const diffColor = diff == null ? '#555'
                       : diff > 0.005 ? '#F44336'
                       : diff < -0.005 ? '#00C853'
                       : '#888';
                     // Show breakdown sub-line if there are fuel/HGV allocs OR W-AE informational surcharges
                     const invoiceHasSurcharge = (row.carrier_surcharges || 0) > 0.005 || (row.carrier_csv_surcharges || 0) > 0.005;
-                    const ourHasSurcharge = bc?.total_cost_price != null && bc?.base_cost_price != null
-                      && Math.abs(bc.total_cost_price - bc.base_cost_price) > 0.005;
+                    // Show Our Cost breakdown if: stored surcharges present, OR per-kg extra applies
+                    const ourHasSurcharge = (bc?.total_cost_price != null && bc?.base_cost_price != null
+                      && Math.abs(bc.total_cost_price - bc.base_cost_price) > 0.005)
+                      || (row.per_kg_extra > 0.005);
 
                     return (
                       <tr
@@ -1712,12 +1741,20 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                           ) : (
                             // Normal outbound OR return that matched a DB charge
                             <>
-                              <span style={{ color: bc?.total_cost_price != null ? '#CCC' : '#555' }}>
-                                {bc?.total_cost_price != null ? gbp(bc.total_cost_price) : '—'}
+                              <span style={{ color: (row.effective_cost ?? bc?.total_cost_price) != null ? '#CCC' : '#555' }}>
+                                {row.effective_cost != null
+                                  ? gbp(row.effective_cost)
+                                  : bc?.total_cost_price != null ? gbp(bc.total_cost_price) : '—'}
                               </span>
                               {ourHasSurcharge && (
                                 <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>
-                                  base {gbp(bc.base_cost_price)} + {gbp(bc.total_cost_price - bc.base_cost_price)}
+                                  base {gbp(bc.base_cost_price)}
+                                  {bc.total_cost_price != null && bc.base_cost_price != null
+                                    && Math.abs(bc.total_cost_price - bc.base_cost_price) > 0.005
+                                    && ` + ${gbp(bc.total_cost_price - bc.base_cost_price)}`}
+                                  {row.per_kg_extra > 0.005 && (
+                                    <span style={{ color: '#81C784' }}>{` + ${gbp(row.per_kg_extra)} per-kg`}</span>
+                                  )}
                                 </div>
                               )}
                             </>

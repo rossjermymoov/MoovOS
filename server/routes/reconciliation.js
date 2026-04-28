@@ -334,7 +334,10 @@ router.post('/bulk-lookup', async (req, res) => {
     // Query weight_bands for all services so the frontend can use cost_price
     // for the reconciliation comparison and sell_price for the customer bill.
     const carrierCostsRes = await query(`
-      SELECT cs.service_code, MIN(wb.price_first) AS cost_price
+      SELECT cs.service_code,
+             MIN(wb.price_first)             AS cost_price,
+             MAX(wb.cost_per_kg)             AS cost_per_kg,
+             MAX(wb.cost_per_kg_threshold_kg) AS cost_per_kg_threshold_kg
       FROM weight_bands wb
       JOIN zones z             ON z.id  = wb.zone_id
       JOIN courier_services cs ON cs.id = z.courier_service_id
@@ -342,9 +345,17 @@ router.post('/bulk-lookup', async (req, res) => {
       GROUP BY cs.service_code
     `);
     const carrier_service_costs = {};
+    const carrier_per_kg_rates  = {};
     for (const row of carrierCostsRes.rows) {
       if (row.service_code) {
-        carrier_service_costs[row.service_code.trim()] = parseFloat(row.cost_price);
+        const code = row.service_code.trim();
+        carrier_service_costs[code] = parseFloat(row.cost_price);
+        if (row.cost_per_kg != null) {
+          carrier_per_kg_rates[code] = {
+            cost_per_kg:  parseFloat(row.cost_per_kg),
+            threshold_kg: parseFloat(row.cost_per_kg_threshold_kg || 30),
+          };
+        }
       }
     }
 
@@ -388,6 +399,7 @@ router.post('/bulk-lookup', async (req, res) => {
       customers_by_account,
       charges_by_customer,
       carrier_service_costs,
+      carrier_per_kg_rates,
       customer_rates_by_customer,
       total:           refs.length,
       matched_count:   matched.length,
