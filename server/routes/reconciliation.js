@@ -65,40 +65,25 @@ router.post('/bulk-lookup', async (req, res) => {
         s.dc_service_id,
         s.tracking_codes,
         -- Does this customer/service use weight bands at all?
-        -- False = flat-rate (any weight → same price, never flag weight diff).
-        -- Match: service_code ILIKE dc_service_id  (primary, mirrors billing engine)
-        --        OR service_name ILIKE c.service_name (fallback for null dc_service_id).
-        -- ILIKE + explicit NULL guards avoid the LOWER(NULL)=NULL silent-false trap.
+        -- Match exclusively by dc_service_id = customer_rates.service_code.
+        -- service_name is a display label and must never be used for matching.
         (
           SELECT EXISTS(
             SELECT 1 FROM customer_rates cr
             WHERE cr.customer_id = c.customer_id
               AND cr.max_weight_kg IS NOT NULL
-              AND (
-                (s.dc_service_id IS NOT NULL
-                  AND TRIM(cr.service_code) ILIKE TRIM(s.dc_service_id))
-                OR
-                (c.service_name IS NOT NULL AND cr.service_name IS NOT NULL
-                  AND TRIM(cr.service_name) ILIKE TRIM(c.service_name))
-              )
+              AND s.dc_service_id IS NOT NULL
+              AND TRIM(cr.service_code) ILIKE TRIM(s.dc_service_id)
           )
         )                       AS has_weight_bands,
         -- The ceiling of this customer's highest weight band for the service.
-        -- If DHL invoices above this value the shipment was billed outside its booked band.
-        -- We take MAX so a 45 kg declared weight on a 0-30 kg rate card returns 30,
-        -- making billed(45) > ceiling(30) correctly flag.
         (
           SELECT MAX(cr.max_weight_kg)
           FROM customer_rates cr
           WHERE cr.customer_id = c.customer_id
             AND cr.max_weight_kg IS NOT NULL
-            AND (
-              (s.dc_service_id IS NOT NULL
-                AND TRIM(cr.service_code) ILIKE TRIM(s.dc_service_id))
-              OR
-              (c.service_name IS NOT NULL AND cr.service_name IS NOT NULL
-                AND TRIM(cr.service_name) ILIKE TRIM(c.service_name))
-            )
+            AND s.dc_service_id IS NOT NULL
+            AND TRIM(cr.service_code) ILIKE TRIM(s.dc_service_id)
         )                       AS band_max_weight_kg,
         cu.id                   AS customer_id,
         cu.business_name        AS customer_name,

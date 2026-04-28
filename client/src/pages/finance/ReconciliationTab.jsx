@@ -988,36 +988,31 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
         // For invoice rows that identified a customer but have no bestCharge,
         // look for a DB charge for that customer with the exact matching service.
         //
-        // Matching rule: invoice service code → serviceCodeMap → internal service
-        // name → charge.service_name (case-insensitive exact). No cost proximity.
-        // No substring guessing. If nothing matches exactly, bestCharge stays null
-        // and the row is flagged as unmatched. This is a financial system — we do
-        // not guess.
+        // Matching rule: invoice service code → mapping → friendly name →
+        //   svcNameToCode → internal service code → charge.dc_service_id (exact).
+        // Service names are display labels only and must never be used for matching.
+        // No guessing — if nothing matches exactly, bestCharge stays null.
         for (const row of rows) {
           if (row.bestCharge) continue;
           const cid = row.accountCustomer?.customer_id;
           if (!cid) continue;
 
-          // Use refs — not state — so we always get the latest mappings values
-          // even if they loaded after doLookup's closure was created.
-          const liveMappings      = mappingsRef.current;
-          const liveNameToCode    = svcNameToCodeRef.current;
+          const liveMappings   = mappingsRef.current;
+          const liveNameToCode = svcNameToCodeRef.current;
 
-          const invoiceSvcName = (row.invoice_service_name || '').trim();
           const invoiceSvcCode = (row.invoice_service_code || '').trim();
-          // The user maps by service CODE (e.g. "1") not service description ("Premiere24").
-          // Try the service code first, then the description as fallback.
-          const mappedName   = liveMappings[invoiceSvcCode] || liveMappings[invoiceSvcName] || invoiceSvcName;
-          const friendlyName = mappedName.trim().toLowerCase();
-          const resolvedCode = (liveNameToCode[mappedName] || '').trim().toLowerCase();
+          const invoiceSvcName = (row.invoice_service_name || '').trim();
+          // invoice code → mapping → friendly name → service code
+          const mappedName    = liveMappings[invoiceSvcCode] || liveMappings[invoiceSvcName] || invoiceSvcName;
+          const resolvedCode  = (liveNameToCode[mappedName] || '').trim();
 
-          if (!friendlyName) continue;
+          // Without a resolved service code we cannot match safely — skip.
+          if (!resolvedCode) continue;
 
-          // Match charge.service_name against EITHER the service code ("DHL-1") OR
-          // the friendly name ("DHL Return") — both are exact, known values.
+          // Match exclusively on dc_service_id (the unique carrier service code).
           const matches = (c) => {
-            const sn = (c.service_name || '').trim().toLowerCase();
-            return sn === friendlyName || (resolvedCode !== '' && sn === resolvedCode);
+            const sid = (c.dc_service_id || '').trim();
+            return sid !== '' && sid.toLowerCase() === resolvedCode.toLowerCase();
           };
 
           // First: search charges_by_customer — charges for this customer whose
