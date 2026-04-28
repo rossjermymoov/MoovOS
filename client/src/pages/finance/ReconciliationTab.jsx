@@ -1132,6 +1132,16 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
             if (bc) {
               const bcSvcCode = svcNameToCodeRef.current[(bc.service_name || '').trim()] || null;
               const pkr       = bcSvcCode ? (carrier_per_kg_rates?.[bcSvcCode] ?? null) : null;
+              if (row.billed_weight_kg > 30) {
+                console.log('[per-kg debug]', {
+                  ref:          row.reference,
+                  svcName:      bc.service_name,
+                  bcSvcCode,
+                  pkr,
+                  carrier_per_kg_rates_keys: Object.keys(carrier_per_kg_rates || {}),
+                  billed_weight_kg: row.billed_weight_kg,
+                });
+              }
               if (pkr && row.billed_weight_kg != null) {
                 const threshold  = pkr.threshold_kg || 30;
                 const overageKg  = Math.max(0, row.billed_weight_kg - threshold);
