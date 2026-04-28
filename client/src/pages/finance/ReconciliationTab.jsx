@@ -1432,9 +1432,9 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                 Invoice Total
               </div>
               <div style={{ fontSize: 22, fontWeight: 800, color: '#B39DDB' }}>
-                {gbp(shipments.reduce((s, r) => s + r.carrier_total, 0))}
+                {gbp(shipments.reduce((s, r) => s + r.carrier_total, 0) + invoiceSurchargeTotal)}
               </div>
-              <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>Base + per-shipment surcharges</div>
+              <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>Freight + fuel + HGV surcharges</div>
             </div>
 
             {/* Our cost total (matched only — base freight, excl. surcharges) */}
