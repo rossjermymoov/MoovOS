@@ -251,7 +251,7 @@ function parseDhlCsv(text) {
 // total_cost_price (base + stored fuel/surcharge charges). This gives a true like-for-like
 // match — both sides include the same surcharge components.
 // Invoice-level FUEL/HGV rows at the bottom are reconciled separately.
-const TOLERANCE_ABS = 0.005;
+const TOLERANCE_ABS = 0.01; // 1p tolerance — sub-penny differences are rounding artefacts
 
 // carrierTotal   = row.carrier_total (base + W-AE surcharges from invoice)
 // charge         = bestCharge from DB (has base_cost_price, total_cost_price)
@@ -1578,8 +1578,8 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                       : (row.effective_cost != null ? row.carrier_total - row.effective_cost
                           : bc?.total_cost_price != null ? row.carrier_total - bc.total_cost_price : null);
                     const diffColor = diff == null ? '#555'
-                      : diff > 0.005 ? '#F44336'
-                      : diff < -0.005 ? '#00C853'
+                      : diff > 0.01 ? '#F44336'
+                      : diff < -0.01 ? '#00C853'
                       : '#888';
                     // Show breakdown sub-line if there are fuel/HGV allocs OR W-AE informational surcharges
                     const invoiceHasSurcharge = (row.carrier_surcharges || 0) > 0.005 || (row.carrier_csv_surcharges || 0) > 0.005;
@@ -1789,7 +1789,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                         </td>
                         <td style={{ ...td, textAlign: 'right' }}>
                           {diff != null ? (
-                            <span style={{ color: diffColor, fontWeight: Math.abs(diff) > 0.005 ? 700 : 400 }}>
+                            <span style={{ color: diffColor, fontWeight: Math.abs(diff) > 0.01 ? 700 : 400 }}>
                               {diff > 0 ? '+' : ''}{gbp(diff)}
                             </span>
                           ) : (
