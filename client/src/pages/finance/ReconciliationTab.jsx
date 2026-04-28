@@ -1135,6 +1135,16 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
               // but the charge already holds the code.
               const bcSvcCode = (bc.service_name || '').trim() || null;
               const pkr       = bcSvcCode ? (carrier_per_kg_rates?.[bcSvcCode] ?? null) : null;
+              if (row.billed_weight_kg > 25) {
+                console.log('[per-kg debug v2]', {
+                  ref:               row.reference,
+                  bc_service_name:   bc.service_name,
+                  bcSvcCode,
+                  pkr,
+                  pkr_keys:          Object.keys(carrier_per_kg_rates || {}),
+                  billed_weight_kg:  row.billed_weight_kg,
+                });
+              }
               if (pkr && row.billed_weight_kg != null) {
                 const threshold  = pkr.threshold_kg || 30;
                 const overageKg  = Math.max(0, row.billed_weight_kg - threshold);
