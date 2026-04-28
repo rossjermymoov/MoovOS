@@ -62,6 +62,7 @@ router.post('/bulk-lookup', async (req, res) => {
         -- over charges.parcel_qty (often left at default 1).
         COALESCE(s.parcel_count, c.parcel_qty, 1) AS parcel_count,
         s.total_weight_kg       AS declared_weight_kg,
+        s.dc_service_id,
         s.tracking_codes,
         -- Does this customer/service use weight bands at all?
         -- False = flat-rate (any weight → same price, never flag weight diff).
@@ -194,6 +195,7 @@ router.post('/bulk-lookup', async (req, res) => {
         has_weight_bands:        row.has_weight_bands    === true || row.has_weight_bands === 't',
         band_max_weight_kg:      row.band_max_weight_kg  != null ? parseFloat(row.band_max_weight_kg)  : null,
         service_name:            row.service_name,
+        dc_service_id:           row.dc_service_id   || null,
         collection_date:         row.collection_date,
         verified:                row.verified,
         billed:                  row.billed,
@@ -301,7 +303,8 @@ router.post('/bulk-lookup', async (req, res) => {
                 AND sc.charge_type IN ('fuel','surcharge')
                 AND sc.cancelled = false
             ), 0)             AS total_cost_price,
-            COALESCE(s.parcel_count, c.parcel_qty, 1) AS parcel_count
+            COALESCE(s.parcel_count, c.parcel_qty, 1) AS parcel_count,
+            s.dc_service_id
           FROM charges c
           LEFT JOIN shipments s ON s.reference = c.order_id
           WHERE c.customer_id = ANY($1::uuid[])
@@ -320,6 +323,7 @@ router.post('/bulk-lookup', async (req, res) => {
             charge_id:        row.charge_id,
             reference:        row.reference,
             service_name:     row.service_name,
+            dc_service_id:    row.dc_service_id    || null,
             base_cost_price:  row.base_cost_price  != null ? parseFloat(row.base_cost_price)  : null,
             total_cost_price: row.total_cost_price  != null ? parseFloat(row.total_cost_price) : null,
             parcel_count:     row.parcel_count       != null ? parseInt(row.parcel_count, 10)   : 1,
