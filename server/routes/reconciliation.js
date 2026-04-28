@@ -335,13 +335,14 @@ router.post('/bulk-lookup', async (req, res) => {
     // for the reconciliation comparison and sell_price for the customer bill.
     const carrierCostsRes = await query(`
       SELECT cs.service_code,
-             MIN(wb.price_first)             AS cost_price,
-             MAX(wb.cost_per_kg)             AS cost_per_kg,
+             MIN(wb.price_first) FILTER (WHERE wb.price_first IS NOT NULL AND wb.price_first > 0) AS cost_price,
+             MAX(wb.cost_per_kg)              AS cost_per_kg,
              MAX(wb.cost_per_kg_threshold_kg) AS cost_per_kg_threshold_kg
       FROM weight_bands wb
       JOIN zones z             ON z.id  = wb.zone_id
       JOIN courier_services cs ON cs.id = z.courier_service_id
-      WHERE wb.price_first IS NOT NULL AND wb.price_first > 0
+      WHERE (wb.price_first IS NOT NULL AND wb.price_first > 0)
+         OR (wb.cost_per_kg  IS NOT NULL AND wb.cost_per_kg  > 0)
       GROUP BY cs.service_code
     `);
     const carrier_service_costs = {};

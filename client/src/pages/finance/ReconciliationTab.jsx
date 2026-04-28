@@ -1130,18 +1130,11 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
             // (e.g. 46 kg on a 0–30 kg rate card), add the excess at the carrier's
             // per-kg rate so the comparison is done at the invoiced weight.
             if (bc) {
-              const bcSvcCode = svcNameToCodeRef.current[(bc.service_name || '').trim()] || null;
+              // bc.service_name stores the carrier service code directly (e.g. "DHL Parcel UK Parcel").
+              // Do NOT translate via svcNameToCode — that map is friendly-name → code,
+              // but the charge already holds the code.
+              const bcSvcCode = (bc.service_name || '').trim() || null;
               const pkr       = bcSvcCode ? (carrier_per_kg_rates?.[bcSvcCode] ?? null) : null;
-              if (row.billed_weight_kg > 30) {
-                console.log('[per-kg debug]', {
-                  ref:          row.reference,
-                  svcName:      bc.service_name,
-                  bcSvcCode,
-                  pkr,
-                  carrier_per_kg_rates_keys: Object.keys(carrier_per_kg_rates || {}),
-                  billed_weight_kg: row.billed_weight_kg,
-                });
-              }
               if (pkr && row.billed_weight_kg != null) {
                 const threshold  = pkr.threshold_kg || 30;
                 const overageKg  = Math.max(0, row.billed_weight_kg - threshold);
