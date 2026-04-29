@@ -106,12 +106,14 @@ router.post('/bulk-lookup', async (req, res) => {
             AND UPPER(sc.service_name) LIKE '%HGV%'
         ), 0)                   AS hgv_cost_price,
         -- Fuel sell component (what we charge the customer for fuel — may differ from cost)
+        -- Excludes reconciliation_excluded rows (duplicate/internal charges flagged by billing engine).
         COALESCE((
           SELECT SUM(sc.price)
           FROM   charges sc
           WHERE  sc.shipment_id = c.shipment_id
             AND  sc.charge_type = 'fuel'
             AND  sc.cancelled   = false
+            AND  (sc.reconciliation_excluded IS NULL OR sc.reconciliation_excluded = false)
         ), 0)                   AS fuel_sell_price,
         -- HGV sell component (what we charge the customer for HGV surcharge)
         COALESCE((
@@ -121,7 +123,20 @@ router.post('/bulk-lookup', async (req, res) => {
             AND  sc.charge_type = 'surcharge'
             AND  sc.cancelled   = false
             AND  UPPER(sc.service_name) LIKE '%HGV%'
+            AND  (sc.reconciliation_excluded IS NULL OR sc.reconciliation_excluded = false)
         ), 0)                   AS hgv_sell_price,
+        -- EPS / emergency fuel surcharge sell component (non-HGV surcharges)
+        -- Excludes reconciliation_excluded rows — the billing engine creates a marked duplicate
+        -- EPS row on some charges, which would double-count EPS (e.g. 30p instead of 15p).
+        COALESCE((
+          SELECT SUM(sc.price)
+          FROM   charges sc
+          WHERE  sc.shipment_id = c.shipment_id
+            AND  sc.charge_type = 'surcharge'
+            AND  sc.cancelled   = false
+            AND  UPPER(sc.service_name) NOT LIKE '%HGV%'
+            AND  (sc.reconciliation_excluded IS NULL OR sc.reconciliation_excluded = false)
+        ), 0)                   AS eps_sell_price,
         -- Total cost = base freight + all non-courier charge cost_prices.
         -- Surcharges we don't pay the carrier (e.g. EPS) have cost_price = 0
         -- on the charge row, so they naturally contribute nothing here.
@@ -134,7 +149,9 @@ router.post('/bulk-lookup', async (req, res) => {
               AND  sc.charge_type IN ('fuel', 'surcharge')
               AND  sc.cancelled   = false
           ), 0)                 AS total_cost_price,
-        -- Total sell = base sell + all non-courier sell prices (including EPS).
+        -- Total sell = base sell + fuel + HGV + EPS (excluding reconciliation_excluded duplicates).
+        -- The billing engine sometimes creates a second EPS row marked reconciliation_excluded=true
+        -- for internal tracking. We must exclude those or EPS doubles (30p instead of 15p).
         COALESCE(c.price, 0)
         + COALESCE((
             SELECT SUM(sc.price)
@@ -142,6 +159,7 @@ router.post('/bulk-lookup', async (req, res) => {
             WHERE  sc.shipment_id = c.shipment_id
               AND  sc.charge_type IN ('fuel', 'surcharge')
               AND  sc.cancelled   = false
+              AND  (sc.reconciliation_excluded IS NULL OR sc.reconciliation_excluded = false)
           ), 0)                 AS total_sell_price
       FROM charges c
       LEFT JOIN shipments s  ON s.reference = c.order_id
@@ -192,6 +210,7 @@ router.post('/bulk-lookup', async (req, res) => {
         hgv_cost_price:          row.hgv_cost_price     != null ? parseFloat(row.hgv_cost_price)    : 0,
         fuel_sell_price:         row.fuel_sell_price    != null ? parseFloat(row.fuel_sell_price)   : 0,
         hgv_sell_price:          row.hgv_sell_price     != null ? parseFloat(row.hgv_sell_price)    : 0,
+        eps_sell_price:          row.eps_sell_price     != null ? parseFloat(row.eps_sell_price)    : 0,
         total_cost_price:        row.total_cost_price   != null ? parseFloat(row.total_cost_price)  : null,
         total_sell_price:        row.total_sell_price   != null ? parseFloat(row.total_sell_price)  : null,
         parcel_count:            row.parcel_count        != null ? parseInt(row.parcel_count, 10)    : 1,

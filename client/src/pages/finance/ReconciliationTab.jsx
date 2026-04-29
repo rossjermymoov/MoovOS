@@ -69,6 +69,7 @@ function parseCsvLine(line) {
 
 // Per-shipment surcharge rates — used post-lookup to allocate invoice-level surcharges
 const HGV_RATE_PER_PARCEL = 0.13; // £0.13 per parcel — update when DHL changes rate
+const EPS_RATE_PER_SHIPMENT = 0.15; // £0.15 fixed per shipment — Emergency Fuel Surcharge
 
 function parseDhlCsv(text) {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
@@ -1224,38 +1225,22 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
         // base freight rate from the rate card. We must add fuel, HGV and EPS on
         // top, matching the same components applied to normal outbound shipments.
         //
-        // EPS is derived as the average (total_sell − base − fuel_sell − hgv_sell)
-        // across all matched outbound rows — this gives the average per-shipment EPS
-        // without needing a separate DB lookup.
+        // EPS: always £0.15 flat per shipment (EPS_RATE_PER_SHIPMENT constant).
+        // Do NOT derive from the average of matched rows — some charges have a
+        // reconciliation_excluded duplicate EPS row that would inflate the average.
         {
-          const outboundWithSell = rows.filter(r =>
-            !r.is_return &&
-            r.bestCharge?.total_sell_price != null &&
-            r.bestCharge?.base_sell_price  != null
-          );
-          const avgEpsSell = outboundWithSell.length > 0
-            ? outboundWithSell.reduce((s, r) => {
-                const bc  = r.bestCharge;
-                const eps = (bc.total_sell_price  || 0)
-                          - (bc.base_sell_price   || 0)
-                          - (bc.fuel_sell_price   || 0)
-                          - (bc.hgv_sell_price    || 0);
-                return s + Math.max(0, eps); // guard against negative (shouldn't happen)
-              }, 0) / outboundWithSell.length
-            : 0;
-
           const invoiceFuelRate = totalInvoiceBase > 0 ? invoiceFuelTotal / totalInvoiceBase : 0;
 
           for (const row of rows) {
             if (row.is_return && row.customer_sell != null) {
-              const pieceCount           = row.csv_piece_count ?? 1;
-              const fuelAlloc            = parseFloat((row.customer_sell * invoiceFuelRate).toFixed(2));
-              const hgvSell              = parseFloat((HGV_RATE_PER_PARCEL * pieceCount).toFixed(2));
-              const epsSell              = parseFloat(avgEpsSell.toFixed(2));
-              row.customer_sell_fuel     = fuelAlloc;
-              row.customer_sell_hgv      = hgvSell;
-              row.customer_sell_eps      = epsSell;
-              row.customer_sell_total    = parseFloat((
+              const pieceCount        = row.csv_piece_count ?? 1;
+              const fuelAlloc         = parseFloat((row.customer_sell * invoiceFuelRate).toFixed(2));
+              const hgvSell           = parseFloat((HGV_RATE_PER_PARCEL * pieceCount).toFixed(2));
+              const epsSell           = EPS_RATE_PER_SHIPMENT;
+              row.customer_sell_fuel  = fuelAlloc;
+              row.customer_sell_hgv   = hgvSell;
+              row.customer_sell_eps   = epsSell;
+              row.customer_sell_total = parseFloat((
                 row.customer_sell + fuelAlloc + hgvSell + epsSell
               ).toFixed(2));
             }
