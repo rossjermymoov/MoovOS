@@ -1160,11 +1160,19 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                   : null;
               }
 
-              // ── Compute effective_sell (sell side, EPS-excluded) ────────────────
-              // total_sell_price stored in DB includes ALL surcharges (fuel, HGV, EPS,
-              // and any other non-carrier surcharges with price > 0). For margin
-              // reporting we only want: base_sell + fuel_sell + hgv_sell.
-              // For over-threshold shipments we also add the customer's per-kg sell rate.
+              // ── Compute effective_sell (sell side, EPS included) ─────────────────
+              // Ross's formula: base + per-kg overage + fuel(on extended base) + HGV + EPS
+              //
+              // For NORMAL items (no overage):
+              //   total_sell_price stored in DB is correct — includes base, fuel, HGV, EPS.
+              //   Use it as-is.
+              //
+              // For HEAVYWEIGHT items (per-kg overage applies):
+              //   The stored total_sell_price has fuel calculated on the flat base rate.
+              //   We must:  (a) add the per-kg sell overage
+              //             (b) recalculate fuel on the extended freight base
+              //             (c) keep HGV + EPS unchanged (they don't scale with weight)
+              //   Formula: total_sell − stored_fuel_sell + recalcFuelSell + per_kg_sell
               {
                 const cid2       = row.group?.customer_id;
                 const custRates2 = cid2 ? (customer_rates_by_customer?.[String(cid2)] || {}) : {};
@@ -1172,27 +1180,33 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                 const custRate   = bcSvc2 ? (custRates2[bcSvc2] || null) : null;
 
                 if (custRate?.per_kg_rate && row.billed_weight_kg != null) {
-                  const sellThresh   = custRate.per_kg_threshold_kg || 30;
-                  const sellOverage  = Math.max(0, row.billed_weight_kg - sellThresh);
+                  const sellThresh  = custRate.per_kg_threshold_kg || 30;
+                  const sellOverage = Math.max(0, row.billed_weight_kg - sellThresh);
                   if (sellOverage > 0) {
                     const sellPkgExtra    = parseFloat((sellOverage * custRate.per_kg_rate).toFixed(2));
                     row.sell_per_kg_extra = sellPkgExtra;
-                    // Recalculate fuel sell on the extended freight sell base
-                    const fuelRate        = totalInvoiceBase > 0 ? invoiceFuelTotal / totalInvoiceBase : 0;
-                    const freightSellBase = (bc.base_sell_price || 0) + sellPkgExtra;
-                    const recalcFuelSell  = parseFloat((freightSellBase * fuelRate).toFixed(2));
-                    row.effective_sell    = parseFloat((freightSellBase + recalcFuelSell + (bc.hgv_sell_price || 0)).toFixed(2));
-                  } else {
-                    row.sell_per_kg_extra = 0;
-                    row.effective_sell = bc.base_sell_price != null
-                      ? parseFloat((bc.base_sell_price + (bc.fuel_sell_price || 0) + (bc.hgv_sell_price || 0)).toFixed(2))
+                    // Recalculate fuel on the extended base (base_sell + per-kg overage)
+                    const fuelRate       = totalInvoiceBase > 0 ? invoiceFuelTotal / totalInvoiceBase : 0;
+                    const freightSellExt = (bc.base_sell_price || 0) + sellPkgExtra;
+                    const recalcFuelSell = parseFloat((freightSellExt * fuelRate).toFixed(2));
+                    // Adjust stored total: swap out stale fuel, add recalc fuel + overage
+                    row.effective_sell = bc.total_sell_price != null
+                      ? parseFloat((
+                          bc.total_sell_price         // everything as stored (HGV, EPS, etc.)
+                          - (bc.fuel_sell_price || 0) // remove stale fuel (calculated at flat base)
+                          + recalcFuelSell            // add fuel recalculated at extended base
+                          + sellPkgExtra              // add per-kg sell overage
+                        ).toFixed(2))
                       : null;
+                  } else {
+                    // Declared weight at/below sell threshold — no adjustment needed
+                    row.sell_per_kg_extra = 0;
+                    row.effective_sell    = bc.total_sell_price;
                   }
                 } else {
+                  // No per-kg sell rate set for this customer/service — use stored total as-is
                   row.sell_per_kg_extra = 0;
-                  row.effective_sell = bc.base_sell_price != null
-                    ? parseFloat((bc.base_sell_price + (bc.fuel_sell_price || 0) + (bc.hgv_sell_price || 0)).toFixed(2))
-                    : null;
+                  row.effective_sell    = bc.total_sell_price;
                 }
               }
             } else {
@@ -1204,6 +1218,49 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
             row.status = getStatus(row.carrier_total, bc, row.effective_cost);
           }
         });
+
+        // ── Return sell totals — second pass ───────────────────────────────────
+        // Returns are not in our system as charges, so customer_sell is just the
+        // base freight rate from the rate card. We must add fuel, HGV and EPS on
+        // top, matching the same components applied to normal outbound shipments.
+        //
+        // EPS is derived as the average (total_sell − base − fuel_sell − hgv_sell)
+        // across all matched outbound rows — this gives the average per-shipment EPS
+        // without needing a separate DB lookup.
+        {
+          const outboundWithSell = rows.filter(r =>
+            !r.is_return &&
+            r.bestCharge?.total_sell_price != null &&
+            r.bestCharge?.base_sell_price  != null
+          );
+          const avgEpsSell = outboundWithSell.length > 0
+            ? outboundWithSell.reduce((s, r) => {
+                const bc  = r.bestCharge;
+                const eps = (bc.total_sell_price  || 0)
+                          - (bc.base_sell_price   || 0)
+                          - (bc.fuel_sell_price   || 0)
+                          - (bc.hgv_sell_price    || 0);
+                return s + Math.max(0, eps); // guard against negative (shouldn't happen)
+              }, 0) / outboundWithSell.length
+            : 0;
+
+          const invoiceFuelRate = totalInvoiceBase > 0 ? invoiceFuelTotal / totalInvoiceBase : 0;
+
+          for (const row of rows) {
+            if (row.is_return && row.customer_sell != null) {
+              const pieceCount           = row.csv_piece_count ?? 1;
+              const fuelAlloc            = parseFloat((row.customer_sell * invoiceFuelRate).toFixed(2));
+              const hgvSell              = parseFloat((HGV_RATE_PER_PARCEL * pieceCount).toFixed(2));
+              const epsSell              = parseFloat(avgEpsSell.toFixed(2));
+              row.customer_sell_fuel     = fuelAlloc;
+              row.customer_sell_hgv      = hgvSell;
+              row.customer_sell_eps      = epsSell;
+              row.customer_sell_total    = parseFloat((
+                row.customer_sell + fuelAlloc + hgvSell + epsSell
+              ).toFixed(2));
+            }
+          }
+        }
 
         setResults(rows);
       } catch (e) {
@@ -1256,7 +1313,8 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
   // For returns with no DB charge, use customer_sell (rate card price for that service).
   const totalSellValue = results
     ? results.reduce((s, r) => {
-        if (r.is_return && !r.bestCharge) return s + (r.customer_sell ?? 0);
+        // Returns: use full sell total (base + fuel + HGV + EPS) not just base rate
+        if (r.is_return && !r.bestCharge) return s + (r.customer_sell_total ?? r.customer_sell ?? 0);
         return s + (r.effective_sell ?? r.bestCharge?.total_sell_price ?? 0);
       }, 0)
     : 0;
@@ -1866,9 +1924,19 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 130 }}>
                             {/* Sell price note for returns / unmatched rows */}
                             {row.is_return && !bc && (
-                              row.customer_sell != null ? (
+                              row.customer_sell_total != null ? (
+                                <div style={{ fontSize: 10, color: '#CE93D8', lineHeight: 1.4 }}>
+                                  <span style={{ fontWeight: 700 }}>Sell: {gbp(row.customer_sell_total)}</span>
+                                  <div style={{ color: '#555', marginTop: 1 }}>
+                                    {gbp(row.customer_sell)} base
+                                    {row.customer_sell_fuel > 0 && ` + ${gbp(row.customer_sell_fuel)} fuel`}
+                                    {row.customer_sell_hgv  > 0 && ` + ${gbp(row.customer_sell_hgv)} HGV`}
+                                    {row.customer_sell_eps  > 0 && ` + ${gbp(row.customer_sell_eps)} EPS`}
+                                  </div>
+                                </div>
+                              ) : row.customer_sell != null ? (
                                 <div style={{ fontSize: 10, color: '#CE93D8' }}>
-                                  Sell: {gbp(row.customer_sell)} <span style={{ color: '#555' }}>rate</span>
+                                  Sell: {gbp(row.customer_sell)} <span style={{ color: '#555' }}>base only</span>
                                 </div>
                               ) : (
                                 <div style={{ fontSize: 10, color: '#555', fontStyle: 'italic' }}>not billed</div>
@@ -2186,13 +2254,22 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                         {/* Sell price + margin for matched rows */}
                         <td style={td}>
                           {(() => {
-                            // Return rows with no DB charge — show customer rate card price
+                            // Return rows with no DB charge — show full sell (base + fuel + HGV + EPS)
                             if (row.is_return && !bc) {
-                              return row.customer_sell != null ? (
+                              const sellTotal = row.customer_sell_total ?? row.customer_sell;
+                              return sellTotal != null ? (
                                 <div style={{ minWidth: 100 }}>
                                   <span style={{ fontSize: 13, fontWeight: 700, color: '#CE93D8' }}>
-                                    {gbp(row.customer_sell)}
+                                    {gbp(sellTotal)}
                                   </span>
+                                  {row.customer_sell_total != null && (
+                                    <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>
+                                      {gbp(row.customer_sell)} base
+                                      {row.customer_sell_fuel > 0 && ` + ${gbp(row.customer_sell_fuel)} fuel`}
+                                      {row.customer_sell_hgv  > 0 && ` + ${gbp(row.customer_sell_hgv)} HGV`}
+                                      {row.customer_sell_eps  > 0 && ` + ${gbp(row.customer_sell_eps)} EPS`}
+                                    </div>
+                                  )}
                                   <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>customer rate</div>
                                 </div>
                               ) : (
