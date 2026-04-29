@@ -1181,6 +1181,18 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                 const bcSvc2     = ((bc.dc_service_id || '').trim() || '').toUpperCase() || null;
                 const custRate   = bcSvc2 ? (custRates2[bcSvc2] || null) : null;
 
+                // Debug — log per-kg sell values for every heavyweight-candidate row
+                if (row.billed_weight_kg != null && row.billed_weight_kg > 25) {
+                  console.log('[recon sell-kg]', row.reference, {
+                    billed_weight_kg: row.billed_weight_kg,
+                    cid2, bcSvc2,
+                    custRate_found: !!custRate,
+                    per_kg_rate: custRate?.per_kg_rate,
+                    per_kg_threshold_kg: custRate?.per_kg_threshold_kg,
+                    custRates2_keys: Object.keys(custRates2),
+                  });
+                }
+
                 if (custRate?.per_kg_rate && row.billed_weight_kg != null) {
                   const sellThresh  = custRate.per_kg_threshold_kg || 30;
                   const sellOverage = Math.max(0, row.billed_weight_kg - sellThresh);

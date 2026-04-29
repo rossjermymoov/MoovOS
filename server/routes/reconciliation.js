@@ -525,7 +525,8 @@ router.get('/debug/:reference', async (req, res) => {
 
     // 2. All customer_rates rows for this customer
     const ratesRes = await query(`
-      SELECT service_code, service_name, min_weight_kg, max_weight_kg
+      SELECT service_code, service_name, min_weight_kg, max_weight_kg,
+             per_kg_rate, per_kg_threshold_kg, price, price_sub
       FROM customer_rates
       WHERE customer_id = $1
       ORDER BY service_code, min_weight_kg
