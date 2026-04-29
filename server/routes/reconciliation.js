@@ -391,7 +391,7 @@ router.post('/bulk-lookup', async (req, res) => {
     const carrier_service_costs = {};
     for (const row of flatCostRes.rows) {
       if (row.service_code) {
-        carrier_service_costs[row.service_code.trim()] = parseFloat(row.cost_price);
+        carrier_service_costs[row.service_code.trim().toUpperCase()] = parseFloat(row.cost_price);
       }
     }
 
@@ -417,7 +417,7 @@ router.post('/bulk-lookup', async (req, res) => {
     const carrier_per_kg_rates = {};
     for (const row of perKgRes.rows) {
       if (!row.service_code || row.cost_per_kg == null) continue;
-      const code = row.service_code.trim();
+      const code = row.service_code.trim().toUpperCase();
       if (!carrier_per_kg_rates[code]) carrier_per_kg_rates[code] = [];
       carrier_per_kg_rates[code].push({
         zone_base_price: parseFloat(row.zone_base_price),
@@ -438,6 +438,11 @@ router.post('/bulk-lookup', async (req, res) => {
     ].filter(Boolean))];
 
     if (allCustIdsForRates.length > 0) {
+      // DISTINCT ON picks ONE row per (customer_id, service_code).
+      // Many customers have duplicate rate rows with null weight bands — the ordering
+      // must put the row that has per_kg_rate set FIRST so DISTINCT ON keeps it.
+      // per_kg_rate DESC NULLS LAST: non-null rates bubble to the top.
+      // max_weight_kg ASC NULLS LAST: secondary sort to pick lowest band when no per_kg.
       const ratesRes = await query(`
         SELECT DISTINCT ON (customer_id, service_code)
           customer_id, service_code, service_name, price, price_sub,
@@ -445,12 +450,24 @@ router.post('/bulk-lookup', async (req, res) => {
         FROM customer_rates
         WHERE customer_id = ANY($1::uuid[])
           AND price IS NOT NULL
-        ORDER BY customer_id, service_code, max_weight_kg ASC NULLS LAST
+        ORDER BY customer_id, service_code,
+                 per_kg_rate DESC NULLS LAST,
+                 max_weight_kg ASC NULLS LAST
       `, [allCustIdsForRates]);
+
+      // Debug: log per_kg_rate values to confirm the right row is being picked
+      const pkgRows = ratesRes.rows.filter(r => r.per_kg_rate != null);
+      if (pkgRows.length) {
+        console.log('[recon] customer per_kg_rates found:', pkgRows.map(r =>
+          `cid=${r.customer_id} svc=${r.service_code} per_kg=${r.per_kg_rate} thresh=${r.per_kg_threshold_kg}`
+        ));
+      } else {
+        console.log('[recon] no customer per_kg_rates found for any matched customer');
+      }
 
       for (const row of ratesRes.rows) {
         const cid  = String(row.customer_id);
-        const code = (row.service_code || '').trim();
+        const code = (row.service_code || '').trim().toUpperCase();
         if (!customer_rates_by_customer[cid]) customer_rates_by_customer[cid] = {};
         customer_rates_by_customer[cid][code] = {
           service_name:        row.service_name,

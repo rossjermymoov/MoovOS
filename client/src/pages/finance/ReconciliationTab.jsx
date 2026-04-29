@@ -1089,13 +1089,14 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
 
             // Cost price = what we pay the carrier (from carrier rate card, e.g. £14.21 for DHL-1).
             // This is the correct comparison target against the DHL invoice amount.
-            const costPrice   = resolvedCode ? (carrier_service_costs?.[resolvedCode] ?? null) : null;
+            const resolvedCodeUC = (resolvedCode || '').toUpperCase();
+            const costPrice   = resolvedCodeUC ? (carrier_service_costs?.[resolvedCodeUC] ?? null) : null;
 
             // Sell price = what we charge the customer (from customer_rates, e.g. £14.91 for DHL-1).
             // Stored separately for billing — not used for the invoice comparison.
             const cid         = row.accountCustomer?.customer_id;
             const custRates   = cid ? (customer_rates_by_customer?.[String(cid)] || {}) : {};
-            const rateEntry   = resolvedCode ? (custRates[resolvedCode] || null) : null;
+            const rateEntry   = resolvedCodeUC ? (custRates[resolvedCodeUC] || null) : null;
             row.customer_sell = rateEntry?.price ?? null;
 
             // Expected carrier total = cost × (1 + fuel%) + HGV per parcel
@@ -1132,7 +1133,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
             if (bc) {
               // Use dc_service_id (the unique carrier service code, e.g. "DHLPUKC-220") for
               // all carrier rate lookups. service_name is a display label and must not be used.
-              const bcSvcCode = (bc.dc_service_id || '').trim() || null;
+              const bcSvcCode = ((bc.dc_service_id || '').trim() || '').toUpperCase() || null;
               const pkrList   = bcSvcCode ? (carrier_per_kg_rates?.[bcSvcCode] || []) : [];
               const pkr       = pkrList.find(e => Math.abs(e.zone_base_price - bc.base_cost_price) < 0.01) || null;
               if (pkr && row.billed_weight_kg != null) {
@@ -1177,7 +1178,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
               {
                 const cid2       = row.group?.customer_id;
                 const custRates2 = cid2 ? (customer_rates_by_customer?.[String(cid2)] || {}) : {};
-                const bcSvc2     = (bc.dc_service_id || '').trim() || null;
+                const bcSvc2     = ((bc.dc_service_id || '').trim() || '').toUpperCase() || null;
                 const custRate   = bcSvc2 ? (custRates2[bcSvc2] || null) : null;
 
                 if (custRate?.per_kg_rate && row.billed_weight_kg != null) {
