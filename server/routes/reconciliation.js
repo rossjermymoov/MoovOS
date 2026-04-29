@@ -105,6 +105,23 @@ router.post('/bulk-lookup', async (req, res) => {
             AND sc.cancelled = false
             AND UPPER(sc.service_name) LIKE '%HGV%'
         ), 0)                   AS hgv_cost_price,
+        -- Fuel sell component (what we charge the customer for fuel — may differ from cost)
+        COALESCE((
+          SELECT SUM(sc.price)
+          FROM   charges sc
+          WHERE  sc.shipment_id = c.shipment_id
+            AND  sc.charge_type = 'fuel'
+            AND  sc.cancelled   = false
+        ), 0)                   AS fuel_sell_price,
+        -- HGV sell component (what we charge the customer for HGV surcharge)
+        COALESCE((
+          SELECT SUM(sc.price)
+          FROM   charges sc
+          WHERE  sc.shipment_id = c.shipment_id
+            AND  sc.charge_type = 'surcharge'
+            AND  sc.cancelled   = false
+            AND  UPPER(sc.service_name) LIKE '%HGV%'
+        ), 0)                   AS hgv_sell_price,
         -- Total cost = base freight + all non-courier charge cost_prices.
         -- Surcharges we don't pay the carrier (e.g. EPS) have cost_price = 0
         -- on the charge row, so they naturally contribute nothing here.
@@ -173,6 +190,8 @@ router.post('/bulk-lookup', async (req, res) => {
         base_sell_price:         row.base_sell_price   != null ? parseFloat(row.base_sell_price)   : null,
         fuel_cost_price:         row.fuel_cost_price    != null ? parseFloat(row.fuel_cost_price)   : 0,
         hgv_cost_price:          row.hgv_cost_price     != null ? parseFloat(row.hgv_cost_price)    : 0,
+        fuel_sell_price:         row.fuel_sell_price    != null ? parseFloat(row.fuel_sell_price)   : 0,
+        hgv_sell_price:          row.hgv_sell_price     != null ? parseFloat(row.hgv_sell_price)    : 0,
         total_cost_price:        row.total_cost_price   != null ? parseFloat(row.total_cost_price)  : null,
         total_sell_price:        row.total_sell_price   != null ? parseFloat(row.total_sell_price)  : null,
         parcel_count:            row.parcel_count        != null ? parseInt(row.parcel_count, 10)    : 1,
@@ -383,7 +402,8 @@ router.post('/bulk-lookup', async (req, res) => {
     if (allCustIdsForRates.length > 0) {
       const ratesRes = await query(`
         SELECT DISTINCT ON (customer_id, service_code)
-          customer_id, service_code, service_name, price, price_sub
+          customer_id, service_code, service_name, price, price_sub,
+          per_kg_rate, per_kg_threshold_kg
         FROM customer_rates
         WHERE customer_id = ANY($1::uuid[])
           AND price IS NOT NULL
@@ -395,9 +415,11 @@ router.post('/bulk-lookup', async (req, res) => {
         const code = (row.service_code || '').trim();
         if (!customer_rates_by_customer[cid]) customer_rates_by_customer[cid] = {};
         customer_rates_by_customer[cid][code] = {
-          service_name: row.service_name,
-          price:        row.price     != null ? parseFloat(row.price)     : null,
-          price_sub:    row.price_sub != null ? parseFloat(row.price_sub) : null,
+          service_name:        row.service_name,
+          price:               row.price               != null ? parseFloat(row.price)               : null,
+          price_sub:           row.price_sub           != null ? parseFloat(row.price_sub)           : null,
+          per_kg_rate:         row.per_kg_rate         != null ? parseFloat(row.per_kg_rate)         : null,
+          per_kg_threshold_kg: row.per_kg_threshold_kg != null ? parseFloat(row.per_kg_threshold_kg) : null,
         };
       }
     }

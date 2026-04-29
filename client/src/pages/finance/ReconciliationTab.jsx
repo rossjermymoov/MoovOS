@@ -1159,9 +1159,47 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                   ? parseFloat((bc.total_cost_price + row.per_kg_extra).toFixed(2))
                   : null;
               }
+
+              // ── Compute effective_sell (sell side, EPS-excluded) ────────────────
+              // total_sell_price stored in DB includes ALL surcharges (fuel, HGV, EPS,
+              // and any other non-carrier surcharges with price > 0). For margin
+              // reporting we only want: base_sell + fuel_sell + hgv_sell.
+              // For over-threshold shipments we also add the customer's per-kg sell rate.
+              {
+                const cid2       = row.group?.customer_id;
+                const custRates2 = cid2 ? (customer_rates_by_customer?.[String(cid2)] || {}) : {};
+                const bcSvc2     = (bc.dc_service_id || '').trim() || null;
+                const custRate   = bcSvc2 ? (custRates2[bcSvc2] || null) : null;
+
+                if (custRate?.per_kg_rate && row.billed_weight_kg != null) {
+                  const sellThresh   = custRate.per_kg_threshold_kg || 30;
+                  const sellOverage  = Math.max(0, row.billed_weight_kg - sellThresh);
+                  if (sellOverage > 0) {
+                    const sellPkgExtra    = parseFloat((sellOverage * custRate.per_kg_rate).toFixed(2));
+                    row.sell_per_kg_extra = sellPkgExtra;
+                    // Recalculate fuel sell on the extended freight sell base
+                    const fuelRate        = totalInvoiceBase > 0 ? invoiceFuelTotal / totalInvoiceBase : 0;
+                    const freightSellBase = (bc.base_sell_price || 0) + sellPkgExtra;
+                    const recalcFuelSell  = parseFloat((freightSellBase * fuelRate).toFixed(2));
+                    row.effective_sell    = parseFloat((freightSellBase + recalcFuelSell + (bc.hgv_sell_price || 0)).toFixed(2));
+                  } else {
+                    row.sell_per_kg_extra = 0;
+                    row.effective_sell = bc.base_sell_price != null
+                      ? parseFloat((bc.base_sell_price + (bc.fuel_sell_price || 0) + (bc.hgv_sell_price || 0)).toFixed(2))
+                      : null;
+                  }
+                } else {
+                  row.sell_per_kg_extra = 0;
+                  row.effective_sell = bc.base_sell_price != null
+                    ? parseFloat((bc.base_sell_price + (bc.fuel_sell_price || 0) + (bc.hgv_sell_price || 0)).toFixed(2))
+                    : null;
+                }
+              }
             } else {
-              row.per_kg_extra   = 0;
-              row.effective_cost = null;
+              row.per_kg_extra      = 0;
+              row.effective_cost    = null;
+              row.effective_sell    = null;
+              row.sell_per_kg_extra = 0;
             }
             row.status = getStatus(row.carrier_total, bc, row.effective_cost);
           }
@@ -1212,9 +1250,15 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
   const invoiceSurchargeTotal = surcharges.reduce((s, r) => s + r.value, 0);
 
   // ── Sell price & margin totals ──────────────────────────────────────────────
-  // Use all rows that have a matched DB charge (regardless of RAG status).
+  // effective_sell = base_sell + fuel_sell + hgv_sell (EPS and other non-carrier
+  // surcharges excluded). Falls back to total_sell_price if fuel_sell_price is
+  // not yet populated (e.g. older charges before migration 110).
+  // For returns with no DB charge, use customer_sell (rate card price for that service).
   const totalSellValue = results
-    ? results.reduce((s, r) => s + (r.bestCharge?.total_sell_price ?? 0), 0)
+    ? results.reduce((s, r) => {
+        if (r.is_return && !r.bestCharge) return s + (r.customer_sell ?? 0);
+        return s + (r.effective_sell ?? r.bestCharge?.total_sell_price ?? 0);
+      }, 0)
     : 0;
   // Mirror the Our Cost Total logic for the cost side
   const totalCostForMargin = results
@@ -1239,7 +1283,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
             if (!acc[custName]) acc[custName] = { name: custName, count: 0, cost: 0, sell: 0 };
             acc[custName].count++;
             acc[custName].cost += r.effective_cost ?? bc.total_cost_price ?? 0;
-            acc[custName].sell += bc.total_sell_price ?? 0;
+            acc[custName].sell += r.effective_sell ?? bc.total_sell_price ?? 0;
             return acc;
           }, {})
       ).sort((a, b) => b.sell - a.sell)
@@ -1820,6 +1864,21 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                         {/* Actions */}
                         <td style={{ ...td }} onClick={e => e.stopPropagation()}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 130 }}>
+                            {/* Sell price note for returns / unmatched rows */}
+                            {row.is_return && !bc && (
+                              row.customer_sell != null ? (
+                                <div style={{ fontSize: 10, color: '#CE93D8' }}>
+                                  Sell: {gbp(row.customer_sell)} <span style={{ color: '#555' }}>rate</span>
+                                </div>
+                              ) : (
+                                <div style={{ fontSize: 10, color: '#555', fontStyle: 'italic' }}>not billed</div>
+                              )
+                            )}
+                            {!row.is_return && row.effective_sell != null && (
+                              <div style={{ fontSize: 10, color: '#FFC107' }}>
+                                Sell: {gbp(row.effective_sell)}
+                              </div>
+                            )}
                             {/* Cost override input */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                               <span style={{ fontSize: 10, color: '#555', whiteSpace: 'nowrap' }}>£</span>
@@ -2126,29 +2185,48 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                         </td>
                         {/* Sell price + margin for matched rows */}
                         <td style={td}>
-                          {bc?.total_sell_price != null && (
-                            <div style={{ minWidth: 100 }}>
-                              <span style={{ fontSize: 13, fontWeight: 700, color: '#FFC107' }}>
-                                {gbp(bc.total_sell_price)}
-                              </span>
-                              {(() => {
-                                const cost = row.effective_cost ?? bc.total_cost_price;
-                                const sell = bc.total_sell_price;
-                                if (cost == null || sell == null || sell === 0) return null;
-                                const margin = sell - cost;
-                                const pct    = (margin / sell) * 100;
-                                return (
+                          {(() => {
+                            // Return rows with no DB charge — show customer rate card price
+                            if (row.is_return && !bc) {
+                              return row.customer_sell != null ? (
+                                <div style={{ minWidth: 100 }}>
+                                  <span style={{ fontSize: 13, fontWeight: 700, color: '#CE93D8' }}>
+                                    {gbp(row.customer_sell)}
+                                  </span>
+                                  <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>customer rate</div>
+                                </div>
+                              ) : (
+                                <span style={{ fontSize: 11, color: '#444', fontStyle: 'italic' }}>not billed</span>
+                              );
+                            }
+                            // Normal rows — use effective_sell (base + fuel_sell + hgv_sell, no EPS)
+                            const effectiveSell = row.effective_sell ?? bc?.total_sell_price;
+                            if (effectiveSell == null) return null;
+                            const cost   = row.effective_cost ?? bc?.total_cost_price;
+                            const margin = cost != null ? effectiveSell - cost : null;
+                            const pct    = (margin != null && effectiveSell > 0) ? (margin / effectiveSell) * 100 : null;
+                            return (
+                              <div style={{ minWidth: 100 }}>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: '#FFC107' }}>
+                                  {gbp(effectiveSell)}
+                                </span>
+                                {pct != null && (
                                   <span style={{
                                     marginLeft: 6, fontSize: 10, fontWeight: 700,
                                     color: pct >= 0 ? '#00BCD4' : '#F44336',
                                   }}>
                                     {pct.toFixed(0)}%
                                   </span>
-                                );
-                              })()}
-                              <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>sell price</div>
-                            </div>
-                          )}
+                                )}
+                                {row.sell_per_kg_extra > 0.005 && (
+                                  <div style={{ fontSize: 10, color: '#81C784', marginTop: 1 }}>
+                                    incl. {gbp(row.sell_per_kg_extra)} per-kg
+                                  </div>
+                                )}
+                                <div style={{ fontSize: 10, color: '#555', marginTop: 1 }}>sell price</div>
+                              </div>
+                            );
+                          })()}
                         </td>
                       </tr>
                     );
