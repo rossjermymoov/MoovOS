@@ -464,24 +464,40 @@ router.get('/customers/:id/credit-status', async (req, res, next) => {
       }
     }
 
-    const totalExposure   = xeroOutstanding + moovosUnbilled;
+    // Reconciled but not yet pushed to Xero
+    // These are finalized lines that have been invoiced internally but haven't
+    // been pushed to Xero yet — they represent committed revenue not yet in Xero.
+    const { rows: reconRows } = await query(
+      `SELECT COALESCE(SUM(sell_total_amount), 0)::numeric(12,2) AS total,
+              COUNT(*)::int AS count
+       FROM finalized_billing_lines
+       WHERE customer_id      = $1
+         AND xero_pushed_at   IS NULL`,
+      [customerId]
+    );
+    const reconNotInvoiced      = parseFloat(reconRows[0]?.total || 0);
+    const reconNotInvoicedCount = reconRows[0]?.count || 0;
+
+    const totalExposure   = xeroOutstanding + moovosUnbilled + reconNotInvoiced;
     const utilisationPct  = creditLimit > 0 ? (totalExposure / creditLimit) * 100 : 0;
     const creditStatus    = utilisationPct >= 100 ? 'over_limit'
                           : utilisationPct >= 90  ? 'warning'
                           : 'ok';
 
     res.json({
-      credit_limit:          creditLimit,
-      xero_outstanding:      Math.round(xeroOutstanding * 100) / 100,
-      moovos_unbilled:       Math.round(moovosUnbilled * 100) / 100,
-      moovos_unbilled_count: moovosUnbilledCount,
-      total_exposure:        Math.round(totalExposure * 100) / 100,
-      utilisation_pct:       Math.round(utilisationPct * 10) / 10,
-      credit_status:         creditStatus,
-      xero_connected:        xeroConnected,
-      xero_linked:           !!customer.xero_contact_id,
-      is_on_stop:            customer.is_on_stop,
-      invoices:              xeroInvoices,
+      credit_limit:                    creditLimit,
+      xero_outstanding:                Math.round(xeroOutstanding  * 100) / 100,
+      moovos_unbilled:                 Math.round(moovosUnbilled   * 100) / 100,
+      moovos_unbilled_count:           moovosUnbilledCount,
+      reconciled_not_yet_invoiced:     Math.round(reconNotInvoiced * 100) / 100,
+      reconciled_not_yet_invoiced_count: reconNotInvoicedCount,
+      total_exposure:                  Math.round(totalExposure    * 100) / 100,
+      utilisation_pct:                 Math.round(utilisationPct   * 10)  / 10,
+      credit_status:                   creditStatus,
+      xero_connected:                  xeroConnected,
+      xero_linked:                     !!customer.xero_contact_id,
+      is_on_stop:                      customer.is_on_stop,
+      invoices:                        xeroInvoices,
     });
   } catch (err) {
     next(err);
@@ -754,6 +770,94 @@ router.post('/reconciliation-runs/:runId/push', async (req, res, next) => {
     }
 
     return res.json({ ok: true, pushed, skipped, errors });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── POST /api/xero/sync-ledger-balances ──────────────────────────────────────
+// Pull unpaid invoice totals from Xero for ALL linked customers and store in
+// customers.ledger_balance.  Called by a scheduled task every 4-6 hours.
+// Can also be triggered manually from the UI.
+//
+// Returns: { updated: number, errors: number, customers: [{ id, name, balance }] }
+
+router.post('/sync-ledger-balances', async (req, res, next) => {
+  try {
+    const token = await getStoredToken();
+    if (!token) return res.status(400).json({ error: 'Xero is not connected' });
+
+    // All customers that are linked to a Xero contact
+    const { rows: linkedCustomers } = await query(
+      `SELECT id, business_name, xero_contact_id
+       FROM customers
+       WHERE xero_contact_id IS NOT NULL
+         AND account_status != 'deleted'
+       ORDER BY business_name`
+    );
+
+    if (!linkedCustomers.length) {
+      return res.json({ updated: 0, errors: 0, customers: [] });
+    }
+
+    // Fetch all AUTHORISED invoices from Xero in one call.
+    // Xero allows filtering by ContactIDs (comma-separated, max 500).
+    const contactIds = linkedCustomers.map(c => c.xero_contact_id);
+    const batchSize  = 100; // Xero ContactIDs filter limit per request
+
+    // Map xero_contact_id → outstanding balance
+    const balanceByContact = {};
+
+    for (let i = 0; i < contactIds.length; i += batchSize) {
+      const batch = contactIds.slice(i, i + batchSize);
+      try {
+        const data = await xeroRequest(
+          'GET',
+          `/Invoices?ContactIDs=${batch.join(',')}&Statuses=AUTHORISED&summaryOnly=true`
+        );
+        for (const inv of (data.Invoices || [])) {
+          const cid = inv.Contact?.ContactID;
+          if (!cid) continue;
+          balanceByContact[cid] = (balanceByContact[cid] || 0) + parseFloat(inv.AmountDue || 0);
+        }
+      } catch (batchErr) {
+        console.error('[xero/sync-ledger-balances] batch error:', batchErr.message);
+        // Continue — other batches may succeed
+      }
+    }
+
+    let updated = 0;
+    let errors  = 0;
+    const updatedCustomers = [];
+
+    for (const cust of linkedCustomers) {
+      const balance = balanceByContact[cust.xero_contact_id] || 0;
+      try {
+        await query(
+          `UPDATE customers SET ledger_balance = $1 WHERE id = $2`,
+          [Math.round(balance * 100) / 100, cust.id]
+        );
+        updated++;
+        updatedCustomers.push({
+          id:      cust.id,
+          name:    cust.business_name,
+          balance: Math.round(balance * 100) / 100,
+        });
+      } catch (err) {
+        console.error(`[xero/sync-ledger-balances] update failed for ${cust.business_name}:`, err.message);
+        errors++;
+      }
+    }
+
+    console.log(`[xero/sync-ledger-balances] Synced ${updated} customers, ${errors} errors`);
+
+    return res.json({
+      ok:        true,
+      updated,
+      errors,
+      synced_at: new Date().toISOString(),
+      customers: updatedCustomers,
+    });
   } catch (err) {
     next(err);
   }

@@ -8,10 +8,16 @@
  * The snapshot captures:
  *   - Carrier cost breakdown (base / fuel / surcharges) — from recon line + charges table
  *   - Customer sell breakdown (base / fuel / surcharges) — from our charges table
+ *   - Per-surcharge-type Buy/Sell breakdown — stored as JSONB in surcharge_detail
  *   - Shipment metadata (tracking, recipient, postcode, weight) — from shipments table
  *
  * Once written, finalized_billing_lines rows are never updated (except for
  * xero_invoice_id, xero_pushed_at, and csv_exported_at tracking fields).
+ *
+ * External booking catch-up:
+ *   For source = 'external_booking' lines (bookings not made through Moov OS),
+ *   we update customers.real_time_balance by adding the sell_total_amount so the
+ *   exposure calculation stays accurate even before Xero is updated.
  */
 
 import { query } from '../db/index.js';
@@ -25,7 +31,7 @@ function round4(n) { return Math.round(n * 10000) / 10000; }
  *
  * @param {number} runId   — reconciliation_runs.id
  * @param {number|null} staffId — staff.id who triggered finalization
- * @returns {Promise<{ lines_finalized: number, customers: number }>}
+ * @returns {Promise<{ lines_finalized: number, customers: number, external_balance_updates: number }>}
  */
 export async function finalizeRun(runId, staffId = null) {
   // Guard: check run exists and is not already finalized
@@ -54,12 +60,31 @@ export async function finalizeRun(runId, staffId = null) {
   }
 
   let finalized = 0;
+  let externalBalanceUpdates = 0;
 
   for (const line of lines) {
     try {
       const snapshot = await buildSnapshot(line, run);
       await insertSnapshot(runId, line.id, snapshot);
       finalized++;
+
+      // ── External Booking Catch-up ────────────────────────────────────────
+      // For shipments booked outside Moov OS we have no charge record in our
+      // DB, so the real_time_balance was never incremented at label creation.
+      // We add the sell_total_amount now so Total Exposure stays accurate.
+      if (line.source === 'external_booking' && snapshot.sell_total_amount > 0) {
+        try {
+          await query(`
+            UPDATE customers
+            SET    real_time_balance = real_time_balance + $2
+            WHERE  id = $1
+          `, [snapshot.customer_id, snapshot.sell_total_amount]);
+          externalBalanceUpdates++;
+        } catch (balErr) {
+          console.error(`[finalization] Failed to update real_time_balance for customer ${snapshot.customer_id}:`, balErr.message);
+        }
+      }
+
     } catch (err) {
       console.error(`[finalization] Failed to snapshot line ${line.id}:`, err.message);
       // Continue — don't fail the whole run for one bad line
@@ -83,9 +108,12 @@ export async function finalizeRun(runId, staffId = null) {
   );
   const customers = parseInt(custRes.rows[0]?.cnt || 0);
 
-  console.log(`[finalization] Run ${runId} finalized: ${finalized} lines, ${customers} customers`);
+  console.log(
+    `[finalization] Run ${runId} finalized: ${finalized} lines, ${customers} customers, ` +
+    `${externalBalanceUpdates} external balance update(s)`
+  );
 
-  return { lines_finalized: finalized, customers };
+  return { lines_finalized: finalized, customers, external_balance_updates: externalBalanceUpdates };
 }
 
 // ─── Build snapshot for a single reconciliation line ─────────────────────────
@@ -109,6 +137,7 @@ async function buildSnapshot(line, run) {
     sell_fuel_amount:        0,
     sell_surcharge_amount:   0,
     sell_total_amount:       0,
+    surcharge_detail:        null,
     customer_name:           null,
     order_reference:         null,
     recipient_name:          null,
@@ -123,6 +152,7 @@ async function buildSnapshot(line, run) {
   if (line.charge_id) {
     const enrichRes = await query(`
       SELECT
+        c.shipment_id,
         c.order_id                         AS order_reference,
         c.price                            AS sell_base,
         c.cost_price                       AS cost_base,
@@ -212,6 +242,42 @@ async function buildSnapshot(line, run) {
         carrier_surcharge_amount: round4(parseFloat(d.cost_surcharge || 0)),
         carrier_total_amount:    round4(parseFloat(line.carrier_amount) || 0),
       });
+
+      // ── Per-surcharge-type detail (JSONB) ──────────────────────────────
+      // Fetch each individual surcharge charge row for this shipment so we can
+      // store a named breakdown (e.g. Long Length, Remote Area, etc.) for both
+      // Buy and Sell sides.  reconciliation_excluded surcharges are included in
+      // the detail record but flagged — they contribute to the raw cost/sell
+      // figures even though they were excluded from the recon comparison.
+      if (d.shipment_id) {
+        const surchargeRes = await query(`
+          SELECT
+            sc.id                        AS charge_id,
+            sx.id                        AS surcharge_id,
+            sx.name                      AS surcharge_name,
+            sc.charge_type,
+            sc.price                     AS sell_amount,
+            sc.cost_price                AS cost_amount,
+            sx.reconciliation_excluded   AS recon_excluded
+          FROM charges sc
+          LEFT JOIN surcharges sx ON sx.id = sc.surcharge_id
+          WHERE sc.shipment_id = $1
+            AND sc.charge_type IN ('fuel', 'surcharge')
+            AND sc.cancelled = false
+          ORDER BY sc.charge_type, sx.name
+        `, [d.shipment_id]);
+
+        if (surchargeRes.rows.length) {
+          snapshot.surcharge_detail = surchargeRes.rows.map(r => ({
+            surcharge_id:    r.surcharge_id   || null,
+            surcharge_name:  r.surcharge_name || r.charge_type,
+            charge_type:     r.charge_type,
+            sell_amount:     round4(parseFloat(r.sell_amount  || 0)),
+            cost_amount:     round4(parseFloat(r.cost_amount  || 0)),
+            recon_excluded:  r.recon_excluded || false,
+          }));
+        }
+      }
     }
   }
 
@@ -237,10 +303,10 @@ async function insertSnapshot(runId, reconLineId, s) {
       weight_kg, service_name, service_code, despatch_date,
       carrier_base_amount, carrier_fuel_amount, carrier_surcharge_amount, carrier_total_amount,
       sell_base_amount, sell_fuel_amount, sell_surcharge_amount, sell_total_amount,
-      recon_status, corrected_by, source
+      surcharge_detail, recon_status, corrected_by, source
     ) VALUES (
       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,
-      $14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24
+      $14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25
     )
     ON CONFLICT (reconciliation_line_id) DO NOTHING
   `, [
@@ -249,6 +315,7 @@ async function insertSnapshot(runId, reconLineId, s) {
     s.weight_kg, s.service_name, s.service_code, s.despatch_date,
     s.carrier_base_amount, s.carrier_fuel_amount, s.carrier_surcharge_amount, s.carrier_total_amount,
     s.sell_base_amount, s.sell_fuel_amount, s.sell_surcharge_amount, s.sell_total_amount,
+    s.surcharge_detail ? JSON.stringify(s.surcharge_detail) : null,
     s.recon_status, s.corrected_by, s.source,
   ]);
 }
@@ -310,7 +377,7 @@ export async function generateCustomerCSV(runId, customerId) {
   const linesRes = await query(`
     SELECT f.*
     FROM   finalized_billing_lines f
-    WHERE  f.run_id     = $1
+    WHERE  f.run_id      = $1
       AND  f.customer_id = $2
     ORDER  BY f.despatch_date ASC, f.tracking_number ASC
   `, [runId, customerId]);
@@ -325,7 +392,19 @@ export async function generateCustomerCSV(runId, customerId) {
     WHERE run_id = $1 AND customer_id = $2
   `, [runId, customerId]);
 
-  // Build CSV
+  // Collect all distinct surcharge names across this customer's lines so we
+  // can produce individual surcharge columns in the CSV.
+  const surchargeNames = new Set();
+  for (const l of lines) {
+    const detail = Array.isArray(l.surcharge_detail)
+      ? l.surcharge_detail
+      : (l.surcharge_detail ? JSON.parse(l.surcharge_detail) : []);
+    for (const s of detail) {
+      if (s.charge_type === 'surcharge') surchargeNames.add(s.surcharge_name);
+    }
+  }
+  const surchargeNamesSorted = [...surchargeNames].sort();
+
   const headers = [
     'Tracking Number',
     'Order Reference',
@@ -336,39 +415,71 @@ export async function generateCustomerCSV(runId, customerId) {
     'Weight (kg)',
     'Base Charge (£)',
     'Fuel Charge (£)',
-    'Surcharges (£)',
+    ...surchargeNamesSorted.map(n => `${n} (£)`),
+    'Total Surcharges (£)',
     'Line Total (£)',
     'Status',
   ];
 
-  const rows = lines.map(l => [
-    l.tracking_number       || '',
-    l.order_reference       || '',
-    l.despatch_date ? new Date(l.despatch_date).toLocaleDateString('en-GB') : '',
-    l.recipient_name        || '',
-    l.recipient_postcode    || '',
-    l.service_name          || '',
-    l.weight_kg != null     ? parseFloat(l.weight_kg).toFixed(3) : '',
-    parseFloat(l.sell_base_amount      || 0).toFixed(2),
-    parseFloat(l.sell_fuel_amount      || 0).toFixed(2),
-    parseFloat(l.sell_surcharge_amount || 0).toFixed(2),
-    parseFloat(l.sell_total_amount     || 0).toFixed(2),
-    l.recon_status          || '',
-  ]);
+  const rows = lines.map(l => {
+    const detail = Array.isArray(l.surcharge_detail)
+      ? l.surcharge_detail
+      : (l.surcharge_detail ? JSON.parse(l.surcharge_detail) : []);
+
+    // Build per-named-surcharge sell amounts
+    const surchargeMap = {};
+    for (const s of detail) {
+      if (s.charge_type === 'surcharge') {
+        surchargeMap[s.surcharge_name] = (surchargeMap[s.surcharge_name] || 0) + (s.sell_amount || 0);
+      }
+    }
+
+    return [
+      l.tracking_number       || '',
+      l.order_reference       || '',
+      l.despatch_date ? new Date(l.despatch_date).toLocaleDateString('en-GB') : '',
+      l.recipient_name        || '',
+      l.recipient_postcode    || '',
+      l.service_name          || '',
+      l.weight_kg != null     ? parseFloat(l.weight_kg).toFixed(3) : '',
+      parseFloat(l.sell_base_amount      || 0).toFixed(2),
+      parseFloat(l.sell_fuel_amount      || 0).toFixed(2),
+      ...surchargeNamesSorted.map(n => (surchargeMap[n] || 0).toFixed(2)),
+      parseFloat(l.sell_surcharge_amount || 0).toFixed(2),
+      parseFloat(l.sell_total_amount     || 0).toFixed(2),
+      l.recon_status          || '',
+    ];
+  });
 
   // Summary totals row
-  const totals = lines.reduce((acc, l) => ({
-    base:      acc.base      + parseFloat(l.sell_base_amount      || 0),
-    fuel:      acc.fuel      + parseFloat(l.sell_fuel_amount      || 0),
-    surcharge: acc.surcharge + parseFloat(l.sell_surcharge_amount || 0),
-    total:     acc.total     + parseFloat(l.sell_total_amount     || 0),
-  }), { base: 0, fuel: 0, surcharge: 0, total: 0 });
+  const totals = lines.reduce((acc, l) => {
+    const detail = Array.isArray(l.surcharge_detail)
+      ? l.surcharge_detail
+      : (l.surcharge_detail ? JSON.parse(l.surcharge_detail) : []);
+    const surchargeMap = {};
+    for (const s of detail) {
+      if (s.charge_type === 'surcharge') {
+        surchargeMap[s.surcharge_name] = (surchargeMap[s.surcharge_name] || 0) + (s.sell_amount || 0);
+      }
+    }
+    for (const n of surchargeNamesSorted) {
+      acc.surchargeByName[n] = (acc.surchargeByName[n] || 0) + (surchargeMap[n] || 0);
+    }
+    return {
+      base:           acc.base      + parseFloat(l.sell_base_amount      || 0),
+      fuel:           acc.fuel      + parseFloat(l.sell_fuel_amount      || 0),
+      surcharge:      acc.surcharge + parseFloat(l.sell_surcharge_amount || 0),
+      total:          acc.total     + parseFloat(l.sell_total_amount     || 0),
+      surchargeByName: acc.surchargeByName,
+    };
+  }, { base: 0, fuel: 0, surcharge: 0, total: 0, surchargeByName: {} });
 
   rows.push([]); // blank separator
   rows.push([
     'TOTAL', '', '', '', '', '', '',
     totals.base.toFixed(2),
     totals.fuel.toFixed(2),
+    ...surchargeNamesSorted.map(n => (totals.surchargeByName[n] || 0).toFixed(2)),
     totals.surcharge.toFixed(2),
     totals.total.toFixed(2),
     '',
@@ -390,4 +501,30 @@ export async function generateCustomerCSV(runId, customerId) {
   ];
 
   return csvLines.join('\r\n');
+}
+
+// ─── Margin report for all finalized runs ─────────────────────────────────────
+
+export async function getMarginReport({ carrierId, limit = 20, offset = 0 } = {}) {
+  const params = [];
+  const where = carrierId ? `WHERE rr.carrier_id = $${params.push(carrierId)}` : '';
+
+  const res = await query(`
+    SELECT *
+    FROM   reconciliation_margin_view rr
+    ${where}
+    ORDER  BY rr.finalized_at DESC
+    LIMIT  $${params.push(limit)} OFFSET $${params.push(offset)}
+  `, params);
+
+  const countRes = await query(`
+    SELECT COUNT(*) AS total
+    FROM   reconciliation_margin_view
+    ${where ? where.replace(/rr\./g, '') : ''}
+  `, carrierId ? [carrierId] : []);
+
+  return {
+    rows:  res.rows,
+    total: parseInt(countRes.rows[0]?.total || 0),
+  };
 }

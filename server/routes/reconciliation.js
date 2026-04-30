@@ -15,7 +15,7 @@
 import express from 'express';
 import { query } from '../db/index.js';
 import { processReconciliationRun, ageUnmatchedLines } from '../services/reconciliationEngine.js';
-import { finalizeRun, getCustomerSummaries, generateCustomerCSV } from '../services/finalizationService.js';
+import { finalizeRun, getCustomerSummaries, generateCustomerCSV, getMarginReport } from '../services/finalizationService.js';
 
 const router = express.Router();
 
@@ -1198,6 +1198,25 @@ router.get('/runs/:id/export/csv', async (req, res) => {
     return res.send(csv);
   } catch (err) {
     console.error('[reconciliation/export/csv] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/reconciliation/margin-report ────────────────────────────────────
+// Aggregated Buy vs Sell per finalized run.
+// Query params: carrier_id (optional), limit, offset
+
+router.get('/margin-report', async (req, res) => {
+  try {
+    const { carrier_id, limit = 20, offset = 0 } = req.query;
+    const report = await getMarginReport({
+      carrierId: carrier_id ? parseInt(carrier_id) : undefined,
+      limit:     parseInt(limit),
+      offset:    parseInt(offset),
+    });
+    return res.json(report);
+  } catch (err) {
+    console.error('[reconciliation/margin-report] error:', err.message);
     return res.status(500).json({ error: err.message });
   }
 });
