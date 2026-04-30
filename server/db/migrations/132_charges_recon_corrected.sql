@@ -17,6 +17,11 @@ ALTER TABLE charges
 -- Note: PostgreSQL UPDATE...FROM does not allow the target table to be
 -- referenced inside JOIN ON clauses. Using comma-style FROM so all
 -- cross-table conditions live in WHERE where the target table is accessible.
+-- Only flag charges where the shipment weight actually exceeded the band
+-- ceiling (total_weight_kg > max_weight_kg) — this is the definitive signal
+-- that per-kg overage was applied. Using cost_price > price_first is too
+-- broad and incorrectly catches multi-parcel shipments where the extra cost
+-- is price_sub (which was always the expected billing, not a correction).
 UPDATE charges
 SET    recon_corrected = TRUE
 FROM   shipments        s,
@@ -40,4 +45,5 @@ WHERE  charges.shipment_id          = s.id
   AND  z.name                       = charges.zone_name
   AND  wb.zone_id                   = z.id
   AND  wb.cost_per_kg               > 0
-  AND  charges.cost_price           > wb.price_first;
+  AND  wb.max_weight_kg             IS NOT NULL
+  AND  s.total_weight_kg            > wb.max_weight_kg;
