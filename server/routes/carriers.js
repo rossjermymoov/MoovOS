@@ -705,9 +705,9 @@ router.delete('/couriers/contacts/:id', async (req, res, next) => {
 
 // GET /api/carriers/volumetric-rules[?carrierId=N]
 // Returns all named rules, each with their assigned services.
-// When carrierId is supplied, the assignable services list is filtered to
-// international services for that carrier only (service_type = 'international').
-// Already-assigned services are always included regardless of service_type.
+// When carrierId is supplied, the assignable services list is all services for
+// that carrier (domestic and international) — volumetric billing applies to
+// any service where the carrier measures dimensions (e.g. DHL domestic 4500).
 router.get('/volumetric-rules', async (req, res, next) => {
   try {
     const carrierId = req.query.carrierId ? parseInt(req.query.carrierId) : null;
@@ -732,12 +732,12 @@ router.get('/volumetric-rules', async (req, res, next) => {
        ORDER  BY vr.name`
     );
 
-    // Assignable services = international services for this carrier.
-    // If no carrierId, return all services (used by the legacy global settings page).
+    // All services for this carrier, regardless of service_type.
+    // If no carrierId, return all services across all carriers.
     const svcParams = carrierId ? [carrierId] : [];
     const svcFilter = carrierId
-      ? `WHERE cs.courier_id = $1 AND cs.service_type = 'international'`
-      : `WHERE cs.service_type = 'international'`;
+      ? `WHERE cs.courier_id = $1`
+      : ``;
 
     const services = await query(
       `SELECT cs.id, cs.name, cs.service_code, c.name AS carrier_name,
@@ -745,7 +745,7 @@ router.get('/volumetric-rules', async (req, res, next) => {
        FROM   courier_services cs
        JOIN   couriers c ON c.id = cs.courier_id
        ${svcFilter}
-       ORDER  BY cs.name`,
+       ORDER  BY cs.service_type NULLS LAST, cs.name`,
       svcParams
     );
 

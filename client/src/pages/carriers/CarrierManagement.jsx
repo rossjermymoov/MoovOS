@@ -2524,7 +2524,7 @@ function VolumetricTab({ courierId }) {
             <Divide size={16}/> Volumetric Rules
           </h2>
           <p style={{ fontSize:12, color:'#777', margin:'4px 0 0' }}>
-            Create named divisor rules and assign international services to them.
+            Create named divisor rules and assign services to them (domestic or international).
             The pricing engine uses <span style={{ color:'#E6EDF3', fontFamily:'monospace' }}>(L×W×H) ÷ divisor</span> when
             it exceeds declared weight. Services with no rule use physical weight only.
           </p>
@@ -2686,7 +2686,7 @@ function VolumetricRuleCard({ rule, availableServices, onUpdate, onDelete, onAss
             value={selSvc}
             onChange={e => setSelSvc(e.target.value)}
           >
-            <option value=''>— Select an international service —</option>
+            <option value=''>— Select a service —</option>
             {available.map(s => (
               <option key={s.id} value={s.id}>{s.name} ({s.service_code})</option>
             ))}
@@ -2700,7 +2700,7 @@ function VolumetricRuleCard({ rule, availableServices, onUpdate, onDelete, onAss
           disabled={available.length === 0}
           style={{ background:'none', border:'1px dashed rgba(123,47,190,0.3)', borderRadius:6, color: available.length ? '#7B2FBE' : '#444', padding:'5px 12px', cursor: available.length ? 'pointer' : 'default', fontSize:11, display:'flex', alignItems:'center', gap:4 }}
         >
-          <Plus size={11}/> Assign international service
+          <Plus size={11}/> Assign service
           {available.length === 0 && <span style={{ color:'#555', marginLeft:4 }}>(all assigned)</span>}
         </button>
       )}
