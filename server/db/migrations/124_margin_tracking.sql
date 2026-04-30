@@ -48,8 +48,7 @@ CREATE VIEW reconciliation_margin_view AS
 SELECT
   rr.id                                                          AS run_id,
   rr.invoice_ref,
-  rr.period_start,
-  rr.period_end,
+  rr.invoice_date,
   rr.finalized_at,
   c.name                                                         AS carrier_name,
   rr.automation_rate,
@@ -86,5 +85,5 @@ FROM   reconciliation_runs rr
 LEFT JOIN finalized_billing_lines f ON f.run_id = rr.id
 LEFT JOIN couriers c ON c.id = rr.carrier_id
 WHERE  rr.finalized = true
-GROUP  BY rr.id, rr.invoice_ref, rr.period_start, rr.period_end,
+GROUP  BY rr.id, rr.invoice_ref, rr.invoice_date,
           rr.finalized_at, c.name, rr.automation_rate;
