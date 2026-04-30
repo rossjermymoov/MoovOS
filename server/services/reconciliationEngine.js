@@ -538,18 +538,6 @@ async function checkCorrectionEngine(customerId, serviceId, carrierId, zoneId, l
   );
 
   if (Math.abs(recalcDelta) <= 0.01) {
-    // Update the stored cost_price so future reconciliation runs see zero delta.
-    if (chargeId) {
-      try {
-        await query(
-          `UPDATE charges SET cost_price = $1, updated_at = NOW() WHERE id = $2`,
-          [expectedCost, chargeId]
-        );
-        console.log(`[recon engine] Updated charges.cost_price to £${expectedCost} for charge ${chargeId}`);
-      } catch (e) {
-        console.warn(`[recon engine] Failed to update cost_price for charge ${chargeId}:`, e.message);
-      }
-    }
     return { corrected: true, reason: 'pricing_rules' };
   }
 
