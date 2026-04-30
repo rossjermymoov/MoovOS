@@ -71,7 +71,10 @@ function outcodeOf(postcode) {
 async function matchZone(serviceId, countryIso, postcode) {
   const outcode = outcodeOf(postcode);
 
-  // Get all zones for this service with their country codes and postcode rules
+  // Get all zones for this service with their country codes and postcode rules.
+  // ORDER BY: zones with postcode rules (Remote, Excluded) first — they have
+  // narrower scope and must be evaluated before catch-all country zones.
+  // Without this, a Standard GB zone can be returned for a Remote postcode.
   const zones = await query(
     `SELECT z.id, z.name,
        array_agg(DISTINCT zcc.country_iso) FILTER (WHERE zcc.id IS NOT NULL) AS countries,
@@ -80,7 +83,8 @@ async function matchZone(serviceId, countryIso, postcode) {
      LEFT JOIN zone_country_codes zcc ON zcc.zone_id = z.id
      LEFT JOIN zone_postcode_rules zpr ON zpr.zone_id = z.id
      WHERE z.courier_service_id = $1
-     GROUP BY z.id`,
+     GROUP BY z.id
+     ORDER BY (SELECT COUNT(*) FROM zone_postcode_rules WHERE zone_id = z.id) DESC`,
     [serviceId]
   );
 
@@ -146,10 +150,10 @@ async function lookupCostPrice(serviceId, zoneId, weightKg, isFirstParcel) {
     `SELECT price_first, price_sub, cost_per_kg, cost_per_kg_threshold_kg
      FROM custom_cost_rate_cards
      WHERE courier_service_id = $1 AND zone_id = $2
-       AND min_weight_kg <= $3 AND max_weight_kg >= $3
+       AND min_weight_kg < $3 AND max_weight_kg >= $3
        AND (active_from IS NULL OR active_from <= $4)
        AND (active_to   IS NULL OR active_to   >= $4)
-     ORDER BY active_from DESC NULLS LAST LIMIT 1`,
+     ORDER BY active_from DESC NULLS LAST, min_weight_kg DESC LIMIT 1`,
     [serviceId, zoneId, weightKg, today]
   );
 
@@ -165,8 +169,8 @@ async function lookupCostPrice(serviceId, zoneId, weightKg, isFirstParcel) {
     const band = await query(
       `SELECT price_first, price_sub, cost_per_kg, cost_per_kg_threshold_kg
        FROM weight_bands
-       WHERE zone_id = $1 AND min_weight_kg <= $2 AND max_weight_kg >= $2
-       LIMIT 1`,
+       WHERE zone_id = $1 AND min_weight_kg < $2 AND max_weight_kg >= $2
+       ORDER BY min_weight_kg DESC LIMIT 1`,
       [zoneId, weightKg]
     );
     if (!band.rows.length) return null;
@@ -196,8 +200,8 @@ async function lookupSellPrice(customerId, serviceId, zoneId, weightKg, costPric
     `SELECT pricing_method, fixed_price, markup_pct, margin_pct
      FROM customer_pricing
      WHERE customer_id = $1 AND courier_service_id = $2 AND zone_id = $3
-       AND min_weight_kg <= $4 AND max_weight_kg >= $4
-     LIMIT 1`,
+       AND min_weight_kg < $4 AND max_weight_kg >= $4
+     ORDER BY min_weight_kg DESC LIMIT 1`,
     [customerId, serviceId, zoneId, weightKg]
   );
 
@@ -235,15 +239,50 @@ export async function processShipment(payload) {
     if (!serviceCode) throw new Error('No service_code in payload');
 
     const svcRow = await query(
-      'SELECT id, fuel_surcharge_pct FROM courier_services WHERE service_code = $1',
+      'SELECT id, fuel_group_id FROM courier_services WHERE service_code = $1',
       [serviceCode]
     );
     if (!svcRow.rows.length) throw new Error(`No courier service found with code = ${serviceCode}`);
-    const { id: serviceId, fuel_surcharge_pct } = svcRow.rows[0];
+    const { id: serviceId, fuel_group_id: fuelGroupId } = svcRow.rows[0];
 
     // 3. MATCH ZONE
     const countryIso = shipment?.ship_to?.country_iso;
     const postcode   = shipment?.ship_to?.postcode;
+
+    // ISO Guard: must be exactly 2 uppercase letters — no silent coercion.
+    // Reject immediately so a bad payload never lands in the wrong zone.
+    if (!countryIso || !/^[A-Z]{2}$/.test(countryIso)) {
+      throw new Error(
+        `Validation Error: ship_to.country_iso "${countryIso}" is not a valid 2-letter ISO code — ` +
+        `expected format: "GB", "DE", "FR" etc. Shipment rejected.`
+      );
+    }
+
+    // 3a. RESOLVE FUEL RATES (customer-specific, keyed to fuel group)
+    // Cost %: fuel_groups.fuel_surcharge_pct  (carrier-side)
+    // Sell %: customer_fuel_group_pricing.sell_pct  (customer-specific)
+    //         fallback: fuel_groups.standard_sell_pct  (default sell %)
+    let fuelCostPct = 0;
+    let fuelSellPct = 0;
+    if (fuelGroupId) {
+      const fuelRes = await query(
+        `SELECT fg.fuel_surcharge_pct                            AS cost_pct,
+                COALESCE(cfgp.sell_pct, fg.standard_sell_pct, 0) AS sell_pct
+         FROM   fuel_groups fg
+         LEFT JOIN customer_fuel_group_pricing cfgp
+                   ON cfgp.fuel_group_id = fg.id AND cfgp.customer_id = $2
+         WHERE  fg.id = $1`,
+        [fuelGroupId, customerId]
+      );
+      if (fuelRes.rows.length) {
+        fuelCostPct = parseFloat(fuelRes.rows[0].cost_pct || 0);
+        fuelSellPct = parseFloat(fuelRes.rows[0].sell_pct || 0);
+        console.log(`[pricing] Fuel group ${fuelGroupId}: cost=${fuelCostPct}%, sell=${fuelSellPct}% (customer ${customerId})`);
+      } else {
+        console.warn(`[pricing] Fuel group ${fuelGroupId} not found — fuel charges will be 0`);
+      }
+    }
+
     const zone = await matchZone(serviceId, countryIso, postcode);
     if (!zone) throw new Error(`No zone matched for service ${serviceCode}, country ${countryIso}, postcode ${postcode}`);
 
@@ -310,14 +349,16 @@ export async function processShipment(payload) {
       });
 
       // 7. FUEL SURCHARGE
-      const fuelPct = parseFloat(fuel_surcharge_pct);
-      if (fuelPct > 0) {
+      // Cost from fuel_groups.fuel_surcharge_pct (carrier rate).
+      // Sell from customer_fuel_group_pricing.sell_pct → fuel_groups.standard_sell_pct.
+      // Both resolved above via fuelCostPct / fuelSellPct.
+      if (fuelCostPct > 0 || fuelSellPct > 0) {
         charges.push({
           ...commonFields,
           charge_type:   'fuel_surcharge',
           parcel_number: parcelNum,
-          cost_price:    +(costPrice * fuelPct / 100).toFixed(2),
-          sell_price:    +(sellPrice * fuelPct / 100).toFixed(2),
+          cost_price:    +(costPrice * fuelCostPct / 100).toFixed(2),
+          sell_price:    +(sellPrice * fuelSellPct / 100).toFixed(2),
           status:        'unverified',
         });
       }
