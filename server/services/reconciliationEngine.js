@@ -49,20 +49,63 @@ function round2(n) { return Math.round(n * 100) / 100; }
 
 /**
  * Build the global service code map for this carrier.
- * Only loads global mappings (customer_id IS NULL) — customer-specific
+ *
+ * TWO-LAYER LOOKUP:
+ *
+ * Layer 1 — Explicit mappings from courier_service_code_mappings
+ *   (saved by the user, highest priority)
+ *
+ * Layer 2 — Implied mappings derived from courier_services.service_code
+ *   Carriers typically send a numeric/short code that is the suffix of our
+ *   internal service code. Examples:
+ *     carrier sends "220"  →  our service_code is "DHL-220"   →  service_id 220
+ *     carrier sends "1"    →  our service_code is "DHL-1"     →  return service
+ *     carrier sends "PARCEL" → our service_code is "DPD-PARCEL" → service_id X
+ *
+ *   The implied code is the part of service_code AFTER the last hyphen.
+ *   Explicit mappings always win over implied ones.
+ *
+ * Only global mappings (customer_id IS NULL) are loaded here; customer-specific
  * mappings are checked per-line after the customer is known.
  */
 async function buildServiceCodeMap(carrierId) {
-  const res = await query(
+  const map = {};
+
+  // ── Layer 2 first (lower priority) — implied from service_code suffix ────
+  // Load every service for this carrier and derive the short code automatically.
+  // 'DHL-220' → suffix '220'; 'DHL-PCUK-220' → suffix '220'; 'DHL-1' → '1'
+  const svcs = await query(
+    `SELECT id AS service_id, service_code
+     FROM   courier_services
+     WHERE  courier_id = $1 AND service_code IS NOT NULL`,
+    [carrierId]
+  );
+  for (const row of svcs.rows) {
+    const code    = row.service_code.trim();
+    const codeUp  = code.toUpperCase();
+    const parts   = code.split('-');
+    const suffix  = parts[parts.length - 1].trim().toUpperCase();
+
+    // Full service_code (e.g. "DHL-220") is also a valid match
+    if (!map[codeUp]) map[codeUp] = row.service_id;
+    // Short suffix (e.g. "220") implied from the service_code
+    if (suffix && suffix !== codeUp && !map[suffix]) map[suffix] = row.service_id;
+  }
+
+  // ── Layer 1 (higher priority) — explicit saved rules ─────────────────────
+  const explicit = await query(
     `SELECT courier_code, service_id
      FROM   courier_service_code_mappings
      WHERE  carrier_id = $1 AND is_active = true AND customer_id IS NULL`,
     [carrierId]
   );
-  const map = {};
-  for (const row of res.rows) {
-    map[row.courier_code.trim().toUpperCase()] = row.service_id;
+  for (const row of explicit.rows) {
+    map[row.courier_code.trim().toUpperCase()] = row.service_id; // overwrites implied
   }
+
+  const impliedCount  = Object.keys(map).length - explicit.rows.length;
+  console.log(`[recon engine] Service code map for carrier ${carrierId}: ${explicit.rows.length} explicit + ${impliedCount} implied entries`);
+
   return map;
 }
 
@@ -70,24 +113,56 @@ async function buildServiceCodeMap(carrierId) {
  * Smart suggestion: if a tracking number is in the Verified Pool, use the
  * pool record's dc_service_id to find the courier_services.id that the
  * unknown raw code most likely maps to.
- * Returns { service_id, service_name, service_code } or null.
+ *
+ * Matching strategy (tried in order):
+ *   1. Pool dc_service_id exact-match against service_code
+ *   2. Pool dc_service_id ends-with service_code (e.g. "dhl-pcuk-220" → "DHL-220")
+ *   3. Raw carrier code suffix-match (e.g. "220" → service_code ending in "-220")
+ *
+ * Returns { id, name, service_code } or null.
  */
-async function getSuggestedServiceFromPool(trackKey, pool, carrierId) {
+async function getSuggestedServiceFromPool(trackKey, pool, carrierId, rawCode = '') {
   const poolHits = pool.get(trackKey) || [];
-  if (poolHits.length === 0) return null;
 
-  const dcServiceId = poolHits[0].dc_service_id;
-  if (!dcServiceId) return null;
+  // Method 1 & 2 — use dc_service_id from the pool record
+  if (poolHits.length > 0) {
+    const dcServiceId = (poolHits[0].dc_service_id || '').trim();
+    if (dcServiceId) {
+      const res = await query(
+        `SELECT id, name, service_code
+         FROM   courier_services
+         WHERE  courier_id = $1
+           AND (
+             TRIM(service_code) ILIKE TRIM($2)
+             OR TRIM($2)        ILIKE '%' || TRIM(service_code)
+           )
+         ORDER BY
+           CASE WHEN TRIM(service_code) ILIKE TRIM($2) THEN 0 ELSE 1 END
+         LIMIT 1`,
+        [carrierId, dcServiceId]
+      );
+      if (res.rows[0]) return res.rows[0];
+    }
+  }
 
-  const res = await query(
-    `SELECT id, name, service_code
-     FROM   courier_services
-     WHERE  courier_id = $1
-       AND  TRIM(service_code) ILIKE TRIM($2)
-     LIMIT  1`,
-    [carrierId, dcServiceId]
-  );
-  return res.rows[0] || null;
+  // Method 3 — match raw carrier code against service_code suffix
+  // "220" → service_code ending in "-220" (e.g. DHL-220, DHL-PCUK-220)
+  if (rawCode) {
+    const res = await query(
+      `SELECT id, name, service_code
+       FROM   courier_services
+       WHERE  courier_id = $1
+         AND (
+           TRIM(service_code) ILIKE TRIM($2)
+           OR service_code    ILIKE '%-' || $2
+         )
+       LIMIT 1`,
+      [carrierId, rawCode]
+    );
+    if (res.rows[0]) return res.rows[0];
+  }
+
+  return null;
 }
 
 // ─── Pre-condition: Build Verified Pool ──────────────────────────────────────
@@ -546,7 +621,7 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
   if (!serviceId) {
     // Unknown service code — hard gate; all lines in group go unmatched.
     // Attempt smart suggestion from pool for every line in the group.
-    const suggestion = await getSuggestedServiceFromPool(trackKey, pool, carrierId);
+    const suggestion = await getSuggestedServiceFromPool(trackKey, pool, carrierId, rawServiceCode);
     if (suggestion) {
       console.log(`[recon engine] Unknown code "${rawServiceCode}" (multi-parcel) — pool suggests service_id=${suggestion.id} (${suggestion.service_code})`);
     }
@@ -683,7 +758,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
   if (!serviceId) {
     // Smart suggestion: use tracking number to find the likely correct service
     // from the Verified Pool (the pool already has the dc_service_id we use).
-    const suggestion = await getSuggestedServiceFromPool(trackKey, pool, carrierId);
+    const suggestion = await getSuggestedServiceFromPool(trackKey, pool, carrierId, rawServiceCode);
     if (suggestion) {
       console.log(`[recon engine] Unknown code "${rawServiceCode}" — pool suggests service_id=${suggestion.id} (${suggestion.service_code})`);
     }
