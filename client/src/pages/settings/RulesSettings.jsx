@@ -18,10 +18,11 @@ const api = axios.create({ baseURL: '/api' });
 export function SettingsNav() {
   const { pathname } = useLocation();
   const tabs = [
-    { to: '/settings/staff',   label: 'Staff' },
-    { to: '/settings/rules',   label: 'SLA Rules Engine' },
-    { to: '/settings/billing', label: 'Billing' },
-    { to: '/settings/xero',    label: 'Xero' },
+    { to: '/settings/staff',       label: 'Staff' },
+    { to: '/settings/rules',       label: 'SLA Rules Engine' },
+    { to: '/settings/volumetric',  label: 'Volumetric Weight' },
+    { to: '/settings/billing',     label: 'Billing' },
+    { to: '/settings/xero',        label: 'Xero' },
   ];
   return (
     <div style={{ display: 'flex', gap: 0, marginBottom: 28, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>

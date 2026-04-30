@@ -112,20 +112,28 @@ async function matchZone(serviceId, countryIso, postcode) {
 async function calcWeight(serviceId, parcel) {
   const actualKg = parseFloat(parcel.weight) || 0;
 
-  // Look up dimensional weight rule
+  // Look up volumetric rule via courier_services → volumetric_rules
   const dimRule = await query(
-    'SELECT divisor FROM dimensional_weight_rules WHERE courier_service_id = $1 LIMIT 1',
+    `SELECT vr.divisor
+     FROM   courier_services cs
+     JOIN   volumetric_rules  vr ON vr.id = cs.volumetric_rule_id
+     WHERE  cs.id = $1`,
     [serviceId]
   );
 
   let dimKg = 0;
   if (dimRule.rows.length) {
-    const { dim_length = 0, dim_width = 0, dim_height = 0 } = parcel;
-    dimKg = (parseFloat(dim_length) * parseFloat(dim_width) * parseFloat(dim_height)) / dimRule.rows[0].divisor;
+    const dim_length = parseFloat(parcel.dim_length || parcel.length || 0);
+    const dim_width  = parseFloat(parcel.dim_width  || parcel.width  || 0);
+    const dim_height = parseFloat(parcel.dim_height || parcel.height || 0);
+    if (dim_length > 0 && dim_width > 0 && dim_height > 0) {
+      dimKg = (dim_length * dim_width * dim_height) / dimRule.rows[0].divisor;
+    }
   }
 
-  const chargedKg = Math.max(actualKg, dimKg);
-  return { actualKg, dimKg, chargedKg };
+  // Use whichever is higher — actual weight wins ties
+  const chargedKg = dimKg > actualKg ? dimKg : actualKg;
+  return { actualKg, dimKg: parseFloat(dimKg.toFixed(3)), chargedKg: parseFloat(chargedKg.toFixed(3)) };
 }
 
 // ─── Cost price lookup ────────────────────────────────────────────────────────

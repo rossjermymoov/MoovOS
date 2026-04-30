@@ -697,4 +697,139 @@ router.delete('/couriers/contacts/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// VOLUMETRIC WEIGHT RULES
+// Named rules (name + divisor) that can be assigned to multiple courier services.
+// The pricing engine uses courier_services.volumetric_rule_id → volumetric_rules.divisor
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/carriers/volumetric-rules
+// Returns all named rules, each with an array of assigned courier services.
+router.get('/volumetric-rules', async (req, res, next) => {
+  try {
+    const rules = await query(
+      `SELECT vr.id, vr.name, vr.divisor, vr.created_at, vr.updated_at,
+              COALESCE(
+                json_agg(
+                  jsonb_build_object(
+                    'id', cs.id,
+                    'name', cs.name,
+                    'service_code', cs.service_code
+                  ) ORDER BY cs.name
+                ) FILTER (WHERE cs.id IS NOT NULL),
+                '[]'
+              ) AS assigned_services
+       FROM   volumetric_rules vr
+       LEFT JOIN courier_services cs ON cs.volumetric_rule_id = vr.id
+       GROUP  BY vr.id
+       ORDER  BY vr.name`
+    );
+
+    // Also return all services so the UI can populate the assignment dropdown
+    const services = await query(
+      `SELECT cs.id, cs.name, cs.service_code, c.name AS carrier_name,
+              cs.volumetric_rule_id
+       FROM   courier_services cs
+       JOIN   couriers c ON c.id = cs.courier_id
+       ORDER  BY c.name, cs.name`
+    );
+
+    res.json({ rules: rules.rows, services: services.rows });
+  } catch (err) { next(err); }
+});
+
+// POST /api/carriers/volumetric-rules
+router.post('/volumetric-rules', async (req, res, next) => {
+  try {
+    const { name, divisor } = req.body;
+    if (!name || !divisor) return res.status(400).json({ error: 'name and divisor are required' });
+    if (parseInt(divisor) <= 0) return res.status(400).json({ error: 'divisor must be greater than 0' });
+
+    const result = await query(
+      `INSERT INTO volumetric_rules (name, divisor) VALUES ($1, $2) RETURNING *`,
+      [name.trim(), parseInt(divisor)]
+    );
+    res.json(result.rows[0]);
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/carriers/volumetric-rules/:id
+router.patch('/volumetric-rules/:id', async (req, res, next) => {
+  try {
+    const { name, divisor } = req.body;
+    const sets = [];
+    const vals = [];
+    let idx = 1;
+
+    if (name    !== undefined) { sets.push(`name = $${idx++}`);    vals.push(name.trim()); }
+    if (divisor !== undefined) {
+      if (parseInt(divisor) <= 0) return res.status(400).json({ error: 'divisor must be greater than 0' });
+      sets.push(`divisor = $${idx++}`); vals.push(parseInt(divisor));
+    }
+    if (!sets.length) return res.status(400).json({ error: 'Nothing to update' });
+
+    sets.push(`updated_at = NOW()`);
+    vals.push(req.params.id);
+
+    const result = await query(
+      `UPDATE volumetric_rules SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`,
+      vals
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Rule not found' });
+    res.json(result.rows[0]);
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/carriers/volumetric-rules/:id
+// Only allowed if no services are currently assigned.
+router.delete('/volumetric-rules/:id', async (req, res, next) => {
+  try {
+    const check = await query(
+      `SELECT COUNT(*)::int AS cnt FROM courier_services WHERE volumetric_rule_id = $1`,
+      [req.params.id]
+    );
+    if (check.rows[0].cnt > 0) {
+      return res.status(409).json({
+        error: `Cannot delete — ${check.rows[0].cnt} service(s) still assigned to this rule. Remove assignments first.`,
+      });
+    }
+    await query('DELETE FROM volumetric_rules WHERE id = $1', [req.params.id]);
+    res.json({ deleted: true });
+  } catch (err) { next(err); }
+});
+
+// PUT /api/carriers/volumetric-rules/:ruleId/services/:serviceId
+// Assign a service to a volumetric rule (replaces any previous assignment).
+router.put('/volumetric-rules/:ruleId/services/:serviceId', async (req, res, next) => {
+  try {
+    const { ruleId, serviceId } = req.params;
+
+    // Confirm the rule exists
+    const ruleCheck = await query('SELECT id FROM volumetric_rules WHERE id = $1', [ruleId]);
+    if (!ruleCheck.rows.length) return res.status(404).json({ error: 'Volumetric rule not found' });
+
+    const result = await query(
+      `UPDATE courier_services SET volumetric_rule_id = $1, updated_at = NOW()
+       WHERE id = $2 RETURNING id, name, service_code, volumetric_rule_id`,
+      [ruleId, serviceId]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Courier service not found' });
+    res.json(result.rows[0]);
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/carriers/volumetric-rules/services/:serviceId
+// Remove a service's volumetric rule assignment.
+router.delete('/volumetric-rules/services/:serviceId', async (req, res, next) => {
+  try {
+    const result = await query(
+      `UPDATE courier_services SET volumetric_rule_id = NULL, updated_at = NOW()
+       WHERE id = $1 RETURNING id, name, service_code`,
+      [req.params.serviceId]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Courier service not found' });
+    res.json({ unassigned: true, service: result.rows[0] });
+  } catch (err) { next(err); }
+});
+
 export default router;
