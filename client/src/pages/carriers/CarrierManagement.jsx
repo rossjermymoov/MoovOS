@@ -903,6 +903,7 @@ function DomesticServiceBands({ svc, cardId, onUpdateBand }) {
                     <th style={{ textAlign:'left', padding:'4px 8px', color:'#555', fontWeight:600, fontSize:11 }}>Max kg</th>
                     <th style={{ textAlign:'right', padding:'4px 8px', color:'#00C853', fontWeight:600, fontSize:11 }}>1st Item</th>
                     <th style={{ textAlign:'right', padding:'4px 8px', color:'#FFC107', fontWeight:600, fontSize:11 }}>Sub Items</th>
+                    <th style={{ textAlign:'right', padding:'4px 8px', color:'#00BCD4', fontWeight:600, fontSize:11 }}>Per kg</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1058,6 +1059,7 @@ function IntlRateCardModal({ svc, onClose, onUpdateBand }) {
                   <th style={{ textAlign:'left', padding:'4px 10px', color:'#555', fontWeight:600, fontSize:11 }}>Max kg</th>
                   <th style={{ textAlign:'right', padding:'4px 10px', color:'#00C853', fontWeight:600, fontSize:11 }}>1st Item</th>
                   <th style={{ textAlign:'right', padding:'4px 10px', color:'#FFC107', fontWeight:600, fontSize:11 }}>Sub Items</th>
+                  <th style={{ textAlign:'right', padding:'4px 10px', color:'#00BCD4', fontWeight:600, fontSize:11 }}>Per kg</th>
                 </tr>
               </thead>
               <tbody>

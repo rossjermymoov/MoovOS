@@ -461,12 +461,14 @@ router.post('/import', async (req, res, next) => {
 // ─── PATCH /bands/:bandId — update a band's price ────────────
 router.patch('/bands/:bandId', async (req, res, next) => {
   try {
-    const { price_first, price_sub } = req.body;
+    const { price_first, price_sub, cost_per_kg, cost_per_kg_threshold_kg } = req.body;
     const updates = [];
     const values  = [];
     let i = 1;
-    if (price_first != null) { updates.push(`price_first = $${i++}`); values.push(parseFloat(price_first)); }
-    if (price_sub != null)   { updates.push(`price_sub = $${i++}`); values.push(price_sub === '' ? null : parseFloat(price_sub)); }
+    if (price_first != null)              { updates.push(`price_first = $${i++}`); values.push(parseFloat(price_first)); }
+    if (price_sub != null)                { updates.push(`price_sub = $${i++}`); values.push(price_sub === '' ? null : parseFloat(price_sub)); }
+    if ('cost_per_kg' in req.body)        { updates.push(`cost_per_kg = $${i++}`); values.push(cost_per_kg == null ? null : parseFloat(cost_per_kg)); }
+    if (cost_per_kg_threshold_kg != null) { updates.push(`cost_per_kg_threshold_kg = $${i++}`); values.push(parseFloat(cost_per_kg_threshold_kg)); }
     if (!updates.length) return res.status(400).json({ error: 'No valid fields' });
     values.push(req.params.bandId);
     const r = await query(
