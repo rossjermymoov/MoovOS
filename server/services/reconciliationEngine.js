@@ -389,15 +389,11 @@ function applyMappings(mappings, line, delta) {
 //     so the weight band range check still finds the flat-rate band (min=0, max=999).
 
 async function checkCorrectionEngine(customerId, serviceId, carrierId, line, delta) {
-  if (!serviceId) {
-    return { corrected: false, reason: 'no_service_id' };
+  if (!serviceId || !(line.billed_weight_kg > 0)) {
+    return { corrected: false, reason: 'no_service_id_or_weight' };
   }
 
-  // Use actual billed weight when available; fall back to 1 kg so flat-rate
-  // services (like DHL return) still get a weight band match.
-  const effectiveWeight = (line.billed_weight_kg && line.billed_weight_kg > 0)
-    ? line.billed_weight_kg
-    : 1;
+  const weight = line.billed_weight_kg;
 
   const bandRes = await query(`
     SELECT wb.price_first, wb.price_sub, wb.cost_per_kg, wb.cost_per_kg_threshold_kg,
@@ -409,7 +405,7 @@ async function checkCorrectionEngine(customerId, serviceId, carrierId, line, del
       AND  ($2 >= COALESCE(wb.min_weight_kg, 0))
       AND  ($2 <  COALESCE(wb.max_weight_kg, 99999))
     LIMIT  1
-  `, [serviceId, effectiveWeight]);
+  `, [serviceId, weight]);
 
   if (!bandRes.rows.length) {
     return { corrected: false, reason: 'no_carrier_band' };
@@ -418,18 +414,16 @@ async function checkCorrectionEngine(customerId, serviceId, carrierId, line, del
   const band = bandRes.rows[0];
   let recalcCost = parseFloat(band.price_first || 0);
 
-  // Per-kg overage — only applied when we have a real weight (not the nominal 1kg fallback)
-  if (line.billed_weight_kg && line.billed_weight_kg > 0 &&
-      band.cost_per_kg && band.cost_per_kg_threshold_kg &&
-      line.billed_weight_kg > parseFloat(band.cost_per_kg_threshold_kg)) {
-    recalcCost += (line.billed_weight_kg - parseFloat(band.cost_per_kg_threshold_kg)) *
+  if (band.cost_per_kg && band.cost_per_kg_threshold_kg &&
+      weight > parseFloat(band.cost_per_kg_threshold_kg)) {
+    recalcCost += (weight - parseFloat(band.cost_per_kg_threshold_kg)) *
                   parseFloat(band.cost_per_kg);
   }
 
   recalcCost = round2(recalcCost);
   const recalcDelta = round2(line.carrier_amount - recalcCost);
 
-  console.log(`[recon engine] Correction check: carrier=£${line.carrier_amount} band_cost=£${recalcCost} delta=£${recalcDelta} service=${serviceId} weight=${effectiveWeight}`);
+  console.log(`[recon engine] Correction check: carrier=£${line.carrier_amount} band_cost=£${recalcCost} delta=£${recalcDelta} service=${serviceId} weight=${weight}kg`);
 
   if (Math.abs(recalcDelta) < 0.02) {
     return { corrected: true, reason: 'pricing_rules' };
