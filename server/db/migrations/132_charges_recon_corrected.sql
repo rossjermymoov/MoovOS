@@ -13,23 +13,31 @@ ALTER TABLE charges
 -- applied (i.e. cost_price > price_first of the matching ceiling band with
 -- a cost_per_kg rate). These were silently updated by the correction engine
 -- in an earlier run and would otherwise appear as matched forever.
-UPDATE charges c
+--
+-- Note: PostgreSQL UPDATE...FROM does not allow the target table to be
+-- referenced inside JOIN ON clauses. Using comma-style FROM so all
+-- cross-table conditions live in WHERE where the target table is accessible.
+UPDATE charges
 SET    recon_corrected = TRUE
-FROM   shipments        s
-JOIN   couriers         co ON (
+FROM   shipments        s,
+       couriers         co,
+       courier_services cs,
+       zones            z,
+       weight_bands     wb
+WHERE  charges.shipment_id          = s.id
+  AND  charges.charge_type          = 'courier'
+  AND  charges.verified             = TRUE
+  AND  charges.cancelled            = FALSE
+  AND  charges.cost_price           IS NOT NULL
+  AND  (
          s.courier ILIKE co.code
          OR s.courier ILIKE co.name
          OR s.courier ILIKE '%' || co.code || '%'
          OR co.code   ILIKE '%' || s.courier || '%'
        )
-JOIN   courier_services cs ON cs.courier_id = co.id
-JOIN   zones            z  ON z.courier_service_id = cs.id
-                           AND z.name = c.zone_name
-JOIN   weight_bands     wb ON wb.zone_id    = z.id
-                           AND wb.cost_per_kg > 0
-                           AND c.cost_price  > wb.price_first
-WHERE  c.shipment_id = s.id
-  AND  c.charge_type = 'courier'
-  AND  c.verified    = TRUE
-  AND  c.cancelled   = FALSE
-  AND  c.cost_price  IS NOT NULL;
+  AND  cs.courier_id                = co.id
+  AND  z.courier_service_id         = cs.id
+  AND  z.name                       = charges.zone_name
+  AND  wb.zone_id                   = z.id
+  AND  wb.cost_per_kg               > 0
+  AND  charges.cost_price           > wb.price_first;
