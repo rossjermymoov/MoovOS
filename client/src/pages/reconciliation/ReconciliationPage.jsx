@@ -121,7 +121,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
   const inferredRef  = colMap.invoice_ref  && csvRows[0] ? csvRows[0][colMap.invoice_ref]  || '' : '';
   const inferredDate = colMap.invoice_date && csvRows[0] ? csvRows[0][colMap.invoice_date] || '' : '';
   const effectiveRef  = invoiceRefOverride || inferredRef;
-  const effectiveDate = inferredDate;
+  const effectiveDate = inferredDate; // raw from CSV — normalised to ISO on submit
 
   function handleFile(e) {
     const file = e.target.files[0];
@@ -334,6 +334,26 @@ function UploadModal({ couriers, onClose, onSuccess }) {
   );
 }
 
+// ─── Date normalisation ───────────────────────────────────────────────────────
+// Postgres DATE requires YYYY-MM-DD. Carrier CSVs often use DD/MM/YYYY.
+// Also handle MM/DD/YYYY and already-ISO strings.
+function toISODate(raw) {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  // Already ISO — YYYY-MM-DD or YYYY/MM/DD
+  if (/^\d{4}[-/]\d{2}[-/]\d{2}/.test(s)) return s.slice(0, 10).replace(/\//g, '-');
+  // DD/MM/YYYY or DD-MM-YYYY (UK format)
+  const ukMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (ukMatch) {
+    const [, d, m, y] = ukMatch;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  // Fallback: let the Date constructor try
+  const parsed = new Date(s);
+  if (!isNaN(parsed)) return parsed.toISOString().slice(0, 10);
+  return null;
+}
+
 // ─── Start Run Button (mutation) ──────────────────────────────────────────────
 function StartRunButton({ carrierId, invoiceRef, invoiceDate, lines, onSuccess, setError }) {
   const [loading, setLoading] = useState(false);
@@ -344,7 +364,7 @@ function StartRunButton({ carrierId, invoiceRef, invoiceDate, lines, onSuccess, 
       const res = await api.post('/reconciliation/runs', {
         carrier_id:   parseInt(carrierId),
         invoice_ref:  invoiceRef,
-        invoice_date: invoiceDate || null,
+        invoice_date: toISODate(invoiceDate),
         lines,
       });
       onSuccess(res.data.run_id);
