@@ -853,10 +853,13 @@ export default function RunDetailPage() {
               <Lock size={13} />Finalized
             </span>
           )}
+          {run.status === 'failed' && (
+            <span style={{ color: '#FF5252', fontSize: 12, fontWeight: 700 }}>✗ Run Failed</span>
+          )}
           {!run.finalized && run.status === 'needs_review' && (
             <span style={{ color: '#FFB300', fontSize: 12, fontWeight: 700 }}>⚠ Needs Review</span>
           )}
-          {!run.finalized && run.unmatched_count === 0 && run.status !== 'processing' && (
+          {!run.finalized && run.unmatched_count === 0 && (run.status === 'complete' || run.status === 'needs_review') && (
             <button
               style={{ ...btnGreen, opacity: finalizing ? 0.7 : 1 }}
               onClick={handleFinalize}
@@ -985,8 +988,18 @@ export default function RunDetailPage() {
             </div>
           )}
 
-          {/* Finalize CTA — show when no unmatched and not yet finalized */}
-          {(run.unmatched_count || 0) === 0 && !run.finalized && run.status !== 'processing' && (
+          {/* Failed run banner */}
+          {run.status === 'failed' && (
+            <div style={{ ...card, border: '1px solid rgba(213,0,0,0.4)', background: 'rgba(213,0,0,0.06)', gridColumn: 'span 2' }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#FF5252', marginBottom: 4 }}>✗ Run Failed</div>
+              <div style={{ fontSize: 12, color: '#888' }}>
+                The reconciliation engine encountered an error during processing. Check Railway logs for details, then delete this run and re-upload the CSV.
+              </div>
+            </div>
+          )}
+
+          {/* Finalize CTA — show when no unmatched, run completed successfully, not yet finalized */}
+          {(run.unmatched_count || 0) === 0 && !run.finalized && (run.status === 'complete' || run.status === 'needs_review') && (
             <div style={{ ...card, border: '1px solid rgba(0,200,83,0.25)', background: 'rgba(0,200,83,0.06)', gridColumn: 'span 2', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: '#00C853' }}>Ready to finalize</div>

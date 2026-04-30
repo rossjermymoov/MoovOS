@@ -110,7 +110,9 @@ router.get('/:id/bands', async (req, res, next) => {
          wb.min_weight_kg,
          wb.max_weight_kg,
          wb.price_first,
-         wb.price_sub
+         wb.price_sub,
+         wb.cost_per_kg,
+         wb.cost_per_kg_threshold_kg
        FROM courier_services cs
        JOIN zones z ON z.courier_service_id = cs.id
        JOIN weight_bands wb ON wb.zone_id = z.id
@@ -142,11 +144,13 @@ router.get('/:id/bands', async (req, res, next) => {
         };
       }
       svc.zones[row.zone_id].bands.push({
-        band_id:       row.band_id,
-        min_weight_kg: row.min_weight_kg,
-        max_weight_kg: row.max_weight_kg,
-        price_first:   row.price_first,
-        price_sub:     row.price_sub,
+        band_id:                  row.band_id,
+        min_weight_kg:            row.min_weight_kg,
+        max_weight_kg:            row.max_weight_kg,
+        price_first:              row.price_first,
+        price_sub:                row.price_sub,
+        cost_per_kg:              row.cost_per_kg,
+        cost_per_kg_threshold_kg: row.cost_per_kg_threshold_kg,
       });
     }
 
