@@ -1691,14 +1691,28 @@ router.get('/charges', async (req, res, next) => {
     if (parcel_type === 'multi')  { conds.push(`c.parcel_qty > 1`); }
     if (unpriced === 'true')      { conds.push(`c.price IS NULL`); }
     if (search) {
+      // DHL PWS invoices prefix all tracking numbers with "60" (e.g. "60120240016682")
+      // but our OMS stores the shorter form ("120240016682") in tracking_codes.
+      // Build an alternate search pattern to bridge this so both forms match:
+      //   user types "60120240016682" → also search "120240016682"
+      //   user types "120240016682"   → also search "60120240016682"
+      let altTrackSearch;
+      if (/^60\d{8,}$/.test(search)) {
+        altTrackSearch = `%${search.slice(2)}%`;       // strip leading "60"
+      } else if (/^\d{8,}$/.test(search)) {
+        altTrackSearch = `%60${search}%`;              // add "60" prefix
+      }
+      const mainPct = `%${search}%`;
+      const trackPct = altTrackSearch || mainPct;
+
       conds.push(`(
         cu.business_name ILIKE $${idx} OR cu.account_number ILIKE $${idx} OR
         c.order_id ILIKE $${idx} OR c.service_name ILIKE $${idx} OR
         s.reference ILIKE $${idx} OR s.reference_2 ILIKE $${idx} OR
-        EXISTS (SELECT 1 FROM unnest(s.tracking_codes) tc WHERE tc ILIKE $${idx})
+        EXISTS (SELECT 1 FROM unnest(s.tracking_codes) tc WHERE tc ILIKE $${idx} OR tc ILIKE $${idx + 1})
       )`);
-      vals.push(`%${search}%`);
-      idx++;
+      vals.push(mainPct, trackPct);
+      idx += 2;
     }
 
     const where = `WHERE ${conds.join(' AND ')}`;

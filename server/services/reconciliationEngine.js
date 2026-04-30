@@ -397,7 +397,7 @@ async function checkCorrectionEngine(customerId, serviceId, carrierId, line, del
 
   if (line.billed_weight_kg && line.billed_weight_kg > 0 && delta !== 0) {
     const bandRes = await query(`
-      SELECT wb.price_first, wb.price_subsequent, wb.cost_per_kg, wb.cost_per_kg_threshold_kg,
+      SELECT wb.price_first, wb.price_sub, wb.cost_per_kg, wb.cost_per_kg_threshold_kg,
              wb.min_weight_kg, wb.max_weight_kg
       FROM   weight_bands      wb
       JOIN   zones             z  ON z.id  = wb.zone_id
@@ -670,8 +670,14 @@ export async function processReconciliationRun(runId, carrierId, lines) {
     }
   }
 
-  // ── Process aggregate lines ───────────────────────────────────────────────
-  if (aggregateLines.length > 0) {
+  // ── Process aggregate lines (fuel / HGV) ─────────────────────────────────
+  // Only process aggregate lines when there are regular lines with tracking
+  // numbers. Aggregate lines without consignment numbers (e.g. DHL fuel/HGV
+  // rows) are meaningless in isolation — they can only be verified against
+  // matched shipments. If no regular lines matched, skip them entirely so they
+  // don't inflate the unmatched count.
+  const hasMatchedLines = matched + corrected > 0;
+  if (aggregateLines.length > 0 && hasMatchedLines) {
     const expectedFuelTotal  = await calculateExpectedFuelTotal(pool, matchedTrackingKeys);
     const hgvRatePerParcel   = await fetchCarrierHGVRate(carrierId);
     // Total parcel count = sum of parcel_count across all regular lines.
@@ -692,6 +698,8 @@ export async function processReconciliationRun(runId, carrierId, lines) {
         case 'unmatched': unmatched++; break;
       }
     }
+  } else if (aggregateLines.length > 0 && !hasMatchedLines) {
+    console.log(`[recon engine] Run ${runId}: skipping ${aggregateLines.length} aggregate line(s) — no matched regular lines to verify against`);
   }
 
   // ── Calculate automation rate ─────────────────────────────────────────────
