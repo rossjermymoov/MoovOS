@@ -374,53 +374,65 @@ function applyMappings(mappings, line, delta) {
 }
 
 // ─── Phase 4b: Correction Engine ─────────────────────────────────────────────
+//
+// Verifies whether the carrier's charge can be explained by the agreed carrier
+// rate card (weight_bands). Used when Phase 3 finds a delta — e.g. because
+// charges.cost_price was calculated before a rate change, or for return services
+// where cost_price may not reflect the carrier's actual fixed rate.
+//
+// Key changes vs original design:
+//   • Does NOT require customer_rates to exist — the check is purely against
+//     the carrier weight band, not the customer sell rate. Customer rates gating
+//     this was preventing return services and per-kg lines from being corrected.
+//   • Works without billed_weight_kg — for flat-rate services (e.g. DHL return)
+//     the CSV may not carry a weight column. We pass weight=1 as a nominal value
+//     so the weight band range check still finds the flat-rate band (min=0, max=999).
 
 async function checkCorrectionEngine(customerId, serviceId, carrierId, line, delta) {
-  if (!customerId || !serviceId) {
-    return { corrected: false, reason: 'no_pricing_rules' };
+  if (!serviceId) {
+    return { corrected: false, reason: 'no_service_id' };
   }
 
-  const rulesRes = await query(
-    `SELECT COUNT(*) AS cnt
-     FROM   customer_rates
-     WHERE  customer_id = $1
-       AND  (
-         TRIM(service_code) ILIKE (
-           SELECT TRIM(service_code) FROM courier_services WHERE id = $2 LIMIT 1
-         )
-         OR service_code IS NULL
-       )`,
-    [customerId, serviceId]
-  );
-  const hasRules = parseInt(rulesRes.rows[0]?.cnt || 0) > 0;
-  if (!hasRules) return { corrected: false, reason: 'no_pricing_rules' };
+  // Use actual billed weight when available; fall back to 1 kg so flat-rate
+  // services (like DHL return) still get a weight band match.
+  const effectiveWeight = (line.billed_weight_kg && line.billed_weight_kg > 0)
+    ? line.billed_weight_kg
+    : 1;
 
-  if (line.billed_weight_kg && line.billed_weight_kg > 0 && delta !== 0) {
-    const bandRes = await query(`
-      SELECT wb.price_first, wb.price_sub, wb.cost_per_kg, wb.cost_per_kg_threshold_kg,
-             wb.min_weight_kg, wb.max_weight_kg
-      FROM   weight_bands      wb
-      JOIN   zones             z  ON z.id  = wb.zone_id
-      JOIN   courier_services  cs ON cs.id = z.courier_service_id
-      WHERE  cs.id = $1
-        AND  ($2 >= COALESCE(wb.min_weight_kg, 0))
-        AND  ($2 <  COALESCE(wb.max_weight_kg, 99999))
-      LIMIT  1
-    `, [serviceId, line.billed_weight_kg]);
+  const bandRes = await query(`
+    SELECT wb.price_first, wb.price_sub, wb.cost_per_kg, wb.cost_per_kg_threshold_kg,
+           wb.min_weight_kg, wb.max_weight_kg
+    FROM   weight_bands      wb
+    JOIN   zones             z  ON z.id  = wb.zone_id
+    JOIN   courier_services  cs ON cs.id = z.courier_service_id
+    WHERE  cs.id = $1
+      AND  ($2 >= COALESCE(wb.min_weight_kg, 0))
+      AND  ($2 <  COALESCE(wb.max_weight_kg, 99999))
+    LIMIT  1
+  `, [serviceId, effectiveWeight]);
 
-    if (bandRes.rows.length) {
-      const band = bandRes.rows[0];
-      let recalcCost = parseFloat(band.price_first || 0);
-      if (band.cost_per_kg && band.cost_per_kg_threshold_kg &&
-          line.billed_weight_kg > band.cost_per_kg_threshold_kg) {
-        recalcCost += (line.billed_weight_kg - band.cost_per_kg_threshold_kg) *
-                      parseFloat(band.cost_per_kg);
-      }
-      const recalcDelta = round2(line.carrier_amount - recalcCost);
-      if (Math.abs(recalcDelta) < 0.02) {
-        return { corrected: true, reason: 'pricing_rules' };
-      }
-    }
+  if (!bandRes.rows.length) {
+    return { corrected: false, reason: 'no_carrier_band' };
+  }
+
+  const band = bandRes.rows[0];
+  let recalcCost = parseFloat(band.price_first || 0);
+
+  // Per-kg overage — only applied when we have a real weight (not the nominal 1kg fallback)
+  if (line.billed_weight_kg && line.billed_weight_kg > 0 &&
+      band.cost_per_kg && band.cost_per_kg_threshold_kg &&
+      line.billed_weight_kg > parseFloat(band.cost_per_kg_threshold_kg)) {
+    recalcCost += (line.billed_weight_kg - parseFloat(band.cost_per_kg_threshold_kg)) *
+                  parseFloat(band.cost_per_kg);
+  }
+
+  recalcCost = round2(recalcCost);
+  const recalcDelta = round2(line.carrier_amount - recalcCost);
+
+  console.log(`[recon engine] Correction check: carrier=£${line.carrier_amount} band_cost=£${recalcCost} delta=£${recalcDelta} service=${serviceId} weight=${effectiveWeight}`);
+
+  if (Math.abs(recalcDelta) < 0.02) {
+    return { corrected: true, reason: 'pricing_rules' };
   }
 
   return { corrected: false, reason: 'unexplained_delta' };
@@ -566,9 +578,20 @@ async function processAggregateLine(line, runId, carrierId, expectedFuelTotal, h
 export async function processReconciliationRun(runId, carrierId, lines) {
   const startTime = Date.now();
 
+  // ── Filter: discard lines with no consignment number ─────────────────────
+  // Carrier invoices (e.g. DHL) append aggregate rows for fuel and HGV
+  // surcharges at the bottom — these have an empty tracking_number/consignment
+  // column and cannot be individually reconciled. Skip them entirely so they
+  // don't pollute the line count, matched/unmatched counters, or automation %.
+  const reconcilableLines = lines.filter(l => String(l.tracking_number || '').trim());
+  const skippedCount      = lines.length - reconcilableLines.length;
+  if (skippedCount > 0) {
+    console.log(`[recon engine] Run ${runId}: skipping ${skippedCount} line(s) with no consignment number (fuel/HGV aggregate rows)`);
+  }
+
   await query(
     `UPDATE reconciliation_runs SET status = 'processing', total_lines = $2 WHERE id = $1`,
-    [runId, lines.length]
+    [runId, reconcilableLines.length]
   );
 
   // ── Phase 1b: Build service code map ──────────────────────────────────────
@@ -586,28 +609,18 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   // ── Phase 4a: Load Mapping Engine rules ───────────────────────────────────
   const mappings = await loadMappings(carrierId);
 
-  // ── Separate aggregate lines (empty tracking_number) from regular lines ───
-  // Aggregate lines are carrier-level totals (fuel, HGV) that have no
-  // individual tracking number — DHL puts these at the bottom of the CSV.
-  const aggregateLines = lines.filter(l => !String(l.tracking_number || '').trim());
-  const regularLines   = lines.filter(l =>  String(l.tracking_number || '').trim());
-
-  // Diagnostic: log first 3 lines so we can see exactly what the engine received
-  console.log(`[recon engine] Run ${runId}: lines=${lines.length} regular=${regularLines.length} aggregate=${aggregateLines.length}`);
-  lines.slice(0, 3).forEach((l, i) => {
+  // Diagnostic: log first 3 reconcilable lines
+  console.log(`[recon engine] Run ${runId}: ${reconcilableLines.length} reconcilable lines (${skippedCount} aggregate skipped)`);
+  reconcilableLines.slice(0, 3).forEach((l, i) => {
     console.log(`[recon engine]   line[${i}]: tracking_number=${JSON.stringify(l.tracking_number)} service_code=${JSON.stringify(l.service_code)} carrier_amount=${JSON.stringify(l.carrier_amount)}`);
   });
 
-  if (aggregateLines.length > 0) {
-    console.log(`[recon engine] Run ${runId}: ${aggregateLines.length} aggregate line(s) detected (no tracking number)`);
-  }
-
-  // ── Group regular lines by tracking number (multi-parcel support) ─────────
+  // ── Group lines by tracking number (multi-parcel support) ───────────────
   // DHL bills each parcel as a separate line under the same tracking number.
   // We compare the SUM of per-parcel carrier amounts against the single
   // charge record's base cost_price.
   const trackingGroups = new Map();
-  for (const line of regularLines) {
+  for (const line of reconcilableLines) {
     const key = String(line.tracking_number).trim().toUpperCase();
     if (!trackingGroups.has(key)) trackingGroups.set(key, []);
     trackingGroups.get(key).push(line);
@@ -621,44 +634,21 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   // Counters
   let matched = 0, corrected = 0, unmatched = 0, ignored = 0;
 
-  // Track which tracking keys resulted in a matched or corrected line
-  // (needed to calculate expected fuel total for the aggregate check).
-  const matchedTrackingKeys = new Set();
-
-  // ── Detect whether this carrier bills fuel as a separate aggregate line ──
-  // When true, per-shipment lines should compare against base cost_price only
-  // (charge.expected_cost), not the total which includes fuel+surcharges.
-  //
-  // Detection is intentionally broad: check both charge_type AND service_code
-  // for any mention of "fuel". This handles cases where the user hasn't mapped
-  // a charge_type column (all lines default to 'base') but DHL's aggregate fuel
-  // line still has "Fuel Surcharge" or similar in the service/description column.
-  const fuelIsAggregated = aggregateLines.some(l => {
-    const ct = (l.charge_type  || '').toLowerCase();
-    const sc = (l.service_code || '').toLowerCase();
-    return ct.includes('fuel') || sc.includes('fuel');
-  });
-  if (fuelIsAggregated) {
-    console.log(`[recon engine] Run ${runId}: fuel billed as aggregate line — using base cost_price for per-shipment comparisons`);
-  }
-
-  // ── Process regular lines (grouped by tracking number) ───────────────────
+  // ── Process lines (grouped by tracking number) ────────────────────────────
   for (const [trackKey, group] of trackingGroups) {
     try {
       const groupResults = await processTrackingGroup(
         group, trackKey, runId, carrierId, serviceCodeMap, pool, mappings
       );
 
-      let groupMatched = false;
       for (const r of groupResults) {
         switch (r.status) {
-          case 'matched':   matched++;   groupMatched = true; break;
-          case 'corrected': corrected++; groupMatched = true; break;
+          case 'matched':   matched++;   break;
+          case 'corrected': corrected++; break;
           case 'unmatched': unmatched++; break;
           case 'ignored':   ignored++;   break;
         }
       }
-      if (groupMatched) matchedTrackingKeys.add(trackKey);
     } catch (lineErr) {
       console.error(`[recon engine] Run ${runId}: ERROR processing tracking group "${trackKey}":`, lineErr.message);
       unmatched++;
@@ -670,41 +660,9 @@ export async function processReconciliationRun(runId, carrierId, lines) {
     }
   }
 
-  // ── Process aggregate lines (fuel / HGV) ─────────────────────────────────
-  // Only process aggregate lines when there are regular lines with tracking
-  // numbers. Aggregate lines without consignment numbers (e.g. DHL fuel/HGV
-  // rows) are meaningless in isolation — they can only be verified against
-  // matched shipments. If no regular lines matched, skip them entirely so they
-  // don't inflate the unmatched count.
-  const hasMatchedLines = matched + corrected > 0;
-  if (aggregateLines.length > 0 && hasMatchedLines) {
-    const expectedFuelTotal  = await calculateExpectedFuelTotal(pool, matchedTrackingKeys);
-    const hgvRatePerParcel   = await fetchCarrierHGVRate(carrierId);
-    // Total parcel count = sum of parcel_count across all regular lines.
-    // DHL column J carries the piece count per line (usually 1 for single-piece
-    // shipments, but can be >1 for multi-piece). Summing this gives the exact
-    // item count the carrier used to calculate the HGV aggregate charge.
-    // Fall back to 1 per line if parcel_count was not mapped in the CSV.
-    const totalParcelCount   = regularLines.reduce(
-      (sum, l) => sum + (parseInt(l.parcel_count, 10) || 1), 0
-    );
-
-    for (const aggLine of aggregateLines) {
-      const result = await processAggregateLine(
-        aggLine, runId, carrierId, expectedFuelTotal, hgvRatePerParcel, totalParcelCount
-      );
-      switch (result.status) {
-        case 'matched':   matched++;   break;
-        case 'unmatched': unmatched++; break;
-      }
-    }
-  } else if (aggregateLines.length > 0 && !hasMatchedLines) {
-    console.log(`[recon engine] Run ${runId}: skipping ${aggregateLines.length} aggregate line(s) — no matched regular lines to verify against`);
-  }
-
   // ── Calculate automation rate ─────────────────────────────────────────────
-  const total         = lines.length;
-  const autoResolved  = matched + corrected;
+  const total          = reconcilableLines.length;
+  const autoResolved   = matched + corrected;
   const automationRate = total > 0 ? round2((autoResolved / total) * 100) : 0;
 
   // ── Finalise run ──────────────────────────────────────────────────────────
@@ -724,7 +682,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
 
   console.log(`[recon engine] Run ${runId} complete in ${Date.now() - startTime}ms — ` +
     `${matched} matched, ${corrected} corrected, ${unmatched} unmatched, ` +
-    `${aggregateLines.length} aggregate, automation: ${automationRate}%`);
+    `${skippedCount} aggregate skipped, automation: ${automationRate}%`);
 
   return {
     run_id:          runId,
