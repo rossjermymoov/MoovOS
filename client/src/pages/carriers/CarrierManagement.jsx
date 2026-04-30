@@ -3008,6 +3008,12 @@ function RateMatrix({ zones }) {
             Each subsequent parcel
           </div>
         )}
+        {zones.some(z => (z.weight_bands||[]).some(b => b.cost_per_kg && parseFloat(b.cost_per_kg) > 0)) && (
+          <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:'#AAAAAA' }}>
+            <span style={{ width:10, height:10, borderRadius:2, background:'#00BCD4', display:'inline-block' }}/>
+            Per-kg overage rate
+          </div>
+        )}
         <span style={{ marginLeft:'auto', fontSize:12, color:'#555' }}>
           {sortedBands.length} weight {sortedBands.length === 1 ? 'band' : 'bands'} · {zones.length} {zones.length === 1 ? 'zone' : 'zones'}
         </span>
@@ -3085,6 +3091,16 @@ function RateMatrix({ zones }) {
                                 +£{parseFloat(b.price_sub).toFixed(2)}
                               </div>
                             )}
+                            {b.cost_per_kg && parseFloat(b.cost_per_kg) > 0 && (
+                              <div style={{
+                                fontSize:10, color:'#00BCD4',
+                                fontFamily:'monospace', marginTop:3,
+                              }}
+                                title={`£${parseFloat(b.cost_per_kg).toFixed(4)}/kg above ${b.cost_per_kg_threshold_kg ?? b.max_weight_kg}kg`}
+                              >
+                                +£{parseFloat(b.cost_per_kg).toFixed(4)}/kg &gt;{b.cost_per_kg_threshold_kg ?? b.max_weight_kg}kg
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <span style={{ color:'#2A2A3A', fontSize:14 }}>—</span>
@@ -3127,10 +3143,11 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
         payload.cost_per_kg               = parseFloat(form.cost_per_kg);
         payload.cost_per_kg_threshold_kg  = parseFloat(form.min_weight_kg); // per-kg kicks in from band start
       } else {
-        // Flat rate band
-        payload.price_first = parseFloat(form.price_first);
-        payload.price_sub   = form.price_sub !== '' ? parseFloat(form.price_sub) : null;
-        payload.cost_per_kg = null;
+        // Flat rate band — optionally with overage rate above max
+        payload.price_first               = parseFloat(form.price_first);
+        payload.price_sub                 = form.price_sub !== '' ? parseFloat(form.price_sub) : null;
+        payload.cost_per_kg               = form.cost_per_kg !== '' ? parseFloat(form.cost_per_kg) : null;
+        payload.cost_per_kg_threshold_kg  = form.cost_per_kg !== '' ? parseFloat(form.max_weight_kg) : null;
       }
       return carriersApi.createWeightBand(payload);
     },
@@ -3194,7 +3211,7 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
                 <span style={{ background:'rgba(0,200,83,0.1)', border:'1px solid rgba(0,200,83,0.3)', borderRadius:20, padding:'1px 8px' }}>Flat rate</span>
                 <button onClick={() => setBandType(null)} style={{ background:'none', border:'none', color:'#555', cursor:'pointer', fontSize:11, marginLeft:'auto' }}>← Change type</button>
               </div>
-              <div style={{ display:'grid', gridTemplateColumns:'1.6fr 1fr 1fr 1fr 1fr auto', gap:8 }}>
+              <div style={{ display:'grid', gridTemplateColumns:'1.6fr 1fr 1fr 1fr 1fr 1fr auto', gap:8 }}>
                 <div className="pill-input-wrap" style={{ height:32 }}>
                   <input placeholder="Name (e.g. Parcel)" value={form.name} onChange={e => setForm(f=>({...f,name:e.target.value}))} style={{ fontSize:12 }}/>
                 </div>
@@ -3203,12 +3220,23 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
                     <input type="number" step="0.001" placeholder={ph} value={form[key]} onChange={e => setForm(f=>({...f,[key]:e.target.value}))} style={{ fontSize:12 }}/>
                   </div>
                 ))}
+                <div className="pill-input-wrap" style={{ height:32 }}>
+                  <input type="number" step="0.0001" placeholder="£/kg overage" value={form.cost_per_kg}
+                    onChange={e => setForm(f=>({...f,cost_per_kg:e.target.value}))}
+                    style={{ fontSize:12, color:'#00BCD4' }}
+                    title="Optional: per-kg charge above the max weight of this band"/>
+                </div>
                 <button onClick={() => addBand.mutate()} disabled={addBand.isPending || !form.min_weight_kg || !form.max_weight_kg || !form.price_first} className="btn-primary" style={{ height:32 }}>
                   {addBand.isPending ? '…' : <Check size={12}/>}
                 </button>
               </div>
               <div style={{ fontSize:11, color:'#555', marginTop:6, paddingLeft:2 }}>
-                Cost Sub is optional — used for 2nd+ parcel pricing on multi-parcel shipments.
+                Cost Sub is optional — for 2nd+ parcel pricing. £/kg overage is optional — per-kg charge above Max kg (e.g. £0.30/kg above 30kg).
+                {form.cost_per_kg && form.max_weight_kg
+                  ? <span style={{ color:'#00BCD4', marginLeft:4 }}>
+                      e.g. {parseFloat(form.max_weight_kg)+5}kg → £{parseFloat(form.price_first||0).toFixed(2)} + (5kg × £{parseFloat(form.cost_per_kg).toFixed(4)}) = £{(parseFloat(form.price_first||0) + 5 * parseFloat(form.cost_per_kg)).toFixed(2)}
+                    </span>
+                  : null}
               </div>
               {addBand.isError && <div style={{ fontSize:11, color:'#F44336', marginTop:6 }}>{addBand.error?.message}</div>}
             </div>
