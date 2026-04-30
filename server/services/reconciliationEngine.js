@@ -221,7 +221,14 @@ async function buildVerifiedPool(carrierId) {
       c.cost_price      AS expected_cost,
       c.shipment_id,
       c.charge_type,
-      c.zone_id,
+      (
+        SELECT z_lkp.id
+        FROM   zones           z_lkp
+        JOIN   courier_services cs_lkp ON cs_lkp.id = z_lkp.courier_service_id
+        WHERE  z_lkp.name    = c.zone_name
+          AND  cs_lkp.courier_id = $1
+        LIMIT  1
+      )                 AS zone_id,
       s.tracking_codes,
       s.dc_service_id,
       s.total_weight_kg AS declared_weight_kg,
