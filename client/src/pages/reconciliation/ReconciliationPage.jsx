@@ -18,6 +18,7 @@ import {
   BookOpen, Save, Star, Pencil, Check,
 } from 'lucide-react';
 import axios from 'axios';
+import { getCourierLogo } from '../../utils/courierLogos';
 
 const api = axios.create({ baseURL: '/api' });
 
@@ -50,38 +51,12 @@ const inputSt = {
   padding: '8px 12px', outline: 'none',
 };
 
-// ─── Carrier brand colours ────────────────────────────────────────────────────
-// Keyed on the `code` field returned by GET /api/reconciliation/couriers.
-// If no match found we fall back to a neutral grey tile.
-const CARRIER_BRANDS = {
-  dhl:     { bg: '#FFCC00', fg: '#222222', label: 'DHL' },
-  dpd:     { bg: '#DC0032', fg: '#FFFFFF', label: 'DPD' },
-  ups:     { bg: '#351C15', fg: '#FFBF00', label: 'UPS' },
-  fedex:   { bg: '#4D148C', fg: '#FF6600', label: 'FedEx' },
-  royal_mail: { bg: '#E60000', fg: '#FFFFFF', label: 'Royal Mail' },
-  royalmail: { bg: '#E60000', fg: '#FFFFFF', label: 'Royal Mail' },
-  hermes:  { bg: '#840085', fg: '#FFFFFF', label: 'Hermes' },
-  evri:    { bg: '#840085', fg: '#FFFFFF', label: 'Evri' },
-  yodel:   { bg: '#0099D8', fg: '#FFFFFF', label: 'Yodel' },
-  tnt:     { bg: '#F26522', fg: '#FFFFFF', label: 'TNT' },
-  parcelforce: { bg: '#D61F26', fg: '#FFFFFF', label: 'Parcelforce' },
-  amazon:  { bg: '#FF9900', fg: '#232F3E', label: 'Amazon' },
-  gls:     { bg: '#00539B', fg: '#FFFFFF', label: 'GLS' },
-  dpd_local: { bg: '#DC0032', fg: '#FFFFFF', label: 'DPD Local' },
-  uk_mail: { bg: '#003087', fg: '#FFFFFF', label: 'UK Mail' },
-  collect_plus: { bg: '#9B1B30', fg: '#FFFFFF', label: 'CollectPlus' },
-};
-
-function carrierBrand(code) {
-  if (!code) return { bg: '#2A2A2A', fg: '#AAAAAA', label: null };
-  const key = String(code).toLowerCase().replace(/[^a-z0-9_]/g, '_');
-  return CARRIER_BRANDS[key] || { bg: '#2A2A2A', fg: '#CCCCCC', label: null };
-}
-
 // ─── Carrier tile ─────────────────────────────────────────────────────────────
 function CarrierTile({ courier, selected, onSelect }) {
-  const brand = carrierBrand(courier.code);
-  const initials = (brand.label || courier.name || '')
+  const logoUrl = getCourierLogo(courier.code) || getCourierLogo(courier.name);
+
+  // Fallback initials badge when no logo is found
+  const initials = (courier.name || '')
     .split(/[\s_-]+/)
     .filter(Boolean)
     .slice(0, 2)
@@ -98,19 +73,33 @@ function CarrierTile({ courier, selected, onSelect }) {
         background: selected ? 'rgba(0,200,83,0.08)' : 'rgba(255,255,255,0.03)',
         border: `2px solid ${selected ? '#00C853' : 'rgba(255,255,255,0.08)'}`,
         transition: 'border-color 0.15s, background 0.15s',
-        minWidth: 0,
+        minWidth: 0, position: 'relative',
       }}
     >
-      {/* Badge */}
+      {/* Logo or fallback initials badge */}
       <div style={{
-        width: 52, height: 52, borderRadius: 10, flexShrink: 0,
-        background: brand.bg, color: brand.fg,
+        width: 56, height: 40, borderRadius: 8, flexShrink: 0, overflow: 'hidden',
+        background: logoUrl ? '#FFFFFF' : 'rgba(255,255,255,0.08)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontWeight: 800, fontSize: 14, letterSpacing: 0.5,
-        boxShadow: selected ? `0 0 0 3px rgba(0,200,83,0.35)` : 'none',
+        boxShadow: selected ? '0 0 0 2px #00C853' : 'none',
         transition: 'box-shadow 0.15s',
       }}>
-        {initials}
+        {logoUrl ? (
+          <img
+            src={logoUrl}
+            alt={courier.name}
+            style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 4 }}
+            onError={e => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }}
+          />
+        ) : null}
+        <span style={{
+          display: logoUrl ? 'none' : 'flex',
+          alignItems: 'center', justifyContent: 'center',
+          width: '100%', height: '100%',
+          fontWeight: 800, fontSize: 13, color: '#AAAAAA', letterSpacing: 0.5,
+        }}>
+          {initials}
+        </span>
       </div>
       {/* Name */}
       <span style={{
@@ -120,10 +109,11 @@ function CarrierTile({ courier, selected, onSelect }) {
       }}>
         {courier.name}
       </span>
-      {/* Tick */}
+      {/* Selected tick */}
       {selected && (
         <div style={{
-          width: 16, height: 16, borderRadius: '50%', background: '#00C853',
+          position: 'absolute', top: 5, right: 5,
+          width: 15, height: 15, borderRadius: '50%', background: '#00C853',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
           <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
