@@ -240,7 +240,17 @@ async function buildVerifiedPool(carrierId) {
     WHERE  c.verified      = true
       AND  c.cancelled     = false
       AND  c.charge_type   = 'courier'
-      AND  (s.courier ILIKE cu_carrier.code OR s.courier ILIKE cu_carrier.name)
+      -- Carrier matching: use contains variants so "DHL" matches "DHL Parcel UK"
+      -- and vice versa. Pure ILIKE equality fails when our couriers.name/code
+      -- doesn't exactly mirror what DeliveryConnect stored in shipments.courier.
+      AND (
+        s.courier ILIKE cu_carrier.code
+        OR s.courier ILIKE cu_carrier.name
+        OR s.courier ILIKE '%' || cu_carrier.code || '%'
+        OR cu_carrier.code ILIKE '%' || s.courier || '%'
+        OR s.courier ILIKE '%' || cu_carrier.name || '%'
+        OR cu_carrier.name ILIKE '%' || s.courier || '%'
+      )
       -- Verification gate: only shipments the carrier has collected.
       -- A shipment is considered despatched if it has tracking codes OR a
       -- dc_service_id (the DeliveryConnect consignment reference). For DHL,
@@ -295,12 +305,13 @@ async function buildVerifiedPool(carrierId) {
     }
   }
 
-  console.log(`[recon engine] Verified pool built: ${pool.size} unique keys from ${res.rows.length} charge records`);
-  if (pool.size === 0) {
-    console.warn(`[recon engine] WARNING: pool is EMPTY — check that DHL shipments have dc_service_id or tracking_codes set`);
+  const poolSize = pool.size;
+  console.log(`[recon engine] Verified pool built: ${poolSize} unique keys from ${res.rows.length} charge records`);
+  if (poolSize === 0) {
+    console.warn(`[recon engine] WARNING: pool is EMPTY — carrier name/code may not match shipments.courier, or no DHL shipments have dc_service_id/tracking_codes`);
   }
 
-  return pool;
+  return { pool, poolSize };
 }
 
 // ─── Phase 2: Account number → customer lookup (Safety Net) ──────────────────
@@ -564,7 +575,13 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   const serviceCodeMap = await buildServiceCodeMap(carrierId);
 
   // ── Pre-condition: Build Verified Pool ────────────────────────────────────
-  const pool = await buildVerifiedPool(carrierId);
+  const { pool, poolSize } = await buildVerifiedPool(carrierId);
+
+  // Persist pool size immediately so the UI can show it even before the run completes.
+  await query(
+    `UPDATE reconciliation_runs SET pool_size = $2 WHERE id = $1`,
+    [runId, poolSize]
+  );
 
   // ── Phase 4a: Load Mapping Engine rules ───────────────────────────────────
   const mappings = await loadMappings(carrierId);
@@ -694,6 +711,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
     unmatched:       unmatched,
     ignored:         ignored,
     automation_rate: automationRate,
+    pool_size:       poolSize,
     duration_ms:     Date.now() - startTime,
   };
 }

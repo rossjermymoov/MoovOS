@@ -870,7 +870,21 @@ export default function RunDetailPage() {
       </div>
 
       {/* KPI strip */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12, marginBottom: 24 }}>
+        {/* Pool size — first tile, most diagnostic value */}
+        {(() => {
+          const ps = run.pool_size;
+          const psColor  = ps == null ? '#555' : ps === 0 ? '#FF5252' : '#00C853';
+          const psValue  = ps == null ? 'Pending…' : ps.toLocaleString();
+          const psBorder = ps === 0 ? '1px solid rgba(213,0,0,0.4)' : card.border;
+          return (
+            <div key="pool" style={{ ...card, border: psBorder }}>
+              <div style={{ fontSize: 10, color: '#666', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Verified Pool</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: psColor }}>{psValue}</div>
+              {ps === 0 && <div style={{ fontSize: 10, color: '#FF5252', marginTop: 4 }}>Carrier name mismatch?</div>}
+            </div>
+          );
+        })()}
         {[
           { label: 'Total Lines', value: total.toLocaleString(), color: '#E6EDF3' },
           { label: 'Matched', value: `${run.matched_count || 0} (${matchedPct}%)`, color: '#00C853' },
