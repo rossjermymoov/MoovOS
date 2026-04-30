@@ -603,4 +603,160 @@ function dueDateFromGenerated(generatedAt) {
   return d.toISOString().split('T')[0];
 }
 
+// ─── POST /api/xero/reconciliation-runs/:runId/push ──────────────────────────
+// Push Xero invoices for all customers in a finalized reconciliation run.
+// One invoice per customer. Xero Reference = "MoovOS Recon Run #<runId> — <invoice_ref>".
+// Body: { customer_id? } — if supplied, push only that customer.
+//
+// Returns: { pushed: [], skipped: [], errors: [] }
+
+router.post('/reconciliation-runs/:runId/push', async (req, res, next) => {
+  try {
+    const runId      = parseInt(req.params.runId);
+    const filterCust = req.body?.customer_id || null;
+
+    // Load run
+    const runRes = await query(
+      `SELECT rr.*, c.name AS carrier_name
+       FROM   reconciliation_runs rr
+       LEFT JOIN couriers c ON c.id = rr.carrier_id
+       WHERE  rr.id = $1`,
+      [runId]
+    );
+    if (!runRes.rows.length) return res.status(404).json({ error: 'Run not found' });
+    const run = runRes.rows[0];
+    if (!run.finalized) {
+      return res.status(422).json({ error: 'Run must be finalized before pushing to Xero' });
+    }
+
+    // Load finalized lines, grouped by customer
+    const params = [runId];
+    let custFilter = '';
+    if (filterCust) {
+      params.push(filterCust);
+      custFilter = `AND f.customer_id = $${params.length}`;
+    }
+
+    const linesRes = await query(`
+      SELECT
+        f.*,
+        cu.xero_contact_id,
+        cu.business_name AS xero_customer_name
+      FROM   finalized_billing_lines f
+      LEFT JOIN customers cu ON cu.id = f.customer_id
+      WHERE  f.run_id = $1 ${custFilter}
+      ORDER  BY f.customer_id, f.despatch_date, f.tracking_number
+    `, params);
+
+    // Group by customer
+    const byCustomer = new Map();
+    for (const line of linesRes.rows) {
+      const key = String(line.customer_id);
+      if (!byCustomer.has(key)) {
+        byCustomer.set(key, {
+          customer_id:      line.customer_id,
+          customer_name:    line.xero_customer_name || line.customer_name,
+          xero_contact_id:  line.xero_contact_id,
+          lines:            [],
+        });
+      }
+      byCustomer.get(key).lines.push(line);
+    }
+
+    const pushed   = [];
+    const skipped  = [];
+    const errors   = [];
+    const today    = new Date().toISOString().split('T')[0];
+    const dueDate  = dueDateFromGenerated(new Date());
+    const xeroAccountCode = process.env.XERO_ACCOUNT_CODE || '200';
+    const reference = `MoovOS Recon Run #${runId}${run.invoice_ref ? ` — ${run.invoice_ref}` : ''}`;
+
+    for (const [, cust] of byCustomer) {
+      if (!cust.xero_contact_id) {
+        skipped.push({
+          customer_id:   cust.customer_id,
+          customer_name: cust.customer_name,
+          reason:        'Not linked to a Xero contact',
+        });
+        continue;
+      }
+
+      try {
+        // Build Xero line items — one per shipment
+        const lineItems = cust.lines.map(l => {
+          const parts = [
+            l.tracking_number || l.order_reference || '',
+            l.service_name    || '',
+            l.weight_kg       ? `${parseFloat(l.weight_kg).toFixed(2)}kg` : '',
+            l.recipient_postcode || '',
+          ].filter(Boolean).join(' — ');
+
+          return {
+            Description: parts || 'Parcel delivery service',
+            Quantity:    1,
+            UnitAmount:  parseFloat(l.sell_total_amount || 0),
+            AccountCode: xeroAccountCode,
+            TaxType:     'NONE',
+          };
+        });
+
+        // Deduplicate: collapse pure-zero lines
+        const nonZeroLines = lineItems.filter(l => l.UnitAmount !== 0);
+        const itemsToSend  = nonZeroLines.length > 0 ? nonZeroLines : lineItems;
+
+        const xeroInvoice = {
+          Type:         'ACCREC',
+          Contact:      { ContactID: cust.xero_contact_id },
+          Date:         today,
+          DueDate:      dueDate,
+          LineItems:    itemsToSend,
+          Status:       'AUTHORISED',
+          Reference:    reference,
+          InvoiceNumber: `MO-REC-${runId}-${String(cust.customer_id).slice(0, 6).toUpperCase()}`,
+        };
+
+        const data = await xeroRequest('POST', '/Invoices', { Invoices: [xeroInvoice] });
+        const xeroInvoiceId = data.Invoices?.[0]?.InvoiceID;
+
+        if (xeroInvoiceId) {
+          // Update all finalized lines for this customer/run with the Xero invoice ID
+          await query(`
+            UPDATE finalized_billing_lines
+            SET xero_invoice_id = $1, xero_pushed_at = NOW()
+            WHERE run_id = $2 AND customer_id = $3
+          `, [xeroInvoiceId, runId, cust.customer_id]);
+
+          pushed.push({
+            customer_id:    cust.customer_id,
+            customer_name:  cust.customer_name,
+            xero_invoice_id: xeroInvoiceId,
+            line_count:     cust.lines.length,
+            total:          cust.lines.reduce((s, l) => s + parseFloat(l.sell_total_amount || 0), 0).toFixed(2),
+          });
+        } else {
+          throw new Error('Xero did not return an InvoiceID');
+        }
+      } catch (err) {
+        console.error(`[xero/recon-push] Customer ${cust.customer_name} error:`, err.message);
+        errors.push({
+          customer_id:   cust.customer_id,
+          customer_name: cust.customer_name,
+          error:         err.message,
+        });
+
+        // Store error against the finalized lines so UI can display it
+        await query(`
+          UPDATE finalized_billing_lines
+          SET xero_push_error = $1
+          WHERE run_id = $2 AND customer_id = $3
+        `, [err.message.slice(0, 500), runId, cust.customer_id]);
+      }
+    }
+
+    return res.json({ ok: true, pushed, skipped, errors });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

@@ -9,8 +9,8 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, RefreshCw, CheckCircle2, AlertTriangle, Zap,
-  X, Check, ChevronDown,
+  ArrowLeft, RefreshCw, CheckCircle2, AlertTriangle,
+  X, Check, Lock, Send, Download, ChevronRight,
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -342,6 +342,157 @@ function LinesTable({ lines, showResolve, onResolve }) {
   );
 }
 
+// ─── Customer summary panel (post-finalization) ───────────────────────────────
+function CustomerSummaryPanel({ runId, run }) {
+  const qc = useQueryClient();
+  const [pushing, setPushing] = useState(null); // customer_id being pushed
+
+  const { data: customers = [], refetch } = useQuery({
+    queryKey: ['recon-customers', runId],
+    queryFn:  () => api.get(`/reconciliation/runs/${runId}/customers`).then(r => r.data),
+    enabled:  !!run?.finalized,
+  });
+
+  async function handleXeroPush(customerId) {
+    setPushing(customerId);
+    try {
+      await api.post(`/xero/reconciliation-runs/${runId}/push`, { customer_id: customerId });
+      refetch();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Xero push failed');
+    } finally {
+      setPushing(null);
+    }
+  }
+
+  async function handlePushAll() {
+    setPushing('all');
+    try {
+      const res = await api.post(`/xero/reconciliation-runs/${runId}/push`);
+      const { pushed, skipped, errors } = res.data;
+      refetch();
+      const msg = [
+        pushed.length  ? `✓ ${pushed.length} invoice(s) pushed`   : null,
+        skipped.length ? `— ${skipped.length} skipped (not linked to Xero)` : null,
+        errors.length  ? `✗ ${errors.length} error(s)` : null,
+      ].filter(Boolean).join('\n');
+      alert(msg || 'Done');
+    } catch (err) {
+      alert(err.response?.data?.error || 'Xero push failed');
+    } finally {
+      setPushing(null);
+    }
+  }
+
+  function handleCSV(customerId) {
+    window.open(`/api/reconciliation/runs/${runId}/export/csv?customer_id=${customerId}`, '_blank');
+  }
+
+  if (!customers.length) return (
+    <div style={{ ...card, color: '#555', fontSize: 12, textAlign: 'center', padding: 30 }}>
+      No finalized billing lines found
+    </div>
+  );
+
+  const unlinkedCount = customers.filter(c => !c.xero_linked).length;
+  const allPushed     = customers.every(c => c.xero_pushed_count > 0);
+
+  return (
+    <div style={card}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#E6EDF3' }}>Customer Billing Summary</div>
+          <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+            {customers.length} customers · {customers.reduce((s, c) => s + c.line_count, 0)} shipments
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {unlinkedCount > 0 && (
+            <span style={{ fontSize: 11, color: '#FFB300', alignSelf: 'center' }}>
+              ⚠ {unlinkedCount} customer{unlinkedCount > 1 ? 's' : ''} not linked to Xero
+            </span>
+          )}
+          {!allPushed && (
+            <button
+              style={{ ...btnGreen, opacity: pushing === 'all' ? 0.7 : 1 }}
+              onClick={handlePushAll}
+              disabled={!!pushing}
+            >
+              {pushing === 'all' ? <RefreshCw size={13} /> : <Send size={13} />}
+              Push All to Xero
+            </button>
+          )}
+        </div>
+      </div>
+
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <thead>
+          <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            {['Customer', 'Shipments', 'Base', 'Fuel', 'Surcharges', 'Total Sell', 'Margin', 'Xero', 'CSV', ''].map(h => (
+              <th key={h} style={{ padding: '7px 10px', textAlign: 'left', color: '#555', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {customers.map(c => (
+            <tr key={c.customer_id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+              <td style={{ padding: '9px 10px', color: '#E6EDF3', fontWeight: 600 }}>{c.customer_name || '—'}</td>
+              <td style={{ padding: '9px 10px', color: '#AAA' }}>{c.line_count}</td>
+              <td style={{ padding: '9px 10px', color: '#888' }}>£{parseFloat(c.total_base || 0).toFixed(2)}</td>
+              <td style={{ padding: '9px 10px', color: '#888' }}>£{parseFloat(c.total_fuel || 0).toFixed(2)}</td>
+              <td style={{ padding: '9px 10px', color: '#888' }}>£{parseFloat(c.total_surcharge || 0).toFixed(2)}</td>
+              <td style={{ padding: '9px 10px', color: '#00C853', fontWeight: 700 }}>£{parseFloat(c.total_sell || 0).toFixed(2)}</td>
+              <td style={{ padding: '9px 10px', color: parseFloat(c.total_margin || 0) > 0 ? '#00C853' : '#FF5252' }}>
+                £{parseFloat(c.total_margin || 0).toFixed(2)}
+              </td>
+              <td style={{ padding: '9px 10px' }}>
+                {c.xero_pushed_count > 0 ? (
+                  <span style={{ color: '#00C853', fontSize: 11, fontWeight: 700 }}>✓ Pushed</span>
+                ) : c.xero_linked ? (
+                  <button
+                    style={{ ...btnGhost, padding: '3px 8px', fontSize: 10, opacity: pushing === c.customer_id ? 0.7 : 1 }}
+                    onClick={() => handleXeroPush(c.customer_id)}
+                    disabled={!!pushing}
+                  >
+                    {pushing === c.customer_id ? <RefreshCw size={11} /> : <Send size={11} />}
+                    Push
+                  </button>
+                ) : (
+                  <span style={{ color: '#555', fontSize: 10 }}>Not linked</span>
+                )}
+              </td>
+              <td style={{ padding: '9px 10px' }}>
+                <button
+                  style={{ ...btnGhost, padding: '3px 8px', fontSize: 10 }}
+                  onClick={() => handleCSV(c.customer_id)}
+                  title='Download itemized CSV'
+                >
+                  <Download size={11} />CSV
+                </button>
+              </td>
+              <td style={{ padding: '9px 10px', color: '#555' }}>
+                {c.xero_push_error && <span style={{ color: '#FF5252', fontSize: 10 }} title={c.xero_push_error}>⚠ Error</span>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr style={{ borderTop: '2px solid rgba(255,255,255,0.1)' }}>
+            <td colSpan={5} style={{ padding: '9px 10px', color: '#888', fontSize: 12, fontWeight: 700 }}>TOTAL</td>
+            <td style={{ padding: '9px 10px', color: '#00C853', fontWeight: 800, fontSize: 14 }}>
+              £{customers.reduce((s, c) => s + parseFloat(c.total_sell || 0), 0).toFixed(2)}
+            </td>
+            <td style={{ padding: '9px 10px', color: '#00C853', fontWeight: 700 }}>
+              £{customers.reduce((s, c) => s + parseFloat(c.total_margin || 0), 0).toFixed(2)}
+            </td>
+            <td colSpan={3} />
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function RunDetailPage() {
   const { id }     = useParams();
@@ -349,12 +500,30 @@ export default function RunDetailPage() {
   const qc         = useQueryClient();
   const [activeTab,     setActiveTab]     = useState('overview');
   const [resolvingLine, setResolvingLine] = useState(null);
+  const [finalizing,    setFinalizing]    = useState(false);
+  const [finalizeError, setFinalizeError] = useState('');
 
-  const { data: run, isLoading: runLoading } = useQuery({
+  const { data: run, isLoading: runLoading, refetch: refetchRun } = useQuery({
     queryKey: ['recon-run', id],
     queryFn:  () => api.get(`/reconciliation/runs/${id}`).then(r => r.data),
-    refetchInterval: run?.status === 'processing' ? 3000 : false,
+    refetchInterval: (data) => data?.status === 'processing' ? 3000 : false,
   });
+
+  async function handleFinalize() {
+    if (!window.confirm('Finalize this run? This will lock all Matched and Corrected lines and create the billing snapshot. This cannot be undone.')) return;
+    setFinalizing(true);
+    setFinalizeError('');
+    try {
+      await api.post(`/reconciliation/runs/${id}/finalize`);
+      qc.invalidateQueries({ queryKey: ['recon-run', id] });
+      qc.invalidateQueries({ queryKey: ['recon-customers', id] });
+      refetchRun();
+    } catch (err) {
+      setFinalizeError(err.response?.data?.error || 'Finalization failed');
+    } finally {
+      setFinalizing(false);
+    }
+  }
 
   const linesQuery = (status) => useQuery({
     queryKey: ['recon-lines', id, status],
@@ -410,9 +579,25 @@ export default function RunDetailPage() {
             {run.status === 'processing' && <span style={{ color: '#79AAFF', marginLeft: 10 }}><RefreshCw size={11} style={{ display: 'inline' }} /> Processing…</span>}
           </div>
         </div>
-        <div>
-          {run.status === 'complete' && <span style={{ color: '#00C853', fontSize: 12, fontWeight: 700 }}>✓ Complete</span>}
-          {run.status === 'needs_review' && <span style={{ color: '#FFB300', fontSize: 12, fontWeight: 700 }}>⚠ Needs Review</span>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {run.finalized && (
+            <span style={{ color: '#00C853', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Lock size={13} />Finalized
+            </span>
+          )}
+          {!run.finalized && run.status === 'needs_review' && (
+            <span style={{ color: '#FFB300', fontSize: 12, fontWeight: 700 }}>⚠ Needs Review</span>
+          )}
+          {!run.finalized && run.unmatched_count === 0 && run.status !== 'processing' && (
+            <button
+              style={{ ...btnGreen, opacity: finalizing ? 0.7 : 1 }}
+              onClick={handleFinalize}
+              disabled={finalizing}
+            >
+              {finalizing ? <RefreshCw size={13} /> : <Lock size={13} />}
+              {finalizing ? 'Finalizing…' : 'Finalize Run'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -493,7 +678,14 @@ export default function RunDetailPage() {
             ))}
           </div>
 
-          {/* Quick action */}
+          {/* Finalize error */}
+          {finalizeError && (
+            <div style={{ ...card, border: '1px solid rgba(213,0,0,0.3)', background: 'rgba(213,0,0,0.08)', gridColumn: 'span 2', color: '#FF5252', fontSize: 12 }}>
+              ✗ {finalizeError}
+            </div>
+          )}
+
+          {/* Quick action — unmatched */}
           {(run.unmatched_count || 0) > 0 && (
             <div style={{ ...card, border: '1px solid rgba(255,160,0,0.3)', background: 'rgba(255,160,0,0.06)', gridColumn: 'span 2', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
@@ -501,7 +693,7 @@ export default function RunDetailPage() {
                   {run.unmatched_count} line{run.unmatched_count !== 1 ? 's' : ''} need manual review
                 </div>
                 <div style={{ fontSize: 12, color: '#888', marginTop: 3 }}>
-                  Review and resolve these to improve your automation rate
+                  Resolve all Unmatched lines before finalizing
                 </div>
               </div>
               <button style={btnGreen} onClick={() => setActiveTab('unmatched')}>
@@ -509,7 +701,30 @@ export default function RunDetailPage() {
               </button>
             </div>
           )}
+
+          {/* Finalize CTA — show when no unmatched and not yet finalized */}
+          {(run.unmatched_count || 0) === 0 && !run.finalized && run.status !== 'processing' && (
+            <div style={{ ...card, border: '1px solid rgba(0,200,83,0.25)', background: 'rgba(0,200,83,0.06)', gridColumn: 'span 2', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#00C853' }}>Ready to finalize</div>
+                <div style={{ fontSize: 12, color: '#888', marginTop: 3 }}>
+                  All lines resolved. Finalize to create the immutable billing snapshot and enable Xero push.
+                </div>
+              </div>
+              <button style={{ ...btnGreen, opacity: finalizing ? 0.7 : 1 }} onClick={handleFinalize} disabled={finalizing}>
+                {finalizing ? <RefreshCw size={14} /> : <Lock size={14} />}
+                {finalizing ? 'Finalizing…' : 'Finalize Run'}
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Customer billing summary — shown after finalization */}
+        {run.finalized && (
+          <div style={{ marginTop: 20 }}>
+            <CustomerSummaryPanel runId={parseInt(id)} run={run} />
+          </div>
+        )}
       )}
 
       {/* Line tables */}

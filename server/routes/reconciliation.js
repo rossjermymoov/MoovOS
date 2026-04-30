@@ -15,6 +15,7 @@
 import express from 'express';
 import { query } from '../db/index.js';
 import { processReconciliationRun, ageUnmatchedLines } from '../services/reconciliationEngine.js';
+import { finalizeRun, getCustomerSummaries, generateCustomerCSV } from '../services/finalizationService.js';
 
 const router = express.Router();
 
@@ -1105,6 +1106,98 @@ router.get('/courier-services', async (req, res) => {
     `, [parseInt(carrier_id)]);
     return res.json(result.rows);
   } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FINALIZATION + POST-RECONCILIATION
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── POST /api/reconciliation/runs/:id/finalize ───────────────────────────────
+// Finalize a run: copy all Matched + Corrected lines into finalized_billing_lines.
+// Blocked if any Unmatched lines remain (must resolve first).
+
+router.post('/runs/:id/finalize', async (req, res) => {
+  try {
+    const runId = parseInt(req.params.id);
+    const result = await finalizeRun(runId, req.user?.id || null);
+    return res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error('[reconciliation/finalize] error:', err.message);
+    const status = err.message.includes('Unmatched') ? 422 : 500;
+    return res.status(status).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/reconciliation/runs/:id/customers ───────────────────────────────
+// Customer summary for a finalized run — aggregated sell totals per customer.
+
+router.get('/runs/:id/customers', async (req, res) => {
+  try {
+    const summaries = await getCustomerSummaries(parseInt(req.params.id));
+    return res.json(summaries);
+  } catch (err) {
+    console.error('[reconciliation/customers] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/reconciliation/runs/:id/finalized-lines ────────────────────────
+// Finalized line detail for one customer (or all if no customer_id).
+
+router.get('/runs/:id/finalized-lines', async (req, res) => {
+  try {
+    const { customer_id, limit = 500, offset = 0 } = req.query;
+    const runId = parseInt(req.params.id);
+    const params = [runId];
+    let where = 'f.run_id = $1';
+    if (customer_id) {
+      params.push(customer_id);
+      where += ` AND f.customer_id = $${params.length}`;
+    }
+    params.push(parseInt(limit), parseInt(offset));
+
+    const result = await query(`
+      SELECT f.*
+      FROM   finalized_billing_lines f
+      WHERE  ${where}
+      ORDER  BY f.despatch_date ASC, f.tracking_number
+      LIMIT  $${params.length - 1} OFFSET $${params.length}
+    `, params);
+
+    const countRes = await query(
+      `SELECT COUNT(*) FROM finalized_billing_lines f WHERE ${where}`,
+      params.slice(0, -2)
+    );
+
+    return res.json({ lines: result.rows, total: parseInt(countRes.rows[0].count) });
+  } catch (err) {
+    console.error('[reconciliation/finalized-lines] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/reconciliation/runs/:id/export/csv ─────────────────────────────
+// Generate and download an itemized CSV for one customer.
+// Query param: customer_id (required)
+
+router.get('/runs/:id/export/csv', async (req, res) => {
+  try {
+    const { customer_id } = req.query;
+    if (!customer_id) return res.status(400).json({ error: 'customer_id is required' });
+
+    const csv = await generateCustomerCSV(parseInt(req.params.id), customer_id);
+
+    // Get customer name for the filename
+    const custRes = await query(`SELECT business_name FROM customers WHERE id = $1`, [customer_id]);
+    const custName = (custRes.rows[0]?.business_name || 'customer').replace(/[^a-z0-9]/gi, '_');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="recon_run_${req.params.id}_${custName}.csv"`);
+    return res.send(csv);
+  } catch (err) {
+    console.error('[reconciliation/export/csv] error:', err.message);
     return res.status(500).json({ error: err.message });
   }
 });
