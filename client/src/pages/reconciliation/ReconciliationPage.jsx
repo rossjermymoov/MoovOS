@@ -50,6 +50,91 @@ const inputSt = {
   padding: '8px 12px', outline: 'none',
 };
 
+// ─── Carrier brand colours ────────────────────────────────────────────────────
+// Keyed on the `code` field returned by GET /api/reconciliation/couriers.
+// If no match found we fall back to a neutral grey tile.
+const CARRIER_BRANDS = {
+  dhl:     { bg: '#FFCC00', fg: '#222222', label: 'DHL' },
+  dpd:     { bg: '#DC0032', fg: '#FFFFFF', label: 'DPD' },
+  ups:     { bg: '#351C15', fg: '#FFBF00', label: 'UPS' },
+  fedex:   { bg: '#4D148C', fg: '#FF6600', label: 'FedEx' },
+  royal_mail: { bg: '#E60000', fg: '#FFFFFF', label: 'Royal Mail' },
+  royalmail: { bg: '#E60000', fg: '#FFFFFF', label: 'Royal Mail' },
+  hermes:  { bg: '#840085', fg: '#FFFFFF', label: 'Hermes' },
+  evri:    { bg: '#840085', fg: '#FFFFFF', label: 'Evri' },
+  yodel:   { bg: '#0099D8', fg: '#FFFFFF', label: 'Yodel' },
+  tnt:     { bg: '#F26522', fg: '#FFFFFF', label: 'TNT' },
+  parcelforce: { bg: '#D61F26', fg: '#FFFFFF', label: 'Parcelforce' },
+  amazon:  { bg: '#FF9900', fg: '#232F3E', label: 'Amazon' },
+  gls:     { bg: '#00539B', fg: '#FFFFFF', label: 'GLS' },
+  dpd_local: { bg: '#DC0032', fg: '#FFFFFF', label: 'DPD Local' },
+  uk_mail: { bg: '#003087', fg: '#FFFFFF', label: 'UK Mail' },
+  collect_plus: { bg: '#9B1B30', fg: '#FFFFFF', label: 'CollectPlus' },
+};
+
+function carrierBrand(code) {
+  if (!code) return { bg: '#2A2A2A', fg: '#AAAAAA', label: null };
+  const key = String(code).toLowerCase().replace(/[^a-z0-9_]/g, '_');
+  return CARRIER_BRANDS[key] || { bg: '#2A2A2A', fg: '#CCCCCC', label: null };
+}
+
+// ─── Carrier tile ─────────────────────────────────────────────────────────────
+function CarrierTile({ courier, selected, onSelect }) {
+  const brand = carrierBrand(courier.code);
+  const initials = (brand.label || courier.name || '')
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(w => w[0].toUpperCase())
+    .join('');
+
+  return (
+    <button
+      onClick={() => onSelect(courier.id)}
+      title={courier.name}
+      style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+        padding: '12px 8px', borderRadius: 10, cursor: 'pointer',
+        background: selected ? 'rgba(0,200,83,0.08)' : 'rgba(255,255,255,0.03)',
+        border: `2px solid ${selected ? '#00C853' : 'rgba(255,255,255,0.08)'}`,
+        transition: 'border-color 0.15s, background 0.15s',
+        minWidth: 0,
+      }}
+    >
+      {/* Badge */}
+      <div style={{
+        width: 52, height: 52, borderRadius: 10, flexShrink: 0,
+        background: brand.bg, color: brand.fg,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontWeight: 800, fontSize: 14, letterSpacing: 0.5,
+        boxShadow: selected ? `0 0 0 3px rgba(0,200,83,0.35)` : 'none',
+        transition: 'box-shadow 0.15s',
+      }}>
+        {initials}
+      </div>
+      {/* Name */}
+      <span style={{
+        fontSize: 11, fontWeight: 600, textAlign: 'center', lineHeight: 1.2,
+        color: selected ? '#00C853' : '#CCCCCC',
+        wordBreak: 'break-word', maxWidth: 72,
+      }}>
+        {courier.name}
+      </span>
+      {/* Tick */}
+      {selected && (
+        <div style={{
+          width: 16, height: 16, borderRadius: '50%', background: '#00C853',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+            <path d="M1 3.5L3.5 6L8 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+      )}
+    </button>
+  );
+}
+
 // ─── Status badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
   const cfg = {
@@ -529,11 +614,27 @@ function UploadModal({ couriers, onClose, onSuccess }) {
         {step === 1 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
-              <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 5 }}>Carrier <span style={{ color: '#FF5252' }}>*</span></label>
-              <select style={inputSt} value={carrierId} onChange={e => { setCarrierId(e.target.value); setLoadedProfileId(null); setColMap({ ...BLANK_MAP }); }}>
-                <option value=''>— Select carrier —</option>
-                {couriers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 10 }}>
+                Select Carrier <span style={{ color: '#FF5252' }}>*</span>
+              </label>
+              {couriers.length === 0 ? (
+                <p style={{ fontSize: 12, color: '#555' }}>No carriers configured — contact your administrator.</p>
+              ) : (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(88px, 1fr))',
+                  gap: 10,
+                }}>
+                  {couriers.map(c => (
+                    <CarrierTile
+                      key={c.id}
+                      courier={c}
+                      selected={String(carrierId) === String(c.id)}
+                      onSelect={id => { setCarrierId(String(id)); setLoadedProfileId(null); setColMap({ ...BLANK_MAP }); }}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Saved profiles for this carrier */}
