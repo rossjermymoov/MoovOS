@@ -373,57 +373,87 @@ function applyMappings(mappings, line, delta) {
   return null;
 }
 
+// ─── Carrier Rate Card Lookup ─────────────────────────────────────────────────
+//
+// Single authoritative function for "what should the carrier charge for this
+// service at this weight?" — used by both Phase 3 (external bookings) and
+// Phase 4b (correction engine for pool hits where cost_price may be wrong).
+//
+// TWO-PASS logic:
+//   Pass 1 — weight falls within a band's min/max range (normal case)
+//   Pass 2 — weight EXCEEDS the top band's max_weight_kg (overage case)
+//             Formula: Base Price + ((Actual Weight - Max Weight) * Overage Rate)
+//
+// Returns the expected carrier cost in £, or null if no band is configured.
+
+async function lookupCarrierBandCost(serviceId, weightKg) {
+  if (!serviceId || !(weightKg > 0)) return null;
+
+  // Pass 1: exact band — weight sits within min/max
+  const exactRes = await query(`
+    SELECT wb.price_first, wb.cost_per_kg, wb.min_weight_kg, wb.max_weight_kg
+    FROM   weight_bands     wb
+    JOIN   zones            z  ON z.id  = wb.zone_id
+    JOIN   courier_services cs ON cs.id = z.courier_service_id
+    WHERE  cs.id = $1
+      AND  ($2 >= COALESCE(wb.min_weight_kg, 0))
+      AND  ($2 <  COALESCE(wb.max_weight_kg, 99999))
+    LIMIT  1
+  `, [serviceId, weightKg]);
+
+  if (exactRes.rows.length) {
+    const b = exactRes.rows[0];
+    return round2(parseFloat(b.price_first || 0));
+  }
+
+  // Pass 2: weight is ABOVE the highest band — apply overage
+  // Formula: Base Price + ((Actual Weight - Max Weight) * Overage Rate)
+  const topRes = await query(`
+    SELECT wb.price_first, wb.cost_per_kg, wb.min_weight_kg, wb.max_weight_kg
+    FROM   weight_bands     wb
+    JOIN   zones            z  ON z.id  = wb.zone_id
+    JOIN   courier_services cs ON cs.id = z.courier_service_id
+    WHERE  cs.id = $1
+      AND  $2 >= COALESCE(wb.min_weight_kg, 0)
+    ORDER BY wb.max_weight_kg DESC NULLS FIRST
+    LIMIT  1
+  `, [serviceId, weightKg]);
+
+  if (topRes.rows.length) {
+    const b = topRes.rows[0];
+    const overageRate = parseFloat(b.cost_per_kg || 0);
+    if (!overageRate) return null; // no overage rate configured → can't calculate
+
+    const bandMax  = parseFloat(b.max_weight_kg);
+    const overageKg = weightKg - bandMax;
+    const cost = round2(parseFloat(b.price_first || 0) + overageKg * overageRate);
+
+    console.log(`[recon engine] Overage: ${weightKg}kg > band max ${bandMax}kg — £${b.price_first} + (${round2(overageKg)}kg × £${overageRate}) = £${cost}`);
+    return cost;
+  }
+
+  return null;
+}
+
 // ─── Phase 4b: Correction Engine ─────────────────────────────────────────────
 //
-// Verifies whether the carrier's charge can be explained by the agreed carrier
-// rate card (weight_bands). Used when Phase 3 finds a delta — e.g. because
-// charges.cost_price was calculated before a rate change, or for return services
-// where cost_price may not reflect the carrier's actual fixed rate.
-//
-// Key changes vs original design:
-//   • Does NOT require customer_rates to exist — the check is purely against
-//     the carrier weight band, not the customer sell rate. Customer rates gating
-//     this was preventing return services and per-kg lines from being corrected.
-//   • Works without billed_weight_kg — for flat-rate services (e.g. DHL return)
-//     the CSV may not carry a weight column. We pass weight=1 as a nominal value
-//     so the weight band range check still finds the flat-rate band (min=0, max=999).
+// Called when Phase 3 finds a delta between carrier_amount and the stored
+// charges.cost_price. Recalculates from the carrier rate card (weight_bands)
+// using the actual billed weight from the CSV. If the rate card explains the
+// carrier's charge, mark as Corrected.
 
 async function checkCorrectionEngine(customerId, serviceId, carrierId, line, delta) {
   if (!serviceId || !(line.billed_weight_kg > 0)) {
     return { corrected: false, reason: 'no_service_id_or_weight' };
   }
 
-  const weight = line.billed_weight_kg;
-
-  const bandRes = await query(`
-    SELECT wb.price_first, wb.price_sub, wb.cost_per_kg, wb.cost_per_kg_threshold_kg,
-           wb.min_weight_kg, wb.max_weight_kg
-    FROM   weight_bands      wb
-    JOIN   zones             z  ON z.id  = wb.zone_id
-    JOIN   courier_services  cs ON cs.id = z.courier_service_id
-    WHERE  cs.id = $1
-      AND  ($2 >= COALESCE(wb.min_weight_kg, 0))
-      AND  ($2 <  COALESCE(wb.max_weight_kg, 99999))
-    LIMIT  1
-  `, [serviceId, weight]);
-
-  if (!bandRes.rows.length) {
+  const expectedCost = await lookupCarrierBandCost(serviceId, line.billed_weight_kg);
+  if (expectedCost === null) {
     return { corrected: false, reason: 'no_carrier_band' };
   }
 
-  const band = bandRes.rows[0];
-  let recalcCost = parseFloat(band.price_first || 0);
-
-  if (band.cost_per_kg && band.cost_per_kg_threshold_kg &&
-      weight > parseFloat(band.cost_per_kg_threshold_kg)) {
-    recalcCost += (weight - parseFloat(band.cost_per_kg_threshold_kg)) *
-                  parseFloat(band.cost_per_kg);
-  }
-
-  recalcCost = round2(recalcCost);
-  const recalcDelta = round2(line.carrier_amount - recalcCost);
-
-  console.log(`[recon engine] Correction check: carrier=£${line.carrier_amount} band_cost=£${recalcCost} delta=£${recalcDelta} service=${serviceId} weight=${weight}kg`);
+  const recalcDelta = round2(line.carrier_amount - expectedCost);
+  console.log(`[recon engine] Correction check: carrier=£${line.carrier_amount} band_cost=£${expectedCost} delta=£${recalcDelta} service=${serviceId} weight=${line.billed_weight_kg}kg`);
 
   if (Math.abs(recalcDelta) < 0.02) {
     return { corrected: true, reason: 'pricing_rules' };
@@ -887,6 +917,15 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
   if (poolHits.length === 0) {
     const customer = await lookupCustomerByAccount(line.account_number);
 
+    // Reconciliation is always against the carrier rate card (cost price), never
+    // the customer sell price. Look up what the carrier should charge for this
+    // service + weight — handles both normal bands and weight overage.
+    const expectedCarrierCost = await lookupCarrierBandCost(serviceId, line.billed_weight_kg);
+    const carrierDelta = expectedCarrierCost !== null
+      ? round2(carrierAmount - expectedCarrierCost)
+      : null;
+    const rateMatches = carrierDelta !== null && Math.abs(carrierDelta) < 0.02;
+
     if (!customer) {
       await insertLine(runId, {
         tracking_number:          trackingNumber,
@@ -898,21 +937,19 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
         service_id:               serviceId,
         customer_id:              null,
         charge_id:                null,
-        expected_amount:          null,
-        delta:                    null,
-        status:                   'unmatched',
+        expected_amount:          expectedCarrierCost,
+        delta:                    carrierDelta,
+        status:                   rateMatches ? 'matched' : 'unmatched',
         corrected_by:             null,
-        unmatched_reason:         'no_account_mapping',
+        unmatched_reason:         rateMatches ? null : 'no_account_mapping',
         source:                   'internal',
       });
-      return { status: 'unmatched' };
+      return { status: rateMatches ? 'matched' : 'unmatched' };
     }
 
-    // External booking path
-    const expectedAmount = await synthesiseExternalExpected(
-      customer.customer_id, serviceId, line.billed_weight_kg
-    );
-
+    // External booking — shipment was booked directly with carrier (not via MoovOS).
+    // Compare carrier invoice against the carrier rate card. If it matches the
+    // agreed cost price, mark as Matched. Sell price is irrelevant here.
     await insertLine(runId, {
       tracking_number:          trackingNumber,
       carrier_account_no:       line.account_number || null,
@@ -923,14 +960,14 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
       service_id:               serviceId,
       customer_id:              customer.customer_id,
       charge_id:                null,
-      expected_amount:          expectedAmount,
-      delta:                    expectedAmount !== null ? round2(carrierAmount - expectedAmount) : null,
-      status:                   'unmatched',
+      expected_amount:          expectedCarrierCost,
+      delta:                    carrierDelta,
+      status:                   rateMatches ? 'matched' : 'unmatched',
       corrected_by:             null,
-      unmatched_reason:         'external_booking_review',
+      unmatched_reason:         rateMatches ? null : 'external_booking_review',
       source:                   'external_booking',
     });
-    return { status: 'unmatched' };
+    return { status: rateMatches ? 'matched' : 'unmatched' };
   }
 
   // ── Phase 3: Match & Compare ──────────────────────────────────────────────
