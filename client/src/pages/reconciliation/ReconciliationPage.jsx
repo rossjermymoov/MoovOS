@@ -85,25 +85,71 @@ function AutoBar({ rate }) {
 }
 
 // ─── CSV Parser ───────────────────────────────────────────────────────────────
+/**
+ * RFC 4180-compliant CSV parser.
+ *
+ * Handles:
+ *  • Quoted fields — "Smith, Jones Ltd" is ONE field, not two
+ *  • Escaped quotes — "" inside a quoted field becomes a literal "
+ *  • CRLF, CR, and LF line endings
+ *  • Fields that are not quoted (bare fields)
+ *
+ * The previous implementation used a naive `line.split(',')` which caused
+ * column shifting whenever a field (e.g. a company name) contained a comma.
+ * That made DHL tracking numbers land on the wrong column and appear as
+ * account numbers or dates instead.
+ */
 function parseCSV(text) {
-  const rows = text.trim().split('\n').map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g, '')));
+  const src = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trimEnd();
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (src[i + 1] === '"') { field += '"'; i++; }   // escaped quote ""
+        else                     inQuotes = false;         // closing quote
+      } else {
+        field += ch;
+      }
+    } else {
+      if      (ch === '"')  { inQuotes = true; }
+      else if (ch === ',')  { row.push(field.trim()); field = ''; }
+      else if (ch === '\n') { row.push(field.trim()); rows.push(row); row = []; field = ''; }
+      else                  { field += ch; }
+    }
+  }
+  // flush last field / row
+  row.push(field.trim());
+  if (row.some(c => c)) rows.push(row);
+
   if (rows.length < 2) return [];
   const headers = rows[0].map(h => h.toLowerCase().trim());
-  return rows.slice(1).filter(r => r.some(c => c)).map(row => {
+  return rows.slice(1).filter(r => r.some(c => c)).map(rowArr => {
     const obj = {};
-    headers.forEach((h, i) => { obj[h] = row[i] || ''; });
+    headers.forEach((h, i) => { obj[h] = rowArr[i] ?? ''; });
     return obj;
   });
 }
 
 function mapToInvoiceLine(row, colMap) {
-  const get = (field) => row[colMap[field]] || '';
+  const get = (field) => {
+    const key = colMap[field];
+    if (!key) return '';
+    const val = row[key];
+    return val !== undefined && val !== null ? String(val) : '';
+  };
   return {
-    tracking_number:  get('tracking_number'),
-    account_number:   get('account_number'),
-    service_code:     get('service_code'),
-    charge_type:      get('charge_type') || 'base',
-    carrier_amount:   parseFloat(get('carrier_amount')) || 0,
+    // Force toString so numeric-looking tracking numbers keep their exact
+    // character representation (no precision loss, no scientific notation).
+    tracking_number:  get('tracking_number').trim(),
+    account_number:   get('account_number').trim(),
+    service_code:     get('service_code').trim(),
+    charge_type:      get('charge_type').trim() || 'base',
+    carrier_amount:   parseFloat(get('carrier_amount').replace(/[£,]/g, '')) || 0,
     billed_weight_kg: parseFloat(get('billed_weight_kg')) || null,
   };
 }
