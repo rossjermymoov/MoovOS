@@ -168,6 +168,18 @@ async function getSuggestedServiceFromPool(trackKey, pool, carrierId, rawCode = 
 // ─── Pre-condition: Build Verified Pool ──────────────────────────────────────
 // Single query, run once per job.
 // Returns Map: tracking_number (upper) → charge row[]
+//
+// VERIFICATION GATE:
+//   Only shipments that have been physically collected by the carrier are
+//   eligible for reconciliation. A shipment is considered "despatched" when
+//   it has at least one entry in tracking_codes (the carrier has assigned a
+//   tracking number — this happens at collection/scan).
+//
+//   Shipments in our system that haven't been picked up yet will have an
+//   empty or null tracking_codes array and are therefore excluded from the
+//   pool. The carrier will never invoice for a shipment they haven't
+//   collected, so this keeps the pool in sync with what can actually appear
+//   on a carrier invoice.
 
 async function buildVerifiedPool(carrierId) {
   const res = await query(`
@@ -198,6 +210,10 @@ async function buildVerifiedPool(carrierId) {
       AND  c.cancelled     = false
       AND  c.charge_type   = 'courier'
       AND  (s.courier ILIKE cu_carrier.code OR s.courier ILIKE cu_carrier.name)
+      -- Verification gate: only include shipments the carrier has actually
+      -- collected (tracking codes present = carrier has scanned/despatched)
+      AND  s.tracking_codes IS NOT NULL
+      AND  array_length(s.tracking_codes, 1) > 0
   `, [carrierId]);
 
   const pool = new Map();
