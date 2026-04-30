@@ -412,13 +412,18 @@ async function fetchCarrierHGVRate(carrierId) {
 
 async function processAggregateLine(line, runId, carrierId, expectedFuelTotal, hgvRatePerParcel, totalParcelCount) {
   const carrierAmount = round2(parseFloat(line.carrier_amount) || 0);
-  const chargeType    = (line.charge_type || '').toLowerCase();
+  const chargeType    = (line.charge_type  || '').toLowerCase();
+  const serviceCode   = (line.service_code || '').toLowerCase();
+
+  // Identify fuel aggregate lines by charge_type OR service_code containing "fuel"
+  // (mirrors the fuelIsAggregated detection above — must be consistent).
+  const isFuelLine = chargeType.includes('fuel') || serviceCode.includes('fuel');
 
   let expectedAmount  = null;
   let status          = 'unmatched';
   let unmatchedReason = 'aggregate_mismatch';
 
-  if (chargeType === 'fuel') {
+  if (isFuelLine) {
     // Fuel aggregate: compare carrier total vs sum of our fuel costs for matched shipments
     expectedAmount = expectedFuelTotal;
     const delta    = round2(carrierAmount - expectedAmount);
@@ -465,7 +470,7 @@ async function processAggregateLine(line, runId, carrierId, expectedFuelTotal, h
     corrected_by:             null,
     unmatched_reason:         status === 'unmatched' ? unmatchedReason : null,
     source:                   'internal',
-    is_fuel:                  chargeType === 'fuel',
+    is_fuel:                  isFuelLine,
   });
 
   return { status };
@@ -534,9 +539,16 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   // ── Detect whether this carrier bills fuel as a separate aggregate line ──
   // When true, per-shipment lines should compare against base cost_price only
   // (charge.expected_cost), not the total which includes fuel+surcharges.
-  const fuelIsAggregated = aggregateLines.some(
-    l => (l.charge_type || '').toLowerCase() === 'fuel'
-  );
+  //
+  // Detection is intentionally broad: check both charge_type AND service_code
+  // for any mention of "fuel". This handles cases where the user hasn't mapped
+  // a charge_type column (all lines default to 'base') but DHL's aggregate fuel
+  // line still has "Fuel Surcharge" or similar in the service/description column.
+  const fuelIsAggregated = aggregateLines.some(l => {
+    const ct = (l.charge_type  || '').toLowerCase();
+    const sc = (l.service_code || '').toLowerCase();
+    return ct.includes('fuel') || sc.includes('fuel');
+  });
   if (fuelIsAggregated) {
     console.log(`[recon engine] Run ${runId}: fuel billed as aggregate line — using base cost_price for per-shipment comparisons`);
   }
@@ -563,9 +575,14 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   if (aggregateLines.length > 0) {
     const expectedFuelTotal  = await calculateExpectedFuelTotal(pool, matchedTrackingKeys);
     const hgvRatePerParcel   = await fetchCarrierHGVRate(carrierId);
-    // Total parcel count = number of individual regular lines
-    // (each DHL per-parcel invoice line = one physical parcel)
-    const totalParcelCount   = regularLines.length;
+    // Total parcel count = sum of parcel_count across all regular lines.
+    // DHL column J carries the piece count per line (usually 1 for single-piece
+    // shipments, but can be >1 for multi-piece). Summing this gives the exact
+    // item count the carrier used to calculate the HGV aggregate charge.
+    // Fall back to 1 per line if parcel_count was not mapped in the CSV.
+    const totalParcelCount   = regularLines.reduce(
+      (sum, l) => sum + (parseInt(l.parcel_count, 10) || 1), 0
+    );
 
     for (const aggLine of aggregateLines) {
       const result = await processAggregateLine(

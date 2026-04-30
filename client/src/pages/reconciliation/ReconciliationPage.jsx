@@ -151,12 +151,16 @@ function mapToInvoiceLine(row, colMap) {
     charge_type:      get('charge_type').trim() || 'base',
     carrier_amount:   parseFloat(get('carrier_amount').replace(/[£,]/g, '')) || 0,
     billed_weight_kg: parseFloat(get('billed_weight_kg')) || null,
+    // DHL column J — piece/item count per line. Used to calculate the HGV
+    // aggregate total (sum of parcel_count × HGV rate per parcel).
+    parcel_count:     parseInt(get('parcel_count'), 10) || null,
   };
 }
 
 const BLANK_MAP = {
   tracking_number: '', account_number: '', service_code: '',
   charge_type: '', carrier_amount: '', billed_weight_kg: '',
+  parcel_count: '',
   invoice_ref: '', invoice_date: '',
 };
 
@@ -214,7 +218,7 @@ function ProfileManagerModal({ couriers, onClose }) {
     tracking_number: 'Tracking Number', account_number: 'Account Number',
     service_code: 'Service Code', charge_type: 'Charge Type',
     carrier_amount: 'Amount (£)', billed_weight_kg: 'Weight (kg)',
-    invoice_ref: 'Invoice Ref', invoice_date: 'Invoice Date',
+    parcel_count: 'Piece Count', invoice_ref: 'Invoice Ref', invoice_date: 'Invoice Date',
   };
 
   return (
@@ -426,6 +430,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
         charge_type:      h => h.includes('charge') && h.includes('type'),
         carrier_amount:   h => h.includes('amount') || h.includes('value') || h.includes('nett') || h.includes('price'),
         billed_weight_kg: h => h.includes('weight'),
+        parcel_count:     h => h.includes('piece') || h.includes('parcel') || h.includes('qty') || h.includes('quantity') || h === 'j',
         invoice_ref:      h => h.includes('invoice') && (h.includes('ref') || h.includes('num') || h.includes('no')),
         invoice_date:     h => h.includes('invoice') && (h.includes('date') || h.includes('dt')),
       };
@@ -486,6 +491,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
     { key: 'charge_type',      label: 'Charge Type',      required: false },
     { key: 'carrier_amount',   label: 'Amount (£)',        required: true },
     { key: 'billed_weight_kg', label: 'Weight (kg)',       required: false },
+    { key: 'parcel_count',     label: 'Piece Count (col J)', required: false, hint: 'Used for HGV total' },
     { key: 'invoice_ref',      label: 'Invoice Reference', required: false, hint: 'Read from CSV' },
     { key: 'invoice_date',     label: 'Invoice Date',      required: false, hint: 'Read from CSV' },
   ];
