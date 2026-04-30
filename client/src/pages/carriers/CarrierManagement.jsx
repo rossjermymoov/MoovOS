@@ -2632,7 +2632,7 @@ function VolumetricRuleCard({ rule, availableServices, onUpdate, onDelete, onAss
             <span style={{ background:'rgba(123,47,190,0.15)', border:'1px solid rgba(123,47,190,0.35)', borderRadius:6, padding:'2px 9px', fontSize:12, color:'#7B2FBE', fontWeight:700 }}>÷ {rule.divisor.toLocaleString()}</span>
           </div>
         )}
-        <div style={{ display:'flex', gap:6', flexShrink:0 }}>
+        <div style={{ display:'flex', gap:6, flexShrink:0 }}>
           {editing ? (
             <>
               <button

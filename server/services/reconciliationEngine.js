@@ -406,27 +406,32 @@ async function lookupCarrierBandCost(serviceId, weightKg) {
     return round2(parseFloat(b.price_first || 0));
   }
 
-  // Pass 2: weight is ABOVE the highest band — apply overage
-  // Formula: Base Price + ((Actual Weight - Max Weight) * Overage Rate)
+  // Pass 2: weight EXCEEDS the top band's max — apply per-kg overage.
+  // Selects the band with the highest finite max_weight_kg that the weight
+  // actually exceeds. NULL-max (open-ended) bands are excluded — they have
+  // no upper limit so there is nothing to overhang from.
+  // Formula: Base Price + ((Actual Weight - Band Max) * Overage Rate)
   const topRes = await query(`
     SELECT wb.price_first, wb.cost_per_kg, wb.min_weight_kg, wb.max_weight_kg
     FROM   weight_bands     wb
     JOIN   zones            z  ON z.id  = wb.zone_id
     JOIN   courier_services cs ON cs.id = z.courier_service_id
     WHERE  cs.id = $1
-      AND  $2 >= COALESCE(wb.min_weight_kg, 0)
-    ORDER BY wb.max_weight_kg DESC NULLS FIRST
+      AND  wb.max_weight_kg IS NOT NULL   -- skip open-ended bands (NULL max → no overage ref point)
+      AND  $2 > wb.max_weight_kg          -- weight must actually exceed the band ceiling
+    ORDER BY wb.max_weight_kg DESC        -- highest ceiling first = tightest overhang band
     LIMIT  1
   `, [serviceId, weightKg]);
 
   if (topRes.rows.length) {
     const b = topRes.rows[0];
     const overageRate = parseFloat(b.cost_per_kg || 0);
-    if (!overageRate) return null; // no overage rate configured → can't calculate
+    if (!overageRate) return null; // no overage rate configured on this band
 
-    const bandMax  = parseFloat(b.max_weight_kg);
+    const bandMax   = parseFloat(b.max_weight_kg);
+    if (!isFinite(bandMax) || bandMax <= 0) return null; // safety: band max must be a real number
     const overageKg = weightKg - bandMax;
-    const cost = round2(parseFloat(b.price_first || 0) + overageKg * overageRate);
+    const cost      = round2(parseFloat(b.price_first || 0) + overageKg * overageRate);
 
     console.log(`[recon engine] Overage: ${weightKg}kg > band max ${bandMax}kg — £${b.price_first} + (${round2(overageKg)}kg × £${overageRate}) = £${cost}`);
     return cost;
