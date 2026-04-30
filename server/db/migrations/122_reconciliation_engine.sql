@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS courier_service_code_mappings (
   courier_code         VARCHAR(60)  NOT NULL,  -- raw code from carrier CSV
   service_id           INTEGER      NOT NULL REFERENCES courier_services(id) ON DELETE CASCADE,
   notes                TEXT,
-  created_by           INTEGER      REFERENCES staff(id) ON DELETE SET NULL,
+  created_by           UUID         REFERENCES staff(id) ON DELETE SET NULL,
   created_from_run_id  INTEGER,               -- reconciliation_runs.id that surfaced this
   is_active            BOOLEAN      NOT NULL DEFAULT true,
   applied_count        INTEGER      NOT NULL DEFAULT 0,
@@ -114,7 +114,7 @@ CREATE TABLE IF NOT EXISTS reconciliation_lines (
   -- Human resolution
   aged                     BOOLEAN      NOT NULL DEFAULT false,
   reconciliation_run_count INTEGER      NOT NULL DEFAULT 1,
-  resolved_by              INTEGER REFERENCES staff(id),
+  resolved_by              UUID         REFERENCES staff(id),
   resolved_at              TIMESTAMPTZ,
   resolution_notes         TEXT,
 

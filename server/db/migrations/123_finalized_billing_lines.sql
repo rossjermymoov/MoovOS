@@ -73,4 +73,4 @@ CREATE INDEX IF NOT EXISTS idx_fbl_xero          ON finalized_billing_lines (xer
 ALTER TABLE reconciliation_runs
   ADD COLUMN IF NOT EXISTS finalized       BOOLEAN     NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS finalized_at    TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS finalized_by    INTEGER     REFERENCES staff(id);
+  ADD COLUMN IF NOT EXISTS finalized_by    UUID        REFERENCES staff(id);
