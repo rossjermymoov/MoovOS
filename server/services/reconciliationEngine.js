@@ -389,15 +389,26 @@ function applyMappings(mappings, line, delta) {
 async function lookupCarrierBandCost(serviceId, weightKg) {
   if (!serviceId || !(weightKg > 0)) return null;
 
-  // Pass 1: exact band — weight sits within min/max
+  // Pass 1: exact band — weight sits WITHIN a band's finite ceiling.
+  //
+  // CRITICAL: wb.max_weight_kg IS NOT NULL is mandatory here.
+  // Without it, COALESCE(null, 99999) causes the open-ended band to match
+  // ANY weight (e.g. 43kg < 99999 = true), returning just price_first with
+  // no overage and blocking Pass 2 entirely.
+  //
+  // Boundary convention (consistent with pricingEngine):
+  //   min is EXCLUSIVE  →  $2 >  COALESCE(min, 0)
+  //   max is INCLUSIVE  →  $2 <= max
   const exactRes = await query(`
     SELECT wb.price_first, wb.cost_per_kg, wb.min_weight_kg, wb.max_weight_kg
     FROM   weight_bands     wb
     JOIN   zones            z  ON z.id  = wb.zone_id
     JOIN   courier_services cs ON cs.id = z.courier_service_id
     WHERE  cs.id = $1
-      AND  ($2 >= COALESCE(wb.min_weight_kg, 0))
-      AND  ($2 <  COALESCE(wb.max_weight_kg, 99999))
+      AND  wb.max_weight_kg IS NOT NULL        -- open-ended bands must not match here
+      AND  $2 >  COALESCE(wb.min_weight_kg, 0) -- lower bound exclusive
+      AND  $2 <= wb.max_weight_kg              -- upper bound inclusive (ceiling)
+    ORDER BY wb.min_weight_kg DESC             -- tightest band first for any overlap
     LIMIT  1
   `, [serviceId, weightKg]);
 
@@ -406,34 +417,48 @@ async function lookupCarrierBandCost(serviceId, weightKg) {
     return round2(parseFloat(b.price_first || 0));
   }
 
-  // Pass 2: weight EXCEEDS the top band's max — apply per-kg overage.
-  // Selects the band with the highest finite max_weight_kg that the weight
-  // actually exceeds. NULL-max (open-ended) bands are excluded — they have
-  // no upper limit so there is nothing to overhang from.
-  // Formula: Base Price + ((Actual Weight - Band Max) * Overage Rate)
+  // Pass 2: weight EXCEEDS every defined band ceiling — apply top-out overage.
+  //
+  // Logic ("Top-Out"):
+  //   1. Find the band with the highest FINITE max_weight_kg (the ceiling band).
+  //      e.g. for DHL 220: max = 30kg, price_first = £4.36, cost_per_kg = £0.30
+  //   2. Excess = actual weight − band ceiling  (e.g. 43 − 30 = 13kg)
+  //   3. Cost   = price_first + (excess × cost_per_kg)  (e.g. £4.36 + 13×£0.30 = £8.26)
+  //   4. If within £0.01 of the carrier invoice → CORRECTED.
+  //
+  // NULL-max (open-ended) bands are excluded — they have no finite ceiling
+  // so there is nothing to measure excess against.
+  // If max_weight_kg somehow comes back non-finite (defensive), the function
+  // returns null rather than producing NaN.
   const topRes = await query(`
     SELECT wb.price_first, wb.cost_per_kg, wb.min_weight_kg, wb.max_weight_kg
     FROM   weight_bands     wb
     JOIN   zones            z  ON z.id  = wb.zone_id
     JOIN   courier_services cs ON cs.id = z.courier_service_id
     WHERE  cs.id = $1
-      AND  wb.max_weight_kg IS NOT NULL   -- skip open-ended bands (NULL max → no overage ref point)
-      AND  $2 > wb.max_weight_kg          -- weight must actually exceed the band ceiling
-    ORDER BY wb.max_weight_kg DESC        -- highest ceiling first = tightest overhang band
+      AND  wb.max_weight_kg IS NOT NULL   -- finite ceiling required — no open-ended bands
+      AND  $2 > wb.max_weight_kg          -- weight must actually exceed this band's ceiling
+    ORDER BY wb.max_weight_kg DESC        -- highest finite ceiling first = tightest overhang
     LIMIT  1
   `, [serviceId, weightKg]);
 
   if (topRes.rows.length) {
     const b = topRes.rows[0];
     const overageRate = parseFloat(b.cost_per_kg || 0);
-    if (!overageRate) return null; // no overage rate configured on this band
+    if (!overageRate) return null; // band has no per-kg rate — overage cannot be calculated
 
-    const bandMax   = parseFloat(b.max_weight_kg);
-    if (!isFinite(bandMax) || bandMax <= 0) return null; // safety: band max must be a real number
-    const overageKg = weightKg - bandMax;
+    // Defensive: max_weight_kg MUST be a real finite number (guaranteed by IS NOT NULL above,
+    // but parseFloat(null/undefined/NaN) would produce NaN and break the math)
+    const bandMax = parseFloat(b.max_weight_kg);
+    if (!isFinite(bandMax) || bandMax <= 0) return null;
+
+    const overageKg = round2(weightKg - bandMax);
     const cost      = round2(parseFloat(b.price_first || 0) + overageKg * overageRate);
 
-    console.log(`[recon engine] Overage: ${weightKg}kg > band max ${bandMax}kg — £${b.price_first} + (${round2(overageKg)}kg × £${overageRate}) = £${cost}`);
+    console.log(
+      `[recon engine] Top-out overage: ${weightKg}kg > ceiling ${bandMax}kg` +
+      ` — £${b.price_first} + (${overageKg}kg × £${overageRate}) = £${cost}`
+    );
     return cost;
   }
 
