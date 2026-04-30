@@ -69,11 +69,14 @@ function ReasonLabel({ reason }) {
   const labels = {
     unknown_service_code:    { text: 'Unknown service code', color: '#FF5252' },
     no_account_mapping:      { text: 'Account not mapped',   color: '#FFB300' },
-    not_in_verified_pool:    { text: 'Not verified',          color: '#FF5252' },
-    no_pricing_rules:        { text: 'No pricing rules',      color: '#FFB300' },
-    unexplained_delta:       { text: 'Unexplained delta',     color: '#FFB300' },
-    external_booking_review: { text: 'External booking',      color: '#79AAFF' },
-    fuel_aggregate_mismatch: { text: 'Fuel mismatch',         color: '#FFB300' },
+    not_in_verified_pool:    { text: 'Not verified',         color: '#FF5252' },
+    no_pricing_rules:        { text: 'No pricing rules',     color: '#FFB300' },
+    unexplained_delta:       { text: 'Unexplained delta',    color: '#FFB300' },
+    external_booking_review: { text: 'External booking',     color: '#79AAFF' },
+    fuel_aggregate_mismatch: { text: 'Fuel mismatch',        color: '#FFB300' },
+    hgv_aggregate_mismatch:  { text: 'HGV mismatch',         color: '#FFB300' },
+    no_hgv_rate:             { text: 'No HGV rate on file',  color: '#FF5252' },
+    aggregate_mismatch:      { text: 'Aggregate mismatch',   color: '#FFB300' },
   };
   const cfg = labels[reason] || { text: reason || '—', color: '#888' };
   return <span style={{ fontSize: 10, color: cfg.color, fontWeight: 600 }}>{cfg.text}</span>;
@@ -81,13 +84,20 @@ function ReasonLabel({ reason }) {
 
 // ─── Resolve drawer ───────────────────────────────────────────────────────────
 function ResolveDrawer({ line, courierId, onClose, onResolved }) {
+  const isUnknownCode = line.unmatched_reason === 'unknown_service_code';
+
+  // For unknown service code lines default straight into the mapping flow
   const [scope,           setScope]           = useState('once');
-  const [mappingType,     setMappingType]     = useState('');
-  const [resolutionType,  setResolutionType]  = useState('');
-  const [resolutionValue, setResolutionValue] = useState('');
-  const [notes,           setNotes]           = useState('');
-  const [loading,         setLoading]         = useState(false);
-  const [error,           setError]           = useState('');
+  const [saveRule,        setSaveRule]        = useState(isUnknownCode);   // "Save as Permanent Rule" checkbox
+  const [ruleScope,       setRuleScope]       = useState('global');        // 'global' | 'customer'
+  const [resolutionType,  setResolutionType]  = useState(isUnknownCode ? 'map_to_service' : '');
+  const [resolutionValue, setResolutionValue] = useState(
+    // Pre-populate with suggested service if the engine found one
+    isUnknownCode && line.suggested_service_id ? String(line.suggested_service_id) : ''
+  );
+  const [notes,    setNotes]   = useState('');
+  const [loading,  setLoading] = useState(false);
+  const [error,    setError]   = useState('');
 
   const { data: services = [] } = useQuery({
     queryKey: ['recon-services', courierId],
@@ -95,8 +105,7 @@ function ResolveDrawer({ line, courierId, onClose, onResolved }) {
     enabled:  !!courierId,
   });
 
-  // Suggest mapping type based on unmatched reason
-  const suggestedType = {
+  const suggestedMappingType = {
     unknown_service_code:    'service_code',
     no_account_mapping:      'account_number',
     no_pricing_rules:        null,
@@ -112,11 +121,15 @@ function ResolveDrawer({ line, courierId, onClose, onResolved }) {
     setLoading(true);
     setError('');
     try {
+      const effectiveScope = saveRule ? 'always' : 'once';
+      const customerId     = (saveRule && ruleScope === 'customer') ? (line.customer_id || null) : null;
+
       await api.post(`/reconciliation/runs/${line.run_id}/lines/${line.id}/resolve`, {
         resolution_type:  resolutionType,
         resolution_value: resolutionValue,
-        scope,
-        mapping_type: scope === 'always' ? (mappingType || suggestedType) : null,
+        scope:            effectiveScope,
+        mapping_type:     effectiveScope === 'always' ? suggestedMappingType : null,
+        customer_id:      customerId,
         notes,
       });
       onResolved();
@@ -127,18 +140,28 @@ function ResolveDrawer({ line, courierId, onClose, onResolved }) {
     }
   }
 
+  // Find the suggested service object for display
+  const suggestedService = line.suggested_service_id
+    ? services.find(s => s.id === line.suggested_service_id)
+    : null;
+  const hasSuggestion = isUnknownCode && (line.suggested_service_name || suggestedService);
+  const suggestionLabel = line.suggested_service_name
+    ? `${line.suggested_service_name} (${line.suggested_service_code})`
+    : suggestedService ? `${suggestedService.name} (${suggestedService.service_code})` : null;
+
   return (
     <div style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000,
       display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end',
     }}>
       <div style={{
-        width: 440, height: '100vh', background: '#0D0F2B',
+        width: 460, height: '100vh', background: '#0D0F2B',
         border: '1px solid rgba(255,255,255,0.1)',
         boxShadow: '-8px 0 40px rgba(0,0,0,0.5)',
         padding: 24, overflowY: 'auto',
         display: 'flex', flexDirection: 'column', gap: 16,
       }}>
+
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, color: '#E6EDF3', margin: 0 }}>Resolve Line</h3>
@@ -150,18 +173,22 @@ function ResolveDrawer({ line, courierId, onClose, onResolved }) {
         {/* Line context */}
         <div style={{ ...card, fontSize: 12 }}>
           <div style={{ display: 'grid', gap: 6 }}>
-            <div><span style={{ color: '#888' }}>Tracking:</span> <span style={{ color: '#E6EDF3', fontFamily: 'monospace' }}>{line.tracking_number}</span></div>
-            <div><span style={{ color: '#888' }}>Service code (raw):</span> <span style={{ color: '#79AAFF', fontFamily: 'monospace' }}>{line.raw_service_code}</span></div>
+            {line.tracking_number && (
+              <div><span style={{ color: '#888' }}>Tracking:</span> <span style={{ color: '#E6EDF3', fontFamily: 'monospace' }}>{line.tracking_number}</span></div>
+            )}
+            <div><span style={{ color: '#888' }}>Raw service code:</span> <span style={{ color: '#79AAFF', fontFamily: 'monospace', fontWeight: 700 }}>{line.raw_service_code || '—'}</span></div>
             <div><span style={{ color: '#888' }}>Carrier amount:</span> <span style={{ color: '#E6EDF3', fontWeight: 700 }}>£{parseFloat(line.carrier_amount || 0).toFixed(2)}</span></div>
             {line.expected_amount != null && (
-              <div><span style={{ color: '#888' }}>Expected amount:</span> <span style={{ color: '#E6EDF3' }}>£{parseFloat(line.expected_amount).toFixed(2)}</span></div>
+              <div><span style={{ color: '#888' }}>Expected:</span> <span style={{ color: '#E6EDF3' }}>£{parseFloat(line.expected_amount).toFixed(2)}</span></div>
             )}
             {line.delta != null && (
-              <div><span style={{ color: '#888' }}>Delta:</span> <span style={{ color: parseFloat(line.delta) > 0 ? '#FF5252' : '#00C853', fontWeight: 700 }}>
-                {parseFloat(line.delta) > 0 ? '+' : ''}£{parseFloat(line.delta).toFixed(2)}
-              </span></div>
+              <div><span style={{ color: '#888' }}>Delta:</span>
+                <span style={{ color: parseFloat(line.delta) > 0 ? '#FF5252' : '#00C853', fontWeight: 700, marginLeft: 4 }}>
+                  {parseFloat(line.delta) > 0 ? '+' : ''}£{parseFloat(line.delta).toFixed(2)}
+                </span>
+              </div>
             )}
-            <div><span style={{ color: '#888' }}>Reason:</span> <ReasonLabel reason={line.unmatched_reason} /></div>
+            <div><span style={{ color: '#888' }}>Reason:</span> <span style={{ marginLeft: 4 }}><ReasonLabel reason={line.unmatched_reason} /></span></div>
             {line.aged && (
               <div style={{ marginTop: 4 }}>
                 <span style={{ background: 'rgba(213,0,0,0.15)', border: '1px solid rgba(213,0,0,0.3)', borderRadius: 9999, padding: '2px 8px', fontSize: 10, color: '#FF5252', fontWeight: 700 }}>
@@ -172,76 +199,89 @@ function ResolveDrawer({ line, courierId, onClose, onResolved }) {
           </div>
         </div>
 
+        {/* Smart suggestion banner — only for unknown_service_code */}
+        {hasSuggestion && (
+          <div style={{
+            background: 'rgba(121,170,255,0.08)', border: '1px solid rgba(121,170,255,0.25)',
+            borderRadius: 8, padding: '10px 14px',
+          }}>
+            <div style={{ fontSize: 11, color: '#79AAFF', fontWeight: 700, marginBottom: 4 }}>
+              ✦ Smart Suggestion
+            </div>
+            <div style={{ fontSize: 12, color: '#C8D8EF' }}>
+              The tracking number was found in the Verified Pool. The shipment was booked as:
+            </div>
+            <div style={{ marginTop: 6, fontSize: 13, fontWeight: 700, color: '#E6EDF3' }}>
+              {suggestionLabel}
+            </div>
+            <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
+              The dropdown below is pre-selected with this match.
+            </div>
+          </div>
+        )}
+
         {error && (
           <div style={{ background: 'rgba(213,0,0,0.1)', border: '1px solid rgba(213,0,0,0.3)', borderRadius: 7, padding: '10px 14px', color: '#FF5252', fontSize: 12 }}>
             {error}
           </div>
         )}
 
-        {/* Resolution scope */}
-        <div>
-          <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 8, fontWeight: 600 }}>RESOLUTION SCOPE</label>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {[
-              { val: 'once',   label: 'Once',   desc: 'Close this line only' },
-              { val: 'always', label: 'Always', desc: 'Save as auto-apply rule' },
-            ].map(opt => (
-              <button
-                key={opt.val}
-                onClick={() => setScope(opt.val)}
-                style={{
-                  padding: '10px 12px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
-                  background: scope === opt.val ? 'rgba(0,200,83,0.12)' : 'rgba(255,255,255,0.04)',
-                  border: `1px solid ${scope === opt.val ? 'rgba(0,200,83,0.4)' : 'rgba(255,255,255,0.08)'}`,
-                }}
-              >
-                <div style={{ fontSize: 13, fontWeight: 700, color: scope === opt.val ? '#00C853' : '#E6EDF3' }}>{opt.label}</div>
-                <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{opt.desc}</div>
-              </button>
-            ))}
+        {/* Resolution type — hidden for unknown_service_code (always map_to_service) */}
+        {!isUnknownCode && (
+          <div>
+            <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 6, fontWeight: 600 }}>RESOLUTION TYPE</label>
+            <select style={inputSt} value={resolutionType} onChange={e => setResolutionType(e.target.value)}>
+              <option value=''>— Select type —</option>
+              <option value='accept'>Accept charge as-is</option>
+              <option value='map_to_service'>Map to internal service</option>
+              <option value='map_to_customer'>Map account to customer</option>
+              <option value='accept_delta'>Accept delta as tolerance</option>
+              <option value='reject'>Reject / dispute charge</option>
+            </select>
           </div>
-        </div>
+        )}
 
-        {/* Resolution type */}
-        <div>
-          <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 6, fontWeight: 600 }}>RESOLUTION TYPE</label>
-          <select style={inputSt} value={resolutionType} onChange={e => setResolutionType(e.target.value)}>
-            <option value=''>— Select type —</option>
-            <option value='accept'>Accept charge as-is</option>
-            <option value='map_to_service'>Map to internal service</option>
-            <option value='map_to_customer'>Map account to customer</option>
-            <option value='accept_delta'>Accept delta as tolerance</option>
-            <option value='reject'>Reject / dispute charge</option>
-          </select>
-        </div>
-
-        {/* Resolution value — changes based on type */}
-        <div>
-          <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 6, fontWeight: 600 }}>RESOLUTION VALUE *</label>
-          {resolutionType === 'map_to_service' ? (
-            <select style={inputSt} value={resolutionValue} onChange={e => setResolutionValue(e.target.value)}>
+        {/* Service mapping dropdown */}
+        {(isUnknownCode || resolutionType === 'map_to_service') && (
+          <div>
+            <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 6, fontWeight: 600 }}>
+              MAP "{line.raw_service_code}" TO INTERNAL SERVICE *
+            </label>
+            <select
+              style={inputSt}
+              value={resolutionValue}
+              onChange={e => setResolutionValue(e.target.value)}
+            >
               <option value=''>— Select service —</option>
               {services.map(s => (
                 <option key={s.id} value={s.id}>
                   {s.name} ({s.service_code})
+                  {s.id === line.suggested_service_id ? ' ✦ Suggested' : ''}
                 </option>
               ))}
             </select>
-          ) : resolutionType === 'accept_delta' ? (
-            <div>
-              <input
-                style={inputSt}
-                type='number'
-                step='0.1'
-                min='0'
-                max='100'
-                placeholder='e.g. 5 (means ±5% tolerance)'
-                value={resolutionValue}
-                onChange={e => setResolutionValue(e.target.value)}
-              />
-              <div style={{ fontSize: 10, color: '#666', marginTop: 4 }}>Percentage tolerance — e.g. 5 means ±5% delta will auto-correct in future</div>
-            </div>
-          ) : (
+          </div>
+        )}
+
+        {/* Delta tolerance input */}
+        {resolutionType === 'accept_delta' && (
+          <div>
+            <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 6, fontWeight: 600 }}>TOLERANCE % *</label>
+            <input
+              style={inputSt}
+              type='number' step='0.1' min='0' max='100'
+              placeholder='e.g. 5 (means ±5%)'
+              value={resolutionValue}
+              onChange={e => setResolutionValue(e.target.value)}
+            />
+            <div style={{ fontSize: 10, color: '#666', marginTop: 4 }}>±% delta that will auto-correct in future runs</div>
+          </div>
+        )}
+
+        {/* Generic value input for other types */}
+        {!isUnknownCode && resolutionType !== 'map_to_service' && resolutionType !== 'accept_delta' && resolutionType && (
+          <div>
+            <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 6, fontWeight: 600 }}>RESOLUTION VALUE *</label>
             <input
               style={inputSt}
               placeholder={
@@ -252,6 +292,61 @@ function ResolveDrawer({ line, courierId, onClose, onResolved }) {
               value={resolutionValue}
               onChange={e => setResolutionValue(e.target.value)}
             />
+          </div>
+        )}
+
+        {/* Save as Permanent Rule */}
+        <div style={{
+          background: saveRule ? 'rgba(0,200,83,0.06)' : 'rgba(255,255,255,0.03)',
+          border: `1px solid ${saveRule ? 'rgba(0,200,83,0.3)' : 'rgba(255,255,255,0.08)'}`,
+          borderRadius: 8, padding: '12px 14px',
+        }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+            <input
+              type='checkbox'
+              checked={saveRule}
+              onChange={e => setSaveRule(e.target.checked)}
+              style={{ width: 15, height: 15, accentColor: '#00C853', cursor: 'pointer' }}
+            />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: saveRule ? '#00C853' : '#E6EDF3' }}>
+                Save as Permanent Rule
+              </div>
+              <div style={{ fontSize: 11, color: '#888', marginTop: 1 }}>
+                Auto-resolve this code on all future runs for this carrier
+              </div>
+            </div>
+          </label>
+
+          {/* Rule scope — only visible when saving a service code mapping */}
+          {saveRule && isUnknownCode && (
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ fontSize: 11, color: '#888', fontWeight: 600, marginBottom: 8 }}>APPLIES TO</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {[
+                  { val: 'global',   label: 'All Customers',    desc: 'Standard code used by all' },
+                  { val: 'customer', label: 'This Customer Only', desc: line.customer_name ? `${line.customer_name} only` : 'Customer-specific contract code' },
+                ].map(opt => (
+                  <button
+                    key={opt.val}
+                    onClick={() => setRuleScope(opt.val)}
+                    style={{
+                      padding: '9px 11px', borderRadius: 7, cursor: 'pointer', textAlign: 'left',
+                      background: ruleScope === opt.val ? 'rgba(0,200,83,0.1)' : 'rgba(255,255,255,0.04)',
+                      border: `1px solid ${ruleScope === opt.val ? 'rgba(0,200,83,0.35)' : 'rgba(255,255,255,0.08)'}`,
+                    }}
+                  >
+                    <div style={{ fontSize: 12, fontWeight: 700, color: ruleScope === opt.val ? '#00C853' : '#E6EDF3' }}>{opt.label}</div>
+                    <div style={{ fontSize: 10, color: '#666', marginTop: 2 }}>{opt.desc}</div>
+                  </button>
+                ))}
+              </div>
+              {ruleScope === 'customer' && !line.customer_id && (
+                <div style={{ fontSize: 11, color: '#FFB300', marginTop: 8 }}>
+                  ⚠ No customer identified on this line — rule will be saved as global
+                </div>
+              )}
+            </div>
           )}
         </div>
 
@@ -259,7 +354,7 @@ function ResolveDrawer({ line, courierId, onClose, onResolved }) {
         <div>
           <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 6, fontWeight: 600 }}>NOTES (OPTIONAL)</label>
           <textarea
-            style={{ ...inputSt, minHeight: 64, resize: 'vertical' }}
+            style={{ ...inputSt, minHeight: 56, resize: 'vertical' }}
             placeholder='Any context for this resolution…'
             value={notes}
             onChange={e => setNotes(e.target.value)}
@@ -275,9 +370,10 @@ function ResolveDrawer({ line, courierId, onClose, onResolved }) {
             disabled={loading}
           >
             {loading ? <RefreshCw size={13} /> : <Check size={13} />}
-            {loading ? 'Saving…' : scope === 'always' ? 'Resolve & Save Rule' : 'Resolve Once'}
+            {loading ? 'Saving…' : saveRule ? 'Resolve & Save Rule' : 'Resolve Once'}
           </button>
         </div>
+
       </div>
     </div>
   );
@@ -303,7 +399,15 @@ function LinesTable({ lines, showResolve, onResolve }) {
                 {line.tracking_number ? line.tracking_number.slice(-12) : '—'}
               </td>
               <td style={{ padding: '9px 10px', color: '#79AAFF', fontFamily: 'monospace', fontSize: 10 }}>{line.raw_service_code || '—'}</td>
-              <td style={{ padding: '9px 10px', color: '#AAA' }}>{line.service_name || '—'}</td>
+              <td style={{ padding: '9px 10px', color: '#AAA' }}>
+                {line.service_name || (
+                  line.suggested_service_name
+                    ? <span style={{ color: '#79AAFF', fontStyle: 'italic' }}>
+                        ✦ {line.suggested_service_name}
+                      </span>
+                    : '—'
+                )}
+              </td>
               <td style={{ padding: '9px 10px', color: '#AAA' }}>{line.customer_name || '—'}</td>
               <td style={{ padding: '9px 10px', color: '#666' }}>{line.charge_type || 'base'}</td>
               <td style={{ padding: '9px 10px', color: '#E6EDF3', fontWeight: 600 }}>

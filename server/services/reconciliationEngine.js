@@ -7,13 +7,24 @@
  *   Phase 1b  — Service Code Normalisation (hard gate)
  *   Pre-cond  — Build Verified Pool (once per run)
  *   Phase 2   — Safety Net check (tracking vs pool, account fallback)
- *   Phase 3   — Match & Compare (fuel aggregate + per-line delta)
+ *   Phase 3   — Match & Compare (multi-parcel grouping + per-line delta)
+ *   Phase 3a  — Aggregate line check (fuel total + HGV surcharge)
  *   Phase 4a  — Mapping Engine (saved human resolutions)
  *   Phase 4b  — Correction Engine (pricing rules)
  *   Phase 5   — State assignment & persistence
  *
  * Entry point: processReconciliationRun(runId, carrierId, lines)
  *   lines = array of normalised invoice objects (see InvoiceLine typedef below)
+ *
+ * DHL-specific notes:
+ *   • Per-parcel lines: tracking_number present, charge_type = 'base' (or blank)
+ *   • Multi-parcel shipments: multiple lines share the same tracking_number
+ *     (first parcel + sub-parcel). Engine groups them and compares the SUM
+ *     against the single charge record's base cost_price.
+ *   • Aggregate lines: tracking_number is EMPTY. Appear at bottom of DHL CSV.
+ *     - charge_type = 'fuel'     → compare against sum of expected fuel costs
+ *     - anything else            → treated as HGV/surcharge aggregate:
+ *       expected = total_parcel_count × carrier_hgv_rate_per_parcel
  */
 
 import { query } from '../db/index.js';
@@ -21,12 +32,13 @@ import { query } from '../db/index.js';
 // ─── Types (JSDoc) ────────────────────────────────────────────────────────────
 /**
  * @typedef {Object} InvoiceLine
- * @property {string}  tracking_number
+ * @property {string}  tracking_number       empty string for aggregate lines
  * @property {string}  [account_number]
  * @property {string}  service_code          raw code from carrier CSV
  * @property {string}  [charge_type]         base | fuel | surcharge | adjustment
  * @property {number}  carrier_amount        what carrier billed (£)
  * @property {number}  [billed_weight_kg]    weight as billed by carrier
+ * @property {number}  [parcel_count]        items in shipment (DHL column J)
  */
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -34,13 +46,17 @@ import { query } from '../db/index.js';
 function round2(n) { return Math.round(n * 100) / 100; }
 
 // ─── Phase 1b: Service Code Normalisation ────────────────────────────────────
-// Returns { serviceId, line } or throws with unmatched_reason
 
+/**
+ * Build the global service code map for this carrier.
+ * Only loads global mappings (customer_id IS NULL) — customer-specific
+ * mappings are checked per-line after the customer is known.
+ */
 async function buildServiceCodeMap(carrierId) {
   const res = await query(
     `SELECT courier_code, service_id
      FROM   courier_service_code_mappings
-     WHERE  carrier_id = $1 AND is_active = true`,
+     WHERE  carrier_id = $1 AND is_active = true AND customer_id IS NULL`,
     [carrierId]
   );
   const map = {};
@@ -50,12 +66,35 @@ async function buildServiceCodeMap(carrierId) {
   return map;
 }
 
+/**
+ * Smart suggestion: if a tracking number is in the Verified Pool, use the
+ * pool record's dc_service_id to find the courier_services.id that the
+ * unknown raw code most likely maps to.
+ * Returns { service_id, service_name, service_code } or null.
+ */
+async function getSuggestedServiceFromPool(trackKey, pool, carrierId) {
+  const poolHits = pool.get(trackKey) || [];
+  if (poolHits.length === 0) return null;
+
+  const dcServiceId = poolHits[0].dc_service_id;
+  if (!dcServiceId) return null;
+
+  const res = await query(
+    `SELECT id, name, service_code
+     FROM   courier_services
+     WHERE  courier_id = $1
+       AND  TRIM(service_code) ILIKE TRIM($2)
+     LIMIT  1`,
+    [carrierId, dcServiceId]
+  );
+  return res.rows[0] || null;
+}
+
 // ─── Pre-condition: Build Verified Pool ──────────────────────────────────────
-// Single query, run once per job. Returns Set of tracking numbers.
-// We also build a map of tracking_number → charge data for fast lookup.
+// Single query, run once per job.
+// Returns Map: tracking_number (upper) → charge row[]
 
 async function buildVerifiedPool(carrierId) {
-  // Pull all verified charges for this carrier, joined to shipments + tracking_codes
   const res = await query(`
     SELECT
       c.id              AS charge_id,
@@ -86,8 +125,7 @@ async function buildVerifiedPool(carrierId) {
       AND  (s.courier ILIKE cu_carrier.code OR s.courier ILIKE cu_carrier.name)
   `, [carrierId]);
 
-  // Build: tracking_number → array of charge records (multiple if return + outbound share a ref)
-  const pool = new Map(); // key: tracking_number (upper), value: charge row[]
+  const pool = new Map();
 
   for (const row of res.rows) {
     const codes = row.tracking_codes || [];
@@ -96,7 +134,6 @@ async function buildVerifiedPool(carrierId) {
       if (!pool.has(key)) pool.set(key, []);
       pool.get(key).push(row);
     }
-    // Also index by reference in case tracking_codes is empty
     if (row.reference) {
       const refKey = String(row.reference).trim().toUpperCase();
       if (!pool.has(refKey)) pool.set(refKey, []);
@@ -115,7 +152,6 @@ async function lookupCustomerByAccount(accountNumber) {
   if (!accountNumber) return null;
   const acct = String(accountNumber).trim();
 
-  // Primary: customer_carrier_links
   const res = await query(
     `SELECT cu.id AS customer_id, cu.business_name, cu.account_number AS customer_account
      FROM   customer_carrier_links ccl
@@ -126,7 +162,6 @@ async function lookupCustomerByAccount(accountNumber) {
   );
   if (res.rows.length) return res.rows[0];
 
-  // Fallback: customers.account_number / dc_customer_id
   const fallback = await query(
     `SELECT id AS customer_id, business_name,
             COALESCE(account_number, dc_customer_id) AS customer_account
@@ -150,11 +185,9 @@ async function loadMappings(carrierId) {
   return res.rows;
 }
 
-// Apply Mapping Engine rules to a line. Returns { applied, mappingId } or null.
 function applyMappings(mappings, line, delta) {
   for (const m of mappings) {
     if (m.mapping_type === 'delta_acceptance') {
-      // match_field = 'charge_type', match_value = charge type, resolution_value = max pct tolerance
       const chargeTypeMatch = !m.match_value || m.match_value === '*' ||
         (line.charge_type || 'base').toLowerCase() === m.match_value.toLowerCase();
       if (!chargeTypeMatch) continue;
@@ -168,25 +201,17 @@ function applyMappings(mappings, line, delta) {
         return { applied: true, mappingId: m.id };
       }
     }
-
-    if (m.mapping_type === 'weight_adjustment') {
-      // resolution_value = kg offset to add to our expected weight before recalculating
-      // For now, flag as potentially correctable — full recalc would need pricing engine
-      // This is handled at the correction engine level
-    }
   }
   return null;
 }
 
 // ─── Phase 4b: Correction Engine ─────────────────────────────────────────────
-// Check if customer has pricing rules AND those rules can explain the delta.
 
 async function checkCorrectionEngine(customerId, serviceId, carrierId, line, delta) {
   if (!customerId || !serviceId) {
     return { corrected: false, reason: 'no_pricing_rules' };
   }
 
-  // Does the customer have any active pricing rules for this service?
   const rulesRes = await query(
     `SELECT COUNT(*) AS cnt
      FROM   customer_rates
@@ -202,10 +227,7 @@ async function checkCorrectionEngine(customerId, serviceId, carrierId, line, del
   const hasRules = parseInt(rulesRes.rows[0]?.cnt || 0) > 0;
   if (!hasRules) return { corrected: false, reason: 'no_pricing_rules' };
 
-  // Try to explain the delta: recalculate expected cost using carrier's billed weight
-  // if that produces a cost matching carrier_amount, delta is explained.
   if (line.billed_weight_kg && line.billed_weight_kg > 0 && delta !== 0) {
-    // Look up the cost at carrier's billed weight using our weight bands
     const bandRes = await query(`
       SELECT wb.price_first, wb.price_subsequent, wb.cost_per_kg, wb.cost_per_kg_threshold_kg,
              wb.min_weight_kg, wb.max_weight_kg
@@ -221,7 +243,6 @@ async function checkCorrectionEngine(customerId, serviceId, carrierId, line, del
     if (bandRes.rows.length) {
       const band = bandRes.rows[0];
       let recalcCost = parseFloat(band.price_first || 0);
-      // Per-kg overage above threshold
       if (band.cost_per_kg && band.cost_per_kg_threshold_kg &&
           line.billed_weight_kg > band.cost_per_kg_threshold_kg) {
         recalcCost += (line.billed_weight_kg - band.cost_per_kg_threshold_kg) *
@@ -234,42 +255,129 @@ async function checkCorrectionEngine(customerId, serviceId, carrierId, line, del
     }
   }
 
-  // Delta present but can't fully explain it
   return { corrected: false, reason: 'unexplained_delta' };
 }
 
-// ─── Fuel aggregate check ─────────────────────────────────────────────────────
-// Fuel is never line-by-line. Check total fuel % of invoice total.
-// Returns 'matched' or 'unmatched' for all fuel lines collectively.
+// ─── Aggregate helpers ────────────────────────────────────────────────────────
 
-function checkFuelAggregate(lines, expectedFuelTotal, tolerance = 5) {
-  const fuelLines = lines.filter(l =>
-    (l.charge_type || '').toLowerCase() === 'fuel'
-  );
-  if (fuelLines.length === 0) return { status: 'none', lines: [] };
+/**
+ * Sum expected fuel costs for all shipments matched in this run.
+ * Called once after regular lines are processed, using the set of tracking keys
+ * that were successfully matched/corrected.
+ */
+async function calculateExpectedFuelTotal(pool, matchedTrackingKeys) {
+  let total = 0;
+  // Deduplicate by shipment_id so multi-line tracking groups don't double-count
+  const seenShipments = new Set();
 
-  const carrierFuelTotal = fuelLines.reduce((s, l) => s + (parseFloat(l.carrier_amount) || 0), 0);
-  const invoiceTotal     = lines.reduce((s, l) => s + (parseFloat(l.carrier_amount) || 0), 0);
+  for (const trackKey of matchedTrackingKeys) {
+    const poolHits = pool.get(trackKey) || [];
+    if (poolHits.length === 0) continue;
+    const charge = poolHits[0];
+    if (seenShipments.has(charge.shipment_id)) continue;
+    seenShipments.add(charge.shipment_id);
 
-  if (invoiceTotal === 0) return { status: 'matched', lines: fuelLines };
+    const fuelRes = await query(
+      `SELECT COALESCE(SUM(cost_price), 0) AS fuel_cost
+       FROM   charges
+       WHERE  shipment_id = $1
+         AND  charge_type = 'fuel'
+         AND  cancelled   = false`,
+      [charge.shipment_id]
+    );
+    total += parseFloat(fuelRes.rows[0]?.fuel_cost || 0);
+  }
+  return round2(total);
+}
 
-  const carrierFuelPct  = (carrierFuelTotal / invoiceTotal) * 100;
-  const expectedFuelPct = expectedFuelTotal > 0
-    ? (expectedFuelTotal / invoiceTotal) * 100
-    : null;
+/**
+ * Look up the HGV (or comparable aggregate) surcharge rate per parcel for this carrier.
+ * Derives the rate from existing charge records: HGV cost_price / parcel_count.
+ * Falls back to 0 if no HGV charges exist yet for this carrier.
+ */
+async function fetchCarrierHGVRate(carrierId) {
+  const res = await query(`
+    SELECT ROUND(c.cost_price::numeric / GREATEST(COALESCE(s.parcel_count, 1), 1), 4) AS rate_per_parcel
+    FROM   charges    c
+    JOIN   shipments  s  ON s.id = c.shipment_id
+    JOIN   couriers   cu ON (
+             s.courier ILIKE cu.code OR s.courier ILIKE cu.name
+           )
+    WHERE  cu.id          = $1
+      AND  c.charge_type  = 'surcharge'
+      AND  c.cancelled    = false
+      AND  UPPER(c.service_name) LIKE '%HGV%'
+      AND  c.cost_price   > 0
+    ORDER  BY c.created_at DESC
+    LIMIT  1
+  `, [carrierId]);
 
-  // If we can't calculate expected fuel %, use a simple absolute check
-  const withinTolerance = expectedFuelPct !== null
-    ? Math.abs(carrierFuelPct - expectedFuelPct) <= tolerance
-    : Math.abs(carrierFuelTotal - expectedFuelTotal) < 1.00;
+  const rate = parseFloat(res.rows[0]?.rate_per_parcel || 0);
+  if (rate > 0) console.log(`[recon engine] HGV rate for carrier ${carrierId}: £${rate}/parcel`);
+  return rate;
+}
 
-  return {
-    status:          withinTolerance ? 'matched' : 'unmatched',
-    carrier_total:   round2(carrierFuelTotal),
-    expected_total:  round2(expectedFuelTotal),
-    carrier_pct:     round2(carrierFuelPct),
-    lines:           fuelLines,
-  };
+// ─── Phase 3a: Process aggregate line (fuel or HGV) ──────────────────────────
+
+async function processAggregateLine(line, runId, carrierId, expectedFuelTotal, hgvRatePerParcel, totalParcelCount) {
+  const carrierAmount = round2(parseFloat(line.carrier_amount) || 0);
+  const chargeType    = (line.charge_type || '').toLowerCase();
+
+  let expectedAmount  = null;
+  let status          = 'unmatched';
+  let unmatchedReason = 'aggregate_mismatch';
+
+  if (chargeType === 'fuel') {
+    // Fuel aggregate: compare carrier total vs sum of our fuel costs for matched shipments
+    expectedAmount = expectedFuelTotal;
+    const delta    = round2(carrierAmount - expectedAmount);
+    // Allow £1.00 tolerance — fuel percentages can drift slightly
+    if (Math.abs(delta) <= 1.00) {
+      status = 'matched';
+    } else {
+      unmatchedReason = 'fuel_aggregate_mismatch';
+    }
+    console.log(`[recon engine] Fuel aggregate: carrier=£${carrierAmount} expected=£${expectedAmount} delta=£${delta} → ${status}`);
+
+  } else {
+    // HGV / other aggregate surcharge
+    if (hgvRatePerParcel > 0) {
+      expectedAmount = round2(totalParcelCount * hgvRatePerParcel);
+      const delta    = round2(carrierAmount - expectedAmount);
+      // Tight tolerance — HGV is formulaic (count × rate)
+      if (Math.abs(delta) < 0.02) {
+        status = 'matched';
+      } else {
+        unmatchedReason = 'hgv_aggregate_mismatch';
+      }
+      console.log(`[recon engine] HGV aggregate: ${totalParcelCount} parcels × £${hgvRatePerParcel} = £${expectedAmount}, carrier=£${carrierAmount} → ${status}`);
+    } else {
+      // No HGV rate on file — flag for human review
+      unmatchedReason = 'no_hgv_rate';
+      console.log(`[recon engine] HGV aggregate: no rate on file for carrier ${carrierId} — unmatched`);
+    }
+  }
+
+  await insertLine(runId, {
+    tracking_number:          null,
+    carrier_account_no:       line.account_number || null,
+    raw_service_code:         line.service_code   || null,
+    charge_type:              chargeType || 'surcharge',
+    carrier_amount:           carrierAmount,
+    carrier_billed_weight_kg: null,
+    service_id:               null,
+    customer_id:              null,
+    charge_id:                null,
+    expected_amount:          expectedAmount,
+    delta:                    expectedAmount !== null ? round2(carrierAmount - expectedAmount) : null,
+    status,
+    corrected_by:             null,
+    unmatched_reason:         status === 'unmatched' ? unmatchedReason : null,
+    source:                   'internal',
+    is_fuel:                  chargeType === 'fuel',
+  });
+
+  return { status };
 }
 
 // ─── Main engine entry point ──────────────────────────────────────────────────
@@ -285,7 +393,6 @@ function checkFuelAggregate(lines, expectedFuelTotal, tolerance = 5) {
 export async function processReconciliationRun(runId, carrierId, lines) {
   const startTime = Date.now();
 
-  // ── Update run status ──────────────────────────────────────────────────────
   await query(
     `UPDATE reconciliation_runs SET status = 'processing', total_lines = $2 WHERE id = $1`,
     [runId, lines.length]
@@ -300,89 +407,79 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   // ── Phase 4a: Load Mapping Engine rules ───────────────────────────────────
   const mappings = await loadMappings(carrierId);
 
-  // ── Separate fuel lines (aggregate check) ────────────────────────────────
-  const fuelLines    = lines.filter(l => (l.charge_type || '').toLowerCase() === 'fuel');
-  const nonFuelLines = lines.filter(l => (l.charge_type || '').toLowerCase() !== 'fuel');
+  // ── Separate aggregate lines (empty tracking_number) from regular lines ───
+  // Aggregate lines are carrier-level totals (fuel, HGV) that have no
+  // individual tracking number — DHL puts these at the bottom of the CSV.
+  const aggregateLines = lines.filter(l => !String(l.tracking_number || '').trim());
+  const regularLines   = lines.filter(l =>  String(l.tracking_number || '').trim());
+
+  if (aggregateLines.length > 0) {
+    console.log(`[recon engine] Run ${runId}: ${aggregateLines.length} aggregate line(s) detected (no tracking number)`);
+  }
+
+  // ── Group regular lines by tracking number (multi-parcel support) ─────────
+  // DHL bills each parcel as a separate line under the same tracking number.
+  // We compare the SUM of per-parcel carrier amounts against the single
+  // charge record's base cost_price.
+  const trackingGroups = new Map();
+  for (const line of regularLines) {
+    const key = String(line.tracking_number).trim().toUpperCase();
+    if (!trackingGroups.has(key)) trackingGroups.set(key, []);
+    trackingGroups.get(key).push(line);
+  }
+
+  const multiParcelGroups = [...trackingGroups.values()].filter(g => g.length > 1);
+  if (multiParcelGroups.length > 0) {
+    console.log(`[recon engine] Run ${runId}: ${multiParcelGroups.length} multi-parcel tracking group(s) detected`);
+  }
 
   // Counters
   let matched = 0, corrected = 0, unmatched = 0, ignored = 0;
 
-  // ── Process non-fuel lines ────────────────────────────────────────────────
-  for (const line of nonFuelLines) {
-    const lineResult = await processLine(
-      line, runId, carrierId, serviceCodeMap, pool, mappings
+  // Track which tracking keys resulted in a matched or corrected line
+  // (needed to calculate expected fuel total for the aggregate check).
+  const matchedTrackingKeys = new Set();
+
+  // ── Process regular lines (grouped by tracking number) ───────────────────
+  for (const [trackKey, group] of trackingGroups) {
+    const groupResults = await processTrackingGroup(
+      group, trackKey, runId, carrierId, serviceCodeMap, pool, mappings
     );
 
-    switch (lineResult.status) {
-      case 'matched':   matched++;   break;
-      case 'corrected': corrected++;  break;
-      case 'unmatched': unmatched++;  break;
-      case 'ignored':   ignored++;    break;
+    let groupMatched = false;
+    for (const r of groupResults) {
+      switch (r.status) {
+        case 'matched':   matched++;   groupMatched = true; break;
+        case 'corrected': corrected++; groupMatched = true; break;
+        case 'unmatched': unmatched++; break;
+        case 'ignored':   ignored++;   break;
+      }
     }
+    if (groupMatched) matchedTrackingKeys.add(trackKey);
   }
 
-  // ── Fuel aggregate check ──────────────────────────────────────────────────
-  // Sum expected fuel from our system for shipments we found in the pool
-  let expectedFuelTotal = 0;
-  for (const fuelLine of fuelLines) {
-    const trackKey = String(fuelLine.tracking_number || '').trim().toUpperCase();
-    const poolHits = pool.get(trackKey) || [];
-    if (poolHits.length > 0) {
-      const charge = poolHits[0];
-      // Fetch fuel cost for this shipment
-      const fuelRes = await query(
-        `SELECT COALESCE(SUM(cost_price), 0) AS fuel_cost
-         FROM   charges
-         WHERE  shipment_id   = $1
-           AND  charge_type   = 'fuel'
-           AND  cancelled     = false`,
-        [charge.shipment_id]
+  // ── Process aggregate lines ───────────────────────────────────────────────
+  if (aggregateLines.length > 0) {
+    const expectedFuelTotal  = await calculateExpectedFuelTotal(pool, matchedTrackingKeys);
+    const hgvRatePerParcel   = await fetchCarrierHGVRate(carrierId);
+    // Total parcel count = number of individual regular lines
+    // (each DHL per-parcel invoice line = one physical parcel)
+    const totalParcelCount   = regularLines.length;
+
+    for (const aggLine of aggregateLines) {
+      const result = await processAggregateLine(
+        aggLine, runId, carrierId, expectedFuelTotal, hgvRatePerParcel, totalParcelCount
       );
-      expectedFuelTotal += parseFloat(fuelRes.rows[0]?.fuel_cost || 0);
+      switch (result.status) {
+        case 'matched':   matched++;   break;
+        case 'unmatched': unmatched++; break;
+      }
     }
-  }
-
-  const fuelCheck = checkFuelAggregate(lines, expectedFuelTotal);
-
-  // Insert fuel lines with aggregate result
-  for (const fuelLine of fuelLines) {
-    const fuelStatus = fuelLines.length > 0 ? fuelCheck.status : 'matched';
-    const trackKey = String(fuelLine.tracking_number || '').trim().toUpperCase();
-    const poolHits = pool.get(trackKey) || [];
-    const charge   = poolHits[0] || null;
-
-    await query(`
-      INSERT INTO reconciliation_lines
-        (run_id, tracking_number, carrier_account_no, raw_service_code, charge_type,
-         carrier_amount, carrier_billed_weight_kg, service_id, customer_id, charge_id,
-         expected_amount, delta, status, source, is_fuel, corrected_by, unmatched_reason)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,true,$15,$16)
-    `, [
-      runId,
-      fuelLine.tracking_number || null,
-      fuelLine.account_number  || null,
-      fuelLine.service_code    || null,
-      'fuel',
-      round2(parseFloat(fuelLine.carrier_amount) || 0),
-      fuelLine.billed_weight_kg || null,
-      null,
-      charge?.customer_id || null,
-      charge?.charge_id   || null,
-      round2(expectedFuelTotal / Math.max(fuelLines.length, 1)),
-      null,
-      fuelStatus,
-      'internal',
-      fuelStatus === 'matched' ? null : null,
-      fuelStatus === 'unmatched' ? 'fuel_aggregate_mismatch' : null,
-    ]);
-
-    if (fuelStatus === 'matched') matched++;
-    else unmatched++;
   }
 
   // ── Calculate automation rate ─────────────────────────────────────────────
-  const total = lines.length;
-  const autoResolved = matched + corrected;
+  const total         = lines.length;
+  const autoResolved  = matched + corrected;
   const automationRate = total > 0 ? round2((autoResolved / total) * 100) : 0;
 
   // ── Finalise run ──────────────────────────────────────────────────────────
@@ -402,7 +499,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
 
   console.log(`[recon engine] Run ${runId} complete in ${Date.now() - startTime}ms — ` +
     `${matched} matched, ${corrected} corrected, ${unmatched} unmatched, ` +
-    `automation: ${automationRate}%`);
+    `${aggregateLines.length} aggregate, automation: ${automationRate}%`);
 
   return {
     run_id:          runId,
@@ -417,7 +514,151 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   };
 }
 
-// ─── Process a single non-fuel line ──────────────────────────────────────────
+// ─── Process a group of lines sharing the same tracking number ────────────────
+// Single-line groups go through the same logic as before.
+// Multi-line groups (multi-parcel shipments) aggregate carrier amounts and
+// compare the SUM against the base cost_price (fuel is billed separately as an
+// aggregate line for carriers like DHL — so base-only comparison is correct).
+
+async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCodeMap, pool, mappings) {
+  // Single-line shortcut
+  if (group.length === 1) {
+    const result = await processLine(group[0], runId, carrierId, serviceCodeMap, pool, mappings);
+    return [result];
+  }
+
+  // ── Multi-parcel group ────────────────────────────────────────────────────
+  const firstLine      = group[0];
+  const rawServiceCode = String(firstLine.service_code || '').trim();
+  const mappedKey      = rawServiceCode.toUpperCase();
+  const serviceId      = serviceCodeMap[mappedKey] || null;
+
+  if (!serviceId) {
+    // Unknown service code — hard gate; all lines in group go unmatched.
+    // Attempt smart suggestion from pool for every line in the group.
+    const suggestion = await getSuggestedServiceFromPool(trackKey, pool, carrierId);
+    if (suggestion) {
+      console.log(`[recon engine] Unknown code "${rawServiceCode}" (multi-parcel) — pool suggests service_id=${suggestion.id} (${suggestion.service_code})`);
+    }
+    for (const line of group) {
+      await insertLine(runId, {
+        tracking_number:          String(line.tracking_number || '').trim(),
+        carrier_account_no:       line.account_number || null,
+        raw_service_code:         rawServiceCode,
+        charge_type:              line.charge_type || 'base',
+        carrier_amount:           round2(parseFloat(line.carrier_amount) || 0),
+        carrier_billed_weight_kg: line.billed_weight_kg || null,
+        service_id:               null,
+        customer_id:              null,
+        charge_id:                null,
+        expected_amount:          null,
+        delta:                    null,
+        status:                   'unmatched',
+        corrected_by:             null,
+        unmatched_reason:         'unknown_service_code',
+        source:                   'internal',
+        suggested_service_id:     suggestion?.id || null,
+      });
+    }
+    return group.map(() => ({ status: 'unmatched' }));
+  }
+
+  const poolHits = pool.get(trackKey) || [];
+
+  if (poolHits.length === 0) {
+    // Not in verified pool — process each line individually
+    // (external booking path, or account-number lookup)
+    const results = [];
+    for (const line of group) {
+      const r = await processLine(line, runId, carrierId, serviceCodeMap, pool, mappings);
+      results.push(r);
+    }
+    return results;
+  }
+
+  // ── Aggregate comparison ──────────────────────────────────────────────────
+  const charge = poolHits[0];
+
+  // For carriers that bill fuel as aggregate lines (DHL), per-parcel lines
+  // represent base freight only. Compare against expected_cost (base cost_price).
+  const totalCarrierAmount = round2(
+    group.reduce((s, l) => s + (parseFloat(l.carrier_amount) || 0), 0)
+  );
+  const expectedBase = round2(parseFloat(charge.expected_cost) || 0);
+  const delta        = round2(totalCarrierAmount - expectedBase);
+
+  // Attach expected for Mapping Engine
+  firstLine._expected_amount = expectedBase;
+
+  let groupStatus = 'unmatched';
+  let correctedBy = null;
+  let mappingId   = null;
+  let unmatchedReason = null;
+
+  if (Math.abs(delta) < 0.02) {
+    groupStatus = 'matched';
+
+  } else {
+    // Try Mapping Engine
+    const mappingResult = applyMappings(mappings, firstLine, delta);
+    if (mappingResult?.applied) {
+      await query(
+        `UPDATE reconciliation_mappings SET applied_count = applied_count + 1, last_applied_at = NOW() WHERE id = $1`,
+        [mappingResult.mappingId]
+      );
+      groupStatus = 'corrected';
+      correctedBy = 'mapping';
+      mappingId   = mappingResult.mappingId;
+
+    } else {
+      // Try Correction Engine (use aggregate line as proxy)
+      const proxyLine = {
+        ...firstLine,
+        carrier_amount:   totalCarrierAmount,
+        billed_weight_kg: firstLine.billed_weight_kg,
+      };
+      const correction = await checkCorrectionEngine(
+        charge.customer_id, serviceId, carrierId, proxyLine, delta
+      );
+      if (correction.corrected) {
+        groupStatus = 'corrected';
+        correctedBy = 'pricing_rules';
+      } else {
+        groupStatus     = 'unmatched';
+        unmatchedReason = correction.reason;
+      }
+    }
+  }
+
+  // Insert one reconciliation_line per original invoice line, all sharing
+  // the group-level result. This preserves the full invoice detail.
+  for (const line of group) {
+    await insertLine(runId, {
+      tracking_number:          String(line.tracking_number || '').trim(),
+      carrier_account_no:       line.account_number || null,
+      raw_service_code:         rawServiceCode,
+      charge_type:              line.charge_type || 'base',
+      carrier_amount:           round2(parseFloat(line.carrier_amount) || 0),
+      carrier_billed_weight_kg: line.billed_weight_kg || null,
+      service_id:               serviceId,
+      customer_id:              charge.customer_id,
+      charge_id:                charge.charge_id,
+      // Store the group-level expected + delta on every line so the UI can
+      // show the full picture rather than partial amounts.
+      expected_amount:          expectedBase,
+      delta:                    delta,
+      status:                   groupStatus,
+      corrected_by:             correctedBy,
+      unmatched_reason:         unmatchedReason,
+      source:                   'internal',
+      mapping_id:               mappingId,
+    });
+  }
+
+  return group.map(() => ({ status: groupStatus }));
+}
+
+// ─── Process a single line ────────────────────────────────────────────────────
 
 async function processLine(line, runId, carrierId, serviceCodeMap, pool, mappings) {
   const trackingNumber = String(line.tracking_number || '').trim();
@@ -430,7 +671,13 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
   const serviceId = serviceCodeMap[mappedKey] || null;
 
   if (!serviceId) {
-    // No mapping — hard gate, immediately Unmatched
+    // Smart suggestion: use tracking number to find the likely correct service
+    // from the Verified Pool (the pool already has the dc_service_id we use).
+    const suggestion = await getSuggestedServiceFromPool(trackKey, pool, carrierId);
+    if (suggestion) {
+      console.log(`[recon engine] Unknown code "${rawServiceCode}" — pool suggests service_id=${suggestion.id} (${suggestion.service_code})`);
+    }
+
     await insertLine(runId, {
       tracking_number:          trackingNumber,
       carrier_account_no:       line.account_number || null,
@@ -447,6 +694,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
       corrected_by:             null,
       unmatched_reason:         'unknown_service_code',
       source:                   'internal',
+      suggested_service_id:     suggestion?.id || null,
     });
     return { status: 'unmatched' };
   }
@@ -455,7 +703,6 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
   const poolHits = pool.get(trackKey) || [];
 
   if (poolHits.length === 0) {
-    // Not in verified pool — try account number (External Booking path)
     const customer = await lookupCustomerByAccount(line.account_number);
 
     if (!customer) {
@@ -479,8 +726,10 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
       return { status: 'unmatched' };
     }
 
-    // External booking — synthesise expected amount from customer's quoted pricing
-    const expectedAmount = await synthesiseExternalExpected(customer.customer_id, serviceId, line.billed_weight_kg);
+    // External booking path
+    const expectedAmount = await synthesiseExternalExpected(
+      customer.customer_id, serviceId, line.billed_weight_kg
+    );
 
     await insertLine(runId, {
       tracking_number:          trackingNumber,
@@ -494,7 +743,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
       charge_id:                null,
       expected_amount:          expectedAmount,
       delta:                    expectedAmount !== null ? round2(carrierAmount - expectedAmount) : null,
-      status:                   'unmatched',   // always review external bookings initially
+      status:                   'unmatched',
       corrected_by:             null,
       unmatched_reason:         'external_booking_review',
       source:                   'external_booking',
@@ -503,20 +752,12 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
   }
 
   // ── Phase 3: Match & Compare ──────────────────────────────────────────────
-  // Use best matching pool hit (prefer same service_id)
-  const charge = poolHits.find(h => {
-    const svcCode = (h.dc_service_id || '').trim().toUpperCase();
-    // match if service_code from carrier_services matches the pool hit's dc_service_id
-    return true; // simplified — use first hit
-  }) || poolHits[0];
-
+  const charge         = poolHits[0];
   const expectedAmount = round2(parseFloat(charge.total_cost_price) || 0);
   const delta          = round2(carrierAmount - expectedAmount);
 
-  // Attach for mapping engine use
   line._expected_amount = expectedAmount;
 
-  // ── Exact match? ──────────────────────────────────────────────────────────
   if (Math.abs(delta) < 0.02) {
     await insertLine(runId, {
       tracking_number:          trackingNumber,
@@ -541,7 +782,6 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
   // ── Phase 4a: Mapping Engine ──────────────────────────────────────────────
   const mappingResult = applyMappings(mappings, line, delta);
   if (mappingResult?.applied) {
-    // Increment mapping applied_count
     await query(
       `UPDATE reconciliation_mappings SET applied_count = applied_count + 1, last_applied_at = NOW() WHERE id = $1`,
       [mappingResult.mappingId]
@@ -620,7 +860,6 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
 async function synthesiseExternalExpected(customerId, serviceId, weightKg) {
   if (!weightKg || !customerId) return null;
 
-  // Look up customer's sell price for this service at this weight
   const serviceRes = await query(
     `SELECT service_code FROM courier_services WHERE id = $1 LIMIT 1`,
     [serviceId]
@@ -658,12 +897,12 @@ async function insertLine(runId, data) {
       (run_id, tracking_number, carrier_account_no, raw_service_code, charge_type,
        carrier_amount, carrier_billed_weight_kg, service_id, customer_id, charge_id,
        expected_amount, delta, status, corrected_by, unmatched_reason, source,
-       mapping_id, is_fuel)
+       mapping_id, is_fuel, suggested_service_id)
     VALUES
-      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
   `, [
     runId,
-    data.tracking_number          || null,
+    data.tracking_number          ?? null,
     data.carrier_account_no       || null,
     data.raw_service_code         || null,
     data.charge_type              || 'base',
@@ -680,12 +919,11 @@ async function insertLine(runId, data) {
     data.source                   || 'internal',
     data.mapping_id               || null,
     data.is_fuel                  || false,
+    data.suggested_service_id     || null,
   ]);
 }
 
 // ─── Age Unmatched lines from previous runs ───────────────────────────────────
-// Called at the start of each new run to flag lines that have appeared
-// Unmatched across >= 2 runs.
 
 export async function ageUnmatchedLines(carrierId) {
   const res = await query(`

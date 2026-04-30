@@ -837,14 +837,17 @@ router.get('/runs/:id/lines', async (req, res) => {
     const result = await query(`
       SELECT
         rl.*,
-        cs.name         AS service_name,
-        cs.service_code AS service_code_internal,
-        cu.business_name AS customer_name,
-        s.full_name      AS resolved_by_name
+        cs.name              AS service_name,
+        cs.service_code      AS service_code_internal,
+        cu.business_name     AS customer_name,
+        s.full_name          AS resolved_by_name,
+        cs_sug.name         AS suggested_service_name,
+        cs_sug.service_code  AS suggested_service_code
       FROM   reconciliation_lines rl
-      LEFT JOIN courier_services cs ON cs.id = rl.service_id
-      LEFT JOIN customers        cu ON cu.id  = rl.customer_id
-      LEFT JOIN staff             s ON s.id   = rl.resolved_by
+      LEFT JOIN courier_services cs     ON cs.id     = rl.service_id
+      LEFT JOIN courier_services cs_sug ON cs_sug.id = rl.suggested_service_id
+      LEFT JOIN customers        cu     ON cu.id      = rl.customer_id
+      LEFT JOIN staff             s     ON s.id       = rl.resolved_by
       WHERE  ${conditions.join(' AND ')}
       ORDER  BY rl.aged DESC, rl.carrier_amount DESC
       LIMIT  $${params.length - 1} OFFSET $${params.length}
@@ -873,7 +876,7 @@ router.get('/runs/:id/lines', async (req, res) => {
 router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
   try {
     const lineId = parseInt(req.params.lineId);
-    const { resolution_type, resolution_value, scope = 'once', notes, mapping_type } = req.body;
+    const { resolution_type, resolution_value, scope = 'once', notes, mapping_type, customer_id } = req.body;
 
     if (!resolution_type) return res.status(400).json({ error: 'resolution_type is required' });
     if (!resolution_value) return res.status(400).json({ error: 'resolution_value is required' });
@@ -932,21 +935,40 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
       mappingId = mRes.rows[0]?.id || null;
     }
 
-    // If this was an unknown_service_code, save to courier_service_code_mappings
+    // If this was an unknown_service_code, save to courier_service_code_mappings.
+    // Supports customer_id = null (global) or a specific UUID (customer-specific rule).
+    // Uses manual upsert to handle partial unique indexes correctly with NULLs.
     if (scope === 'always' && line.unmatched_reason === 'unknown_service_code' && resolution_value) {
-      await query(`
-        INSERT INTO courier_service_code_mappings
-          (carrier_id, courier_code, service_id, created_by, created_from_run_id)
-        VALUES ($1,$2,$3,$4,$5)
-        ON CONFLICT (carrier_id, courier_code)
-        DO UPDATE SET service_id = EXCLUDED.service_id, is_active = true
-      `, [
-        line.carrier_id,
-        line.raw_service_code,
-        parseInt(resolution_value),
-        req.user?.id || null,
-        line.run_id,
-      ]);
+      const custId = customer_id || null;
+
+      const existingMapping = await query(`
+        SELECT id FROM courier_service_code_mappings
+        WHERE  carrier_id   = $1
+          AND  courier_code = $2
+          AND  ($3::uuid IS NULL AND customer_id IS NULL
+                OR customer_id = $3::uuid)
+      `, [line.carrier_id, line.raw_service_code, custId]);
+
+      if (existingMapping.rows.length) {
+        await query(`
+          UPDATE courier_service_code_mappings
+          SET    service_id = $1, is_active = true
+          WHERE  id = $2
+        `, [parseInt(resolution_value), existingMapping.rows[0].id]);
+      } else {
+        await query(`
+          INSERT INTO courier_service_code_mappings
+            (carrier_id, courier_code, service_id, customer_id, created_by, created_from_run_id)
+          VALUES ($1,$2,$3,$4,$5,$6)
+        `, [
+          line.carrier_id,
+          line.raw_service_code,
+          parseInt(resolution_value),
+          custId,
+          req.user?.id || null,
+          line.run_id,
+        ]);
+      }
     }
 
     // Update run stats
@@ -994,27 +1016,47 @@ router.get('/service-code-mappings', async (req, res) => {
 });
 
 // ─── POST /api/reconciliation/service-code-mappings ───────────────────────────
+// Supports customer_id = null (global) or a specific UUID (customer-specific).
+// Uses a manual upsert because partial unique indexes don't play well with
+// ON CONFLICT column lists when NULLs are involved.
+
 router.post('/service-code-mappings', async (req, res) => {
   try {
-    const { carrier_id, courier_code, service_id, notes } = req.body;
+    const { carrier_id, courier_code, service_id, notes, customer_id } = req.body;
     if (!carrier_id)   return res.status(400).json({ error: 'carrier_id is required' });
     if (!courier_code) return res.status(400).json({ error: 'courier_code is required' });
     if (!service_id)   return res.status(400).json({ error: 'service_id is required' });
 
-    const result = await query(`
-      INSERT INTO courier_service_code_mappings
-        (carrier_id, courier_code, service_id, notes, created_by)
-      VALUES ($1,$2,$3,$4,$5)
-      ON CONFLICT (carrier_id, courier_code)
-      DO UPDATE SET service_id = EXCLUDED.service_id, notes = EXCLUDED.notes, is_active = true
-      RETURNING *
-    `, [
-      parseInt(carrier_id),
-      courier_code.trim().toUpperCase(),
-      parseInt(service_id),
-      notes || null,
-      req.user?.id || null,
-    ]);
+    const normCode     = courier_code.trim().toUpperCase();
+    const carrierIdInt = parseInt(carrier_id);
+    const serviceIdInt = parseInt(service_id);
+    const custId       = customer_id || null;
+
+    // Check for an existing row matching the same (carrier, code, customer scope)
+    const existing = await query(`
+      SELECT id FROM courier_service_code_mappings
+      WHERE  carrier_id   = $1
+        AND  courier_code = $2
+        AND  ($3::uuid IS NULL AND customer_id IS NULL
+              OR customer_id = $3::uuid)
+    `, [carrierIdInt, normCode, custId]);
+
+    let result;
+    if (existing.rows.length) {
+      result = await query(`
+        UPDATE courier_service_code_mappings
+        SET    service_id = $1, notes = $2, is_active = true
+        WHERE  id = $3
+        RETURNING *
+      `, [serviceIdInt, notes || null, existing.rows[0].id]);
+    } else {
+      result = await query(`
+        INSERT INTO courier_service_code_mappings
+          (carrier_id, courier_code, service_id, notes, customer_id, created_by)
+        VALUES ($1,$2,$3,$4,$5,$6)
+        RETURNING *
+      `, [carrierIdInt, normCode, serviceIdInt, notes || null, custId, req.user?.id || null]);
+    }
 
     return res.status(201).json(result.rows[0]);
   } catch (err) {
