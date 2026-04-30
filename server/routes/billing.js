@@ -785,10 +785,22 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData, 
     }
 
     // ── Fuel group charge ─────────────────────────────────────────────────────
-    // If the service has a fuel_group_id set, apply the customer's fuel sell %
-    // (from customer_fuel_group_pricing, falling back to standard_sell_pct).
+    // Apply the customer's fuel sell % (from customer_fuel_group_pricing,
+    // falling back to the fuel group's standard_sell_pct).
+    //
+    // Lookup strategy — tries in order, stops at first match:
+    //   1. Exact service match via dc_service_id  (most precise)
+    //   2. Carrier-wide fallback via courierId     (when dc_service_id is
+    //      absent or doesn't match a service with a fuel group configured)
+    //
+    // Without the fallback, any shipment missing dc_service_id silently
+    // skips fuel while HGV/EPS still apply (they use the carrier name
+    // fallback already resolved above at line ~693). This was causing
+    // customers like Barry Carter Motors to receive HGV + EPS but no fuel.
+    let fuelGroupRow = null;
+
     if (shipmentData.dc_service_id) {
-      const fuelRes = await query(`
+      const { rows: fuelRows } = await query(`
         SELECT
           fg.id                  AS fuel_group_id,
           fg.name                AS fuel_group_name,
@@ -802,29 +814,53 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData, 
         WHERE cs.service_code ILIKE $1
         LIMIT 1
       `, [shipmentData.dc_service_id, customerId]);
+      if (fuelRows.length) fuelGroupRow = fuelRows[0];
+    }
 
-      if (fuelRes.rows.length) {
-        const fg = fuelRes.rows[0];
-        const sellPct    = parseFloat(fg.customer_sell_pct ?? fg.standard_sell_pct ?? 0);
-        const carrierPct = parseFloat(fg.carrier_pct ?? 0);
+    // Fallback: dc_service_id absent or didn't match — look up any fuel group
+    // configured for this carrier. For single-fuel-group carriers (DHL UK,
+    // DPD UK etc.) this always returns the correct group.
+    if (!fuelGroupRow && courierId) {
+      const { rows: fallbackRows } = await query(`
+        SELECT DISTINCT ON (fg.id)
+          fg.id                  AS fuel_group_id,
+          fg.name                AS fuel_group_name,
+          fg.standard_sell_pct,
+          fg.fuel_surcharge_pct  AS carrier_pct,
+          cfgp.sell_pct          AS customer_sell_pct
+        FROM courier_services cs
+        JOIN fuel_groups fg ON fg.id = cs.fuel_group_id
+        LEFT JOIN customer_fuel_group_pricing cfgp
+               ON cfgp.fuel_group_id = fg.id AND cfgp.customer_id = $2
+        WHERE cs.courier_id = $1
+        ORDER BY fg.id
+        LIMIT 1
+      `, [courierId, customerId]);
+      if (fallbackRows.length) {
+        fuelGroupRow = fallbackRows[0];
+        console.log(`[applySurcharges] Fuel group resolved via carrier fallback (courier_id=${courierId}, shipment=${shipmentId})`);
+      }
+    }
 
-        if (sellPct > 0) {
-          // Idempotency: one fuel charge per shipment — check by charge_type='fuel'
-          const { rows: existingFuel } = await query(
-            `SELECT id FROM charges WHERE shipment_id=$1 AND charge_type='fuel'`,
-            [shipmentId]
-          );
+    if (fuelGroupRow) {
+      const sellPct    = parseFloat(fuelGroupRow.customer_sell_pct ?? fuelGroupRow.standard_sell_pct ?? 0);
+      const carrierPct = parseFloat(fuelGroupRow.carrier_pct ?? 0);
 
-          if (!existingFuel.length) {
-            const baseCost    = parseFloat(basePrice) || 0;
-            const fuelPrice   = parseFloat((baseCost * sellPct    / 100).toFixed(2));
-            const fuelCost    = carrierPct > 0 ? parseFloat((baseCost * carrierPct / 100).toFixed(2)) : null;
-            await query(`
-              INSERT INTO charges
-                (shipment_id, customer_id, charge_type, service_name, price, cost_price, price_auto, parcel_qty)
-              VALUES ($1, $2, 'fuel', $3, $4, $5, true, 1)
-            `, [shipmentId, customerId, `${fg.fuel_group_name} Fuel`, fuelPrice, fuelCost]);
-          }
+      if (sellPct > 0) {
+        // Idempotency: one fuel charge per shipment
+        const { rows: existingFuel } = await query(
+          `SELECT id FROM charges WHERE shipment_id=$1 AND charge_type='fuel'`,
+          [shipmentId]
+        );
+        if (!existingFuel.length) {
+          const baseCost  = parseFloat(basePrice) || 0;
+          const fuelPrice = parseFloat((baseCost * sellPct    / 100).toFixed(2));
+          const fuelCost  = carrierPct > 0 ? parseFloat((baseCost * carrierPct / 100).toFixed(2)) : null;
+          await query(`
+            INSERT INTO charges
+              (shipment_id, customer_id, charge_type, service_name, price, cost_price, price_auto, parcel_qty)
+            VALUES ($1, $2, 'fuel', $3, $4, $5, true, 1)
+          `, [shipmentId, customerId, `${fuelGroupRow.fuel_group_name} Fuel`, fuelPrice, fuelCost]);
         }
       }
     }
