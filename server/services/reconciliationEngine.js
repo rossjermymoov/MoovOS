@@ -440,10 +440,20 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   // (needed to calculate expected fuel total for the aggregate check).
   const matchedTrackingKeys = new Set();
 
+  // ── Detect whether this carrier bills fuel as a separate aggregate line ──
+  // When true, per-shipment lines should compare against base cost_price only
+  // (charge.expected_cost), not the total which includes fuel+surcharges.
+  const fuelIsAggregated = aggregateLines.some(
+    l => (l.charge_type || '').toLowerCase() === 'fuel'
+  );
+  if (fuelIsAggregated) {
+    console.log(`[recon engine] Run ${runId}: fuel billed as aggregate line — using base cost_price for per-shipment comparisons`);
+  }
+
   // ── Process regular lines (grouped by tracking number) ───────────────────
   for (const [trackKey, group] of trackingGroups) {
     const groupResults = await processTrackingGroup(
-      group, trackKey, runId, carrierId, serviceCodeMap, pool, mappings
+      group, trackKey, runId, carrierId, serviceCodeMap, pool, mappings, fuelIsAggregated
     );
 
     let groupMatched = false;
@@ -520,10 +530,10 @@ export async function processReconciliationRun(runId, carrierId, lines) {
 // compare the SUM against the base cost_price (fuel is billed separately as an
 // aggregate line for carriers like DHL — so base-only comparison is correct).
 
-async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCodeMap, pool, mappings) {
+async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCodeMap, pool, mappings, fuelIsAggregated = false) {
   // Single-line shortcut
   if (group.length === 1) {
-    const result = await processLine(group[0], runId, carrierId, serviceCodeMap, pool, mappings);
+    const result = await processLine(group[0], runId, carrierId, serviceCodeMap, pool, mappings, fuelIsAggregated);
     return [result];
   }
 
@@ -660,7 +670,7 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
 
 // ─── Process a single line ────────────────────────────────────────────────────
 
-async function processLine(line, runId, carrierId, serviceCodeMap, pool, mappings) {
+async function processLine(line, runId, carrierId, serviceCodeMap, pool, mappings, fuelIsAggregated = false) {
   const trackingNumber = String(line.tracking_number || '').trim();
   const trackKey       = trackingNumber.toUpperCase();
   const rawServiceCode = String(line.service_code   || '').trim();
@@ -752,9 +762,13 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
   }
 
   // ── Phase 3: Match & Compare ──────────────────────────────────────────────
-  const charge         = poolHits[0];
-  const expectedAmount = round2(parseFloat(charge.total_cost_price) || 0);
-  const delta          = round2(carrierAmount - expectedAmount);
+  const charge = poolHits[0];
+  // When fuel is billed as a separate aggregate line (e.g. DHL), compare
+  // against base cost_price only — not total_cost_price which includes fuel/surcharges.
+  const expectedAmount = fuelIsAggregated
+    ? round2(parseFloat(charge.expected_cost) || 0)
+    : round2(parseFloat(charge.total_cost_price) || 0);
+  const delta = round2(carrierAmount - expectedAmount);
 
   line._expected_amount = expectedAmount;
 

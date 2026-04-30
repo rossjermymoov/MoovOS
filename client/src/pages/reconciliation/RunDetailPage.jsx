@@ -379,6 +379,170 @@ function ResolveDrawer({ line, courierId, onClose, onResolved }) {
   );
 }
 
+// ─── Service code mapping banner ─────────────────────────────────────────────
+// Appears above the Unmatched table when there are unknown_service_code lines.
+// Groups them by raw code, lets the user pick a mapping for each, then bulk-saves.
+function ServiceCodeMappingBanner({ unmatchedLines, runId, courierId, onMapped }) {
+  const unknownLines = unmatchedLines.filter(l => l.unmatched_reason === 'unknown_service_code');
+  if (!unknownLines.length) return null;
+
+  // Group by raw_service_code — preserve insertion order
+  const groups = new Map();
+  for (const line of unknownLines) {
+    const code = line.raw_service_code || '(blank)';
+    if (!groups.has(code)) {
+      groups.set(code, { code, count: 0, suggested_service_id: null, suggested_label: null });
+    }
+    const g = groups.get(code);
+    g.count++;
+    if (!g.suggested_service_id && line.suggested_service_id) {
+      g.suggested_service_id = line.suggested_service_id;
+      const name = line.suggested_service_name
+        ? `${line.suggested_service_name} (${line.suggested_service_code})`
+        : null;
+      g.suggested_label = name;
+    }
+  }
+
+  // Mapping state: code → service_id string
+  const [selections, setSelections] = useState(() => {
+    const init = {};
+    for (const [code, g] of groups) {
+      init[code] = g.suggested_service_id ? String(g.suggested_service_id) : '';
+    }
+    return init;
+  });
+  const [saving,  setSaving]  = useState(false);
+  const [error,   setError]   = useState('');
+  const [success, setSuccess] = useState('');
+
+  const { data: services = [] } = useQuery({
+    queryKey: ['recon-services', courierId],
+    queryFn:  () => api.get(`/reconciliation/courier-services?carrier_id=${courierId}`).then(r => r.data),
+    enabled:  !!courierId,
+  });
+
+  const allSet = [...groups.keys()].every(code => !!selections[code]);
+
+  async function handleApply() {
+    setSaving(true);
+    setError('');
+    setSuccess('');
+    try {
+      const mappings = [...groups.keys()]
+        .filter(code => !!selections[code])
+        .map(code => ({ raw_service_code: code, service_id: parseInt(selections[code]) }));
+
+      const res = await api.post(`/reconciliation/runs/${runId}/bulk-map-service-codes`, { mappings });
+      setSuccess(`Mapped ${res.data.total_lines_updated} line${res.data.total_lines_updated !== 1 ? 's' : ''} — refreshing…`);
+      setTimeout(onMapped, 800);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to apply mappings');
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div style={{
+      background: 'rgba(255,160,0,0.04)',
+      border: '1px solid rgba(255,160,0,0.25)',
+      borderRadius: 10, padding: 20, marginBottom: 16,
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#FFB300', display: 'flex', alignItems: 'center', gap: 7 }}>
+            <AlertTriangle size={15} />
+            {groups.size} unknown service code{groups.size !== 1 ? 's' : ''} — map before finalizing
+          </div>
+          <div style={{ fontSize: 12, color: '#888', marginTop: 3 }}>
+            Map each raw carrier code to an internal service. Saves as a permanent rule so future runs auto-resolve.
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {[...groups.values()].map(g => (
+          <div key={g.code} style={{
+            display: 'grid', gridTemplateColumns: '140px 50px 1fr 120px', gap: 12,
+            alignItems: 'center', padding: '10px 14px',
+            background: 'rgba(255,255,255,0.03)', borderRadius: 8,
+            border: selections[g.code] ? '1px solid rgba(0,200,83,0.2)' : '1px solid rgba(255,255,255,0.06)',
+          }}>
+            {/* Raw code */}
+            <div>
+              <div style={{ fontSize: 10, color: '#666', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Raw Code</div>
+              <div style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, color: '#79AAFF' }}>{g.code}</div>
+            </div>
+            {/* Line count */}
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 10, color: '#666', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Lines</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#AAA' }}>{g.count}</div>
+            </div>
+            {/* Service dropdown */}
+            <div>
+              <div style={{ fontSize: 10, color: '#666', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>
+                Maps To{g.suggested_label && <span style={{ color: '#79AAFF', marginLeft: 5 }}>✦ Suggestion available</span>}
+              </div>
+              <select
+                style={inputSt}
+                value={selections[g.code] || ''}
+                onChange={e => setSelections(prev => ({ ...prev, [g.code]: e.target.value }))}
+              >
+                <option value=''>— Select internal service —</option>
+                {services.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.service_code})
+                    {s.id === g.suggested_service_id ? ' ✦' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {/* Status indicator */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+              {selections[g.code] ? (
+                <span style={{ fontSize: 11, color: '#00C853', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Check size={13} />Ready
+                </span>
+              ) : (
+                <span style={{ fontSize: 11, color: '#FFB300' }}>Needs mapping</span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Error / success feedback */}
+      {error && (
+        <div style={{ marginTop: 12, fontSize: 12, color: '#FF5252', background: 'rgba(213,0,0,0.1)', border: '1px solid rgba(213,0,0,0.3)', borderRadius: 7, padding: '8px 12px' }}>
+          {error}
+        </div>
+      )}
+      {success && (
+        <div style={{ marginTop: 12, fontSize: 12, color: '#00C853', background: 'rgba(0,200,83,0.1)', border: '1px solid rgba(0,200,83,0.3)', borderRadius: 7, padding: '8px 12px' }}>
+          {success}
+        </div>
+      )}
+
+      {/* Apply button */}
+      <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+        <button
+          style={{
+            ...btnGreen,
+            opacity: (saving || !allSet) ? 0.6 : 1,
+            cursor: (saving || !allSet) ? 'not-allowed' : 'pointer',
+          }}
+          onClick={handleApply}
+          disabled={saving || !allSet}
+          title={!allSet ? 'Map all codes before applying' : ''}
+        >
+          {saving ? <RefreshCw size={13} /> : <Check size={13} />}
+          {saving ? 'Applying…' : `Apply ${[...groups.keys()].filter(c => selections[c]).length} Mapping${groups.size !== 1 ? 's' : ''}`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Lines table ──────────────────────────────────────────────────────────────
 function LinesTable({ lines, showResolve, onResolve }) {
   return (
@@ -833,12 +997,35 @@ export default function RunDetailPage() {
         </>
       )}
 
-      {/* Line tables */}
-      {activeTab !== 'overview' && (
+      {/* Unmatched tab — service code mapping banner + lines table */}
+      {activeTab === 'unmatched' && (
+        <>
+          <ServiceCodeMappingBanner
+            unmatchedLines={unmatchedLines}
+            runId={parseInt(id)}
+            courierId={run.carrier_id}
+            onMapped={() => {
+              qc.invalidateQueries({ queryKey: ['recon-run', id] });
+              qc.invalidateQueries({ queryKey: ['recon-lines', id] });
+              refetchRun();
+            }}
+          />
+          <div style={card}>
+            <LinesTable
+              lines={unmatchedLines}
+              showResolve
+              onResolve={setResolvingLine}
+            />
+          </div>
+        </>
+      )}
+
+      {/* Line tables for other tabs */}
+      {activeTab !== 'overview' && activeTab !== 'unmatched' && (
         <div style={card}>
           <LinesTable
             lines={currentLines}
-            showResolve={activeTab === 'unmatched'}
+            showResolve={false}
             onResolve={setResolvingLine}
           />
         </div>

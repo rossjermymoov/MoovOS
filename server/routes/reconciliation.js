@@ -986,6 +986,96 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
   }
 });
 
+// ─── POST /api/reconciliation/runs/:id/bulk-map-service-codes ─────────────────
+// Save multiple service code mappings at once and immediately apply them to all
+// matching unmatched lines in this run. Designed for the "Map Unknown Codes"
+// banner that groups lines by raw_service_code so the user can map them in bulk.
+//
+// Body: { mappings: [{ raw_service_code, service_id, customer_id? }] }
+// Each mapping is saved as a global permanent rule (customer_id = null) unless
+// customer_id is provided.
+
+router.post('/runs/:id/bulk-map-service-codes', async (req, res) => {
+  try {
+    const runId = parseInt(req.params.id);
+    const { mappings = [] } = req.body;
+
+    if (!mappings.length) return res.status(400).json({ error: 'mappings array is required' });
+
+    // Fetch run to get carrier_id
+    const runRes = await query('SELECT carrier_id FROM reconciliation_runs WHERE id = $1', [runId]);
+    if (!runRes.rows.length) return res.status(404).json({ error: 'Run not found' });
+    const carrierId = runRes.rows[0].carrier_id;
+
+    let totalUpdated = 0;
+    const results = [];
+
+    for (const m of mappings) {
+      const { raw_service_code, service_id, customer_id = null } = m;
+      if (!raw_service_code || !service_id) continue;
+
+      const custId = customer_id || null;
+
+      // 1. Upsert courier_service_code_mappings (manual upsert for partial index safety)
+      const existing = await query(`
+        SELECT id FROM courier_service_code_mappings
+        WHERE  carrier_id   = $1
+          AND  courier_code = $2
+          AND  ($3::uuid IS NULL AND customer_id IS NULL
+                OR customer_id = $3::uuid)
+      `, [carrierId, raw_service_code, custId]);
+
+      if (existing.rows.length) {
+        await query(
+          'UPDATE courier_service_code_mappings SET service_id = $1, is_active = true WHERE id = $2',
+          [parseInt(service_id), existing.rows[0].id]
+        );
+      } else {
+        await query(`
+          INSERT INTO courier_service_code_mappings
+            (carrier_id, courier_code, service_id, customer_id, created_by, created_from_run_id)
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `, [carrierId, raw_service_code, parseInt(service_id), custId, req.user?.id || null, runId]);
+      }
+
+      // 2. Update all matching unmatched lines in this run
+      const updRes = await query(`
+        UPDATE reconciliation_lines
+        SET    status        = 'corrected',
+               corrected_by  = 'human',
+               service_id    = $1,
+               resolved_at   = NOW(),
+               resolved_by   = $2
+        WHERE  run_id            = $3
+          AND  raw_service_code  = $4
+          AND  status            = 'unmatched'
+          AND  unmatched_reason  = 'unknown_service_code'
+        RETURNING id
+      `, [parseInt(service_id), req.user?.id || null, runId, raw_service_code]);
+
+      const count = updRes.rowCount || 0;
+      totalUpdated += count;
+      results.push({ raw_service_code, service_id, lines_updated: count });
+    }
+
+    // 3. Recount and update run stats from DB (most accurate)
+    await query(`
+      UPDATE reconciliation_runs rr
+      SET    unmatched_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'unmatched'),
+             corrected_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status IN ('corrected')),
+             status = CASE
+               WHEN (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'unmatched') > 0
+               THEN 'needs_review' ELSE 'complete' END
+      WHERE  id = $1
+    `, [runId]);
+
+    return res.json({ applied: true, total_lines_updated: totalUpdated, results });
+  } catch (err) {
+    console.error('[reconciliation/bulk-map] POST error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── GET /api/reconciliation/service-code-mappings ────────────────────────────
 // List all courier service code mappings (for management UI).
 
