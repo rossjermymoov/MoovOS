@@ -49,7 +49,7 @@ const btnRed = {
 function StatusBadge({ status }) {
   const cfg = {
     matched:      { color: '#00C853', bg: 'rgba(0,200,83,0.12)',   border: 'rgba(0,200,83,0.3)',   label: 'Matched' },
-    corrected:    { color: '#79AAFF', bg: 'rgba(30,100,200,0.15)', border: 'rgba(30,100,200,0.4)', label: 'Corrected' },
+    corrected:    { color: '#FF8F00', bg: 'rgba(255,143,0,0.12)',  border: 'rgba(255,143,0,0.3)',  label: 'Corrected' },
     unmatched:    { color: '#FFB300', bg: 'rgba(255,160,0,0.12)',  border: 'rgba(255,160,0,0.3)',  label: 'Unmatched' },
     processing:   { color: '#888',   bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.1)', label: 'Processing' },
   }[status] || { color: '#AAA', bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.1)', label: status };
@@ -891,7 +891,7 @@ export default function RunDetailPage() {
         {[
           { label: 'Total Lines', value: total.toLocaleString(), color: '#E6EDF3' },
           { label: 'Matched', value: `${run.matched_count || 0} (${matchedPct}%)`, color: '#00C853' },
-          { label: 'Corrected', value: `${run.corrected_count || 0} (${correctedPct}%)`, color: '#79AAFF' },
+          { label: 'Corrected', value: `${run.corrected_count || 0} (${correctedPct}%)`, color: '#FF8F00' },
           { label: 'Unmatched', value: `${run.unmatched_count || 0} (${unmatchedPct}%)`, color: (run.unmatched_count || 0) > 0 ? '#FFB300' : '#555' },
           { label: 'Automation Rate', value: run.automation_rate != null ? `${run.automation_rate}%` : '—', color: parseFloat(run.automation_rate) >= 80 ? '#00C853' : '#FFB300' },
         ].map(({ label, value, color }) => (
@@ -931,7 +931,7 @@ export default function RunDetailPage() {
             <div style={{ fontSize: 13, fontWeight: 700, color: '#E6EDF3', marginBottom: 16 }}>Result breakdown</div>
             {[
               { label: 'Matched',   count: run.matched_count   || 0, color: '#00C853' },
-              { label: 'Corrected', count: run.corrected_count || 0, color: '#79AAFF' },
+              { label: 'Corrected', count: run.corrected_count || 0, color: '#FF8F00' },
               { label: 'Unmatched', count: run.unmatched_count || 0, color: '#FFB300' },
             ].map(({ label, count, color }) => (
               <div key={label} style={{ marginBottom: 12 }}>

@@ -450,7 +450,7 @@ async function lookupCarrierBandCost(serviceId, weightKg, zoneId) {
 
   if (exactRes.rows.length) {
     const b = exactRes.rows[0];
-    return round2(parseFloat(b.price_first || 0));
+    return { cost: round2(parseFloat(b.price_first || 0)), pass: 1, overageKg: null };
   }
 
   // Pass 2: weight EXCEEDS every defined band ceiling — apply top-out overage.
@@ -507,7 +507,7 @@ async function lookupCarrierBandCost(serviceId, weightKg, zoneId) {
       `[recon engine] Top-out overage: ${weightKg}kg > ceiling ${bandMax}kg` +
       ` — £${b.price_first} + (${overageKg}kg × £${overageRate}) = £${cost}`
     );
-    return cost;
+    return { cost, pass: 2, overageKg };
   }
 
   return null;
@@ -520,38 +520,56 @@ async function lookupCarrierBandCost(serviceId, weightKg, zoneId) {
 // using the actual billed weight from the CSV. If the rate card explains the
 // carrier's charge, mark as Corrected.
 
-// chargeId is optional — when provided and the engine confirms the carrier's charge,
-// charges.cost_price is updated so that future reconciliation runs show zero delta.
-async function checkCorrectionEngine(customerId, serviceId, carrierId, zoneId, line, delta, chargeId) {
+// originalExpectedCost — the stored charges.cost_price (passed by caller so metadata can
+// record what we expected before the carrier invoice revealed the true cost).
+// chargeId — when provided, sets recon_corrected on the charge for future run flagging.
+async function checkCorrectionEngine(customerId, serviceId, carrierId, zoneId, line, delta, chargeId, originalExpectedCost) {
   if (!serviceId || !(line.billed_weight_kg > 0)) {
     return { corrected: false, reason: 'no_service_id_or_weight' };
   }
 
-  const expectedCost = await lookupCarrierBandCost(serviceId, line.billed_weight_kg, zoneId);
-  if (expectedCost === null) {
+  const result = await lookupCarrierBandCost(serviceId, line.billed_weight_kg, zoneId);
+  if (result === null) {
     return { corrected: false, reason: 'no_carrier_band' };
   }
 
-  const recalcDelta = round2(line.carrier_amount - expectedCost);
+  const { cost: newCalculatedCost, pass, overageKg } = result;
+  const recalcDelta = round2(line.carrier_amount - newCalculatedCost);
   console.log(
-    `[recon engine] Correction check: carrier=£${line.carrier_amount} band_cost=£${expectedCost}` +
-    ` delta=£${recalcDelta} service=${serviceId} zone=${zoneId} weight=${line.billed_weight_kg}kg`
+    `[recon engine] Correction check: carrier=£${line.carrier_amount} band_cost=£${newCalculatedCost}` +
+    ` (pass ${pass}) delta=£${recalcDelta} service=${serviceId} zone=${zoneId} weight=${line.billed_weight_kg}kg`
   );
 
   if (Math.abs(recalcDelta) <= 0.01) {
-    // Persist the flag so future runs surface this charge as 'corrected'
-    // even when delta reaches zero (charge cost_price already aligned).
+    // Determine the specific correction reason
+    let correction_reason;
+    if (pass === 2) {
+      correction_reason = 'weight_overage';
+    } else if (originalExpectedCost != null && Math.abs(newCalculatedCost - parseFloat(originalExpectedCost)) > 0.01) {
+      correction_reason = 'rate_adjustment';
+    } else {
+      correction_reason = 'pricing_rules';
+    }
+
+    // Build audit metadata
+    const correction_metadata = {
+      original_expected_cost: originalExpectedCost != null ? round2(parseFloat(originalExpectedCost)) : null,
+      new_calculated_cost:    newCalculatedCost,
+      correction_reason,
+      weight_delta:           overageKg,   // kg over ceiling (null for Pass 1)
+      billed_weight_kg:       line.billed_weight_kg,
+    };
+
+    // Persist flag so future runs also surface this charge as 'corrected'
     if (chargeId) {
       try {
-        await query(
-          `UPDATE charges SET recon_corrected = TRUE WHERE id = $1`,
-          [chargeId]
-        );
+        await query(`UPDATE charges SET recon_corrected = TRUE WHERE id = $1`, [chargeId]);
       } catch (e) {
         console.warn(`[recon engine] Failed to set recon_corrected on charge ${chargeId}:`, e.message);
       }
     }
-    return { corrected: true, reason: 'pricing_rules' };
+
+    return { corrected: true, reason: 'pricing_rules', correction_metadata };
   }
 
   return { corrected: false, reason: 'unexplained_delta' };
@@ -923,7 +941,7 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
         billed_weight_kg: firstLine.billed_weight_kg,
       };
       const correction = await checkCorrectionEngine(
-        charge.customer_id, serviceId, carrierId, charge.zone_id, proxyLine, delta, charge.charge_id
+        charge.customer_id, serviceId, carrierId, charge.zone_id, proxyLine, delta, charge.charge_id, expectedBase
       );
       if (correction.corrected) {
         groupStatus = 'corrected';
@@ -1018,7 +1036,8 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
     // lookupCarrierBandCost requires a zone — without it we can't do a
     // zone-pinned rate card check, so expectedCarrierCost will be null
     // and rateMatches will be false (correct — we can't verify without zone).
-    const expectedCarrierCost = await lookupCarrierBandCost(serviceId, line.billed_weight_kg, null);
+    const bandResult       = await lookupCarrierBandCost(serviceId, line.billed_weight_kg, null);
+    const expectedCarrierCost = bandResult?.cost ?? null;
     const carrierDelta = expectedCarrierCost !== null
       ? round2(carrierAmount - expectedCarrierCost)
       : null;
@@ -1079,10 +1098,53 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
   line._expected_amount = expectedAmount;
 
   if (Math.abs(delta) < 0.02) {
-    // If the charge was previously auto-corrected (recon_corrected flag set),
-    // surface it as 'corrected' even with zero delta — preserves the audit
-    // trail that DHL's charge differed from our original billing calculation.
-    const prevCorrected = !!charge.recon_corrected;
+    // Clean match requires BOTH amount AND declared weight to agree with invoice.
+    // If weight differs, DHL reweighed the parcel — flag as corrected with reason
+    // 'weight_discrepancy' so it's visible in reporting even though cost is right.
+    const declaredWeight  = parseFloat(charge.declared_weight_kg) || null;
+    const billedWeight    = parseFloat(line.billed_weight_kg)     || null;
+    const weightDeltaKg   = (declaredWeight != null && billedWeight != null)
+      ? round2(Math.abs(billedWeight - declaredWeight))
+      : null;
+    const weightMismatch  = weightDeltaKg != null && weightDeltaKg >= 0.5;
+    const prevCorrected   = !!charge.recon_corrected;
+
+    if (!weightMismatch && !prevCorrected) {
+      // Truly clean — amount and weight both agree
+      await insertLine(runId, {
+        tracking_number:          trackingNumber,
+        carrier_account_no:       line.account_number || null,
+        raw_service_code:         rawServiceCode,
+        charge_type:              line.charge_type || 'base',
+        carrier_amount:           carrierAmount,
+        carrier_billed_weight_kg: line.billed_weight_kg || null,
+        service_id:               serviceId,
+        customer_id:              charge.customer_id,
+        charge_id:                charge.charge_id,
+        expected_amount:          expectedAmount,
+        delta:                    delta,
+        status:                   'matched',
+        corrected_by:             null,
+        unmatched_reason:         null,
+        source:                   'internal',
+      });
+      return { status: 'matched' };
+    }
+
+    // Amount matched but weight or prior correction flag requires 'corrected'
+    const correction_metadata = weightMismatch ? {
+      original_expected_cost: expectedAmount,
+      new_calculated_cost:    expectedAmount,
+      correction_reason:      'weight_discrepancy',
+      weight_delta:           weightDeltaKg,
+      billed_weight_kg:       billedWeight,
+    } : {
+      original_expected_cost: expectedAmount,
+      new_calculated_cost:    expectedAmount,
+      correction_reason:      'previously_corrected',
+      weight_delta:           null,
+      billed_weight_kg:       billedWeight,
+    };
     await insertLine(runId, {
       tracking_number:          trackingNumber,
       carrier_account_no:       line.account_number || null,
@@ -1095,12 +1157,13 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
       charge_id:                charge.charge_id,
       expected_amount:          expectedAmount,
       delta:                    delta,
-      status:                   prevCorrected ? 'corrected' : 'matched',
-      corrected_by:             prevCorrected ? 'pricing_rules' : null,
+      status:                   'corrected',
+      corrected_by:             'pricing_rules',
       unmatched_reason:         null,
       source:                   'internal',
+      correction_metadata,
     });
-    return { status: prevCorrected ? 'corrected' : 'matched' };
+    return { status: 'corrected' };
   }
 
   // ── Phase 4a: Mapping Engine ──────────────────────────────────────────────
@@ -1134,7 +1197,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
 
   // ── Phase 4b: Correction Engine ───────────────────────────────────────────
   const correction = await checkCorrectionEngine(
-    charge.customer_id, serviceId, carrierId, charge.zone_id, line, delta, charge.charge_id
+    charge.customer_id, serviceId, carrierId, charge.zone_id, line, delta, charge.charge_id, expectedAmount
   );
 
   if (correction.corrected) {
@@ -1154,6 +1217,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
       corrected_by:             'pricing_rules',
       unmatched_reason:         null,
       source:                   'internal',
+      correction_metadata:      correction.correction_metadata || null,
     });
     return { status: 'corrected' };
   }
@@ -1221,9 +1285,9 @@ async function insertLine(runId, data) {
       (run_id, tracking_number, carrier_account_no, raw_service_code, charge_type,
        carrier_amount, carrier_billed_weight_kg, service_id, customer_id, charge_id,
        expected_amount, delta, status, corrected_by, unmatched_reason, source,
-       mapping_id, is_fuel, suggested_service_id)
+       mapping_id, is_fuel, suggested_service_id, correction_metadata)
     VALUES
-      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
   `, [
     runId,
     data.tracking_number          ?? null,
@@ -1244,6 +1308,7 @@ async function insertLine(runId, data) {
     data.mapping_id               || null,
     data.is_fuel                  || false,
     data.suggested_service_id     || null,
+    data.correction_metadata      ? JSON.stringify(data.correction_metadata) : null,
   ]);
 }
 
