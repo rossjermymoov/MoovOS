@@ -221,6 +221,7 @@ async function buildVerifiedPool(carrierId) {
       c.cost_price      AS expected_cost,
       c.shipment_id,
       c.charge_type,
+      c.zone_id,
       s.tracking_codes,
       s.dc_service_id,
       s.total_weight_kg AS declared_weight_kg,
@@ -386,8 +387,15 @@ function applyMappings(mappings, line, delta) {
 //
 // Returns the expected carrier cost in £, or null if no band is configured.
 
-async function lookupCarrierBandCost(serviceId, weightKg) {
+async function lookupCarrierBandCost(serviceId, weightKg, zoneId) {
   if (!serviceId || !(weightKg > 0)) return null;
+
+  // zoneId is required — without it the query spans every zone for the service
+  // and can return the price from the wrong zone (e.g. Ireland instead of Mainland).
+  if (!zoneId) {
+    console.warn(`[recon engine] lookupCarrierBandCost called without zoneId for service ${serviceId} — returning null`);
+    return null;
+  }
 
   // Pass 1: exact band — weight sits WITHIN a band's finite ceiling.
   //
@@ -399,18 +407,22 @@ async function lookupCarrierBandCost(serviceId, weightKg) {
   // Boundary convention (consistent with pricingEngine):
   //   min is EXCLUSIVE  →  $2 >  COALESCE(min, 0)
   //   max is INCLUSIVE  →  $2 <= max
+  //
+  // $3 = zoneId — hard-pins the lookup to the correct zone so we never
+  // accidentally use a band from Ireland / International / etc.
   const exactRes = await query(`
     SELECT wb.price_first, wb.cost_per_kg, wb.min_weight_kg, wb.max_weight_kg
     FROM   weight_bands     wb
     JOIN   zones            z  ON z.id  = wb.zone_id
     JOIN   courier_services cs ON cs.id = z.courier_service_id
     WHERE  cs.id = $1
+      AND  z.id  = $3                          -- strict zone pin
       AND  wb.max_weight_kg IS NOT NULL        -- open-ended bands must not match here
       AND  $2 >  COALESCE(wb.min_weight_kg, 0) -- lower bound exclusive
       AND  $2 <= wb.max_weight_kg              -- upper bound inclusive (ceiling)
     ORDER BY wb.min_weight_kg DESC             -- tightest band first for any overlap
     LIMIT  1
-  `, [serviceId, weightKg]);
+  `, [serviceId, weightKg, zoneId]);
 
   if (exactRes.rows.length) {
     const b = exactRes.rows[0];
@@ -421,26 +433,26 @@ async function lookupCarrierBandCost(serviceId, weightKg) {
   //
   // Logic ("Top-Out"):
   //   1. Find the band with the highest FINITE max_weight_kg (the ceiling band).
-  //      e.g. for DHL 220: max = 30kg, price_first = £4.36, cost_per_kg = £0.30
+  //      e.g. for DHL 220 Mainland: max = 30kg, price_first = £4.36, cost_per_kg = £0.30
   //   2. Excess = actual weight − band ceiling  (e.g. 43 − 30 = 13kg)
   //   3. Cost   = price_first + (excess × cost_per_kg)  (e.g. £4.36 + 13×£0.30 = £8.26)
   //   4. If within £0.01 of the carrier invoice → CORRECTED.
   //
+  // Zone is pinned via $3 — same zone as Pass 1 so both passes use identical data.
   // NULL-max (open-ended) bands are excluded — they have no finite ceiling
   // so there is nothing to measure excess against.
-  // If max_weight_kg somehow comes back non-finite (defensive), the function
-  // returns null rather than producing NaN.
   const topRes = await query(`
     SELECT wb.price_first, wb.cost_per_kg, wb.min_weight_kg, wb.max_weight_kg
     FROM   weight_bands     wb
     JOIN   zones            z  ON z.id  = wb.zone_id
     JOIN   courier_services cs ON cs.id = z.courier_service_id
     WHERE  cs.id = $1
-      AND  wb.max_weight_kg IS NOT NULL   -- finite ceiling required — no open-ended bands
-      AND  $2 > wb.max_weight_kg          -- weight must actually exceed this band's ceiling
-    ORDER BY wb.max_weight_kg DESC        -- highest finite ceiling first = tightest overhang
+      AND  z.id  = $3                   -- strict zone pin (same zone as Pass 1)
+      AND  wb.max_weight_kg IS NOT NULL -- finite ceiling required — no open-ended bands
+      AND  $2 > wb.max_weight_kg        -- weight must actually exceed this band's ceiling
+    ORDER BY wb.max_weight_kg DESC      -- highest finite ceiling first = tightest overhang
     LIMIT  1
-  `, [serviceId, weightKg]);
+  `, [serviceId, weightKg, zoneId]);
 
   if (topRes.rows.length) {
     const b = topRes.rows[0];
@@ -472,18 +484,24 @@ async function lookupCarrierBandCost(serviceId, weightKg) {
 // using the actual billed weight from the CSV. If the rate card explains the
 // carrier's charge, mark as Corrected.
 
-async function checkCorrectionEngine(customerId, serviceId, carrierId, line, delta) {
+async function checkCorrectionEngine(customerId, serviceId, carrierId, zoneId, line, delta) {
   if (!serviceId || !(line.billed_weight_kg > 0)) {
     return { corrected: false, reason: 'no_service_id_or_weight' };
   }
+  if (!zoneId) {
+    return { corrected: false, reason: 'no_zone_id' };
+  }
 
-  const expectedCost = await lookupCarrierBandCost(serviceId, line.billed_weight_kg);
+  const expectedCost = await lookupCarrierBandCost(serviceId, line.billed_weight_kg, zoneId);
   if (expectedCost === null) {
     return { corrected: false, reason: 'no_carrier_band' };
   }
 
   const recalcDelta = round2(line.carrier_amount - expectedCost);
-  console.log(`[recon engine] Correction check: carrier=£${line.carrier_amount} band_cost=£${expectedCost} delta=£${recalcDelta} service=${serviceId} weight=${line.billed_weight_kg}kg`);
+  console.log(
+    `[recon engine] Correction check: carrier=£${line.carrier_amount} band_cost=£${expectedCost}` +
+    ` delta=£${recalcDelta} service=${serviceId} zone=${zoneId} weight=${line.billed_weight_kg}kg`
+  );
 
   if (Math.abs(recalcDelta) <= 0.01) {
     return { corrected: true, reason: 'pricing_rules' };
@@ -856,7 +874,7 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
         billed_weight_kg: firstLine.billed_weight_kg,
       };
       const correction = await checkCorrectionEngine(
-        charge.customer_id, serviceId, carrierId, proxyLine, delta
+        charge.customer_id, serviceId, carrierId, charge.zone_id, proxyLine, delta
       );
       if (correction.corrected) {
         groupStatus = 'corrected';
@@ -947,10 +965,11 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
   if (poolHits.length === 0) {
     const customer = await lookupCustomerByAccount(line.account_number);
 
-    // Reconciliation is always against the carrier rate card (cost price), never
-    // the customer sell price. Look up what the carrier should charge for this
-    // service + weight — handles both normal bands and weight overage.
-    const expectedCarrierCost = await lookupCarrierBandCost(serviceId, line.billed_weight_kg);
+    // Pool MISS: no charge record, so no zone_id is available.
+    // lookupCarrierBandCost requires a zone — without it we can't do a
+    // zone-pinned rate card check, so expectedCarrierCost will be null
+    // and rateMatches will be false (correct — we can't verify without zone).
+    const expectedCarrierCost = await lookupCarrierBandCost(serviceId, line.billed_weight_kg, null);
     const carrierDelta = expectedCarrierCost !== null
       ? round2(carrierAmount - expectedCarrierCost)
       : null;
@@ -1062,7 +1081,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
 
   // ── Phase 4b: Correction Engine ───────────────────────────────────────────
   const correction = await checkCorrectionEngine(
-    charge.customer_id, serviceId, carrierId, line, delta
+    charge.customer_id, serviceId, carrierId, charge.zone_id, line, delta
   );
 
   if (correction.corrected) {
