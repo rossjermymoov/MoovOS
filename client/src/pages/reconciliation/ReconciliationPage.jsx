@@ -3,14 +3,19 @@
  *
  * Lists all reconciliation runs. Lets staff upload a new carrier invoice CSV
  * and kick off an automated reconciliation run.
+ *
+ * CSV Column Profiles: saved per-carrier column mappings so users don't have
+ * to re-map columns on every run. Profiles are managed from the main page
+ * or within the upload wizard.
  */
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Upload, RefreshCw, CheckCircle2, AlertTriangle, Clock,
-  ChevronRight, TrendingUp, X, Plus, FileText,
+  ChevronRight, TrendingUp, X, Plus, FileText, Trash2,
+  BookOpen, Save, Star, Pencil, Check,
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -31,6 +36,11 @@ const btnGhost = {
   background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
   borderRadius: 7, color: '#AAA', padding: '9px 16px', cursor: 'pointer',
   fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
+};
+const btnRed = {
+  background: 'rgba(213,0,0,0.08)', border: '1px solid rgba(213,0,0,0.25)',
+  borderRadius: 7, color: '#FF5252', padding: '5px 10px', cursor: 'pointer',
+  fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5,
 };
 const inputSt = {
   width: '100%', boxSizing: 'border-box',
@@ -75,9 +85,6 @@ function AutoBar({ rate }) {
 }
 
 // ─── CSV Parser ───────────────────────────────────────────────────────────────
-// Parse a carrier CSV into InvoiceLine objects.
-// Column mapping: configurable per carrier via the UI.
-
 function parseCSV(text) {
   const rows = text.trim().split('\n').map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g, '')));
   if (rows.length < 2) return [];
@@ -89,7 +96,6 @@ function parseCSV(text) {
   });
 }
 
-// Map raw CSV row to InvoiceLine using the column map the user configured
 function mapToInvoiceLine(row, colMap) {
   const get = (field) => row[colMap[field]] || '';
   return {
@@ -102,26 +108,254 @@ function mapToInvoiceLine(row, colMap) {
   };
 }
 
+const BLANK_MAP = {
+  tracking_number: '', account_number: '', service_code: '',
+  charge_type: '', carrier_amount: '', billed_weight_kg: '',
+  invoice_ref: '', invoice_date: '',
+};
+
+// ─── Date normalisation ───────────────────────────────────────────────────────
+function toISODate(raw) {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  if (/^\d{4}[-/]\d{2}[-/]\d{2}/.test(s)) return s.slice(0, 10).replace(/\//g, '-');
+  const ukMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (ukMatch) {
+    const [, d, m, y] = ukMatch;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  const parsed = new Date(s);
+  if (!isNaN(parsed)) return parsed.toISOString().slice(0, 10);
+  return null;
+}
+
+// ─── Profile Manager Modal ────────────────────────────────────────────────────
+function ProfileManagerModal({ couriers, onClose }) {
+  const qc = useQueryClient();
+  const [selectedCarrier, setSelectedCarrier] = useState(couriers[0]?.id || '');
+  const [editingId,  setEditingId]  = useState(null);
+  const [editName,   setEditName]   = useState('');
+  const [deletingId, setDeletingId] = useState(null);
+
+  const { data: profiles = [], refetch } = useQuery({
+    queryKey: ['csv-profiles', selectedCarrier],
+    queryFn:  () => selectedCarrier
+      ? api.get(`/reconciliation/csv-profiles?carrier_id=${selectedCarrier}`).then(r => r.data)
+      : Promise.resolve([]),
+    enabled: !!selectedCarrier,
+  });
+
+  async function handleRename(id) {
+    if (!editName.trim()) return;
+    await api.put(`/reconciliation/csv-profiles/${id}`, { profile_name: editName });
+    setEditingId(null);
+    refetch();
+  }
+
+  async function handleSetDefault(id) {
+    await api.put(`/reconciliation/csv-profiles/${id}`, { is_default: true });
+    refetch();
+  }
+
+  async function handleDelete(id) {
+    await api.delete(`/reconciliation/csv-profiles/${id}`);
+    setDeletingId(null);
+    refetch();
+    qc.invalidateQueries({ queryKey: ['csv-profiles'] });
+  }
+
+  const FIELD_LABELS = {
+    tracking_number: 'Tracking Number', account_number: 'Account Number',
+    service_code: 'Service Code', charge_type: 'Charge Type',
+    carrier_amount: 'Amount (£)', billed_weight_kg: 'Weight (kg)',
+    invoice_ref: 'Invoice Ref', invoice_date: 'Invoice Date',
+  };
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <div style={{
+        background: '#0D0F2B', border: '1px solid rgba(255,255,255,0.1)',
+        borderRadius: 12, width: 660, maxHeight: '80vh', overflow: 'auto', padding: 28,
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#E6EDF3', margin: 0 }}>Column Profiles</h2>
+            <p style={{ fontSize: 12, color: '#888', marginTop: 4, margin: 0 }}>Saved CSV column mappings per carrier</p>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer' }}>
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Carrier selector */}
+        <div style={{ marginBottom: 20 }}>
+          <select style={inputSt} value={selectedCarrier} onChange={e => setSelectedCarrier(e.target.value)}>
+            <option value=''>— Select carrier —</option>
+            {couriers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+
+        {/* Profile list */}
+        {profiles.length === 0 ? (
+          <div style={{ textAlign: 'center', color: '#555', fontSize: 13, padding: '30px 0' }}>
+            No saved profiles for this carrier yet. Upload a CSV and save the column mapping to create one.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {profiles.map(p => (
+              <div key={p.id} style={{
+                ...card,
+                border: p.is_default ? '1px solid rgba(0,200,83,0.3)' : '1px solid rgba(255,255,255,0.08)',
+                padding: '14px 16px',
+              }}>
+                {/* Header row */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                  {editingId === p.id ? (
+                    <input
+                      style={{ ...inputSt, fontSize: 13, fontWeight: 700 }}
+                      value={editName}
+                      onChange={e => setEditName(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleRename(p.id)}
+                      autoFocus
+                    />
+                  ) : (
+                    <div style={{ flex: 1, fontSize: 14, fontWeight: 700, color: '#E6EDF3' }}>
+                      {p.profile_name}
+                      {p.is_default && (
+                        <span style={{ marginLeft: 8, fontSize: 10, color: '#00C853', background: 'rgba(0,200,83,0.12)', border: '1px solid rgba(0,200,83,0.3)', borderRadius: 9999, padding: '1px 7px', fontWeight: 700 }}>
+                          Default
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {editingId === p.id ? (
+                      <>
+                        <button style={{ ...btnGreen, padding: '4px 10px', fontSize: 11 }} onClick={() => handleRename(p.id)}>
+                          <Check size={12} />Save
+                        </button>
+                        <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 11 }} onClick={() => setEditingId(null)}>
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        {!p.is_default && (
+                          <button
+                            style={{ ...btnGhost, padding: '4px 8px', fontSize: 11 }}
+                            title='Set as default for this carrier'
+                            onClick={() => handleSetDefault(p.id)}
+                          >
+                            <Star size={11} />Default
+                          </button>
+                        )}
+                        <button
+                          style={{ ...btnGhost, padding: '4px 8px', fontSize: 11 }}
+                          onClick={() => { setEditingId(p.id); setEditName(p.profile_name); }}
+                        >
+                          <Pencil size={11} />Rename
+                        </button>
+                        {deletingId === p.id ? (
+                          <div style={{ display: 'flex', gap: 5 }}>
+                            <button style={{ ...btnRed, padding: '4px 8px', fontSize: 11 }} onClick={() => handleDelete(p.id)}>
+                              Confirm Delete
+                            </button>
+                            <button style={{ ...btnGhost, padding: '4px 8px', fontSize: 11 }} onClick={() => setDeletingId(null)}>
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            style={{ ...btnRed, padding: '4px 8px', fontSize: 11 }}
+                            onClick={() => setDeletingId(p.id)}
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Column mapping preview */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {Object.entries(p.column_map || {}).filter(([, v]) => v).map(([field, col]) => (
+                    <span key={field} style={{
+                      fontSize: 10, color: '#888', background: 'rgba(255,255,255,0.05)',
+                      border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5, padding: '2px 7px',
+                    }}>
+                      <span style={{ color: '#555' }}>{FIELD_LABELS[field] || field}:</span>{' '}
+                      <span style={{ color: '#AAA' }}>{col}</span>
+                    </span>
+                  ))}
+                </div>
+                <div style={{ fontSize: 10, color: '#444', marginTop: 8 }}>
+                  Updated {new Date(p.updated_at).toLocaleDateString('en-GB')}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Upload modal ─────────────────────────────────────────────────────────────
 function UploadModal({ couriers, onClose, onSuccess }) {
-  const [carrierId,        setCarrierId]        = useState('');
-  const [invoiceRefOverride, setInvoiceRefOverride] = useState(''); // manual override only
-  const [csvRows,          setCsvRows]          = useState([]);
-  const [headers,          setHeaders]          = useState([]);
-  const [colMap,           setColMap]           = useState({
-    tracking_number: '', account_number: '', service_code: '',
-    charge_type: '', carrier_amount: '', billed_weight_kg: '',
-    invoice_ref: '', invoice_date: '',   // extracted from CSV
-  });
-  const [step,  setStep]  = useState(1); // 1=setup 2=map columns 3=confirm
-  const [error, setError] = useState('');
+  const qc = useQueryClient();
+  const [carrierId,           setCarrierId]           = useState('');
+  const [invoiceRefOverride,  setInvoiceRefOverride]  = useState('');
+  const [csvRows,             setCsvRows]             = useState([]);
+  const [headers,             setHeaders]             = useState([]);
+  const [colMap,              setColMap]              = useState({ ...BLANK_MAP });
+  const [step,                setStep]                = useState(1);
+  const [error,               setError]               = useState('');
+
+  // Profile state
+  const [loadedProfileId,  setLoadedProfileId]  = useState(null);  // profile that was loaded
+  const [saveProfileName,  setSaveProfileName]  = useState('');    // name to save as
+  const [saveAsDefault,    setSaveAsDefault]    = useState(false);
+  const [showSaveSection,  setShowSaveSection]  = useState(false);
+  const [profileSaving,    setProfileSaving]    = useState(false);
+
   const fileRef = useRef();
 
-  // Derive invoice ref: from CSV column > manual override > empty
+  // Load saved profiles when carrier changes
+  const { data: profiles = [] } = useQuery({
+    queryKey: ['csv-profiles', carrierId],
+    queryFn:  () => carrierId
+      ? api.get(`/reconciliation/csv-profiles?carrier_id=${carrierId}`).then(r => r.data)
+      : Promise.resolve([]),
+    enabled: !!carrierId,
+  });
+
+  // Auto-apply default profile when carrier is selected (and no file loaded yet)
+  useEffect(() => {
+    if (carrierId && profiles.length > 0 && csvRows.length === 0) {
+      const defaultProfile = profiles.find(p => p.is_default);
+      if (defaultProfile) {
+        setColMap({ ...BLANK_MAP, ...defaultProfile.column_map });
+        setLoadedProfileId(defaultProfile.id);
+        setSaveProfileName(defaultProfile.profile_name);
+      }
+    }
+  }, [profiles, carrierId]);
+
   const inferredRef  = colMap.invoice_ref  && csvRows[0] ? csvRows[0][colMap.invoice_ref]  || '' : '';
   const inferredDate = colMap.invoice_date && csvRows[0] ? csvRows[0][colMap.invoice_date] || '' : '';
   const effectiveRef  = invoiceRefOverride || inferredRef;
-  const effectiveDate = inferredDate; // raw from CSV — normalised to ISO on submit
+  const effectiveDate = inferredDate;
+
+  function applyProfile(profile) {
+    setColMap({ ...BLANK_MAP, ...profile.column_map });
+    setLoadedProfileId(profile.id);
+    setSaveProfileName(profile.profile_name);
+  }
 
   function handleFile(e) {
     const file = e.target.files[0];
@@ -133,28 +367,66 @@ function UploadModal({ couriers, onClose, onSuccess }) {
       const hdrs = Object.keys(rows[0]);
       setHeaders(hdrs);
       setCsvRows(rows);
-      // Auto-map common column names
-      const autoMap = { ...colMap };
+
+      // Start with loaded profile's map (if any), then auto-map unset fields
+      const autoMap = { ...BLANK_MAP, ...(loadedProfileId
+        ? (profiles.find(p => p.id === loadedProfileId)?.column_map || {})
+        : {}) };
+
       const AUTO_RULES = {
         tracking_number:  h => h.includes('tracking') || h.includes('consignment') || h.includes('waybill'),
-        account_number:   h => h.includes('account') || h.includes('acct') || h.includes('customer'),
+        account_number:   h => h.includes('account') || h.includes('acct'),
         service_code:     h => h.includes('service') || h.includes('product'),
         charge_type:      h => h.includes('charge') && h.includes('type'),
-        carrier_amount:   h => h.includes('amount') || h.includes('value') || h.includes('price') || h.includes('charge'),
+        carrier_amount:   h => h.includes('amount') || h.includes('value') || h.includes('nett') || h.includes('price'),
         billed_weight_kg: h => h.includes('weight'),
         invoice_ref:      h => h.includes('invoice') && (h.includes('ref') || h.includes('num') || h.includes('no')),
         invoice_date:     h => h.includes('invoice') && (h.includes('date') || h.includes('dt')),
       };
       for (const [field, test] of Object.entries(AUTO_RULES)) {
-        if (!autoMap[field]) {
+        // Only auto-map if the field isn't already set from a profile,
+        // or if the profile's value doesn't exist in this CSV's headers
+        const currentVal = autoMap[field];
+        if (!currentVal || !hdrs.includes(currentVal)) {
           const found = hdrs.find(h => test(h.toLowerCase()));
           if (found) autoMap[field] = found;
+          else if (!hdrs.includes(currentVal)) autoMap[field] = '';
         }
       }
       setColMap(autoMap);
       setStep(2);
     };
     reader.readAsText(file);
+  }
+
+  async function saveProfile() {
+    if (!saveProfileName.trim() || !carrierId) return;
+    setProfileSaving(true);
+    try {
+      if (loadedProfileId) {
+        // Update existing profile
+        await api.put(`/reconciliation/csv-profiles/${loadedProfileId}`, {
+          profile_name: saveProfileName.trim(),
+          column_map:   colMap,
+          is_default:   saveAsDefault || undefined,
+        });
+      } else {
+        // Create new profile
+        const res = await api.post('/reconciliation/csv-profiles', {
+          carrier_id:   parseInt(carrierId),
+          profile_name: saveProfileName.trim(),
+          column_map:   colMap,
+          is_default:   saveAsDefault,
+        });
+        setLoadedProfileId(res.data.id);
+      }
+      qc.invalidateQueries({ queryKey: ['csv-profiles'] });
+      setShowSaveSection(false);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to save profile');
+    } finally {
+      setProfileSaving(false);
+    }
   }
 
   function buildLines() {
@@ -172,9 +444,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
     { key: 'invoice_date',     label: 'Invoice Date',      required: false, hint: 'Read from CSV' },
   ];
 
-  // Step 2 → 3: only need carrier + required columns mapped; invoice ref is optional
-  const canProceed = carrierId &&
-    FIELDS.filter(f => f.required).every(f => colMap[f.key]);
+  const canProceed = carrierId && FIELDS.filter(f => f.required).every(f => colMap[f.key]);
   const lines = step === 3 ? buildLines() : [];
 
   return (
@@ -184,18 +454,13 @@ function UploadModal({ couriers, onClose, onSuccess }) {
     }}>
       <div style={{
         background: '#0D0F2B', border: '1px solid rgba(255,255,255,0.1)',
-        borderRadius: 12, width: 620, maxHeight: '85vh', overflow: 'auto',
-        padding: 28,
+        borderRadius: 12, width: 640, maxHeight: '88vh', overflow: 'auto', padding: 28,
       }}>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
           <div>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#E6EDF3', margin: 0 }}>
-              New Reconciliation Run
-            </h2>
-            <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
-              Step {step} of 3
-            </div>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#E6EDF3', margin: 0 }}>New Reconciliation Run</h2>
+            <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>Step {step} of 3</div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer' }}>
             <X size={20} />
@@ -208,18 +473,56 @@ function UploadModal({ couriers, onClose, onSuccess }) {
           </div>
         )}
 
-        {/* Step 1 — Carrier + file upload only */}
+        {/* ── Step 1 — Carrier + file ───────────────────────────────────────── */}
         {step === 1 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
               <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 5 }}>Carrier <span style={{ color: '#FF5252' }}>*</span></label>
-              <select style={inputSt} value={carrierId} onChange={e => setCarrierId(e.target.value)}>
+              <select style={inputSt} value={carrierId} onChange={e => { setCarrierId(e.target.value); setLoadedProfileId(null); setColMap({ ...BLANK_MAP }); }}>
                 <option value=''>— Select carrier —</option>
                 {couriers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
+
+            {/* Saved profiles for this carrier */}
+            {carrierId && profiles.length > 0 && (
+              <div>
+                <div style={{ fontSize: 11, color: '#888', fontWeight: 600, marginBottom: 8 }}>SAVED COLUMN PROFILES</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {profiles.map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => applyProfile(p)}
+                      style={{
+                        padding: '10px 14px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
+                        background: loadedProfileId === p.id ? 'rgba(0,200,83,0.1)' : 'rgba(255,255,255,0.03)',
+                        border: `1px solid ${loadedProfileId === p.id ? 'rgba(0,200,83,0.35)' : 'rgba(255,255,255,0.08)'}`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: loadedProfileId === p.id ? '#00C853' : '#E6EDF3' }}>
+                          {p.profile_name}
+                          {p.is_default && (
+                            <span style={{ marginLeft: 8, fontSize: 10, color: '#888' }}>Default</span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 11, color: '#555', marginTop: 2 }}>
+                          {Object.values(p.column_map || {}).filter(Boolean).length} columns mapped
+                        </div>
+                      </div>
+                      {loadedProfileId === p.id && <Check size={14} color='#00C853' />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div>
-              <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 5 }}>Upload Carrier Invoice CSV <span style={{ color: '#FF5252' }}>*</span></label>
+              <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 5 }}>
+                Upload Carrier Invoice CSV <span style={{ color: '#FF5252' }}>*</span>
+                {loadedProfileId && <span style={{ color: '#00C853', marginLeft: 8 }}>· Profile loaded — columns will be auto-applied</span>}
+              </label>
               <input ref={fileRef} type='file' accept='.csv,.txt' style={{ display: 'none' }} onChange={handleFile} />
               <button
                 style={{ ...btnGhost, width: '100%', justifyContent: 'center', padding: '20px 16px' }}
@@ -235,12 +538,14 @@ function UploadModal({ couriers, onClose, onSuccess }) {
           </div>
         )}
 
-        {/* Step 2 — Map columns */}
+        {/* ── Step 2 — Map columns ──────────────────────────────────────────── */}
         {step === 2 && (
           <div>
             <p style={{ fontSize: 12, color: '#888', marginBottom: 16 }}>
               We found <strong style={{ color: '#E6EDF3' }}>{csvRows.length} rows</strong> and <strong style={{ color: '#E6EDF3' }}>{headers.length} columns</strong>. Map the columns below.
+              {loadedProfileId && <span style={{ color: '#00C853', marginLeft: 8 }}>Profile applied — check mappings are correct for this file.</span>}
             </p>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {FIELDS.map(f => (
                 <div key={f.key} style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: 10, alignItems: 'center' }}>
@@ -261,7 +566,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
               ))}
             </div>
 
-            {/* Invoice ref manual override if not in CSV */}
+            {/* Invoice ref manual override */}
             {!colMap.invoice_ref && (
               <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '170px 1fr', gap: 10, alignItems: 'center' }}>
                 <label style={{ fontSize: 12, color: '#888' }}>
@@ -279,19 +584,75 @@ function UploadModal({ couriers, onClose, onSuccess }) {
 
             {/* Preview */}
             {csvRows[0] && colMap.tracking_number && (
-              <div style={{ marginTop: 16, ...card, fontSize: 11, color: '#888' }}>
+              <div style={{ marginTop: 14, ...card, fontSize: 11, color: '#888' }}>
                 <div style={{ color: '#00C853', fontWeight: 700, marginBottom: 8 }}>Preview — first row</div>
                 <div>Tracking: <span style={{ color: '#E6EDF3' }}>{csvRows[0][colMap.tracking_number]}</span></div>
-                {colMap.service_code  && <div>Service code: <span style={{ color: '#E6EDF3' }}>{csvRows[0][colMap.service_code]}</span></div>}
+                {colMap.service_code   && <div>Service code: <span style={{ color: '#E6EDF3' }}>{csvRows[0][colMap.service_code]}</span></div>}
                 {colMap.carrier_amount && <div>Amount: <span style={{ color: '#E6EDF3' }}>£{parseFloat(csvRows[0][colMap.carrier_amount] || 0).toFixed(2)}</span></div>}
-                {inferredRef  && <div>Invoice ref: <span style={{ color: '#E6EDF3' }}>{inferredRef}</span></div>}
-                {inferredDate && <div>Invoice date: <span style={{ color: '#E6EDF3' }}>{inferredDate}</span></div>}
+                {inferredRef           && <div>Invoice ref: <span style={{ color: '#E6EDF3' }}>{inferredRef}</span></div>}
+                {inferredDate          && <div>Invoice date: <span style={{ color: '#E6EDF3' }}>{inferredDate}</span></div>}
               </div>
             )}
+
+            {/* Save profile section */}
+            <div style={{
+              marginTop: 20, padding: '14px 16px', borderRadius: 8,
+              background: showSaveSection ? 'rgba(0,200,83,0.06)' : 'rgba(255,255,255,0.02)',
+              border: `1px solid ${showSaveSection ? 'rgba(0,200,83,0.25)' : 'rgba(255,255,255,0.06)'}`,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <BookOpen size={14} color={showSaveSection ? '#00C853' : '#666'} />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: showSaveSection ? '#00C853' : '#AAA' }}>
+                    {loadedProfileId ? 'Update saved profile' : 'Save as column profile'}
+                  </span>
+                  <span style={{ fontSize: 11, color: '#555' }}>
+                    — reuse this mapping on future runs
+                  </span>
+                </div>
+                <button
+                  style={{ ...btnGhost, padding: '4px 10px', fontSize: 11 }}
+                  onClick={() => setShowSaveSection(s => !s)}
+                >
+                  {showSaveSection ? 'Hide' : 'Show'}
+                </button>
+              </div>
+
+              {showSaveSection && (
+                <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center' }}>
+                    <input
+                      style={inputSt}
+                      placeholder={loadedProfileId ? 'Profile name' : 'e.g. DHL Standard, DHL Weekly Express'}
+                      value={saveProfileName}
+                      onChange={e => setSaveProfileName(e.target.value)}
+                    />
+                    <button
+                      style={{ ...btnGreen, opacity: (profileSaving || !saveProfileName.trim()) ? 0.5 : 1 }}
+                      onClick={saveProfile}
+                      disabled={profileSaving || !saveProfileName.trim()}
+                    >
+                      {profileSaving ? <RefreshCw size={13} /> : <Save size={13} />}
+                      {loadedProfileId ? 'Update' : 'Save'}
+                    </button>
+                  </div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: '#888' }}>
+                    <input
+                      type='checkbox'
+                      checked={saveAsDefault}
+                      onChange={e => setSaveAsDefault(e.target.checked)}
+                      style={{ accentColor: '#00C853' }}
+                    />
+                    Set as default profile for {couriers.find(c => String(c.id) === String(carrierId))?.name || 'this carrier'}
+                    <span style={{ fontSize: 11, color: '#555' }}>(auto-applies on future uploads)</span>
+                  </label>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
-        {/* Step 3 — Confirm */}
+        {/* ── Step 3 — Confirm ──────────────────────────────────────────────── */}
         {step === 3 && (
           <div>
             <div style={{ ...card, marginBottom: 16 }}>
@@ -303,12 +664,12 @@ function UploadModal({ couriers, onClose, onSuccess }) {
               </div>
             </div>
             <p style={{ fontSize: 12, color: '#888' }}>
-              The engine will process all {lines.length} lines automatically. Lines that can't be resolved will be flagged for your review. This typically takes a few seconds.
+              The engine will process all {lines.length} lines automatically. Lines that can't be resolved will be flagged for your review.
             </p>
           </div>
         )}
 
-        {/* Footer buttons */}
+        {/* Footer */}
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 24 }}>
           {step > 1 && (
             <button style={btnGhost} onClick={() => setStep(s => s - 1)}>Back</button>
@@ -334,26 +695,6 @@ function UploadModal({ couriers, onClose, onSuccess }) {
   );
 }
 
-// ─── Date normalisation ───────────────────────────────────────────────────────
-// Postgres DATE requires YYYY-MM-DD. Carrier CSVs often use DD/MM/YYYY.
-// Also handle MM/DD/YYYY and already-ISO strings.
-function toISODate(raw) {
-  if (!raw) return null;
-  const s = String(raw).trim();
-  // Already ISO — YYYY-MM-DD or YYYY/MM/DD
-  if (/^\d{4}[-/]\d{2}[-/]\d{2}/.test(s)) return s.slice(0, 10).replace(/\//g, '-');
-  // DD/MM/YYYY or DD-MM-YYYY (UK format)
-  const ukMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-  if (ukMatch) {
-    const [, d, m, y] = ukMatch;
-    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-  }
-  // Fallback: let the Date constructor try
-  const parsed = new Date(s);
-  if (!isNaN(parsed)) return parsed.toISOString().slice(0, 10);
-  return null;
-}
-
 // ─── Start Run Button (mutation) ──────────────────────────────────────────────
 function StartRunButton({ carrierId, invoiceRef, invoiceDate, lines, onSuccess, setError }) {
   const [loading, setLoading] = useState(false);
@@ -376,7 +717,7 @@ function StartRunButton({ carrierId, invoiceRef, invoiceDate, lines, onSuccess, 
 
   return (
     <button style={{ ...btnGreen, opacity: loading ? 0.7 : 1 }} onClick={handleStart} disabled={loading}>
-      {loading ? <RefreshCw size={14} className='animate-spin' /> : <Upload size={14} />}
+      {loading ? <RefreshCw size={14} /> : <Upload size={14} />}
       {loading ? 'Starting…' : 'Start Reconciliation'}
     </button>
   );
@@ -386,12 +727,14 @@ function StartRunButton({ carrierId, invoiceRef, invoiceDate, lines, onSuccess, 
 export default function ReconciliationPage() {
   const navigate     = useNavigate();
   const qc           = useQueryClient();
-  const [showUpload, setShowUpload] = useState(false);
+  const [showUpload,  setShowUpload]  = useState(false);
+  const [showProfiles, setShowProfiles] = useState(false);
+  const [deletingRunId, setDeletingRunId] = useState(null);
 
   const { data: runsData, isLoading: runsLoading } = useQuery({
     queryKey: ['recon-runs'],
     queryFn:  () => api.get('/reconciliation/runs').then(r => r.data),
-    refetchInterval: 5000, // poll for processing updates
+    refetchInterval: 5000,
   });
 
   const { data: couriers = [] } = useQuery({
@@ -401,13 +744,12 @@ export default function ReconciliationPage() {
 
   const runs = runsData?.runs || [];
 
-  // Summary stats
-  const totalRuns       = runs.length;
-  const avgAutomation   = runs.length
+  const totalRuns     = runs.length;
+  const avgAutomation = runs.length
     ? Math.round(runs.reduce((s, r) => s + (parseFloat(r.automation_rate) || 0), 0) / runs.length)
     : 0;
-  const openItems       = runs.reduce((s, r) => s + (r.unmatched_count || 0), 0);
-  const needsReview     = runs.filter(r => r.status === 'needs_review').length;
+  const openItems   = runs.reduce((s, r) => s + (r.unmatched_count || 0), 0);
+  const needsReview = runs.filter(r => r.status === 'needs_review').length;
 
   function handleRunSuccess(runId) {
     setShowUpload(false);
@@ -415,21 +757,33 @@ export default function ReconciliationPage() {
     setTimeout(() => navigate(`/reconciliation/${runId}`), 800);
   }
 
+  async function handleDeleteRun(e, runId) {
+    e.stopPropagation();
+    if (deletingRunId !== runId) { setDeletingRunId(runId); return; }
+    try {
+      await api.delete(`/reconciliation/runs/${runId}`);
+      qc.invalidateQueries({ queryKey: ['recon-runs'] });
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to delete run');
+    } finally {
+      setDeletingRunId(null);
+    }
+  }
+
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: '#E6EDF3', margin: 0 }}>
-            Invoice Reconciliation
-          </h1>
-          <p style={{ fontSize: 13, color: '#888', marginTop: 4 }}>
-            Automated courier invoice matching engine
-          </p>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: '#E6EDF3', margin: 0 }}>Invoice Reconciliation</h1>
+          <p style={{ fontSize: 13, color: '#888', marginTop: 4 }}>Automated courier invoice matching engine</p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button style={btnGhost} onClick={() => navigate('/reconciliation/margin-report')}>
             <TrendingUp size={15} />Margin Report
+          </button>
+          <button style={btnGhost} onClick={() => setShowProfiles(true)}>
+            <BookOpen size={15} />Column Profiles
           </button>
           <button style={btnGreen} onClick={() => setShowUpload(true)}>
             <Plus size={16} />New Run
@@ -440,10 +794,10 @@ export default function ReconciliationPage() {
       {/* KPI strip */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>
         {[
-          { label: 'Total Runs', value: totalRuns, color: '#79AAFF', icon: FileText },
+          { label: 'Total Runs',     value: totalRuns,     color: '#79AAFF', icon: FileText },
           { label: 'Avg. Automation', value: `${avgAutomation}%`, color: '#00C853', icon: TrendingUp },
-          { label: 'Open Unmatched', value: openItems, color: openItems > 0 ? '#FFB300' : '#00C853', icon: AlertTriangle },
-          { label: 'Needs Review', value: needsReview, color: needsReview > 0 ? '#FF5252' : '#00C853', icon: CheckCircle2 },
+          { label: 'Open Unmatched', value: openItems,     color: openItems > 0 ? '#FFB300' : '#00C853', icon: AlertTriangle },
+          { label: 'Needs Review',   value: needsReview,   color: needsReview > 0 ? '#FF5252' : '#00C853', icon: CheckCircle2 },
         ].map(({ label, value, color, icon: Icon }) => (
           <div key={label} style={{ ...card }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -498,7 +852,37 @@ export default function ReconciliationPage() {
                     {run.automation_rate != null ? <AutoBar rate={run.automation_rate} /> : <span style={{ color: '#555' }}>—</span>}
                   </td>
                   <td style={{ padding: '10px 10px' }}><StatusBadge status={run.status} /></td>
-                  <td style={{ padding: '10px 10px', color: '#555' }}><ChevronRight size={14} /></td>
+                  <td style={{ padding: '10px 10px' }} onClick={e => e.stopPropagation()}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <ChevronRight size={14} color='#555' />
+                      {deletingRunId === run.id ? (
+                        <div style={{ display: 'flex', gap: 5 }}>
+                          <button
+                            style={{ ...btnRed, padding: '3px 8px', fontSize: 10, whiteSpace: 'nowrap' }}
+                            onClick={e => handleDeleteRun(e, run.id)}
+                          >
+                            Confirm
+                          </button>
+                          <button
+                            style={{ ...btnGhost, padding: '3px 6px', fontSize: 10 }}
+                            onClick={e => { e.stopPropagation(); setDeletingRunId(null); }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', padding: '2px 4px', borderRadius: 4 }}
+                          title='Delete this run'
+                          onClick={e => handleDeleteRun(e, run.id)}
+                          onMouseEnter={e => e.currentTarget.style.color = '#FF5252'}
+                          onMouseLeave={e => e.currentTarget.style.color = '#444'}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -506,12 +890,18 @@ export default function ReconciliationPage() {
         )}
       </div>
 
-      {/* Upload modal */}
       {showUpload && (
         <UploadModal
           couriers={couriers}
           onClose={() => setShowUpload(false)}
           onSuccess={handleRunSuccess}
+        />
+      )}
+
+      {showProfiles && (
+        <ProfileManagerModal
+          couriers={couriers}
+          onClose={() => setShowProfiles(false)}
         />
       )}
     </div>

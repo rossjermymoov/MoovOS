@@ -1120,6 +1120,158 @@ router.delete('/learned-mappings/:id', async (req, res) => {
   }
 });
 
+// ─── DELETE /api/reconciliation/runs/:id ──────────────────────────────────────
+// Hard-delete a reconciliation run and all its data.
+// Order: finalized_billing_lines (no CASCADE) → run (cascades to recon lines).
+
+router.delete('/runs/:id', async (req, res) => {
+  try {
+    const runId = parseInt(req.params.id);
+
+    const runCheck = await query('SELECT id, invoice_ref, finalized FROM reconciliation_runs WHERE id = $1', [runId]);
+    if (!runCheck.rows.length) return res.status(404).json({ error: 'Run not found' });
+
+    // Delete finalized billing lines first (FK has no CASCADE)
+    const fblRes = await query('DELETE FROM finalized_billing_lines WHERE run_id = $1', [runId]);
+
+    // Delete the run — reconciliation_lines cascade
+    await query('DELETE FROM reconciliation_runs WHERE id = $1', [runId]);
+
+    console.log(`[reconciliation] Run ${runId} (ref: ${runCheck.rows[0].invoice_ref}) deleted — ${fblRes.rowCount} finalized lines removed`);
+    return res.json({ deleted: true, run_id: runId, finalized_lines_removed: fblRes.rowCount });
+  } catch (err) {
+    console.error('[reconciliation/runs] DELETE error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CSV COLUMN PROFILES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── GET /api/reconciliation/csv-profiles ─────────────────────────────────────
+// List saved column profiles for a carrier.
+// Query: carrier_id (required)
+
+router.get('/csv-profiles', async (req, res) => {
+  try {
+    const { carrier_id } = req.query;
+    if (!carrier_id) return res.status(400).json({ error: 'carrier_id is required' });
+
+    const result = await query(`
+      SELECT p.*, c.name AS carrier_name
+      FROM   carrier_csv_profiles p
+      JOIN   couriers c ON c.id = p.carrier_id
+      WHERE  p.carrier_id = $1
+      ORDER  BY p.is_default DESC, p.updated_at DESC
+    `, [parseInt(carrier_id)]);
+
+    return res.json(result.rows);
+  } catch (err) {
+    console.error('[reconciliation/csv-profiles] GET error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/reconciliation/csv-profiles ────────────────────────────────────
+// Create (or upsert by name) a column profile.
+// Body: { carrier_id, profile_name, column_map, is_default? }
+
+router.post('/csv-profiles', async (req, res) => {
+  try {
+    const { carrier_id, profile_name, column_map, is_default = false } = req.body;
+    if (!carrier_id)    return res.status(400).json({ error: 'carrier_id is required' });
+    if (!profile_name)  return res.status(400).json({ error: 'profile_name is required' });
+    if (!column_map)    return res.status(400).json({ error: 'column_map is required' });
+
+    const cidInt = parseInt(carrier_id);
+
+    // If setting as default, clear existing default for this carrier first
+    if (is_default) {
+      await query(
+        'UPDATE carrier_csv_profiles SET is_default = false WHERE carrier_id = $1 AND is_default = true',
+        [cidInt]
+      );
+    }
+
+    const result = await query(`
+      INSERT INTO carrier_csv_profiles
+        (carrier_id, profile_name, column_map, is_default, created_by)
+      VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT (carrier_id, profile_name)
+      DO UPDATE SET
+        column_map = EXCLUDED.column_map,
+        is_default = EXCLUDED.is_default,
+        updated_at = NOW()
+      RETURNING *
+    `, [cidInt, profile_name.trim(), JSON.stringify(column_map), is_default, req.user?.id || null]);
+
+    return res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error('[reconciliation/csv-profiles] POST error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PUT /api/reconciliation/csv-profiles/:id ─────────────────────────────────
+// Update a profile's name, column_map, or default flag.
+
+router.put('/csv-profiles/:id', async (req, res) => {
+  try {
+    const { profile_name, column_map, is_default } = req.body;
+    const profId = parseInt(req.params.id);
+
+    const existing = await query('SELECT * FROM carrier_csv_profiles WHERE id = $1', [profId]);
+    if (!existing.rows.length) return res.status(404).json({ error: 'Profile not found' });
+    const prof = existing.rows[0];
+
+    // Clear existing default if we're promoting this one
+    if (is_default === true) {
+      await query(
+        'UPDATE carrier_csv_profiles SET is_default = false WHERE carrier_id = $1 AND is_default = true AND id <> $2',
+        [prof.carrier_id, profId]
+      );
+    }
+
+    const result = await query(`
+      UPDATE carrier_csv_profiles
+      SET
+        profile_name = COALESCE($1, profile_name),
+        column_map   = COALESCE($2, column_map),
+        is_default   = COALESCE($3, is_default),
+        updated_at   = NOW()
+      WHERE id = $4
+      RETURNING *
+    `, [
+      profile_name ? profile_name.trim() : null,
+      column_map   ? JSON.stringify(column_map) : null,
+      is_default   !== undefined ? is_default : null,
+      profId,
+    ]);
+
+    return res.json(result.rows[0]);
+  } catch (err) {
+    console.error('[reconciliation/csv-profiles] PUT error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── DELETE /api/reconciliation/csv-profiles/:id ──────────────────────────────
+
+router.delete('/csv-profiles/:id', async (req, res) => {
+  try {
+    const result = await query(
+      'DELETE FROM carrier_csv_profiles WHERE id = $1 RETURNING id',
+      [parseInt(req.params.id)]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Profile not found' });
+    return res.json({ deleted: true });
+  } catch (err) {
+    console.error('[reconciliation/csv-profiles] DELETE error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── GET /api/reconciliation/couriers ────────────────────────────────────────
 // List all couriers (for run creation dropdown).
 
