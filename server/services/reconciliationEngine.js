@@ -455,7 +455,7 @@ async function checkCorrectionEngine(customerId, serviceId, carrierId, line, del
   const recalcDelta = round2(line.carrier_amount - expectedCost);
   console.log(`[recon engine] Correction check: carrier=£${line.carrier_amount} band_cost=£${expectedCost} delta=£${recalcDelta} service=${serviceId} weight=${line.billed_weight_kg}kg`);
 
-  if (Math.abs(recalcDelta) < 0.02) {
+  if (Math.abs(recalcDelta) <= 0.01) {
     return { corrected: true, reason: 'pricing_rules' };
   }
 
@@ -924,7 +924,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
     const carrierDelta = expectedCarrierCost !== null
       ? round2(carrierAmount - expectedCarrierCost)
       : null;
-    const rateMatches = carrierDelta !== null && Math.abs(carrierDelta) < 0.02;
+    const rateMatches = carrierDelta !== null && Math.abs(carrierDelta) <= 0.01;
 
     if (!customer) {
       await insertLine(runId, {
