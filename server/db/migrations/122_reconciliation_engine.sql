@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS reconciliation_mappings (
   resolution_value          VARCHAR(255) NOT NULL,   -- target value (code, customer_id, pct, kg offset)
   customer_id               UUID         REFERENCES customers(id) ON DELETE SET NULL, -- NULL = applies to all
   created_from_line_id      INTEGER,                 -- reconciliation_lines.id that triggered this
-  created_by                INTEGER      REFERENCES staff(id) ON DELETE SET NULL,
+  created_by                UUID         REFERENCES staff(id) ON DELETE SET NULL,
   is_active                 BOOLEAN      NOT NULL DEFAULT true,
   applied_count             INTEGER      NOT NULL DEFAULT 0,
   last_applied_at           TIMESTAMPTZ,
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS reconciliation_runs (
   unmatched_count  INTEGER      NOT NULL DEFAULT 0,
   ignored_count    INTEGER      NOT NULL DEFAULT 0,
   automation_rate  NUMERIC(5,2),                  -- % auto-resolved (no human needed)
-  created_by       INTEGER      REFERENCES staff(id) ON DELETE SET NULL,
+  created_by       UUID         REFERENCES staff(id) ON DELETE SET NULL,
   created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   completed_at     TIMESTAMPTZ,
   notes            TEXT
