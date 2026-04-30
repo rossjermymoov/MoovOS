@@ -116,24 +116,26 @@ async function matchZone(serviceId, countryIso, postcode) {
 async function calcWeight(serviceId, parcel) {
   const actualKg = parseFloat(parcel.weight) || 0;
 
-  // Look up volumetric rule via courier_services → volumetric_rules
-  const dimRule = await query(
-    `SELECT vr.divisor
-     FROM   courier_services cs
-     JOIN   volumetric_rules  vr ON vr.id = cs.volumetric_rule_id
-     WHERE  cs.id = $1`,
+  // Pull the per-service volumetric divisor directly from courier_services.
+  // NULL or 0 → skip dimensional calculation entirely (physical weight only).
+  const svcRes = await query(
+    `SELECT volumetric_divisor FROM courier_services WHERE id = $1`,
     [serviceId]
   );
+  const divisor = svcRes.rows.length
+    ? parseInt(svcRes.rows[0].volumetric_divisor || 0, 10)
+    : 0;
 
   let dimKg = 0;
-  if (dimRule.rows.length) {
+  if (divisor > 0) {
     const dim_length = parseFloat(parcel.dim_length || parcel.length || 0);
     const dim_width  = parseFloat(parcel.dim_width  || parcel.width  || 0);
     const dim_height = parseFloat(parcel.dim_height || parcel.height || 0);
     if (dim_length > 0 && dim_width > 0 && dim_height > 0) {
-      dimKg = (dim_length * dim_width * dim_height) / dimRule.rows[0].divisor;
+      dimKg = (dim_length * dim_width * dim_height) / divisor;
     }
   }
+  // divisor = 0 or NULL → dimKg stays 0, so chargedKg = actualKg (physical only)
 
   // Use whichever is higher — actual weight wins ties
   const chargedKg = dimKg > actualKg ? dimKg : actualKg;
