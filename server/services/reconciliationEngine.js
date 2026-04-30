@@ -592,6 +592,12 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   const aggregateLines = lines.filter(l => !String(l.tracking_number || '').trim());
   const regularLines   = lines.filter(l =>  String(l.tracking_number || '').trim());
 
+  // Diagnostic: log first 3 lines so we can see exactly what the engine received
+  console.log(`[recon engine] Run ${runId}: lines=${lines.length} regular=${regularLines.length} aggregate=${aggregateLines.length}`);
+  lines.slice(0, 3).forEach((l, i) => {
+    console.log(`[recon engine]   line[${i}]: tracking_number=${JSON.stringify(l.tracking_number)} service_code=${JSON.stringify(l.service_code)} carrier_amount=${JSON.stringify(l.carrier_amount)}`);
+  });
+
   if (aggregateLines.length > 0) {
     console.log(`[recon engine] Run ${runId}: ${aggregateLines.length} aggregate line(s) detected (no tracking number)`);
   }
@@ -638,20 +644,30 @@ export async function processReconciliationRun(runId, carrierId, lines) {
 
   // ── Process regular lines (grouped by tracking number) ───────────────────
   for (const [trackKey, group] of trackingGroups) {
-    const groupResults = await processTrackingGroup(
-      group, trackKey, runId, carrierId, serviceCodeMap, pool, mappings
-    );
+    try {
+      const groupResults = await processTrackingGroup(
+        group, trackKey, runId, carrierId, serviceCodeMap, pool, mappings
+      );
 
-    let groupMatched = false;
-    for (const r of groupResults) {
-      switch (r.status) {
-        case 'matched':   matched++;   groupMatched = true; break;
-        case 'corrected': corrected++; groupMatched = true; break;
-        case 'unmatched': unmatched++; break;
-        case 'ignored':   ignored++;   break;
+      let groupMatched = false;
+      for (const r of groupResults) {
+        switch (r.status) {
+          case 'matched':   matched++;   groupMatched = true; break;
+          case 'corrected': corrected++; groupMatched = true; break;
+          case 'unmatched': unmatched++; break;
+          case 'ignored':   ignored++;   break;
+        }
       }
+      if (groupMatched) matchedTrackingKeys.add(trackKey);
+    } catch (lineErr) {
+      console.error(`[recon engine] Run ${runId}: ERROR processing tracking group "${trackKey}":`, lineErr.message);
+      unmatched++;
+      // Insert a placeholder so it appears in All Lines
+      try {
+        await query(`INSERT INTO reconciliation_lines (run_id, tracking_number, status, unmatched_reason, source, carrier_amount, charge_type)
+          VALUES ($1,$2,'unmatched','processing_error','internal',0,'base')`, [runId, trackKey]);
+      } catch (_) { /* ignore insert failure */ }
     }
-    if (groupMatched) matchedTrackingKeys.add(trackKey);
   }
 
   // ── Process aggregate lines ───────────────────────────────────────────────
