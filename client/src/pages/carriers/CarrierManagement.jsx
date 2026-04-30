@@ -12,6 +12,7 @@ import {
   Plus, ChevronRight, ChevronDown, ChevronUp, Trash2, X, Check, Phone, Mail,
   User, Building2, Edit2, Zap, AlertTriangle, ArrowLeft, GripVertical,
   Upload, Download, Copy, TrendingUp, Calendar, FileText, CheckCircle, Save, RefreshCw,
+  Divide,
 } from 'lucide-react';
 import { carriersApi } from '../../api/carriers';
 import { getCourierLogo } from '../../utils/courierLogos';
@@ -1920,11 +1921,12 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
       {/* Tab bar */}
       <div style={{ display:'flex', gap:2, marginBottom:20, borderBottom:'1px solid rgba(255,255,255,0.08)' }}>
         {[
-          { key:'services',   label:'Services' },
-          { key:'rate-cards',   label:'Cost Rate Cards' },
+          { key:'services',    label:'Services' },
+          { key:'rate-cards',  label:'Cost Rate Cards' },
           { key:'crc-templates', label:'Customer Rate Card Templates' },
-          { key:'fuel',         label:'Fuel Groups' },
-          { key:'surcharges',   label:`Surcharges${surcharges.length ? ` (${surcharges.length})` : ''}` },
+          { key:'fuel',        label:'Fuel Groups' },
+          { key:'surcharges',  label:`Surcharges${surcharges.length ? ` (${surcharges.length})` : ''}` },
+          { key:'volumetric',  label:'Volumetric Rules' },
         ].map(t => (
           <button key={t.key} onClick={() => setCarrierTab(t.key)} style={{
             background:'none', border:'none', cursor:'pointer',
@@ -2452,6 +2454,254 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
           </div>
         )}
       </div>}  {/* end carrierTab === 'surcharges' */}
+
+      {/* ── Tab: Volumetric Rules ── */}
+      {carrierTab === 'volumetric' && carrier && (
+        <VolumetricTab courierId={carrier.id} />
+      )}
+    </div>
+  );
+}
+
+// ─── Volumetric Rules Tab ─────────────────────────────────────────────────────
+// Scoped to a single carrier. Only shows international services in the
+// assignment dropdown (service_type = 'international'). Rules are global
+// (shareable across carriers) but the assign picker is carrier-filtered.
+
+function VolumetricTab({ courierId }) {
+  const qc = useQueryClient();
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName]       = useState('');
+  const [newDivisor, setNewDivisor] = useState('');
+  const [err, setErr]               = useState('');
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['volumetric-rules', courierId],
+    queryFn: () => api.get(`/carriers/volumetric-rules?carrierId=${courierId}`).then(r => r.data),
+  });
+
+  const inv = () => qc.invalidateQueries({ queryKey: ['volumetric-rules', courierId] });
+
+  const createRule = useMutation({
+    mutationFn: b => api.post('/carriers/volumetric-rules', b),
+    onSuccess: () => { inv(); setShowCreate(false); setNewName(''); setNewDivisor(''); setErr(''); },
+    onError: e => setErr(e.response?.data?.error || 'Error creating rule'),
+  });
+  const updateRule = useMutation({
+    mutationFn: ({ id, ...b }) => api.patch(`/carriers/volumetric-rules/${id}`, b),
+    onSuccess: inv,
+    onError: e => setErr(e.response?.data?.error || 'Error updating rule'),
+  });
+  const deleteRule = useMutation({
+    mutationFn: id => api.delete(`/carriers/volumetric-rules/${id}`),
+    onSuccess: inv,
+    onError: e => setErr(e.response?.data?.error || 'Error deleting rule'),
+  });
+  const assignSvc = useMutation({
+    mutationFn: ({ ruleId, serviceId }) => api.put(`/carriers/volumetric-rules/${ruleId}/services/${serviceId}`),
+    onSuccess: inv,
+    onError: e => setErr(e.response?.data?.error || 'Error assigning service'),
+  });
+  const unassignSvc = useMutation({
+    mutationFn: serviceId => api.delete(`/carriers/volumetric-rules/services/${serviceId}`),
+    onSuccess: inv,
+    onError: e => setErr(e.response?.data?.error || 'Error removing service'),
+  });
+
+  const canCreate = newName.trim().length > 0 && parseInt(newDivisor) > 0;
+
+  const volCard  = { background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:10, padding:'18px 20px', marginBottom:14 };
+  const volInput = { width:'100%', boxSizing:'border-box', background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:7, color:'#E6EDF3', fontSize:12, padding:'7px 10px', outline:'none' };
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+        <div>
+          <h2 style={{ fontSize:17, fontWeight:700, color:'#7B2FBE', margin:0, display:'flex', alignItems:'center', gap:8 }}>
+            <Divide size={16}/> Volumetric Rules
+          </h2>
+          <p style={{ fontSize:12, color:'#777', margin:'4px 0 0' }}>
+            Create named divisor rules and assign international services to them.
+            The pricing engine uses <span style={{ color:'#E6EDF3', fontFamily:'monospace' }}>(L×W×H) ÷ divisor</span> when
+            it exceeds declared weight. Services with no rule use physical weight only.
+          </p>
+        </div>
+        <button
+          onClick={() => { setShowCreate(s => !s); setErr(''); }}
+          style={{ display:'inline-flex', alignItems:'center', gap:6, height:34, padding:'0 16px', background:'rgba(123,47,190,0.15)', border:'1px solid rgba(123,47,190,0.4)', borderRadius:8, color:'#7B2FBE', fontSize:13, fontWeight:700, cursor:'pointer' }}
+        >
+          <Plus size={13}/> New Rule
+        </button>
+      </div>
+
+      {err && (
+        <div style={{ background:'rgba(213,0,0,0.12)', border:'1px solid rgba(213,0,0,0.3)', borderRadius:7, padding:'10px 14px', marginBottom:14, color:'#FF5252', fontSize:12 }}>
+          {err}
+        </div>
+      )}
+
+      {/* Create form */}
+      {showCreate && (
+        <div style={{ ...volCard, border:'1px solid rgba(123,47,190,0.3)', marginBottom:20 }}>
+          <div style={{ fontSize:12, fontWeight:700, color:'#7B2FBE', marginBottom:12 }}>New Volumetric Rule</div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 160px', gap:10, marginBottom:10 }}>
+            <div>
+              <label style={{ fontSize:11, color:'#888', display:'block', marginBottom:4 }}>Rule Name</label>
+              <input style={volInput} placeholder='e.g. International Air 5000' value={newName} onChange={e => setNewName(e.target.value)} />
+            </div>
+            <div>
+              <label style={{ fontSize:11, color:'#888', display:'block', marginBottom:4 }}>Divisor</label>
+              <input style={volInput} type='number' min='1' placeholder='5000' value={newDivisor} onChange={e => setNewDivisor(e.target.value)} />
+            </div>
+          </div>
+          {parseInt(newDivisor) > 0 && (
+            <div style={{ background:'rgba(123,47,190,0.06)', border:'1px solid rgba(123,47,190,0.2)', borderRadius:7, padding:'8px 12px', fontSize:12, color:'#AAAAAA', marginBottom:10 }}>
+              Example: 30×30×30 = 27,000cm³ ÷ {parseInt(newDivisor).toLocaleString()} = <strong style={{ color:'#E6EDF3' }}>{(27000/parseInt(newDivisor)).toFixed(2)} kg</strong>
+            </div>
+          )}
+          <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+            <button onClick={() => { setShowCreate(false); setNewName(''); setNewDivisor(''); }} style={{ background:'none', border:'1px solid rgba(255,255,255,0.12)', borderRadius:6, color:'#AAAAAA', padding:'6px 12px', cursor:'pointer', fontSize:12 }}>Cancel</button>
+            <button
+              disabled={!canCreate}
+              onClick={() => createRule.mutate({ name: newName.trim(), divisor: parseInt(newDivisor) })}
+              style={{ background: canCreate ? 'rgba(123,47,190,0.2)' : 'rgba(123,47,190,0.05)', border:'1px solid rgba(123,47,190,0.4)', borderRadius:6, color: canCreate ? '#7B2FBE' : '#555', padding:'6px 14px', cursor: canCreate ? 'pointer' : 'not-allowed', fontSize:12, fontWeight:700 }}
+            >
+              <Check size={12} style={{ display:'inline', marginRight:4 }}/>Save Rule
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Rule cards */}
+      {isLoading ? (
+        <div style={{ color:'#666', fontSize:13 }}>Loading...</div>
+      ) : !data?.rules?.length ? (
+        <div style={{ ...volCard, textAlign:'center', color:'#666', fontSize:13, padding:40 }}>
+          No volumetric rules yet. Create one above.
+        </div>
+      ) : (
+        data.rules.map(rule => (
+          <VolumetricRuleCard
+            key={rule.id}
+            rule={rule}
+            availableServices={data.services || []}
+            onUpdate={(id, body) => updateRule.mutate({ id, ...body })}
+            onDelete={id => {
+              if (rule.assigned_services.length > 0) {
+                setErr(`Remove all ${rule.assigned_services.length} assigned service(s) before deleting "${rule.name}".`);
+                return;
+              }
+              deleteRule.mutate(id);
+            }}
+            onAssign={(ruleId, serviceId) => assignSvc.mutate({ ruleId, serviceId })}
+            onUnassign={serviceId => unassignSvc.mutate(serviceId)}
+          />
+        ))
+      )}
+    </div>
+  );
+}
+
+function VolumetricRuleCard({ rule, availableServices, onUpdate, onDelete, onAssign, onUnassign }) {
+  const [editing, setEditing]       = useState(false);
+  const [editName, setEditName]     = useState(rule.name);
+  const [editDivisor, setEditDivisor] = useState(String(rule.divisor));
+  const [showAssign, setShowAssign] = useState(false);
+  const [selSvc, setSelSvc]         = useState('');
+
+  const assignedIds = new Set(rule.assigned_services.map(s => s.id));
+  const available   = availableServices.filter(s => !assignedIds.has(s.id));
+
+  const volCard  = { background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:10, padding:'18px 20px', marginBottom:14 };
+  const volInput = { width:'100%', boxSizing:'border-box', background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:7, color:'#E6EDF3', fontSize:12, padding:'7px 10px', outline:'none' };
+
+  return (
+    <div style={volCard}>
+      {/* Header */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+        {editing ? (
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 130px', gap:8, flex:1, marginRight:10 }}>
+            <input style={volInput} value={editName} onChange={e => setEditName(e.target.value)} />
+            <input style={volInput} type='number' min='1' value={editDivisor} onChange={e => setEditDivisor(e.target.value)} />
+          </div>
+        ) : (
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <Divide size={15} color='#7B2FBE'/>
+            <span style={{ fontSize:14, fontWeight:700, color:'#E6EDF3' }}>{rule.name}</span>
+            <span style={{ background:'rgba(123,47,190,0.15)', border:'1px solid rgba(123,47,190,0.35)', borderRadius:6, padding:'2px 9px', fontSize:12, color:'#7B2FBE', fontWeight:700 }}>÷ {rule.divisor.toLocaleString()}</span>
+          </div>
+        )}
+        <div style={{ display:'flex', gap:6', flexShrink:0 }}>
+          {editing ? (
+            <>
+              <button
+                onClick={() => { onUpdate(rule.id, { name: editName.trim(), divisor: parseInt(editDivisor) }); setEditing(false); }}
+                disabled={!editName.trim() || !(parseInt(editDivisor) > 0)}
+                style={{ background:'rgba(0,200,83,0.12)', border:'1px solid rgba(0,200,83,0.3)', borderRadius:6, color:'#00C853', padding:'5px 10px', cursor:'pointer', fontSize:12, fontWeight:700, display:'flex', alignItems:'center', gap:4 }}
+              ><Check size={12}/>Save</button>
+              <button onClick={() => { setEditing(false); setEditName(rule.name); setEditDivisor(String(rule.divisor)); }} style={{ background:'none', border:'1px solid rgba(255,255,255,0.12)', borderRadius:6, color:'#AAAAAA', padding:'5px 10px', cursor:'pointer', fontSize:12 }}>Cancel</button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => setEditing(true)} style={{ background:'none', border:'1px solid rgba(255,255,255,0.12)', borderRadius:6, color:'#AAAAAA', padding:'5px 10px', cursor:'pointer', fontSize:12 }}>Edit</button>
+              <button onClick={() => onDelete(rule.id)} style={{ background:'rgba(213,0,0,0.08)', border:'1px solid rgba(213,0,0,0.25)', borderRadius:6, color:'#FF5252', padding:'5px 8px', cursor:'pointer', display:'flex', alignItems:'center' }}><Trash2 size={12}/></button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Formula preview */}
+      {!editing && (
+        <div style={{ background:'rgba(123,47,190,0.05)', border:'1px solid rgba(123,47,190,0.15)', borderRadius:7, padding:'7px 12px', fontSize:12, color:'#AAAAAA', marginBottom:12 }}>
+          (L × W × H) ÷ {rule.divisor.toLocaleString()} &nbsp;|&nbsp; Example: 30×30×30 = {(27000/rule.divisor).toFixed(2)} kg
+        </div>
+      )}
+
+      {/* Assigned services */}
+      <div style={{ fontSize:11, color:'#666', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:8 }}>
+        Assigned Services ({rule.assigned_services.length})
+      </div>
+      <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:10 }}>
+        {rule.assigned_services.length === 0 ? (
+          <span style={{ fontSize:12, color:'#555', fontStyle:'italic' }}>No services assigned</span>
+        ) : (
+          rule.assigned_services.map(svc => (
+            <span key={svc.id} style={{ display:'inline-flex', alignItems:'center', gap:5, background:'rgba(123,47,190,0.1)', border:'1px solid rgba(123,47,190,0.25)', borderRadius:9999, padding:'3px 10px', fontSize:11, color:'#E6EDF3' }}>
+              {svc.name}
+              <span style={{ color:'#666', fontSize:10 }}>({svc.service_code})</span>
+              <button onClick={() => onUnassign(svc.id)} style={{ background:'none', border:'none', cursor:'pointer', color:'#FF5252', padding:'0 0 0 2px', display:'flex' }}><X size={11}/></button>
+            </span>
+          ))
+        )}
+      </div>
+
+      {/* Assign dropdown */}
+      {showAssign ? (
+        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+          <select
+            style={{ flex:1, background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:7, color:'#E6EDF3', fontSize:12, padding:'7px 10px', outline:'none' }}
+            value={selSvc}
+            onChange={e => setSelSvc(e.target.value)}
+          >
+            <option value=''>— Select an international service —</option>
+            {available.map(s => (
+              <option key={s.id} value={s.id}>{s.name} ({s.service_code})</option>
+            ))}
+          </select>
+          <button onClick={() => { if (selSvc) { onAssign(rule.id, parseInt(selSvc)); setSelSvc(''); setShowAssign(false); } }} disabled={!selSvc} style={{ background:'rgba(123,47,190,0.15)', border:'1px solid rgba(123,47,190,0.4)', borderRadius:6, color:'#7B2FBE', padding:'7px 12px', cursor:'pointer', fontSize:12, fontWeight:700, display:'flex', alignItems:'center', gap:4 }}><Check size={12}/>Assign</button>
+          <button onClick={() => { setShowAssign(false); setSelSvc(''); }} style={{ background:'none', border:'1px solid rgba(255,255,255,0.1)', borderRadius:6, color:'#888', padding:'7px 10px', cursor:'pointer', fontSize:12 }}><X size={12}/></button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setShowAssign(true)}
+          disabled={available.length === 0}
+          style={{ background:'none', border:'1px dashed rgba(123,47,190,0.3)', borderRadius:6, color: available.length ? '#7B2FBE' : '#444', padding:'5px 12px', cursor: available.length ? 'pointer' : 'default', fontSize:11, display:'flex', alignItems:'center', gap:4 }}
+        >
+          <Plus size={11}/> Assign international service
+          {available.length === 0 && <span style={{ color:'#555', marginLeft:4 }}>(all assigned)</span>}
+        </button>
+      )}
     </div>
   );
 }

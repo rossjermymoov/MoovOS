@@ -703,35 +703,50 @@ router.delete('/couriers/contacts/:id', async (req, res, next) => {
 // The pricing engine uses courier_services.volumetric_rule_id → volumetric_rules.divisor
 // ─────────────────────────────────────────────────────────────────────────────
 
-// GET /api/carriers/volumetric-rules
-// Returns all named rules, each with an array of assigned courier services.
+// GET /api/carriers/volumetric-rules[?carrierId=N]
+// Returns all named rules, each with their assigned services.
+// When carrierId is supplied, the assignable services list is filtered to
+// international services for that carrier only (service_type = 'international').
+// Already-assigned services are always included regardless of service_type.
 router.get('/volumetric-rules', async (req, res, next) => {
   try {
+    const carrierId = req.query.carrierId ? parseInt(req.query.carrierId) : null;
+
     const rules = await query(
       `SELECT vr.id, vr.name, vr.divisor, vr.created_at, vr.updated_at,
               COALESCE(
                 json_agg(
                   jsonb_build_object(
-                    'id', cs.id,
-                    'name', cs.name,
-                    'service_code', cs.service_code
+                    'id',           cs.id,
+                    'name',         cs.name,
+                    'service_code', cs.service_code,
+                    'carrier_name', c.name
                   ) ORDER BY cs.name
                 ) FILTER (WHERE cs.id IS NOT NULL),
                 '[]'
               ) AS assigned_services
        FROM   volumetric_rules vr
        LEFT JOIN courier_services cs ON cs.volumetric_rule_id = vr.id
+       LEFT JOIN couriers         c  ON c.id = cs.courier_id
        GROUP  BY vr.id
        ORDER  BY vr.name`
     );
 
-    // Also return all services so the UI can populate the assignment dropdown
+    // Assignable services = international services for this carrier.
+    // If no carrierId, return all services (used by the legacy global settings page).
+    const svcParams = carrierId ? [carrierId] : [];
+    const svcFilter = carrierId
+      ? `WHERE cs.courier_id = $1 AND cs.service_type = 'international'`
+      : `WHERE cs.service_type = 'international'`;
+
     const services = await query(
       `SELECT cs.id, cs.name, cs.service_code, c.name AS carrier_name,
-              cs.volumetric_rule_id
+              cs.volumetric_rule_id, cs.service_type
        FROM   courier_services cs
        JOIN   couriers c ON c.id = cs.courier_id
-       ORDER  BY c.name, cs.name`
+       ${svcFilter}
+       ORDER  BY cs.name`,
+      svcParams
     );
 
     res.json({ rules: rules.rows, services: services.rows });
@@ -754,6 +769,7 @@ router.post('/volumetric-rules', async (req, res, next) => {
 });
 
 // PATCH /api/carriers/volumetric-rules/:id
+// When divisor changes, cascade to all services currently assigned to this rule.
 router.patch('/volumetric-rules/:id', async (req, res, next) => {
   try {
     const { name, divisor } = req.body;
@@ -776,6 +792,17 @@ router.patch('/volumetric-rules/:id', async (req, res, next) => {
       vals
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Rule not found' });
+
+    // Cascade: if divisor changed, push new value to all assigned services
+    if (divisor !== undefined) {
+      await query(
+        `UPDATE courier_services
+         SET    volumetric_divisor = $1, updated_at = NOW()
+         WHERE  volumetric_rule_id = $2`,
+        [parseInt(divisor), req.params.id]
+      );
+    }
+
     res.json(result.rows[0]);
   } catch (err) { next(err); }
 });
@@ -799,19 +826,25 @@ router.delete('/volumetric-rules/:id', async (req, res, next) => {
 });
 
 // PUT /api/carriers/volumetric-rules/:ruleId/services/:serviceId
-// Assign a service to a volumetric rule (replaces any previous assignment).
+// Assign a service to a volumetric rule.
+// Also writes the rule's divisor into courier_services.volumetric_divisor so
+// the pricing engine picks it up without a JOIN.
 router.put('/volumetric-rules/:ruleId/services/:serviceId', async (req, res, next) => {
   try {
     const { ruleId, serviceId } = req.params;
 
-    // Confirm the rule exists
-    const ruleCheck = await query('SELECT id FROM volumetric_rules WHERE id = $1', [ruleId]);
+    const ruleCheck = await query('SELECT id, divisor FROM volumetric_rules WHERE id = $1', [ruleId]);
     if (!ruleCheck.rows.length) return res.status(404).json({ error: 'Volumetric rule not found' });
+    const { divisor } = ruleCheck.rows[0];
 
     const result = await query(
-      `UPDATE courier_services SET volumetric_rule_id = $1, updated_at = NOW()
-       WHERE id = $2 RETURNING id, name, service_code, volumetric_rule_id`,
-      [ruleId, serviceId]
+      `UPDATE courier_services
+       SET    volumetric_rule_id = $1,
+              volumetric_divisor = $2,
+              updated_at         = NOW()
+       WHERE  id = $3
+       RETURNING id, name, service_code, volumetric_rule_id, volumetric_divisor`,
+      [ruleId, divisor, serviceId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Courier service not found' });
     res.json(result.rows[0]);
@@ -819,12 +852,16 @@ router.put('/volumetric-rules/:ruleId/services/:serviceId', async (req, res, nex
 });
 
 // DELETE /api/carriers/volumetric-rules/services/:serviceId
-// Remove a service's volumetric rule assignment.
+// Remove a service's volumetric rule assignment and clear its divisor.
 router.delete('/volumetric-rules/services/:serviceId', async (req, res, next) => {
   try {
     const result = await query(
-      `UPDATE courier_services SET volumetric_rule_id = NULL, updated_at = NOW()
-       WHERE id = $1 RETURNING id, name, service_code`,
+      `UPDATE courier_services
+       SET    volumetric_rule_id = NULL,
+              volumetric_divisor = NULL,
+              updated_at         = NOW()
+       WHERE  id = $1
+       RETURNING id, name, service_code`,
       [req.params.serviceId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Courier service not found' });
