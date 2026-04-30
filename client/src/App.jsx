@@ -19,6 +19,8 @@ import CustomerSimPage from './pages/customer/CustomerSimPage';
 import KatanaPage from './pages/katana/KatanaPage';
 import PricingPage from './pages/pricing/PricingPage';
 import RateCardEditor from './pages/pricing/RateCardEditor';
+import ReconciliationPage from './pages/reconciliation/ReconciliationPage';
+import RunDetailPage from './pages/reconciliation/RunDetailPage';
 
 // Placeholder pages for other sections (to be built)
 const Placeholder = ({ name }) => (
@@ -90,6 +92,10 @@ function AppRoutes() {
         </Route>
         <Route path="customer-sim"  element={<CustomerSimPage />} />
         <Route path="carriers"      element={<CarrierManagement />} />
+        <Route path="reconciliation">
+          <Route index element={<ReconciliationPage />} />
+          <Route path=":id" element={<RunDetailPage />} />
+        </Route>
         <Route path="reports"   element={<Placeholder name="Dashboards & Reporting" />} />
         <Route path="knowledge" element={<KatanaPage />} />
         <Route path="settings">

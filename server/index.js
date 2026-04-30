@@ -28,6 +28,7 @@ import katanaRouter from './routes/katana.js';
 import pricingRouter from './routes/pricing.js';
 import xeroRouter from './routes/xero.js';
 import authRouter from './routes/auth.js';
+import reconciliationRouter from './routes/reconciliation.js';
 
 dotenv.config();
 
@@ -67,6 +68,7 @@ app.use('/api/xero',                  xeroRouter);
 // Webhook-safe alias — suppliers that block URLs containing "billing"
 // should send to /api/moov-charges/webhook instead
 app.use('/api/moov-charges',          billingRouter);
+app.use('/api/reconciliation',        reconciliationRouter);
 
 // ─── Health check ────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'moov-os' }));

@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   Users, Tag, Truck, BarChart2, FileText,
-  AlertTriangle, BookOpen, Settings, LayoutDashboard, UserCheck, LogOut,
+  AlertTriangle, BookOpen, Settings, LayoutDashboard, UserCheck, LogOut, GitCompare,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -12,6 +12,7 @@ export const NAV_ITEMS = [
   { to: '/pricing',      icon: Tag,             label: 'Pricing',    key: 'pricing' },
   { to: '/tracking',     icon: Truck,           label: 'Tracking',   key: 'tracking' },
   { to: '/finance',      icon: FileText,        label: 'Finance',    key: 'finance' },
+  { to: '/reconciliation', icon: GitCompare,   label: 'Reconcile',  key: 'reconciliation' },
   { to: '/queries',      icon: AlertTriangle,   label: 'Queries',    key: 'queries' },
   { to: '/customer-sim', icon: UserCheck,       label: 'Cust. Sim',  key: 'customer_sim' },
   { to: '/carriers',     icon: Truck,           label: 'Carriers',   key: 'carriers' },
