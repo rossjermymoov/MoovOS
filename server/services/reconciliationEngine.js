@@ -241,10 +241,15 @@ async function buildVerifiedPool(carrierId) {
       AND  c.cancelled     = false
       AND  c.charge_type   = 'courier'
       AND  (s.courier ILIKE cu_carrier.code OR s.courier ILIKE cu_carrier.name)
-      -- Verification gate: only include shipments the carrier has actually
-      -- collected (tracking codes present = carrier has scanned/despatched)
-      AND  s.tracking_codes IS NOT NULL
-      AND  array_length(s.tracking_codes, 1) > 0
+      -- Verification gate: only shipments the carrier has collected.
+      -- A shipment is considered despatched if it has tracking codes OR a
+      -- dc_service_id (the DeliveryConnect consignment reference). For DHL,
+      -- the consignment number lives in dc_service_id; tracking_codes may be
+      -- empty until DC posts a tracking event back.
+      AND (
+        (s.tracking_codes IS NOT NULL AND array_length(s.tracking_codes, 1) > 0)
+        OR s.dc_service_id IS NOT NULL
+      )
   `, [carrierId]);
 
   const pool = new Map();
@@ -256,23 +261,43 @@ async function buildVerifiedPool(carrierId) {
   }
 
   for (const row of res.rows) {
+    // ── Index by tracking_codes ───────────────────────────────────────────
     const codes = row.tracking_codes || [];
     for (const code of codes) {
       const key = String(code).trim().toUpperCase();
       addToPool(key, row);
-
-      // Also index under "60" prefix variant so DHL invoice lookups always hit.
-      // DHL PWS sends "60XXXXXXXXXX"; OMS may store the shorter form and vice-versa.
+      // "60" prefix variants (DHL PWS vs OMS format bridge)
       if (key.startsWith('60') && key.length > 4) {
-        addToPool(key.slice(2), row);      // strip prefix → DB short form
+        addToPool(key.slice(2), row);
       } else {
-        addToPool('60' + key, row);        // add prefix → DHL invoice form
+        addToPool('60' + key, row);
       }
     }
+
+    // ── Index by dc_service_id ────────────────────────────────────────────
+    // For DHL shipments managed via DeliveryConnect, the consignment number
+    // from the PWS invoice is stored in dc_service_id (not tracking_codes).
+    // This is the PRIMARY lookup key for DHL reconciliation.
+    if (row.dc_service_id) {
+      const dcKey = String(row.dc_service_id).trim().toUpperCase();
+      addToPool(dcKey, row);
+      if (dcKey.startsWith('60') && dcKey.length > 4) {
+        addToPool(dcKey.slice(2), row);
+      } else {
+        addToPool('60' + dcKey, row);
+      }
+    }
+
+    // ── Index by order reference ──────────────────────────────────────────
     if (row.reference) {
       const refKey = String(row.reference).trim().toUpperCase();
       addToPool(refKey, row);
     }
+  }
+
+  console.log(`[recon engine] Verified pool built: ${pool.size} unique keys from ${res.rows.length} charge records`);
+  if (pool.size === 0) {
+    console.warn(`[recon engine] WARNING: pool is EMPTY — check that DHL shipments have dc_service_id or tracking_codes set`);
   }
 
   return pool;
@@ -859,8 +884,11 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
   }
 
   // ── Phase 2: Safety Net — is tracking number in Verified Pool? ────────────
-  // poolLookup also tries "60" prefix variants to bridge DHL invoice format vs OMS format.
+  // poolLookup also tries "60" prefix variants and dc_service_id keys.
   const poolHits = poolLookup(pool, trackKey);
+  if (!poolHits.length) {
+    console.log(`[recon engine] Pool MISS: "${trackKey}" — not found in pool (${pool.size} keys). Will try account lookup.`);
+  }
 
   if (poolHits.length === 0) {
     const customer = await lookupCustomerByAccount(line.account_number);
