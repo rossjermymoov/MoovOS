@@ -45,6 +45,37 @@ import { query } from '../db/index.js';
 
 function round2(n) { return Math.round(n * 100) / 100; }
 
+/**
+ * Pool lookup with carrier prefix normalisation.
+ *
+ * DHL PWS invoices include a "60" prefix on every consignment number (e.g.
+ * "601234567890") that may not be present in our OMS tracking_codes (e.g.
+ * "1234567890"). We try the exact key first, then fall back to:
+ *   • stripping the leading "60"  — CSV has "60..." but DB has "..."
+ *   • adding a "60" prefix         — DB has "60..." but CSV sent shorter form
+ *
+ * Matching is always by the EXACT string from column C — this function just
+ * bridges the carrier prefix gap transparently.
+ */
+function poolLookup(pool, trackKey) {
+  let hits = pool.get(trackKey);
+  if (hits && hits.length) return hits;
+
+  // Try without "60" prefix (CSV had it, DB doesn't)
+  if (trackKey.startsWith('60') && trackKey.length > 4) {
+    hits = pool.get(trackKey.slice(2));
+    if (hits && hits.length) return hits;
+  }
+
+  // Try with "60" prefix added (DB had it, CSV was shorter)
+  if (!trackKey.startsWith('60')) {
+    hits = pool.get('60' + trackKey);
+    if (hits && hits.length) return hits;
+  }
+
+  return [];
+}
+
 // ─── Phase 1b: Service Code Normalisation ────────────────────────────────────
 
 /**
@@ -122,7 +153,7 @@ async function buildServiceCodeMap(carrierId) {
  * Returns { id, name, service_code } or null.
  */
 async function getSuggestedServiceFromPool(trackKey, pool, carrierId, rawCode = '') {
-  const poolHits = pool.get(trackKey) || [];
+  const poolHits = poolLookup(pool, trackKey);
 
   // Method 1 & 2 — use dc_service_id from the pool record
   if (poolHits.length > 0) {
@@ -218,19 +249,29 @@ async function buildVerifiedPool(carrierId) {
 
   const pool = new Map();
 
+  function addToPool(key, row) {
+    if (!pool.has(key)) pool.set(key, []);
+    const bucket = pool.get(key);
+    if (!bucket.find(r => r.charge_id === row.charge_id)) bucket.push(row);
+  }
+
   for (const row of res.rows) {
     const codes = row.tracking_codes || [];
     for (const code of codes) {
       const key = String(code).trim().toUpperCase();
-      if (!pool.has(key)) pool.set(key, []);
-      pool.get(key).push(row);
+      addToPool(key, row);
+
+      // Also index under "60" prefix variant so DHL invoice lookups always hit.
+      // DHL PWS sends "60XXXXXXXXXX"; OMS may store the shorter form and vice-versa.
+      if (key.startsWith('60') && key.length > 4) {
+        addToPool(key.slice(2), row);      // strip prefix → DB short form
+      } else {
+        addToPool('60' + key, row);        // add prefix → DHL invoice form
+      }
     }
     if (row.reference) {
       const refKey = String(row.reference).trim().toUpperCase();
-      if (!pool.has(refKey)) pool.set(refKey, []);
-      if (!pool.get(refKey).find(r => r.charge_id === row.charge_id)) {
-        pool.get(refKey).push(row);
-      }
+      addToPool(refKey, row);
     }
   }
 
@@ -362,7 +403,7 @@ async function calculateExpectedFuelTotal(pool, matchedTrackingKeys) {
   const seenShipments = new Set();
 
   for (const trackKey of matchedTrackingKeys) {
-    const poolHits = pool.get(trackKey) || [];
+    const poolHits = poolLookup(pool, trackKey);
     if (poolHits.length === 0) continue;
     const charge = poolHits[0];
     if (seenShipments.has(charge.shipment_id)) continue;
@@ -556,7 +597,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   // ── Process regular lines (grouped by tracking number) ───────────────────
   for (const [trackKey, group] of trackingGroups) {
     const groupResults = await processTrackingGroup(
-      group, trackKey, runId, carrierId, serviceCodeMap, pool, mappings, fuelIsAggregated
+      group, trackKey, runId, carrierId, serviceCodeMap, pool, mappings
     );
 
     let groupMatched = false;
@@ -638,10 +679,10 @@ export async function processReconciliationRun(runId, carrierId, lines) {
 // compare the SUM against the base cost_price (fuel is billed separately as an
 // aggregate line for carriers like DHL — so base-only comparison is correct).
 
-async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCodeMap, pool, mappings, fuelIsAggregated = false) {
+async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCodeMap, pool, mappings) {
   // Single-line shortcut
   if (group.length === 1) {
-    const result = await processLine(group[0], runId, carrierId, serviceCodeMap, pool, mappings, fuelIsAggregated);
+    const result = await processLine(group[0], runId, carrierId, serviceCodeMap, pool, mappings);
     return [result];
   }
 
@@ -681,7 +722,7 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
     return group.map(() => ({ status: 'unmatched' }));
   }
 
-  const poolHits = pool.get(trackKey) || [];
+  const poolHits = poolLookup(pool, trackKey);
 
   if (poolHits.length === 0) {
     // Not in verified pool — process each line individually
@@ -697,8 +738,8 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
   // ── Aggregate comparison ──────────────────────────────────────────────────
   const charge = poolHits[0];
 
-  // For carriers that bill fuel as aggregate lines (DHL), per-parcel lines
-  // represent base freight only. Compare against expected_cost (base cost_price).
+  // Per-shipment comparison: base cost_price ONLY.
+  // Fuel and HGV are verified via aggregate lines — never included here.
   const totalCarrierAmount = round2(
     group.reduce((s, l) => s + (parseFloat(l.carrier_amount) || 0), 0)
   );
@@ -778,7 +819,7 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
 
 // ─── Process a single line ────────────────────────────────────────────────────
 
-async function processLine(line, runId, carrierId, serviceCodeMap, pool, mappings, fuelIsAggregated = false) {
+async function processLine(line, runId, carrierId, serviceCodeMap, pool, mappings) {
   const trackingNumber = String(line.tracking_number || '').trim();
   const trackKey       = trackingNumber.toUpperCase();
   const rawServiceCode = String(line.service_code   || '').trim();
@@ -818,7 +859,8 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
   }
 
   // ── Phase 2: Safety Net — is tracking number in Verified Pool? ────────────
-  const poolHits = pool.get(trackKey) || [];
+  // poolLookup also tries "60" prefix variants to bridge DHL invoice format vs OMS format.
+  const poolHits = poolLookup(pool, trackKey);
 
   if (poolHits.length === 0) {
     const customer = await lookupCustomerByAccount(line.account_number);
@@ -870,12 +912,11 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
   }
 
   // ── Phase 3: Match & Compare ──────────────────────────────────────────────
+  // Rule: compare against base cost_price ONLY (charges.cost_price).
+  // Fuel and HGV surcharges are verified separately via the aggregate line
+  // checks — they are NEVER included in per-shipment comparisons.
   const charge = poolHits[0];
-  // When fuel is billed as a separate aggregate line (e.g. DHL), compare
-  // against base cost_price only — not total_cost_price which includes fuel/surcharges.
-  const expectedAmount = fuelIsAggregated
-    ? round2(parseFloat(charge.expected_cost) || 0)
-    : round2(parseFloat(charge.total_cost_price) || 0);
+  const expectedAmount = round2(parseFloat(charge.expected_cost) || 0);
   const delta = round2(carrierAmount - expectedAmount);
 
   line._expected_amount = expectedAmount;
