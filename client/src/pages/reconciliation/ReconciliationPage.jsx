@@ -104,18 +104,24 @@ function mapToInvoiceLine(row, colMap) {
 
 // ─── Upload modal ─────────────────────────────────────────────────────────────
 function UploadModal({ couriers, onClose, onSuccess }) {
-  const [carrierId,   setCarrierId]   = useState('');
-  const [invoiceRef,  setInvoiceRef]  = useState('');
-  const [invoiceDate, setInvoiceDate] = useState('');
-  const [csvRows,     setCsvRows]     = useState([]);
-  const [headers,     setHeaders]     = useState([]);
-  const [colMap,      setColMap]      = useState({
+  const [carrierId,        setCarrierId]        = useState('');
+  const [invoiceRefOverride, setInvoiceRefOverride] = useState(''); // manual override only
+  const [csvRows,          setCsvRows]          = useState([]);
+  const [headers,          setHeaders]          = useState([]);
+  const [colMap,           setColMap]           = useState({
     tracking_number: '', account_number: '', service_code: '',
     charge_type: '', carrier_amount: '', billed_weight_kg: '',
+    invoice_ref: '', invoice_date: '',   // extracted from CSV
   });
   const [step,  setStep]  = useState(1); // 1=setup 2=map columns 3=confirm
   const [error, setError] = useState('');
   const fileRef = useRef();
+
+  // Derive invoice ref: from CSV column > manual override > empty
+  const inferredRef  = colMap.invoice_ref  && csvRows[0] ? csvRows[0][colMap.invoice_ref]  || '' : '';
+  const inferredDate = colMap.invoice_date && csvRows[0] ? csvRows[0][colMap.invoice_date] || '' : '';
+  const effectiveRef  = invoiceRefOverride || inferredRef;
+  const effectiveDate = inferredDate;
 
   function handleFile(e) {
     const file = e.target.files[0];
@@ -124,20 +130,26 @@ function UploadModal({ couriers, onClose, onSuccess }) {
     reader.onload = (ev) => {
       const rows = parseCSV(ev.target.result);
       if (!rows.length) { setError('CSV appears empty or invalid'); return; }
-      setHeaders(Object.keys(rows[0]));
+      const hdrs = Object.keys(rows[0]);
+      setHeaders(hdrs);
       setCsvRows(rows);
       // Auto-map common column names
       const autoMap = { ...colMap };
-      for (const field of Object.keys(colMap)) {
-        const found = Object.keys(rows[0]).find(h =>
-          h.includes(field.replace('_', '')) ||
-          h.includes(field.split('_')[0]) ||
-          (field === 'carrier_amount' && (h.includes('amount') || h.includes('charge') || h.includes('price'))) ||
-          (field === 'tracking_number' && (h.includes('tracking') || h.includes('consignment') || h.includes('waybill'))) ||
-          (field === 'service_code' && (h.includes('service') || h.includes('product'))) ||
-          (field === 'account_number' && (h.includes('account') || h.includes('acct')))
-        );
-        if (found) autoMap[field] = found;
+      const AUTO_RULES = {
+        tracking_number:  h => h.includes('tracking') || h.includes('consignment') || h.includes('waybill'),
+        account_number:   h => h.includes('account') || h.includes('acct') || h.includes('customer'),
+        service_code:     h => h.includes('service') || h.includes('product'),
+        charge_type:      h => h.includes('charge') && h.includes('type'),
+        carrier_amount:   h => h.includes('amount') || h.includes('value') || h.includes('price') || h.includes('charge'),
+        billed_weight_kg: h => h.includes('weight'),
+        invoice_ref:      h => h.includes('invoice') && (h.includes('ref') || h.includes('num') || h.includes('no')),
+        invoice_date:     h => h.includes('invoice') && (h.includes('date') || h.includes('dt')),
+      };
+      for (const [field, test] of Object.entries(AUTO_RULES)) {
+        if (!autoMap[field]) {
+          const found = hdrs.find(h => test(h.toLowerCase()));
+          if (found) autoMap[field] = found;
+        }
       }
       setColMap(autoMap);
       setStep(2);
@@ -156,9 +168,12 @@ function UploadModal({ couriers, onClose, onSuccess }) {
     { key: 'charge_type',      label: 'Charge Type',      required: false },
     { key: 'carrier_amount',   label: 'Amount (£)',        required: true },
     { key: 'billed_weight_kg', label: 'Weight (kg)',       required: false },
+    { key: 'invoice_ref',      label: 'Invoice Reference', required: false, hint: 'Read from CSV' },
+    { key: 'invoice_date',     label: 'Invoice Date',      required: false, hint: 'Read from CSV' },
   ];
 
-  const canProceed = carrierId && invoiceRef &&
+  // Step 2 → 3: only need carrier + required columns mapped; invoice ref is optional
+  const canProceed = carrierId &&
     FIELDS.filter(f => f.required).every(f => colMap[f.key]);
   const lines = step === 3 ? buildLines() : [];
 
@@ -169,7 +184,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
     }}>
       <div style={{
         background: '#0D0F2B', border: '1px solid rgba(255,255,255,0.1)',
-        borderRadius: 12, width: 600, maxHeight: '85vh', overflow: 'auto',
+        borderRadius: 12, width: 620, maxHeight: '85vh', overflow: 'auto',
         padding: 28,
       }}>
         {/* Header */}
@@ -193,36 +208,29 @@ function UploadModal({ couriers, onClose, onSuccess }) {
           </div>
         )}
 
-        {/* Step 1 — Setup */}
+        {/* Step 1 — Carrier + file upload only */}
         {step === 1 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div>
-              <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 5 }}>Carrier</label>
+              <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 5 }}>Carrier <span style={{ color: '#FF5252' }}>*</span></label>
               <select style={inputSt} value={carrierId} onChange={e => setCarrierId(e.target.value)}>
                 <option value=''>— Select carrier —</option>
                 {couriers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div>
-                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 5 }}>Invoice Reference</label>
-                <input style={inputSt} placeholder='e.g. INV-2024-001' value={invoiceRef} onChange={e => setInvoiceRef(e.target.value)} />
-              </div>
-              <div>
-                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 5 }}>Invoice Date</label>
-                <input style={inputSt} type='date' value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} />
-              </div>
-            </div>
             <div>
-              <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 5 }}>Upload CSV</label>
+              <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 5 }}>Upload Carrier Invoice CSV <span style={{ color: '#FF5252' }}>*</span></label>
               <input ref={fileRef} type='file' accept='.csv,.txt' style={{ display: 'none' }} onChange={handleFile} />
               <button
                 style={{ ...btnGhost, width: '100%', justifyContent: 'center', padding: '20px 16px' }}
                 onClick={() => fileRef.current?.click()}
               >
                 <Upload size={16} />
-                Click to upload carrier invoice CSV
+                {csvRows.length > 0 ? `✓ ${csvRows.length} rows loaded — click to replace` : 'Click to upload carrier invoice CSV'}
               </button>
+              <p style={{ fontSize: 11, color: '#555', marginTop: 6 }}>
+                Invoice reference and date will be read from the CSV in the next step.
+              </p>
             </div>
           </div>
         )}
@@ -235,28 +243,49 @@ function UploadModal({ couriers, onClose, onSuccess }) {
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {FIELDS.map(f => (
-                <div key={f.key} style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 10, alignItems: 'center' }}>
+                <div key={f.key} style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: 10, alignItems: 'center' }}>
                   <label style={{ fontSize: 12, color: f.required ? '#E6EDF3' : '#888', fontWeight: f.required ? 600 : 400 }}>
-                    {f.label} {f.required && <span style={{ color: '#FF5252' }}>*</span>}
+                    {f.label}
+                    {f.required && <span style={{ color: '#FF5252' }}> *</span>}
+                    {f.hint && <span style={{ color: '#555', fontSize: 10, display: 'block' }}>{f.hint}</span>}
                   </label>
                   <select
                     style={inputSt}
                     value={colMap[f.key]}
                     onChange={e => setColMap(m => ({ ...m, [f.key]: e.target.value }))}
                   >
-                    <option value=''>— Not mapped —</option>
+                    <option value=''>— Not in CSV —</option>
                     {headers.map(h => <option key={h} value={h}>{h}</option>)}
                   </select>
                 </div>
               ))}
             </div>
+
+            {/* Invoice ref manual override if not in CSV */}
+            {!colMap.invoice_ref && (
+              <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '170px 1fr', gap: 10, alignItems: 'center' }}>
+                <label style={{ fontSize: 12, color: '#888' }}>
+                  Invoice Ref (manual)
+                  <span style={{ color: '#555', fontSize: 10, display: 'block' }}>If not in CSV</span>
+                </label>
+                <input
+                  style={inputSt}
+                  placeholder='e.g. INV-2024-001'
+                  value={invoiceRefOverride}
+                  onChange={e => setInvoiceRefOverride(e.target.value)}
+                />
+              </div>
+            )}
+
             {/* Preview */}
             {csvRows[0] && colMap.tracking_number && (
               <div style={{ marginTop: 16, ...card, fontSize: 11, color: '#888' }}>
                 <div style={{ color: '#00C853', fontWeight: 700, marginBottom: 8 }}>Preview — first row</div>
                 <div>Tracking: <span style={{ color: '#E6EDF3' }}>{csvRows[0][colMap.tracking_number]}</span></div>
-                <div>Service code: <span style={{ color: '#E6EDF3' }}>{csvRows[0][colMap.service_code]}</span></div>
-                <div>Amount: <span style={{ color: '#E6EDF3' }}>£{parseFloat(csvRows[0][colMap.carrier_amount] || 0).toFixed(2)}</span></div>
+                {colMap.service_code  && <div>Service code: <span style={{ color: '#E6EDF3' }}>{csvRows[0][colMap.service_code]}</span></div>}
+                {colMap.carrier_amount && <div>Amount: <span style={{ color: '#E6EDF3' }}>£{parseFloat(csvRows[0][colMap.carrier_amount] || 0).toFixed(2)}</span></div>}
+                {inferredRef  && <div>Invoice ref: <span style={{ color: '#E6EDF3' }}>{inferredRef}</span></div>}
+                {inferredDate && <div>Invoice date: <span style={{ color: '#E6EDF3' }}>{inferredDate}</span></div>}
               </div>
             )}
           </div>
@@ -268,8 +297,8 @@ function UploadModal({ couriers, onClose, onSuccess }) {
             <div style={{ ...card, marginBottom: 16 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 12 }}>
                 <div><span style={{ color: '#888' }}>Carrier:</span> <span style={{ color: '#E6EDF3' }}>{couriers.find(c => String(c.id) === String(carrierId))?.name}</span></div>
-                <div><span style={{ color: '#888' }}>Invoice Ref:</span> <span style={{ color: '#E6EDF3' }}>{invoiceRef}</span></div>
-                <div><span style={{ color: '#888' }}>Invoice Date:</span> <span style={{ color: '#E6EDF3' }}>{invoiceDate || '—'}</span></div>
+                <div><span style={{ color: '#888' }}>Invoice Ref:</span> <span style={{ color: '#E6EDF3' }}>{effectiveRef || <em style={{ color: '#555' }}>None</em>}</span></div>
+                <div><span style={{ color: '#888' }}>Invoice Date:</span> <span style={{ color: '#E6EDF3' }}>{effectiveDate || '—'}</span></div>
                 <div><span style={{ color: '#888' }}>Total lines:</span> <span style={{ color: '#00C853', fontWeight: 700 }}>{lines.length}</span></div>
               </div>
             </div>
@@ -286,8 +315,8 @@ function UploadModal({ couriers, onClose, onSuccess }) {
           )}
           {step < 3 && (
             <button
-              style={{ ...btnGreen, opacity: (step === 1 ? (carrierId && invoiceRef && csvRows.length > 0) : canProceed) ? 1 : 0.4 }}
-              disabled={step === 1 ? !(carrierId && invoiceRef && csvRows.length > 0) : !canProceed}
+              style={{ ...btnGreen, opacity: (step === 1 ? (carrierId && csvRows.length > 0) : canProceed) ? 1 : 0.4 }}
+              disabled={step === 1 ? !(carrierId && csvRows.length > 0) : !canProceed}
               onClick={() => setStep(s => s + 1)}
             >
               Next
@@ -295,7 +324,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
           )}
           {step === 3 && (
             <StartRunButton
-              carrierId={carrierId} invoiceRef={invoiceRef} invoiceDate={invoiceDate}
+              carrierId={carrierId} invoiceRef={effectiveRef} invoiceDate={effectiveDate}
               lines={buildLines()} onSuccess={onSuccess} setError={setError}
             />
           )}
@@ -378,9 +407,14 @@ export default function ReconciliationPage() {
             Automated courier invoice matching engine
           </p>
         </div>
-        <button style={btnGreen} onClick={() => setShowUpload(true)}>
-          <Plus size={16} />New Run
-        </button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button style={btnGhost} onClick={() => navigate('/reconciliation/margin-report')}>
+            <TrendingUp size={15} />Margin Report
+          </button>
+          <button style={btnGreen} onClick={() => setShowUpload(true)}>
+            <Plus size={16} />New Run
+          </button>
+        </div>
       </div>
 
       {/* KPI strip */}
