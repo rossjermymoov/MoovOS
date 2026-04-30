@@ -219,6 +219,7 @@ async function buildVerifiedPool(carrierId) {
       c.order_id        AS reference,
       c.customer_id,
       c.cost_price      AS expected_cost,
+      c.recon_corrected,
       c.shipment_id,
       c.charge_type,
       (
@@ -538,6 +539,18 @@ async function checkCorrectionEngine(customerId, serviceId, carrierId, zoneId, l
   );
 
   if (Math.abs(recalcDelta) <= 0.01) {
+    // Persist the flag so future runs surface this charge as 'corrected'
+    // even when delta reaches zero (charge cost_price already aligned).
+    if (chargeId) {
+      try {
+        await query(
+          `UPDATE charges SET recon_corrected = TRUE WHERE id = $1`,
+          [chargeId]
+        );
+      } catch (e) {
+        console.warn(`[recon engine] Failed to set recon_corrected on charge ${chargeId}:`, e.message);
+      }
+    }
     return { corrected: true, reason: 'pricing_rules' };
   }
 
@@ -886,7 +899,9 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
   let unmatchedReason = null;
 
   if (Math.abs(delta) < 0.02) {
-    groupStatus = 'matched';
+    // If previously auto-corrected, keep 'corrected' for the audit trail
+    groupStatus = charge.recon_corrected ? 'corrected' : 'matched';
+    correctedBy = charge.recon_corrected ? 'pricing_rules' : null;
 
   } else {
     // Try Mapping Engine
@@ -1064,6 +1079,10 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
   line._expected_amount = expectedAmount;
 
   if (Math.abs(delta) < 0.02) {
+    // If the charge was previously auto-corrected (recon_corrected flag set),
+    // surface it as 'corrected' even with zero delta — preserves the audit
+    // trail that DHL's charge differed from our original billing calculation.
+    const prevCorrected = !!charge.recon_corrected;
     await insertLine(runId, {
       tracking_number:          trackingNumber,
       carrier_account_no:       line.account_number || null,
@@ -1076,12 +1095,12 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
       charge_id:                charge.charge_id,
       expected_amount:          expectedAmount,
       delta:                    delta,
-      status:                   'matched',
-      corrected_by:             null,
+      status:                   prevCorrected ? 'corrected' : 'matched',
+      corrected_by:             prevCorrected ? 'pricing_rules' : null,
       unmatched_reason:         null,
       source:                   'internal',
     });
-    return { status: 'matched' };
+    return { status: prevCorrected ? 'corrected' : 'matched' };
   }
 
   // ── Phase 4a: Mapping Engine ──────────────────────────────────────────────
