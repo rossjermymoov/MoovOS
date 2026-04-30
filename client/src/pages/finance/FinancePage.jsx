@@ -9,7 +9,6 @@ import { billingApi } from '../../api/billing';
 import { customersApi } from '../../api/customers';
 import { format, parseISO } from 'date-fns';
 import { getCourierLogo } from '../../utils/courierLogos';
-import ReconciliationTab from './ReconciliationTab';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -1274,7 +1273,6 @@ export default function FinancePage() {
         {[
           { key: 'created',          label: 'Created' },
           { key: 'awaiting',         label: 'Awaiting Reconciliation' },
-          { key: 'reconciliation',   label: 'Reconciliation' },
           { key: 'billed',           label: 'Billed' },
           { key: 'credits',          label: 'Credits' },
         ].map(tab => (
@@ -1866,10 +1864,6 @@ export default function FinancePage() {
         <AwaitingReconciliationTab customers={customers} gbp={gbp} fmt={fmt} getCourierLogo={getCourierLogo} />
       )}
 
-      {/* ── Tab: Reconciliation ────────────────────────────────────────── */}
-      {activeTab === 'reconciliation' && (
-        <ReconciliationTab />
-      )}
 
       {/* ── Tab: Billed ────────────────────────────────────────────────── */}
       {activeTab === 'billed' && (
