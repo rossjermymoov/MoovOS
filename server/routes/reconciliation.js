@@ -1505,4 +1505,124 @@ router.get('/margin-report', async (req, res) => {
   }
 });
 
+// ─── GET /api/reconciliation/pool-diagnostic ─────────────────────────────────
+// Diagnostic: check whether a specific tracking number / consignment number
+// would be found in the Verified Pool for a given carrier.
+// Useful for debugging without running a full reconciliation.
+//
+// Query params: carrier_id (required), tracking_number (required)
+
+router.get('/pool-diagnostic', async (req, res) => {
+  try {
+    const { carrier_id, tracking_number } = req.query;
+    if (!carrier_id || !tracking_number) {
+      return res.status(400).json({ error: 'carrier_id and tracking_number are required' });
+    }
+
+    const trackKey  = String(tracking_number).trim().toUpperCase();
+    const carrierId = parseInt(carrier_id);
+
+    // Build variants to search for (mirrors poolLookup logic)
+    const variants = [trackKey];
+    if (trackKey.startsWith('60') && trackKey.length > 4) variants.push(trackKey.slice(2));
+    else variants.push('60' + trackKey);
+
+    // 1. Check shipments table directly
+    const shipmentRes = await query(`
+      SELECT
+        s.id           AS shipment_id,
+        s.courier,
+        s.dc_service_id,
+        s.tracking_codes,
+        s.created_at
+      FROM   shipments s
+      WHERE  (
+        s.dc_service_id = ANY($1)
+        OR EXISTS (
+          SELECT 1 FROM unnest(s.tracking_codes) tc
+          WHERE UPPER(tc) = ANY($1)
+        )
+      )
+      ORDER BY s.created_at DESC
+      LIMIT 10
+    `, [variants]);
+
+    // 2. Check if those shipments have verified courier charges
+    const chargeRes = await query(`
+      SELECT
+        c.id              AS charge_id,
+        c.cost_price      AS expected_cost,
+        c.verified,
+        c.cancelled,
+        c.charge_type,
+        s.courier,
+        s.dc_service_id,
+        s.tracking_codes
+      FROM   charges   c
+      JOIN   shipments s ON s.id = c.shipment_id
+      JOIN   couriers  cu ON cu.id = $2
+      WHERE  (
+        s.dc_service_id = ANY($1)
+        OR EXISTS (
+          SELECT 1 FROM unnest(s.tracking_codes) tc
+          WHERE UPPER(tc) = ANY($1)
+        )
+      )
+        AND c.charge_type = 'courier'
+      ORDER BY c.created_at DESC
+      LIMIT 10
+    `, [variants, carrierId]);
+
+    // 3. Check pool query as-is (does it include verified=true + carrier match + gate)
+    const poolRes = await query(`
+      SELECT
+        c.id              AS charge_id,
+        c.cost_price      AS expected_cost,
+        c.verified,
+        c.cancelled,
+        c.charge_type,
+        s.courier,
+        s.dc_service_id,
+        s.tracking_codes,
+        cu_carrier.code   AS carrier_code,
+        cu_carrier.name   AS carrier_name
+      FROM   charges      c
+      JOIN   shipments    s          ON s.id           = c.shipment_id
+      JOIN   couriers     cu_carrier ON cu_carrier.id  = $2
+      LEFT JOIN customers cu         ON cu.id          = c.customer_id
+      WHERE  (
+        s.dc_service_id = ANY($1)
+        OR EXISTS (
+          SELECT 1 FROM unnest(s.tracking_codes) tc
+          WHERE UPPER(tc) = ANY($1)
+        )
+      )
+        AND c.charge_type = 'courier'
+      LIMIT 10
+    `, [variants, carrierId]);
+
+    return res.json({
+      searched_for:         tracking_number,
+      variants_tried:       variants,
+      shipments_found:      shipmentRes.rows,
+      all_charges_found:    chargeRes.rows,
+      pool_eligible_charges: poolRes.rows,
+      diagnosis: (() => {
+        if (shipmentRes.rows.length === 0) return 'NOT_IN_DB: No shipment found with this tracking number or dc_service_id';
+        if (chargeRes.rows.length === 0) return 'NO_COURIER_CHARGE: Shipment exists but no courier charge found';
+        const notVerified = chargeRes.rows.filter(r => !r.verified);
+        if (notVerified.length > 0) return `NOT_VERIFIED: ${notVerified.length} charge(s) found but verified=false`;
+        const cancelled = chargeRes.rows.filter(r => r.cancelled);
+        if (cancelled.length > 0) return `CANCELLED: ${cancelled.length} charge(s) are cancelled`;
+        const poolHits = poolRes.rows.filter(r => r.verified && !r.cancelled);
+        if (poolHits.length > 0) return `IN_POOL: ${poolHits.length} pool-eligible charge(s) found — carrier match is ${poolHits[0].courier} vs carrier code=${poolHits[0].carrier_code}/name=${poolHits[0].carrier_name}`;
+        return `CARRIER_MISMATCH: Charges exist but none passed the carrier filter. shipments.courier="${chargeRes.rows[0]?.courier}" vs carrier code="${poolRes.rows[0]?.carrier_code}"/name="${poolRes.rows[0]?.carrier_name}"`;
+      })(),
+    });
+  } catch (err) {
+    console.error('[reconciliation/pool-diagnostic] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
