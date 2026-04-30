@@ -421,9 +421,10 @@ async function lookupCarrierBandCost(serviceId, weightKg, zoneId) {
   //   max is INCLUSIVE  →  $2 <= max
   //
   // $3 = zoneId — hard-pins the lookup to the correct zone when available.
+  // wb.id is returned so callers can detect band changes (intra-band vs cross-band weight shifts).
   const exactRes = zoneId
     ? await query(`
-        SELECT wb.price_first, wb.cost_per_kg, wb.min_weight_kg, wb.max_weight_kg
+        SELECT wb.id AS band_id, wb.price_first, wb.cost_per_kg, wb.min_weight_kg, wb.max_weight_kg
         FROM   weight_bands     wb
         JOIN   zones            z  ON z.id  = wb.zone_id
         JOIN   courier_services cs ON cs.id = z.courier_service_id
@@ -436,7 +437,7 @@ async function lookupCarrierBandCost(serviceId, weightKg, zoneId) {
         LIMIT  1
       `, [serviceId, weightKg, zoneId])
     : await query(`
-        SELECT wb.price_first, wb.cost_per_kg, wb.min_weight_kg, wb.max_weight_kg
+        SELECT wb.id AS band_id, wb.price_first, wb.cost_per_kg, wb.min_weight_kg, wb.max_weight_kg
         FROM   weight_bands     wb
         JOIN   zones            z  ON z.id  = wb.zone_id
         JOIN   courier_services cs ON cs.id = z.courier_service_id
@@ -450,7 +451,7 @@ async function lookupCarrierBandCost(serviceId, weightKg, zoneId) {
 
   if (exactRes.rows.length) {
     const b = exactRes.rows[0];
-    return { cost: round2(parseFloat(b.price_first || 0)), pass: 1, overageKg: null };
+    return { cost: round2(parseFloat(b.price_first || 0)), pass: 1, overageKg: null, bandId: b.band_id };
   }
 
   // Pass 2: weight EXCEEDS every defined band ceiling — apply top-out overage.
@@ -467,7 +468,7 @@ async function lookupCarrierBandCost(serviceId, weightKg, zoneId) {
   // ceiling so there is nothing to measure excess against.
   const topRes = zoneId
     ? await query(`
-        SELECT wb.price_first, wb.cost_per_kg, wb.min_weight_kg, wb.max_weight_kg
+        SELECT wb.id AS band_id, wb.price_first, wb.cost_per_kg, wb.min_weight_kg, wb.max_weight_kg
         FROM   weight_bands     wb
         JOIN   zones            z  ON z.id  = wb.zone_id
         JOIN   courier_services cs ON cs.id = z.courier_service_id
@@ -479,7 +480,7 @@ async function lookupCarrierBandCost(serviceId, weightKg, zoneId) {
         LIMIT  1
       `, [serviceId, weightKg, zoneId])
     : await query(`
-        SELECT wb.price_first, wb.cost_per_kg, wb.min_weight_kg, wb.max_weight_kg
+        SELECT wb.id AS band_id, wb.price_first, wb.cost_per_kg, wb.min_weight_kg, wb.max_weight_kg
         FROM   weight_bands     wb
         JOIN   zones            z  ON z.id  = wb.zone_id
         JOIN   courier_services cs ON cs.id = z.courier_service_id
@@ -507,7 +508,7 @@ async function lookupCarrierBandCost(serviceId, weightKg, zoneId) {
       `[recon engine] Top-out overage: ${weightKg}kg > ceiling ${bandMax}kg` +
       ` — £${b.price_first} + (${overageKg}kg × £${overageRate}) = £${cost}`
     );
-    return { cost, pass: 2, overageKg };
+    return { cost, pass: 2, overageKg, bandId: b.band_id };
   }
 
   return null;
@@ -917,9 +918,11 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
   let unmatchedReason = null;
 
   if (Math.abs(delta) < 0.02) {
-    // If previously auto-corrected, keep 'corrected' for the audit trail
-    groupStatus = charge.recon_corrected ? 'corrected' : 'matched';
-    correctedBy = charge.recon_corrected ? 'pricing_rules' : null;
+    // Multi-parcel aggregate comparison — amount matches.
+    // For multi-parcel groups we compare the SUM, so per-line band-change detection
+    // is not meaningful. Simply mark as matched when the total agrees.
+    groupStatus = 'matched';
+    correctedBy = null;
 
   } else {
     // Try Mapping Engine
@@ -1098,19 +1101,45 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
   line._expected_amount = expectedAmount;
 
   if (Math.abs(delta) < 0.02) {
-    // Clean match requires BOTH amount AND declared weight to agree with invoice.
-    // If weight differs, DHL reweighed the parcel — flag as corrected with reason
-    // 'weight_discrepancy' so it's visible in reporting even though cost is right.
-    const declaredWeight  = parseFloat(charge.declared_weight_kg) || null;
-    const billedWeight    = parseFloat(line.billed_weight_kg)     || null;
-    const weightDeltaKg   = (declaredWeight != null && billedWeight != null)
-      ? round2(Math.abs(billedWeight - declaredWeight))
-      : null;
-    const weightMismatch  = weightDeltaKg != null && weightDeltaKg >= 0.5;
-    const prevCorrected   = !!charge.recon_corrected;
+    // Financial significance filter:
+    //   Intra-band weight changes (e.g. 2.1kg → 2.9kg, both in the same band,
+    //   same price) are MATCHED — DHL rounding noise is not a correction.
+    //   Only flag as corrected if the weight shift crossed a band boundary, which
+    //   means a different price WOULD have applied (even if this run's amount
+    //   happens to agree because cost_price was already updated).
+    //
+    // Algorithm:
+    //   1. Look up which band declared_weight falls into  → band_id_d
+    //   2. Look up which band billed_weight falls into    → band_id_b
+    //   3. Same band_id → MATCHED (no financial impact, intra-band noise)
+    //   4. Different band_id → CORRECTED ('band_change' — crosses a pricing tier)
+    //
+    // When zone_id is not available (pool miss path), we cannot zone-pin the
+    // lookup, so fall through to MATCHED to avoid spurious noise flags.
+    const declaredWeight = parseFloat(charge.declared_weight_kg) || null;
+    const billedWeight   = parseFloat(line.billed_weight_kg)     || null;
 
-    if (!weightMismatch && !prevCorrected) {
-      // Truly clean — amount and weight both agree
+    let bandChanged         = false;
+    let weightDeltaForMeta  = null;
+
+    if (
+      declaredWeight != null && billedWeight != null &&
+      Math.abs(billedWeight - declaredWeight) >= 0.01 &&
+      charge.zone_id
+    ) {
+      const [dResult, bResult] = await Promise.all([
+        lookupCarrierBandCost(serviceId, declaredWeight, charge.zone_id),
+        lookupCarrierBandCost(serviceId, billedWeight,   charge.zone_id),
+      ]);
+      // Different band_id means the weight crossed a pricing tier boundary
+      if (dResult && bResult && dResult.bandId !== bResult.bandId) {
+        bandChanged        = true;
+        weightDeltaForMeta = round2(billedWeight - declaredWeight);
+      }
+    }
+
+    if (!bandChanged) {
+      // Intra-band or no weight data — genuinely matched, no financial significance
       await insertLine(runId, {
         tracking_number:          trackingNumber,
         carrier_account_no:       line.account_number || null,
@@ -1131,20 +1160,26 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
       return { status: 'matched' };
     }
 
-    // Amount matched but weight or prior correction flag requires 'corrected'
-    const correction_metadata = weightMismatch ? {
+    // Weight crossed a band boundary — true correction even at zero cost delta.
+    // Persist the flag so future runs can see this charge was corrected.
+    if (charge.charge_id) {
+      try {
+        await query(`UPDATE charges SET recon_corrected = TRUE WHERE id = $1`, [charge.charge_id]);
+      } catch (e) {
+        console.warn(`[recon engine] Failed to set recon_corrected on charge ${charge.charge_id}:`, e.message);
+      }
+    }
+    const correction_metadata = {
       original_expected_cost: expectedAmount,
       new_calculated_cost:    expectedAmount,
-      correction_reason:      'weight_discrepancy',
-      weight_delta:           weightDeltaKg,
-      billed_weight_kg:       billedWeight,
-    } : {
-      original_expected_cost: expectedAmount,
-      new_calculated_cost:    expectedAmount,
-      correction_reason:      'previously_corrected',
-      weight_delta:           null,
+      correction_reason:      'band_change',
+      weight_delta:           weightDeltaForMeta,  // only set because it caused a band change
       billed_weight_kg:       billedWeight,
     };
+    console.log(
+      `[recon engine] Band change: declared ${declaredWeight}kg → billed ${billedWeight}kg` +
+      ` crosses band boundary (delta ${weightDeltaForMeta > 0 ? '+' : ''}${weightDeltaForMeta}kg)`
+    );
     await insertLine(runId, {
       tracking_number:          trackingNumber,
       carrier_account_no:       line.account_number || null,
