@@ -161,13 +161,13 @@ function PermissionsPanel({ staffMember, onClose }) {
               <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
                 <button
                   onClick={grantAll}
-                  style={{ fontSize: 11, color: '#00C853', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 4, background: 'rgba(0,200,83,0.1)' }}
+                  style={{ fontSize: 11, color: '#00C853', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 4, background: 'rgba(0,200,83,0.1)' }}
                 >
                   Grant all
                 </button>
                 <button
                   onClick={revokeAll}
-                  style={{ fontSize: 11, color: '#E91E8C', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 4, background: 'rgba(233,30,140,0.1)' }}
+                  style={{ fontSize: 11, color: '#E91E8C', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 4, background: 'rgba(233,30,140,0.1)' }}
                 >
                   Revoke all
                 </button>

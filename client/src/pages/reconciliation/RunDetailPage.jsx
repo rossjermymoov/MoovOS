@@ -639,6 +639,7 @@ export default function RunDetailPage() {
 
       {/* Tab content */}
       {activeTab === 'overview' && (
+        <>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           {/* Breakdown chart */}
           <div style={card}>
@@ -725,6 +726,7 @@ export default function RunDetailPage() {
             <CustomerSummaryPanel runId={parseInt(id)} run={run} />
           </div>
         )}
+        </>
       )}
 
       {/* Line tables */}

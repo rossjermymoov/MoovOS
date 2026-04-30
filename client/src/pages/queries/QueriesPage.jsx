@@ -339,7 +339,6 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 14, fontWeight: 800, color: hasNewReply ? C.blue : C.muted,
         border: `1px solid ${hasNewReply ? `${C.blue}33` : C.border}`,
-        flexShrink: 0,
       }}>
         {(q.customer_name || '?')[0].toUpperCase()}
       </div>
