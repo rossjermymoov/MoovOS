@@ -1610,13 +1610,14 @@ router.get('/pool-diagnostic', async (req, res) => {
       diagnosis: (() => {
         if (shipmentRes.rows.length === 0) return 'NOT_IN_DB: No shipment found with this tracking number or dc_service_id';
         if (chargeRes.rows.length === 0) return 'NO_COURIER_CHARGE: Shipment exists but no courier charge found';
-        const notVerified = chargeRes.rows.filter(r => !r.verified);
-        if (notVerified.length > 0) return `NOT_VERIFIED: ${notVerified.length} charge(s) found but verified=false`;
-        const cancelled = chargeRes.rows.filter(r => r.cancelled);
-        if (cancelled.length > 0) return `CANCELLED: ${cancelled.length} charge(s) are cancelled`;
+        // Only look at non-cancelled charges for verification check
+        const activeCourier = chargeRes.rows.filter(r => !r.cancelled && r.charge_type === 'courier');
+        if (activeCourier.length === 0) return `ALL_CANCELLED: ${chargeRes.rows.length} charge(s) found but all are cancelled`;
+        const notVerified = activeCourier.filter(r => !r.verified);
+        if (notVerified.length === activeCourier.length) return `NOT_VERIFIED: ${notVerified.length} active charge(s) found but none are verified`;
         const poolHits = poolRes.rows.filter(r => r.verified && !r.cancelled);
-        if (poolHits.length > 0) return `IN_POOL: ${poolHits.length} pool-eligible charge(s) found — carrier match is ${poolHits[0].courier} vs carrier code=${poolHits[0].carrier_code}/name=${poolHits[0].carrier_name}`;
-        return `CARRIER_MISMATCH: Charges exist but none passed the carrier filter. shipments.courier="${chargeRes.rows[0]?.courier}" vs carrier code="${poolRes.rows[0]?.carrier_code}"/name="${poolRes.rows[0]?.carrier_name}"`;
+        if (poolHits.length > 0) return `IN_POOL: charge ${poolHits[0].charge_id} — expected_cost=£${poolHits[0].expected_cost} — shipments.courier="${poolHits[0].courier}" matches carrier code="${poolHits[0].carrier_code}"`;
+        return `CARRIER_MISMATCH: Verified charge exists but failed carrier filter. shipments.courier="${activeCourier[0]?.courier}" vs carrier code="${chargeRes.rows[0]?.courier}"`;
       })(),
     });
   } catch (err) {
