@@ -414,7 +414,7 @@ function CustomerMatchingPanel({ connected }) {
       <div style={{ fontSize: 11, color: '#555', marginBottom: 10, display: 'flex', gap: 16 }}>
         <span>Confidence: <span style={{ color: '#00C853' }}>≥80% auto-accepted</span></span>
         <span><span style={{ color: '#FFC107' }}>50–79%</span> needs review</span>
-        <span><span style={{ color: '#777' }}}>&lt;50%</span> search manually</span>
+        <span><span style={{ color: '#777' }}>&lt;50%</span> search manually</span>
       </div>
 
       {/* Filter tabs */}

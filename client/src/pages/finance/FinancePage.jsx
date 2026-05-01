@@ -355,7 +355,15 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
   };
 
   // Conclusion is green if the charge already has a price OR the engine would price it
-  const alreadyPriced  = charge.price != null;
+  const alreadyPriced = charge.price != null;
+  // Current total = base price + all sell-side charge lines (fuel, surcharges etc.)
+  const currentTotal = alreadyPriced
+    ? parseFloat(charge.price) + (Array.isArray(charge.charge_lines) ? charge.charge_lines : [])
+        .reduce((s, l) => s + parseFloat(l.price || 0), 0)
+    : null;
+  // Are the current total and the engine total effectively the same? (within 1p rounding)
+  const pricesMatch = alreadyPriced && trace?.conclusion?.priced &&
+    Math.abs((currentTotal ?? 0) - (trace.conclusion.total ?? 0)) < 0.015;
   const conclusionColor = (alreadyPriced || trace?.conclusion?.priced) ? '#00C853' : '#F44336';
 
   // Shared row style for ✓/✗ check lists
@@ -429,7 +437,7 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                   <span style={{ color: '#00C853', fontWeight: 700, fontSize: 14 }}>✓</span>
                   <div>
                     <div style={{ color: '#00C853', fontWeight: 700, fontSize: 13 }}>
-                      Already priced — £{parseFloat(charge.price).toFixed(2)}
+                      Already priced — £{currentTotal != null ? currentTotal.toFixed(2) : parseFloat(charge.price).toFixed(2)}
                     </div>
                     <div style={{ color: '#888', fontSize: 11, marginTop: 1 }}>
                       The trace below shows what the engine would set if re-priced now.
@@ -655,13 +663,15 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                   fontFamily: 'monospace', fontSize: 13,
                 }}>
                   <div style={{ fontWeight: 700, color: conclusionColor, fontSize: 14, marginBottom: 10 }}>
-                    {alreadyPriced && trace.conclusion.priced
-                      ? `✓ Currently £${parseFloat(charge.price).toFixed(2)} — re-price would set £${trace.conclusion.total?.toFixed(2)}`
-                      : alreadyPriced && !trace.conclusion.priced
-                        ? `⚠ Currently £${parseFloat(charge.price).toFixed(2)} — engine can no longer find a rate`
-                        : trace.conclusion.priced
-                          ? '✓ Rate found — ready to apply'
-                          : '✗ No rate — manual price needed'}
+                    {alreadyPriced && trace.conclusion.priced && pricesMatch
+                      ? `✓ Price correct — £${currentTotal.toFixed(2)} matches engine`
+                      : alreadyPriced && trace.conclusion.priced && !pricesMatch
+                        ? `⚠ Currently £${currentTotal.toFixed(2)} — re-price would set £${trace.conclusion.total?.toFixed(2)}`
+                        : alreadyPriced && !trace.conclusion.priced
+                          ? `⚠ Currently £${currentTotal.toFixed(2)} — engine can no longer find a rate`
+                          : trace.conclusion.priced
+                            ? '✓ Rate found — ready to apply'
+                            : '✗ No rate — manual price needed'}
                   </div>
 
                   {trace.conclusion.priced && <>
