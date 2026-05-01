@@ -1734,7 +1734,6 @@ router.get('/charges', async (req, res, next) => {
       conds.push(`(
         cu.business_name ILIKE $${idx} OR cu.account_number ILIKE $${idx} OR
         c.order_id ILIKE $${idx} OR c.service_name ILIKE $${idx} OR
-        c.tracking_code ILIKE $${idx} OR c.tracking_code ILIKE $${idx + 1} OR
         s.reference ILIKE $${idx} OR s.reference_2 ILIKE $${idx} OR
         EXISTS (SELECT 1 FROM unnest(s.tracking_codes) tc WHERE tc ILIKE $${idx} OR tc ILIKE $${idx + 1})
       )`);
