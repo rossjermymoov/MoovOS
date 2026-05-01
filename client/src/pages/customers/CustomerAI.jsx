@@ -1,7 +1,10 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Check, Sparkles, Loader2, AlertCircle, Trash2, Plus } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Sparkles, Loader2, AlertCircle, Trash2, Plus, Upload, FileText, X } from 'lucide-react';
+import axios from 'axios';
 import { customersApi } from '../../api/customers';
+
+const api = axios.create({ baseURL: '/api' });
 
 // ─── Shared styles ─────────────────────────────────────────────
 const inputStyle = (error) => ({
@@ -36,6 +39,138 @@ function Field({ label, error, required, children }) {
   );
 }
 
+// ─── PDF / Text input panel ────────────────────────────────────
+// Handles both PDF upload and paste-text, triggering onReady(text) when content is ready.
+function DocumentInput({ label, hint, onReady, loading, loadingMsg }) {
+  const [mode, setMode]       = useState('upload'); // 'upload' | 'paste'
+  const [pasteText, setPaste] = useState('');
+  const [fileName, setFileName] = useState('');
+  const [dragOver, setDragOver] = useState(false);
+  const fileRef = useRef(null);
+
+  async function handleFile(file) {
+    if (!file || file.type !== 'application/pdf') return;
+    setFileName(file.name);
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const { data } = await api.post('/customers/parse-pdf', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      onReady(data.text || '');
+    } catch (e) {
+      alert('Could not read PDF — ' + (e.response?.data?.error || e.message));
+      setFileName('');
+    }
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFile(file);
+  }
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: '40px 0' }}>
+        <Loader2 size={32} color="#7B2FBE" style={{ animation: 'spin 1s linear infinite' }} />
+        <p style={{ fontSize: 14, color: '#7B2FBE', margin: 0 }}>{loadingMsg || 'Processing…'}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Mode toggle */}
+      <div style={{ display: 'flex', gap: 0, border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, overflow: 'hidden', alignSelf: 'flex-start' }}>
+        {[['upload', 'Upload PDF'], ['paste', 'Paste Text']].map(([m, lbl]) => (
+          <button
+            key={m}
+            onClick={() => setMode(m)}
+            style={{
+              padding: '7px 16px', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer',
+              background: mode === m ? 'rgba(123,47,190,0.25)' : 'rgba(255,255,255,0.03)',
+              color: mode === m ? '#A78BFA' : '#666',
+              borderRight: m === 'upload' ? '1px solid rgba(255,255,255,0.08)' : 'none',
+            }}
+          >
+            {m === 'upload' ? <><Upload size={11} style={{ marginRight: 5 }} />{lbl}</> : lbl}
+          </button>
+        ))}
+      </div>
+
+      {mode === 'upload' ? (
+        <>
+          {/* Drop zone */}
+          <div
+            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleDrop}
+            onClick={() => fileRef.current?.click()}
+            style={{
+              border: `2px dashed ${dragOver ? '#7B2FBE' : fileName ? 'rgba(0,200,83,0.4)' : 'rgba(255,255,255,0.12)'}`,
+              borderRadius: 12, padding: '36px 24px',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: 10, cursor: 'pointer',
+              background: dragOver ? 'rgba(123,47,190,0.06)' : fileName ? 'rgba(0,200,83,0.04)' : 'rgba(255,255,255,0.02)',
+              transition: 'all 0.15s',
+            }}
+          >
+            {fileName ? (
+              <>
+                <FileText size={28} color="#00C853" />
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ fontSize: 13, color: '#00C853', fontWeight: 600, margin: 0 }}>{fileName}</p>
+                  <p style={{ fontSize: 12, color: '#666', margin: '4px 0 0' }}>PDF uploaded — AI will extract the data</p>
+                </div>
+                <button
+                  onClick={e => { e.stopPropagation(); setFileName(''); fileRef.current.value = ''; }}
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#888', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                >
+                  <X size={11} /> Remove
+                </button>
+              </>
+            ) : (
+              <>
+                <Upload size={28} color="#555" />
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ fontSize: 13, color: '#AAA', fontWeight: 600, margin: 0 }}>Drop PDF here or click to browse</p>
+                  <p style={{ fontSize: 12, color: '#555', margin: '4px 0 0' }}>{hint}</p>
+                </div>
+              </>
+            )}
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".pdf,application/pdf"
+            style={{ display: 'none' }}
+            onChange={e => handleFile(e.target.files?.[0])}
+          />
+        </>
+      ) : (
+        <div>
+          <textarea
+            style={{ ...textareaStyle, minHeight: 220 }}
+            value={pasteText}
+            onChange={e => setPaste(e.target.value)}
+            placeholder={hint}
+          />
+          <button
+            onClick={() => pasteText.trim() && onReady(pasteText)}
+            disabled={!pasteText.trim()}
+            className="btn-primary"
+            style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}
+          >
+            <Sparkles size={13} /> Extract with AI
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Step 0: DC Account Number ─────────────────────────────────
 function StepDcId({ dcId, setDcId, error }) {
   return (
@@ -49,11 +184,10 @@ function StepDcId({ dcId, setDcId, error }) {
           <span style={{ fontSize: 13, fontWeight: 600, color: '#7B2FBE' }}>AI-Assisted Onboarding</span>
         </div>
         <p style={{ fontSize: 13, color: '#AAAAAA', lineHeight: 1.6, margin: 0 }}>
-          Provide the DC account number, paste the customer's application form, and paste their rate card.
+          Provide the DC account number, upload (or paste) the customer's application form PDF, then upload their rate card PDF.
           AI will extract all the details and pre-fill the forms — you just review and confirm.
         </p>
       </div>
-
       <Field label="DC Account Number" required error={error}>
         <input
           style={inputStyle(error)}
@@ -69,39 +203,7 @@ function StepDcId({ dcId, setDcId, error }) {
   );
 }
 
-// ─── Step 1: Application Form ─────────────────────────────────
-function StepApplicationForm({ formText, setFormText, customer, setCustomer, contact, setContact, extracting, onExtract, extracted }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {!extracted ? (
-        <>
-          <Field label="Paste Application Form">
-            <textarea
-              style={{ ...textareaStyle, minHeight: 260 }}
-              value={formText}
-              onChange={e => setFormText(e.target.value)}
-              placeholder="Paste the customer's application form text here — any format is fine. Include company name, address, VAT number, contact details, credit limit, payment terms etc."
-            />
-          </Field>
-          <button
-            className="btn-primary"
-            onClick={onExtract}
-            disabled={extracting || !formText.trim()}
-            style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 8 }}
-          >
-            {extracting ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Extracting…</> : <><Sparkles size={14} /> Extract with AI</>}
-          </button>
-          {extracting && (
-            <p style={{ fontSize: 13, color: '#7B2FBE' }}>AI is reading the form and extracting customer details…</p>
-          )}
-        </>
-      ) : (
-        <CustomerFields customer={customer} setCustomer={setCustomer} contact={contact} setContact={setContact} />
-      )}
-    </div>
-  );
-}
-
+// ─── Customer editable fields (shown after extraction) ─────────
 function CustomerFields({ customer, setCustomer, contact, setContact }) {
   function sc(f, v) { setCustomer(c => ({ ...c, [f]: v })); }
   function sco(f, v) { setContact(c => ({ ...c, [f]: v })); }
@@ -247,20 +349,62 @@ function CustomerFields({ customer, setCustomer, contact, setContact }) {
   );
 }
 
+// ─── Step 1: Application Form ─────────────────────────────────
+function StepApplicationForm({ customer, setCustomer, contact, setContact, formExtracted, setFormExtracted, extractingForm, setExtractingForm, setFormError }) {
+
+  async function handleReady(text) {
+    setExtractingForm(true);
+    setFormError('');
+    try {
+      const data = await customersApi.aiExtract({ application_form_text: text });
+      setCustomer(data.customer || {});
+      setContact(data.contact || {});
+      setFormExtracted(true);
+    } catch (e) {
+      setFormError('AI extraction failed — ' + (e.response?.data?.error || e.message));
+    } finally {
+      setExtractingForm(false);
+    }
+  }
+
+  if (formExtracted) {
+    return <CustomerFields customer={customer} setCustomer={setCustomer} contact={contact} setContact={setContact} />;
+  }
+
+  return (
+    <DocumentInput
+      label="Application Form"
+      hint="Upload or paste the customer's application form — company name, address, VAT number, contact details, credit limit, payment terms etc."
+      onReady={handleReady}
+      loading={extractingForm}
+      loadingMsg="Reading PDF and extracting customer details…"
+    />
+  );
+}
+
 // ─── Step 2: Rate Card ─────────────────────────────────────────
-function StepRateCard({ rateText, setRateText, rates, setRates, extracting, onExtract, extracted }) {
+function StepRateCard({ rates, setRates, ratesExtracted, setRatesExtracted, extractingRates, setExtractingRates, setRateError }) {
+
+  async function handleReady(text) {
+    setExtractingRates(true);
+    setRateError('');
+    try {
+      const data = await customersApi.aiExtractRates({ rate_card_text: text });
+      setRates(data.rates || []);
+      setRatesExtracted(true);
+    } catch (e) {
+      setRateError('Rate extraction failed — ' + (e.response?.data?.error || e.message));
+    } finally {
+      setExtractingRates(false);
+    }
+  }
+
   function updateRate(i, field, value) {
     setRates(rs => rs.map((r, idx) => idx === i ? { ...r, [field]: value } : r));
   }
-  function removeRate(i) {
-    setRates(rs => rs.filter((_, idx) => idx !== i));
-  }
+  function removeRate(i) { setRates(rs => rs.filter((_, idx) => idx !== i)); }
   function addRate() {
-    setRates(rs => [...rs, {
-      service_code: '', service_name: '', courier_name: '',
-      zone_name: '', weight_class_name: '', min_weight_kg: null, max_weight_kg: null,
-      price: '', price_sub: null,
-    }]);
+    setRates(rs => [...rs, { service_code: '', service_name: '', courier_name: '', zone_name: '', weight_class_name: '', min_weight_kg: null, max_weight_kg: null, price: '', price_sub: null }]);
   }
 
   const cellInput = (val, onChange, placeholder = '') => (
@@ -276,85 +420,71 @@ function StepRateCard({ rateText, setRateText, rates, setRates, extracting, onEx
     />
   );
 
+  if (!ratesExtracted) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <DocumentInput
+          label="Rate Card"
+          hint="Upload or paste the customer's rate card — service names, zones, weight bands, prices."
+          onReady={handleReady}
+          loading={extractingRates}
+          loadingMsg="Reading PDF and extracting pricing rows…"
+        />
+        <button
+          className="btn-ghost"
+          onClick={() => { setRates([]); setRatesExtracted(true); }}
+          style={{ alignSelf: 'flex-start', fontSize: 13 }}
+        >
+          Skip — add rates later
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {!extracted ? (
-        <>
-          <Field label="Paste Rate Card">
-            <textarea
-              style={{ ...textareaStyle, minHeight: 280 }}
-              value={rateText}
-              onChange={e => setRateText(e.target.value)}
-              placeholder="Paste the customer's rate card here — any format works (PDF text, spreadsheet paste, table, etc). Include service names, zones, weight bands, and prices."
-            />
-          </Field>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <button
-              className="btn-primary"
-              onClick={onExtract}
-              disabled={extracting || !rateText.trim()}
-              style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-            >
-              {extracting ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Extracting…</> : <><Sparkles size={14} /> Extract Rates with AI</>}
-            </button>
-            <button
-              className="btn-ghost"
-              onClick={() => { setRates([]); onExtract(true); }}
-              style={{ fontSize: 13 }}
-            >
-              Skip — add rates later
-            </button>
-          </div>
-          {extracting && (
-            <p style={{ fontSize: 13, color: '#7B2FBE' }}>AI is reading the rate card and extracting pricing rows…</p>
-          )}
-        </>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ padding: '10px 14px', background: 'rgba(0,200,83,0.08)', border: '1px solid rgba(0,200,83,0.3)', borderRadius: 8, fontSize: 13, color: '#00C853', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Check size={14} /> {rates.length} rate{rates.length !== 1 ? 's' : ''} extracted — review, correct service codes, and remove any incorrect rows.
-          </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ padding: '10px 14px', background: 'rgba(0,200,83,0.08)', border: '1px solid rgba(0,200,83,0.3)', borderRadius: 8, fontSize: 13, color: '#00C853', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Check size={14} /> {rates.length} rate{rates.length !== 1 ? 's' : ''} extracted — review, correct service codes, and remove any incorrect rows.
+      </div>
 
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                  {['Service Code', 'Service Name', 'Carrier', 'Zone', 'Weight Class', 'Min kg', 'Max kg', 'Price £', 'Sub Price £', ''].map(h => (
-                    <th key={h} style={{ padding: '6px 8px', textAlign: 'left', color: '#AAAAAA', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rates.map((r, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <td style={{ padding: '5px 4px', minWidth: 90 }}>{cellInput(r.service_code, v => updateRate(i, 'service_code', v), 'DPD-NX')}</td>
-                    <td style={{ padding: '5px 4px', minWidth: 130 }}>{cellInput(r.service_name, v => updateRate(i, 'service_name', v), 'DPD Next Day')}</td>
-                    <td style={{ padding: '5px 4px', minWidth: 70 }}>{cellInput(r.courier_name, v => updateRate(i, 'courier_name', v), 'DPD')}</td>
-                    <td style={{ padding: '5px 4px', minWidth: 80 }}>{cellInput(r.zone_name, v => updateRate(i, 'zone_name', v), 'Mainland')}</td>
-                    <td style={{ padding: '5px 4px', minWidth: 90 }}>{cellInput(r.weight_class_name, v => updateRate(i, 'weight_class_name', v), '0-5kg')}</td>
-                    <td style={{ padding: '5px 4px', width: 60 }}>{cellInput(r.min_weight_kg, v => updateRate(i, 'min_weight_kg', v === '' ? null : parseFloat(v)), '')}</td>
-                    <td style={{ padding: '5px 4px', width: 60 }}>{cellInput(r.max_weight_kg, v => updateRate(i, 'max_weight_kg', v === '' ? null : parseFloat(v)), '')}</td>
-                    <td style={{ padding: '5px 4px', width: 70 }}>{cellInput(r.price, v => updateRate(i, 'price', v), '0.00')}</td>
-                    <td style={{ padding: '5px 4px', width: 70 }}>{cellInput(r.price_sub, v => updateRate(i, 'price_sub', v === '' ? null : parseFloat(v)), '')}</td>
-                    <td style={{ padding: '5px 4px' }}>
-                      <button onClick={() => removeRate(i)} style={{ background: 'none', border: 'none', color: '#E91E8C', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                        <Trash2 size={13} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+              {['Service Code', 'Service Name', 'Carrier', 'Zone', 'Weight Class', 'Min kg', 'Max kg', 'Price £', 'Sub £', ''].map(h => (
+                <th key={h} style={{ padding: '6px 8px', textAlign: 'left', color: '#AAAAAA', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rates.map((r, i) => (
+              <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                <td style={{ padding: '5px 4px', minWidth: 90 }}>{cellInput(r.service_code, v => updateRate(i, 'service_code', v), 'DPD-NX')}</td>
+                <td style={{ padding: '5px 4px', minWidth: 130 }}>{cellInput(r.service_name, v => updateRate(i, 'service_name', v), 'DPD Next Day')}</td>
+                <td style={{ padding: '5px 4px', minWidth: 70 }}>{cellInput(r.courier_name, v => updateRate(i, 'courier_name', v), 'DPD')}</td>
+                <td style={{ padding: '5px 4px', minWidth: 80 }}>{cellInput(r.zone_name, v => updateRate(i, 'zone_name', v), 'Mainland')}</td>
+                <td style={{ padding: '5px 4px', minWidth: 90 }}>{cellInput(r.weight_class_name, v => updateRate(i, 'weight_class_name', v), '0-5kg')}</td>
+                <td style={{ padding: '5px 4px', width: 60 }}>{cellInput(r.min_weight_kg, v => updateRate(i, 'min_weight_kg', v === '' ? null : parseFloat(v)), '')}</td>
+                <td style={{ padding: '5px 4px', width: 60 }}>{cellInput(r.max_weight_kg, v => updateRate(i, 'max_weight_kg', v === '' ? null : parseFloat(v)), '')}</td>
+                <td style={{ padding: '5px 4px', width: 70 }}>{cellInput(r.price, v => updateRate(i, 'price', v), '0.00')}</td>
+                <td style={{ padding: '5px 4px', width: 70 }}>{cellInput(r.price_sub, v => updateRate(i, 'price_sub', v === '' ? null : parseFloat(v)), '')}</td>
+                <td style={{ padding: '5px 4px' }}>
+                  <button onClick={() => removeRate(i)} style={{ background: 'none', border: 'none', color: '#E91E8C', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                    <Trash2 size={13} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-          <button onClick={addRate} className="btn-ghost" style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-            <Plus size={13} /> Add Row
-          </button>
+      <button onClick={addRate} className="btn-ghost" style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+        <Plus size={13} /> Add Row
+      </button>
 
-          {rates.length === 0 && (
-            <p style={{ fontSize: 13, color: '#666' }}>No rates — customer will be created without any pricing. You can add rates later from the customer record.</p>
-          )}
-        </div>
+      {rates.length === 0 && (
+        <p style={{ fontSize: 13, color: '#666' }}>No rates — customer will be created without pricing. You can add rates later from the customer record.</p>
       )}
     </div>
   );
@@ -366,7 +496,6 @@ function StepConfirm({ dcId, customer, contact, rates }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-
         <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 16 }}>
           <p style={sectionH}>Customer</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -381,7 +510,6 @@ function StepConfirm({ dcId, customer, contact, rates }) {
             <ReviewRow label="Billing" value={`${customer.billing_cycle} / ${customer.payment_terms_days} days`} />
           </div>
         </div>
-
         <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 16 }}>
           <p style={sectionH}>Primary Contact</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -392,7 +520,6 @@ function StepConfirm({ dcId, customer, contact, rates }) {
           </div>
         </div>
       </div>
-
       <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 16 }}>
         <p style={sectionH}>Rates — {validRates.length} rows to import</p>
         {validRates.length === 0 ? (
@@ -432,8 +559,7 @@ function StepIndicator({ current }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', marginBottom: 28 }}>
       {STEPS.map((s, i) => {
-        const done = i < current;
-        const active = i === current;
+        const done = i < current, active = i === current;
         return (
           <div key={i} style={{ display: 'flex', alignItems: 'center', flex: i < STEPS.length - 1 ? 1 : 'none' }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
@@ -496,64 +622,30 @@ function SuccessScreen({ customer, rateResults, navigate }) {
 export default function CustomerAI() {
   const navigate = useNavigate();
 
-  const [step, setStep] = useState(0);
+  const [step, setStep]   = useState(0);
   const [done, setDone]   = useState(false);
   const [result, setResult] = useState(null);
 
   // Step 0
-  const [dcId, setDcId] = useState('');
+  const [dcId, setDcId]         = useState('');
   const [dcIdError, setDcIdError] = useState('');
 
   // Step 1
-  const [formText, setFormText]     = useState('');
-  const [customer, setCustomer]     = useState({});
-  const [contact, setContact]       = useState({});
+  const [customer, setCustomer]         = useState({});
+  const [contact, setContact]           = useState({});
   const [formExtracted, setFormExtracted] = useState(false);
   const [extractingForm, setExtractingForm] = useState(false);
-  const [formError, setFormError]   = useState('');
+  const [formError, setFormError]       = useState('');
 
   // Step 2
-  const [rateText, setRateText]     = useState('');
-  const [rates, setRates]           = useState([]);
+  const [rates, setRates]               = useState([]);
   const [ratesExtracted, setRatesExtracted] = useState(false);
   const [extractingRates, setExtractingRates] = useState(false);
-  const [rateError, setRateError]   = useState('');
+  const [rateError, setRateError]       = useState('');
 
   // Step 3
-  const [saving, setSaving]         = useState(false);
-  const [saveError, setSaveError]   = useState('');
-
-  async function extractForm() {
-    if (!formText.trim()) return;
-    setExtractingForm(true);
-    setFormError('');
-    try {
-      const data = await customersApi.aiExtract({ application_form_text: formText });
-      setCustomer(data.customer || {});
-      setContact(data.contact || {});
-      setFormExtracted(true);
-    } catch (e) {
-      setFormError('AI extraction failed — ' + (e.response?.data?.error || e.message));
-    } finally {
-      setExtractingForm(false);
-    }
-  }
-
-  async function extractRates(skip = false) {
-    if (skip) { setRates([]); setRatesExtracted(true); return; }
-    if (!rateText.trim()) return;
-    setExtractingRates(true);
-    setRateError('');
-    try {
-      const data = await customersApi.aiExtractRates({ rate_card_text: rateText });
-      setRates(data.rates || []);
-      setRatesExtracted(true);
-    } catch (e) {
-      setRateError('Rate extraction failed — ' + (e.response?.data?.error || e.message));
-    } finally {
-      setExtractingRates(false);
-    }
-  }
+  const [saving, setSaving]     = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   async function confirmCreate() {
     setSaving(true);
@@ -576,12 +668,12 @@ export default function CustomerAI() {
       setDcIdError('');
       setStep(1);
     } else if (step === 1) {
-      if (!formExtracted) { setFormError('Please extract the application form first'); return; }
+      if (!formExtracted) { setFormError('Please upload or paste the application form first'); return; }
       if (!customer.business_name) { setFormError('Business name is required — check the extracted data'); return; }
       setFormError('');
       setStep(2);
     } else if (step === 2) {
-      if (!ratesExtracted) { setRateError('Please extract the rate card (or click "Skip")'); return; }
+      if (!ratesExtracted) { setRateError('Please upload or paste the rate card (or click "Skip")'); return; }
       setRateError('');
       setStep(3);
     } else if (step === 3) {
@@ -589,15 +681,13 @@ export default function CustomerAI() {
     }
   }
 
-  function back() {
-    if (step > 0) setStep(s => s - 1);
-  }
+  function back() { if (step > 0) setStep(s => s - 1); }
 
   const stepTitles = ['DC Account Number', 'Application Form', 'Rate Card', 'Review & Confirm'];
   const stepSubtitles = [
     'Provide the DC account number that is already configured in the webhook system.',
-    'Paste the customer application form and let AI extract the details.',
-    'Paste the rate card and let AI extract all pricing rows.',
+    'Upload the PDF or paste the text of the customer application form.',
+    'Upload the PDF or paste the text of the customer rate card.',
     'Review everything and create the customer record.',
   ];
 
@@ -628,23 +718,26 @@ export default function CustomerAI() {
         <p style={{ fontSize: 13, color: '#AAAAAA', marginBottom: 28 }}>{stepSubtitles[step]}</p>
 
         {step === 0 && <StepDcId dcId={dcId} setDcId={setDcId} error={dcIdError} />}
+
         {step === 1 && (
           <StepApplicationForm
-            formText={formText} setFormText={setFormText}
             customer={customer} setCustomer={setCustomer}
             contact={contact} setContact={setContact}
-            extracting={extractingForm} onExtract={extractForm}
-            extracted={formExtracted}
+            formExtracted={formExtracted} setFormExtracted={setFormExtracted}
+            extractingForm={extractingForm} setExtractingForm={setExtractingForm}
+            setFormError={setFormError}
           />
         )}
+
         {step === 2 && (
           <StepRateCard
-            rateText={rateText} setRateText={setRateText}
             rates={rates} setRates={setRates}
-            extracting={extractingRates} onExtract={extractRates}
-            extracted={ratesExtracted}
+            ratesExtracted={ratesExtracted} setRatesExtracted={setRatesExtracted}
+            extractingRates={extractingRates} setExtractingRates={setExtractingRates}
+            setRateError={setRateError}
           />
         )}
+
         {step === 3 && <StepConfirm dcId={dcId} customer={customer} contact={contact} rates={rates} />}
 
         {(formError || rateError || saveError) && (
@@ -658,7 +751,11 @@ export default function CustomerAI() {
           <button className="btn-ghost" onClick={step === 0 ? () => navigate('/customers') : back}>
             <ArrowLeft size={14} /> {step === 0 ? 'Cancel' : 'Back'}
           </button>
-          <button className="btn-primary" onClick={next} disabled={saving || extractingForm || extractingRates}>
+          <button
+            className="btn-primary"
+            onClick={next}
+            disabled={saving || extractingForm || extractingRates}
+          >
             {saving
               ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Creating…</>
               : step === 3

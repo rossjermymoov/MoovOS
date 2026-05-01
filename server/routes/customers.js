@@ -4,6 +4,8 @@
  */
 
 import express from 'express';
+import multer from 'multer';
+import { PDFParse } from 'pdf-parse';
 import { query } from '../db/index.js';
 
 const router = express.Router();
@@ -668,6 +670,30 @@ router.delete('/:id/services/:serviceId', async (req, res, next) => {
       [req.params.id, req.params.serviceId]
     );
     res.json({ deleted: true });
+  } catch (err) { next(err); }
+});
+
+// ─── PDF Text Extraction ─────────────────────────────────────────────────────
+
+// Memory-only upload — no files written to disk
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB max
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === 'application/pdf') cb(null, true);
+    else cb(new Error('Only PDF files are accepted'));
+  },
+});
+
+// POST /api/customers/parse-pdf
+// Accepts a multipart PDF upload, returns { text } with extracted content.
+router.post('/parse-pdf', upload.single('file'), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No PDF file uploaded' });
+    // pdf-parse v2: class-based API — getText() loads internally
+    const parser = new PDFParse({ data: req.file.buffer });
+    const result = await parser.getText();
+    res.json({ text: result.text || '', pages: result.total });
   } catch (err) { next(err); }
 });
 
