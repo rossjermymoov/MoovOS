@@ -5,12 +5,12 @@
  * Tabs: Overview | Matched | Corrected | Unmatched (human review queue) | Mappings
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, RefreshCw, CheckCircle2, AlertTriangle,
-  X, Check, Lock, Send, Download, ChevronRight,
+  X, Check, Lock, Send, Download, ChevronRight, Info,
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -605,8 +605,118 @@ function ServiceCodeMappingBanner({ unmatchedLines, runId, courierId, onMapped }
   );
 }
 
+// ─── Trace modal ──────────────────────────────────────────────────────────────
+function TraceModal({ runId, lineId, trackingNumber, onClose }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    api.get(`/reconciliation/runs/${runId}/lines/${lineId}/trace`)
+      .then(r => { setData(r.data); setLoading(false); })
+      .catch(e => { setErr(e.response?.data?.error || 'Failed to load trace'); setLoading(false); });
+  }, [runId, lineId]);
+
+  const stepColor = s => s === 'ok' ? '#00C853' : s === 'warn' ? '#FF8F00' : s === 'error' ? '#FF5252' : '#AAA';
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 1000,
+      background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }} onClick={onClose}>
+      <div style={{
+        background: '#0d1117', border: '1px solid rgba(255,255,255,0.12)',
+        borderRadius: 12, padding: 24, width: 640, maxHeight: '80vh',
+        overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
+      }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#E6EDF3', marginBottom: 4 }}>
+              Reconciliation Trace
+            </div>
+            <div style={{ fontSize: 11, color: '#555', fontFamily: 'monospace' }}>
+              {trackingNumber || `line #${lineId}`}
+            </div>
+          </div>
+          <button style={{ ...btnGhost, padding: '4px 8px' }} onClick={onClose}>
+            <X size={13} />
+          </button>
+        </div>
+
+        {loading && (
+          <div style={{ textAlign: 'center', color: '#555', fontSize: 12, padding: '30px 0' }}>
+            <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite', marginBottom: 8 }} />
+            <div>Loading trace…</div>
+          </div>
+        )}
+
+        {err && (
+          <div style={{ color: '#FF5252', fontSize: 12, padding: '20px 0', textAlign: 'center' }}>
+            {err}
+          </div>
+        )}
+
+        {data && data.steps && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {data.steps.map((step, i) => (
+              <div key={i} style={{
+                background: 'rgba(255,255,255,0.03)',
+                border: `1px solid rgba(255,255,255,${step.status === 'error' ? '0.15' : '0.06'})`,
+                borderRadius: 8, padding: '10px 14px',
+                borderLeft: `3px solid ${stepColor(step.status)}`,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#E6EDF3' }}>
+                    {i + 1}. {step.label}
+                  </span>
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
+                    color: stepColor(step.status),
+                  }}>
+                    {step.status}
+                  </span>
+                </div>
+                <div style={{ fontSize: 11, color: '#888', lineHeight: 1.5 }}>
+                  {step.detail}
+                </div>
+                {step.value != null && (
+                  <div style={{
+                    marginTop: 6, fontSize: 12, fontWeight: 700,
+                    color: step.status === 'error' ? '#FF5252' : step.status === 'warn' ? '#FF8F00' : '#E6EDF3',
+                  }}>
+                    {step.value}
+                  </div>
+                )}
+                {step.meta && Object.keys(step.meta).length > 0 && (
+                  <div style={{
+                    marginTop: 8, padding: '6px 10px',
+                    background: 'rgba(255,255,255,0.03)', borderRadius: 6,
+                    display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 16px',
+                  }}>
+                    {Object.entries(step.meta).map(([k, v]) => (
+                      <div key={k} style={{ fontSize: 10, color: '#555' }}>
+                        <span style={{ color: '#444' }}>{k}: </span>
+                        <span style={{ color: '#888', fontFamily: 'monospace' }}>{String(v)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      </div>
+    </div>
+  );
+}
+
 // ─── Lines table ──────────────────────────────────────────────────────────────
-function LinesTable({ lines, showResolve, onResolve }) {
+function LinesTable({ lines, showResolve, onResolve, runId }) {
+  const [traceLine, setTraceLine] = useState(null);
   return (
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
@@ -657,11 +767,22 @@ function LinesTable({ lines, showResolve, onResolve }) {
                 )}
               </td>
               <td style={{ padding: '9px 10px' }}>
-                {showResolve && line.status === 'unmatched' && (
-                  <button style={{ ...btnGhost, padding: '4px 8px', fontSize: 10 }} onClick={() => onResolve(line)}>
-                    Resolve
-                  </button>
-                )}
+                <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                  {showResolve && line.status === 'unmatched' && (
+                    <button style={{ ...btnGhost, padding: '4px 8px', fontSize: 10 }} onClick={() => onResolve(line)}>
+                      Resolve
+                    </button>
+                  )}
+                  {runId && (
+                    <button
+                      title="Show reconciliation decision trace"
+                      style={{ ...btnGhost, padding: '4px 7px', fontSize: 10 }}
+                      onClick={() => setTraceLine(line)}
+                    >
+                      <Info size={11} />
+                    </button>
+                  )}
+                </div>
               </td>
             </tr>
           ))}
@@ -669,6 +790,14 @@ function LinesTable({ lines, showResolve, onResolve }) {
       </table>
       {lines.length === 0 && (
         <div style={{ textAlign: 'center', color: '#555', fontSize: 12, padding: '30px 0' }}>No lines in this category</div>
+      )}
+      {traceLine && runId && (
+        <TraceModal
+          runId={runId}
+          lineId={traceLine.id}
+          trackingNumber={traceLine.tracking_number}
+          onClose={() => setTraceLine(null)}
+        />
       )}
     </div>
   );
@@ -1106,6 +1235,7 @@ export default function RunDetailPage() {
               lines={unmatchedLines}
               showResolve
               onResolve={setResolvingLine}
+              runId={id}
             />
           </div>
         </>
@@ -1118,6 +1248,7 @@ export default function RunDetailPage() {
             lines={currentLines}
             showResolve={false}
             onResolve={setResolvingLine}
+            runId={id}
           />
         </div>
       )}
