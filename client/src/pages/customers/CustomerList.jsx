@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, ChevronDown, Filter, ShieldCheck } from 'lucide-react';
+import { Search, Plus, ChevronDown, Filter, ShieldCheck, Sparkles } from 'lucide-react';
 import { customersApi } from '../../api/customers';
 import { HealthBadge, AccountStatusBadge, TierBadge, CreditUtilisationBar } from '../../components/ui/StatusBadge';
 import { format } from 'date-fns';
@@ -62,6 +62,10 @@ export default function CustomerList() {
                 {activeFilterCount}
               </span>
             )}
+          </button>
+          <button className="btn-ghost" onClick={() => navigate('/customers/ai-new')}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Sparkles size={14} color="#7B2FBE" /> AI Onboarding
           </button>
           <button className="btn-primary" onClick={() => navigate('/customers/new')}>
             <Plus size={14} /> Add Customer

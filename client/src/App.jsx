@@ -5,6 +5,7 @@ import LoginPage from './pages/auth/LoginPage';
 import CustomerList from './pages/customers/CustomerList';
 import CustomerRecord from './pages/customers/CustomerRecord';
 import CustomerNew from './pages/customers/CustomerNew';
+import CustomerAI from './pages/customers/CustomerAI';
 import StaffSettings from './pages/settings/StaffSettings';
 import RulesSettings from './pages/settings/RulesSettings';
 import BillingSettings from './pages/settings/BillingSettings';
@@ -78,6 +79,7 @@ function AppRoutes() {
         <Route path="customers">
           <Route index element={<CustomerList />} />
           <Route path="new" element={<CustomerNew />} />
+          <Route path="ai-new" element={<CustomerAI />} />
           <Route path=":id" element={<CustomerRecord />} />
         </Route>
 

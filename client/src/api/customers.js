@@ -28,8 +28,8 @@ export const customersApi = {
     api.post(`/customers/${customerId}/volume-alerts/${alertId}/dismiss`, { note, staff_id })
        .then(r => r.data),
 
-  addBillingAlias: (id, alias) =>
-    api.post(`/customers/${id}/billing-aliases`, { alias }).then(r => r.data),
-  removeBillingAlias: (id, alias) =>
-    api.delete(`/customers/${id}/billing-aliases/${encodeURIComponent(alias)}`).then(r => r.data),
+  // AI-assisted onboarding
+  aiExtract:      (data) => api.post('/customers/ai-extract',       data).then(r => r.data),
+  aiExtractRates: (data) => api.post('/customers/ai-extract-rates', data).then(r => r.data),
+  aiOnboard:      (data) => api.post('/customers/ai-onboard',       data).then(r => r.data),
 };

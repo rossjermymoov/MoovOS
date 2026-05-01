@@ -671,4 +671,273 @@ router.delete('/:id/services/:serviceId', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── AI-Assisted Onboarding ──────────────────────────────────────────────────
+
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const AI_MODEL = 'claude-haiku-4-5-20251001';
+
+async function callAI(systemPrompt, userContent) {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: AI_MODEL,
+      max_tokens: 4096,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userContent }],
+    }),
+  });
+  if (!response.ok) throw new Error(`Anthropic API error: ${response.status}`);
+  const data = await response.json();
+  const text = data.content?.[0]?.text ?? '';
+  // Extract JSON from response (may be wrapped in markdown code block)
+  const match = text.match(/```json\s*([\s\S]*?)```/i) || text.match(/(\{[\s\S]*\})/);
+  if (!match) throw new Error('AI returned no parseable JSON');
+  return JSON.parse(match[1]);
+}
+
+// POST /api/customers/ai-extract
+// Takes application_form_text, returns structured customer + contact data
+router.post('/ai-extract', async (req, res, next) => {
+  try {
+    const { application_form_text } = req.body;
+    if (!application_form_text) return res.status(400).json({ error: 'application_form_text required' });
+
+    const system = `You are a data extraction assistant for a UK parcel courier reseller.
+Extract structured business information from a customer application form.
+Respond with ONLY valid JSON in this exact structure:
+{
+  "customer": {
+    "business_name": "",
+    "company_type": "limited_company|partnership|sole_trader",
+    "company_reg_number": "",
+    "vat_number": "",
+    "address_line_1": "",
+    "address_line_2": "",
+    "city": "",
+    "county": "",
+    "postcode": "",
+    "country": "United Kingdom",
+    "phone_number": "",
+    "primary_email": "",
+    "accounts_email": "",
+    "eori_number": "",
+    "ioss_number": "",
+    "credit_limit": 0,
+    "billing_cycle": "weekly|fortnightly|monthly",
+    "payment_terms_days": 30,
+    "tier": "bronze|silver|gold|enterprise"
+  },
+  "contact": {
+    "full_name": "",
+    "job_title": "",
+    "email_address": "",
+    "phone_number": "",
+    "is_main_contact": true,
+    "is_finance_contact": false
+  }
+}
+Rules:
+- Use empty string "" for any field not found in the form
+- For credit_limit: extract numeric value in £, default 0 if not found
+- For billing_cycle: infer from payment terms text (weekly/fortnightly/monthly), default "monthly"
+- For payment_terms_days: extract numeric days (7, 14, 28, 30), default 30
+- For tier: infer from volume/spend level if mentioned (bronze=low, silver=mid, gold=high, enterprise=very high), default "bronze"
+- For company_type: infer from "Ltd"→limited_company, "LLP"/"Partnership"→partnership, "Sole Trader"→sole_trader, default "limited_company"
+- Postcodes must be uppercase UK format
+- Phone numbers in UK format starting with 0 or +44`;
+
+    const result = await callAI(system, `Extract data from this application form:\n\n${application_form_text}`);
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+// POST /api/customers/ai-extract-rates
+// Takes rate_card_text, returns array of rate rows
+router.post('/ai-extract-rates', async (req, res, next) => {
+  try {
+    const { rate_card_text } = req.body;
+    if (!rate_card_text) return res.status(400).json({ error: 'rate_card_text required' });
+
+    // Fetch existing service codes from DB to help the AI match
+    const servicesRes = await query(`
+      SELECT DISTINCT service_code, service_name, courier_code, courier_name
+      FROM customer_rates
+      ORDER BY service_code
+      LIMIT 100
+    `);
+    const existingServices = servicesRes.rows.map(r =>
+      `${r.service_code} (${r.service_name}) — ${r.courier_name}`
+    ).join('\n');
+
+    const system = `You are a data extraction assistant for a UK parcel courier reseller.
+Extract pricing data from a rate card document.
+
+KNOWN SERVICE CODES IN OUR SYSTEM:
+${existingServices || '(none yet — use your best guess based on carrier and service name)'}
+
+Respond with ONLY valid JSON:
+{
+  "rates": [
+    {
+      "service_code": "e.g. DPD-NX",
+      "service_name": "e.g. DPD Next Day",
+      "courier_name": "e.g. DPD",
+      "zone_name": "e.g. Mainland",
+      "weight_class_name": "e.g. 0-5kg",
+      "min_weight_kg": 0,
+      "max_weight_kg": 5,
+      "price": 6.50,
+      "price_sub": null
+    }
+  ]
+}
+Rules:
+- Extract EVERY pricing row from the rate card as a separate entry
+- service_code: match to KNOWN SERVICE CODES above if carrier/service matches; otherwise construct as CARRIER-ABBREV (e.g. DPD Next Day → DPD-NX, Evri Standard → EV-STD)
+- zone_name: use the zone name exactly as shown in the rate card
+- weight_class_name: format as "Xkg-Ykg" or "0-Xkg" or "FlatRate" for single-price services
+- min_weight_kg/max_weight_kg: numeric kg values; use null for flat-rate (no weight bands)
+- price: the sell price in £ as a decimal number (do NOT include £ symbol)
+- price_sub: price per additional parcel in same consignment, or null if not specified
+- All prices as numeric values, not strings`;
+
+    const result = await callAI(system, `Extract rate card pricing from this document:\n\n${rate_card_text}`);
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+// POST /api/customers/ai-onboard
+// Creates customer + contact + rates in one transaction
+router.post('/ai-onboard', async (req, res, next) => {
+  try {
+    const { dc_id, customer: cd, contact: co, rates = [] } = req.body;
+
+    if (!cd?.business_name) return res.status(400).json({ error: 'business_name required' });
+
+    // ─── 1. Create customer record ────────────────────────────────
+    const custRes = await query(`
+      INSERT INTO customers (
+        business_name, company_type, company_reg_number, vat_number,
+        address_line_1, address_line_2, city, county, postcode, country,
+        phone_number, primary_email, accounts_email, eori_number, ioss_number,
+        tier, credit_limit, billing_cycle, payment_terms_days,
+        dc_id, account_status, vat_enabled
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
+        $16,$17,$18,$19,$20,'active',true
+      ) RETURNING *
+    `, [
+      cd.business_name,
+      cd.company_type || 'limited_company',
+      cd.company_reg_number || null,
+      cd.vat_number || null,
+      cd.address_line_1 || null,
+      cd.address_line_2 || null,
+      cd.city || null,
+      cd.county || null,
+      cd.postcode || null,
+      cd.country || 'United Kingdom',
+      cd.phone_number || null,
+      cd.primary_email || null,
+      cd.accounts_email || null,
+      cd.eori_number || null,
+      cd.ioss_number || null,
+      cd.tier || 'bronze',
+      parseFloat(cd.credit_limit) || 0,
+      cd.billing_cycle || 'monthly',
+      parseInt(cd.payment_terms_days) || 30,
+      dc_id || null,
+    ]);
+    const customer = custRes.rows[0];
+
+    // ─── 2. Create primary contact ─────────────────────────────────
+    if (co?.full_name) {
+      await query(`
+        INSERT INTO customer_contacts
+          (customer_id, full_name, job_title, email_address, phone_number,
+           is_main_contact, is_finance_contact)
+        VALUES ($1,$2,$3,$4,$5,$6,$7)
+      `, [
+        customer.id,
+        co.full_name,
+        co.job_title || null,
+        co.email_address || null,
+        co.phone_number || null,
+        co.is_main_contact !== false,
+        co.is_finance_contact === true,
+      ]);
+    }
+
+    // ─── 3. Insert customer rates ──────────────────────────────────
+    const rateResults = { inserted: 0, skipped: [] };
+
+    for (const rate of rates) {
+      const { service_code, service_name, courier_name, zone_name,
+              weight_class_name, min_weight_kg, max_weight_kg, price, price_sub } = rate;
+
+      if (!service_code || !zone_name || price == null) {
+        rateResults.skipped.push({ rate, reason: 'missing service_code, zone_name, or price' });
+        continue;
+      }
+
+      // Resolve service and courier IDs from DB
+      const svcRes = await query(`
+        SELECT cs.id AS service_id, cs.courier_id, cs.service_code, cs.name AS service_name,
+               c.code AS courier_code, c.name AS courier_name_db
+        FROM courier_services cs
+        JOIN couriers c ON c.id = cs.courier_id
+        WHERE cs.service_code ILIKE $1
+        LIMIT 1
+      `, [service_code]);
+
+      if (!svcRes.rows.length) {
+        rateResults.skipped.push({ rate, reason: `service_code '${service_code}' not found in DB` });
+        continue;
+      }
+
+      const svc = svcRes.rows[0];
+
+      try {
+        await query(`
+          INSERT INTO customer_rates
+            (customer_id, courier_id, courier_code, courier_name,
+             service_id, service_code, service_name,
+             zone_name, weight_class_name,
+             min_weight_kg, max_weight_kg,
+             price, price_sub)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+          ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
+          DO UPDATE SET
+            price     = EXCLUDED.price,
+            price_sub = EXCLUDED.price_sub
+        `, [
+          customer.id,
+          svc.courier_id,
+          svc.courier_code,
+          svc.courier_name_db,
+          svc.service_id,
+          svc.service_code,
+          service_name || svc.service_name,
+          zone_name,
+          weight_class_name || 'Parcel',
+          min_weight_kg ?? null,
+          max_weight_kg ?? null,
+          parseFloat(price),
+          price_sub != null ? parseFloat(price_sub) : null,
+        ]);
+        rateResults.inserted++;
+      } catch (rateErr) {
+        rateResults.skipped.push({ rate, reason: rateErr.message });
+      }
+    }
+
+    res.status(201).json({ customer, rates: rateResults });
+  } catch (err) { next(err); }
+});
+
 export default router;
