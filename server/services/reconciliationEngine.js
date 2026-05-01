@@ -99,12 +99,21 @@ function poolLookup(pool, trackKey) {
  * Only global mappings (customer_id IS NULL) are loaded here; customer-specific
  * mappings are checked per-line after the customer is known.
  */
+/**
+ * Returns { serviceMap, surchargeMap } for this carrier.
+ *
+ * serviceMap:  { [RAW_CODE_UPPER]: service_id }   — delivery service mappings
+ * surchargeMap: { [RAW_CODE_UPPER]: surcharge_id } — surcharge mappings
+ *
+ * A raw carrier code can map to EITHER a service OR a surcharge, never both.
+ * When a surcharge mapping exists, Phase 1b marks the line as corrected
+ * immediately (the carrier charge is a known named surcharge — no price-comparison).
+ */
 async function buildServiceCodeMap(carrierId) {
-  const map = {};
+  const serviceMap   = {};
+  const surchargeMap = {};
 
   // ── Layer 2 first (lower priority) — implied from service_code suffix ────
-  // Load every service for this carrier and derive the short code automatically.
-  // 'DHL-220' → suffix '220'; 'DHL-PCUK-220' → suffix '220'; 'DHL-1' → '1'
   const svcs = await query(
     `SELECT id AS service_id, service_code
      FROM   courier_services
@@ -117,27 +126,33 @@ async function buildServiceCodeMap(carrierId) {
     const parts   = code.split('-');
     const suffix  = parts[parts.length - 1].trim().toUpperCase();
 
-    // Full service_code (e.g. "DHL-220") is also a valid match
-    if (!map[codeUp]) map[codeUp] = row.service_id;
-    // Short suffix (e.g. "220") implied from the service_code
-    if (suffix && suffix !== codeUp && !map[suffix]) map[suffix] = row.service_id;
+    if (!serviceMap[codeUp]) serviceMap[codeUp] = row.service_id;
+    if (suffix && suffix !== codeUp && !serviceMap[suffix]) serviceMap[suffix] = row.service_id;
   }
 
   // ── Layer 1 (higher priority) — explicit saved rules ─────────────────────
   const explicit = await query(
-    `SELECT courier_code, service_id
+    `SELECT courier_code, service_id, surcharge_id
      FROM   courier_service_code_mappings
      WHERE  carrier_id = $1 AND is_active = true AND customer_id IS NULL`,
     [carrierId]
   );
   for (const row of explicit.rows) {
-    map[row.courier_code.trim().toUpperCase()] = row.service_id; // overwrites implied
+    const key = row.courier_code.trim().toUpperCase();
+    if (row.surcharge_id) {
+      // Surcharge mapping — remove from service map if it was implied there
+      delete serviceMap[key];
+      surchargeMap[key] = row.surcharge_id;
+    } else if (row.service_id) {
+      serviceMap[key] = row.service_id; // overwrites implied
+    }
   }
 
-  const impliedCount  = Object.keys(map).length - explicit.rows.length;
-  console.log(`[recon engine] Service code map for carrier ${carrierId}: ${explicit.rows.length} explicit + ${impliedCount} implied entries`);
+  const surchargeCount = Object.keys(surchargeMap).length;
+  const impliedCount   = Object.keys(serviceMap).length - (explicit.rows.filter(r => r.service_id).length);
+  console.log(`[recon engine] Code map for carrier ${carrierId}: ${explicit.rows.length} explicit (${surchargeCount} surcharge) + ${impliedCount} implied service entries`);
 
-  return map;
+  return { serviceMap, surchargeMap };
 }
 
 /**
@@ -733,7 +748,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   );
 
   // ── Phase 1b: Build service code map ──────────────────────────────────────
-  const serviceCodeMap = await buildServiceCodeMap(carrierId);
+  const { serviceMap: serviceCodeMap, surchargeMap } = await buildServiceCodeMap(carrierId);
 
   // ── Pre-condition: Build Verified Pool ────────────────────────────────────
   const { pool, poolSize } = await buildVerifiedPool(carrierId);
@@ -776,7 +791,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   for (const [trackKey, group] of trackingGroups) {
     try {
       const groupResults = await processTrackingGroup(
-        group, trackKey, runId, carrierId, serviceCodeMap, pool, mappings
+        group, trackKey, runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings
       );
 
       for (const r of groupResults) {
@@ -842,10 +857,10 @@ export async function processReconciliationRun(runId, carrierId, lines) {
 // compare the SUM against the base cost_price (fuel is billed separately as an
 // aggregate line for carriers like DHL — so base-only comparison is correct).
 
-async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCodeMap, pool, mappings) {
+async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings) {
   // Single-line shortcut
   if (group.length === 1) {
-    const result = await processLine(group[0], runId, carrierId, serviceCodeMap, pool, mappings);
+    const result = await processLine(group[0], runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings);
     return [result];
   }
 
@@ -854,6 +869,36 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
   const rawServiceCode = String(firstLine.service_code || '').trim();
   const mappedKey      = rawServiceCode.toUpperCase();
   const serviceId      = serviceCodeMap[mappedKey] || null;
+
+  // ── Surcharge mapping check — before the hard service-code gate ───────────
+  // If the raw carrier code maps to a known surcharge, auto-correct all lines
+  // in this group without going through pool/price comparison.
+  if (!serviceId && surchargeMap[mappedKey]) {
+    const surchargeId = surchargeMap[mappedKey];
+    console.log(`[recon engine] Raw code "${rawServiceCode}" (multi-parcel) — matched surcharge ${surchargeId}`);
+    const totalAmount = round2(group.reduce((s, l) => s + (parseFloat(l.carrier_amount) || 0), 0));
+    for (const line of group) {
+      await insertLine(runId, {
+        tracking_number:          String(line.tracking_number || '').trim(),
+        carrier_account_no:       line.account_number || null,
+        raw_service_code:         rawServiceCode,
+        charge_type:              line.charge_type || 'surcharge',
+        carrier_amount:           round2(parseFloat(line.carrier_amount) || 0),
+        carrier_billed_weight_kg: line.billed_weight_kg || null,
+        service_id:               null,
+        customer_id:              null,
+        charge_id:                null,
+        expected_amount:          null,
+        delta:                    null,
+        status:                   'corrected',
+        corrected_by:             'surcharge_mapping',
+        unmatched_reason:         null,
+        source:                   'internal',
+        suggested_service_id:     null,
+      });
+    }
+    return group.map(() => ({ status: 'corrected' }));
+  }
 
   if (!serviceId) {
     // Unknown service code — hard gate; all lines in group go unmatched.
@@ -986,7 +1031,7 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
 
 // ─── Process a single line ────────────────────────────────────────────────────
 
-async function processLine(line, runId, carrierId, serviceCodeMap, pool, mappings) {
+async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings) {
   const trackingNumber = String(line.tracking_number || '').trim();
   const trackKey       = trackingNumber.toUpperCase();
   const rawServiceCode = String(line.service_code   || '').trim();
@@ -995,6 +1040,32 @@ async function processLine(line, runId, carrierId, serviceCodeMap, pool, mapping
   // ── Phase 1b: Service code normalisation ──────────────────────────────────
   const mappedKey = rawServiceCode.toUpperCase();
   const serviceId = serviceCodeMap[mappedKey] || null;
+
+  // ── Surcharge mapping check — before the hard unknown-code gate ───────────
+  // If the raw carrier code is mapped to a known surcharge, auto-correct immediately.
+  if (!serviceId && surchargeMap[mappedKey]) {
+    const surchargeId = surchargeMap[mappedKey];
+    console.log(`[recon engine] Raw code "${rawServiceCode}" — matched surcharge ${surchargeId}`);
+    await insertLine(runId, {
+      tracking_number:          trackingNumber,
+      carrier_account_no:       line.account_number || null,
+      raw_service_code:         rawServiceCode,
+      charge_type:              line.charge_type || 'surcharge',
+      carrier_amount:           carrierAmount,
+      carrier_billed_weight_kg: line.billed_weight_kg || null,
+      service_id:               null,
+      customer_id:              null,
+      charge_id:                null,
+      expected_amount:          null,
+      delta:                    null,
+      status:                   'corrected',
+      corrected_by:             'surcharge_mapping',
+      unmatched_reason:         null,
+      source:                   'internal',
+      suggested_service_id:     null,
+    });
+    return { status: 'corrected' };
+  }
 
   if (!serviceId) {
     // Smart suggestion: use tracking number to find the likely correct service

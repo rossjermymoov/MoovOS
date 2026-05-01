@@ -65,7 +65,11 @@ function StatusBadge({ status }) {
 }
 
 // ─── Unmatched reason label ───────────────────────────────────────────────────
-function ReasonLabel({ reason }) {
+function ReasonLabel({ reason, correctedBy }) {
+  // corrected_by values from the engine
+  if (correctedBy === 'surcharge_mapping') {
+    return <span style={{ fontSize: 10, color: '#00C853', fontWeight: 600 }}>Surcharge mapping</span>;
+  }
   const labels = {
     unknown_service_code:    { text: 'Unknown service code', color: '#FF5252' },
     no_account_mapping:      { text: 'Account not mapped',   color: '#FFB300' },
@@ -99,10 +103,18 @@ function ResolveDrawer({ line, courierId, onClose, onResolved }) {
   const [loading,  setLoading] = useState(false);
   const [error,    setError]   = useState('');
 
+  const isSurchargeMapping = resolutionType === 'map_to_surcharge';
+
   const { data: services = [] } = useQuery({
     queryKey: ['recon-services', courierId],
     queryFn:  () => api.get(`/reconciliation/courier-services?carrier_id=${courierId}`).then(r => r.data),
     enabled:  !!courierId,
+  });
+
+  const { data: surcharges = [] } = useQuery({
+    queryKey: ['recon-surcharges', courierId],
+    queryFn:  () => api.get(`/reconciliation/surcharges?carrier_id=${courierId}`).then(r => r.data),
+    enabled:  !!courierId && (isUnknownCode || resolutionType === 'map_to_surcharge'),
   });
 
   const suggestedMappingType = {
@@ -226,14 +238,38 @@ function ResolveDrawer({ line, courierId, onClose, onResolved }) {
           </div>
         )}
 
-        {/* Resolution type — hidden for unknown_service_code (always map_to_service) */}
-        {!isUnknownCode && (
+        {/* Resolution type — for unknown_service_code show both service and surcharge mapping options */}
+        {isUnknownCode ? (
+          <div>
+            <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 6, fontWeight: 600 }}>RESOLUTION TYPE</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {[
+                { val: 'map_to_service',   label: 'Delivery Service', desc: 'Base freight service (e.g. DHL Next Day)' },
+                { val: 'map_to_surcharge', label: 'Surcharge',        desc: 'Named fee (e.g. congestion, remote area)' },
+              ].map(opt => (
+                <button
+                  key={opt.val}
+                  onClick={() => { setResolutionType(opt.val); setResolutionValue(''); }}
+                  style={{
+                    padding: '9px 11px', borderRadius: 7, cursor: 'pointer', textAlign: 'left',
+                    background: resolutionType === opt.val ? 'rgba(0,200,83,0.1)' : 'rgba(255,255,255,0.04)',
+                    border: `1px solid ${resolutionType === opt.val ? 'rgba(0,200,83,0.35)' : 'rgba(255,255,255,0.08)'}`,
+                  }}
+                >
+                  <div style={{ fontSize: 12, fontWeight: 700, color: resolutionType === opt.val ? '#00C853' : '#E6EDF3' }}>{opt.label}</div>
+                  <div style={{ fontSize: 10, color: '#666', marginTop: 2 }}>{opt.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
           <div>
             <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 6, fontWeight: 600 }}>RESOLUTION TYPE</label>
             <select style={inputSt} value={resolutionType} onChange={e => setResolutionType(e.target.value)}>
               <option value=''>— Select type —</option>
               <option value='accept'>Accept charge as-is</option>
               <option value='map_to_service'>Map to internal service</option>
+              <option value='map_to_surcharge'>Map to surcharge</option>
               <option value='map_to_customer'>Map account to customer</option>
               <option value='accept_delta'>Accept delta as tolerance</option>
               <option value='reject'>Reject / dispute charge</option>
@@ -242,7 +278,7 @@ function ResolveDrawer({ line, courierId, onClose, onResolved }) {
         )}
 
         {/* Service mapping dropdown */}
-        {(isUnknownCode || resolutionType === 'map_to_service') && (
+        {(resolutionType === 'map_to_service') && (
           <div>
             <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 6, fontWeight: 600 }}>
               MAP "{line.raw_service_code}" TO INTERNAL SERVICE *
@@ -260,6 +296,32 @@ function ResolveDrawer({ line, courierId, onClose, onResolved }) {
                 </option>
               ))}
             </select>
+          </div>
+        )}
+
+        {/* Surcharge mapping dropdown */}
+        {(resolutionType === 'map_to_surcharge') && (
+          <div>
+            <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 6, fontWeight: 600 }}>
+              MAP "{line.raw_service_code}" TO SURCHARGE *
+            </label>
+            <select
+              style={inputSt}
+              value={resolutionValue}
+              onChange={e => setResolutionValue(e.target.value)}
+            >
+              <option value=''>— Select surcharge —</option>
+              {surcharges.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.name} ({s.code})
+                </option>
+              ))}
+            </select>
+            {surcharges.length === 0 && (
+              <div style={{ fontSize: 10, color: '#FFB300', marginTop: 4 }}>
+                No surcharges configured for this carrier yet. Add them in Settings → Surcharges first.
+              </div>
+            )}
           </div>
         )}
 
@@ -318,8 +380,8 @@ function ResolveDrawer({ line, courierId, onClose, onResolved }) {
             </div>
           </label>
 
-          {/* Rule scope — only visible when saving a service code mapping */}
-          {saveRule && isUnknownCode && (
+          {/* Rule scope — visible when saving a service code OR surcharge mapping */}
+          {saveRule && (isUnknownCode || resolutionType === 'map_to_surcharge') && (
             <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
               <div style={{ fontSize: 11, color: '#888', fontWeight: 600, marginBottom: 8 }}>APPLIES TO</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -589,8 +651,10 @@ function LinesTable({ lines, showResolve, onResolve }) {
               </td>
               <td style={{ padding: '9px 10px' }}><StatusBadge status={line.status} /></td>
               <td style={{ padding: '9px 10px' }}>
-                <ReasonLabel reason={line.unmatched_reason} />
-                {line.corrected_by && <span style={{ fontSize: 10, color: '#666' }}>via {line.corrected_by}</span>}
+                <ReasonLabel reason={line.unmatched_reason} correctedBy={line.corrected_by} />
+                {line.corrected_by && line.corrected_by !== 'surcharge_mapping' && (
+                  <span style={{ fontSize: 10, color: '#666' }}>via {line.corrected_by}</span>
+                )}
               </td>
               <td style={{ padding: '9px 10px' }}>
                 {showResolve && line.status === 'unmatched' && (

@@ -936,10 +936,14 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
     }
 
     // If this was an unknown_service_code, save to courier_service_code_mappings.
+    // Supports:
+    //   - map_to_service:   resolution_value = service_id (integer)
+    //   - map_to_surcharge: resolution_value = surcharge_id (UUID)
     // Supports customer_id = null (global) or a specific UUID (customer-specific rule).
     // Uses manual upsert to handle partial unique indexes correctly with NULLs.
     if (scope === 'always' && line.unmatched_reason === 'unknown_service_code' && resolution_value) {
       const custId = customer_id || null;
+      const isSurchargeMapping = resolution_type === 'map_to_surcharge';
 
       const existingMapping = await query(`
         SELECT id FROM courier_service_code_mappings
@@ -950,24 +954,47 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
       `, [line.carrier_id, line.raw_service_code, custId]);
 
       if (existingMapping.rows.length) {
-        await query(`
-          UPDATE courier_service_code_mappings
-          SET    service_id = $1, is_active = true
-          WHERE  id = $2
-        `, [parseInt(resolution_value), existingMapping.rows[0].id]);
+        if (isSurchargeMapping) {
+          await query(`
+            UPDATE courier_service_code_mappings
+            SET    service_id = NULL, surcharge_id = $1, is_active = true
+            WHERE  id = $2
+          `, [resolution_value, existingMapping.rows[0].id]);
+        } else {
+          await query(`
+            UPDATE courier_service_code_mappings
+            SET    service_id = $1, surcharge_id = NULL, is_active = true
+            WHERE  id = $2
+          `, [parseInt(resolution_value), existingMapping.rows[0].id]);
+        }
       } else {
-        await query(`
-          INSERT INTO courier_service_code_mappings
-            (carrier_id, courier_code, service_id, customer_id, created_by, created_from_run_id)
-          VALUES ($1,$2,$3,$4,$5,$6)
-        `, [
-          line.carrier_id,
-          line.raw_service_code,
-          parseInt(resolution_value),
-          custId,
-          req.user?.id || null,
-          line.run_id,
-        ]);
+        if (isSurchargeMapping) {
+          await query(`
+            INSERT INTO courier_service_code_mappings
+              (carrier_id, courier_code, service_id, surcharge_id, customer_id, created_by, created_from_run_id)
+            VALUES ($1,$2,NULL,$3,$4,$5,$6)
+          `, [
+            line.carrier_id,
+            line.raw_service_code,
+            resolution_value,
+            custId,
+            req.user?.id || null,
+            line.run_id,
+          ]);
+        } else {
+          await query(`
+            INSERT INTO courier_service_code_mappings
+              (carrier_id, courier_code, service_id, surcharge_id, customer_id, created_by, created_from_run_id)
+            VALUES ($1,$2,$3,NULL,$4,$5,$6)
+          `, [
+            line.carrier_id,
+            line.raw_service_code,
+            parseInt(resolution_value),
+            custId,
+            req.user?.id || null,
+            line.run_id,
+          ]);
+        }
       }
     }
 
@@ -1387,6 +1414,28 @@ router.get('/courier-services', async (req, res) => {
       FROM   courier_services cs
       WHERE  cs.courier_id = $1
       ORDER  BY cs.name
+    `, [parseInt(carrier_id)]);
+    return res.json(result.rows);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/reconciliation/surcharges ───────────────────────────────────────
+// List active surcharges for a carrier (for surcharge code mapping dropdown).
+
+router.get('/surcharges', async (req, res) => {
+  try {
+    const { carrier_id } = req.query;
+    if (!carrier_id) return res.status(400).json({ error: 'carrier_id is required' });
+
+    const result = await query(`
+      SELECT s.id, s.code, s.name, s.calc_type, s.default_value,
+             s.reconciliation_excluded
+      FROM   surcharges s
+      WHERE  s.courier_id = $1
+        AND  s.active     = true
+      ORDER  BY s.name
     `, [parseInt(carrier_id)]);
     return res.json(result.rows);
   } catch (err) {
