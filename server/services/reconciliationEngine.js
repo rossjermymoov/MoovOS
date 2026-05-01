@@ -1097,16 +1097,11 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
   let unmatchedReason = null;
 
   if (Math.abs(delta) < 0.02) {
-    // Multi-parcel aggregate comparison — total matches (freight + known surcharges).
-    // If column surcharges were involved, mark as corrected so the UI surfaces the
-    // surcharge breakdown; otherwise it's a pure freight match.
-    if (colSurchargeTotal > 0) {
-      groupStatus = 'corrected';
-      correctedBy = 'column_surcharge';
-    } else {
-      groupStatus = 'matched';
-      correctedBy = null;
-    }
+    // PRICE IS KING — carrier charged within £0.01 of what we expected → MATCHED.
+    // Column surcharge detail is stored in correction_metadata for the audit trail
+    // but never elevates the status to 'corrected'. If the money matches, it's green.
+    groupStatus = 'matched';
+    correctedBy = null;
 
   } else {
     // Try Mapping Engine
@@ -1165,7 +1160,7 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
       unmatched_reason:         unmatchedReason,
       source:                   'internal',
       mapping_id:               mappingId,
-      correction_metadata:      correctedBy === 'column_surcharge' ? colSurchargeMeta : null,
+      correction_metadata:      colSurchargeMeta,  // null when no column surcharges; audit trail when present
     });
   }
 
@@ -1363,30 +1358,9 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     }
 
     if (!isCorrection) {
-      if (colSurchargeTotal > 0) {
-        // Column surcharges explain the difference from pure freight expected.
-        // Carrier charged exactly freight + known named surcharges → corrected.
-        await insertLine(runId, {
-          tracking_number:          trackingNumber,
-          carrier_account_no:       line.account_number || null,
-          raw_service_code:         rawServiceCode,
-          charge_type:              line.charge_type || 'base',
-          carrier_amount:           carrierAmount,
-          carrier_billed_weight_kg: line.billed_weight_kg || null,
-          service_id:               serviceId,
-          customer_id:              charge.customer_id,
-          charge_id:                charge.charge_id,
-          expected_amount:          fullExpected,
-          delta:                    delta,
-          status:                   'corrected',
-          corrected_by:             'column_surcharge',
-          unmatched_reason:         null,
-          source:                   'internal',
-          correction_metadata:      { col_surcharge_total: colSurchargeTotal, col_surcharges: colSurchargeBreakdown },
-        });
-        return { status: 'corrected' };
-      }
-      // Genuinely matched — same pricing tier, same calculation path, no named surcharges
+      // PRICE IS KING — carrier charged within £0.01 of what we expected → MATCHED.
+      // Column surcharge amounts (if any) are stored in correction_metadata for the
+      // audit trail but do NOT change the status to 'corrected'. Green = green.
       await insertLine(runId, {
         tracking_number:          trackingNumber,
         carrier_account_no:       line.account_number || null,
@@ -1403,6 +1377,9 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
         corrected_by:             null,
         unmatched_reason:         null,
         source:                   'internal',
+        correction_metadata:      colSurchargeTotal > 0
+          ? { col_surcharge_total: colSurchargeTotal, col_surcharges: colSurchargeBreakdown }
+          : null,
       });
       return { status: 'matched' };
     }
