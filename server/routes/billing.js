@@ -2361,11 +2361,25 @@ router.get('/charges/:id/debug', async (req, res, next) => {
     if (!r.rows.length) return res.status(404).json({ error: 'Charge not found' });
     const row = r.rows[0];
 
+    // Fetch current stored total: base price + all active fuel/surcharge lines for this shipment
+    const surchargeTotal = await query(`
+      SELECT COALESCE(SUM(price), 0)::numeric AS total
+      FROM charges
+      WHERE shipment_id = (SELECT shipment_id FROM charges WHERE id = $1)
+        AND charge_type IN ('fuel', 'surcharge')
+        AND cancelled = false
+    `, [id]);
+    const storedSurchargeTotal = parseFloat(surchargeTotal.rows[0]?.total ?? 0);
+    const storedTotal = row.price != null
+      ? parseFloat((parseFloat(row.price) + storedSurchargeTotal).toFixed(2))
+      : null;
+
     const trace = {
       charge_id: id,
       order_id: row.order_id,
       stored: {
         price: row.price,
+        stored_total: storedTotal,
         price_auto: row.price_auto,
         zone: row.zone_name,
         weight_class: row.weight_class_name,

@@ -356,14 +356,18 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
 
   // Conclusion is green if the charge already has a price OR the engine would price it
   const alreadyPriced = charge.price != null;
-  // Current total = base price + all sell-side charge lines (fuel, surcharges etc.)
-  const currentTotal = alreadyPriced
-    ? parseFloat(charge.price) + (Array.isArray(charge.charge_lines) ? charge.charge_lines : [])
-        .reduce((s, l) => s + parseFloat(l.price || 0), 0)
-    : null;
+  // Use the server-provided stored_total (base + all fuel/surcharge rows) for accurate comparison.
+  // Falls back to client-side sum if the trace hasn't loaded yet.
+  const currentTotal = trace?.stored?.stored_total != null
+    ? parseFloat(trace.stored.stored_total)
+    : alreadyPriced
+      ? parseFloat(charge.price) + (Array.isArray(charge.charge_lines) ? charge.charge_lines : [])
+          .reduce((s, l) => s + parseFloat(l.price || 0), 0)
+      : null;
   // Are the current total and the engine total effectively the same? (within 1p rounding)
   const pricesMatch = alreadyPriced && trace?.conclusion?.priced &&
-    Math.abs((currentTotal ?? 0) - (trace.conclusion.total ?? 0)) < 0.015;
+    currentTotal != null &&
+    Math.abs(currentTotal - (trace.conclusion.total ?? 0)) < 0.015;
   const conclusionColor = (alreadyPriced || trace?.conclusion?.priced) ? '#00C853' : '#F44336';
 
   // Shared row style for ✓/✗ check lists
