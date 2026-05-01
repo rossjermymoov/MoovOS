@@ -232,9 +232,15 @@ function mapToInvoiceLine(row, colMap) {
   }
 
   return {
-    // Force toString so numeric-looking tracking numbers keep their exact
-    // character representation (no precision loss, no scientific notation).
-    tracking_number:  get('tracking_number').trim(),
+    // ── Tracking number: ALWAYS a string ─────────────────────────────────────
+    // DHL consignment numbers (e.g. "600123456789") look like integers but MUST
+    // be treated as opaque strings. The custom parseCSV() function is character-
+    // level and never performs numeric coercion, so values are already strings.
+    // The explicit String() call below is a hard guard against any future change
+    // that might return a non-string (e.g. swapping in Papa.parse with
+    // dynamicTyping enabled — that would silently lose leading zeros and cause
+    // "600" prefix numbers to become wrong values via float64 precision loss).
+    tracking_number:  String(get('tracking_number')).trim(),
     account_number:   get('account_number').trim(),
     service_code:     get('service_code').trim(),
     charge_type:      get('charge_type').trim() || 'base',

@@ -1717,27 +1717,53 @@ router.get('/charges', async (req, res, next) => {
     if (parcel_type === 'multi')  { conds.push(`c.parcel_qty > 1`); }
     if (unpriced === 'true')      { conds.push(`c.price IS NULL`); }
     if (search) {
-      // DHL PWS invoices prefix all tracking numbers with "60" (e.g. "60120240016682")
-      // but our OMS stores the shorter form ("120240016682") in tracking_codes.
-      // Build an alternate search pattern to bridge this so both forms match:
-      //   user types "60120240016682" → also search "120240016682"
-      //   user types "120240016682"   → also search "60120240016682"
-      let altTrackSearch;
-      if (/^60\d{8,}$/.test(search)) {
-        altTrackSearch = `%${search.slice(2)}%`;       // strip leading "60"
-      } else if (/^\d{8,}$/.test(search)) {
-        altTrackSearch = `%60${search}%`;              // add "60" prefix
-      }
+      // ── Tracking-number prefix normalisation ──────────────────────────────
+      // DHL PWS consignment numbers appear in two places:
+      //   • s.tracking_codes  — array of codes from DeliveryConnect tracking events
+      //   • s.dc_service_id   — the primary consignment number DHL assigns at despatch
+      //
+      // Both are searched. dc_service_id is critical: for DHL, the consignment
+      // number (what appears on the invoice) is stored here, not in tracking_codes.
+      //
+      // DHL prefixes all consignment numbers with "60" on their PWS invoices, so:
+      //   "600123456789"  — DHL invoice form  (600-prefix number)
+      //   "0123456789"    — strip 2 chars ("60") → wrong for "600" numbers
+      //   "123456789"     — strip 3 chars ("600") → correct OMS form
+      //
+      // Rules (checked in order, first match wins):
+      //   starts with "600" + ≥7 digits → altTrack strips "600" (3 chars)
+      //   starts with "60"  + ≥8 digits → altTrack strips "60"  (2 chars)
+      //   pure digits ≥8                → altTrack prepends "60"
+      //   anything else                 → altTrack = mainPct (same as main)
       const mainPct = `%${search}%`;
-      const trackPct = altTrackSearch || mainPct;
+      let altTrack;
+      if (/^600\d{7,}$/.test(search)) {
+        altTrack = `%${search.slice(3)}%`;   // "600123456789" → "%123456789%"
+      } else if (/^60\d{8,}$/.test(search)) {
+        altTrack = `%${search.slice(2)}%`;   // "60123456789"  → "%123456789%"
+      } else if (/^\d{8,}$/.test(search)) {
+        altTrack = `%60${search}%`;           // "123456789"    → "%60123456789%"
+      } else {
+        altTrack = mainPct;
+      }
 
+      // $idx   = mainPct  (broad ILIKE for names, references, order IDs, service names)
+      // $idx+1 = altTrack (prefix-stripped/added form for tracking numbers only)
       conds.push(`(
-        cu.business_name ILIKE $${idx} OR cu.account_number ILIKE $${idx} OR
-        c.order_id ILIKE $${idx} OR c.service_name ILIKE $${idx} OR
-        s.reference ILIKE $${idx} OR s.reference_2 ILIKE $${idx} OR
-        EXISTS (SELECT 1 FROM unnest(s.tracking_codes) tc WHERE tc ILIKE $${idx} OR tc ILIKE $${idx + 1})
+        cu.business_name    ILIKE $${idx}     OR
+        cu.account_number   ILIKE $${idx}     OR
+        c.order_id          ILIKE $${idx}     OR
+        c.service_name      ILIKE $${idx}     OR
+        s.reference         ILIKE $${idx}     OR
+        s.reference_2       ILIKE $${idx}     OR
+        s.dc_service_id     ILIKE $${idx}     OR
+        s.dc_service_id     ILIKE $${idx + 1} OR
+        EXISTS (
+          SELECT 1 FROM unnest(s.tracking_codes) tc
+          WHERE tc ILIKE $${idx} OR tc ILIKE $${idx + 1}
+        )
       )`);
-      vals.push(mainPct, trackPct);
+      vals.push(mainPct, altTrack);
       idx += 2;
     }
 
