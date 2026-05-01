@@ -2539,22 +2539,25 @@ router.get('/charges/:id/debug', async (req, res, next) => {
     const countryIsoForZone = row.ship_to_country_iso || 'GB';
     const resolvedZone = await resolveZoneNameByServiceCode(dcServiceId, countryIsoForZone, postcode);
 
-    // All distinct weight bands for this service from customer_rates
+    // All distinct weight bands for this customer+service from customer_rates.
+    // Include flat-rate rows (null bounds = "All weights") by NOT filtering IS NOT NULL.
+    // Also filter by customer_id so we only see bands this customer actually has.
     const allBandsRes = await query(`
       SELECT DISTINCT weight_class_name, min_weight_kg, max_weight_kg
       FROM customer_rates
       WHERE service_code ILIKE $1
-        AND min_weight_kg IS NOT NULL
-        AND max_weight_kg IS NOT NULL
-      ORDER BY min_weight_kg ASC NULLS LAST
-    `, [dcServiceId || '']);
+        AND customer_id = $2
+      ORDER BY max_weight_kg ASC NULLS LAST
+    `, [dcServiceId || '', customerId]);
 
-    // Resolve weight band directly from customer_rates numeric bounds
-    const resolvedBandRow = allBandsRes.rows.find(b =>
-      b.min_weight_kg != null && b.max_weight_kg != null &&
-      parseFloat(b.min_weight_kg) < (weightPerParcel ?? 0) &&
-      parseFloat(b.max_weight_kg) >= (weightPerParcel ?? 0)
-    );
+    // Resolve weight band from customer_rates numeric bounds.
+    // Flat-rate rows have null bounds and cover all weights.
+    const resolvedBandRow = allBandsRes.rows.find(b => {
+      if (b.min_weight_kg == null && b.max_weight_kg == null) return true; // flat rate — covers all weights
+      if (b.min_weight_kg == null || b.max_weight_kg == null) return false; // partial null — skip
+      return parseFloat(b.min_weight_kg) < (weightPerParcel ?? 0) &&
+             parseFloat(b.max_weight_kg) >= (weightPerParcel ?? 0);
+    });
     const resolvedBand = resolvedBandRow ? resolvedBandRow.weight_class_name : null;
 
     // Build zone checks (✓/✗)
@@ -2596,15 +2599,16 @@ router.get('/charges/:id/debug', async (req, res, next) => {
     }
 
     // ── Step 4: Base price ─────────────────────────────────────────────────────
+    // Use IS NULL OR ... checks so flat-rate rows (null bounds) match all weights.
     const priceRes = await query(`
       SELECT price, price_sub, zone_name, weight_class_name
       FROM customer_rates
       WHERE customer_id = $1
         AND service_code ILIKE $2
         AND zone_name ILIKE $3
-        AND min_weight_kg < $4
-        AND max_weight_kg >= $4
-      ORDER BY max_weight_kg ASC
+        AND (min_weight_kg IS NULL OR min_weight_kg < $4)
+        AND (max_weight_kg IS NULL OR max_weight_kg >= $4)
+      ORDER BY max_weight_kg ASC NULLS LAST
       LIMIT 1
     `, [customerId, dcServiceId || '', resolvedZone, weightPerParcel ?? 0]);
 
