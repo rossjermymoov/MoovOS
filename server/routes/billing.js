@@ -1796,6 +1796,7 @@ router.get('/charges', async (req, res, next) => {
           COALESCE(SUM(c.cost_price), 0)::numeric(12,2) AS total_cost
         FROM charges c
         LEFT JOIN customers cu ON cu.id = c.customer_id
+        LEFT JOIN shipments  s  ON s.id  = c.shipment_id
         ${where}
       `, vals),
     ]);
