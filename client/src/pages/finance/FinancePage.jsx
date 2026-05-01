@@ -722,7 +722,7 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
               borderRadius: 8, color: '#888', padding: '8px 16px', cursor: 'pointer', fontSize: 13 }}>
             Close
           </button>
-          {trace?.conclusion?.priced && (
+          {trace?.conclusion?.priced && !pricesMatch && (
             <button
               onClick={() => repriceMut.mutate()}
               disabled={repriceMut.isLoading}
