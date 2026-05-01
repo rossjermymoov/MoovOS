@@ -1024,11 +1024,19 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
       }
     }
 
-    // Recount run stats from DB — handles both single-resolve and bulk-apply cases
+    // Recount run stats from DB — handles both single-resolve and bulk-apply cases.
+    // Also recalculates automation_rate so it stays live as humans resolve lines.
     await query(`
       UPDATE reconciliation_runs rr
-      SET    unmatched_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'unmatched'),
+      SET    matched_count   = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'matched'),
              corrected_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'corrected'),
+             unmatched_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'unmatched'),
+             automation_rate = CASE WHEN rr.total_lines > 0 THEN
+               ROUND(
+                 (SELECT COUNT(*)::numeric FROM reconciliation_lines WHERE run_id = rr.id AND status IN ('matched','corrected'))
+                 / rr.total_lines * 100, 2
+               )
+             ELSE 0 END,
              status = CASE
                WHEN (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'unmatched') > 0
                THEN 'needs_review' ELSE 'complete' END
@@ -1114,11 +1122,19 @@ router.post('/runs/:id/bulk-map-service-codes', async (req, res) => {
       results.push({ raw_service_code, service_id, lines_updated: count });
     }
 
-    // 3. Recount and update run stats from DB (most accurate)
+    // 3. Recount and update run stats from DB (most accurate).
+    // Recalculates automation_rate so it stays live as lines are resolved.
     await query(`
       UPDATE reconciliation_runs rr
-      SET    unmatched_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'unmatched'),
+      SET    matched_count   = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'matched'),
              corrected_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status IN ('corrected')),
+             unmatched_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'unmatched'),
+             automation_rate = CASE WHEN rr.total_lines > 0 THEN
+               ROUND(
+                 (SELECT COUNT(*)::numeric FROM reconciliation_lines WHERE run_id = rr.id AND status IN ('matched','corrected'))
+                 / rr.total_lines * 100, 2
+               )
+             ELSE 0 END,
              status = CASE
                WHEN (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'unmatched') > 0
                THEN 'needs_review' ELSE 'complete' END

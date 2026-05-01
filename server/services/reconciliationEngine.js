@@ -938,6 +938,31 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
   const mappedKey      = rawServiceCode.toUpperCase();
   const serviceId      = serviceCodeMap[mappedKey] || null;
 
+  // ── Separate true freight lines from unmapped surcharge lines ───────────────
+  // In DHL invoices, all parcel lines for the same consignment share the same
+  // service code (e.g. "220"). Lines with a DIFFERENT service code under the same
+  // tracking number are surcharges that haven't been mapped yet (not in surchargeMap).
+  // Including them as "parcels" inflates baseLines.length and produces a silly-high
+  // expected amount (e.g. first + 4×sub when only 2 parcels exist).
+  //
+  // Separation rules:
+  //   - freightLines: lines where service_code matches the primary freight code (rawServiceCode)
+  //   - orphanLines:  lines with a different service code — unmapped surcharges
+  //
+  // If ALL base lines have the same code (no orphans), the split is a no-op.
+  const freightLines = baseLines.filter(
+    l => String(l.service_code || '').trim().toUpperCase() === mappedKey
+  );
+  const orphanLines  = baseLines.filter(
+    l => String(l.service_code || '').trim().toUpperCase() !== mappedKey
+  );
+  if (orphanLines.length > 0) {
+    console.log(
+      `[recon engine] Tracking group ${trackKey}: ${orphanLines.length} line(s) have different service codes ` +
+      `from freight code "${rawServiceCode}" — treating as unmapped surcharges, processing individually`
+    );
+  }
+
   if (!serviceId) {
     // Unknown service code — hard gate; all lines in group go unmatched.
     // Attempt smart suggestion from pool for every line in the group.
@@ -972,7 +997,9 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
 
   if (poolHits.length === 0) {
     // Not in verified pool — process each base line individually
-    // (external booking path, or account-number lookup)
+    // (external booking path, or account-number lookup).
+    // Orphan lines (unmapped surcharges) are also processed here since without
+    // a pool hit we have no expected cost to compare against.
     for (const line of baseLines) {
       const r = await processLine(line, runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings);
       results.push(r);
@@ -980,13 +1007,29 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
     return results;
   }
 
-  // ── Aggregate comparison (base/freight lines only) ────────────────────────
+  // ── Aggregate comparison (freight lines only) ─────────────────────────────
   const charge = poolHits[0];
 
-  // Compare the SUM of base freight lines only.
-  // Surcharge lines have already been split out and auto-corrected above.
+  // Process orphan lines (unmapped surcharges with a different service code)
+  // individually — they each need their own lookup or correction engine pass.
+  for (const line of orphanLines) {
+    const r = await processLine(line, runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings);
+    results.push(r);
+  }
+
+  // If all base lines turned out to be orphans, we're done.
+  if (freightLines.length === 0) return results;
+
+  // If only one freight line remains after splitting, use the single-line path.
+  if (freightLines.length === 1) {
+    const r = await processLine(freightLines[0], runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings);
+    return [...results, r];
+  }
+
+  // Compare the SUM of true freight lines only (not orphan/unmapped-surcharge lines).
+  // Surcharge lines (from surchargeMap) and orphan lines have already been separated.
   const totalCarrierAmount = round2(
-    baseLines.reduce((s, l) => s + (parseFloat(l.carrier_amount) || 0), 0)
+    freightLines.reduce((s, l) => s + (parseFloat(l.carrier_amount) || 0), 0)
   );
 
   // ── Multi-parcel expected cost — recompute from the carrier rate card ──────
@@ -996,6 +1039,10 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
   // Recomputing here avoids both false "corrected" statuses and "sky-high" expected
   // amounts in the UI.
   //
+  // IMPORTANT: Only use the recomputed value when price_sub IS configured in the
+  // rate card. If price_sub is null, using first_rate as sub_rate gives a wrong
+  // (inflated) expected — fall back to stored cost_price instead.
+  //
   // DHL puts the per-parcel weight on each invoice line — we use firstLine.billed_weight_kg
   // directly (not divided by group size) to find the correct weight band.
   let expectedBase;
@@ -1003,18 +1050,28 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
   if (perParcelWeight > 0 && serviceId && charge.zone_id) {
     const bandResult = await lookupCarrierBandCost(serviceId, perParcelWeight, charge.zone_id);
     if (bandResult && bandResult.pass === 1) {
-      // price_sub = per-additional-parcel rate. Fall back to first-parcel rate when not set.
-      const subRate    = bandResult.price_sub != null ? bandResult.price_sub : bandResult.cost;
-      const recomputed = round2(bandResult.cost + (baseLines.length - 1) * subRate);
-      console.log(
-        `[recon engine] Multi-parcel expected (${baseLines.length} parcels, ${perParcelWeight}kg/parcel):` +
-        ` first=£${bandResult.cost} sub=£${subRate} → expected=£${recomputed}` +
-        ` (stored cost_price=£${round2(parseFloat(charge.expected_cost) || 0)})`
-      );
-      expectedBase = recomputed;
+      if (bandResult.price_sub != null) {
+        // Have a configured sub rate — can correctly compute multi-parcel expected.
+        const recomputed = round2(bandResult.cost + (freightLines.length - 1) * bandResult.price_sub);
+        console.log(
+          `[recon engine] Multi-parcel expected (${freightLines.length} freight parcels, ${perParcelWeight}kg/parcel):` +
+          ` first=£${bandResult.cost} sub=£${bandResult.price_sub} → expected=£${recomputed}` +
+          ` (stored cost_price=£${round2(parseFloat(charge.expected_cost) || 0)})`
+        );
+        expectedBase = recomputed;
+      } else {
+        // price_sub not configured — using first_rate as sub_rate would over-estimate.
+        // Fall back to stored cost_price and log so the rate card can be corrected.
+        console.warn(
+          `[recon engine] Multi-parcel (${freightLines.length} freight parcels): ` +
+          `price_sub not set for band (service=${serviceId}, weight=${perParcelWeight}kg, zone=${charge.zone_id}) — ` +
+          `falling back to stored cost_price=£${round2(parseFloat(charge.expected_cost) || 0)}. ` +
+          `Configure price_sub in the carrier rate card to fix this.`
+        );
+      }
     }
   }
-  // Fall back to stored cost_price if rate card lookup unavailable (no weight, no zone, etc.)
+  // Fall back to stored cost_price if rate card lookup unavailable or price_sub missing.
   if (expectedBase == null) {
     expectedBase = round2(parseFloat(charge.expected_cost) || 0);
   }
@@ -1083,14 +1140,14 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
     }
   }
 
-  // Insert one reconciliation_line per original invoice line (base lines only).
-  // Store the group-level expected + delta on every base line so the UI shows the
+  // Insert one reconciliation_line per true freight line.
+  // Store the group-level expected + delta on every line so the UI shows the
   // full picture. expected_amount = freight base + column surcharges so that delta
   // = 0 when carrier charged exactly what we expected (freight + known surcharges).
   const colSurchargeMeta = colSurchargeTotal > 0
     ? { col_surcharge_total: colSurchargeTotal, col_surcharges: colSurchargeBreakdown }
     : null;
-  for (const line of baseLines) {
+  for (const line of freightLines) {
     await insertLine(runId, {
       tracking_number:          String(line.tracking_number || '').trim(),
       carrier_account_no:       line.account_number || null,
@@ -1112,7 +1169,7 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
     });
   }
 
-  return [...results, ...baseLines.map(() => ({ status: groupStatus }))];
+  return [...results, ...freightLines.map(() => ({ status: groupStatus }))];
 }
 
 // ─── Process a single line ────────────────────────────────────────────────────

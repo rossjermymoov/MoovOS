@@ -540,10 +540,14 @@ function UploadModal({ couriers, onClose, onSuccess }) {
       setHeaders(hdrs);
       setCsvRows(rows);
 
-      // Start with loaded profile's map (if any), then auto-map unset fields
+      // Start with loaded profile's map (if any), then auto-map unset fields.
+      // Always preserve the current in-memory surcharge_columns — they are never
+      // auto-detectable from CSV headers and must survive file re-uploads.
       const autoMap = { ...BLANK_MAP, ...(loadedProfileId
         ? (profiles.find(p => p.id === loadedProfileId)?.column_map || {})
-        : {}) };
+        : {}), surcharge_columns: colMap.surcharge_columns?.length
+          ? colMap.surcharge_columns
+          : ((profiles.find(p => p.id === loadedProfileId)?.column_map?.surcharge_columns) || []) };
 
       const AUTO_RULES = {
         tracking_number:  h => h.includes('tracking') || h.includes('consignment') || h.includes('waybill'),
