@@ -1329,30 +1329,21 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   line._expected_amount = fullExpected;
 
   if (Math.abs(delta) < 0.02) {
-    // ── Financial significance filter ─────────────────────────────────────────
+    // ── PRICE IS KING rule ────────────────────────────────────────────────────
     //
-    // Cost agrees with our expected — but HOW the carrier calculated it matters.
-    // Priority (checked in order, first match wins):
+    // If the carrier charged within £0.01 of what we expected, the row is GREEN
+    // (Matched). No weight-band comparisons, no tier-change analysis, no declared
+    // vs billed weight gymnastics.
     //
-    //   1. Billed weight triggered Pass 2 (overage formula)
-    //      → ALWAYS CORRECTED — carrier applied a different calculation path,
-    //        even if cost_price was already updated to match.
+    // ONE exception: if the billed weight triggered the Pass 2 overage formula
+    // (weight exceeds every defined band ceiling), the carrier applied a
+    // structurally different billing path. Flag as Corrected even at delta = 0
+    // so the Corrections Report captures it.
     //
-    //   2. Billed band_id ≠ declared band_id (weight crossed a pricing tier)
-    //      → ALWAYS CORRECTED — different band = different pricing tier.
-    //
-    //   3. Same band_id AND same pass
-    //      → MATCHED — intra-band rounding noise (e.g. 2.1kg → 2.9kg, both £4.36).
-    //
-    // NOTE: Pass 2 always uses the ceiling band's id, so band_id alone cannot
-    // distinguish "declared in Pass 1 ceiling band" from "billed in Pass 2 using
-    // the same ceiling band record". The pass field is the definitive signal.
-    //
-    // When zone_id is unavailable (pool miss), fall through to MATCHED — we
-    // cannot make a zone-pinned band comparison without it.
+    // Band changes (declared and billed weights in different tiers but same price)
+    // are NOT flagged — if the money matches, the tier is irrelevant.
 
-    const declaredWeight = parseFloat(charge.declared_weight_kg) || null;
-    const billedWeight   = parseFloat(line.billed_weight_kg)     || null;
+    const billedWeight = parseFloat(line.billed_weight_kg) || null;
 
     let isCorrection       = false;
     let correctionReason   = null;
@@ -1360,26 +1351,15 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
 
     if (billedWeight != null && charge.zone_id) {
       const bResult = await lookupCarrierBandCost(serviceId, billedWeight, charge.zone_id);
-
       if (bResult && bResult.pass === 2) {
-        // Carrier applied the overage formula — always a correction regardless
-        // of whether the amount happens to match (cost_price may have been
-        // updated by a prior run's correction engine).
         isCorrection       = true;
         correctionReason   = 'weight_overage';
-        weightDeltaForMeta = bResult.overageKg;  // kg above the band ceiling
+        weightDeltaForMeta = bResult.overageKg;
         console.log(
           `[recon engine] Zero-delta Pass 2 override: billed ${billedWeight}kg triggered` +
           ` overage (+${bResult.overageKg}kg above ceiling) → CORRECTED`
         );
       }
-      // Band changes (different tier but same delta) are NOT flagged as corrections
-      // at zero delta — the carrier charged exactly the expected amount regardless
-      // of which weight tier was applied. Band discrepancies only matter when there
-      // is a price difference, which is caught by the correction engine below
-      // (delta > 0.02 path). Flagging band changes at delta = 0 produces false
-      // "Corrected via pricing_rules" on multi-parcel shipments billed as a single
-      // line where declared (per-parcel) and billed (combined) weights differ.
     }
 
     if (!isCorrection) {
