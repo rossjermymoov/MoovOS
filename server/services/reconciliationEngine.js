@@ -439,7 +439,7 @@ async function lookupCarrierBandCost(serviceId, weightKg, zoneId) {
   // wb.id is returned so callers can detect band changes (intra-band vs cross-band weight shifts).
   const exactRes = zoneId
     ? await query(`
-        SELECT wb.id AS band_id, wb.price_first, wb.cost_per_kg, wb.min_weight_kg, wb.max_weight_kg
+        SELECT wb.id AS band_id, wb.price_first, wb.price_sub, wb.cost_per_kg, wb.min_weight_kg, wb.max_weight_kg
         FROM   weight_bands     wb
         JOIN   zones            z  ON z.id  = wb.zone_id
         JOIN   courier_services cs ON cs.id = z.courier_service_id
@@ -452,7 +452,7 @@ async function lookupCarrierBandCost(serviceId, weightKg, zoneId) {
         LIMIT  1
       `, [serviceId, weightKg, zoneId])
     : await query(`
-        SELECT wb.id AS band_id, wb.price_first, wb.cost_per_kg, wb.min_weight_kg, wb.max_weight_kg
+        SELECT wb.id AS band_id, wb.price_first, wb.price_sub, wb.cost_per_kg, wb.min_weight_kg, wb.max_weight_kg
         FROM   weight_bands     wb
         JOIN   zones            z  ON z.id  = wb.zone_id
         JOIN   courier_services cs ON cs.id = z.courier_service_id
@@ -466,7 +466,11 @@ async function lookupCarrierBandCost(serviceId, weightKg, zoneId) {
 
   if (exactRes.rows.length) {
     const b = exactRes.rows[0];
-    return { cost: round2(parseFloat(b.price_first || 0)), pass: 1, overageKg: null, bandId: b.band_id };
+    return {
+      cost:      round2(parseFloat(b.price_first || 0)),
+      price_sub: b.price_sub != null ? round2(parseFloat(b.price_sub)) : null,
+      pass: 1, overageKg: null, bandId: b.band_id,
+    };
   }
 
   // Pass 2: weight EXCEEDS every defined band ceiling — apply top-out overage.
@@ -964,8 +968,38 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
   const totalCarrierAmount = round2(
     baseLines.reduce((s, l) => s + (parseFloat(l.carrier_amount) || 0), 0)
   );
-  const expectedBase = round2(parseFloat(charge.expected_cost) || 0);
-  const delta        = round2(totalCarrierAmount - expectedBase);
+
+  // ── Multi-parcel expected cost — recompute from the carrier rate card ──────
+  // charges.cost_price (stored at booking) is often wrong for multi-parcel
+  // shipments when weight_bands.price_sub is not configured: the billing engine
+  // falls back to first_rate × parcel_count instead of first_rate + (n−1) × sub_rate.
+  // Recomputing here avoids both false "corrected" statuses and "sky-high" expected
+  // amounts in the UI.
+  //
+  // DHL puts the per-parcel weight on each invoice line — we use firstLine.billed_weight_kg
+  // directly (not divided by group size) to find the correct weight band.
+  let expectedBase;
+  const perParcelWeight = round2(parseFloat(firstLine.billed_weight_kg) || 0);
+  if (perParcelWeight > 0 && serviceId && charge.zone_id) {
+    const bandResult = await lookupCarrierBandCost(serviceId, perParcelWeight, charge.zone_id);
+    if (bandResult && bandResult.pass === 1) {
+      // price_sub = per-additional-parcel rate. Fall back to first-parcel rate when not set.
+      const subRate    = bandResult.price_sub != null ? bandResult.price_sub : bandResult.cost;
+      const recomputed = round2(bandResult.cost + (baseLines.length - 1) * subRate);
+      console.log(
+        `[recon engine] Multi-parcel expected (${baseLines.length} parcels, ${perParcelWeight}kg/parcel):` +
+        ` first=£${bandResult.cost} sub=£${subRate} → expected=£${recomputed}` +
+        ` (stored cost_price=£${round2(parseFloat(charge.expected_cost) || 0)})`
+      );
+      expectedBase = recomputed;
+    }
+  }
+  // Fall back to stored cost_price if rate card lookup unavailable (no weight, no zone, etc.)
+  if (expectedBase == null) {
+    expectedBase = round2(parseFloat(charge.expected_cost) || 0);
+  }
+
+  const delta = round2(totalCarrierAmount - expectedBase);
 
   // Attach expected for Mapping Engine
   firstLine._expected_amount = expectedBase;
