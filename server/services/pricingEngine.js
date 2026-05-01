@@ -108,29 +108,28 @@ export async function matchZone(serviceId, countryIso, postcode) {
   // Only consider zones that explicitly list the destination country.
   const compatZones = zones.rows.filter(z => (z.countries || []).includes(countryIso));
 
-  // Does the service use postcode-based zone assignment?
-  // If yes, postcode must match an explicit include rule — no silent catch-alls.
-  const serviceUsesPostcodeRules = compatZones.some(z =>
-    (z.postcode_rules || []).some(r => r.type === 'include')
-  );
-
   for (const zone of compatZones) {
     const rules        = zone.postcode_rules || [];
     const includeRules = rules.filter(r => r.type === 'include');
     const excludeRules = rules.filter(r => r.type === 'exclude');
 
-    // Exclusions always win.
+    // Exclusions always win — checked first regardless of rule type.
     if (excludeRules.some(r => outcode.startsWith(r.prefix))) continue;
 
     if (includeRules.length > 0) {
-      // Explicit include rules present: outcode must match one.
+      // Zone has explicit include rules: outcode MUST match one.
+      // e.g. "Highlands zone" lists IV, KW, HS, PA, etc.
       if (!includeRules.some(r => outcode.startsWith(r.prefix))) continue;
-      return zone;                                     // ← explicit postcode match
+      return zone;                                     // ← explicit include match
     }
 
-    // Zone has no include rules.
-    if (serviceUsesPostcodeRules) continue;            // blocked — other zones use postcodes
-    return zone;                                       // ← international / country-only match
+    // Zone has NO include rules.
+    // Two valid patterns reach here:
+    //   • Exclude-only zone ("Mainland UK — everywhere except Highlands"):
+    //     the outcode wasn't excluded above, so it belongs here.
+    //   • No-rule zone (international service — country code is the only selector).
+    // Both are valid matches — return the zone.
+    return zone;                                       // ← exclude-only or country-only match
   }
 
   return null;
@@ -468,7 +467,7 @@ export async function processShipment(payload) {
       order_id:            orderId,
       tracking_code:       trackingCode,
       courier_service_id:  serviceId,
-      zone_id:             zone.id,
+      zone_id:             zone?.id || null,
       ship_to_postcode:    postcode,
       ship_to_country_iso: countryIso,
       ship_to_name:        shipment?.ship_to?.name,
