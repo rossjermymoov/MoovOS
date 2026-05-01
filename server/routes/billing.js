@@ -1954,6 +1954,12 @@ router.post('/full-reprice', async (req, res, next) => {
       ORDER BY c.created_at ASC
     `);
 
+    // Respond immediately so nginx proxy timeout can't kill the request.
+    // The actual repricing runs in the background — check server logs for completion.
+    res.json({ started: true, total: charges.length, note: 'Reprice running in background — refresh in a moment to see updates' });
+
+    // ── Background processing ─────────────────────────────────────────────────
+    (async () => {
     const summary = {
       total:              charges.length,
       repriced:           0,
@@ -2100,7 +2106,13 @@ router.post('/full-reprice', async (req, res, next) => {
       }
     }
 
-    res.json(summary);
+    console.log('[full-reprice] complete:', JSON.stringify({
+      total: summary.total, repriced: summary.repriced,
+      fuel_updated: summary.fuel_updated, no_rate: summary.no_rate,
+      errors: summary.errors, changed: summary.changed,
+    }));
+    })().catch(err => console.error('[full-reprice] background error:', err.message));
+
   } catch (err) { next(err); }
 });
 
@@ -2339,6 +2351,7 @@ router.get('/charges/:id/debug', async (req, res, next) => {
         s.courier, s.dc_service_id, s.service_name AS s_service_name,
         s.total_weight_kg, s.parcel_count, s.parcel_weight_kg,
         s.ship_to_postcode, s.ship_to_country_iso,
+        s.dim_length_cm, s.dim_width_cm, s.dim_height_cm,
         s.raw_payload
       FROM charges c
       LEFT JOIN shipments s ON s.id = c.shipment_id
@@ -2393,6 +2406,47 @@ router.get('/charges/:id/debug', async (req, res, next) => {
       postcode:          postcode,
       outward_code:      outward,
     });
+
+    // ── Step 1.5: Volumetric weight calculation ────────────────────────────────
+    {
+      const dimL = row.dim_length_cm != null ? parseFloat(row.dim_length_cm) : null;
+      const dimW = row.dim_width_cm  != null ? parseFloat(row.dim_width_cm)  : null;
+      const dimH = row.dim_height_cm != null ? parseFloat(row.dim_height_cm) : null;
+
+      // Fetch volumetric divisor for this courier service
+      let volumetricDivisor = null;
+      if (dcServiceId) {
+        const vdRes = await query(
+          `SELECT volumetric_divisor FROM courier_services WHERE service_code ILIKE $1 LIMIT 1`,
+          [dcServiceId]
+        );
+        const rawDiv = vdRes.rows[0]?.volumetric_divisor;
+        volumetricDivisor = rawDiv != null ? parseInt(rawDiv, 10) : null;
+      }
+
+      // Calculate volumetric weight (dims in cm, divisor in cm³/kg)
+      let volumetricKg = null;
+      let weightBasis  = 'physical';
+      if (volumetricDivisor && volumetricDivisor > 0 && dimL && dimW && dimH) {
+        volumetricKg = Math.round((dimL * dimW * dimH) / volumetricDivisor * 100) / 100;
+        if (weightPerParcel != null && volumetricKg > weightPerParcel) weightBasis = 'volumetric';
+      }
+
+      trace.steps.push({
+        step: 1.5,
+        title: 'Volumetric weight',
+        physical_kg:         weightPerParcel != null ? Math.round(weightPerParcel * 1000) / 1000 : null,
+        dim_length_cm:       dimL,
+        dim_width_cm:        dimW,
+        dim_height_cm:       dimH,
+        volumetric_divisor:  volumetricDivisor,
+        volumetric_kg:       volumetricKg,
+        weight_basis:        weightBasis,
+        charged_kg:          volumetricKg != null && volumetricKg > (weightPerParcel ?? 0)
+                               ? volumetricKg
+                               : (weightPerParcel != null ? Math.round(weightPerParcel * 1000) / 1000 : null),
+      });
+    }
 
     // ── Step 2: Customer resolution (same 4-step logic as live webhook) ───────
     const { accountNumber, customerDcId } = extracted;

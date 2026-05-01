@@ -342,14 +342,21 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
 
   const stepColor = (step) => {
     if (!trace) return '#555';
-    if (step.step === 3 && step.error) return '#F44336';
-    if (step.step === 3 && (!step.resolved_zone || !step.resolved_band)) return '#F44336';
-    if (step.step === 4 && step.error) return '#F44336';
-    if (step.step === 5 && !step.surcharges?.length && !step.fuel) return '#555';
+    const t = step.title || '';
+    // Rate card search — red if zone/band not resolved
+    if (t === 'Rate card search' && (step.error || !step.resolved_zone || !step.resolved_band)) return '#F44336';
+    // Base price — red if no price found
+    if (t === 'Base price' && step.error) return '#F44336';
+    // Surcharges — grey if none (not an error, just informational)
+    if (t === 'Surcharges' && !step.surcharges?.length && !step.fuel) return '#555';
+    // Volumetric — amber if no dims available (can't calculate)
+    if (t === 'Volumetric weight' && step.volumetric_divisor == null) return '#888';
     return '#00C853';
   };
 
-  const conclusionColor = trace?.conclusion?.priced ? '#00C853' : '#F44336';
+  // Conclusion is green if the charge already has a price OR the engine would price it
+  const alreadyPriced  = charge.price != null;
+  const conclusionColor = (alreadyPriced || trace?.conclusion?.priced) ? '#00C853' : '#F44336';
 
   // Shared row style for ✓/✗ check lists
   const checkRow = (matched) => ({
@@ -410,6 +417,27 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
           )}
           {trace && (
             <>
+              {/* Already-priced banner */}
+              {alreadyPriced && (
+                <div style={{
+                  background: 'rgba(0,200,83,0.09)',
+                  border: '1px solid rgba(0,200,83,0.3)',
+                  borderRadius: 8, padding: '10px 14px',
+                  marginBottom: 14,
+                  display: 'flex', alignItems: 'center', gap: 10,
+                }}>
+                  <span style={{ color: '#00C853', fontWeight: 700, fontSize: 14 }}>✓</span>
+                  <div>
+                    <div style={{ color: '#00C853', fontWeight: 700, fontSize: 13 }}>
+                      Already priced — £{parseFloat(charge.price).toFixed(2)}
+                    </div>
+                    <div style={{ color: '#888', fontSize: 11, marginTop: 1 }}>
+                      The trace below shows what the engine would set if re-priced now.
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Steps */}
               {trace.steps.map(step => (
                 <div key={step.step} style={{
@@ -448,6 +476,52 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                       <div><span style={{ color: '#888' }}>total_weight_kg:</span> <span style={{ color: step.total_weight_kg != null ? '#fff' : '#FFC107' }}>{step.total_weight_kg != null ? `${step.total_weight_kg} kg` : 'null — not in webhook'}</span></div>
                       <div><span style={{ color: '#888' }}>weight_per_parcel:</span> <span style={{ color: step.weight_per_parcel != null ? '#fff' : '#FFC107' }}>{step.weight_per_parcel != null ? `${step.weight_per_parcel} kg` : 'null'}</span></div>
                       <div><span style={{ color: '#888' }}>postcode:</span> <span style={{ color: '#fff' }}>{step.postcode || 'null'}{step.outward_code ? ` → outward: ${step.outward_code}` : ''}</span></div>
+                    </>}
+
+                    {/* ── Step 1.5: Volumetric weight ── */}
+                    {step.step === 1.5 && <>
+                      {/* Divisor */}
+                      {step.volumetric_divisor == null ? (
+                        <div style={{ color: '#888' }}>No volumetric divisor configured for this service — physical weight used as-is.</div>
+                      ) : (
+                        <>
+                          <div><span style={{ color: '#888' }}>physical weight:</span> <span style={{ color: '#fff' }}>{step.physical_kg != null ? `${step.physical_kg} kg` : 'null'}</span></div>
+                          <div>
+                            <span style={{ color: '#888' }}>dims (L × W × H):</span>{' '}
+                            {step.dim_length_cm != null && step.dim_width_cm != null && step.dim_height_cm != null ? (
+                              <span style={{ color: '#fff' }}>
+                                {step.dim_length_cm} × {step.dim_width_cm} × {step.dim_height_cm} cm
+                              </span>
+                            ) : (
+                              <span style={{ color: '#FFC107' }}>null — dims not in webhook payload</span>
+                            )}
+                          </div>
+                          <div><span style={{ color: '#888' }}>divisor:</span> <span style={{ color: '#fff' }}>{step.volumetric_divisor} cm³/kg</span></div>
+                          {step.volumetric_kg != null ? (
+                            <>
+                              <div>
+                                <span style={{ color: '#888' }}>volumetric weight:</span>{' '}
+                                <span style={{ color: '#fff' }}>
+                                  ({step.dim_length_cm} × {step.dim_width_cm} × {step.dim_height_cm}) ÷ {step.volumetric_divisor} = {step.volumetric_kg} kg
+                                </span>
+                              </div>
+                              <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                                <span style={{ color: '#888' }}>charged weight:</span>{' '}
+                                <span style={{ color: '#00C853', fontWeight: 700 }}>
+                                  {step.charged_kg} kg
+                                </span>{' '}
+                                <span style={{ color: '#555', fontSize: 11 }}>
+                                  ({step.weight_basis === 'volumetric'
+                                    ? `volumetric ${step.volumetric_kg} kg > physical ${step.physical_kg} kg`
+                                    : `physical ${step.physical_kg} kg ≥ volumetric ${step.volumetric_kg} kg`})
+                                </span>
+                              </div>
+                            </>
+                          ) : (
+                            <div style={{ color: '#FFC107' }}>Cannot calculate volumetric weight — dimensions missing in payload.</div>
+                          )}
+                        </>
+                      )}
                     </>}
 
                     {/* ── Step 2: Customer resolution ── */}
@@ -575,13 +649,19 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
               {/* Conclusion */}
               {trace.conclusion && (
                 <div style={{
-                  background: trace.conclusion.priced ? 'rgba(0,200,83,0.07)' : 'rgba(244,67,54,0.07)',
+                  background: (alreadyPriced || trace.conclusion.priced) ? 'rgba(0,200,83,0.07)' : 'rgba(244,67,54,0.07)',
                   border: `1px solid ${conclusionColor}33`,
                   borderRadius: 10, padding: '14px 16px',
                   fontFamily: 'monospace', fontSize: 13,
                 }}>
                   <div style={{ fontWeight: 700, color: conclusionColor, fontSize: 14, marginBottom: 10 }}>
-                    {trace.conclusion.priced ? '✓ Rate found' : '✗ No rate — manual price needed'}
+                    {alreadyPriced && trace.conclusion.priced
+                      ? `✓ Currently £${parseFloat(charge.price).toFixed(2)} — re-price would set £${trace.conclusion.total?.toFixed(2)}`
+                      : alreadyPriced && !trace.conclusion.priced
+                        ? `⚠ Currently £${parseFloat(charge.price).toFixed(2)} — engine can no longer find a rate`
+                        : trace.conclusion.priced
+                          ? '✓ Rate found — ready to apply'
+                          : '✗ No rate — manual price needed'}
                   </div>
 
                   {trace.conclusion.priced && <>
@@ -618,41 +698,39 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
         </div>
 
         {/* Footer */}
-        {trace?.conclusion?.priced && charge.price == null && (
-          <div style={{
-            padding: '12px 20px',
-            borderTop: '1px solid rgba(255,255,255,0.08)',
-            display: 'flex', justifyContent: 'flex-end', gap: 10,
-          }}>
-            <button onClick={onClose}
-              style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)',
-                borderRadius: 8, color: '#888', padding: '8px 16px', cursor: 'pointer', fontSize: 13 }}>
-              Close
-            </button>
+        <div style={{
+          padding: '12px 20px',
+          borderTop: '1px solid rgba(255,255,255,0.08)',
+          display: 'flex', justifyContent: 'flex-end', gap: 10,
+        }}>
+          <button onClick={onClose}
+            style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: 8, color: '#888', padding: '8px 16px', cursor: 'pointer', fontSize: 13 }}>
+            Close
+          </button>
+          {trace?.conclusion?.priced && (
             <button
               onClick={() => repriceMut.mutate()}
               disabled={repriceMut.isLoading}
               style={{
-                background: 'rgba(0,200,83,0.15)', border: '1px solid rgba(0,200,83,0.4)',
-                borderRadius: 8, color: '#00C853', padding: '8px 18px',
+                background: alreadyPriced ? 'rgba(99,102,241,0.15)' : 'rgba(0,200,83,0.15)',
+                border: `1px solid ${alreadyPriced ? 'rgba(99,102,241,0.4)' : 'rgba(0,200,83,0.4)'}`,
+                borderRadius: 8,
+                color: alreadyPriced ? '#A5B4FC' : '#00C853',
+                padding: '8px 18px',
                 cursor: 'pointer', fontSize: 13, fontWeight: 700,
                 display: 'inline-flex', alignItems: 'center', gap: 6,
               }}
             >
               <RotateCcw size={13} />
-              {repriceMut.isLoading ? 'Applying…' : `Apply £${trace.conclusion.total?.toFixed(2)}`}
+              {repriceMut.isLoading
+                ? 'Applying…'
+                : alreadyPriced
+                  ? `Re-price to £${trace.conclusion.total?.toFixed(2)}`
+                  : `Apply £${trace.conclusion.total?.toFixed(2)}`}
             </button>
-          </div>
-        )}
-        {!(trace?.conclusion?.priced && charge.price == null) && (
-          <div style={{ padding: '12px 20px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'flex-end' }}>
-            <button onClick={onClose}
-              style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)',
-                borderRadius: 8, color: '#888', padding: '8px 16px', cursor: 'pointer', fontSize: 13 }}>
-              Close
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1363,6 +1441,11 @@ export default function FinancePage() {
         }}>
           {fullRepriceResult.error ? (
             <span style={{ color: '#F44336', fontSize: 13 }}>Error: {fullRepriceResult.error}</span>
+          ) : fullRepriceResult.started ? (
+            <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ color: '#A5B4FC', fontWeight: 700 }}>⟳ Reprice started</span>
+              <span style={{ color: '#A5B4FC' }}>{fullRepriceResult.total} charges queued — refresh in a moment to see updates</span>
+            </div>
           ) : (
             <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
               <span style={{ color: '#A5B4FC', fontWeight: 700 }}>✓ Full reprice complete</span>
