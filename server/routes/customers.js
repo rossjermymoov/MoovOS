@@ -5,7 +5,7 @@
 
 import express from 'express';
 import multer from 'multer';
-import { PDFParse } from 'pdf-parse';
+import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 import { query } from '../db/index.js';
 
 const router = express.Router();
@@ -690,10 +690,9 @@ const upload = multer({
 router.post('/parse-pdf', upload.single('file'), async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No PDF file uploaded' });
-    // pdf-parse v2: class-based API — getText() loads internally
-    const parser = new PDFParse({ data: req.file.buffer });
-    const result = await parser.getText();
-    res.json({ text: result.text || '', pages: result.total });
+    // pdf-parse v1: function-based API
+    const data = await pdfParse(req.file.buffer);
+    res.json({ text: data.text || '', pages: data.numpages });
   } catch (err) { next(err); }
 });
 
