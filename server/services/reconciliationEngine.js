@@ -1358,36 +1358,28 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     let correctionReason   = null;
     let weightDeltaForMeta = null;
 
-    if (declaredWeight != null && billedWeight != null && charge.zone_id) {
-      const [dResult, bResult] = await Promise.all([
-        lookupCarrierBandCost(serviceId, declaredWeight, charge.zone_id),
-        lookupCarrierBandCost(serviceId, billedWeight,   charge.zone_id),
-      ]);
+    if (billedWeight != null && charge.zone_id) {
+      const bResult = await lookupCarrierBandCost(serviceId, billedWeight, charge.zone_id);
 
-      if (bResult) {
-        if (bResult.pass === 2) {
-          // Carrier applied the overage formula — always a correction regardless
-          // of whether the amount happens to match (cost_price may have been
-          // updated by a prior run's correction engine).
-          isCorrection       = true;
-          correctionReason   = 'weight_overage';
-          weightDeltaForMeta = bResult.overageKg;  // kg above the band ceiling
-          console.log(
-            `[recon engine] Zero-delta Pass 2 override: billed ${billedWeight}kg triggered` +
-            ` overage (+${bResult.overageKg}kg above ceiling) → CORRECTED`
-          );
-        } else if (dResult && dResult.bandId !== bResult.bandId) {
-          // Weight crossed from one pricing tier into another
-          isCorrection       = true;
-          correctionReason   = 'band_change';
-          weightDeltaForMeta = round2(billedWeight - declaredWeight);
-          console.log(
-            `[recon engine] Band change: declared ${declaredWeight}kg (band ${dResult.bandId})` +
-            ` → billed ${billedWeight}kg (band ${bResult.bandId}) → CORRECTED`
-          );
-        }
-        // else: same band_id, same pass → intra-band noise → fall through to MATCHED
+      if (bResult && bResult.pass === 2) {
+        // Carrier applied the overage formula — always a correction regardless
+        // of whether the amount happens to match (cost_price may have been
+        // updated by a prior run's correction engine).
+        isCorrection       = true;
+        correctionReason   = 'weight_overage';
+        weightDeltaForMeta = bResult.overageKg;  // kg above the band ceiling
+        console.log(
+          `[recon engine] Zero-delta Pass 2 override: billed ${billedWeight}kg triggered` +
+          ` overage (+${bResult.overageKg}kg above ceiling) → CORRECTED`
+        );
       }
+      // Band changes (different tier but same delta) are NOT flagged as corrections
+      // at zero delta — the carrier charged exactly the expected amount regardless
+      // of which weight tier was applied. Band discrepancies only matter when there
+      // is a price difference, which is caught by the correction engine below
+      // (delta > 0.02 path). Flagging band changes at delta = 0 produces false
+      // "Corrected via pricing_rules" on multi-parcel shipments billed as a single
+      // line where declared (per-parcel) and billed (combined) weights differ.
     }
 
     if (!isCorrection) {
