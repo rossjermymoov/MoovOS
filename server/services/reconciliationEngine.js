@@ -315,11 +315,16 @@ async function buildVerifiedPool(carrierId) {
     for (const code of codes) {
       const key = String(code).trim().toUpperCase();
       addToPool(key, row);
-      // "60" prefix variants (DHL PWS vs OMS format bridge)
-      if (key.startsWith('60') && key.length > 4) {
-        addToPool(key.slice(2), row);
+      // "60" prefix variants — bridge DHL PWS invoice format vs OMS storage.
+      // "600..." numbers need slice(3) not slice(2) to avoid a wrong leading "0".
+      if (key.startsWith('600') && key.length > 5) {
+        addToPool(key.slice(3), row);   // "600123456789" → "123456789"
+        addToPool(key.slice(2), row);   // "600123456789" → "0123456789" (fallback)
+      } else if (key.startsWith('60') && key.length > 4) {
+        addToPool(key.slice(2), row);   // "601234567890" → "1234567890"
+        addToPool('60' + key, row);     // also index "60" + "601234..." as a fallback
       } else {
-        addToPool('60' + key, row);
+        addToPool('60' + key, row);     // bare number → add "60" prefix variant
       }
     }
 
@@ -330,10 +335,13 @@ async function buildVerifiedPool(carrierId) {
     if (row.dc_service_id) {
       const dcKey = String(row.dc_service_id).trim().toUpperCase();
       addToPool(dcKey, row);
-      if (dcKey.startsWith('60') && dcKey.length > 4) {
-        addToPool(dcKey.slice(2), row);
+      if (dcKey.startsWith('600') && dcKey.length > 5) {
+        addToPool(dcKey.slice(3), row);   // "600123456789" → "123456789"
+        addToPool(dcKey.slice(2), row);   // "600123456789" → "0123456789" (fallback)
+      } else if (dcKey.startsWith('60') && dcKey.length > 4) {
+        addToPool(dcKey.slice(2), row);   // "601234567890" → "1234567890"
       } else {
-        addToPool('60' + dcKey, row);
+        addToPool('60' + dcKey, row);     // bare number → add "60" prefix variant
       }
     }
 

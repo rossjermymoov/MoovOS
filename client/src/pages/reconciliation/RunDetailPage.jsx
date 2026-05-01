@@ -622,7 +622,7 @@ function LinesTable({ lines, showResolve, onResolve }) {
             <tr key={line.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
               <td style={{ padding: '9px 10px', fontFamily: 'monospace', color: '#AAA', fontSize: 10 }}>
                 {line.aged && <span title='Aged' style={{ color: '#FF5252', marginRight: 4 }}>⚠</span>}
-                {line.tracking_number ? line.tracking_number.slice(-12) : '—'}
+                {line.tracking_number || '—'}
               </td>
               <td style={{ padding: '9px 10px', color: '#79AAFF', fontFamily: 'monospace', fontSize: 10 }}>{line.raw_service_code || '—'}</td>
               <td style={{ padding: '9px 10px', color: '#AAA' }}>

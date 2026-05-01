@@ -1616,10 +1616,17 @@ router.get('/pool-diagnostic', async (req, res) => {
     const trackKey  = String(tracking_number).trim().toUpperCase();
     const carrierId = parseInt(carrier_id);
 
-    // Build variants to search for (mirrors poolLookup logic)
+    // Build variants to search for (mirrors poolLookup logic).
+    // "600..." numbers need slice(3) not slice(2) to avoid a leading "0".
     const variants = [trackKey];
-    if (trackKey.startsWith('60') && trackKey.length > 4) variants.push(trackKey.slice(2));
-    else variants.push('60' + trackKey);
+    if (trackKey.startsWith('600') && trackKey.length > 5) {
+      variants.push(trackKey.slice(3));   // "600123456789" → "123456789"
+      variants.push(trackKey.slice(2));   // "600123456789" → "0123456789" (fallback)
+    } else if (trackKey.startsWith('60') && trackKey.length > 4) {
+      variants.push(trackKey.slice(2));   // "601234567890" → "1234567890"
+    } else {
+      variants.push('60' + trackKey);     // bare → add "60" prefix
+    }
 
     // 1. Check shipments table directly
     const shipmentRes = await query(`
