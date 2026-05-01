@@ -865,40 +865,54 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
   }
 
   // ── Multi-parcel group ────────────────────────────────────────────────────
-  const firstLine      = group[0];
+  // ── Split mixed-code groups into surcharge lines vs base/freight lines ─────
+  // DHL sometimes puts congestion surcharge lines under the SAME tracking number
+  // as the base freight lines. If we include them in the aggregate comparison,
+  // the total carrier amount exceeds our expected_cost (which is base-only),
+  // producing a false delta. Split them out first and auto-correct them, then
+  // compare only the freight lines against expected.
+  const surchargeLines = group.filter(l => surchargeMap[String(l.service_code || '').trim().toUpperCase()]);
+  const baseLines      = group.filter(l => !surchargeMap[String(l.service_code || '').trim().toUpperCase()]);
+  const results        = [];
+
+  for (const line of surchargeLines) {
+    const rawCode = String(line.service_code || '').trim();
+    console.log(`[recon engine] Raw code "${rawCode}" (mixed group, tracking=${String(line.tracking_number || '').trim()}) — matched surcharge, auto-correcting`);
+    await insertLine(runId, {
+      tracking_number:          String(line.tracking_number || '').trim(),
+      carrier_account_no:       line.account_number || null,
+      raw_service_code:         rawCode,
+      charge_type:              line.charge_type || 'surcharge',
+      carrier_amount:           round2(parseFloat(line.carrier_amount) || 0),
+      carrier_billed_weight_kg: line.billed_weight_kg || null,
+      service_id:               null,
+      customer_id:              null,
+      charge_id:                null,
+      expected_amount:          null,
+      delta:                    null,
+      status:                   'corrected',
+      corrected_by:             'surcharge_mapping',
+      unmatched_reason:         null,
+      source:                   'internal',
+      suggested_service_id:     null,
+    });
+    results.push({ status: 'corrected' });
+  }
+
+  // If ALL lines in the group were surcharge lines, we're done.
+  if (baseLines.length === 0) return results;
+
+  // If there's only one base line left after splitting, use the single-line path.
+  if (baseLines.length === 1) {
+    const r = await processLine(baseLines[0], runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings);
+    return [...results, r];
+  }
+
+  // ── Continue with just the base/freight lines ─────────────────────────────
+  const firstLine      = baseLines[0];
   const rawServiceCode = String(firstLine.service_code || '').trim();
   const mappedKey      = rawServiceCode.toUpperCase();
   const serviceId      = serviceCodeMap[mappedKey] || null;
-
-  // ── Surcharge mapping check — before the hard service-code gate ───────────
-  // If the raw carrier code maps to a known surcharge, auto-correct all lines
-  // in this group without going through pool/price comparison.
-  if (!serviceId && surchargeMap[mappedKey]) {
-    const surchargeId = surchargeMap[mappedKey];
-    console.log(`[recon engine] Raw code "${rawServiceCode}" (multi-parcel) — matched surcharge ${surchargeId}`);
-    const totalAmount = round2(group.reduce((s, l) => s + (parseFloat(l.carrier_amount) || 0), 0));
-    for (const line of group) {
-      await insertLine(runId, {
-        tracking_number:          String(line.tracking_number || '').trim(),
-        carrier_account_no:       line.account_number || null,
-        raw_service_code:         rawServiceCode,
-        charge_type:              line.charge_type || 'surcharge',
-        carrier_amount:           round2(parseFloat(line.carrier_amount) || 0),
-        carrier_billed_weight_kg: line.billed_weight_kg || null,
-        service_id:               null,
-        customer_id:              null,
-        charge_id:                null,
-        expected_amount:          null,
-        delta:                    null,
-        status:                   'corrected',
-        corrected_by:             'surcharge_mapping',
-        unmatched_reason:         null,
-        source:                   'internal',
-        suggested_service_id:     null,
-      });
-    }
-    return group.map(() => ({ status: 'corrected' }));
-  }
 
   if (!serviceId) {
     // Unknown service code — hard gate; all lines in group go unmatched.
@@ -927,29 +941,28 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
         suggested_service_id:     suggestion?.id || null,
       });
     }
-    return group.map(() => ({ status: 'unmatched' }));
+    return [...results, ...baseLines.map(() => ({ status: 'unmatched' }))];
   }
 
   const poolHits = poolLookup(pool, trackKey);
 
   if (poolHits.length === 0) {
-    // Not in verified pool — process each line individually
+    // Not in verified pool — process each base line individually
     // (external booking path, or account-number lookup)
-    const results = [];
-    for (const line of group) {
-      const r = await processLine(line, runId, carrierId, serviceCodeMap, pool, mappings);
+    for (const line of baseLines) {
+      const r = await processLine(line, runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings);
       results.push(r);
     }
     return results;
   }
 
-  // ── Aggregate comparison ──────────────────────────────────────────────────
+  // ── Aggregate comparison (base/freight lines only) ────────────────────────
   const charge = poolHits[0];
 
-  // Per-shipment comparison: base cost_price ONLY.
-  // Fuel and HGV are verified via aggregate lines — never included here.
+  // Compare the SUM of base freight lines only.
+  // Surcharge lines have already been split out and auto-corrected above.
   const totalCarrierAmount = round2(
-    group.reduce((s, l) => s + (parseFloat(l.carrier_amount) || 0), 0)
+    baseLines.reduce((s, l) => s + (parseFloat(l.carrier_amount) || 0), 0)
   );
   const expectedBase = round2(parseFloat(charge.expected_cost) || 0);
   const delta        = round2(totalCarrierAmount - expectedBase);
@@ -1001,9 +1014,9 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
     }
   }
 
-  // Insert one reconciliation_line per original invoice line, all sharing
-  // the group-level result. This preserves the full invoice detail.
-  for (const line of group) {
+  // Insert one reconciliation_line per original invoice line (base lines only).
+  // Surcharge lines have already been inserted above.
+  for (const line of baseLines) {
     await insertLine(runId, {
       tracking_number:          String(line.tracking_number || '').trim(),
       carrier_account_no:       line.account_number || null,
@@ -1014,8 +1027,8 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
       service_id:               serviceId,
       customer_id:              charge.customer_id,
       charge_id:                charge.charge_id,
-      // Store the group-level expected + delta on every line so the UI can
-      // show the full picture rather than partial amounts.
+      // Store the group-level expected + delta on every base line so the UI
+      // can show the full picture rather than partial amounts.
       expected_amount:          expectedBase,
       delta:                    delta,
       status:                   groupStatus,
@@ -1026,7 +1039,7 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
     });
   }
 
-  return group.map(() => ({ status: groupStatus }));
+  return [...results, ...baseLines.map(() => ({ status: groupStatus }))];
 }
 
 // ─── Process a single line ────────────────────────────────────────────────────

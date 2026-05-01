@@ -998,15 +998,40 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
       }
     }
 
-    // Update run stats
+    // If scope = 'always' and a surcharge mapping was saved, bulk-apply it to all
+    // other unmatched lines in this run that share the same raw_service_code.
+    // This mirrors the bulk-map-service-codes behaviour for service mappings.
+    let bulkApplied = 0;
+    if (scope === 'always' && resolution_type === 'map_to_surcharge' && line.raw_service_code) {
+      const bulkRes = await query(`
+        UPDATE reconciliation_lines
+        SET    status       = 'corrected',
+               corrected_by = 'surcharge_mapping',
+               resolved_at  = NOW()
+        WHERE  run_id           = $1
+          AND  raw_service_code = $2
+          AND  status           = 'unmatched'
+          AND  id              <> $3
+        RETURNING id
+      `, [line.run_id, line.raw_service_code, lineId]);
+      bulkApplied = bulkRes.rowCount || 0;
+      if (bulkApplied > 0) {
+        console.log(`[reconciliation/resolve] Surcharge rule bulk-applied to ${bulkApplied} additional line(s) in run ${line.run_id}`);
+      }
+    }
+
+    // Recount run stats from DB — handles both single-resolve and bulk-apply cases
     await query(`
-      UPDATE reconciliation_runs
-      SET unmatched_count  = unmatched_count - 1,
-          corrected_count  = corrected_count + 1
-      WHERE id = $1
+      UPDATE reconciliation_runs rr
+      SET    unmatched_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'unmatched'),
+             corrected_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'corrected'),
+             status = CASE
+               WHEN (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'unmatched') > 0
+               THEN 'needs_review' ELSE 'complete' END
+      WHERE  id = $1
     `, [line.run_id]);
 
-    return res.json({ resolved: true, mapping_id: mappingId });
+    return res.json({ resolved: true, mapping_id: mappingId, bulk_applied: bulkApplied });
   } catch (err) {
     console.error('[reconciliation/resolve] POST error:', err);
     return res.status(500).json({ error: err.message });
