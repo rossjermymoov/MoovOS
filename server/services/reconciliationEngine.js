@@ -62,13 +62,27 @@ function poolLookup(pool, trackKey) {
   let hits = pool.get(trackKey);
   if (hits && hits.length) return hits;
 
-  // Try without "60" prefix (CSV had it, DB doesn't)
-  if (trackKey.startsWith('60') && trackKey.length > 4) {
-    hits = pool.get(trackKey.slice(2));
+  // Try without carrier prefix (CSV had it, DB stores the bare consignment number).
+  //
+  // DHL PWS invoices use a "60" prefix on every consignment number:
+  //   "601234567890" → strip "60"  → "1234567890"
+  //
+  // HOWEVER some DHL numbers start with "600..." — here the true consignment
+  // number starts after the "600" (3 chars), not after "60" (2 chars).
+  // Without this distinction, "600123456789" → "0123456789" (wrong leading zero).
+  //
+  // Strategy for "600..." numbers: try slice(3) first, then slice(2) as fallback.
+  if (trackKey.startsWith('600') && trackKey.length > 5) {
+    hits = pool.get(trackKey.slice(3));  // "600123456789" → "123456789"
+    if (hits && hits.length) return hits;
+    hits = pool.get(trackKey.slice(2));  // fallback: "600123456789" → "0123456789"
+    if (hits && hits.length) return hits;
+  } else if (trackKey.startsWith('60') && trackKey.length > 4) {
+    hits = pool.get(trackKey.slice(2));  // "601234567890" → "1234567890"
     if (hits && hits.length) return hits;
   }
 
-  // Try with "60" prefix added (DB had it, CSV was shorter)
+  // Try with "60" prefix added (DB has "60..." but CSV sent the shorter form)
   if (!trackKey.startsWith('60')) {
     hits = pool.get('60' + trackKey);
     if (hits && hits.length) return hits;
@@ -1312,14 +1326,45 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   // Fuel and HGV surcharges are verified separately via the aggregate line
   // checks — they are NEVER included in per-shipment comparisons.
   //
-  // Column surcharges (named per-shipment surcharges baked into carrier_amount):
-  // fullExpected = expectedFreight + colSurchargeTotal, so that delta reflects
-  // only unexplained discrepancies. When delta ≈ 0 thanks to surcharges, the
-  // line is marked corrected/column_surcharge rather than matched.
-  const charge = poolHits[0];
-  const expectedAmount = round2(parseFloat(charge.expected_cost) || 0);
-  const fullExpected   = round2(expectedAmount + colSurchargeTotal);
-  const delta          = round2(carrierAmount - fullExpected);
+  // Multi-parcel single-line invoices (line.parcel_count > 1):
+  //   The carrier bills the whole shipment on one CSV line. Sub-parcel cost is
+  //   PART OF THE BASE FREIGHT — it is NOT an additive surcharge. We recompute
+  //   expectedBase from the rate card: price_first + (parcel_count−1) × price_sub.
+  //   Column surcharges are zeroed out for this path to prevent double-counting
+  //   (the CSV profile may have mapped a sub-parcel column as a col-surcharge, which
+  //   would already be included in the rate-card-derived base).
+  //
+  // Single-parcel lines:
+  //   Column surcharges (named per-shipment surcharges baked into carrier_amount,
+  //   e.g. IOD, long-length) are added to expected so the delta reflects only
+  //   unexplained discrepancies.
+  const charge      = poolHits[0];
+  const parcelCount = Math.max(1, parseInt(line.parcel_count) || 1);
+
+  let expectedAmount          = round2(parseFloat(charge.expected_cost) || 0);
+  let effectiveColSurcharge   = colSurchargeTotal;  // default: include named surcharges
+
+  if (parcelCount > 1 && serviceId && charge.zone_id) {
+    // Single invoice line for a multi-parcel shipment.
+    // Recompute expected as price_first + (parcel_count − 1) × price_sub.
+    const perParcelKg = round2(parseFloat(line.billed_weight_kg) || 0);
+    if (perParcelKg > 0) {
+      const bandResult = await lookupCarrierBandCost(serviceId, perParcelKg, charge.zone_id);
+      if (bandResult && bandResult.pass === 1 && bandResult.price_sub != null) {
+        const recomputed = round2(bandResult.cost + (parcelCount - 1) * bandResult.price_sub);
+        console.log(
+          `[recon engine] Multi-parcel single-line (${parcelCount} parcels, ${perParcelKg}kg/parcel):` +
+          ` first=£${bandResult.cost} sub=£${bandResult.price_sub} → expected=£${recomputed}` +
+          ` (stored cost_price=£${expectedAmount})`
+        );
+        expectedAmount        = recomputed;
+        effectiveColSurcharge = 0;   // sub-parcel is base, not a surcharge add-on
+      }
+    }
+  }
+
+  const fullExpected = round2(expectedAmount + effectiveColSurcharge);
+  const delta        = round2(carrierAmount - fullExpected);
 
   line._expected_amount = fullExpected;
 
@@ -1377,8 +1422,8 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
         corrected_by:             null,
         unmatched_reason:         null,
         source:                   'internal',
-        correction_metadata:      colSurchargeTotal > 0
-          ? { col_surcharge_total: colSurchargeTotal, col_surcharges: colSurchargeBreakdown }
+        correction_metadata:      effectiveColSurcharge > 0
+          ? { col_surcharge_total: effectiveColSurcharge, col_surcharges: colSurchargeBreakdown }
           : null,
       });
       return { status: 'matched' };
@@ -1399,7 +1444,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       correction_reason:      correctionReason,
       weight_delta:           weightDeltaForMeta,
       billed_weight_kg:       billedWeight,
-      ...(colSurchargeTotal > 0 && { col_surcharge_total: colSurchargeTotal, col_surcharges: colSurchargeBreakdown }),
+      ...(effectiveColSurcharge > 0 && { col_surcharge_total: effectiveColSurcharge, col_surcharges: colSurchargeBreakdown }),
     };
     await insertLine(runId, {
       tracking_number:          trackingNumber,
