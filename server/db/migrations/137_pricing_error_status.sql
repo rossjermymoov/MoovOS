@@ -10,6 +10,22 @@
 
 ALTER TYPE charge_status ADD VALUE IF NOT EXISTS 'pricing_error';
 
--- Drop NOT NULL so pricing_error charges can have NULL prices.
-ALTER TABLE charges ALTER COLUMN cost_price DROP NOT NULL;
-ALTER TABLE charges ALTER COLUMN sell_price DROP NOT NULL;
+-- Drop NOT NULL on cost_price / sell_price so pricing_error charges can store NULL.
+-- Uses conditional blocks because older production DBs may use 'price'/'price_auto'
+-- column names rather than the newer 'cost_price'/'sell_price' naming.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'charges' AND column_name = 'cost_price'
+  ) THEN
+    ALTER TABLE charges ALTER COLUMN cost_price DROP NOT NULL;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'charges' AND column_name = 'sell_price'
+  ) THEN
+    ALTER TABLE charges ALTER COLUMN sell_price DROP NOT NULL;
+  END IF;
+END $$;
