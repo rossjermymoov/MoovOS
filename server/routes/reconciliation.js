@@ -899,14 +899,18 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
       return res.status(400).json({ error: 'Line is not Unmatched — cannot resolve' });
     }
 
-    // Mark line as resolved
+    // Mark line as resolved.
+    // Zero out the delta — the human has accepted the carrier's charge as correct.
+    // expected_amount is set to carrier_amount so the Corrected tab shows £0.00 delta.
     await query(`
       UPDATE reconciliation_lines
-      SET    status         = 'corrected',
-             corrected_by   = 'human',
-             resolved_by    = $2,
-             resolved_at    = NOW(),
-             resolution_notes = $3
+      SET    status           = 'corrected',
+             corrected_by     = 'human',
+             resolved_by      = $2,
+             resolved_at      = NOW(),
+             resolution_notes = $3,
+             expected_amount  = carrier_amount,
+             delta            = 0
       WHERE  id = $1
     `, [lineId, req.user?.id || null, notes || null]);
 
