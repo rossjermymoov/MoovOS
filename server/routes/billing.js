@@ -12,8 +12,34 @@ import express from 'express';
 import { createHash } from 'crypto';
 import { query } from '../db/index.js';
 import { normalisePayload as normaliseTrackingPayload, upsertEvent as upsertTrackingEvent } from './tracking.js';
+import { getTrace } from '../services/pricingEngine.js';
 
 const router = express.Router();
+
+// ─── GET /api/billing/pricing-trace ──────────────────────────────────────────
+// Dry-run trace for verifying the pricing engine math without creating charges.
+// ?serviceCode=DHL-220&customerId=5&physicalKg=1&postcode=LS1+1AA
+// &l=15&w=10&h=8   (optional dimensions in cm for volumetric calculation)
+router.get('/pricing-trace', async (req, res, next) => {
+  try {
+    const { serviceCode, customerId, physicalKg, postcode, l, w, h, countryIso } = req.query;
+    if (!serviceCode || !customerId || !physicalKg || !postcode) {
+      return res.status(400).json({ error: 'serviceCode, customerId, physicalKg and postcode are required' });
+    }
+    const dims = (l && w && h)
+      ? { l: parseFloat(l), w: parseFloat(w), h: parseFloat(h) }
+      : null;
+    const trace = await getTrace(
+      serviceCode,
+      parseInt(customerId),
+      parseFloat(physicalKg),
+      dims,
+      postcode,
+      countryIso || 'GB'
+    );
+    res.json(trace);
+  } catch (err) { next(err); }
+});
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

@@ -1,54 +1,55 @@
 /**
- * Moov OS — Pricing Engine
+ * Moov OS — Pricing Engine  (Webhook / Charge Creation)
  *
- * Given a full Voila shipment payload, calculates:
- *  - Zone matching
- *  - Weight (actual vs dimensional)
- *  - Cost price (courier rate cards)
- *  - Sell price (customer rate cards)
- *  - Fuel surcharge
- *  - Congestion surcharge
- *  - Rules engine charges
+ * "Gospel" flow per charge:
+ *   1. Weight        — max(physical, volumetric) using service.volumetric_divisor
+ *   2. Cost price    — lookupCarrierBandCost (two-pass; same logic as reconciliation engine)
+ *   3. Sell price    — lookupCustomerSellPrice (same exclusive-lower-bound boundary convention)
+ *   4. Dual fuel     — carrier_fuel_pct applied to cost; customer_fuel_pct applied to sell
+ *   5. Trace         — pricing_logic_trace JSONB stored on every base-rate charge
  *
- * Returns an array of charge objects ready to insert into the charges table.
+ * Band boundary convention (consistent with reconciliation engine and billing.js):
+ *   lower bound  EXCLUSIVE  →  weight  >  COALESCE(min_weight_kg, 0)
+ *   upper bound  INCLUSIVE  →  weight  <= max_weight_kg
+ *
+ * Two-pass cost lookup:
+ *   Pass 1 — weight fits inside a finite band  (max IS NOT NULL, weight <= max)
+ *   Pass 2 — weight exceeds every ceiling band  →  price_first + overageKg × cost_per_kg
  */
 
 import { query } from '../db/index.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Resolve a dot-notation path like "ship_to.country_iso" or "parcels[0].weight" against an object */
+function round2(n) { return Math.round(n * 100) / 100; }
+
+/** Resolve a dot-notation path like "ship_to.country_iso" or "parcels[0].weight" */
 function resolvePath(obj, path) {
   const parts = path.replace(/\[(\d+)\]/g, '.$1').split('.');
   return parts.reduce((curr, part) => (curr == null ? undefined : curr[part]), obj);
 }
 
-/** Evaluate a single condition against the payload */
 function evalCondition(condition, payload) {
-  const actual = resolvePath(payload, condition.json_field_path);
+  const actual   = resolvePath(payload, condition.json_field_path);
   const expected = condition.value;
-
   if (actual == null) return false;
-
-  const actualStr  = String(actual).trim();
-  const actualNum  = parseFloat(actual);
-
+  const actualStr = String(actual).trim();
+  const actualNum = parseFloat(actual);
   switch (condition.operator) {
-    case 'equals':                  return actualStr === expected;
-    case 'not_equals':              return actualStr !== expected;
-    case 'greater_than':            return actualNum > parseFloat(expected);
-    case 'less_than':               return actualNum < parseFloat(expected);
-    case 'greater_than_or_equal':   return actualNum >= parseFloat(expected);
-    case 'less_than_or_equal':      return actualNum <= parseFloat(expected);
-    case 'in':                      return expected.split(',').map(s => s.trim()).includes(actualStr);
-    case 'not_in':                  return !expected.split(',').map(s => s.trim()).includes(actualStr);
-    case 'starts_with':             return actualStr.startsWith(expected);
-    case 'contains':                return actualStr.includes(expected);
-    default:                        return false;
+    case 'equals':                return actualStr === expected;
+    case 'not_equals':            return actualStr !== expected;
+    case 'greater_than':          return actualNum > parseFloat(expected);
+    case 'less_than':             return actualNum < parseFloat(expected);
+    case 'greater_than_or_equal': return actualNum >= parseFloat(expected);
+    case 'less_than_or_equal':    return actualNum <= parseFloat(expected);
+    case 'in':                    return expected.split(',').map(s => s.trim()).includes(actualStr);
+    case 'not_in':                return !expected.split(',').map(s => s.trim()).includes(actualStr);
+    case 'starts_with':           return actualStr.startsWith(expected);
+    case 'contains':              return actualStr.includes(expected);
+    default:                      return false;
   }
 }
 
-/** Evaluate a full rule (all conditions) against the payload */
 function evalRule(conditions, payload) {
   if (!conditions.length) return false;
   let result = evalCondition(conditions[0], payload);
@@ -60,7 +61,6 @@ function evalRule(conditions, payload) {
   return result;
 }
 
-/** Extract postcode outward code (e.g. "SW1A 2AA" → "SW1A") */
 function outcodeOf(postcode) {
   if (!postcode) return '';
   return postcode.trim().split(' ')[0].toUpperCase();
@@ -70,15 +70,11 @@ function outcodeOf(postcode) {
 
 async function matchZone(serviceId, countryIso, postcode) {
   const outcode = outcodeOf(postcode);
-
-  // Get all zones for this service with their country codes and postcode rules.
-  // ORDER BY: zones with postcode rules (Remote, Excluded) first — they have
-  // narrower scope and must be evaluated before catch-all country zones.
-  // Without this, a Standard GB zone can be returned for a Remote postcode.
   const zones = await query(
     `SELECT z.id, z.name,
        array_agg(DISTINCT zcc.country_iso) FILTER (WHERE zcc.id IS NOT NULL) AS countries,
-       json_agg(jsonb_build_object('prefix',zpr.postcode_prefix,'type',zpr.rule_type)) FILTER (WHERE zpr.id IS NOT NULL) AS postcode_rules
+       json_agg(jsonb_build_object('prefix',zpr.postcode_prefix,'type',zpr.rule_type))
+         FILTER (WHERE zpr.id IS NOT NULL) AS postcode_rules
      FROM zones z
      LEFT JOIN zone_country_codes zcc ON zcc.zone_id = z.id
      LEFT JOIN zone_postcode_rules zpr ON zpr.zone_id = z.id
@@ -87,37 +83,27 @@ async function matchZone(serviceId, countryIso, postcode) {
      ORDER BY (SELECT COUNT(*) FROM zone_postcode_rules WHERE zone_id = z.id) DESC`,
     [serviceId]
   );
-
   for (const zone of zones.rows) {
-    const countries = zone.countries || [];
-    const rules = zone.postcode_rules || [];
-
-    // Country must match
+    const countries    = zone.countries     || [];
+    const rules        = zone.postcode_rules || [];
     if (!countries.includes(countryIso)) continue;
-
-    // Check postcode inclusion/exclusion rules
     const includeRules = rules.filter(r => r.type === 'include');
     const excludeRules = rules.filter(r => r.type === 'exclude');
-
-    // If any exclude rule matches, skip
     if (excludeRules.some(r => outcode.startsWith(r.prefix))) continue;
-
-    // If include rules exist, postcode must match one of them
     if (includeRules.length && !includeRules.some(r => outcode.startsWith(r.prefix))) continue;
-
     return zone;
   }
-
   return null;
 }
 
-// ─── Weight calculation ───────────────────────────────────────────────────────
+// ─── Step 1: Weight ───────────────────────────────────────────────────────────
+// Returns physical_kg, volumetric_kg, charged_kg, and the divisor used.
+// Both weights are stored in the trace so the reason for the chosen weight
+// is always auditable.
 
 async function calcWeight(serviceId, parcel) {
-  const actualKg = parseFloat(parcel.weight) || 0;
+  const physicalKg = round2(parseFloat(parcel.weight) || 0);
 
-  // Pull the per-service volumetric divisor directly from courier_services.
-  // NULL or 0 → skip dimensional calculation entirely (physical weight only).
   const svcRes = await query(
     `SELECT volumetric_divisor FROM courier_services WHERE id = $1`,
     [serviceId]
@@ -126,96 +112,217 @@ async function calcWeight(serviceId, parcel) {
     ? parseInt(svcRes.rows[0].volumetric_divisor || 0, 10)
     : 0;
 
-  let dimKg = 0;
+  let volumetricKg = 0;
   if (divisor > 0) {
-    const dim_length = parseFloat(parcel.dim_length || parcel.length || 0);
-    const dim_width  = parseFloat(parcel.dim_width  || parcel.width  || 0);
-    const dim_height = parseFloat(parcel.dim_height || parcel.height || 0);
-    if (dim_length > 0 && dim_width > 0 && dim_height > 0) {
-      dimKg = (dim_length * dim_width * dim_height) / divisor;
+    const l = parseFloat(parcel.dim_length || parcel.length || 0);
+    const w = parseFloat(parcel.dim_width  || parcel.width  || 0);
+    const h = parseFloat(parcel.dim_height || parcel.height || 0);
+    if (l > 0 && w > 0 && h > 0) {
+      volumetricKg = round2((l * w * h) / divisor);
     }
   }
-  // divisor = 0 or NULL → dimKg stays 0, so chargedKg = actualKg (physical only)
 
-  // Use whichever is higher — actual weight wins ties
-  const chargedKg = dimKg > actualKg ? dimKg : actualKg;
-  return { actualKg, dimKg: parseFloat(dimKg.toFixed(3)), chargedKg: parseFloat(chargedKg.toFixed(3)) };
+  const chargedKg   = volumetricKg > physicalKg ? volumetricKg : physicalKg;
+  const weightBasis = volumetricKg > physicalKg ? 'volumetric' : 'physical';
+
+  return {
+    physicalKg,
+    volumetricKg,
+    chargedKg,
+    volumetricDivisor: divisor || null,
+    weightBasis,
+  };
 }
 
-// ─── Cost price lookup ────────────────────────────────────────────────────────
+// ─── Step 2: Cost price — two-pass carrier band lookup ────────────────────────
+//
+// Mirrors reconciliationEngine.lookupCarrierBandCost exactly.
+//
+// Pass 1 — weight sits within a band's finite ceiling:
+//   weight > COALESCE(min_weight_kg, 0)  (exclusive lower)
+//   weight <= max_weight_kg              (inclusive upper)
+//   max_weight_kg IS NOT NULL            (finite bands only — open-ended bands block Pass 2 if included)
+//
+// Pass 2 — weight exceeds every ceiling:
+//   Finds the band with the highest finite max, then:
+//   cost = price_first + (weight - max) × cost_per_kg
+//
+// Returns { cost, pass, overageKg, bandLabel } or null if no band configured.
 
-async function lookupCostPrice(serviceId, zoneId, weightKg, isFirstParcel) {
-  const today = new Date().toISOString().split('T')[0];
+async function lookupCarrierBandCost(serviceId, weightKg, zoneId) {
+  if (!serviceId || !(weightKg > 0)) return null;
 
-  // Check custom rate cards first
-  const custom = await query(
-    `SELECT price_first, price_sub, cost_per_kg, cost_per_kg_threshold_kg
-     FROM custom_cost_rate_cards
-     WHERE courier_service_id = $1 AND zone_id = $2
-       AND min_weight_kg < $3 AND max_weight_kg >= $3
-       AND (active_from IS NULL OR active_from <= $4)
-       AND (active_to   IS NULL OR active_to   >= $4)
-     ORDER BY active_from DESC NULLS LAST, min_weight_kg DESC LIMIT 1`,
-    [serviceId, zoneId, weightKg, today]
-  );
+  // Pass 1
+  const p1 = zoneId
+    ? await query(`
+        SELECT wb.id, wb.price_first, wb.price_sub,
+               wb.cost_per_kg, wb.min_weight_kg, wb.max_weight_kg
+        FROM   weight_bands wb
+        JOIN   zones z ON z.id = wb.zone_id
+        WHERE  z.courier_service_id = $1
+          AND  z.id = $3
+          AND  wb.max_weight_kg IS NOT NULL
+          AND  $2 >  COALESCE(wb.min_weight_kg, 0)
+          AND  $2 <= wb.max_weight_kg
+        ORDER  BY wb.min_weight_kg DESC
+        LIMIT  1
+      `, [serviceId, weightKg, zoneId])
+    : await query(`
+        SELECT wb.id, wb.price_first, wb.price_sub,
+               wb.cost_per_kg, wb.min_weight_kg, wb.max_weight_kg
+        FROM   weight_bands wb
+        JOIN   zones z ON z.id = wb.zone_id
+        WHERE  z.courier_service_id = $1
+          AND  wb.max_weight_kg IS NOT NULL
+          AND  $2 >  COALESCE(wb.min_weight_kg, 0)
+          AND  $2 <= wb.max_weight_kg
+        ORDER  BY wb.price_first ASC
+        LIMIT  1
+      `, [serviceId, weightKg]);
 
-  let priceFirst, priceSub, costPerKg, costPerKgThreshold;
-  if (custom.rows.length) {
-    const row = custom.rows[0];
-    priceFirst         = parseFloat(row.price_first);
-    priceSub           = row.price_sub           != null ? parseFloat(row.price_sub)           : null;
-    costPerKg          = row.cost_per_kg          != null ? parseFloat(row.cost_per_kg)          : null;
-    costPerKgThreshold = row.cost_per_kg_threshold_kg != null ? parseFloat(row.cost_per_kg_threshold_kg) : 30;
-  } else {
-    // Standard weight band
-    const band = await query(
-      `SELECT price_first, price_sub, cost_per_kg, cost_per_kg_threshold_kg
-       FROM weight_bands
-       WHERE zone_id = $1 AND min_weight_kg < $2 AND max_weight_kg >= $2
-       ORDER BY min_weight_kg DESC LIMIT 1`,
-      [zoneId, weightKg]
+  if (p1.rows.length) {
+    const b = p1.rows[0];
+    return {
+      cost:       round2(parseFloat(b.price_first || 0)),
+      costSub:    b.price_sub != null ? round2(parseFloat(b.price_sub)) : null,
+      pass:       1,
+      overageKg:  null,
+      bandLabel:  `${b.min_weight_kg ?? 0}–${b.max_weight_kg}kg`,
+    };
+  }
+
+  // Pass 2 — ceiling band overage
+  const p2 = zoneId
+    ? await query(`
+        SELECT wb.id, wb.price_first, wb.cost_per_kg, wb.max_weight_kg
+        FROM   weight_bands wb
+        JOIN   zones z ON z.id = wb.zone_id
+        WHERE  z.courier_service_id = $1
+          AND  z.id = $3
+          AND  wb.max_weight_kg IS NOT NULL
+          AND  $2 > wb.max_weight_kg
+        ORDER  BY wb.max_weight_kg DESC
+        LIMIT  1
+      `, [serviceId, weightKg, zoneId])
+    : await query(`
+        SELECT wb.id, wb.price_first, wb.cost_per_kg, wb.max_weight_kg
+        FROM   weight_bands wb
+        JOIN   zones z ON z.id = wb.zone_id
+        WHERE  z.courier_service_id = $1
+          AND  wb.max_weight_kg IS NOT NULL
+          AND  $2 > wb.max_weight_kg
+        ORDER  BY wb.max_weight_kg DESC
+        LIMIT  1
+      `, [serviceId, weightKg]);
+
+  if (p2.rows.length) {
+    const b           = p2.rows[0];
+    const overageRate = parseFloat(b.cost_per_kg || 0);
+    const bandMax     = parseFloat(b.max_weight_kg);
+    if (!overageRate || !isFinite(bandMax)) return null;
+
+    const overageKg = round2(weightKg - bandMax);
+    const cost      = round2(parseFloat(b.price_first || 0) + overageKg * overageRate);
+    console.log(
+      `[pricing] Cost Pass 2 overage: ${weightKg}kg > ceiling ${bandMax}kg` +
+      ` — £${b.price_first} + (${overageKg}kg × £${overageRate}) = £${cost}`
     );
-    if (!band.rows.length) return null;
-    const row = band.rows[0];
-    priceFirst         = parseFloat(row.price_first);
-    priceSub           = row.price_sub           != null ? parseFloat(row.price_sub)           : null;
-    costPerKg          = row.cost_per_kg          != null ? parseFloat(row.cost_per_kg)          : null;
-    costPerKgThreshold = row.cost_per_kg_threshold_kg != null ? parseFloat(row.cost_per_kg_threshold_kg) : 30;
+    return {
+      cost,
+      costSub:   null,
+      pass:      2,
+      overageKg,
+      bandLabel: `>${bandMax}kg (overage @ £${overageRate}/kg)`,
+    };
   }
 
-  // Base rate: first parcel uses price_first; subsequent parcels use price_sub (if set)
-  let basePrice = isFirstParcel ? priceFirst : (priceSub ?? priceFirst);
-
-  // Per-kg surcharge above threshold (e.g. DHL: fixed up to 30 kg, then £x/kg or part thereof)
-  if (costPerKg != null && weightKg > costPerKgThreshold) {
-    const kgsOver = Math.ceil(weightKg - costPerKgThreshold);
-    basePrice += kgsOver * costPerKg;
-  }
-
-  return basePrice;
+  return null;
 }
 
-// ─── Sell price calculation ───────────────────────────────────────────────────
+// ─── Step 3: Sell price — customer rate card ──────────────────────────────────
+//
+// Reads customer_rates (the same table billing.js uses for reprice).
+// Identical boundary convention to lookupCarrierBandCost:
+//   weight > COALESCE(min_weight_kg, 0)  (exclusive lower)
+//   weight <= max_weight_kg              (inclusive upper, Pass 1 — finite bands only)
+//
+// If no finite band matches, tries open-ended bands (max IS NULL) as a catch-all.
+// Per-kg overage (per_kg_rate / per_kg_threshold_kg) is applied on top when present.
+//
+// Returns { sellPrice, sellSub, pass, overageKg, bandLabel } or null.
 
-async function lookupSellPrice(customerId, serviceId, zoneId, weightKg, costPrice) {
-  const pricing = await query(
-    `SELECT pricing_method, fixed_price, markup_pct, margin_pct
-     FROM customer_pricing
-     WHERE customer_id = $1 AND courier_service_id = $2 AND zone_id = $3
-       AND min_weight_kg < $4 AND max_weight_kg >= $4
-     ORDER BY min_weight_kg DESC LIMIT 1`,
-    [customerId, serviceId, zoneId, weightKg]
-  );
+async function lookupCustomerSellPrice(customerId, serviceCode, weightKg, zoneName) {
+  if (!customerId || !serviceCode || !(weightKg > 0)) return null;
 
-  if (!pricing.rows.length) return null;
-  const { pricing_method, fixed_price, markup_pct, margin_pct } = pricing.rows[0];
+  // Pass 1 — finite band
+  const p1 = await query(`
+    SELECT id, price, price_sub, per_kg_rate, per_kg_threshold_kg,
+           min_weight_kg, max_weight_kg
+    FROM   customer_rates
+    WHERE  customer_id  = $1
+      AND  service_code ILIKE $2
+      AND  zone_name    ILIKE $3
+      AND  max_weight_kg IS NOT NULL
+      AND  $4 >  COALESCE(min_weight_kg, 0)
+      AND  $4 <= max_weight_kg
+    ORDER  BY min_weight_kg DESC
+    LIMIT  1
+  `, [customerId, serviceCode, zoneName, weightKg]);
 
-  switch (pricing_method) {
-    case 'fixed':      return parseFloat(fixed_price);
-    case 'markup_pct': return costPrice * (1 + parseFloat(markup_pct) / 100);
-    case 'margin_pct': return costPrice / (1 - parseFloat(margin_pct) / 100);
-    default:           return null;
+  if (p1.rows.length) {
+    const r = p1.rows[0];
+    let sellPrice = round2(parseFloat(r.price || 0));
+    let overageKg = null;
+
+    // Per-kg overage above threshold (e.g. customer rate: £X + £Y/kg above 30kg)
+    if (r.per_kg_rate != null && r.per_kg_threshold_kg != null && weightKg > parseFloat(r.per_kg_threshold_kg)) {
+      overageKg  = round2(weightKg - parseFloat(r.per_kg_threshold_kg));
+      sellPrice  = round2(sellPrice + overageKg * parseFloat(r.per_kg_rate));
+    }
+
+    return {
+      sellPrice,
+      sellSub:   r.price_sub != null ? round2(parseFloat(r.price_sub)) : null,
+      pass:      1,
+      overageKg,
+      bandLabel: `${r.min_weight_kg ?? 0}–${r.max_weight_kg}kg`,
+    };
   }
+
+  // Pass 2-equivalent — open-ended top band (max IS NULL)
+  const p2 = await query(`
+    SELECT id, price, price_sub, per_kg_rate, per_kg_threshold_kg,
+           min_weight_kg, max_weight_kg
+    FROM   customer_rates
+    WHERE  customer_id  = $1
+      AND  service_code ILIKE $2
+      AND  zone_name    ILIKE $3
+      AND  max_weight_kg IS NULL
+      AND  $4 > COALESCE(min_weight_kg, 0)
+    ORDER  BY min_weight_kg DESC NULLS LAST
+    LIMIT  1
+  `, [customerId, serviceCode, zoneName, weightKg]);
+
+  if (p2.rows.length) {
+    const r = p2.rows[0];
+    let sellPrice = round2(parseFloat(r.price || 0));
+    let overageKg = null;
+
+    if (r.per_kg_rate != null && r.per_kg_threshold_kg != null && weightKg > parseFloat(r.per_kg_threshold_kg)) {
+      overageKg  = round2(weightKg - parseFloat(r.per_kg_threshold_kg));
+      sellPrice  = round2(sellPrice + overageKg * parseFloat(r.per_kg_rate));
+    }
+
+    return {
+      sellPrice,
+      sellSub:   r.price_sub != null ? round2(parseFloat(r.price_sub)) : null,
+      pass:      2,
+      overageKg,
+      bandLabel: `>${r.min_weight_kg ?? 0}kg (open-ended)`,
+    };
+  }
+
+  return null;
 }
 
 // ─── Main engine ──────────────────────────────────────────────────────────────
@@ -226,7 +333,7 @@ export async function processShipment(payload) {
   const errors  = [];
 
   try {
-    // 1. IDENTIFY CUSTOMER
+    // ── 1. IDENTIFY CUSTOMER ──────────────────────────────────────────────────
     const dcId = shipment?.billing?.customer_dc_id || shipment?.account_number;
     if (!dcId) throw new Error('No customer DC ID in payload (billing.customer_dc_id or account_number)');
 
@@ -236,39 +343,42 @@ export async function processShipment(payload) {
     if (!custRow.rows.length) throw new Error(`No customer found with dc_id = ${dcId}`);
     const { id: customerId, multi_box_pricing } = custRow.rows[0];
 
-    // 2. IDENTIFY SERVICE
+    // ── 2. IDENTIFY SERVICE ───────────────────────────────────────────────────
     const serviceCode = shipment?.courier?.service_code || shipment?.dc_service_id;
     if (!serviceCode) throw new Error('No service_code in payload');
 
     const svcRow = await query(
-      'SELECT id, fuel_group_id FROM courier_services WHERE service_code = $1',
+      'SELECT id, service_code, fuel_group_id FROM courier_services WHERE service_code = $1',
       [serviceCode]
     );
     if (!svcRow.rows.length) throw new Error(`No courier service found with code = ${serviceCode}`);
     const { id: serviceId, fuel_group_id: fuelGroupId } = svcRow.rows[0];
 
-    // 3. MATCH ZONE
+    // ── 3. MATCH ZONE ─────────────────────────────────────────────────────────
     const countryIso = shipment?.ship_to?.country_iso;
     const postcode   = shipment?.ship_to?.postcode;
 
-    // ISO Guard: must be exactly 2 uppercase letters — no silent coercion.
-    // Reject immediately so a bad payload never lands in the wrong zone.
     if (!countryIso || !/^[A-Z]{2}$/.test(countryIso)) {
       throw new Error(
-        `Validation Error: ship_to.country_iso "${countryIso}" is not a valid 2-letter ISO code — ` +
-        `expected format: "GB", "DE", "FR" etc. Shipment rejected.`
+        `Validation Error: ship_to.country_iso "${countryIso}" is not a valid 2-letter ISO code.`
       );
     }
 
-    // 3a. RESOLVE FUEL RATES (customer-specific, keyed to fuel group)
-    // Cost %: fuel_groups.fuel_surcharge_pct  (carrier-side)
-    // Sell %: customer_fuel_group_pricing.sell_pct  (customer-specific)
-    //         fallback: fuel_groups.standard_sell_pct  (default sell %)
+    const zone = await matchZone(serviceId, countryIso, postcode);
+    if (!zone) throw new Error(`No zone matched for service ${serviceCode}, country ${countryIso}, postcode ${postcode}`);
+
+    // ── 4. DUAL FUEL RATES ────────────────────────────────────────────────────
+    // carrier_fuel_pct  → applied to base COST  (what we pay the carrier)
+    // customer_fuel_pct → applied to base SELL  (what the customer pays us)
+    // Both come from the fuel_group assigned to this service.
     let fuelCostPct = 0;
     let fuelSellPct = 0;
+    let fuelGroupName = null;
+
     if (fuelGroupId) {
       const fuelRes = await query(
-        `SELECT fg.fuel_surcharge_pct                            AS cost_pct,
+        `SELECT fg.name                                           AS fuel_group_name,
+                fg.fuel_surcharge_pct                            AS cost_pct,
                 COALESCE(cfgp.sell_pct, fg.standard_sell_pct, 0) AS sell_pct
          FROM   fuel_groups fg
          LEFT JOIN customer_fuel_group_pricing cfgp
@@ -277,96 +387,151 @@ export async function processShipment(payload) {
         [fuelGroupId, customerId]
       );
       if (fuelRes.rows.length) {
-        fuelCostPct = parseFloat(fuelRes.rows[0].cost_pct || 0);
-        fuelSellPct = parseFloat(fuelRes.rows[0].sell_pct || 0);
-        console.log(`[pricing] Fuel group ${fuelGroupId}: cost=${fuelCostPct}%, sell=${fuelSellPct}% (customer ${customerId})`);
-      } else {
-        console.warn(`[pricing] Fuel group ${fuelGroupId} not found — fuel charges will be 0`);
+        fuelGroupName = fuelRes.rows[0].fuel_group_name;
+        fuelCostPct   = round2(parseFloat(fuelRes.rows[0].cost_pct || 0));
+        fuelSellPct   = round2(parseFloat(fuelRes.rows[0].sell_pct || 0));
+        console.log(
+          `[pricing] Fuel "${fuelGroupName}" — cost: ${fuelCostPct}%, sell: ${fuelSellPct}% (customer ${customerId})`
+        );
       }
     }
 
-    const zone = await matchZone(serviceId, countryIso, postcode);
-    if (!zone) throw new Error(`No zone matched for service ${serviceCode}, country ${countryIso}, postcode ${postcode}`);
-
-    // 4. PROCESS PARCELS
-    const parcels     = shipment.parcels || [];
+    // ── 5. PROCESS PARCELS ────────────────────────────────────────────────────
+    const parcels      = shipment.parcels || [];
     const totalParcels = parcels.length;
-    const voilaId     = shipment.id;
-    const orderId     = shipment.reference || shipment.reference_2 || String(voilaId);
+    const voilaId      = shipment.id;
+    const orderId      = shipment.reference || shipment.reference_2 || String(voilaId);
     const trackingCode = shipment?.courier?.tracking_code || null;
     const despatchDate = shipment.collection_date ? new Date(shipment.collection_date) : null;
 
     const commonFields = {
-      customer_id:        customerId,
-      voila_shipment_id:  voilaId,
-      order_id:           orderId,
-      tracking_code:      trackingCode,
-      courier_service_id: serviceId,
-      zone_id:            zone.id,
-      ship_to_postcode:   postcode,
+      customer_id:         customerId,
+      voila_shipment_id:   voilaId,
+      order_id:            orderId,
+      tracking_code:       trackingCode,
+      courier_service_id:  serviceId,
+      zone_id:             zone.id,
+      ship_to_postcode:    postcode,
       ship_to_country_iso: countryIso,
-      ship_to_name:       shipment?.ship_to?.name,
-      parcel_count:       totalParcels,
-      despatch_date:      despatchDate,
-      raw_payload:        JSON.stringify(payload),
+      ship_to_name:        shipment?.ship_to?.name,
+      parcel_count:        totalParcels,
+      despatch_date:       despatchDate,
+      raw_payload:         JSON.stringify(payload),
     };
 
     for (let i = 0; i < parcels.length; i++) {
-      const parcel      = parcels[i];
-      const isFirst     = i === 0;
-      const parcelNum   = i + 1;
+      const parcel    = parcels[i];
+      const isFirst   = i === 0;
+      const parcelNum = i + 1;
 
-      // Weight
-      const { actualKg, dimKg, chargedKg } = await calcWeight(serviceId, parcel);
+      // ── Step 1: Weight ─────────────────────────────────────────────────────
+      const weightResult = await calcWeight(serviceId, parcel);
+      const { physicalKg, volumetricKg, chargedKg, volumetricDivisor, weightBasis } = weightResult;
 
-      // Cost: multi-box uses sub rate for all but first; override below if enabled
-      let useFirst = isFirst;
-      if (multi_box_pricing && !isFirst) useFirst = false; // sub rate improves margin
+      // ── Step 2: Cost price (two-pass carrier band) ─────────────────────────
+      const useFirstParcel = isFirst || !multi_box_pricing;
+      const costResult = await lookupCarrierBandCost(serviceId, chargedKg, zone.id);
 
-      const costPrice = await lookupCostPrice(serviceId, zone.id, chargedKg, useFirst);
-      if (costPrice == null) {
-        errors.push(`No cost price found for parcel ${parcelNum} (${chargedKg}kg)`);
+      if (!costResult) {
+        errors.push(`No carrier band found for parcel ${parcelNum} (${chargedKg}kg, zone ${zone.name})`);
         continue;
       }
 
-      // Sell
-      let sellPrice = await lookupSellPrice(customerId, serviceId, zone.id, chargedKg, costPrice);
-      if (sellPrice == null) {
-        // No customer pricing configured — use cost as fallback (0 margin)
-        sellPrice = costPrice;
-        errors.push(`No customer pricing found for parcel ${parcelNum} — using cost price`);
+      // First parcel uses price_first; additional parcels use price_sub if set
+      const baseCost = useFirstParcel
+        ? costResult.cost
+        : (costResult.costSub ?? costResult.cost);
+
+      // ── Step 3: Sell price (customer rate card) ────────────────────────────
+      const sellResult = await lookupCustomerSellPrice(customerId, serviceCode, chargedKg, zone.name);
+
+      let baseSell;
+      if (!sellResult) {
+        baseSell = baseCost;  // fallback: cost = sell (0 margin), surfaced via error
+        errors.push(`No customer rate found for parcel ${parcelNum} (${chargedKg}kg, zone "${zone.name}", service "${serviceCode}") — using cost price`);
+      } else {
+        baseSell = useFirstParcel
+          ? sellResult.sellPrice
+          : (sellResult.sellSub ?? sellResult.sellPrice);
       }
 
-      // Base rate charge
+      // ── Step 4: Dual fuel ──────────────────────────────────────────────────
+      const fuelCost = fuelCostPct > 0 ? round2(baseCost * fuelCostPct / 100) : 0;
+      const fuelSell = fuelSellPct > 0 ? round2(baseSell * fuelSellPct / 100) : 0;
+
+      const totalCost = round2(baseCost + fuelCost);
+      const totalSell = round2(baseSell + fuelSell);
+      const profit    = round2(totalSell - totalCost);
+
+      // ── Step 5: Pricing logic trace ────────────────────────────────────────
+      const pricing_logic_trace = {
+        // Weight
+        physical_kg:        physicalKg,
+        volumetric_kg:      volumetricKg,
+        volumetric_divisor: volumetricDivisor,
+        charged_kg:         chargedKg,
+        weight_basis:       weightBasis,                // 'physical' | 'volumetric'
+        // Cost
+        cost_pass:          costResult.pass,             // 1 (normal) or 2 (overage)
+        cost_band:          costResult.bandLabel,
+        cost_overage_kg:    costResult.overageKg,
+        base_cost:          baseCost,
+        fuel_cost_pct:      fuelCostPct,
+        fuel_cost:          fuelCost,
+        total_cost:         totalCost,
+        // Sell
+        sell_band:          sellResult?.bandLabel  || null,
+        sell_pass:          sellResult?.pass       || null,
+        sell_overage_kg:    sellResult?.overageKg  || null,
+        base_sell:          baseSell,
+        fuel_sell_pct:      fuelSellPct,
+        fuel_sell:          fuelSell,
+        total_sell:         totalSell,
+        // P&L
+        profit,
+        margin_pct:         totalSell > 0 ? round2((profit / totalSell) * 100) : 0,
+        // Meta
+        zone:               zone.name,
+        fuel_group:         fuelGroupName,
+        parcel_number:      parcelNum,
+        is_first_parcel:    isFirst,
+      };
+
+      console.log(
+        `[pricing] Parcel ${parcelNum}: ${chargedKg}kg (${weightBasis})` +
+        ` cost=£${baseCost}+£${fuelCost}fuel=£${totalCost}` +
+        ` sell=£${baseSell}+£${fuelSell}fuel=£${totalSell}` +
+        ` profit=£${profit}`
+      );
+
+      // ── Base rate charge ───────────────────────────────────────────────────
       charges.push({
         ...commonFields,
-        charge_type:           'base_rate',
+        charge_type:           'courier',
         parcel_number:         parcelNum,
-        weight_actual_kg:      actualKg,
-        weight_dimensional_kg: dimKg,
+        weight_actual_kg:      physicalKg,
+        weight_dimensional_kg: volumetricKg,
         weight_charged_kg:     chargedKg,
-        cost_price:            costPrice,
-        sell_price:            sellPrice,
+        cost_price:            baseCost,
+        sell_price:            baseSell,
         status:                'unverified',
+        pricing_logic_trace,
       });
 
-      // 7. FUEL SURCHARGE
-      // Cost from fuel_groups.fuel_surcharge_pct (carrier rate).
-      // Sell from customer_fuel_group_pricing.sell_pct → fuel_groups.standard_sell_pct.
-      // Both resolved above via fuelCostPct / fuelSellPct.
+      // ── Fuel surcharge (separate line for audit) ───────────────────────────
       if (fuelCostPct > 0 || fuelSellPct > 0) {
         charges.push({
           ...commonFields,
-          charge_type:   'fuel_surcharge',
+          charge_type:   'fuel',
           parcel_number: parcelNum,
-          cost_price:    +(costPrice * fuelCostPct / 100).toFixed(2),
-          sell_price:    +(sellPrice * fuelSellPct / 100).toFixed(2),
+          cost_price:    fuelCost,
+          sell_price:    fuelSell,
           status:        'unverified',
         });
       }
     }
 
-    // 8. CONGESTION SURCHARGE (once per shipment, not per parcel)
+    // ── Congestion surcharge (once per shipment) ───────────────────────────────
     const outcode = outcodeOf(postcode);
     const congestion = await query(
       `SELECT fee FROM congestion_surcharges
@@ -375,17 +540,11 @@ export async function processShipment(payload) {
       [serviceId, outcode]
     );
     if (congestion.rows.length) {
-      const fee = parseFloat(congestion.rows[0].fee);
-      charges.push({
-        ...commonFields,
-        charge_type: 'congestion_surcharge',
-        cost_price:  fee,
-        sell_price:  fee,
-        status:      'unverified',
-      });
+      const fee = round2(parseFloat(congestion.rows[0].fee));
+      charges.push({ ...commonFields, charge_type: 'congestion_surcharge', cost_price: fee, sell_price: fee, status: 'unverified' });
     }
 
-    // 9. RULES ENGINE
+    // ── Rules engine ───────────────────────────────────────────────────────────
     const rules = await query(
       `SELECT r.*, json_agg(jsonb_build_object(
          'logic_operator',c.logic_operator,'json_field_path',c.json_field_path,
@@ -402,25 +561,23 @@ export async function processShipment(payload) {
       const conditions = rule.conditions || [];
       if (!evalRule(conditions, shipment)) continue;
 
-      // Calculate charge amount
-      const baseCharge = charges.find(c => c.charge_type === 'base_rate');
-      const baseRate   = baseCharge ? parseFloat(baseCharge.cost_price) : 0;
-      const chargedKg  = baseCharge ? parseFloat(baseCharge.weight_charged_kg || 0) : 0;
-      const parcelCount = totalParcels;
+      const baseCharge  = charges.find(c => c.charge_type === 'courier');
+      const baseRate    = baseCharge ? parseFloat(baseCharge.cost_price) : 0;
+      const chargedKg   = baseCharge ? parseFloat(baseCharge.weight_charged_kg || 0) : 0;
 
       let chargeAmt = 0;
       switch (rule.charge_method) {
         case 'fixed':      chargeAmt = parseFloat(rule.charge_value); break;
         case 'percentage': chargeAmt = baseRate * parseFloat(rule.charge_value) / 100; break;
         case 'per_kg':     chargeAmt = chargedKg * parseFloat(rule.charge_value); break;
-        case 'per_parcel': chargeAmt = parcelCount * parseFloat(rule.charge_value); break;
+        case 'per_parcel': chargeAmt = totalParcels * parseFloat(rule.charge_value); break;
       }
 
       charges.push({
         ...commonFields,
         charge_type: rule.name,
-        cost_price:  +chargeAmt.toFixed(2),
-        sell_price:  +chargeAmt.toFixed(2),
+        cost_price:  round2(chargeAmt),
+        sell_price:  round2(chargeAmt),
         status:      'unverified',
       });
     }
@@ -432,7 +589,8 @@ export async function processShipment(payload) {
   }
 }
 
-/** Insert calculated charges into the database */
+// ─── Insert calculated charges ────────────────────────────────────────────────
+
 export async function insertCharges(charges) {
   const inserted = [];
   for (const c of charges) {
@@ -443,20 +601,95 @@ export async function insertCharges(charges) {
          weight_actual_kg, weight_dimensional_kg, weight_charged_kg,
          cost_price, sell_price, status,
          despatch_date, ship_to_postcode, ship_to_country_iso, ship_to_name,
-         parcel_count, raw_payload
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+         parcel_count, raw_payload, pricing_logic_trace
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
        ON CONFLICT DO NOTHING
        RETURNING *`,
       [
         c.customer_id, c.voila_shipment_id, c.order_id, c.tracking_code,
         c.courier_service_id, c.zone_id, c.charge_type, c.parcel_number || null,
-        c.weight_actual_kg || null, c.weight_dimensional_kg || null, c.weight_charged_kg || null,
+        c.weight_actual_kg      || null,
+        c.weight_dimensional_kg || null,
+        c.weight_charged_kg     || null,
         c.cost_price, c.sell_price, c.status,
-        c.despatch_date || null, c.ship_to_postcode || null, c.ship_to_country_iso || null, c.ship_to_name || null,
-        c.parcel_count || null, c.raw_payload ? JSON.parse(c.raw_payload) : null,
+        c.despatch_date         || null,
+        c.ship_to_postcode      || null,
+        c.ship_to_country_iso   || null,
+        c.ship_to_name          || null,
+        c.parcel_count          || null,
+        c.raw_payload ? JSON.parse(c.raw_payload) : null,
+        c.pricing_logic_trace   ? JSON.stringify(c.pricing_logic_trace) : null,
       ]
     );
     if (result.rows.length) inserted.push(result.rows[0]);
   }
   return inserted;
+}
+
+// ─── Trace example helper (for verification) ─────────────────────────────────
+// Returns a dry-run trace for any weight without touching the DB.
+// Call via: GET /api/pricing/trace?serviceCode=DHL-220&customerId=X&weightKg=1.5&postcode=LS1+1AA
+
+export async function getTrace(serviceCode, customerId, physicalKg, dims, postcode, countryIso = 'GB') {
+  const svcRow = await query(
+    `SELECT id, service_code, fuel_group_id, volumetric_divisor FROM courier_services WHERE service_code = $1`,
+    [serviceCode]
+  );
+  if (!svcRow.rows.length) return { error: `No service: ${serviceCode}` };
+  const svc       = svcRow.rows[0];
+  const serviceId = svc.id;
+  const divisor   = parseInt(svc.volumetric_divisor || 0);
+
+  // Volumetric
+  let volumetricKg = 0;
+  if (divisor > 0 && dims?.l && dims?.w && dims?.h) {
+    volumetricKg = round2((dims.l * dims.w * dims.h) / divisor);
+  }
+  const chargedKg   = Math.max(physicalKg, volumetricKg);
+  const weightBasis = volumetricKg > physicalKg ? 'volumetric' : 'physical';
+
+  // Zone
+  const zone = await matchZone(serviceId, countryIso, postcode);
+  if (!zone) return { error: `No zone for ${serviceCode} / ${postcode}` };
+
+  // Cost
+  const costResult = await lookupCarrierBandCost(serviceId, chargedKg, zone.id);
+
+  // Sell
+  const sellResult = await lookupCustomerSellPrice(customerId, serviceCode, chargedKg, zone.name);
+
+  // Fuel
+  let fuelCostPct = 0, fuelSellPct = 0, fuelGroupName = null;
+  if (svc.fuel_group_id) {
+    const fr = await query(
+      `SELECT fg.name, fg.fuel_surcharge_pct AS cost_pct,
+              COALESCE(cfgp.sell_pct, fg.standard_sell_pct, 0) AS sell_pct
+       FROM fuel_groups fg
+       LEFT JOIN customer_fuel_group_pricing cfgp ON cfgp.fuel_group_id = fg.id AND cfgp.customer_id = $2
+       WHERE fg.id = $1`,
+      [svc.fuel_group_id, customerId]
+    );
+    if (fr.rows.length) {
+      fuelGroupName = fr.rows[0].name;
+      fuelCostPct   = round2(parseFloat(fr.rows[0].cost_pct || 0));
+      fuelSellPct   = round2(parseFloat(fr.rows[0].sell_pct || 0));
+    }
+  }
+
+  const baseCost  = costResult?.cost ?? null;
+  const baseSell  = sellResult?.sellPrice ?? null;
+  const fuelCost  = baseCost != null ? round2(baseCost * fuelCostPct / 100) : null;
+  const fuelSell  = baseSell != null ? round2(baseSell * fuelSellPct / 100) : null;
+  const totalCost = baseCost != null ? round2(baseCost + (fuelCost ?? 0)) : null;
+  const totalSell = baseSell != null ? round2(baseSell + (fuelSell ?? 0)) : null;
+  const profit    = (totalCost != null && totalSell != null) ? round2(totalSell - totalCost) : null;
+
+  return {
+    input: { serviceCode, customerId, physicalKg, dims, chargedKg, weightBasis, volumetricDivisor: divisor || null, zone: zone.name },
+    cost:  { pass: costResult?.pass, band: costResult?.bandLabel, overageKg: costResult?.overageKg, base_cost: baseCost, fuel_cost_pct: fuelCostPct, fuel_cost: fuelCost, total_cost: totalCost },
+    sell:  { pass: sellResult?.pass, band: sellResult?.bandLabel, overageKg: sellResult?.overageKg, base_sell: baseSell, fuel_sell_pct: fuelSellPct, fuel_sell: fuelSell, total_sell: totalSell },
+    profit,
+    margin_pct: totalSell > 0 ? round2((profit / totalSell) * 100) : null,
+    fuel_group: fuelGroupName,
+  };
 }
