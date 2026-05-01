@@ -863,58 +863,25 @@ export async function processReconciliationRun(runId, carrierId, lines) {
 // aggregate line for carriers like DHL — so base-only comparison is correct).
 
 /**
- * Extract surcharge_amounts from invoice lines (populated by mapToInvoiceLine when the
- * carrier CSV profile has surcharge_columns configured) and insert a corrected
- * reconciliation_line for each non-zero surcharge amount.
- *
- * Amounts are summed across the group so that multi-parcel shipments where the same
- * surcharge appears on multiple rows are coalesced into a single corrected line.
+ * Sum surcharge_amounts from all lines in a group.
+ * Returns { total, breakdown: [{ surcharge_id, amount }] }
  */
-async function insertColumnSurchargeLines(runId, trackingNumber, lines) {
-  const totals = {};
+function sumGroupColumnSurcharges(lines) {
+  const byId = {};
   for (const line of lines) {
-    const sa = line.surcharge_amounts;
-    if (!sa || typeof sa !== 'object') continue;
-    for (const [surchargeId, raw] of Object.entries(sa)) {
+    if (!line.surcharge_amounts) continue;
+    for (const [surchargeId, raw] of Object.entries(line.surcharge_amounts)) {
       const amt = round2(parseFloat(raw) || 0);
       if (amt <= 0) continue;
-      totals[surchargeId] = round2((totals[surchargeId] || 0) + amt);
+      byId[surchargeId] = round2((byId[surchargeId] || 0) + amt);
     }
   }
-
-  for (const [surchargeId, totalAmount] of Object.entries(totals)) {
-    console.log(`[recon engine] Column surcharge: tracking=${trackingNumber} surcharge_id=${surchargeId} amount=£${totalAmount}`);
-    await insertLine(runId, {
-      tracking_number:          trackingNumber,
-      carrier_account_no:       lines[0]?.account_number || null,
-      raw_service_code:         null,
-      charge_type:              'surcharge',
-      carrier_amount:           totalAmount,
-      carrier_billed_weight_kg: null,
-      service_id:               null,
-      customer_id:              null,
-      charge_id:                null,
-      expected_amount:          null,
-      delta:                    null,
-      status:                   'corrected',
-      corrected_by:             'column_surcharge',
-      unmatched_reason:         null,
-      source:                   'internal',
-      suggested_service_id:     null,
-      correction_metadata:      { surcharge_id: surchargeId },
-    });
-  }
+  const breakdown = Object.entries(byId).map(([surcharge_id, amount]) => ({ surcharge_id, amount }));
+  const total = round2(breakdown.reduce((s, r) => s + r.amount, 0));
+  return { total, breakdown };
 }
 
 async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings) {
-  // ── Column surcharge extraction ──────────────────────────────────────────────
-  // If the carrier CSV profile has surcharge_columns configured, mapToInvoiceLine
-  // populates line.surcharge_amounts = { surcharge_id: amount }. Sum across the group
-  // and insert corrected lines now — before any freight analysis — so they appear in
-  // the run regardless of how the base freight line resolves.
-  const trackingStr = String(group[0]?.tracking_number || '').trim();
-  await insertColumnSurchargeLines(runId, trackingStr, group);
-
   // Single-line shortcut
   if (group.length === 1) {
     const result = await processLine(group[0], runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings);
@@ -1052,10 +1019,20 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
     expectedBase = round2(parseFloat(charge.expected_cost) || 0);
   }
 
-  const delta = round2(totalCarrierAmount - expectedBase);
+  // ── Column surcharge accounting ───────────────────────────────────────────────
+  // DHL (and other carriers) bake named per-shipment surcharges (long length,
+  // book-in, IOD, etc.) into the same invoice-line carrier_amount as the freight
+  // charge — they are NOT separate CSV rows. When the carrier CSV profile has
+  // surcharge_columns configured, mapToInvoiceLine extracts those amounts into
+  // line.surcharge_amounts. We add them to expected so the delta reflects ONLY
+  // unexplained discrepancies, not known named surcharges.
+  const { total: colSurchargeTotal, breakdown: colSurchargeBreakdown } = sumGroupColumnSurcharges(group);
+  const fullExpected = round2(expectedBase + colSurchargeTotal);
 
-  // Attach expected for Mapping Engine
-  firstLine._expected_amount = expectedBase;
+  const delta = round2(totalCarrierAmount - fullExpected);
+
+  // Attach full expected (freight + known surcharges) for the Mapping Engine
+  firstLine._expected_amount = fullExpected;
 
   let groupStatus = 'unmatched';
   let correctedBy = null;
@@ -1063,11 +1040,16 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
   let unmatchedReason = null;
 
   if (Math.abs(delta) < 0.02) {
-    // Multi-parcel aggregate comparison — amount matches.
-    // For multi-parcel groups we compare the SUM, so per-line band-change detection
-    // is not meaningful. Simply mark as matched when the total agrees.
-    groupStatus = 'matched';
-    correctedBy = null;
+    // Multi-parcel aggregate comparison — total matches (freight + known surcharges).
+    // If column surcharges were involved, mark as corrected so the UI surfaces the
+    // surcharge breakdown; otherwise it's a pure freight match.
+    if (colSurchargeTotal > 0) {
+      groupStatus = 'corrected';
+      correctedBy = 'column_surcharge';
+    } else {
+      groupStatus = 'matched';
+      correctedBy = null;
+    }
 
   } else {
     // Try Mapping Engine
@@ -1102,7 +1084,12 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
   }
 
   // Insert one reconciliation_line per original invoice line (base lines only).
-  // Surcharge lines have already been inserted above.
+  // Store the group-level expected + delta on every base line so the UI shows the
+  // full picture. expected_amount = freight base + column surcharges so that delta
+  // = 0 when carrier charged exactly what we expected (freight + known surcharges).
+  const colSurchargeMeta = colSurchargeTotal > 0
+    ? { col_surcharge_total: colSurchargeTotal, col_surcharges: colSurchargeBreakdown }
+    : null;
   for (const line of baseLines) {
     await insertLine(runId, {
       tracking_number:          String(line.tracking_number || '').trim(),
@@ -1114,15 +1101,14 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
       service_id:               serviceId,
       customer_id:              charge.customer_id,
       charge_id:                charge.charge_id,
-      // Store the group-level expected + delta on every base line so the UI
-      // can show the full picture rather than partial amounts.
-      expected_amount:          expectedBase,
+      expected_amount:          fullExpected,
       delta:                    delta,
       status:                   groupStatus,
       corrected_by:             correctedBy,
       unmatched_reason:         unmatchedReason,
       source:                   'internal',
       mapping_id:               mappingId,
+      correction_metadata:      correctedBy === 'column_surcharge' ? colSurchargeMeta : null,
     });
   }
 
@@ -1136,6 +1122,10 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   const trackKey       = trackingNumber.toUpperCase();
   const rawServiceCode = String(line.service_code   || '').trim();
   const carrierAmount  = round2(parseFloat(line.carrier_amount) || 0);
+
+  // Column surcharges baked into this line's carrier_amount — used throughout
+  // Phase 3 to compute the true freight delta (carrier billed = freight + surcharges).
+  const { total: colSurchargeTotal, breakdown: colSurchargeBreakdown } = sumGroupColumnSurcharges([line]);
 
   // ── Phase 1b: Service code normalisation ──────────────────────────────────
   const mappedKey = rawServiceCode.toUpperCase();
@@ -1210,10 +1200,14 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     // lookupCarrierBandCost requires a zone — without it we can't do a
     // zone-pinned rate card check, so expectedCarrierCost will be null
     // and rateMatches will be false (correct — we can't verify without zone).
-    const bandResult       = await lookupCarrierBandCost(serviceId, line.billed_weight_kg, null);
+    const bandResult          = await lookupCarrierBandCost(serviceId, line.billed_weight_kg, null);
     const expectedCarrierCost = bandResult?.cost ?? null;
-    const carrierDelta = expectedCarrierCost !== null
-      ? round2(carrierAmount - expectedCarrierCost)
+    // Include column surcharges in expected so the delta reflects unexplained discrepancies only
+    const fullExpectedCarrierCost = expectedCarrierCost != null
+      ? round2(expectedCarrierCost + colSurchargeTotal)
+      : null;
+    const carrierDelta = fullExpectedCarrierCost !== null
+      ? round2(carrierAmount - fullExpectedCarrierCost)
       : null;
     const rateMatches = carrierDelta !== null && Math.abs(carrierDelta) <= 0.01;
 
@@ -1228,7 +1222,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
         service_id:               serviceId,
         customer_id:              null,
         charge_id:                null,
-        expected_amount:          expectedCarrierCost,
+        expected_amount:          fullExpectedCarrierCost,
         delta:                    carrierDelta,
         status:                   rateMatches ? 'matched' : 'unmatched',
         corrected_by:             null,
@@ -1251,7 +1245,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       service_id:               serviceId,
       customer_id:              customer.customer_id,
       charge_id:                null,
-      expected_amount:          expectedCarrierCost,
+      expected_amount:          fullExpectedCarrierCost,
       delta:                    carrierDelta,
       status:                   rateMatches ? 'matched' : 'unmatched',
       corrected_by:             null,
@@ -1265,11 +1259,17 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   // Rule: compare against base cost_price ONLY (charges.cost_price).
   // Fuel and HGV surcharges are verified separately via the aggregate line
   // checks — they are NEVER included in per-shipment comparisons.
+  //
+  // Column surcharges (named per-shipment surcharges baked into carrier_amount):
+  // fullExpected = expectedFreight + colSurchargeTotal, so that delta reflects
+  // only unexplained discrepancies. When delta ≈ 0 thanks to surcharges, the
+  // line is marked corrected/column_surcharge rather than matched.
   const charge = poolHits[0];
   const expectedAmount = round2(parseFloat(charge.expected_cost) || 0);
-  const delta = round2(carrierAmount - expectedAmount);
+  const fullExpected   = round2(expectedAmount + colSurchargeTotal);
+  const delta          = round2(carrierAmount - fullExpected);
 
-  line._expected_amount = expectedAmount;
+  line._expected_amount = fullExpected;
 
   if (Math.abs(delta) < 0.02) {
     // ── Financial significance filter ─────────────────────────────────────────
@@ -1334,7 +1334,30 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     }
 
     if (!isCorrection) {
-      // Genuinely matched — same pricing tier, same calculation path
+      if (colSurchargeTotal > 0) {
+        // Column surcharges explain the difference from pure freight expected.
+        // Carrier charged exactly freight + known named surcharges → corrected.
+        await insertLine(runId, {
+          tracking_number:          trackingNumber,
+          carrier_account_no:       line.account_number || null,
+          raw_service_code:         rawServiceCode,
+          charge_type:              line.charge_type || 'base',
+          carrier_amount:           carrierAmount,
+          carrier_billed_weight_kg: line.billed_weight_kg || null,
+          service_id:               serviceId,
+          customer_id:              charge.customer_id,
+          charge_id:                charge.charge_id,
+          expected_amount:          fullExpected,
+          delta:                    delta,
+          status:                   'corrected',
+          corrected_by:             'column_surcharge',
+          unmatched_reason:         null,
+          source:                   'internal',
+          correction_metadata:      { col_surcharge_total: colSurchargeTotal, col_surcharges: colSurchargeBreakdown },
+        });
+        return { status: 'corrected' };
+      }
+      // Genuinely matched — same pricing tier, same calculation path, no named surcharges
       await insertLine(runId, {
         tracking_number:          trackingNumber,
         carrier_account_no:       line.account_number || null,
@@ -1345,7 +1368,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
         service_id:               serviceId,
         customer_id:              charge.customer_id,
         charge_id:                charge.charge_id,
-        expected_amount:          expectedAmount,
+        expected_amount:          fullExpected,
         delta:                    delta,
         status:                   'matched',
         corrected_by:             null,
@@ -1370,6 +1393,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       correction_reason:      correctionReason,
       weight_delta:           weightDeltaForMeta,
       billed_weight_kg:       billedWeight,
+      ...(colSurchargeTotal > 0 && { col_surcharge_total: colSurchargeTotal, col_surcharges: colSurchargeBreakdown }),
     };
     await insertLine(runId, {
       tracking_number:          trackingNumber,
@@ -1381,7 +1405,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       service_id:               serviceId,
       customer_id:              charge.customer_id,
       charge_id:                charge.charge_id,
-      expected_amount:          expectedAmount,
+      expected_amount:          fullExpected,
       delta:                    delta,
       status:                   'corrected',
       corrected_by:             'pricing_rules',
@@ -1410,7 +1434,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       service_id:               serviceId,
       customer_id:              charge.customer_id,
       charge_id:                charge.charge_id,
-      expected_amount:          expectedAmount,
+      expected_amount:          fullExpected,
       delta:                    delta,
       status:                   'corrected',
       corrected_by:             'mapping',
@@ -1423,7 +1447,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
 
   // ── Phase 4b: Correction Engine ───────────────────────────────────────────
   const correction = await checkCorrectionEngine(
-    charge.customer_id, serviceId, carrierId, charge.zone_id, line, delta, charge.charge_id, expectedAmount
+    charge.customer_id, serviceId, carrierId, charge.zone_id, line, delta, charge.charge_id, fullExpected
   );
 
   if (correction.corrected) {
@@ -1437,7 +1461,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       service_id:               serviceId,
       customer_id:              charge.customer_id,
       charge_id:                charge.charge_id,
-      expected_amount:          expectedAmount,
+      expected_amount:          fullExpected,
       delta:                    delta,
       status:                   'corrected',
       corrected_by:             'pricing_rules',
@@ -1459,7 +1483,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     service_id:               serviceId,
     customer_id:              charge.customer_id,
     charge_id:                charge.charge_id,
-    expected_amount:          expectedAmount,
+    expected_amount:          fullExpected,
     delta:                    delta,
     status:                   'unmatched',
     corrected_by:             null,
