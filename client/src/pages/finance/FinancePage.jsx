@@ -128,11 +128,11 @@ function ChargeCellSell({ charge, onSave, onDebug }) {
   const [hov, setHov] = useState(false);
   const [above, setAbove] = useState(false);
   const wrapRef = useRef(null);
-  const hasLines = charge.price != null && charge.charge_lines?.length > 0;
+  const hasPrice = charge.price != null;
   return (
     <div ref={wrapRef} style={{ position: 'relative', display: 'inline-block' }}
       onMouseEnter={() => {
-        if (hasLines) {
+        if (hasPrice) {
           const rect = wrapRef.current?.getBoundingClientRect();
           setAbove(rect ? (window.innerHeight - rect.bottom) < 180 : false);
           setHov(true);
