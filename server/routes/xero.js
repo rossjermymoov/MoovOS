@@ -269,14 +269,41 @@ router.get('/contacts/search', async (req, res, next) => {
 // ─── Customer linking ─────────────────────────────────────────────────────────
 
 // GET /api/xero/customers/match-status
+// Returns all customers with link status + pre-computed Xero suggestions for unlinked ones.
 router.get('/customers/match-status', async (req, res, next) => {
   try {
     const result = await query(
-      `SELECT id, business_name, xero_contact_id
+      `SELECT id, business_name, xero_contact_id, xero_contact_name
        FROM customers
        ORDER BY business_name ASC`
     );
-    res.json({ customers: result.rows });
+    const customers = result.rows;
+
+    // Pre-compute suggestions for unlinked customers by fetching all Xero contacts once
+    const suggestions = {}; // customer_id → { xero_id, xero_name, score }
+    const unlinked = customers.filter(c => !c.xero_contact_id);
+    if (unlinked.length > 0) {
+      try {
+        const data = await xeroRequest('GET', '/Contacts?includeArchived=false&pageSize=1000');
+        const xeroContacts = data.Contacts || [];
+        for (const cust of unlinked) {
+          const name = (cust.business_name || '').toLowerCase().trim();
+          let best = null, bestScore = 0;
+          for (const xc of xeroContacts) {
+            const score = nameMatchScore(name, (xc.Name || '').toLowerCase().trim());
+            if (score > bestScore) { bestScore = score; best = xc; }
+          }
+          if (best && bestScore >= 0.4) {
+            suggestions[cust.id] = { xero_id: best.ContactID, xero_name: best.Name, score: Math.round(bestScore * 100) };
+          }
+        }
+      } catch (e) {
+        // Xero may be disconnected — suggestions simply won't be included
+        console.warn('[match-status] Could not fetch Xero contacts for suggestions:', e.message);
+      }
+    }
+
+    res.json({ customers, suggestions });
   } catch (err) {
     next(err);
   }
@@ -289,8 +316,8 @@ router.put('/customers/:id/link', async (req, res, next) => {
     if (!xero_contact_id) return res.status(400).json({ error: 'xero_contact_id required' });
 
     await query(
-      `UPDATE customers SET xero_contact_id = $1 WHERE id = $2`,
-      [xero_contact_id, req.params.id]
+      `UPDATE customers SET xero_contact_id = $1, xero_contact_name = $2 WHERE id = $3`,
+      [xero_contact_id, xero_contact_name || null, req.params.id]
     );
     res.json({ ok: true, xero_contact_id, xero_contact_name });
   } catch (err) {
@@ -301,7 +328,7 @@ router.put('/customers/:id/link', async (req, res, next) => {
 // DELETE /api/xero/customers/:id/link
 router.delete('/customers/:id/link', async (req, res, next) => {
   try {
-    await query(`UPDATE customers SET xero_contact_id = NULL WHERE id = $1`, [req.params.id]);
+    await query(`UPDATE customers SET xero_contact_id = NULL, xero_contact_name = NULL WHERE id = $1`, [req.params.id]);
     res.json({ ok: true });
   } catch (err) {
     next(err);
@@ -343,8 +370,8 @@ router.post('/customers/auto-match', async (req, res, next) => {
       if (best && bestScore >= 0.8) {
         // High confidence — auto-apply
         await query(
-          `UPDATE customers SET xero_contact_id = $1 WHERE id = $2`,
-          [best.ContactID, cust.id]
+          `UPDATE customers SET xero_contact_id = $1, xero_contact_name = $2 WHERE id = $3`,
+          [best.ContactID, best.Name, cust.id]
         );
         matched.push({ customer_id: cust.id, customer_name: cust.business_name, xero_name: best.Name, score: bestScore });
       } else if (best && bestScore >= 0.5) {
