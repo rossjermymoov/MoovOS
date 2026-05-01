@@ -270,6 +270,7 @@ router.get('/contacts/search', async (req, res, next) => {
 
 // GET /api/xero/customers/match-status
 // Returns all customers with link status + pre-computed Xero suggestions for unlinked ones.
+// Also backfills xero_contact_name for linked customers that only have a UUID stored.
 router.get('/customers/match-status', async (req, res, next) => {
   try {
     const result = await query(
@@ -279,13 +280,36 @@ router.get('/customers/match-status', async (req, res, next) => {
     );
     const customers = result.rows;
 
-    // Pre-compute suggestions for unlinked customers by fetching all Xero contacts once
     const suggestions = {}; // customer_id → { xero_id, xero_name, score }
-    const unlinked = customers.filter(c => !c.xero_contact_id);
-    if (unlinked.length > 0) {
+    const unlinked  = customers.filter(c => !c.xero_contact_id);
+    // Linked customers that are missing a human-readable name (UUID-only)
+    const needsName = customers.filter(c => c.xero_contact_id && !c.xero_contact_name);
+
+    if (unlinked.length > 0 || needsName.length > 0) {
       try {
         const data = await xeroRequest('GET', '/Contacts?includeArchived=false&pageSize=1000');
         const xeroContacts = data.Contacts || [];
+
+        // Build a quick lookup: ContactID → Name
+        const contactById = {};
+        for (const xc of xeroContacts) {
+          contactById[xc.ContactID] = xc.Name;
+        }
+
+        // ── Backfill names for already-linked customers with no stored name ──
+        for (const cust of needsName) {
+          const name = contactById[cust.xero_contact_id];
+          if (name) {
+            await query(
+              `UPDATE customers SET xero_contact_name = $1 WHERE id = $2`,
+              [name, cust.id]
+            );
+            // Update in-memory so the response is accurate immediately
+            cust.xero_contact_name = name;
+          }
+        }
+
+        // ── Suggestions for unlinked customers ───────────────────────────────
         for (const cust of unlinked) {
           const name = (cust.business_name || '').toLowerCase().trim();
           let best = null, bestScore = 0;
@@ -299,7 +323,7 @@ router.get('/customers/match-status', async (req, res, next) => {
         }
       } catch (e) {
         // Xero may be disconnected — suggestions simply won't be included
-        console.warn('[match-status] Could not fetch Xero contacts for suggestions:', e.message);
+        console.warn('[match-status] Could not fetch Xero contacts:', e.message);
       }
     }
 
@@ -392,17 +416,42 @@ router.post('/customers/auto-match', async (req, res, next) => {
   }
 });
 
-// Simple name match scorer: returns 0–1
+// Strip common company suffixes so "Acme Ltd" and "Acme Limited" core-match
+const COMPANY_SUFFIXES = /\b(limited|ltd|plc|llp|llc|inc|incorporated|co|company|group|holdings|services|solutions|enterprises|trading|international)\b\.?/gi;
+
+function normaliseName(s) {
+  return s
+    .replace(COMPANY_SUFFIXES, '')   // drop suffixes
+    .replace(/[^a-z0-9\s]/g, '')     // drop punctuation
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Name match scorer: returns 0–1
+// Handles company suffix variants (Ltd/Limited/PLC etc) before scoring.
 function nameMatchScore(a, b) {
+  if (!a || !b) return 0;
   if (a === b) return 1;
-  if (a.includes(b) || b.includes(a)) {
-    const longer  = Math.max(a.length, b.length);
-    const shorter = Math.min(a.length, b.length);
-    return shorter / longer;
+
+  const na = normaliseName(a);
+  const nb = normaliseName(b);
+
+  // Exact match after stripping suffixes → very high confidence
+  if (na.length > 0 && na === nb) return 0.97;
+
+  // One normalised form contains the other (e.g. "Acme" vs "Acme Logistics")
+  if (na.length > 0 && nb.length > 0 && (na.includes(nb) || nb.includes(na))) {
+    const longer  = Math.max(na.length, nb.length);
+    const shorter = Math.min(na.length, nb.length);
+    // Floor at 0.78 — containment is a strong signal even when lengths differ
+    return Math.max(0.78, shorter / longer);
   }
-  // Word overlap
-  const wordsA = new Set(a.split(/\W+/).filter(w => w.length > 2));
-  const wordsB = new Set(b.split(/\W+/).filter(w => w.length > 2));
+
+  // Fallback: word overlap on normalised names
+  // Use length > 1 so short words (e.g. single letters) are included
+  const wordsA = new Set(na.split(/\s+/).filter(w => w.length > 1));
+  const wordsB = new Set(nb.split(/\s+/).filter(w => w.length > 1));
+  if (wordsA.size === 0 || wordsB.size === 0) return 0;
   const common = [...wordsA].filter(w => wordsB.has(w)).length;
   const total  = new Set([...wordsA, ...wordsB]).size;
   return total > 0 ? common / total : 0;
