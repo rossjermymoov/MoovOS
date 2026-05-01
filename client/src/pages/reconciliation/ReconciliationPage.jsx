@@ -217,6 +217,20 @@ function mapToInvoiceLine(row, colMap) {
     const val = row[key];
     return val !== undefined && val !== null ? String(val) : '';
   };
+
+  // Extract surcharge column amounts.
+  // surcharge_columns = [{ col: '<csv header>', surcharge_id: '<uuid>' }, ...]
+  // The engine will sum these across multi-parcel groups and insert corrected lines.
+  const surcharge_amounts = {};
+  if (Array.isArray(colMap.surcharge_columns)) {
+    for (const { col, surcharge_id } of colMap.surcharge_columns) {
+      if (!col || !surcharge_id) continue;
+      const val = row[col];
+      const amt = parseFloat(String(val || '').replace(/[£,]/g, '')) || 0;
+      if (amt > 0) surcharge_amounts[surcharge_id] = amt;
+    }
+  }
+
   return {
     // Force toString so numeric-looking tracking numbers keep their exact
     // character representation (no precision loss, no scientific notation).
@@ -229,6 +243,7 @@ function mapToInvoiceLine(row, colMap) {
     // DHL column J — piece/item count per line. Used to calculate the HGV
     // aggregate total (sum of parcel_count × HGV rate per parcel).
     parcel_count:     parseInt(get('parcel_count'), 10) || null,
+    ...(Object.keys(surcharge_amounts).length > 0 && { surcharge_amounts }),
   };
 }
 
@@ -237,6 +252,7 @@ const BLANK_MAP = {
   charge_type: '', carrier_amount: '', billed_weight_kg: '',
   parcel_count: '',
   invoice_ref: '', invoice_date: '',
+  surcharge_columns: [],   // [{ col: '<csv header>', surcharge_id: '<uuid>' }]
 };
 
 // ─── Date normalisation ───────────────────────────────────────────────────────
@@ -459,6 +475,17 @@ function UploadModal({ couriers, onClose, onSuccess }) {
     enabled: !!carrierId,
   });
 
+  // Load surcharges for this carrier (used in surcharge column mapping UI)
+  const { data: surchargesList = [] } = useQuery({
+    queryKey: ['recon-surcharges', carrierId],
+    queryFn:  () => api.get('/reconciliation/surcharges', { params: { carrier_id: carrierId } }).then(r => r.data),
+    enabled:  !!carrierId,
+  });
+
+  // New-row state for the "add surcharge column" form
+  const [newSurchargeCol, setNewSurchargeCol] = useState('');
+  const [newSurchargeId,  setNewSurchargeId]  = useState('');
+
   // Auto-apply default profile when carrier is selected (and no file loaded yet)
   useEffect(() => {
     if (carrierId && profiles.length > 0 && csvRows.length === 0) {
@@ -480,6 +507,26 @@ function UploadModal({ couriers, onClose, onSuccess }) {
     setColMap({ ...BLANK_MAP, ...profile.column_map });
     setLoadedProfileId(profile.id);
     setSaveProfileName(profile.profile_name);
+  }
+
+  function addSurchargeCol() {
+    if (!newSurchargeCol || !newSurchargeId) return;
+    // Prevent duplicate: same column mapped to the same surcharge
+    const existing = colMap.surcharge_columns || [];
+    if (existing.some(s => s.col === newSurchargeCol && s.surcharge_id === newSurchargeId)) return;
+    setColMap(m => ({
+      ...m,
+      surcharge_columns: [...existing, { col: newSurchargeCol, surcharge_id: newSurchargeId }],
+    }));
+    setNewSurchargeCol('');
+    setNewSurchargeId('');
+  }
+
+  function removeSurchargeCol(idx) {
+    setColMap(m => ({
+      ...m,
+      surcharge_columns: (m.surcharge_columns || []).filter((_, i) => i !== idx),
+    }));
   }
 
   function handleFile(e) {
@@ -651,7 +698,10 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                           )}
                         </div>
                         <div style={{ fontSize: 11, color: '#555', marginTop: 2 }}>
-                          {Object.values(p.column_map || {}).filter(Boolean).length} columns mapped
+                          {Object.entries(p.column_map || {}).filter(([k, v]) => k !== 'surcharge_columns' && v).length} columns mapped
+                          {(p.column_map?.surcharge_columns?.length > 0) && (
+                            <span style={{ marginLeft: 6, color: '#666' }}>· {p.column_map.surcharge_columns.length} surcharge col{p.column_map.surcharge_columns.length > 1 ? 's' : ''}</span>
+                          )}
                         </div>
                       </div>
                       {loadedProfileId === p.id && <Check size={14} color='#00C853' />}
@@ -707,6 +757,84 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                   </select>
                 </div>
               ))}
+            </div>
+
+            {/* Surcharge column mappings */}
+            <div style={{ marginTop: 20 }}>
+              <div style={{
+                fontSize: 11, color: '#888', fontWeight: 600, marginBottom: 10,
+                display: 'flex', alignItems: 'center', gap: 8,
+                paddingBottom: 8, borderBottom: '1px solid rgba(255,255,255,0.06)',
+              }}>
+                SURCHARGE COLUMN MAPPINGS
+                <span style={{ fontWeight: 400, fontSize: 10, color: '#555' }}>
+                  — columns in this carrier&#x2019;s CSV that carry named surcharge amounts
+                </span>
+              </div>
+
+              {/* Existing mapped surcharges */}
+              {(colMap.surcharge_columns || []).length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 8 }}>
+                  {(colMap.surcharge_columns || []).map((sc, idx) => {
+                    const sur = surchargesList.find(s => String(s.id) === String(sc.surcharge_id));
+                    return (
+                      <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{
+                          fontSize: 11, color: '#E6EDF3',
+                          background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+                          borderRadius: 5, padding: '4px 10px', minWidth: 120, textAlign: 'center',
+                        }}>
+                          {sc.col}
+                        </span>
+                        <span style={{ fontSize: 11, color: '#555' }}>→</span>
+                        <span style={{ fontSize: 12, color: '#00C853', flex: 1, fontWeight: 500 }}>
+                          {sur?.name || sc.surcharge_id}
+                        </span>
+                        <button onClick={() => removeSurchargeCol(idx)} style={{ ...btnRed, padding: '3px 8px', fontSize: 11 }}>
+                          <X size={11} /> Remove
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Add new surcharge column row */}
+              {surchargesList.length > 0 ? (
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <select
+                    style={{ ...inputSt, flex: '0 0 180px' }}
+                    value={newSurchargeCol}
+                    onChange={e => setNewSurchargeCol(e.target.value)}
+                  >
+                    <option value=''>— CSV column —</option>
+                    {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                  <span style={{ fontSize: 11, color: '#555', flexShrink: 0 }}>→</span>
+                  <select
+                    style={{ ...inputSt, flex: 1 }}
+                    value={newSurchargeId}
+                    onChange={e => setNewSurchargeId(e.target.value)}
+                  >
+                    <option value=''>— Surcharge type —</option>
+                    {surchargesList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                  <button
+                    onClick={addSurchargeCol}
+                    disabled={!newSurchargeCol || !newSurchargeId}
+                    style={{
+                      ...btnGreen, padding: '8px 12px', flexShrink: 0,
+                      opacity: (!newSurchargeCol || !newSurchargeId) ? 0.4 : 1,
+                    }}
+                  >
+                    <Plus size={13} /> Add
+                  </button>
+                </div>
+              ) : carrierId ? (
+                <p style={{ fontSize: 11, color: '#555', margin: 0 }}>No surcharges configured for this carrier.</p>
+              ) : (
+                <p style={{ fontSize: 11, color: '#555', margin: 0 }}>Select a carrier first.</p>
+              )}
             </div>
 
             {/* Invoice ref manual override */}

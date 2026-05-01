@@ -39,6 +39,7 @@ import { query } from '../db/index.js';
  * @property {number}  carrier_amount        what carrier billed (£)
  * @property {number}  [billed_weight_kg]    weight as billed by carrier
  * @property {number}  [parcel_count]        items in shipment (DHL column J)
+ * @property {Object}  [surcharge_amounts]   { [surcharge_id]: amount } from CSV column mappings
  */
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -861,7 +862,59 @@ export async function processReconciliationRun(runId, carrierId, lines) {
 // compare the SUM against the base cost_price (fuel is billed separately as an
 // aggregate line for carriers like DHL — so base-only comparison is correct).
 
+/**
+ * Extract surcharge_amounts from invoice lines (populated by mapToInvoiceLine when the
+ * carrier CSV profile has surcharge_columns configured) and insert a corrected
+ * reconciliation_line for each non-zero surcharge amount.
+ *
+ * Amounts are summed across the group so that multi-parcel shipments where the same
+ * surcharge appears on multiple rows are coalesced into a single corrected line.
+ */
+async function insertColumnSurchargeLines(runId, trackingNumber, lines) {
+  const totals = {};
+  for (const line of lines) {
+    const sa = line.surcharge_amounts;
+    if (!sa || typeof sa !== 'object') continue;
+    for (const [surchargeId, raw] of Object.entries(sa)) {
+      const amt = round2(parseFloat(raw) || 0);
+      if (amt <= 0) continue;
+      totals[surchargeId] = round2((totals[surchargeId] || 0) + amt);
+    }
+  }
+
+  for (const [surchargeId, totalAmount] of Object.entries(totals)) {
+    console.log(`[recon engine] Column surcharge: tracking=${trackingNumber} surcharge_id=${surchargeId} amount=£${totalAmount}`);
+    await insertLine(runId, {
+      tracking_number:          trackingNumber,
+      carrier_account_no:       lines[0]?.account_number || null,
+      raw_service_code:         null,
+      charge_type:              'surcharge',
+      carrier_amount:           totalAmount,
+      carrier_billed_weight_kg: null,
+      service_id:               null,
+      customer_id:              null,
+      charge_id:                null,
+      expected_amount:          null,
+      delta:                    null,
+      status:                   'corrected',
+      corrected_by:             'column_surcharge',
+      unmatched_reason:         null,
+      source:                   'internal',
+      suggested_service_id:     null,
+      correction_metadata:      { surcharge_id: surchargeId },
+    });
+  }
+}
+
 async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings) {
+  // ── Column surcharge extraction ──────────────────────────────────────────────
+  // If the carrier CSV profile has surcharge_columns configured, mapToInvoiceLine
+  // populates line.surcharge_amounts = { surcharge_id: amount }. Sum across the group
+  // and insert corrected lines now — before any freight analysis — so they appear in
+  // the run regardless of how the base freight line resolves.
+  const trackingStr = String(group[0]?.tracking_number || '').trim();
+  await insertColumnSurchargeLines(runId, trackingStr, group);
+
   // Single-line shortcut
   if (group.length === 1) {
     const result = await processLine(group[0], runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings);
