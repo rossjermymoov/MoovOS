@@ -66,34 +66,88 @@ function outcodeOf(postcode) {
   return postcode.trim().split(' ')[0].toUpperCase();
 }
 
-// ─── Zone matching ────────────────────────────────────────────────────────────
+// ─── Zone matching — strict, no catch-alls ───────────────────────────────────
+//
+// Resolution rules (in priority order):
+//   1. Zone MUST have an explicit zone_country_codes entry for the destination
+//      country.  Zones with no country codes are never used.
+//   2. If ANY zone for this service+country has 'include' postcode rules the
+//      service is treated as postcode-routed.  In that mode:
+//        • The outcode MUST match an include rule in exactly one zone.
+//        • Zones that have no include rules are NOT used as catch-alls.
+//   3. If NO zone has include rules (international / country-only services)
+//      a country-code match alone is sufficient.
+//   4. 'exclude' rules always skip a zone regardless of includes.
+//
+// Zones are queried with those that have the most include rules first so the
+// most-specific match wins.
+//
+// EXPORTED — billing.js diagnostic calls this same function so diagnostic
+// and live engine are guaranteed identical behaviour.
 
-async function matchZone(serviceId, countryIso, postcode) {
+export async function matchZone(serviceId, countryIso, postcode) {
   const outcode = outcodeOf(postcode);
+
   const zones = await query(
     `SELECT z.id, z.name,
        array_agg(DISTINCT zcc.country_iso) FILTER (WHERE zcc.id IS NOT NULL) AS countries,
-       json_agg(jsonb_build_object('prefix',zpr.postcode_prefix,'type',zpr.rule_type))
+       json_agg(jsonb_build_object('prefix', zpr.postcode_prefix, 'type', zpr.rule_type))
          FILTER (WHERE zpr.id IS NOT NULL) AS postcode_rules
      FROM zones z
      LEFT JOIN zone_country_codes zcc ON zcc.zone_id = z.id
      LEFT JOIN zone_postcode_rules zpr ON zpr.zone_id = z.id
      WHERE z.courier_service_id = $1
      GROUP BY z.id
-     ORDER BY (SELECT COUNT(*) FROM zone_postcode_rules WHERE zone_id = z.id) DESC`,
+     ORDER BY (
+       SELECT COUNT(*) FROM zone_postcode_rules
+       WHERE zone_id = z.id AND rule_type = 'include'
+     ) DESC, z.name`,
     [serviceId]
   );
-  for (const zone of zones.rows) {
-    const countries    = zone.countries     || [];
+
+  // Only consider zones that explicitly list the destination country.
+  const compatZones = zones.rows.filter(z => (z.countries || []).includes(countryIso));
+
+  // Does the service use postcode-based zone assignment?
+  // If yes, postcode must match an explicit include rule — no silent catch-alls.
+  const serviceUsesPostcodeRules = compatZones.some(z =>
+    (z.postcode_rules || []).some(r => r.type === 'include')
+  );
+
+  for (const zone of compatZones) {
     const rules        = zone.postcode_rules || [];
-    if (!countries.includes(countryIso)) continue;
     const includeRules = rules.filter(r => r.type === 'include');
     const excludeRules = rules.filter(r => r.type === 'exclude');
+
+    // Exclusions always win.
     if (excludeRules.some(r => outcode.startsWith(r.prefix))) continue;
-    if (includeRules.length && !includeRules.some(r => outcode.startsWith(r.prefix))) continue;
-    return zone;
+
+    if (includeRules.length > 0) {
+      // Explicit include rules present: outcode must match one.
+      if (!includeRules.some(r => outcode.startsWith(r.prefix))) continue;
+      return zone;                                     // ← explicit postcode match
+    }
+
+    // Zone has no include rules.
+    if (serviceUsesPostcodeRules) continue;            // blocked — other zones use postcodes
+    return zone;                                       // ← international / country-only match
   }
+
   return null;
+}
+
+// Convenience wrapper: resolves serviceId from a service code string and
+// returns the matched zone NAME (string) or null.
+// Used by billing.js diagnostic so both paths call the same matchZone logic.
+export async function resolveZoneNameByServiceCode(serviceCode, countryIso, postcode) {
+  if (!serviceCode || !countryIso) return null;
+  const svcRes = await query(
+    'SELECT id FROM courier_services WHERE service_code ILIKE $1 LIMIT 1',
+    [serviceCode]
+  );
+  if (!svcRes.rows.length) return null;
+  const zone = await matchZone(svcRes.rows[0].id, countryIso || 'GB', postcode);
+  return zone ? zone.name : null;
 }
 
 // ─── Step 1: Weight ───────────────────────────────────────────────────────────
@@ -355,6 +409,8 @@ export async function processShipment(payload) {
     const { id: serviceId, fuel_group_id: fuelGroupId } = svcRow.rows[0];
 
     // ── 3. MATCH ZONE ─────────────────────────────────────────────────────────
+    // A missing zone is NOT a throw — charges are created with status='pricing_error'
+    // and NULL prices so the failure is visible in the UI.
     const countryIso = shipment?.ship_to?.country_iso;
     const postcode   = shipment?.ship_to?.postcode;
 
@@ -365,7 +421,9 @@ export async function processShipment(payload) {
     }
 
     const zone = await matchZone(serviceId, countryIso, postcode);
-    if (!zone) throw new Error(`No zone matched for service ${serviceCode}, country ${countryIso}, postcode ${postcode}`);
+    if (!zone) {
+      console.warn(`[pricing] ⚠ No zone for service ${serviceCode}, country ${countryIso}, postcode ${postcode} — charges will be pricing_error`);
+    }
 
     // ── 4. DUAL FUEL RATES ────────────────────────────────────────────────────
     // carrier_fuel_pct  → applied to base COST  (what we pay the carrier)
@@ -429,33 +487,69 @@ export async function processShipment(payload) {
       const { physicalKg, volumetricKg, chargedKg, volumetricDivisor, weightBasis } = weightResult;
 
       // ── Step 2: Cost price (two-pass carrier band) ─────────────────────────
-      const useFirstParcel = isFirst || !multi_box_pricing;
-      const costResult = await lookupCarrierBandCost(serviceId, chargedKg, zone.id);
+      // Only attempt if zone was resolved — null zone means pricing_error below.
+      const costResult = zone
+        ? await lookupCarrierBandCost(serviceId, chargedKg, zone.id)
+        : null;
 
-      if (!costResult) {
-        errors.push(`No carrier band found for parcel ${parcelNum} (${chargedKg}kg, zone ${zone.name})`);
+      // ── Step 3: Sell price (customer rate card) ────────────────────────────
+      // Only attempt if zone AND cost were resolved.
+      const sellResult = (zone && costResult)
+        ? await lookupCustomerSellPrice(customerId, serviceCode, chargedKg, zone.name)
+        : null;
+
+      // ── Hard stop: any missing step → pricing_error, NULL prices ──────────
+      // No fallbacks. No baseSell = baseCost. No || 0.
+      if (!zone || !costResult || !sellResult) {
+        const errorStep = !zone       ? 'no_zone_matched'
+                        : !costResult ? 'no_cost_band'
+                        :               'no_sell_price';
+        const errorDetail = !zone
+          ? `No zone for service ${serviceCode}, country ${countryIso}, postcode ${postcode}`
+          : !costResult
+            ? `No carrier band for ${chargedKg}kg in zone "${zone.name}"`
+            : `No customer rate for ${chargedKg}kg in zone "${zone.name}", service "${serviceCode}"`;
+
+        console.warn(`[pricing] ✗ Parcel ${parcelNum}: ${errorDetail}`);
+        errors.push(`Parcel ${parcelNum}: pricing_error (${errorStep}) — ${errorDetail}`);
+
+        charges.push({
+          ...commonFields,
+          charge_type:           'courier',
+          parcel_number:         parcelNum,
+          weight_actual_kg:      physicalKg,
+          weight_dimensional_kg: volumetricKg,
+          weight_charged_kg:     chargedKg,
+          cost_price:            null,
+          sell_price:            null,
+          status:                'pricing_error',
+          pricing_logic_trace: {
+            error:              errorStep,
+            error_detail:       errorDetail,
+            physical_kg:        physicalKg,
+            volumetric_kg:      volumetricKg,
+            volumetric_divisor: volumetricDivisor,
+            charged_kg:         chargedKg,
+            weight_basis:       weightBasis,
+            zone_attempted:     zone?.name || null,
+            country:            countryIso,
+            postcode,
+            service:            serviceCode,
+            parcel_number:      parcelNum,
+          },
+        });
         continue;
       }
 
-      // First parcel uses price_first; additional parcels use price_sub if set
+      // ── Step 4: Dual fuel ──────────────────────────────────────────────────
+      const useFirstParcel = isFirst || !multi_box_pricing;
       const baseCost = useFirstParcel
         ? costResult.cost
         : (costResult.costSub ?? costResult.cost);
+      const baseSell = useFirstParcel
+        ? sellResult.sellPrice
+        : (sellResult.sellSub ?? sellResult.sellPrice);
 
-      // ── Step 3: Sell price (customer rate card) ────────────────────────────
-      const sellResult = await lookupCustomerSellPrice(customerId, serviceCode, chargedKg, zone.name);
-
-      let baseSell;
-      if (!sellResult) {
-        baseSell = baseCost;  // fallback: cost = sell (0 margin), surfaced via error
-        errors.push(`No customer rate found for parcel ${parcelNum} (${chargedKg}kg, zone "${zone.name}", service "${serviceCode}") — using cost price`);
-      } else {
-        baseSell = useFirstParcel
-          ? sellResult.sellPrice
-          : (sellResult.sellSub ?? sellResult.sellPrice);
-      }
-
-      // ── Step 4: Dual fuel ──────────────────────────────────────────────────
       const fuelCost = fuelCostPct > 0 ? round2(baseCost * fuelCostPct / 100) : 0;
       const fuelSell = fuelSellPct > 0 ? round2(baseSell * fuelSellPct / 100) : 0;
 
@@ -470,9 +564,9 @@ export async function processShipment(payload) {
         volumetric_kg:      volumetricKg,
         volumetric_divisor: volumetricDivisor,
         charged_kg:         chargedKg,
-        weight_basis:       weightBasis,                // 'physical' | 'volumetric'
+        weight_basis:       weightBasis,
         // Cost
-        cost_pass:          costResult.pass,             // 1 (normal) or 2 (overage)
+        cost_pass:          costResult.pass,
         cost_band:          costResult.bandLabel,
         cost_overage_kg:    costResult.overageKg,
         base_cost:          baseCost,
@@ -480,9 +574,9 @@ export async function processShipment(payload) {
         fuel_cost:          fuelCost,
         total_cost:         totalCost,
         // Sell
-        sell_band:          sellResult?.bandLabel  || null,
-        sell_pass:          sellResult?.pass       || null,
-        sell_overage_kg:    sellResult?.overageKg  || null,
+        sell_band:          sellResult.bandLabel,
+        sell_pass:          sellResult.pass,
+        sell_overage_kg:    sellResult.overageKg,
         base_sell:          baseSell,
         fuel_sell_pct:      fuelSellPct,
         fuel_sell:          fuelSell,
@@ -498,7 +592,7 @@ export async function processShipment(payload) {
       };
 
       console.log(
-        `[pricing] Parcel ${parcelNum}: ${chargedKg}kg (${weightBasis})` +
+        `[pricing] ✓ Parcel ${parcelNum}: ${chargedKg}kg (${weightBasis})` +
         ` cost=£${baseCost}+£${fuelCost}fuel=£${totalCost}` +
         ` sell=£${baseSell}+£${fuelSell}fuel=£${totalSell}` +
         ` profit=£${profit}`
@@ -518,7 +612,7 @@ export async function processShipment(payload) {
         pricing_logic_trace,
       });
 
-      // ── Fuel surcharge (separate line for audit) ───────────────────────────
+      // ── Fuel surcharge (separate line, only when pricing succeeded) ────────
       if (fuelCostPct > 0 || fuelSellPct > 0) {
         charges.push({
           ...commonFields,
@@ -648,15 +742,30 @@ export async function getTrace(serviceCode, customerId, physicalKg, dims, postco
   const chargedKg   = Math.max(physicalKg, volumetricKg);
   const weightBasis = volumetricKg > physicalKg ? 'volumetric' : 'physical';
 
-  // Zone
+  // Zone — strict match, same function as live engine
   const zone = await matchZone(serviceId, countryIso, postcode);
-  if (!zone) return { error: `No zone for ${serviceCode} / ${postcode}` };
+  if (!zone) return {
+    error: 'no_zone_matched',
+    error_detail: `No zone matched for service ${serviceCode}, country ${countryIso}, postcode ${postcode}`,
+    input: { serviceCode, customerId, physicalKg, dims, chargedKg, weightBasis, volumetricDivisor: divisor || null, zone: null },
+  };
 
-  // Cost
+  // Cost — hard stop if null
   const costResult = await lookupCarrierBandCost(serviceId, chargedKg, zone.id);
+  if (!costResult) return {
+    error: 'no_cost_band',
+    error_detail: `No carrier band for ${chargedKg}kg in zone "${zone.name}"`,
+    input: { serviceCode, customerId, physicalKg, dims, chargedKg, weightBasis, volumetricDivisor: divisor || null, zone: zone.name },
+  };
 
-  // Sell
+  // Sell — hard stop if null
   const sellResult = await lookupCustomerSellPrice(customerId, serviceCode, chargedKg, zone.name);
+  if (!sellResult) return {
+    error: 'no_sell_price',
+    error_detail: `No customer rate for ${chargedKg}kg in zone "${zone.name}", service "${serviceCode}", customer ${customerId}`,
+    input: { serviceCode, customerId, physicalKg, dims, chargedKg, weightBasis, volumetricDivisor: divisor || null, zone: zone.name },
+    cost: { pass: costResult.pass, band: costResult.bandLabel, base_cost: costResult.cost },
+  };
 
   // Fuel
   let fuelCostPct = 0, fuelSellPct = 0, fuelGroupName = null;
@@ -676,18 +785,18 @@ export async function getTrace(serviceCode, customerId, physicalKg, dims, postco
     }
   }
 
-  const baseCost  = costResult?.cost ?? null;
-  const baseSell  = sellResult?.sellPrice ?? null;
-  const fuelCost  = baseCost != null ? round2(baseCost * fuelCostPct / 100) : null;
-  const fuelSell  = baseSell != null ? round2(baseSell * fuelSellPct / 100) : null;
-  const totalCost = baseCost != null ? round2(baseCost + (fuelCost ?? 0)) : null;
-  const totalSell = baseSell != null ? round2(baseSell + (fuelSell ?? 0)) : null;
-  const profit    = (totalCost != null && totalSell != null) ? round2(totalSell - totalCost) : null;
+  const baseCost  = costResult.cost;
+  const baseSell  = sellResult.sellPrice;
+  const fuelCost  = fuelCostPct > 0 ? round2(baseCost * fuelCostPct / 100) : 0;
+  const fuelSell  = fuelSellPct > 0 ? round2(baseSell * fuelSellPct / 100) : 0;
+  const totalCost = round2(baseCost + fuelCost);
+  const totalSell = round2(baseSell + fuelSell);
+  const profit    = round2(totalSell - totalCost);
 
   return {
     input: { serviceCode, customerId, physicalKg, dims, chargedKg, weightBasis, volumetricDivisor: divisor || null, zone: zone.name },
-    cost:  { pass: costResult?.pass, band: costResult?.bandLabel, overageKg: costResult?.overageKg, base_cost: baseCost, fuel_cost_pct: fuelCostPct, fuel_cost: fuelCost, total_cost: totalCost },
-    sell:  { pass: sellResult?.pass, band: sellResult?.bandLabel, overageKg: sellResult?.overageKg, base_sell: baseSell, fuel_sell_pct: fuelSellPct, fuel_sell: fuelSell, total_sell: totalSell },
+    cost:  { pass: costResult.pass, band: costResult.bandLabel, overageKg: costResult.overageKg, base_cost: baseCost, fuel_cost_pct: fuelCostPct, fuel_cost: fuelCost, total_cost: totalCost },
+    sell:  { pass: sellResult.pass, band: sellResult.bandLabel, overageKg: sellResult.overageKg, base_sell: baseSell, fuel_sell_pct: fuelSellPct, fuel_sell: fuelSell, total_sell: totalSell },
     profit,
     margin_pct: totalSell > 0 ? round2((profit / totalSell) * 100) : null,
     fuel_group: fuelGroupName,

@@ -12,7 +12,7 @@ import express from 'express';
 import { createHash } from 'crypto';
 import { query } from '../db/index.js';
 import { normalisePayload as normaliseTrackingPayload, upsertEvent as upsertTrackingEvent } from './tracking.js';
-import { getTrace } from '../services/pricingEngine.js';
+import { getTrace, resolveZoneNameByServiceCode } from '../services/pricingEngine.js';
 
 const router = express.Router();
 
@@ -2478,14 +2478,11 @@ router.get('/charges/:id/debug', async (req, res, next) => {
       return res.json(trace);
     }
 
-    // Resolve zone from postcode
+    // Resolve zone using the SAME strict matchZone function as the live pricing engine.
+    // This guarantees diagnostic and live engine are always in sync: if one fails, both fail.
     const distinctZones = [...new Set(allRatesRes.rows.map(r => r.zone_name))];
-    let resolvedZone = null;
-    if (distinctZones.length === 1) {
-      resolvedZone = distinctZones[0];
-    } else {
-      resolvedZone = await zoneForPostcode(dcServiceId, postcode);
-    }
+    const countryIsoForZone = row.ship_to_country_iso || 'GB';
+    const resolvedZone = await resolveZoneNameByServiceCode(dcServiceId, countryIsoForZone, postcode);
 
     // All distinct weight bands for this service from customer_rates
     const allBandsRes = await query(`
@@ -2528,12 +2525,18 @@ router.get('/charges/:id/debug', async (req, res, next) => {
       resolved_band: resolvedBand,
     });
 
-    if (!resolvedBand) {
-      trace.conclusion = { priced: false, reason: 'no matching weight band' };
+    // Hard stop: zone must be resolved by the engine — no fuzzy fallback
+    if (!resolvedZone) {
+      trace.conclusion = {
+        priced: false,
+        reason: 'no_zone_matched',
+        detail: `Postcode "${postcode}" (country: ${countryIsoForZone}) did not match any zone for service "${dcServiceId}". ` +
+                `Zones compared: ${distinctZones.join(', ') || 'none'}`,
+      };
       return res.json(trace);
     }
-    if (!resolvedZone) {
-      trace.conclusion = { priced: false, reason: 'no matching zone' };
+    if (!resolvedBand) {
+      trace.conclusion = { priced: false, reason: 'no matching weight band' };
       return res.json(trace);
     }
 
