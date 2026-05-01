@@ -1727,4 +1727,212 @@ router.get('/pool-diagnostic', async (req, res) => {
   }
 });
 
+// ─── GET /api/reconciliation/runs/:id/lines/:lineId/trace ────────────────────
+// Returns a step-by-step decision trace for a single reconciliation line.
+// Shows exactly what the engine found in the pool, what the rate card said,
+// how expected was computed, and why the status was assigned.
+router.get('/runs/:id/lines/:lineId/trace', async (req, res) => {
+  try {
+    const runId  = parseInt(req.params.id);
+    const lineId = parseInt(req.params.lineId);
+
+    // ── Step 1: Load the stored line ─────────────────────────────────────────
+    const lineRes = await query(`
+      SELECT
+        rl.*,
+        cs.name          AS service_name,
+        cs.service_code  AS service_code_internal,
+        cu.business_name AS customer_name
+      FROM   reconciliation_lines rl
+      LEFT JOIN courier_services cs ON cs.id = rl.service_id
+      LEFT JOIN customers        cu ON cu.id = rl.customer_id
+      WHERE  rl.id = $1 AND rl.run_id = $2
+    `, [lineId, runId]);
+
+    if (!lineRes.rows.length) {
+      return res.status(404).json({ error: 'Line not found' });
+    }
+    const line = lineRes.rows[0];
+
+    // ── Step 2: Load the linked charge + shipment ─────────────────────────────
+    let chargeInfo = null;
+    if (line.charge_id) {
+      const cRes = await query(`
+        SELECT
+          c.id, c.cost_price, c.verified, c.cancelled, c.zone_name, c.charge_type,
+          s.tracking_codes, s.dc_service_id, s.parcel_count, s.total_weight_kg,
+          s.courier, s.reference
+        FROM   charges   c
+        JOIN   shipments s ON s.id = c.shipment_id
+        WHERE  c.id = $1
+      `, [line.charge_id]);
+      if (cRes.rows.length) chargeInfo = cRes.rows[0];
+    }
+
+    // ── Step 3: Load the weight band(s) that apply ───────────────────────────
+    let bandInfo = null;
+    let subFallback = null;
+    if (line.service_id && line.carrier_billed_weight_kg) {
+      const zoneRes = chargeInfo?.zone_name
+        ? await query(
+            `SELECT z.id FROM zones z
+             JOIN courier_services cs ON cs.id = z.courier_service_id
+             WHERE cs.id = $1 AND z.name ILIKE $2 LIMIT 1`,
+            [line.service_id, chargeInfo.zone_name]
+          )
+        : { rows: [] };
+      const zoneId = zoneRes.rows[0]?.id || null;
+
+      const bandQ = zoneId
+        ? await query(
+            `SELECT wb.id, wb.price_first, wb.price_sub, wb.cost_per_kg,
+                    wb.min_weight_kg, wb.max_weight_kg, z.name AS zone_name
+             FROM   weight_bands wb
+             JOIN   zones z ON z.id = wb.zone_id
+             WHERE  z.courier_service_id = $1
+               AND  wb.zone_id = $2
+               AND  wb.max_weight_kg IS NOT NULL
+               AND  $3 >  COALESCE(wb.min_weight_kg, 0)
+               AND  $3 <= wb.max_weight_kg
+             ORDER BY wb.min_weight_kg DESC LIMIT 1`,
+            [line.service_id, zoneId, line.carrier_billed_weight_kg]
+          )
+        : { rows: [] };
+      bandInfo = bandQ.rows[0] || null;
+
+      // Sub-rate fallback across the zone
+      if (bandInfo && bandInfo.price_sub == null && zoneId) {
+        const subQ = await query(
+          `SELECT MIN(wb.price_sub) AS price_sub
+           FROM   weight_bands wb
+           JOIN   zones z ON z.id = wb.zone_id
+           WHERE  z.courier_service_id = $1
+             AND  wb.zone_id = $2
+             AND  wb.price_sub IS NOT NULL`,
+          [line.service_id, zoneId]
+        );
+        if (subQ.rows[0]?.price_sub != null) {
+          subFallback = parseFloat(subQ.rows[0].price_sub);
+        }
+      }
+    }
+
+    // ── Step 4: Reconstruct expected calculation ──────────────────────────────
+    const storedCostPrice  = parseFloat(chargeInfo?.cost_price || 0);
+    const carrierAmount    = parseFloat(line.carrier_amount || 0);
+    const expectedAmount   = parseFloat(line.expected_amount || 0);
+    const delta            = parseFloat(line.delta || 0);
+    const priceSub         = bandInfo?.price_sub != null
+      ? parseFloat(bandInfo.price_sub)
+      : subFallback;
+    const priceFirst       = bandInfo ? parseFloat(bandInfo.price_first || 0) : null;
+
+    // ── Build trace steps ─────────────────────────────────────────────────────
+    const steps = [];
+
+    // Pool lookup
+    steps.push({
+      phase: 'Pool Lookup',
+      result: line.charge_id ? 'HIT' : 'MISS',
+      detail: line.charge_id
+        ? `Found charge #${line.charge_id} — stored cost_price=£${storedCostPrice.toFixed(2)}, zone="${chargeInfo?.zone_name || '?'}", verified=${chargeInfo?.verified}`
+        : `No verified charge found for tracking "${line.tracking_number}" with this carrier`,
+    });
+
+    if (line.charge_id) {
+      // Service code
+      steps.push({
+        phase: 'Service Code',
+        result: line.service_id ? 'RESOLVED' : 'UNKNOWN',
+        detail: line.service_id
+          ? `Raw code "${line.raw_service_code}" → service #${line.service_id} (${line.service_code_internal || line.service_name || '?'})`
+          : `Raw code "${line.raw_service_code}" not mapped — no reconciliation possible until mapped`,
+      });
+
+      // Weight band
+      if (bandInfo) {
+        steps.push({
+          phase: 'Rate Card Lookup',
+          result: 'FOUND',
+          detail: `Billed weight ${line.carrier_billed_weight_kg}kg → band [${bandInfo.min_weight_kg ?? 0}–${bandInfo.max_weight_kg}kg], zone="${bandInfo.zone_name}", price_first=£${parseFloat(bandInfo.price_first).toFixed(2)}, price_sub=${bandInfo.price_sub != null ? '£' + parseFloat(bandInfo.price_sub).toFixed(2) : 'null' + (subFallback != null ? ` (zone fallback: £${subFallback.toFixed(2)})` : ' (not configured)')}`,
+        });
+      } else if (line.carrier_billed_weight_kg) {
+        steps.push({
+          phase: 'Rate Card Lookup',
+          result: 'NO_BAND',
+          detail: `No weight band found for ${line.carrier_billed_weight_kg}kg — cannot recompute expected from rate card`,
+        });
+      }
+
+      // Expected calculation
+      const parcelCount = chargeInfo?.parcel_count || 1;
+      let expectedExplain;
+      if (parcelCount > 1 && priceFirst != null && priceSub != null) {
+        const rateCardExpected = priceFirst + (parcelCount - 1) * priceSub;
+        expectedExplain = `Multi-parcel (${parcelCount} parcels): rate card = £${priceFirst.toFixed(2)} + ${parcelCount - 1} × £${priceSub.toFixed(2)} = £${rateCardExpected.toFixed(2)}`;
+        if (Math.abs(rateCardExpected - expectedAmount) > 0.02) {
+          expectedExplain += ` — stored expected=£${expectedAmount.toFixed(2)} DIFFERS (booking engine may have used wrong formula)`;
+        }
+      } else if (parcelCount > 1) {
+        expectedExplain = `Multi-parcel (${parcelCount} parcels) but price_sub not found — fell back to stored cost_price=£${storedCostPrice.toFixed(2)}`;
+      } else {
+        expectedExplain = `Single parcel — stored cost_price=£${storedCostPrice.toFixed(2)}`;
+        if (Math.abs(storedCostPrice - expectedAmount) > 0.02) {
+          expectedExplain += ` (column surcharges adjusted expected to £${expectedAmount.toFixed(2)})`;
+        }
+      }
+      steps.push({ phase: 'Expected Calculation', result: `£${expectedAmount.toFixed(2)}`, detail: expectedExplain });
+
+      // Delta
+      steps.push({
+        phase: 'Delta',
+        result: `£${delta >= 0 ? '+' : ''}${delta.toFixed(2)}`,
+        detail: `Carrier £${carrierAmount.toFixed(2)} − Expected £${expectedAmount.toFixed(2)} = £${delta.toFixed(2)}`,
+      });
+
+      // Status decision
+      const absD = Math.abs(delta);
+      let statusExplain;
+      if (absD < 0.02) {
+        statusExplain = 'Delta < £0.02 → Price is King rule → MATCHED';
+      } else if (line.corrected_by === 'pricing_rules') {
+        statusExplain = `Delta £${delta.toFixed(2)} → Correction Engine: rate card explains carrier charge → CORRECTED (pricing_rules). The stored cost_price (£${storedCostPrice.toFixed(2)}) was wrong at booking — carrier billed correctly.`;
+      } else if (line.corrected_by === 'column_surcharge') {
+        statusExplain = `Delta £${delta.toFixed(2)} explained by column surcharges → CORRECTED (column_surcharge)`;
+      } else if (line.corrected_by === 'mapping') {
+        statusExplain = `Delta £${delta.toFixed(2)} explained by saved mapping → CORRECTED (mapping)`;
+      } else if (line.status === 'unmatched') {
+        statusExplain = `Delta £${delta.toFixed(2)} — neither rate card nor saved mapping explains it → UNMATCHED (${line.unmatched_reason || 'unknown'})`;
+      } else {
+        statusExplain = `Status: ${line.status}, corrected_by: ${line.corrected_by || 'none'}`;
+      }
+      steps.push({ phase: 'Status Decision', result: line.status.toUpperCase(), detail: statusExplain });
+
+      // Correction metadata if present
+      if (line.correction_metadata) {
+        steps.push({
+          phase: 'Correction Metadata',
+          result: 'STORED',
+          detail: JSON.stringify(line.correction_metadata),
+        });
+      }
+    }
+
+    return res.json({
+      line_id:      lineId,
+      run_id:       runId,
+      tracking:     line.tracking_number,
+      status:       line.status,
+      corrected_by: line.corrected_by,
+      charge:       chargeInfo,
+      band:         bandInfo,
+      sub_fallback: subFallback,
+      steps,
+    });
+  } catch (err) {
+    console.error('[reconciliation/trace] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
