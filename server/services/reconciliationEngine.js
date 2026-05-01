@@ -1072,23 +1072,45 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
   if (perParcelWeight > 0 && serviceId && charge.zone_id) {
     const bandResult = await lookupCarrierBandCost(serviceId, perParcelWeight, charge.zone_id);
     if (bandResult && bandResult.pass === 1) {
-      if (bandResult.price_sub != null) {
-        // Have a configured sub rate — can correctly compute multi-parcel expected.
-        const recomputed = round2(bandResult.cost + (freightLines.length - 1) * bandResult.price_sub);
+      // Resolve price_sub: use the matched band's value, or fall back to any
+      // configured price_sub in the same zone. DHL charges one flat sub rate
+      // regardless of weight tier — it may only be entered on one band in the UI.
+      let priceSub = bandResult.price_sub;
+      if (priceSub == null) {
+        const subRes = await query(
+          `SELECT MIN(wb.price_sub) AS price_sub
+           FROM   weight_bands     wb
+           JOIN   zones            z   ON z.id  = wb.zone_id
+           WHERE  z.courier_service_id = $1
+             AND  wb.zone_id           = $2
+             AND  wb.price_sub         IS NOT NULL`,
+          [serviceId, charge.zone_id]
+        );
+        if (subRes.rows.length && subRes.rows[0].price_sub != null) {
+          priceSub = round2(parseFloat(subRes.rows[0].price_sub));
+          console.log(
+            `[recon engine] Multi-parcel: price_sub not on matched band ` +
+            `(service=${serviceId}, ${perParcelWeight}kg) — using zone fallback sub=£${priceSub}`
+          );
+        }
+      }
+
+      if (priceSub != null) {
+        // Have a sub rate (from matched band or zone fallback) — recompute expected.
+        const recomputed = round2(bandResult.cost + (freightLines.length - 1) * priceSub);
         console.log(
           `[recon engine] Multi-parcel expected (${freightLines.length} freight parcels, ${perParcelWeight}kg/parcel):` +
-          ` first=£${bandResult.cost} sub=£${bandResult.price_sub} → expected=£${recomputed}` +
+          ` first=£${bandResult.cost} sub=£${priceSub} → expected=£${recomputed}` +
           ` (stored cost_price=£${round2(parseFloat(charge.expected_cost) || 0)})`
         );
         expectedBase = recomputed;
       } else {
-        // price_sub not configured — using first_rate as sub_rate would over-estimate.
-        // Fall back to stored cost_price and log so the rate card can be corrected.
+        // No sub rate anywhere in this zone — fall back to stored cost_price.
         console.warn(
           `[recon engine] Multi-parcel (${freightLines.length} freight parcels): ` +
-          `price_sub not set for band (service=${serviceId}, weight=${perParcelWeight}kg, zone=${charge.zone_id}) — ` +
+          `price_sub not configured in any band for zone ${charge.zone_id} — ` +
           `falling back to stored cost_price=£${round2(parseFloat(charge.expected_cost) || 0)}. ` +
-          `Configure price_sub in the carrier rate card to fix this.`
+          `Set price_sub on at least one weight band in the DHL rate card.`
         );
       }
     }
@@ -1358,15 +1380,33 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     const perParcelKg = round2(parseFloat(line.billed_weight_kg) || 0);
     if (perParcelKg > 0) {
       const bandResult = await lookupCarrierBandCost(serviceId, perParcelKg, charge.zone_id);
-      if (bandResult && bandResult.pass === 1 && bandResult.price_sub != null) {
-        const recomputed = round2(bandResult.cost + (parcelCount - 1) * bandResult.price_sub);
-        console.log(
-          `[recon engine] Multi-parcel single-line (${parcelCount} parcels, ${perParcelKg}kg/parcel):` +
-          ` first=£${bandResult.cost} sub=£${bandResult.price_sub} → expected=£${recomputed}` +
-          ` (stored cost_price=£${expectedAmount})`
-        );
-        expectedAmount        = recomputed;
-        effectiveColSurcharge = 0;   // sub-parcel is base, not a surcharge add-on
+      if (bandResult && bandResult.pass === 1) {
+        // Resolve price_sub — same zone fallback as processTrackingGroup.
+        let priceSub = bandResult.price_sub;
+        if (priceSub == null) {
+          const subRes = await query(
+            `SELECT MIN(wb.price_sub) AS price_sub
+             FROM   weight_bands     wb
+             JOIN   zones            z   ON z.id  = wb.zone_id
+             WHERE  z.courier_service_id = $1
+               AND  wb.zone_id           = $2
+               AND  wb.price_sub         IS NOT NULL`,
+            [serviceId, charge.zone_id]
+          );
+          if (subRes.rows.length && subRes.rows[0].price_sub != null) {
+            priceSub = round2(parseFloat(subRes.rows[0].price_sub));
+          }
+        }
+        if (priceSub != null) {
+          const recomputed = round2(bandResult.cost + (parcelCount - 1) * priceSub);
+          console.log(
+            `[recon engine] Multi-parcel single-line (${parcelCount} parcels, ${perParcelKg}kg/parcel):` +
+            ` first=£${bandResult.cost} sub=£${priceSub} → expected=£${recomputed}` +
+            ` (stored cost_price=£${expectedAmount})`
+          );
+          expectedAmount        = recomputed;
+          effectiveColSurcharge = 0;   // sub-parcel is base, not a surcharge add-on
+        }
       }
     }
   }
