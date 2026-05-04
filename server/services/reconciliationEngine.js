@@ -28,6 +28,7 @@
  */
 
 import { query } from '../db/index.js';
+import { matchZone } from './pricingEngine.js';
 
 // ─── Types (JSDoc) ────────────────────────────────────────────────────────────
 /**
@@ -558,10 +559,9 @@ async function lookupCarrierBandCost(serviceId, weightKg, zoneId) {
 
 // ─── Phase 4b: Correction Engine ─────────────────────────────────────────────
 //
-// Called when Phase 3 finds a delta between carrier_amount and the stored
-// charges.cost_price. Recalculates from the carrier rate card (weight_bands)
-// using the actual billed weight from the CSV. If the rate card explains the
-// carrier's charge, mark as Corrected.
+// Called when Phase 3 finds an unexplained delta after the rate card comparison.
+// Re-checks using the billed weight from the CSV — if the rate card (weight_bands)
+// explains the carrier's charge (e.g. overage), mark as Corrected.
 
 // originalExpectedCost — the stored charges.cost_price (passed by caller so metadata can
 // record what we expected before the carrier invoice revealed the true cost).
@@ -1054,16 +1054,9 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
     freightLines.reduce((s, l) => s + (parseFloat(l.carrier_amount) || 0), 0)
   );
 
-  // ── Multi-parcel expected cost — recompute from the carrier rate card ──────
-  // charges.cost_price (stored at booking) is often wrong for multi-parcel
-  // shipments when weight_bands.price_sub is not configured: the billing engine
-  // falls back to first_rate × parcel_count instead of first_rate + (n−1) × sub_rate.
-  // Recomputing here avoids both false "corrected" statuses and "sky-high" expected
-  // amounts in the UI.
-  //
-  // IMPORTANT: Only use the recomputed value when price_sub IS configured in the
-  // rate card. If price_sub is null, using first_rate as sub_rate gives a wrong
-  // (inflated) expected — fall back to stored cost_price instead.
+  // ── Multi-parcel expected cost — from the carrier rate card (first principles) ──
+  // All expected amounts are computed from weight_bands using service_id + zone + weight.
+  // charges.cost_price is never used — it comes from the billing API / webhook.
   //
   // DHL puts the per-parcel weight on each invoice line — we use firstLine.billed_weight_kg
   // directly (not divided by group size) to find the correct weight band.
@@ -1100,24 +1093,48 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
         const recomputed = round2(bandResult.cost + (freightLines.length - 1) * priceSub);
         console.log(
           `[recon engine] Multi-parcel expected (${freightLines.length} freight parcels, ${perParcelWeight}kg/parcel):` +
-          ` first=£${bandResult.cost} sub=£${priceSub} → expected=£${recomputed}` +
-          ` (stored cost_price=£${round2(parseFloat(charge.expected_cost) || 0)})`
+          ` first=£${bandResult.cost} sub=£${priceSub} → expected=£${recomputed}`
         );
         expectedBase = recomputed;
       } else {
-        // No sub rate anywhere in this zone — fall back to stored cost_price.
+        // No sub rate anywhere in this zone — expectedBase stays null.
+        // The null-guard below will insert all freight lines as 'no_rate_card' unmatched.
         console.warn(
           `[recon engine] Multi-parcel (${freightLines.length} freight parcels): ` +
           `price_sub not configured in any band for zone ${charge.zone_id} — ` +
-          `falling back to stored cost_price=£${round2(parseFloat(charge.expected_cost) || 0)}. ` +
-          `Set price_sub on at least one weight band in the DHL rate card.`
+          `marking as no_rate_card. Set price_sub on at least one weight band.`
         );
       }
     }
   }
-  // Fall back to stored cost_price if rate card lookup unavailable or price_sub missing.
+  // If no rate card result available (zone not configured, or price_sub missing),
+  // do NOT fall back to charges.cost_price — that value comes from the billing API
+  // / webhook and must never be used for reconciliation comparison.
+  // Instead, mark all freight lines unmatched so the operator can investigate.
   if (expectedBase == null) {
-    expectedBase = round2(parseFloat(charge.expected_cost) || 0);
+    for (const line of freightLines) {
+      await insertLine(runId, {
+        tracking_number:          String(line.tracking_number || '').trim(),
+        carrier_account_no:       line.account_number    || null,
+        raw_service_code:         rawServiceCode,
+        charge_type:              line.charge_type       || 'base',
+        carrier_amount:           round2(parseFloat(line.carrier_amount) || 0),
+        carrier_billed_weight_kg: line.billed_weight_kg  || null,
+        service_id:               serviceId,
+        customer_id:              charge.customer_id,
+        charge_id:                charge.charge_id,
+        expected_amount:          null,
+        delta:                    null,
+        status:                   'unmatched',
+        corrected_by:             null,
+        unmatched_reason:         'no_rate_card',
+        source:                   'internal',
+        shipment_date:            line.shipment_date     || null,
+        ship_to_postcode:         line.delivery_postcode || null,
+        ship_to_country:          line.ship_to_country   || null,
+      });
+    }
+    return [...results, ...freightLines.map(() => ({ status: 'unmatched' }))];
   }
 
   // ── Column surcharge accounting ───────────────────────────────────────────────
@@ -1310,11 +1327,11 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     if (!customer) {
       await insertLine(runId, {
         tracking_number:          trackingNumber,
-        carrier_account_no:       line.account_number || null,
+        carrier_account_no:       line.account_number    || null,
         raw_service_code:         rawServiceCode,
-        charge_type:              line.charge_type || 'base',
+        charge_type:              line.charge_type       || 'base',
         carrier_amount:           carrierAmount,
-        carrier_billed_weight_kg: line.billed_weight_kg || null,
+        carrier_billed_weight_kg: line.billed_weight_kg  || null,
         service_id:               serviceId,
         customer_id:              null,
         charge_id:                null,
@@ -1324,57 +1341,88 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
         corrected_by:             null,
         unmatched_reason:         'no_account_mapping',
         source:                   'internal',
-        shipment_date:            line.shipment_date || null,
+        shipment_date:            line.shipment_date     || null,
+        ship_to_postcode:         line.delivery_postcode || null,
+        ship_to_country:          line.ship_to_country   || null,
       });
       return { status: 'unmatched' };
     }
 
     // External booking — shipment booked directly with carrier, no OMS record.
-    // Amount shown for operator review; expected/delta left null (unverifiable
-    // without zone).
+    // Attempt to resolve zone from delivery postcode (captured from carrier CSV) so
+    // we can compute expected from the rate card and potentially auto-match.
+    // If zone resolution fails, expected stays null and operator reviews manually.
+    let externalExpected = null;
+    const extWeightKg    = round2(parseFloat(line.billed_weight_kg) || 0);
+    if (serviceId && extWeightKg > 0 && (line.delivery_postcode || line.ship_to_country)) {
+      const zone = await matchZone(serviceId, line.ship_to_country || 'GB', line.delivery_postcode || '');
+      if (zone) {
+        const band = await lookupCarrierBandCost(serviceId, extWeightKg, zone.id);
+        if (band) externalExpected = band.cost;
+      }
+    }
+    const externalDelta  = externalExpected !== null ? round2(carrierAmount - externalExpected) : null;
+    const externalStatus = externalExpected !== null && Math.abs(externalDelta) < 0.02
+      ? 'matched' : 'unmatched';
+    const externalReason = externalStatus === 'matched' ? null
+      : (externalExpected !== null ? 'price_mismatch' : 'external_booking_review');
+
     await insertLine(runId, {
       tracking_number:          trackingNumber,
-      carrier_account_no:       line.account_number || null,
+      carrier_account_no:       line.account_number    || null,
       raw_service_code:         rawServiceCode,
-      charge_type:              line.charge_type || 'base',
+      charge_type:              line.charge_type       || 'base',
       carrier_amount:           carrierAmount,
-      carrier_billed_weight_kg: line.billed_weight_kg || null,
+      carrier_billed_weight_kg: line.billed_weight_kg  || null,
       service_id:               serviceId,
       customer_id:              customer.customer_id,
       charge_id:                null,
-      expected_amount:          null,
-      delta:                    null,
-      status:                   'unmatched',
+      expected_amount:          externalExpected,
+      delta:                    externalDelta,
+      status:                   externalStatus,
       corrected_by:             null,
-      unmatched_reason:         'external_booking_review',
+      unmatched_reason:         externalReason,
       source:                   'external_booking',
-      shipment_date:            line.shipment_date || null,
+      shipment_date:            line.shipment_date     || null,
+      ship_to_postcode:         line.delivery_postcode || null,
+      ship_to_country:          line.ship_to_country   || null,
     });
-    return { status: 'unmatched' };
+    return { status: externalStatus };
   }
 
   // ── Phase 3: Match & Compare ──────────────────────────────────────────────
-  // Rule: compare against base cost_price ONLY (charges.cost_price).
-  // Fuel and HGV surcharges are verified separately via the aggregate line
-  // checks — they are NEVER included in per-shipment comparisons.
+  // Rule: compare base carrier amount against rate card price_first ONLY.
+  //
+  // charges.cost_price (charge.expected_cost) is populated from the billing API /
+  // webhook and MUST NOT be used — every expected amount is built from first
+  // principles: service_id + zone_id + billed_weight_kg → weight_bands.price_first.
+  //
+  // The pool record gives us zone_id (where the parcel was delivered) and
+  // customer/shipment linkage — that is all we use from it price-wise.
   //
   // Multi-parcel single-line invoices (line.parcel_count > 1):
   //   The carrier bills the whole shipment on one CSV line. Sub-parcel cost is
   //   PART OF THE BASE FREIGHT — it is NOT an additive surcharge. We recompute
   //   expectedBase from the rate card: price_first + (parcel_count−1) × price_sub.
-  //   Column surcharges are zeroed out for this path to prevent double-counting
-  //   (the CSV profile may have mapped a sub-parcel column as a col-surcharge, which
-  //   would already be included in the rate-card-derived base).
+  //   Column surcharges are zeroed out for this path to prevent double-counting.
   //
   // Single-parcel lines:
   //   Column surcharges (named per-shipment surcharges baked into carrier_amount,
   //   e.g. IOD, long-length) are added to expected so the delta reflects only
   //   unexplained discrepancies.
-  const charge      = poolHits[0];
-  const parcelCount = Math.max(1, parseInt(line.parcel_count) || 1);
+  const charge            = poolHits[0];
+  const parcelCount       = Math.max(1, parseInt(line.parcel_count) || 1);
+  const perParcelWeightKg = round2(parseFloat(line.billed_weight_kg) || 0);
 
-  let expectedAmount          = round2(parseFloat(charge.expected_cost) || 0);
-  let effectiveColSurcharge   = colSurchargeTotal;  // default: include named surcharges
+  // Base expected — always from rate card.  Initial single-parcel lookup;
+  // overridden below for multi-parcel paths (DPD all_sub, DHL first+sub).
+  let expectedAmount        = null;
+  let effectiveColSurcharge = colSurchargeTotal;  // default: include named surcharges
+
+  if (serviceId && charge.zone_id && perParcelWeightKg > 0) {
+    const singleBand = await lookupCarrierBandCost(serviceId, perParcelWeightKg, charge.zone_id);
+    if (singleBand) expectedAmount = singleBand.cost;
+  }
 
   if (parcelCount > 1 && serviceId && charge.zone_id) {
     // Single invoice line for a multi-parcel shipment.
@@ -1385,10 +1433,9 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     // DPD-style carriers (parcel_pricing === 'all_sub'): ALL parcels at sub-rate.
     //   expected = parcel_count × price_sub
     //   (including the first — DPD bills a flat per-parcel sub-rate when Items > 1)
-    const perParcelKg = round2(parseFloat(line.billed_weight_kg) || 0);
     const allAtSub    = (line.parcel_pricing || '') === 'all_sub';
-    if (perParcelKg > 0) {
-      const bandResult = await lookupCarrierBandCost(serviceId, perParcelKg, charge.zone_id);
+    if (perParcelWeightKg > 0) {
+      const bandResult = await lookupCarrierBandCost(serviceId, perParcelWeightKg, charge.zone_id);
       if (bandResult && bandResult.pass === 1) {
         // Resolve price_sub — same zone fallback as processTrackingGroup.
         let priceSub = bandResult.price_sub;
@@ -1412,17 +1459,15 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
             // DPD: all parcels (including first) at sub-rate
             recomputed = round2(parcelCount * priceSub);
             console.log(
-              `[recon engine] Multi-parcel single-line DPD-style (${parcelCount} parcels, ${perParcelKg}kg/parcel):` +
-              ` all at sub=£${priceSub} → expected=£${recomputed}` +
-              ` (stored cost_price=£${expectedAmount})`
+              `[recon engine] Multi-parcel single-line DPD-style (${parcelCount} parcels, ${perParcelWeightKg}kg/parcel):` +
+              ` all at sub=£${priceSub} → expected=£${recomputed}`
             );
           } else {
             // Standard: first at base rate, rest at sub-rate
             recomputed = round2(bandResult.cost + (parcelCount - 1) * priceSub);
             console.log(
-              `[recon engine] Multi-parcel single-line (${parcelCount} parcels, ${perParcelKg}kg/parcel):` +
-              ` first=£${bandResult.cost} sub=£${priceSub} → expected=£${recomputed}` +
-              ` (stored cost_price=£${expectedAmount})`
+              `[recon engine] Multi-parcel single-line (${parcelCount} parcels, ${perParcelWeightKg}kg/parcel):` +
+              ` first=£${bandResult.cost} sub=£${priceSub} → expected=£${recomputed}`
             );
           }
           expectedAmount        = recomputed;
@@ -1430,6 +1475,33 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
         }
       }
     }
+  }
+
+  // No rate card configured for this service/zone — cannot compare.
+  // Mark unmatched so the operator can investigate rather than showing a
+  // misleading delta based on billing API cost_price.
+  if (expectedAmount === null) {
+    await insertLine(runId, {
+      tracking_number:          trackingNumber,
+      carrier_account_no:       line.account_number     || null,
+      raw_service_code:         rawServiceCode,
+      charge_type:              line.charge_type        || 'base',
+      carrier_amount:           carrierAmount,
+      carrier_billed_weight_kg: line.billed_weight_kg   || null,
+      service_id:               serviceId,
+      customer_id:              charge.customer_id,
+      charge_id:                charge.charge_id,
+      expected_amount:          null,
+      delta:                    null,
+      status:                   'unmatched',
+      corrected_by:             null,
+      unmatched_reason:         'no_rate_card',
+      source:                   'internal',
+      shipment_date:            line.shipment_date      || null,
+      ship_to_postcode:         line.delivery_postcode  || null,
+      ship_to_country:          line.ship_to_country    || null,
+    });
+    return { status: 'unmatched' };
   }
 
   const fullExpected = round2(expectedAmount + effectiveColSurcharge);
@@ -1477,11 +1549,11 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       // audit trail but do NOT change the status to 'corrected'. Green = green.
       await insertLine(runId, {
         tracking_number:          trackingNumber,
-        carrier_account_no:       line.account_number || null,
+        carrier_account_no:       line.account_number    || null,
         raw_service_code:         rawServiceCode,
-        charge_type:              line.charge_type || 'base',
+        charge_type:              line.charge_type       || 'base',
         carrier_amount:           carrierAmount,
-        carrier_billed_weight_kg: line.billed_weight_kg || null,
+        carrier_billed_weight_kg: line.billed_weight_kg  || null,
         service_id:               serviceId,
         customer_id:              charge.customer_id,
         charge_id:                charge.charge_id,
@@ -1491,7 +1563,9 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
         corrected_by:             null,
         unmatched_reason:         null,
         source:                   'internal',
-        shipment_date:            line.shipment_date || null,
+        shipment_date:            line.shipment_date     || null,
+        ship_to_postcode:         line.delivery_postcode || null,
+        ship_to_country:          line.ship_to_country   || null,
         correction_metadata:      effectiveColSurcharge > 0
           ? { col_surcharge_total: effectiveColSurcharge, col_surcharges: colSurchargeBreakdown }
           : null,
@@ -1518,11 +1592,11 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     };
     await insertLine(runId, {
       tracking_number:          trackingNumber,
-      carrier_account_no:       line.account_number || null,
+      carrier_account_no:       line.account_number    || null,
       raw_service_code:         rawServiceCode,
-      charge_type:              line.charge_type || 'base',
+      charge_type:              line.charge_type       || 'base',
       carrier_amount:           carrierAmount,
-      carrier_billed_weight_kg: line.billed_weight_kg || null,
+      carrier_billed_weight_kg: line.billed_weight_kg  || null,
       service_id:               serviceId,
       customer_id:              charge.customer_id,
       charge_id:                charge.charge_id,
@@ -1532,7 +1606,9 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       corrected_by:             'pricing_rules',
       unmatched_reason:         null,
       source:                   'internal',
-      shipment_date:            line.shipment_date || null,
+      shipment_date:            line.shipment_date     || null,
+      ship_to_postcode:         line.delivery_postcode || null,
+      ship_to_country:          line.ship_to_country   || null,
       correction_metadata,
     });
     return { status: 'corrected' };
@@ -1548,11 +1624,11 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
 
     await insertLine(runId, {
       tracking_number:          trackingNumber,
-      carrier_account_no:       line.account_number || null,
+      carrier_account_no:       line.account_number    || null,
       raw_service_code:         rawServiceCode,
-      charge_type:              line.charge_type || 'base',
+      charge_type:              line.charge_type       || 'base',
       carrier_amount:           carrierAmount,
-      carrier_billed_weight_kg: line.billed_weight_kg || null,
+      carrier_billed_weight_kg: line.billed_weight_kg  || null,
       service_id:               serviceId,
       customer_id:              charge.customer_id,
       charge_id:                charge.charge_id,
@@ -1562,7 +1638,9 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       corrected_by:             'mapping',
       unmatched_reason:         null,
       source:                   'internal',
-      shipment_date:            line.shipment_date || null,
+      shipment_date:            line.shipment_date     || null,
+      ship_to_postcode:         line.delivery_postcode || null,
+      ship_to_country:          line.ship_to_country   || null,
       mapping_id:               mappingResult.mappingId,
     });
     return { status: 'corrected' };
@@ -1576,11 +1654,11 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   if (correction.corrected) {
     await insertLine(runId, {
       tracking_number:          trackingNumber,
-      carrier_account_no:       line.account_number || null,
+      carrier_account_no:       line.account_number    || null,
       raw_service_code:         rawServiceCode,
-      charge_type:              line.charge_type || 'base',
+      charge_type:              line.charge_type       || 'base',
       carrier_amount:           carrierAmount,
-      carrier_billed_weight_kg: line.billed_weight_kg || null,
+      carrier_billed_weight_kg: line.billed_weight_kg  || null,
       service_id:               serviceId,
       customer_id:              charge.customer_id,
       charge_id:                charge.charge_id,
@@ -1590,7 +1668,9 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       corrected_by:             'pricing_rules',
       unmatched_reason:         null,
       source:                   'internal',
-      shipment_date:            line.shipment_date || null,
+      shipment_date:            line.shipment_date     || null,
+      ship_to_postcode:         line.delivery_postcode || null,
+      ship_to_country:          line.ship_to_country   || null,
       correction_metadata:      correction.correction_metadata || null,
     });
     return { status: 'corrected' };
@@ -1599,11 +1679,11 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   // ── Unmatched ─────────────────────────────────────────────────────────────
   await insertLine(runId, {
     tracking_number:          trackingNumber,
-    carrier_account_no:       line.account_number || null,
+    carrier_account_no:       line.account_number    || null,
     raw_service_code:         rawServiceCode,
-    charge_type:              line.charge_type || 'base',
+    charge_type:              line.charge_type       || 'base',
     carrier_amount:           carrierAmount,
-    carrier_billed_weight_kg: line.billed_weight_kg || null,
+    carrier_billed_weight_kg: line.billed_weight_kg  || null,
     service_id:               serviceId,
     customer_id:              charge.customer_id,
     charge_id:                charge.charge_id,
@@ -1613,7 +1693,9 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     corrected_by:             null,
     unmatched_reason:         correction.reason,
     source:                   'internal',
-    shipment_date:            line.shipment_date || null,
+    shipment_date:            line.shipment_date     || null,
+    ship_to_postcode:         line.delivery_postcode || null,
+    ship_to_country:          line.ship_to_country   || null,
   });
   return { status: 'unmatched' };
 }
@@ -1660,9 +1742,10 @@ async function insertLine(runId, data) {
       (run_id, tracking_number, carrier_account_no, raw_service_code, charge_type,
        carrier_amount, carrier_billed_weight_kg, service_id, customer_id, charge_id,
        expected_amount, delta, status, corrected_by, unmatched_reason, source,
-       mapping_id, is_fuel, suggested_service_id, correction_metadata, shipment_date)
+       mapping_id, is_fuel, suggested_service_id, correction_metadata, shipment_date,
+       ship_to_postcode, ship_to_country)
     VALUES
-      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
   `, [
     runId,
     data.tracking_number          ?? null,
@@ -1685,6 +1768,8 @@ async function insertLine(runId, data) {
     data.suggested_service_id     || null,
     data.correction_metadata      ? JSON.stringify(data.correction_metadata) : null,
     data.shipment_date            || null,
+    data.ship_to_postcode         || null,
+    data.ship_to_country          || null,
   ]);
 }
 
@@ -1733,11 +1818,18 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
     const poolHits      = trackKey ? poolLookup(pool, trackKey) : [];
 
     if (poolHits.length > 0) {
-      // ── Pool HIT: compare carrier_amount against stored cost_price ──────────
-      const charge        = poolHits[0];
-      const expectedCost  = round2(parseFloat(charge.expected_cost) || 0);
-      const delta         = round2(carrierAmount - expectedCost);
-      const isMatch       = Math.abs(delta) < 0.02;
+      // ── Pool HIT: compare carrier_amount against rate card price_first ──────
+      // charges.cost_price (charge.expected_cost) is from the billing API / webhook
+      // and must never be used. Build expected from first principles: zone + weight.
+      const charge    = poolHits[0];
+      const weightKg  = round2(parseFloat(line.billed_weight_kg) || 0);
+      let expectedCost = null;
+      if (weightKg > 0 && charge.zone_id) {
+        const band = await lookupCarrierBandCost(serviceId, weightKg, charge.zone_id);
+        if (band) expectedCost = band.cost;
+      }
+      const delta   = expectedCost !== null ? round2(carrierAmount - expectedCost) : null;
+      const isMatch = expectedCost !== null && Math.abs(delta) < 0.02;
 
       await query(`
         UPDATE reconciliation_lines
@@ -1760,7 +1852,7 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
         charge.charge_id,
         expectedCost,
         delta,
-        isMatch ? null : 'price_mismatch',
+        isMatch ? null : (expectedCost === null ? 'no_rate_card' : 'price_mismatch'),
         line.line_id,
       ]);
 

@@ -305,6 +305,11 @@ function mapToInvoiceLine(row, colMap) {
     // Distinct from invoice_date. Used by finalizationService as despatch_date fallback
     // for external_booking lines where no charge record exists.
     shipment_date: toISODate(get('shipment_date')),
+    // Delivery postcode and country — captured from carrier CSV (DPD profile maps these).
+    // Used by the engine to resolve zone for external bookings and stored on the line
+    // for operator visibility in RunDetailPage.
+    delivery_postcode: get('delivery_postcode').trim() || null,
+    ship_to_country:   get('ship_to_country').trim()   || null,
     ...(Object.keys(surcharge_amounts).length > 0 && { surcharge_amounts }),
   };
 }
@@ -314,6 +319,7 @@ const BLANK_MAP = {
   charge_type: '', carrier_amount: '', billed_weight_kg: '',
   parcel_count: '', shipment_date: '',
   invoice_ref: '', invoice_date: '',
+  delivery_postcode: '', ship_to_country: '',
   surcharge_columns: [],   // [{ col: '<csv header>', surcharge_id: '<uuid>' }]
   // ── Carrier-format options ─────────────────────────────────────────────────
   // header_row_skip: number of preamble rows before the column header row.
@@ -713,9 +719,11 @@ function UploadModal({ couriers, onClose, onSuccess }) {
     { key: 'carrier_amount',   label: 'Amount (£)',        required: true },
     { key: 'billed_weight_kg', label: 'Weight (kg)',       required: false },
     { key: 'parcel_count',     label: 'Piece / Item Count',  required: false, hint: 'Multi-parcel pricing & HGV' },
-    { key: 'shipment_date',    label: 'Shipment Date',    required: false, hint: 'Per-parcel despatch date (not invoice date)' },
-    { key: 'invoice_ref',      label: 'Invoice Reference', required: false, hint: 'Read from CSV' },
-    { key: 'invoice_date',     label: 'Invoice Date',      required: false, hint: 'Read from CSV' },
+    { key: 'shipment_date',      label: 'Shipment Date',      required: false, hint: 'Per-parcel despatch date (not invoice date)' },
+    { key: 'delivery_postcode',  label: 'Delivery Postcode',  required: false, hint: 'Used for zone resolution on external bookings' },
+    { key: 'ship_to_country',    label: 'Destination Country', required: false, hint: 'ISO country code (e.g. GB, IE, DE)' },
+    { key: 'invoice_ref',        label: 'Invoice Reference',  required: false, hint: 'Read from CSV' },
+    { key: 'invoice_date',       label: 'Invoice Date',       required: false, hint: 'Read from CSV' },
   ];
 
   const canProceed = carrierId && FIELDS.filter(f => f.required).every(f => colMap[f.key]);
