@@ -301,6 +301,10 @@ function mapToInvoiceLine(row, colMap) {
     // 'all_sub' (DPD): ALL parcels billed at price_sub when items > 1 (including first).
     // '' / undefined (standard, DHL): first at price_first + (n-1) at price_sub.
     ...(colMap.parcel_pricing && { parcel_pricing: colMap.parcel_pricing }),
+    // Per-row shipment date (e.g. DPD "Date" column = consignment collection/despatch date).
+    // Distinct from invoice_date. Used by finalizationService as despatch_date fallback
+    // for external_booking lines where no charge record exists.
+    shipment_date: toISODate(get('shipment_date')),
     ...(Object.keys(surcharge_amounts).length > 0 && { surcharge_amounts }),
   };
 }
@@ -308,7 +312,7 @@ function mapToInvoiceLine(row, colMap) {
 const BLANK_MAP = {
   tracking_number: '', account_number: '', service_code: '',
   charge_type: '', carrier_amount: '', billed_weight_kg: '',
-  parcel_count: '',
+  parcel_count: '', shipment_date: '',
   invoice_ref: '', invoice_date: '',
   surcharge_columns: [],   // [{ col: '<csv header>', surcharge_id: '<uuid>' }]
   // ── Carrier-format options ─────────────────────────────────────────────────
@@ -709,6 +713,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
     { key: 'carrier_amount',   label: 'Amount (£)',        required: true },
     { key: 'billed_weight_kg', label: 'Weight (kg)',       required: false },
     { key: 'parcel_count',     label: 'Piece / Item Count',  required: false, hint: 'Multi-parcel pricing & HGV' },
+    { key: 'shipment_date',    label: 'Shipment Date',    required: false, hint: 'Per-parcel despatch date (not invoice date)' },
     { key: 'invoice_ref',      label: 'Invoice Reference', required: false, hint: 'Read from CSV' },
     { key: 'invoice_date',     label: 'Invoice Date',      required: false, hint: 'Read from CSV' },
   ];
@@ -793,7 +798,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                           )}
                         </div>
                         <div style={{ fontSize: 11, color: '#555', marginTop: 2 }}>
-                          {Object.entries(p.column_map || {}).filter(([k, v]) => !['surcharge_columns','header_row_skip','parcel_pricing'].includes(k) && v).length} columns mapped
+                          {Object.entries(p.column_map || {}).filter(([k, v]) => !['surcharge_columns','header_row_skip','parcel_pricing','preamble_fields'].includes(k) && v).length} columns mapped
                           {(p.column_map?.surcharge_columns?.length > 0) && (
                             <span style={{ marginLeft: 6, color: '#666' }}>· {p.column_map.surcharge_columns.length} surcharge col{p.column_map.surcharge_columns.length > 1 ? 's' : ''}</span>
                           )}

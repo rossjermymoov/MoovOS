@@ -37,6 +37,11 @@ SELECT
     'billed_weight_kg',  'weight',
     'parcel_count',      'items',
 
+    -- DPD "Date" column = per-shipment collection/despatch date.
+    -- Stored as shipment_date on reconciliation_lines; used by finalizationService
+    -- as the despatch_date fallback for external_booking lines (no charge record).
+    'shipment_date',     'date',
+
     -- invoice_ref is NOT a per-row column — it lives in the preamble (D1 / row 0 col 3).
     -- preamble_fields below auto-extracts it into the run's invoice_ref on upload.
     'invoice_ref',       '',

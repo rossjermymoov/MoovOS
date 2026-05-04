@@ -145,7 +145,12 @@ async function buildSnapshot(line, run) {
     weight_kg:               line.carrier_billed_weight_kg || null,
     service_name:            null,
     service_code:            null,
-    despatch_date:           null,
+    // Use the per-row shipment date from the CSV as the initial despatch_date.
+    // For internal bookings (charge_id present), this is overridden below by
+    // shipments.despatch_date from the charge enrichment query.
+    // For external bookings and OMS-missed lines (charge_id null), this is the
+    // only source of a despatch date — it comes from the DPD "Date" column etc.
+    despatch_date:           line.shipment_date || null,
   };
 
   // ── Enrich from our charges table + shipments ─────────────────────────────

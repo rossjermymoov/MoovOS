@@ -1203,6 +1203,7 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
       corrected_by:             correctedBy,
       unmatched_reason:         unmatchedReason,
       source:                   'internal',
+      shipment_date:            line.shipment_date || null,
       mapping_id:               mappingId,
       correction_metadata:      colSurchargeMeta,  // null when no column surcharges; audit trail when present
     });
@@ -1324,6 +1325,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
         corrected_by:             null,
         unmatched_reason:         rateMatches ? null : 'no_account_mapping',
         source:                   'internal',
+        shipment_date:            line.shipment_date || null,
       });
       return { status: rateMatches ? 'matched' : 'unmatched' };
     }
@@ -1347,6 +1349,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       corrected_by:             null,
       unmatched_reason:         rateMatches ? null : 'external_booking_review',
       source:                   'external_booking',
+      shipment_date:            line.shipment_date || null,
     });
     return { status: rateMatches ? 'matched' : 'unmatched' };
   }
@@ -1489,6 +1492,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
         corrected_by:             null,
         unmatched_reason:         null,
         source:                   'internal',
+        shipment_date:            line.shipment_date || null,
         correction_metadata:      effectiveColSurcharge > 0
           ? { col_surcharge_total: effectiveColSurcharge, col_surcharges: colSurchargeBreakdown }
           : null,
@@ -1529,6 +1533,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       corrected_by:             'pricing_rules',
       unmatched_reason:         null,
       source:                   'internal',
+      shipment_date:            line.shipment_date || null,
       correction_metadata,
     });
     return { status: 'corrected' };
@@ -1558,6 +1563,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       corrected_by:             'mapping',
       unmatched_reason:         null,
       source:                   'internal',
+      shipment_date:            line.shipment_date || null,
       mapping_id:               mappingResult.mappingId,
     });
     return { status: 'corrected' };
@@ -1585,6 +1591,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       corrected_by:             'pricing_rules',
       unmatched_reason:         null,
       source:                   'internal',
+      shipment_date:            line.shipment_date || null,
       correction_metadata:      correction.correction_metadata || null,
     });
     return { status: 'corrected' };
@@ -1607,6 +1614,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     corrected_by:             null,
     unmatched_reason:         correction.reason,
     source:                   'internal',
+    shipment_date:            line.shipment_date || null,
   });
   return { status: 'unmatched' };
 }
@@ -1653,9 +1661,9 @@ async function insertLine(runId, data) {
       (run_id, tracking_number, carrier_account_no, raw_service_code, charge_type,
        carrier_amount, carrier_billed_weight_kg, service_id, customer_id, charge_id,
        expected_amount, delta, status, corrected_by, unmatched_reason, source,
-       mapping_id, is_fuel, suggested_service_id, correction_metadata)
+       mapping_id, is_fuel, suggested_service_id, correction_metadata, shipment_date)
     VALUES
-      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
   `, [
     runId,
     data.tracking_number          ?? null,
@@ -1677,6 +1685,7 @@ async function insertLine(runId, data) {
     data.is_fuel                  || false,
     data.suggested_service_id     || null,
     data.correction_metadata      ? JSON.stringify(data.correction_metadata) : null,
+    data.shipment_date            || null,
   ]);
 }
 
