@@ -1856,28 +1856,41 @@ router.get('/runs/:id/lines/:lineId/trace', async (req, res) => {
 
       // Expected calculation
       const parcelCount = chargeInfo?.parcel_count || 1;
-      let expectedExplain;
+      // ── Display expected from the rate card (bandInfo from step 3), not from
+      // stored expected_amount. stored expected_amount can be null/0 when zone_id
+      // was missing at run time — that's a DB artifact, not the current truth.
+      // The rate card lookup in step 3 is always fresh and authoritative.
+      let rateCardDisplay = null;
+      let rateCardExplain;
       if (parcelCount > 1 && priceFirst != null && priceSub != null) {
-        const rateCardExpected = priceFirst + (parcelCount - 1) * priceSub;
-        expectedExplain = `Multi-parcel (${parcelCount} parcels): rate card = £${priceFirst.toFixed(2)} + ${parcelCount - 1} × £${priceSub.toFixed(2)} = £${rateCardExpected.toFixed(2)}`;
-        if (Math.abs(rateCardExpected - expectedAmount) > 0.02) {
-          expectedExplain += ` — stored expected=£${expectedAmount.toFixed(2)} DIFFERS (booking engine may have used wrong formula)`;
+        // Multi-parcel: DPD all-sub = n × price_sub; standard = first + (n-1) × sub
+        const allAtSub = false; // trace doesn't currently know parcel_pricing; use standard formula for display
+        rateCardDisplay = Math.round((priceFirst + (parcelCount - 1) * priceSub) * 100) / 100;
+        rateCardExplain = `Multi-parcel (${parcelCount} parcels): rate card = £${priceFirst.toFixed(2)} + ${parcelCount - 1} × £${priceSub.toFixed(2)} = £${rateCardDisplay.toFixed(2)}`;
+        if (expectedAmount > 0 && Math.abs(rateCardDisplay - expectedAmount) > 0.02) {
+          rateCardExplain += ` — stored expected=£${expectedAmount.toFixed(2)} differs (may use all-sub pricing)`;
         }
       } else if (parcelCount > 1) {
-        expectedExplain = `Multi-parcel (${parcelCount} parcels) but price_sub not found — fell back to stored cost_price=£${storedCostPrice.toFixed(2)}`;
-      } else {
-        expectedExplain = `Single parcel — stored cost_price=£${storedCostPrice.toFixed(2)}`;
-        if (Math.abs(storedCostPrice - expectedAmount) > 0.02) {
-          expectedExplain += ` (column surcharges adjusted expected to £${expectedAmount.toFixed(2)})`;
+        rateCardDisplay = priceFirst;
+        rateCardExplain = `Multi-parcel (${parcelCount} parcels) but price_sub not found — using price_first=£${priceFirst != null ? priceFirst.toFixed(2) : '?'}`;
+      } else if (priceFirst != null) {
+        rateCardDisplay = priceFirst;
+        rateCardExplain = `Single parcel — rate card price_first=£${priceFirst.toFixed(2)}, zone="${bandInfo?.zone_name || '?'}"`;
+        if (expectedAmount > 0 && Math.abs(priceFirst - expectedAmount) > 0.02) {
+          rateCardExplain += ` — stored expected=£${expectedAmount.toFixed(2)} differs (run with different rate card version)`;
         }
+      } else {
+        rateCardDisplay = null;
+        rateCardExplain = `Rate card lookup produced no result for this service/weight/zone`;
       }
-      steps.push({ phase: 'Expected Calculation', result: `£${expectedAmount.toFixed(2)}`, detail: expectedExplain });
+      const displayExpected = rateCardDisplay != null ? rateCardDisplay : expectedAmount;
+      steps.push({ phase: 'Expected Calculation', result: `£${displayExpected != null ? displayExpected.toFixed(2) : '?'}`, detail: rateCardExplain });
 
       // Delta
       steps.push({
         phase: 'Delta',
         result: `£${delta >= 0 ? '+' : ''}${delta.toFixed(2)}`,
-        detail: `Carrier £${carrierAmount.toFixed(2)} − Expected £${expectedAmount.toFixed(2)} = £${delta.toFixed(2)}`,
+        detail: `Carrier £${carrierAmount.toFixed(2)} − Expected £${displayExpected != null ? displayExpected.toFixed(2) : '?'} = £${delta.toFixed(2)}`,
       });
 
       // Status decision

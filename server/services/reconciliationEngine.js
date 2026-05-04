@@ -1902,8 +1902,9 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
       const charge    = poolHits[0];
       const weightKg  = round2(parseFloat(line.billed_weight_kg) || 0);
       let expectedCost = null;
-      if (weightKg > 0 && charge.zone_id) {
-        const band = await lookupCarrierBandCost(serviceId, weightKg, charge.zone_id);
+      // Use zone-free fallback when zone_id is null — same behaviour as processLine.
+      if (weightKg > 0) {
+        const band = await lookupCarrierBandCost(serviceId, weightKg, charge.zone_id || null);
         if (band) expectedCost = band.cost;
       }
       const delta   = expectedCost !== null ? round2(carrierAmount - expectedCost) : null;
