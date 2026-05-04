@@ -589,11 +589,11 @@ export async function processShipment(payload) {
     if (!serviceCode) throw new Error('No service_code in payload — checked shipment.courier.service_code, shipment.dc_service_id, and request_shipment.dc_service_id');
 
     const svcRow = await query(
-      'SELECT id, service_code, fuel_group_id FROM courier_services WHERE service_code = $1',
+      'SELECT id, service_code, fuel_group_id, charges_per_parcel FROM courier_services WHERE service_code = $1',
       [serviceCode]
     );
     if (!svcRow.rows.length) throw new Error(`No courier service found with code = ${serviceCode}`);
-    const { id: serviceId, fuel_group_id: fuelGroupId } = svcRow.rows[0];
+    const { id: serviceId, fuel_group_id: fuelGroupId, charges_per_parcel: chargesPerParcel } = svcRow.rows[0];
 
     // ── 3. MATCH ZONE ─────────────────────────────────────────────────────────
     // A missing zone is NOT a throw — charges are created with status='pricing_error'
@@ -669,6 +669,14 @@ export async function processShipment(payload) {
       raw_payload:         JSON.stringify(payload),
     };
 
+    // ── Per-parcel pricing results staging ────────────────────────────────────
+    // We always price each parcel individually (correct for weight-banded billing).
+    // If chargesPerParcel = false (default), results are consolidated into ONE
+    // courier charge + ONE fuel charge at the end so the reconciliation pool
+    // matches a single invoice line per consignment (DPD behaviour).
+    // If chargesPerParcel = true, each parcel gets its own charge row.
+    const parcelResults = [];
+
     for (let i = 0; i < parcels.length; i++) {
       const parcel    = parcels[i];
       const isFirst   = i === 0;
@@ -705,6 +713,7 @@ export async function processShipment(payload) {
         console.warn(`[pricing] ✗ Parcel ${parcelNum}: ${errorDetail}`);
         errors.push(`Parcel ${parcelNum}: pricing_error (${errorStep}) — ${errorDetail}`);
 
+        // Always emit per-parcel for errors — visibility matters
         charges.push({
           ...commonFields,
           charge_type:           'courier',
@@ -790,30 +799,91 @@ export async function processShipment(payload) {
         ` profit=£${profit}`
       );
 
-      // ── Base rate charge ───────────────────────────────────────────────────
-      charges.push({
-        ...commonFields,
-        charge_type:           'courier',
-        parcel_number:         parcelNum,
-        weight_actual_kg:      physicalKg,
-        weight_dimensional_kg: volumetricKg,
-        weight_charged_kg:     chargedKg,
-        cost_price:            baseCost,
-        sell_price:            baseSell,
-        status:                'unverified',
+      parcelResults.push({
+        parcelNum,
+        physicalKg, volumetricKg, chargedKg,
+        baseCost, baseSell,
+        fuelCost, fuelSell,
         pricing_logic_trace,
       });
+    }
 
-      // ── Fuel surcharge (separate line, only when pricing succeeded) ────────
-      if (fuelCostPct > 0 || fuelSellPct > 0) {
+    // ── Emit courier + fuel charges ────────────────────────────────────────────
+    if (chargesPerParcel || parcels.length <= 1) {
+      // One charge row per parcel (e.g. DHL per-parcel invoicing, or single-parcel shipment)
+      for (const r of parcelResults) {
         charges.push({
           ...commonFields,
-          charge_type:   'fuel',
-          parcel_number: parcelNum,
-          cost_price:    fuelCost,
-          sell_price:    fuelSell,
-          status:        'unverified',
+          charge_type:           'courier',
+          parcel_number:         r.parcelNum,
+          weight_actual_kg:      r.physicalKg,
+          weight_dimensional_kg: r.volumetricKg,
+          weight_charged_kg:     r.chargedKg,
+          cost_price:            r.baseCost,
+          sell_price:            r.baseSell,
+          status:                'unverified',
+          pricing_logic_trace:   r.pricing_logic_trace,
         });
+        if (fuelCostPct > 0 || fuelSellPct > 0) {
+          charges.push({
+            ...commonFields,
+            charge_type:   'fuel',
+            parcel_number: r.parcelNum,
+            cost_price:    r.fuelCost,
+            sell_price:    r.fuelSell,
+            status:        'unverified',
+          });
+        }
+      }
+    } else {
+      // Consolidate: one courier charge + one fuel charge for the whole shipment.
+      // Each parcel was priced individually (correct weight-band lookup), results summed.
+      // This matches how DPD (and most carriers) issue a single invoice line per consignment.
+      const totalBaseCost = round2(parcelResults.reduce((s, r) => s + r.baseCost, 0));
+      const totalBaseSell = round2(parcelResults.reduce((s, r) => s + r.baseSell, 0));
+      const totalFuelCost = round2(parcelResults.reduce((s, r) => s + r.fuelCost, 0));
+      const totalFuelSell = round2(parcelResults.reduce((s, r) => s + r.fuelSell, 0));
+      const totalPhysical = round2(parcelResults.reduce((s, r) => s + r.physicalKg, 0));
+      const totalVolumetric = round2(parcelResults.reduce((s, r) => s + r.volumetricKg, 0));
+      const totalCharged  = round2(parcelResults.reduce((s, r) => s + r.chargedKg, 0));
+
+      if (parcelResults.length > 0) {
+        console.log(
+          `[pricing] ✓ Consolidated ${parcelResults.length} parcels:` +
+          ` total charged ${totalCharged}kg` +
+          ` cost=£${totalBaseCost}+£${totalFuelCost}fuel` +
+          ` sell=£${totalBaseSell}+£${totalFuelSell}fuel`
+        );
+
+        charges.push({
+          ...commonFields,
+          charge_type:           'courier',
+          parcel_number:         null,  // consolidated — not a single parcel
+          weight_actual_kg:      totalPhysical,
+          weight_dimensional_kg: totalVolumetric,
+          weight_charged_kg:     totalCharged,
+          cost_price:            totalBaseCost,
+          sell_price:            totalBaseSell,
+          status:                'unverified',
+          pricing_logic_trace: {
+            consolidated:    true,
+            parcel_count:    parcelResults.length,
+            total_cost:      round2(totalBaseCost + totalFuelCost),
+            total_sell:      round2(totalBaseSell + totalFuelSell),
+            parcels:         parcelResults.map(r => r.pricing_logic_trace),
+          },
+        });
+
+        if (fuelCostPct > 0 || fuelSellPct > 0) {
+          charges.push({
+            ...commonFields,
+            charge_type:   'fuel',
+            parcel_number: null,
+            cost_price:    totalFuelCost,
+            sell_price:    totalFuelSell,
+            status:        'unverified',
+          });
+        }
       }
     }
 

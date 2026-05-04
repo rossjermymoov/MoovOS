@@ -1982,7 +1982,9 @@ router.post('/full-reprice', async (req, res, next) => {
 
     // Respond immediately so nginx proxy timeout can't kill the request.
     // The actual repricing runs in the background — check server logs for completion.
-    res.json({ started: true, total: charges.length, note: 'Reprice running in background — refresh in a moment to see updates' });
+    // timestamp prevents Express from returning a cached 304 when the charge count hasn't changed.
+    res.set('Cache-Control', 'no-store');
+    res.json({ started: true, total: charges.length, ts: Date.now(), note: 'Reprice running in background — refresh in a moment to see updates' });
 
     // ── Background processing ─────────────────────────────────────────────────
     (async () => {
