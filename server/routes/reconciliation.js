@@ -14,7 +14,7 @@
 
 import express from 'express';
 import { query } from '../db/index.js';
-import { processReconciliationRun, ageUnmatchedLines } from '../services/reconciliationEngine.js';
+import { processReconciliationRun, ageUnmatchedLines, reprocessMappedLines } from '../services/reconciliationEngine.js';
 import { finalizeRun, getCustomerSummaries, generateCustomerCSV, getMarginReport } from '../services/finalizationService.js';
 
 const router = express.Router();
@@ -1102,24 +1102,14 @@ router.post('/runs/:id/bulk-map-service-codes', async (req, res) => {
         `, [carrierId, raw_service_code, parseInt(service_id), custId, req.user?.id || null, runId]);
       }
 
-      // 2. Update all matching unmatched lines in this run
-      const updRes = await query(`
-        UPDATE reconciliation_lines
-        SET    status        = 'corrected',
-               corrected_by  = 'human',
-               service_id    = $1,
-               resolved_at   = NOW(),
-               resolved_by   = $2
-        WHERE  run_id            = $3
-          AND  raw_service_code  = $4
-          AND  status            = 'unmatched'
-          AND  unmatched_reason  = 'unknown_service_code'
-        RETURNING id
-      `, [parseInt(service_id), req.user?.id || null, runId, raw_service_code]);
+      // 2. Re-process affected lines through the engine:
+      //    pool lookup → cost comparison → proper matched/unmatched/external_booking.
+      //    Never blind-stamp as 'corrected' — we need real expected_amount / delta.
+      const reprocessResult = await reprocessMappedLines(runId, raw_service_code, parseInt(service_id), carrierId);
 
-      const count = updRes.rowCount || 0;
+      const count = reprocessResult.matched + reprocessResult.unmatched + reprocessResult.external_booking;
       totalUpdated += count;
-      results.push({ raw_service_code, service_id, lines_updated: count });
+      results.push({ raw_service_code, service_id, lines_updated: count, ...reprocessResult });
     }
 
     // 3. Recount and update run stats from DB (most accurate).

@@ -1293,20 +1293,19 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   if (poolHits.length === 0) {
     const customer = await lookupCustomerByAccount(line.account_number);
 
-    // Pool MISS: no charge record, so no zone_id is available.
-    // lookupCarrierBandCost requires a zone — without it we can't do a
-    // zone-pinned rate card check, so expectedCarrierCost will be null
-    // and rateMatches will be false (correct — we can't verify without zone).
-    const bandResult          = await lookupCarrierBandCost(serviceId, line.billed_weight_kg, null);
-    const expectedCarrierCost = bandResult?.cost ?? null;
-    // Include column surcharges in expected so the delta reflects unexplained discrepancies only
-    const fullExpectedCarrierCost = expectedCarrierCost != null
-      ? round2(expectedCarrierCost + colSurchargeTotal)
-      : null;
-    const carrierDelta = fullExpectedCarrierCost !== null
-      ? round2(carrierAmount - fullExpectedCarrierCost)
-      : null;
-    const rateMatches = carrierDelta !== null && Math.abs(carrierDelta) <= 0.01;
+    // Pool MISS — no charge record in the OMS for this tracking number.
+    //
+    // We do NOT attempt a zone-free rate card estimate here. Without a zone we
+    // cannot pin the correct weight band, so any figure we compute would be a
+    // guess rather than a verified comparison. Marking a line as "matched" or
+    // "unmatched" based on an unzoned estimate misleads the operator.
+    //
+    // Instead we record the line with expected_amount = null and route it to
+    // manual review.  Two sub-cases:
+    //   • customer found via account_number → source = 'external_booking',
+    //     unmatched_reason = 'external_booking_review' (amber, reviewable)
+    //   • no customer found                → source = 'internal',
+    //     unmatched_reason = 'no_account_mapping' (amber, needs account mapped)
 
     if (!customer) {
       await insertLine(runId, {
@@ -1319,20 +1318,20 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
         service_id:               serviceId,
         customer_id:              null,
         charge_id:                null,
-        expected_amount:          fullExpectedCarrierCost,
-        delta:                    carrierDelta,
-        status:                   rateMatches ? 'matched' : 'unmatched',
+        expected_amount:          null,
+        delta:                    null,
+        status:                   'unmatched',
         corrected_by:             null,
-        unmatched_reason:         rateMatches ? null : 'no_account_mapping',
+        unmatched_reason:         'no_account_mapping',
         source:                   'internal',
         shipment_date:            line.shipment_date || null,
       });
-      return { status: rateMatches ? 'matched' : 'unmatched' };
+      return { status: 'unmatched' };
     }
 
-    // External booking — shipment was booked directly with carrier (not via MoovOS).
-    // Compare carrier invoice against the carrier rate card. If it matches the
-    // agreed cost price, mark as Matched. Sell price is irrelevant here.
+    // External booking — shipment booked directly with carrier, no OMS record.
+    // Amount shown for operator review; expected/delta left null (unverifiable
+    // without zone).
     await insertLine(runId, {
       tracking_number:          trackingNumber,
       carrier_account_no:       line.account_number || null,
@@ -1343,15 +1342,15 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       service_id:               serviceId,
       customer_id:              customer.customer_id,
       charge_id:                null,
-      expected_amount:          fullExpectedCarrierCost,
-      delta:                    carrierDelta,
-      status:                   rateMatches ? 'matched' : 'unmatched',
+      expected_amount:          null,
+      delta:                    null,
+      status:                   'unmatched',
       corrected_by:             null,
-      unmatched_reason:         rateMatches ? null : 'external_booking_review',
+      unmatched_reason:         'external_booking_review',
       source:                   'external_booking',
       shipment_date:            line.shipment_date || null,
     });
-    return { status: rateMatches ? 'matched' : 'unmatched' };
+    return { status: 'unmatched' };
   }
 
   // ── Phase 3: Match & Compare ──────────────────────────────────────────────
@@ -1687,6 +1686,130 @@ async function insertLine(runId, data) {
     data.correction_metadata      ? JSON.stringify(data.correction_metadata) : null,
     data.shipment_date            || null,
   ]);
+}
+
+// ─── Reprocess lines after a service code mapping is saved ───────────────────
+//
+// Called by bulk-map-service-codes after the user maps an unknown_service_code.
+// Re-runs the core pool-lookup + cost comparison for every affected line in the
+// run so they get proper matched/unmatched/external_booking status rather than
+// being blindly stamped "corrected".
+//
+// For each line:
+//   • Pool HIT  → expected = cost_price, delta computed, status = matched / unmatched
+//   • Pool MISS → customer lookup via account_number
+//       – customer found  → external_booking, expected = null (no zone, no estimate)
+//       – no customer     → unmatched / no_account_mapping
+//
+// Returns { matched, unmatched, external_booking } counts.
+
+export async function reprocessMappedLines(runId, rawServiceCode, serviceId, carrierId) {
+  // Load all unknown_service_code lines in this run that have the newly mapped code
+  const linesRes = await query(`
+    SELECT
+      id              AS line_id,
+      tracking_number,
+      carrier_amount,
+      carrier_billed_weight_kg AS billed_weight_kg,
+      carrier_account_no       AS account_number,
+      parcel_count,
+      correction_metadata
+    FROM reconciliation_lines
+    WHERE run_id             = $1
+      AND raw_service_code   = $2
+      AND status             = 'unmatched'
+      AND unmatched_reason   = 'unknown_service_code'
+  `, [runId, rawServiceCode]);
+
+  if (!linesRes.rows.length) return { matched: 0, unmatched: 0, external_booking: 0 };
+
+  const { pool } = await buildVerifiedPool(carrierId);
+
+  let matched = 0, unmatched = 0, external_booking = 0;
+
+  for (const line of linesRes.rows) {
+    const trackKey      = String(line.tracking_number || '').trim().toUpperCase();
+    const carrierAmount = round2(parseFloat(line.carrier_amount) || 0);
+    const poolHits      = trackKey ? poolLookup(pool, trackKey) : [];
+
+    if (poolHits.length > 0) {
+      // ── Pool HIT: compare carrier_amount against stored cost_price ──────────
+      const charge        = poolHits[0];
+      const expectedCost  = round2(parseFloat(charge.expected_cost) || 0);
+      const delta         = round2(carrierAmount - expectedCost);
+      const isMatch       = Math.abs(delta) < 0.02;
+
+      await query(`
+        UPDATE reconciliation_lines
+        SET  status          = $1,
+             service_id      = $2,
+             customer_id     = $3,
+             charge_id       = $4,
+             expected_amount = $5,
+             delta           = $6,
+             unmatched_reason = $7,
+             source           = 'internal',
+             corrected_by     = NULL,
+             resolved_at      = NULL,
+             resolved_by      = NULL
+        WHERE id = $8
+      `, [
+        isMatch ? 'matched' : 'unmatched',
+        serviceId,
+        charge.customer_id,
+        charge.charge_id,
+        expectedCost,
+        delta,
+        isMatch ? null : 'price_mismatch',
+        line.line_id,
+      ]);
+
+      if (isMatch) matched++; else unmatched++;
+
+    } else {
+      // ── Pool MISS: external booking or unknown account ───────────────────────
+      const customer = await lookupCustomerByAccount(line.account_number);
+
+      if (customer) {
+        await query(`
+          UPDATE reconciliation_lines
+          SET  status           = 'unmatched',
+               service_id       = $1,
+               customer_id      = $2,
+               charge_id        = NULL,
+               expected_amount  = NULL,
+               delta            = NULL,
+               unmatched_reason = 'external_booking_review',
+               source           = 'external_booking',
+               corrected_by     = NULL,
+               resolved_at      = NULL,
+               resolved_by      = NULL
+          WHERE id = $3
+        `, [serviceId, customer.customer_id, line.line_id]);
+        external_booking++;
+      } else {
+        await query(`
+          UPDATE reconciliation_lines
+          SET  status           = 'unmatched',
+               service_id       = $1,
+               customer_id      = NULL,
+               charge_id        = NULL,
+               expected_amount  = NULL,
+               delta            = NULL,
+               unmatched_reason = 'no_account_mapping',
+               source           = 'internal',
+               corrected_by     = NULL,
+               resolved_at      = NULL,
+               resolved_by      = NULL
+          WHERE id = $2
+        `, [serviceId, line.line_id]);
+        unmatched++;
+      }
+    }
+  }
+
+  console.log(`[recon engine] reprocessMappedLines run=${runId} code="${rawServiceCode}": matched=${matched} external_booking=${external_booking} unmatched=${unmatched}`);
+  return { matched, unmatched, external_booking };
 }
 
 // ─── Age Unmatched lines from previous runs ───────────────────────────────────
