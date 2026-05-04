@@ -2259,4 +2259,246 @@ router.get('/runs/:id/tracking-probe', async (req, res) => {
   }
 });
 
+// ─── GET /api/reconciliation/consignment-trace ───────────────────────────────
+// Full engine simulation for a single DPD (or any carrier) consignment number.
+// Mirrors the reconciliation engine's exact decision path so you can trace why
+// a specific parcel matched or didn't.
+//
+// Query params:
+//   tracking        (required) — the raw consignment number from the CSV
+//   carrier_id      (required) — couriers.id for the carrier
+//   carrier_amount  (optional) — what the carrier billed (£) for comparison
+//   raw_service_code (optional) — service code from the CSV (e.g. "9" for DPD Classic)
+
+router.get('/consignment-trace', async (req, res) => {
+  try {
+    const { tracking, carrier_id, carrier_amount, raw_service_code } = req.query;
+    if (!tracking || !carrier_id) {
+      return res.status(400).json({ error: 'tracking and carrier_id are required' });
+    }
+
+    const carrierAmt  = carrier_amount ? parseFloat(carrier_amount) : null;
+    const rawCode     = (raw_service_code || '').trim().toUpperCase();
+    const trackKey    = tracking.trim().toUpperCase();
+    const carrierId   = parseInt(carrier_id);
+
+    const steps = [];
+
+    // ── Step 1: Find shipment ────────────────────────────────────────────────
+    // Mirror poolLookup variants: try exact, plus "60"-prefix variants
+    const variants = [trackKey];
+    if (trackKey.startsWith('600') && trackKey.length > 5) {
+      variants.push(trackKey.slice(3), trackKey.slice(2));
+    } else if (trackKey.startsWith('60') && trackKey.length > 4) {
+      variants.push(trackKey.slice(2));
+    } else {
+      variants.push('60' + trackKey);
+    }
+
+    const shipRes = await query(`
+      SELECT
+        s.id                AS shipment_id,
+        s.courier,
+        s.dc_service_id,
+        s.tracking_codes,
+        s.reference,
+        s.reference_2,
+        s.total_weight_kg,
+        s.parcel_count,
+        s.ship_to_postcode,
+        s.created_at,
+        cu.business_name    AS customer_name,
+        cu.id               AS customer_id,
+        cu.account_number   AS customer_account
+      FROM   shipments    s
+      LEFT JOIN charges   c  ON c.shipment_id = s.id AND c.charge_type = 'courier' AND c.cancelled = false
+      LEFT JOIN customers cu ON cu.id = c.customer_id
+      WHERE  s.tracking_codes && $1
+          OR s.dc_service_id = ANY($1)
+      ORDER BY s.created_at DESC
+      LIMIT 3
+    `, [variants]);
+
+    if (shipRes.rows.length === 0) {
+      steps.push({
+        phase: '1 — Shipment Lookup',
+        result: 'NOT_FOUND',
+        detail: `No shipment in DB has tracking_codes containing "${tracking}" (or variants: ${variants.join(', ')}). The consignment number is not in our OMS.`,
+      });
+      return res.json({ tracking, steps, verdict: 'NOT_IN_DB' });
+    }
+
+    const shipment = shipRes.rows[0];
+    steps.push({
+      phase: '1 — Shipment Lookup',
+      result: 'FOUND',
+      detail: `Shipment #${shipment.shipment_id} — courier="${shipment.courier}", customer="${shipment.customer_name || 'unknown'}", reference="${shipment.reference}", tracking_codes=${JSON.stringify(shipment.tracking_codes)}, weight=${shipment.total_weight_kg}kg, parcels=${shipment.parcel_count}`,
+    });
+
+    // ── Step 2: Carrier match ────────────────────────────────────────────────
+    const carrierRes = await query(
+      `SELECT id, code, name FROM couriers WHERE id = $1`, [carrierId]
+    );
+    const carrier = carrierRes.rows[0];
+    const courierVal = (shipment.courier || '').toLowerCase();
+    const cCode = (carrier?.code || '').toLowerCase();
+    const cName = (carrier?.name || '').toLowerCase();
+    const carrierMatches = cCode && (
+      courierVal.includes(cCode) || cCode.includes(courierVal) ||
+      courierVal.includes(cName) || cName.includes(courierVal)
+    );
+    steps.push({
+      phase: '2 — Carrier Match',
+      result: carrierMatches ? 'MATCH' : 'MISMATCH',
+      detail: carrierMatches
+        ? `shipments.courier="${shipment.courier}" matches carrier code="${carrier?.code}" / name="${carrier?.name}"`
+        : `PROBLEM: shipments.courier="${shipment.courier}" does NOT match carrier code="${carrier?.code}" / name="${carrier?.name}" — this shipment will never enter the pool for this carrier`,
+    });
+
+    // ── Step 3: Verified charge ──────────────────────────────────────────────
+    const chargeRes = await query(`
+      SELECT
+        c.id                   AS charge_id,
+        c.cost_price,
+        c.verified,
+        c.cancelled,
+        c.zone_name,
+        c.order_id,
+        c.charge_type
+      FROM   charges   c
+      JOIN   shipments s ON s.id = c.shipment_id
+      WHERE  (s.tracking_codes && $1 OR s.dc_service_id = ANY($1))
+        AND  c.charge_type = 'courier'
+        AND  c.cancelled = false
+      ORDER BY c.created_at DESC
+      LIMIT 5
+    `, [variants]);
+
+    if (chargeRes.rows.length === 0) {
+      steps.push({
+        phase: '3 — Charge Lookup',
+        result: 'NO_CHARGE',
+        detail: 'No courier charge record exists for this shipment. The billing webhook may not have fired, or charges were cancelled.',
+      });
+      return res.json({ tracking, shipment, steps, verdict: 'NO_CHARGE' });
+    }
+
+    const charge = chargeRes.rows.find(c => c.verified) || chargeRes.rows[0];
+    if (!charge.verified) {
+      steps.push({
+        phase: '3 — Charge Lookup',
+        result: 'NOT_VERIFIED',
+        detail: `Charge #${charge.charge_id} exists (cost_price=£${charge.cost_price}) but verified=false. The pool only includes verified charges. The shipment-verified webhook event has not fired for this shipment yet.`,
+      });
+    } else {
+      steps.push({
+        phase: '3 — Charge Lookup',
+        result: 'VERIFIED',
+        detail: `Charge #${charge.charge_id} — verified=true, cost_price=£${charge.cost_price}, zone="${charge.zone_name}", order_id="${charge.order_id}"`,
+      });
+    }
+
+    // ── Step 4: Pool gate ────────────────────────────────────────────────────
+    const hasTrackingCodes = shipment.tracking_codes && shipment.tracking_codes.length > 0;
+    const hasDcServiceId   = !!shipment.dc_service_id;
+    const gatePass = hasTrackingCodes || hasDcServiceId;
+    steps.push({
+      phase: '4 — Pool Gate',
+      result: gatePass ? (charge.verified ? 'IN_POOL' : 'GATE_PASSED_BUT_NOT_VERIFIED') : 'BLOCKED',
+      detail: gatePass
+        ? `Gate passed — tracking_codes=${JSON.stringify(shipment.tracking_codes)}, dc_service_id="${shipment.dc_service_id}". ${charge.verified ? 'Charge is verified → this shipment IS in the pool.' : 'Charge is NOT verified → not in pool.'}`
+        : `PROBLEM: shipments.tracking_codes is empty AND dc_service_id is null — pool gate blocks this shipment from ever entering the pool.`,
+    });
+
+    if (!charge.verified) {
+      return res.json({ tracking, shipment, charge, steps, verdict: 'NOT_VERIFIED_BLOCKED' });
+    }
+
+    // ── Step 5: Service code mapping ─────────────────────────────────────────
+    let serviceId = null;
+    let serviceName = null;
+    if (rawCode) {
+      const svcRes = await query(`
+        SELECT cscm.service_id, cs.name AS service_name, cs.service_code
+        FROM   courier_service_code_mappings cscm
+        JOIN   courier_services             cs ON cs.id = cscm.service_id
+        JOIN   couriers                     cu ON cu.id = cs.courier_id
+        WHERE  UPPER(cscm.raw_code) = $1
+          AND  cu.id = $2
+          AND  cscm.service_id IS NOT NULL
+        LIMIT 1
+      `, [rawCode, carrierId]);
+      if (svcRes.rows.length) {
+        serviceId   = svcRes.rows[0].service_id;
+        serviceName = svcRes.rows[0].service_name;
+        steps.push({
+          phase: '5 — Service Code Mapping',
+          result: 'MAPPED',
+          detail: `Raw code "${rawCode}" → service #${serviceId} (${serviceName} / ${svcRes.rows[0].service_code})`,
+        });
+      } else {
+        steps.push({
+          phase: '5 — Service Code Mapping',
+          result: 'NOT_MAPPED',
+          detail: `Raw code "${rawCode}" has no entry in courier_service_code_mappings for this carrier. The engine will mark this line "unmatched" with reason "unknown_service_code" until it is mapped.`,
+        });
+      }
+    } else {
+      steps.push({ phase: '5 — Service Code Mapping', result: 'SKIPPED', detail: 'raw_service_code not provided — cannot check mapping' });
+    }
+
+    // ── Step 6: Expected cost comparison ─────────────────────────────────────
+    const storedCostPrice = parseFloat(charge.cost_price || 0);
+    if (carrierAmt !== null) {
+      const delta = Math.round((carrierAmt - storedCostPrice) * 100) / 100;
+      const matched = Math.abs(delta) <= 0.01;
+      steps.push({
+        phase: '6 — Cost Comparison',
+        result: matched ? 'MATCH' : 'DELTA',
+        detail: matched
+          ? `Carrier £${carrierAmt.toFixed(2)} vs stored cost_price £${storedCostPrice.toFixed(2)} — delta £${delta.toFixed(2)} ≤ £0.01 → WOULD MATCH once pool lookup works`
+          : `Carrier £${carrierAmt.toFixed(2)} vs stored cost_price £${storedCostPrice.toFixed(2)} — delta £${delta >= 0 ? '+' : ''}${delta.toFixed(2)} → outside ±£0.01 tolerance`,
+      });
+    } else {
+      steps.push({
+        phase: '6 — Cost Comparison',
+        result: 'SKIPPED',
+        detail: `carrier_amount not provided. Stored cost_price=£${storedCostPrice.toFixed(2)}. Pass carrier_amount=X to see the delta calculation.`,
+      });
+    }
+
+    // ── Verdict ───────────────────────────────────────────────────────────────
+    let verdict = 'UNKNOWN';
+    if (!gatePass)                     verdict = 'BLOCKED_BY_POOL_GATE';
+    else if (!charge.verified)         verdict = 'NOT_VERIFIED';
+    else if (!carrierMatches)          verdict = 'CARRIER_MISMATCH';
+    else if (serviceId === null && rawCode) verdict = 'SERVICE_CODE_NOT_MAPPED';
+    else if (carrierAmt !== null && Math.abs(carrierAmt - storedCostPrice) <= 0.01) verdict = 'WILL_MATCH';
+    else if (carrierAmt !== null)      verdict = 'COST_DELTA';
+    else                               verdict = 'POOL_LOOKUP_SHOULD_WORK';
+
+    return res.json({
+      tracking,
+      carrier_amount_provided: carrierAmt,
+      shipment,
+      charge,
+      steps,
+      verdict,
+      verdict_note: {
+        WILL_MATCH:            'Once re-uploaded with the fixed profile (consignment column), this line will be MATCHED automatically.',
+        COST_DELTA:            'Pool lookup should work but carrier amount ≠ stored cost_price. The engine will attempt correction via rate card and saved mappings.',
+        NOT_VERIFIED:          'Charge exists but is not verified. The shipment-verified webhook event must fire before this shipment enters the pool.',
+        CARRIER_MISMATCH:      'The courier name stored in shipments doesn\'t match the carrier being reconciled. Check shipments.courier vs couriers.code/name.',
+        SERVICE_CODE_NOT_MAPPED: 'Pool lookup would work but the service code from the CSV isn\'t mapped. Add a service code mapping first.',
+        BLOCKED_BY_POOL_GATE:  'No tracking_codes AND no dc_service_id — the Voila webhook did not store tracking information for this shipment.',
+        POOL_LOOKUP_SHOULD_WORK: 'Charge is verified and pool gate passes. Should match on next upload.',
+      }[verdict] || '',
+    });
+
+  } catch (err) {
+    console.error('[reconciliation/consignment-trace] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
