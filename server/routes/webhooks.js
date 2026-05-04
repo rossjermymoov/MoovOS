@@ -214,14 +214,33 @@ import { probeShipmentRaw, mapToWebhookPayload } from '../services/voilaClient.j
 
 router.get('/voila-probe', async (req, res, next) => {
   try {
-    const { shipment_id } = req.query;
-    if (!shipment_id) return res.status(400).json({ error: 'shipment_id required' });
+    const { shipment_id, reference } = req.query;
+    if (!shipment_id && !reference) {
+      return res.status(400).json({ error: 'shipment_id or reference required' });
+    }
 
-    const raw     = await probeShipmentRaw(shipment_id);
+    // Look up the Voila ID from our DB if only a reference was given
+    let voilaId = shipment_id;
+    if (!voilaId && reference) {
+      const dbRow = await query(
+        `SELECT voila_shipment_id FROM charges WHERE order_id = $1 AND voila_shipment_id IS NOT NULL LIMIT 1`,
+        [reference]
+      );
+      if (dbRow.rows.length) {
+        voilaId = dbRow.rows[0].voila_shipment_id;
+      } else {
+        return res.status(404).json({
+          error: `No charge found in DB for reference "${reference}" — cannot resolve Voila shipment ID`,
+        });
+      }
+    }
+
+    const raw     = await probeShipmentRaw(voilaId);
     const rawList = Array.isArray(raw) ? raw : (raw.shipments || [raw]);
-    const match   = rawList.find(s => String(s.id) === String(shipment_id)) || rawList[0];
+    const match   = rawList.find(s => String(s.id) === String(voilaId)) || rawList[0];
 
     res.json({
+      voila_id_used:   voilaId,
       raw_response:    raw,
       mapped_payload:  match ? mapToWebhookPayload(match) : null,
       shipment_found:  !!match,
