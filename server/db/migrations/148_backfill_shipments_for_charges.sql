@@ -1,141 +1,130 @@
--- ─── Migration 148 — Backfill shipment records for charges missing shipment_id ──
+-- ─── Migration 148 — Add missing charges columns + backfill shipment records ───
 --
--- Root cause:
---   Charges created via the new Voila webhook path (POST /api/v1/webhooks/shipment-created
---   → pricingEngine.js) did not previously create a row in the shipments table.
---   The reconciliation engine's buildVerifiedPool query does:
+-- Root cause of DPD reconciliation failure:
+--   pricingEngine.js (new Voila webhook path) inserts charges without creating a
+--   shipments record. The reconciliation pool queries via INNER JOIN shipments,
+--   so charges with shipment_id = NULL were completely invisible to the pool.
+--   All DPD invoice lines became "not in our system" → external_booking path.
 --
---     FROM charges c JOIN shipments s ON s.id = c.shipment_id
+-- This migration does two things:
 --
---   This inner join silently excludes every charge where shipment_id IS NULL —
---   making them invisible to the pool. The engine sees them as "not in our system"
---   and routes them through the external_booking path, matching by rate card only.
+--   Part A: Add columns that pricingEngine.js needs on the charges table.
+--           Uses ADD COLUMN IF NOT EXISTS so safe to re-run or run on any DB.
 --
---   DHL worked because those charges were ingested via the old billing.js path
---   which did create shipment records. DPD failed because it uses the new path.
+--   Part B: Create shipment records for charges that have voila_shipment_id but
+--           no shipment_id, and link all those charges back to their new shipment.
+--           Uses charges.tracking_code (singular) where available.
 --
--- Fix applied elsewhere:
---   - webhooks.js now calls createOrUpdateShipment() before insertCharges()
---   - insertCharges() now accepts shipmentId and stores it on charges
---   - buildVerifiedPool uses LEFT JOIN (safety net) + COALESCE for zone_id
---
--- This migration backfills the shipment records for all historical charges that
--- have shipment_id IS NULL and raw_payload IS NOT NULL (i.e. from the new path).
--- It then links ALL charges sharing that platform_shipment_id back to the new
--- shipment row (courier, fuel, surcharge charges all get shipment_id set).
+-- Note: raw_payload on charges was not added by prior migrations.
+--       We add it here. Historical charges will have NULL raw_payload — that is
+--       expected and harmless. Going forward, webhooks.js creates the shipment
+--       record before insertCharges() is called, so raw_payload on charges is
+--       no longer the critical path for the reconciliation fix.
+
+-- ── Part A: Schema corrections ────────────────────────────────────────────────
+
+-- pricingEngine.js charge fields (new webhook path)
+ALTER TABLE charges ADD COLUMN IF NOT EXISTS voila_shipment_id     VARCHAR(50);
+ALTER TABLE charges ADD COLUMN IF NOT EXISTS tracking_code         VARCHAR(100);
+ALTER TABLE charges ADD COLUMN IF NOT EXISTS courier_service_id    INTEGER REFERENCES courier_services(id) ON DELETE SET NULL;
+ALTER TABLE charges ADD COLUMN IF NOT EXISTS zone_id               INTEGER REFERENCES zones(id) ON DELETE SET NULL;
+ALTER TABLE charges ADD COLUMN IF NOT EXISTS parcel_number         INTEGER;
+ALTER TABLE charges ADD COLUMN IF NOT EXISTS weight_actual_kg      NUMERIC(8,3);
+ALTER TABLE charges ADD COLUMN IF NOT EXISTS weight_dimensional_kg NUMERIC(8,3);
+ALTER TABLE charges ADD COLUMN IF NOT EXISTS weight_charged_kg     NUMERIC(8,3);
+ALTER TABLE charges ADD COLUMN IF NOT EXISTS sell_price            NUMERIC(10,4);
+ALTER TABLE charges ADD COLUMN IF NOT EXISTS status                VARCHAR(30);
+ALTER TABLE charges ADD COLUMN IF NOT EXISTS despatch_date         DATE;
+ALTER TABLE charges ADD COLUMN IF NOT EXISTS ship_to_postcode      VARCHAR(20);
+ALTER TABLE charges ADD COLUMN IF NOT EXISTS ship_to_country_iso   VARCHAR(5);
+ALTER TABLE charges ADD COLUMN IF NOT EXISTS ship_to_name          VARCHAR(200);
+ALTER TABLE charges ADD COLUMN IF NOT EXISTS parcel_count          INTEGER;
+ALTER TABLE charges ADD COLUMN IF NOT EXISTS raw_payload           JSONB;
+ALTER TABLE charges ADD COLUMN IF NOT EXISTS pricing_logic_trace   JSONB;
+
+-- Reconciliation fields (may already exist from migration 132 / 133)
+ALTER TABLE charges ADD COLUMN IF NOT EXISTS recon_corrected       BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE charges ADD COLUMN IF NOT EXISTS zone_name             VARCHAR(100);
+
+-- Index for reconciliation engine lookups
+CREATE INDEX IF NOT EXISTS idx_charges_voila_shipment ON charges(voila_shipment_id);
+CREATE INDEX IF NOT EXISTS idx_charges_tracking_code  ON charges(tracking_code);
+CREATE INDEX IF NOT EXISTS idx_charges_courier_service ON charges(courier_service_id);
+
+-- ── Part B: Backfill shipment records ─────────────────────────────────────────
 
 DO $$
 DECLARE
-  v_created  INTEGER := 0;
-  v_linked   INTEGER := 0;
+  v_created INTEGER := 0;
+  v_linked  INTEGER := 0;
 BEGIN
 
-  -- ── Step 1: Create shipment records from raw_payload ────────────────────────
-  -- We use DISTINCT ON (platform_shipment_id) because multiple charges share the
-  -- same Voila shipment ID. One shipment row per platform_shipment_id is created.
-  -- ON CONFLICT handles the (rare) case where a shipment row was already created
-  -- by an earlier run or by a billing.js call for the same shipment.
+  -- Create one shipment record per unique voila_shipment_id.
+  -- All fields come directly from the charges table (no raw_payload needed).
+  -- tracking_codes is built from charges.tracking_code where available.
 
-  WITH parsed AS (
-    SELECT DISTINCT ON (NULLIF(raw_payload->'shipment'->>'id', '')::BIGINT)
-      NULLIF(raw_payload->'shipment'->>'id', '')::BIGINT            AS platform_id,
-      raw_payload->'shipment'->>'courier'                           AS courier,
-      raw_payload->'shipment'->>'reference'                         AS reference,
-      raw_payload->'shipment'->>'reference_2'                       AS reference_2,
-      raw_payload->'shipment'->>'ship_to_name'                      AS ship_to_name,
-      raw_payload->'shipment'->>'ship_to_postcode'                  AS ship_to_postcode,
-      raw_payload->'shipment'->>'ship_to_country_iso'               AS ship_to_country_iso,
-      NULLIF(raw_payload->'shipment'->>'collection_date', '')::DATE  AS collection_date,
-      COALESCE((raw_payload->'shipment'->>'parcel_count')::INTEGER, 1) AS parcel_count,
-
-      -- Tracking codes: create_label_parcels[*].tracking_code
-      -- These are the DPD consignment/label numbers that appear on the invoice.
-      ARRAY(
-        SELECT elem->>'tracking_code'
-        FROM   jsonb_array_elements(
-          COALESCE(raw_payload->'shipment'->'create_label_parcels', '[]'::jsonb)
-        ) AS elem
-        WHERE  elem->>'tracking_code' IS NOT NULL
-          AND  elem->>'tracking_code' <> ''
-      )                                                              AS tracking_codes,
-
-      -- dc_service_id from request_shipment JSON string
+  WITH charge_groups AS (
+    SELECT DISTINCT ON (c.voila_shipment_id)
+      c.voila_shipment_id                                AS platform_id_str,
+      c.customer_id,
+      c.ship_to_name,
+      c.ship_to_postcode,
+      c.ship_to_country_iso,
+      c.order_id                                         AS reference,
+      c.parcel_count,
+      c.despatch_date                                    AS collection_date,
       CASE
-        WHEN raw_payload->>'request_shipment' IS NOT NULL
-         AND raw_payload->>'request_shipment' <> ''
-         AND raw_payload->>'request_shipment' <> 'null'
-        THEN (raw_payload->>'request_shipment')::jsonb->>'dc_service_id'
+        WHEN c.tracking_code IS NOT NULL AND c.tracking_code <> ''
+        THEN ARRAY[c.tracking_code]
         ELSE NULL
-      END                                                            AS dc_service_id,
-
-      -- Total weight from create_label_parcels
-      (
-        SELECT NULLIF(
-          COALESCE(SUM((elem->>'weight')::NUMERIC), 0), 0
-        )
-        FROM   jsonb_array_elements(
-          COALESCE(raw_payload->'shipment'->'create_label_parcels', '[]'::jsonb)
-        ) AS elem
-      )                                                              AS total_weight_kg,
-
-      customer_id,
-      raw_payload->'shipment'->>'account_number'                    AS account_number,
-      raw_payload                                                    AS raw_payload
-
-    FROM   charges
-    WHERE  shipment_id   IS NULL
-      AND  raw_payload   IS NOT NULL
-      AND  raw_payload->'shipment'->>'id' IS NOT NULL
-      AND  raw_payload->'shipment'->>'id' <> ''
-    ORDER BY NULLIF(raw_payload->'shipment'->>'id', '')::BIGINT, created_at ASC
+      END                                                AS tracking_codes
+    FROM   charges c
+    WHERE  c.shipment_id      IS NULL
+      AND  c.voila_shipment_id IS NOT NULL
+      AND  c.charge_type       = 'courier'
+    ORDER BY c.voila_shipment_id, c.created_at ASC
   ),
   ins AS (
     INSERT INTO shipments (
       platform_shipment_id, event_type,
-      customer_id, customer_account,
-      courier, dc_service_id,
+      customer_id,
       ship_to_name, ship_to_postcode, ship_to_country_iso,
-      reference, reference_2,
-      parcel_count, total_weight_kg, collection_date,
-      tracking_codes, raw_payload
+      reference, parcel_count, collection_date,
+      tracking_codes
     )
     SELECT
-      p.platform_id,
+      NULLIF(cg.platform_id_str, '')::BIGINT,
       'shipment.created',
-      p.customer_id,
-      p.account_number,
-      p.courier,
-      p.dc_service_id,
-      p.ship_to_name, p.ship_to_postcode, p.ship_to_country_iso,
-      p.reference, p.reference_2,
-      p.parcel_count, p.total_weight_kg, p.collection_date,
-      NULLIF(p.tracking_codes, ARRAY[]::TEXT[]),
-      p.raw_payload
-    FROM parsed p
-    WHERE p.platform_id IS NOT NULL
+      cg.customer_id,
+      cg.ship_to_name,
+      cg.ship_to_postcode,
+      cg.ship_to_country_iso,
+      cg.reference,
+      cg.parcel_count,
+      cg.collection_date,
+      cg.tracking_codes
+    FROM charge_groups cg
+    WHERE NULLIF(cg.platform_id_str, '') IS NOT NULL
     ON CONFLICT (platform_shipment_id) DO UPDATE SET
       tracking_codes = COALESCE(EXCLUDED.tracking_codes, shipments.tracking_codes),
-      dc_service_id  = COALESCE(EXCLUDED.dc_service_id,  shipments.dc_service_id),
       customer_id    = COALESCE(EXCLUDED.customer_id,    shipments.customer_id),
       updated_at     = NOW()
     RETURNING id, platform_shipment_id
   )
   SELECT COUNT(*) INTO v_created FROM ins;
 
-  -- ── Step 2: Link all charges (of any type) to their new shipment rows ────────
-  -- Courier, fuel, surcharge, congestion charges sharing the same voila_shipment_id
-  -- all need shipment_id set so the pool's total_cost_price subquery can sum them.
-  -- We match via platform_shipment_id → the Voila shipment id stored as a BIGINT.
-
+  -- Link ALL charge types (courier, fuel, surcharge, congestion, etc.) that share
+  -- the same voila_shipment_id to their new shipment row.
+  -- This is needed so the pool's total_cost_price subquery can sum fuel charges.
   WITH linked AS (
     UPDATE charges c
     SET    shipment_id = s.id,
            updated_at  = NOW()
     FROM   shipments s
     WHERE  s.platform_shipment_id IS NOT NULL
-      AND  s.platform_shipment_id::TEXT = c.raw_payload->'shipment'->>'id'
-      AND  c.shipment_id IS NULL
-      AND  c.raw_payload IS NOT NULL
+      AND  s.platform_shipment_id = NULLIF(c.voila_shipment_id, '')::BIGINT
+      AND  c.shipment_id      IS NULL
+      AND  c.voila_shipment_id IS NOT NULL
     RETURNING c.id
   )
   SELECT COUNT(*) INTO v_linked FROM linked;
