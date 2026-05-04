@@ -206,13 +206,18 @@ function AutoBar({ rate }) {
  *
  * @param {string} text     - raw CSV text
  * @param {Object} opts
- * @param {number} opts.skipRows - number of preamble rows to skip before the column
+ * @param {number} opts.skipRows      - number of preamble rows to skip before the column
  *   header row. DPD invoices have 4 rows of invoice summary data before the actual
  *   column header row. Default 0 (standard DHL format).
+ * @param {boolean} opts.returnPreamble - when true, returns { rows, preamble } where
+ *   preamble is a 2D array of the raw pre-header rows (useful for extracting invoice
+ *   numbers, account codes etc. from DPD-style headers).
+ *
+ * @returns {Array|{rows:Array,preamble:Array[]}}
  */
-function parseCSV(text, { skipRows = 0 } = {}) {
+function parseCSV(text, { skipRows = 0, returnPreamble = false } = {}) {
   const src = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trimEnd();
-  const rows = [];
+  const rawRows = [];
   let row = [];
   let field = '';
   let inQuotes = false;
@@ -229,24 +234,28 @@ function parseCSV(text, { skipRows = 0 } = {}) {
     } else {
       if      (ch === '"')  { inQuotes = true; }
       else if (ch === ',')  { row.push(field.trim()); field = ''; }
-      else if (ch === '\n') { row.push(field.trim()); rows.push(row); row = []; field = ''; }
+      else if (ch === '\n') { row.push(field.trim()); rawRows.push(row); row = []; field = ''; }
       else                  { field += ch; }
     }
   }
   // flush last field / row
   row.push(field.trim());
-  if (row.some(c => c)) rows.push(row);
+  if (row.some(c => c)) rawRows.push(row);
 
   // skipRows: skip preamble rows before the column header.
-  // DPD invoices have 4 rows (account info, nett value, VAT, gross) before headers.
-  const headerIdx = Math.min(skipRows, rows.length - 1);
-  if (rows.length < headerIdx + 2) return [];
-  const headers = rows[headerIdx].map(h => h.toLowerCase().trim());
-  return rows.slice(headerIdx + 1).filter(r => r.some(c => c)).map(rowArr => {
+  // DPD invoices have 4 rows (account/invoice info, nett value, VAT, gross) before headers.
+  const headerIdx = Math.min(skipRows, rawRows.length - 1);
+  if (rawRows.length < headerIdx + 2) return returnPreamble ? { rows: [], preamble: [] } : [];
+
+  const preamble = rawRows.slice(0, headerIdx);   // raw rows before the column header
+  const headers  = rawRows[headerIdx].map(h => h.toLowerCase().trim());
+  const rows = rawRows.slice(headerIdx + 1).filter(r => r.some(c => c)).map(rowArr => {
     const obj = {};
     headers.forEach((h, i) => { obj[h] = rowArr[i] ?? ''; });
     return obj;
   });
+
+  return returnPreamble ? { rows, preamble } : rows;
 }
 
 function mapToInvoiceLine(row, colMap) {
@@ -310,6 +319,10 @@ const BLANK_MAP = {
   //   '' = standard — first parcel at price_first + (n-1) at price_sub.
   //   'all_sub' — ALL parcels at price_sub when items > 1 (DPD-style).
   parcel_pricing: '',
+  // preamble_fields: extract named values from specific cells in the pre-header rows.
+  //   [{ field: 'invoice_ref'|'account_number_hint', row: N, col: M }, ...]
+  //   DPD example: invoice ref at row 0 col 3, account number at row 0 col 1.
+  preamble_fields: [],
 };
 
 // ─── Date normalisation ───────────────────────────────────────────────────────
@@ -595,9 +608,26 @@ function UploadModal({ couriers, onClose, onSuccess }) {
       // This must be read BEFORE autoMap overwrites colMap, so we use the
       // current colMap state (set from the profile selected in Step 1).
       const skipRows = parseInt(colMap.header_row_skip) || 0;
-      const rows = parseCSV(ev.target.result, { skipRows });
+      const hasPreamble = skipRows > 0;
+      const parsed = parseCSV(ev.target.result, { skipRows, returnPreamble: hasPreamble });
+      const rows    = hasPreamble ? parsed.rows    : parsed;
+      const preamble = hasPreamble ? parsed.preamble : [];
       if (!rows.length) { setError('CSV appears empty or invalid'); return; }
       const hdrs = Object.keys(rows[0]);
+
+      // Extract named values from preamble cells (e.g. DPD invoice ref at row 0 col 3).
+      if (preamble.length > 0 && Array.isArray(colMap.preamble_fields)) {
+        for (const pf of colMap.preamble_fields) {
+          const pRow = preamble[pf.row];
+          if (!pRow) continue;
+          const val = String(pRow[pf.col] ?? '').trim();
+          if (!val) continue;
+          if (pf.field === 'invoice_ref' && !invoiceRefOverride) {
+            setInvoiceRefOverride(val);
+          }
+          // account_number_hint: stored in autoMap for preview — not a per-line field
+        }
+      }
       setHeaders(hdrs);
       setCsvRows(rows);
 
@@ -678,7 +708,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
     { key: 'charge_type',      label: 'Charge Type',      required: false },
     { key: 'carrier_amount',   label: 'Amount (£)',        required: true },
     { key: 'billed_weight_kg', label: 'Weight (kg)',       required: false },
-    { key: 'parcel_count',     label: 'Piece Count (col J)', required: false, hint: 'Used for HGV total' },
+    { key: 'parcel_count',     label: 'Piece / Item Count',  required: false, hint: 'Multi-parcel pricing & HGV' },
     { key: 'invoice_ref',      label: 'Invoice Reference', required: false, hint: 'Read from CSV' },
     { key: 'invoice_date',     label: 'Invoice Date',      required: false, hint: 'Read from CSV' },
   ];

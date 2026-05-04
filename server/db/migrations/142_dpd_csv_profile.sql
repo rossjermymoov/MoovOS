@@ -36,19 +36,40 @@ SELECT
     'carrier_amount',    'revenue',
     'billed_weight_kg',  'weight',
     'parcel_count',      'items',
+
+    -- invoice_ref is NOT a per-row column — it lives in the preamble (D1 / row 0 col 3).
+    -- preamble_fields below auto-extracts it into the run's invoice_ref on upload.
     'invoice_ref',       '',
-    'invoice_date',      'date',
+
+    -- DPD's "Date" column is the individual shipment date, not the invoice date.
+    -- There is no invoice-level date field in the DPD CSV; leave blank so the
+    -- user can enter it manually via the override field in the wizard if needed.
+    'invoice_date',      '',
+
+    -- Account number is in the preamble (B1 / row 0 col 1), not per-row.
     'account_number',    '',
     'charge_type',       '',
 
     -- ── DPD-specific parser options ─────────────────────────────────────
     -- Skip the 4 invoice summary rows that appear before the column header row.
+    -- Row 0: "Account No", <acct>, "Invoice No", <inv_no>, ..., <company name>
+    -- Row 1: "Nett Invoice Value", , <value>, "GBP"
+    -- Row 2: "VAT", , <value>, "GBP"
+    -- Row 3: "Gross Invoice Value", , <value>, "GBP"
+    -- Row 4: actual column headers ("Date","Consignment","Header","Parcel No",...)
     'header_row_skip',   4,
 
     -- All parcels in a multi-parcel DPD consignment are billed at the sub-rate
     -- (price_sub), including the first. Expected = n × price_sub, not
     -- price_first + (n-1) × price_sub.
     'parcel_pricing',    'all_sub',
+
+    -- ── Preamble field extraction ─────────────────────────────────────────
+    -- Extract the invoice reference from the preamble (row 0, col 3 = invoice number).
+    -- The frontend auto-populates invoiceRefOverride from this when the file is loaded.
+    'preamble_fields',   jsonb_build_array(
+      jsonb_build_object('field', 'invoice_ref', 'row', 0, 'col', 3)
+    ),
 
     -- Surcharge columns are left empty here and should be added via the UI
     -- once the DPD surcharge IDs are confirmed in the reconciliation resolver.
