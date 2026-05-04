@@ -48,48 +48,24 @@ import { matchZone } from './pricingEngine.js';
 function round2(n) { return Math.round(n * 100) / 100; }
 
 /**
- * Pool lookup with carrier prefix normalisation.
+ * Pool lookup — strict exact-match only.
  *
- * DHL PWS invoices include a "60" prefix on every consignment number (e.g.
- * "601234567890") that may not be present in our OMS tracking_codes (e.g.
- * "1234567890"). We try the exact key first, then fall back to:
- *   • stripping the leading "60"  — CSV has "60..." but DB has "..."
- *   • adding a "60" prefix         — DB has "60..." but CSV sent shorter form
+ * Tracking numbers are immutable strings.  The value in the carrier invoice
+ * CSV must match the value stored in the OMS exactly — same prefix, same
+ * length, same format.  If the DB stores "601234567890" and the invoice has
+ * "1234567890" (or vice versa), that is a DATA inconsistency that must be
+ * fixed in the database, not patched by silent prefix stripping here.
  *
- * Matching is always by the EXACT string from column C — this function just
- * bridges the carrier prefix gap transparently.
+ * A pool miss for a known consignment means either:
+ *   (a) the charge is not yet verified — fix the verification path
+ *   (b) the tracking number format in the DB differs from the invoice — fix the data
+ *   (c) the shipment was genuinely not in our system — UNMATCHED is correct
+ *
+ * The order-reference fallback (indexed separately) still applies.
  */
 function poolLookup(pool, trackKey) {
-  let hits = pool.get(trackKey);
-  if (hits && hits.length) return hits;
-
-  // Try without carrier prefix (CSV had it, DB stores the bare consignment number).
-  //
-  // DHL PWS invoices use a "60" prefix on every consignment number:
-  //   "601234567890" → strip "60"  → "1234567890"
-  //
-  // HOWEVER some DHL numbers start with "600..." — here the true consignment
-  // number starts after the "600" (3 chars), not after "60" (2 chars).
-  // Without this distinction, "600123456789" → "0123456789" (wrong leading zero).
-  //
-  // Strategy for "600..." numbers: try slice(3) first, then slice(2) as fallback.
-  if (trackKey.startsWith('600') && trackKey.length > 5) {
-    hits = pool.get(trackKey.slice(3));  // "600123456789" → "123456789"
-    if (hits && hits.length) return hits;
-    hits = pool.get(trackKey.slice(2));  // fallback: "600123456789" → "0123456789"
-    if (hits && hits.length) return hits;
-  } else if (trackKey.startsWith('60') && trackKey.length > 4) {
-    hits = pool.get(trackKey.slice(2));  // "601234567890" → "1234567890"
-    if (hits && hits.length) return hits;
-  }
-
-  // Try with "60" prefix added (DB has "60..." but CSV sent the shorter form)
-  if (!trackKey.startsWith('60')) {
-    hits = pool.get('60' + trackKey);
-    if (hits && hits.length) return hits;
-  }
-
-  return [];
+  const hits = pool.get(trackKey);
+  return (hits && hits.length) ? hits : [];
 }
 
 // ─── Phase 1b: Service Code Normalisation ────────────────────────────────────
@@ -253,24 +229,12 @@ async function buildVerifiedPool(carrierId) {
       c.recon_corrected,
       c.shipment_id,
       c.charge_type,
-      -- zone_id: prefer c.zone_id (set by pricingEngine.js on new-style charges)
-      -- then fall back to name-lookup subquery for old-style charges (set by billing.js
-      -- which stores zone_name on charges but not zone_id).
-      COALESCE(
-        c.zone_id,
-        (
-          SELECT z_lkp.id
-          FROM   zones           z_lkp
-          JOIN   courier_services cs_lkp ON cs_lkp.id = z_lkp.courier_service_id
-          -- ILIKE for case-insensitive match — charges.zone_name and zones.name
-          -- must agree lexically but may differ in capitalisation (e.g. "mainland"
-          -- vs "Mainland"). Exact = match would produce zone_id = null and silently
-          -- prevent rate-card lookups for every pool hit on that carrier.
-          WHERE  z_lkp.name    ILIKE c.zone_name
-            AND  cs_lkp.courier_id = $1
-          LIMIT  1
-        )
-      )                 AS zone_id,
+      -- zone_id: STRICT — direct integer link only.
+      -- No ILIKE zone_name fallback.  If zone_id is NULL on a charge, the
+      -- reconciliation engine will surface it as 'data_error_no_zone' so the
+      -- operator can fix the underlying data rather than silently guessing.
+      -- Every charge MUST have zone_id set at creation time.
+      c.zone_id,
       -- tracking_codes: from shipment record (old-style) OR single tracking_code
       -- stored on the charge itself (new-style, extracted from create_label_parcels).
       COALESCE(
@@ -338,39 +302,24 @@ async function buildVerifiedPool(carrierId) {
   }
 
   for (const row of res.rows) {
-    // ── Index by tracking_codes ───────────────────────────────────────────
+    // ── Index by tracking_codes — EXACT MATCH ONLY ────────────────────────
+    // Tracking numbers are immutable strings.  The DB value must match the
+    // invoice value exactly (same prefix, same length, same format).
+    // If they differ, fix the data — do not paper over it with prefix variants.
     const codes = row.tracking_codes || [];
     for (const code of codes) {
       const key = String(code).trim().toUpperCase();
       addToPool(key, row);
-      // "60" prefix variants — bridge DHL PWS invoice format vs OMS storage.
-      // "600..." numbers need slice(3) not slice(2) to avoid a wrong leading "0".
-      if (key.startsWith('600') && key.length > 5) {
-        addToPool(key.slice(3), row);   // "600123456789" → "123456789"
-        addToPool(key.slice(2), row);   // "600123456789" → "0123456789" (fallback)
-      } else if (key.startsWith('60') && key.length > 4) {
-        addToPool(key.slice(2), row);   // "601234567890" → "1234567890"
-        addToPool('60' + key, row);     // also index "60" + "601234..." as a fallback
-      } else {
-        addToPool('60' + key, row);     // bare number → add "60" prefix variant
-      }
     }
 
-    // ── Index by dc_service_id ────────────────────────────────────────────
+    // ── Index by dc_service_id — EXACT MATCH ONLY ────────────────────────
     // For DHL shipments managed via DeliveryConnect, the consignment number
     // from the PWS invoice is stored in dc_service_id (not tracking_codes).
     // This is the PRIMARY lookup key for DHL reconciliation.
+    // No prefix normalisation — the stored dc_service_id must match the invoice.
     if (row.dc_service_id) {
       const dcKey = String(row.dc_service_id).trim().toUpperCase();
       addToPool(dcKey, row);
-      if (dcKey.startsWith('600') && dcKey.length > 5) {
-        addToPool(dcKey.slice(3), row);   // "600123456789" → "123456789"
-        addToPool(dcKey.slice(2), row);   // "600123456789" → "0123456789" (fallback)
-      } else if (dcKey.startsWith('60') && dcKey.length > 4) {
-        addToPool(dcKey.slice(2), row);   // "601234567890" → "1234567890"
-      } else {
-        addToPool('60' + dcKey, row);     // bare number → add "60" prefix variant
-      }
     }
 
     // ── Index by order reference ──────────────────────────────────────────
@@ -386,16 +335,15 @@ async function buildVerifiedPool(carrierId) {
     console.warn(`[recon engine] WARNING: pool is EMPTY — carrier name/code may not match shipments.courier, or no verified shipments have dc_service_id/tracking_codes`);
   }
 
-  // Zone-id diagnostic — surfaces zone_name mismatches early.
-  // If zone_id is null for many records it means charges.zone_name doesn't match
-  // any zones.name for this carrier (case-insensitive ILIKE already applied above).
+  // Zone-id diagnostic — strict mode.
+  // Every charge MUST have zone_id set.  If zone_id is null the engine will
+  // emit 'data_error_no_zone' when that consignment appears on an invoice.
+  // Fix: update the charge record to set the correct zone_id.
   const nullZoneRows = res.rows.filter(r => !r.zone_id);
   if (nullZoneRows.length > 0) {
-    const sample = [...new Set(nullZoneRows.map(r => r.zone_name || '(blank)'))].slice(0, 5);
     console.warn(
-      `[recon engine] Pool zone_id diagnostic: ${nullZoneRows.length}/${res.rows.length} charge records have no zone_id.` +
-      ` Sample zone_name values with no match: ${sample.join(', ')}.` +
-      ` (New-style charges use zone_id directly and should show zone_id=null only if pricing_error.)`
+      `[recon engine] DATA_ERROR: ${nullZoneRows.length}/${res.rows.length} pool charge(s) have zone_id=NULL.` +
+      ` These will surface as data_error_no_zone on the invoice — fix the zone_id on these charges.`
     );
   }
 
@@ -1513,27 +1461,48 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   const charge            = poolHits[0];
   const parcelCount       = Math.max(1, parseInt(line.parcel_count) || 1);
   const perParcelWeightKg = round2(parseFloat(line.billed_weight_kg) || 0);
+  const allAtSub          = (line.parcel_pricing || '') === 'all_sub';
 
-  // Base expected — always from rate card.  Initial single-parcel lookup;
-  // overridden below for multi-parcel paths (DPD all_sub, DHL first+sub).
+  // ── STRICT zone_id enforcement ────────────────────────────────────────────
+  // Every charge MUST have zone_id set as a direct integer link.
+  // If zone_id is null, the rate card band cannot be correctly pinned — any
+  // expected amount we produce would be a guess.  Surface as DATA_ERROR so the
+  // operator can fix the charge record rather than silently misreconciling.
+  if (!charge.zone_id) {
+    console.error(
+      `[recon engine] DATA_ERROR: charge ${charge.charge_id} (tracking=${trackingNumber}) has zone_id=null.` +
+      ` Fix zone_id on this charge — no zone-free fallback is applied.`
+    );
+    await insertLine(runId, {
+      tracking_number:          trackingNumber,
+      carrier_account_no:       line.account_number    || null,
+      raw_service_code:         rawServiceCode,
+      charge_type:              line.charge_type       || 'base',
+      carrier_amount:           carrierAmount,
+      carrier_billed_weight_kg: line.billed_weight_kg  || null,
+      service_id:               serviceId,
+      customer_id:              charge.customer_id,
+      charge_id:                charge.charge_id,
+      expected_amount:          null,
+      delta:                    null,
+      status:                   'unmatched',
+      corrected_by:             null,
+      unmatched_reason:         'data_error_no_zone',
+      source:                   'internal',
+      shipment_date:            line.shipment_date     || null,
+      ship_to_postcode:         line.delivery_postcode || null,
+      ship_to_country:          line.ship_to_country   || null,
+    });
+    return { status: 'unmatched' };
+  }
+
+  // Base expected — always from rate card, always zone-pinned (zone_id guaranteed non-null above).
   let expectedAmount        = null;
   let effectiveColSurcharge = colSurchargeTotal;  // default: include named surcharges
 
   if (serviceId && perParcelWeightKg > 0) {
-    // Prefer zone-pinned lookup when zone_id is known (charges.zone_name matched
-    // zones.name for this carrier). Fall back to zone-free lookup when zone_id is
-    // null — this can happen when charges were created before zones were configured,
-    // or when zone_name has no exact match even after ILIKE normalisation.
-    // Zone-free returns the lowest price band across all zones (safe for flat-rate
-    // services; may be slightly off for multi-zone services but far better than null).
-    const singleBand = await ctx.bandLookup(serviceId, perParcelWeightKg, charge.zone_id || null);
+    const singleBand = await ctx.bandLookup(serviceId, perParcelWeightKg, charge.zone_id);
     if (singleBand) expectedAmount = singleBand.cost;
-    if (!charge.zone_id) {
-      console.warn(
-        `[recon engine] Pool hit zone_id is null for charge ${charge.charge_id} — zone-free band fallback used.` +
-        ` zone_name on charge: "${charge.zone_name || '(blank)'}"`
-      );
-    }
   }
 
   if (parcelCount > 1 && serviceId) {
@@ -1543,13 +1512,12 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     //   expected = price_first + (parcel_count − 1) × price_sub
     //
     // DPD-style carriers (parcel_pricing === 'all_sub'): ALL parcels at sub-rate.
-    //   expected = parcel_count × price_sub
-    //   (including the first — DPD bills a flat per-parcel sub-rate when Items > 1)
-    const allAtSub    = (line.parcel_pricing || '') === 'all_sub';
+    //   expected = items × price_sub   ← the DPD "items" column is the parcel count.
+    //   No fallback to single-parcel rate — if the math doesn't match the invoice,
+    //   the line is UNMATCHED so the operator can see the error clearly.
     if (perParcelWeightKg > 0) {
       const bandResult = await ctx.bandLookup(serviceId, perParcelWeightKg, charge.zone_id);
       if (bandResult && bandResult.pass === 1) {
-        // Resolve price_sub — same zone fallback as processTrackingGroup.
         let priceSub = bandResult.price_sub;
         if (priceSub == null) {
           priceSub = await ctx.subRateLookup(serviceId, charge.zone_id);
@@ -1557,14 +1525,14 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
         if (priceSub != null) {
           let recomputed;
           if (allAtSub) {
-            // DPD: all parcels (including first) at sub-rate
+            // DPD: ALL parcels (including first) at sub-rate — items × price_sub
             recomputed = round2(parcelCount * priceSub);
             console.log(
-              `[recon engine] Multi-parcel single-line DPD-style (${parcelCount} parcels, ${perParcelWeightKg}kg/parcel):` +
-              ` all at sub=£${priceSub} → expected=£${recomputed}`
+              `[recon engine] DPD multi-parcel (${parcelCount} items, ${perParcelWeightKg}kg/parcel):` +
+              ` ${parcelCount} × £${priceSub} = expected £${recomputed}`
             );
           } else {
-            // Standard: first at base rate, rest at sub-rate
+            // Standard (DHL): first at price_first, rest at price_sub
             recomputed = round2(bandResult.cost + (parcelCount - 1) * priceSub);
             console.log(
               `[recon engine] Multi-parcel single-line (${parcelCount} parcels, ${perParcelWeightKg}kg/parcel):` +
@@ -1745,6 +1713,43 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       mapping_id:               mappingResult.mappingId,
     });
     return { status: 'corrected' };
+  }
+
+  // ── Phase 4b bypass — DPD all_sub multi-parcel mismatch ─────────────────
+  // When expected was computed as items × price_sub and doesn't match the
+  // carrier invoice, that is a transparent data mismatch — not a pricing
+  // ambiguity the correction engine can resolve.
+  // The correction engine MUST NOT run here: it would find single-parcel
+  // price_first, compare it to the carrier amount, and silently hide the
+  // discrepancy as "corrected" — masking the real problem (wrong parcel count
+  // or wrong price_sub value in the rate card).
+  // UNMATCHED with reason 'multi_parcel_mismatch' is the correct outcome.
+  if (allAtSub && parcelCount > 1) {
+    console.log(
+      `[recon engine] DPD multi-parcel mismatch: ${parcelCount} items × price_sub=£${round2(expectedAmount / parcelCount)} = expected £${expectedAmount}` +
+      ` vs carrier £${carrierAmount} (delta £${delta}) — UNMATCHED (multi_parcel_mismatch)`
+    );
+    await insertLine(runId, {
+      tracking_number:          trackingNumber,
+      carrier_account_no:       line.account_number    || null,
+      raw_service_code:         rawServiceCode,
+      charge_type:              line.charge_type       || 'base',
+      carrier_amount:           carrierAmount,
+      carrier_billed_weight_kg: line.billed_weight_kg  || null,
+      service_id:               serviceId,
+      customer_id:              charge.customer_id,
+      charge_id:                charge.charge_id,
+      expected_amount:          fullExpected,
+      delta:                    delta,
+      status:                   'unmatched',
+      corrected_by:             null,
+      unmatched_reason:         'multi_parcel_mismatch',
+      source:                   'internal',
+      shipment_date:            line.shipment_date     || null,
+      ship_to_postcode:         line.delivery_postcode || null,
+      ship_to_country:          line.ship_to_country   || null,
+    });
+    return { status: 'unmatched' };
   }
 
   // ── Phase 4b: Correction Engine ───────────────────────────────────────────

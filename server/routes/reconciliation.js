@@ -819,7 +819,7 @@ router.get('/runs/:id', async (req, res) => {
 
 router.get('/runs/:id/lines', async (req, res) => {
   try {
-    const { status, aged, limit = 200, offset = 0 } = req.query;
+    const { status, aged, tracking, limit = 200, offset = 0 } = req.query;
     const runId = parseInt(req.params.id);
     const params = [runId];
     const conditions = ['rl.run_id = $1'];
@@ -830,6 +830,14 @@ router.get('/runs/:id/lines', async (req, res) => {
     }
     if (aged === 'true') {
       conditions.push('rl.aged = true');
+    }
+    // Partial tracking number search — matches any substring of the consignment number
+    // regardless of prefix (e.g. "601234" matches "601234567890" and "1234567890601234").
+    // Designed so operators can search by partial DHL or DPD numbers without knowing
+    // the exact prefix format stored in the DB.
+    if (tracking && String(tracking).trim()) {
+      params.push(`%${String(tracking).trim()}%`);
+      conditions.push(`rl.tracking_number ILIKE $${params.length}`);
     }
 
     params.push(parseInt(limit), parseInt(offset));
