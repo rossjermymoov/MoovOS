@@ -380,10 +380,107 @@ async function lookupCustomerSellPrice(customerId, serviceCode, weightKg, zoneNa
 
 // ─── Main engine ──────────────────────────────────────────────────────────────
 
+// ─── Payload normaliser ───────────────────────────────────────────────────────
+// processShipment was originally written for DC webhook format where
+// shipment.courier is an object, shipment.ship_to is nested, and parcels live
+// in shipment.parcels.  The Voila API (mapToWebhookPayload) produces a flat
+// format: shipment.courier is a string, shipment.ship_to_country_iso etc. are
+// top-level, parcels come from create_label_parcels, and the service code is
+// buried in request_shipment.dc_service_id.
+//
+// This function normalises both into a single shape so the rest of the engine
+// doesn't need branching throughout.
+
+function normaliseShipmentPayload(payload) {
+  const ship = payload.shipment || {};
+
+  // Parse request_shipment JSON string for extra fields (dc_service_id, weight, dims)
+  let reqShip = {};
+  try {
+    reqShip = typeof payload.request_shipment === 'string'
+      ? JSON.parse(payload.request_shipment)
+      : (payload.request_shipment || {});
+  } catch { /* leave empty */ }
+
+  // ── Service code ─────────────────────────────────────────────────────────
+  // DC webhook: shipment.courier = { service_code: 'DPD-12', ... }
+  // Voila API:  service code in request_shipment.dc_service_id or
+  //             shipment.dc_service_id (if already flat)
+  const serviceCode =
+    (typeof ship.courier === 'object' ? ship.courier?.service_code : null) ||
+    ship.dc_service_id ||
+    reqShip.dc_service_id ||
+    reqShip.courier?.service_code ||
+    null;
+
+  // ── Destination ──────────────────────────────────────────────────────────
+  // DC webhook: shipment.ship_to = { country_iso, postcode, name }
+  // Voila API:  shipment.ship_to_country_iso, shipment.ship_to_postcode etc.
+  const countryIso =
+    ship.ship_to?.country_iso ||
+    ship.ship_to_country_iso  ||
+    reqShip.ship_to_country_iso ||
+    'GB';
+
+  const postcode =
+    ship.ship_to?.postcode ||
+    ship.ship_to_postcode  ||
+    reqShip.ship_to_postcode ||
+    null;
+
+  const shipToName =
+    ship.ship_to?.name ||
+    ship.ship_to_name  ||
+    ship.ship_to_company_name ||
+    null;
+
+  // ── Parcels ───────────────────────────────────────────────────────────────
+  // DC webhook: shipment.parcels = [{ weight, dim_length, ... }]
+  // Voila API:  shipment.create_label_parcels = [{ weight, tracking_code, ... }]
+  //             OR fallback to total_weight_kg / parcel_count if no per-parcel data
+  let parcels = [];
+
+  if (Array.isArray(ship.parcels) && ship.parcels.length) {
+    parcels = ship.parcels;
+  } else if (Array.isArray(ship.create_label_parcels) && ship.create_label_parcels.length) {
+    // create_label_parcels may have weight; fall back to total_weight / count
+    const totalWeightKg = parseFloat(ship.total_weight_kg || reqShip.total_weight_kg || 0);
+    const parcelCount   = ship.parcel_count || ship.create_label_parcels.length || 1;
+    const perParcelKg   = parcelCount > 0 ? totalWeightKg / parcelCount : totalWeightKg;
+
+    parcels = ship.create_label_parcels.map((clp) => ({
+      weight:     parseFloat(clp.weight || clp.weight_kg || perParcelKg) || perParcelKg,
+      dim_length: parseFloat(clp.dim_length || clp.length || reqShip.dim_length || 0) || 0,
+      dim_width:  parseFloat(clp.dim_width  || clp.width  || reqShip.dim_width  || 0) || 0,
+      dim_height: parseFloat(clp.dim_height || clp.height || reqShip.dim_height || 0) || 0,
+      tracking_code: clp.tracking_code || null,
+    }));
+  } else {
+    // Last resort: single synthetic parcel from shipment-level weight
+    const totalWeightKg = parseFloat(ship.total_weight_kg || reqShip.total_weight_kg || 0);
+    const parcelCount   = parseInt(ship.parcel_count || 1, 10);
+    const perParcelKg   = parcelCount > 0 ? totalWeightKg / parcelCount : totalWeightKg;
+    for (let i = 0; i < parcelCount; i++) {
+      parcels.push({
+        weight:     perParcelKg,
+        dim_length: parseFloat(reqShip.dim_length || 0),
+        dim_width:  parseFloat(reqShip.dim_width  || 0),
+        dim_height: parseFloat(reqShip.dim_height || 0),
+        tracking_code: null,
+      });
+    }
+  }
+
+  return { serviceCode, countryIso, postcode, shipToName, parcels };
+}
+
 export async function processShipment(payload) {
   const { shipment } = payload;
   const charges = [];
   const errors  = [];
+
+  // Normalise payload fields — handles both DC webhook and Voila API formats.
+  const norm = normaliseShipmentPayload(payload);
 
   try {
     // ── 1. IDENTIFY CUSTOMER ──────────────────────────────────────────────────
@@ -488,8 +585,8 @@ export async function processShipment(payload) {
     }
 
     // ── 2. IDENTIFY SERVICE ───────────────────────────────────────────────────
-    const serviceCode = shipment?.courier?.service_code || shipment?.dc_service_id;
-    if (!serviceCode) throw new Error('No service_code in payload');
+    const serviceCode = norm.serviceCode;
+    if (!serviceCode) throw new Error('No service_code in payload — checked shipment.courier.service_code, shipment.dc_service_id, and request_shipment.dc_service_id');
 
     const svcRow = await query(
       'SELECT id, service_code, fuel_group_id FROM courier_services WHERE service_code = $1',
@@ -501,12 +598,12 @@ export async function processShipment(payload) {
     // ── 3. MATCH ZONE ─────────────────────────────────────────────────────────
     // A missing zone is NOT a throw — charges are created with status='pricing_error'
     // and NULL prices so the failure is visible in the UI.
-    const countryIso = shipment?.ship_to?.country_iso;
-    const postcode   = shipment?.ship_to?.postcode;
+    const countryIso = norm.countryIso;
+    const postcode   = norm.postcode;
 
     if (!countryIso || !/^[A-Z]{2}$/.test(countryIso)) {
       throw new Error(
-        `Validation Error: ship_to.country_iso "${countryIso}" is not a valid 2-letter ISO code.`
+        `Validation Error: country_iso "${countryIso}" is not a valid 2-letter ISO code.`
       );
     }
 
@@ -545,14 +642,16 @@ export async function processShipment(payload) {
     }
 
     // ── 5. PROCESS PARCELS ────────────────────────────────────────────────────
-    const parcels      = shipment.parcels || [];
-    const totalParcels = parcels.length;
+    const parcels      = norm.parcels;
+    const totalParcels = parcels.length || shipment.parcel_count || 1;
     const voilaId      = shipment.id;
     const orderId      = shipment.reference || shipment.reference_2 || String(voilaId);
-    // Tracking codes come from create_label_parcels (one per physical parcel).
-    // shipment.courier is a string (carrier name), NOT an object with tracking_code.
+    // First tracking code from create_label_parcels (or from normalised parcel objects)
     const clParcels    = shipment.create_label_parcels || [];
-    const trackingCode = clParcels.map(p => p.tracking_code).filter(Boolean)[0] || null;
+    const trackingCode =
+      clParcels.map(p => p.tracking_code).filter(Boolean)[0] ||
+      parcels.map(p => p.tracking_code).filter(Boolean)[0] ||
+      null;
     const despatchDate = shipment.collection_date ? new Date(shipment.collection_date) : null;
 
     const commonFields = {
@@ -564,7 +663,7 @@ export async function processShipment(payload) {
       zone_id:             zone?.id || null,
       ship_to_postcode:    postcode,
       ship_to_country_iso: countryIso,
-      ship_to_name:        shipment?.ship_to?.name,
+      ship_to_name:        norm.shipToName,
       parcel_count:        totalParcels,
       despatch_date:       despatchDate,
       raw_payload:         JSON.stringify(payload),
