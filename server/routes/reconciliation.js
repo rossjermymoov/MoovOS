@@ -2283,7 +2283,16 @@ router.get('/consignment-trace', async (req, res) => {
     const carrierAmt  = carrier_amount ? parseFloat(carrier_amount) : null;
     const rawCode     = (raw_service_code || '').trim().toUpperCase();
     const trackKey    = tracking.trim().toUpperCase();
-    const carrierId   = parseInt(carrier_id);
+    const carrierId   = parseInt(carrier_id, 10);
+
+    // Validate carrier_id early — parseInt of a non-numeric string (e.g. UUID)
+    // gives NaN, which would silently produce a false CARRIER_MISMATCH verdict.
+    if (isNaN(carrierId)) {
+      return res.status(400).json({
+        error: `carrier_id "${carrier_id}" is not a valid integer. Pass the numeric couriers.id (e.g. carrier_id=3).`,
+        hint:  'Find the correct carrier_id by calling GET /api/reconciliation/carriers',
+      });
+    }
 
     const steps = [];
 
@@ -2342,6 +2351,11 @@ router.get('/consignment-trace', async (req, res) => {
     const carrierRes = await query(
       `SELECT id, code, name FROM couriers WHERE id = $1`, [carrierId]
     );
+    if (!carrierRes.rows.length) {
+      return res.status(400).json({
+        error: `No carrier found with id=${carrierId}. Check couriers table or call GET /api/reconciliation/carriers for valid IDs.`,
+      });
+    }
     const carrier = carrierRes.rows[0];
     const courierVal = (shipment.courier || '').toLowerCase();
     const cCode = (carrier?.code || '').toLowerCase();

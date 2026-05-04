@@ -411,20 +411,36 @@ router.post('/voila-backfill', authMiddleware, async (req, res, next) => {
             //
             // Critical for reconciliation pool: the pool indexes by
             // shipments.tracking_codes (DPD consignment numbers from create_label_parcels).
-            // Historical charges have tracking_code = NULL (extraction bug) and their
-            // shipments records have tracking_codes = NULL. Without this upsert,
-            // the pool has no key to look up DPD consignment numbers against, and
-            // every invoice line falls to the external_booking rate-card path.
+            // Historical charges have tracking_codes = NULL because create_label_parcels
+            // may have been empty or the tracking_code extraction had a bug.
+            // Without this upsert, the pool has no key to look up DPD consignment
+            // numbers against, and every invoice line falls to the external_booking path.
             //
             // ON CONFLICT in createOrUpdateShipment uses COALESCE — safe to call
             // repeatedly, never overwrites a real tracking_codes with NULL.
+            //
+            // Two charge paths to check:
+            //   A) pricingEngine.js path  → charges.voila_shipment_id = shipmentId (UUID)
+            //   B) billing.js path        → shipments.platform_shipment_id = parseInt(shipmentId) (BIGINT)
+            const numericPlatformId = parseInt(shipmentId, 10) || null;
             const existing = await query(
-              `SELECT id, customer_id FROM charges WHERE voila_shipment_id = $1 LIMIT 1`,
-              [shipmentId]
+              `SELECT c.id, c.customer_id
+               FROM   charges  c
+               LEFT JOIN shipments s ON s.id = c.shipment_id
+               WHERE  c.charge_type = 'courier'
+                 AND  c.cancelled   = false
+                 AND  (
+                   c.voila_shipment_id = $1
+                   OR (s.platform_shipment_id = $2 AND $2 IS NOT NULL)
+                 )
+               LIMIT 1`,
+              [shipmentId, numericPlatformId]
             );
 
             if (existing.rows.length) {
               // Charges exist — refresh the shipment record (tracking_codes, etc.)
+              // from the fresh Voila API payload. This populates any missing
+              // tracking_codes so the reconciliation pool can index them.
               const existingCustomerId = existing.rows[0]?.customer_id || null;
               await createOrUpdateShipment(payload, existingCustomerId);
               refreshed++;
