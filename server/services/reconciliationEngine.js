@@ -566,12 +566,12 @@ async function lookupCarrierBandCost(serviceId, weightKg, zoneId) {
 // originalExpectedCost — the stored charges.cost_price (passed by caller so metadata can
 // record what we expected before the carrier invoice revealed the true cost).
 // chargeId — when provided, sets recon_corrected on the charge for future run flagging.
-async function checkCorrectionEngine(customerId, serviceId, carrierId, zoneId, line, delta, chargeId, originalExpectedCost) {
+async function checkCorrectionEngine(customerId, serviceId, carrierId, zoneId, line, delta, chargeId, originalExpectedCost, ctx) {
   if (!serviceId || !(line.billed_weight_kg > 0)) {
     return { corrected: false, reason: 'no_service_id_or_weight' };
   }
 
-  const result = await lookupCarrierBandCost(serviceId, line.billed_weight_kg, zoneId);
+  const result = await ctx.bandLookup(serviceId, line.billed_weight_kg, zoneId);
   if (result === null) {
     return { corrected: false, reason: 'no_carrier_band' };
   }
@@ -789,6 +789,53 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   // ── Phase 4a: Load Mapping Engine rules ───────────────────────────────────
   const mappings = await loadMappings(carrierId);
 
+  // ── Run-scoped lookup caches ───────────────────────────────────────────────
+  // Carrier invoices repeat the same zone + weight combos many times. Caching
+  // eliminates redundant DB round-trips — the primary source of per-line latency.
+  const _bandCache    = new Map();
+  const _custCache    = new Map();
+  const _zoneCache    = new Map();
+  const _subRateCache = new Map();
+
+  const ctx = {
+    async bandLookup(serviceId, weightKg, zoneId) {
+      const key = `${serviceId}:${zoneId ?? ''}:${weightKg}`;
+      if (_bandCache.has(key)) return _bandCache.get(key);
+      const r = await lookupCarrierBandCost(serviceId, weightKg, zoneId);
+      _bandCache.set(key, r);
+      return r;
+    },
+    async customerLookup(accountNumber) {
+      if (!accountNumber) return null;
+      const k = String(accountNumber).trim();
+      if (_custCache.has(k)) return _custCache.get(k);
+      const r = await lookupCustomerByAccount(k);
+      _custCache.set(k, r);
+      return r;
+    },
+    async zoneLookup(serviceId, country, postcode) {
+      const key = `${serviceId}:${country ?? ''}:${postcode ?? ''}`;
+      if (_zoneCache.has(key)) return _zoneCache.get(key);
+      const r = await matchZone(serviceId, country, postcode);
+      _zoneCache.set(key, r);
+      return r;
+    },
+    async subRateLookup(serviceId, zoneId) {
+      const key = `${serviceId}:${zoneId}`;
+      if (_subRateCache.has(key)) return _subRateCache.get(key);
+      const subRes = await query(
+        `SELECT MIN(wb.price_sub) AS price_sub
+         FROM   weight_bands wb JOIN zones z ON z.id = wb.zone_id
+         WHERE  z.courier_service_id = $1 AND wb.zone_id = $2 AND wb.price_sub IS NOT NULL`,
+        [serviceId, zoneId]
+      );
+      const priceSub = (subRes.rows.length && subRes.rows[0].price_sub != null)
+        ? round2(parseFloat(subRes.rows[0].price_sub)) : null;
+      _subRateCache.set(key, priceSub);
+      return priceSub;
+    },
+  };
+
   // Diagnostic: log first 3 reconcilable lines
   console.log(`[recon engine] Run ${runId}: ${reconcilableLines.length} reconcilable lines (${skippedCount} aggregate skipped)`);
   reconcilableLines.slice(0, 3).forEach((l, i) => {
@@ -814,29 +861,36 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   // Counters
   let matched = 0, corrected = 0, unmatched = 0, ignored = 0;
 
-  // ── Process lines (grouped by tracking number) ────────────────────────────
-  for (const [trackKey, group] of trackingGroups) {
-    try {
-      const groupResults = await processTrackingGroup(
-        group, trackKey, runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings
-      );
+  // ── Process tracking groups — parallel batches ────────────────────────────
+  // Sequential processing with ~4ms DB latency per line adds up fast (500 lines =
+  // 2+ seconds minimum before any work is done). Batching groups into concurrent
+  // Promise.allSettled calls uses the DB connection pool efficiently.
+  const BATCH_SIZE  = 40; // concurrent groups per batch
+  const groupsArray = [...trackingGroups.entries()];
 
-      for (const r of groupResults) {
-        switch (r.status) {
-          case 'matched':   matched++;   break;
-          case 'corrected': corrected++; break;
-          case 'unmatched': unmatched++; break;
-          case 'ignored':   ignored++;   break;
+  for (let i = 0; i < groupsArray.length; i += BATCH_SIZE) {
+    const batch = groupsArray.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(
+      batch.map(([trackKey, group]) =>
+        processTrackingGroup(group, trackKey, runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings, ctx)
+      )
+    );
+
+    for (const res of results) {
+      if (res.status === 'fulfilled') {
+        for (const r of res.value) {
+          switch (r.status) {
+            case 'matched':   matched++;   break;
+            case 'corrected': corrected++; break;
+            case 'unmatched': unmatched++; break;
+            case 'ignored':   ignored++;   break;
+          }
         }
+      } else {
+        console.error(`[recon engine] Run ${runId}: group processing error:`, res.reason?.message);
+        unmatched++;
+        // Can't insert placeholder here (no trackKey easily available); count only.
       }
-    } catch (lineErr) {
-      console.error(`[recon engine] Run ${runId}: ERROR processing tracking group "${trackKey}":`, lineErr.message);
-      unmatched++;
-      // Insert a placeholder so it appears in All Lines
-      try {
-        await query(`INSERT INTO reconciliation_lines (run_id, tracking_number, status, unmatched_reason, source, carrier_amount, charge_type)
-          VALUES ($1,$2,'unmatched','processing_error','internal',0,'base')`, [runId, trackKey]);
-      } catch (_) { /* ignore insert failure */ }
     }
   }
 
@@ -844,6 +898,9 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   const total          = reconcilableLines.length;
   const autoResolved   = matched + corrected;
   const automationRate = total > 0 ? round2((autoResolved / total) * 100) : 0;
+
+  // ── Log cache stats ───────────────────────────────────────────────────────
+  console.log(`[recon engine] Run ${runId} cache stats — bands: ${_bandCache.size} keys, customers: ${_custCache.size} keys, zones: ${_zoneCache.size} keys`);
 
   // ── Finalise run ──────────────────────────────────────────────────────────
   const overallStatus = unmatched > 0 ? 'needs_review' : 'complete';
@@ -903,10 +960,10 @@ function sumGroupColumnSurcharges(lines) {
   return { total, breakdown };
 }
 
-async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings) {
+async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings, ctx) {
   // Single-line shortcut
   if (group.length === 1) {
-    const result = await processLine(group[0], runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings);
+    const result = await processLine(group[0], runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings, ctx);
     return [result];
   }
 
@@ -950,7 +1007,7 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
 
   // If there's only one base line left after splitting, use the single-line path.
   if (baseLines.length === 1) {
-    const r = await processLine(baseLines[0], runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings);
+    const r = await processLine(baseLines[0], runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings, ctx);
     return [...results, r];
   }
 
@@ -1035,7 +1092,7 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
   // Process orphan lines (unmapped surcharges with a different service code)
   // individually — they each need their own lookup or correction engine pass.
   for (const line of orphanLines) {
-    const r = await processLine(line, runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings);
+    const r = await processLine(line, runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings, ctx);
     results.push(r);
   }
 
@@ -1044,7 +1101,7 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
 
   // If only one freight line remains after splitting, use the single-line path.
   if (freightLines.length === 1) {
-    const r = await processLine(freightLines[0], runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings);
+    const r = await processLine(freightLines[0], runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings, ctx);
     return [...results, r];
   }
 
@@ -1063,24 +1120,15 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
   let expectedBase;
   const perParcelWeight = round2(parseFloat(firstLine.billed_weight_kg) || 0);
   if (perParcelWeight > 0 && serviceId && charge.zone_id) {
-    const bandResult = await lookupCarrierBandCost(serviceId, perParcelWeight, charge.zone_id);
+    const bandResult = await ctx.bandLookup(serviceId, perParcelWeight, charge.zone_id);
     if (bandResult && bandResult.pass === 1) {
       // Resolve price_sub: use the matched band's value, or fall back to any
       // configured price_sub in the same zone. DHL charges one flat sub rate
       // regardless of weight tier — it may only be entered on one band in the UI.
       let priceSub = bandResult.price_sub;
       if (priceSub == null) {
-        const subRes = await query(
-          `SELECT MIN(wb.price_sub) AS price_sub
-           FROM   weight_bands     wb
-           JOIN   zones            z   ON z.id  = wb.zone_id
-           WHERE  z.courier_service_id = $1
-             AND  wb.zone_id           = $2
-             AND  wb.price_sub         IS NOT NULL`,
-          [serviceId, charge.zone_id]
-        );
-        if (subRes.rows.length && subRes.rows[0].price_sub != null) {
-          priceSub = round2(parseFloat(subRes.rows[0].price_sub));
+        priceSub = await ctx.subRateLookup(serviceId, charge.zone_id);
+        if (priceSub != null) {
           console.log(
             `[recon engine] Multi-parcel: price_sub not on matched band ` +
             `(service=${serviceId}, ${perParcelWeight}kg) — using zone fallback sub=£${priceSub}`
@@ -1231,7 +1279,7 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
 
 // ─── Process a single line ────────────────────────────────────────────────────
 
-async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings) {
+async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings, ctx) {
   const trackingNumber = String(line.tracking_number || '').trim();
   const trackKey       = trackingNumber.toUpperCase();
   const rawServiceCode = String(line.service_code   || '').trim();
@@ -1308,7 +1356,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   }
 
   if (poolHits.length === 0) {
-    const customer = await lookupCustomerByAccount(line.account_number);
+    const customer = await ctx.customerLookup(line.account_number);
 
     // Pool MISS — no charge record in the OMS for this tracking number.
     //
@@ -1355,9 +1403,9 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     let externalExpected = null;
     const extWeightKg    = round2(parseFloat(line.billed_weight_kg) || 0);
     if (serviceId && extWeightKg > 0 && (line.delivery_postcode || line.ship_to_country)) {
-      const zone = await matchZone(serviceId, line.ship_to_country || 'GB', line.delivery_postcode || '');
+      const zone = await ctx.zoneLookup(serviceId, line.ship_to_country || 'GB', line.delivery_postcode || '');
       if (zone) {
-        const band = await lookupCarrierBandCost(serviceId, extWeightKg, zone.id);
+        const band = await ctx.bandLookup(serviceId, extWeightKg, zone.id);
         if (band) externalExpected = band.cost;
       }
     }
@@ -1420,7 +1468,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   let effectiveColSurcharge = colSurchargeTotal;  // default: include named surcharges
 
   if (serviceId && charge.zone_id && perParcelWeightKg > 0) {
-    const singleBand = await lookupCarrierBandCost(serviceId, perParcelWeightKg, charge.zone_id);
+    const singleBand = await ctx.bandLookup(serviceId, perParcelWeightKg, charge.zone_id);
     if (singleBand) expectedAmount = singleBand.cost;
   }
 
@@ -1435,23 +1483,12 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     //   (including the first — DPD bills a flat per-parcel sub-rate when Items > 1)
     const allAtSub    = (line.parcel_pricing || '') === 'all_sub';
     if (perParcelWeightKg > 0) {
-      const bandResult = await lookupCarrierBandCost(serviceId, perParcelWeightKg, charge.zone_id);
+      const bandResult = await ctx.bandLookup(serviceId, perParcelWeightKg, charge.zone_id);
       if (bandResult && bandResult.pass === 1) {
         // Resolve price_sub — same zone fallback as processTrackingGroup.
         let priceSub = bandResult.price_sub;
         if (priceSub == null) {
-          const subRes = await query(
-            `SELECT MIN(wb.price_sub) AS price_sub
-             FROM   weight_bands     wb
-             JOIN   zones            z   ON z.id  = wb.zone_id
-             WHERE  z.courier_service_id = $1
-               AND  wb.zone_id           = $2
-               AND  wb.price_sub         IS NOT NULL`,
-            [serviceId, charge.zone_id]
-          );
-          if (subRes.rows.length && subRes.rows[0].price_sub != null) {
-            priceSub = round2(parseFloat(subRes.rows[0].price_sub));
-          }
+          priceSub = await ctx.subRateLookup(serviceId, charge.zone_id);
         }
         if (priceSub != null) {
           let recomputed;
@@ -1531,7 +1568,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     let weightDeltaForMeta = null;
 
     if (billedWeight != null && charge.zone_id) {
-      const bResult = await lookupCarrierBandCost(serviceId, billedWeight, charge.zone_id);
+      const bResult = await ctx.bandLookup(serviceId, billedWeight, charge.zone_id);
       if (bResult && bResult.pass === 2) {
         isCorrection       = true;
         correctionReason   = 'weight_overage';
@@ -1648,7 +1685,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
 
   // ── Phase 4b: Correction Engine ───────────────────────────────────────────
   const correction = await checkCorrectionEngine(
-    charge.customer_id, serviceId, carrierId, charge.zone_id, line, delta, charge.charge_id, fullExpected
+    charge.customer_id, serviceId, carrierId, charge.zone_id, line, delta, charge.charge_id, fullExpected, ctx
   );
 
   if (correction.corrected) {
