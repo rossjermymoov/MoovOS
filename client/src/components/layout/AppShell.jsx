@@ -5,9 +5,9 @@ import KatanaWidget from '../katana/KatanaWidget';
 
 export default function AppShell() {
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#0A0B1E' }}>
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#0A0B1E' }}>
       <Sidebar />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
         <TopBar />
         <main style={{ flex: 1, padding: 24, overflowY: 'auto' }}>
           <Outlet />

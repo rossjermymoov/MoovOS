@@ -51,9 +51,22 @@ const inputSt = {
   padding: '8px 12px', outline: 'none',
 };
 
+// ─── Couriers with a fully configured reconciliation process ─────────────────
+// Add a courier's normalised name here once its rate card, zone logic, service
+// code mappings and surcharge rules have been set up and verified.
+// Everything else is greyed out and non-interactive in the upload wizard.
+const RECONCILIATION_READY = new Set(['dhl']);
+
+function isReconciliationReady(courier) {
+  const name = (courier.name || '').toLowerCase().trim();
+  const code = (courier.code || '').toLowerCase().trim();
+  return RECONCILIATION_READY.has(name) || RECONCILIATION_READY.has(code);
+}
+
 // ─── Carrier tile ─────────────────────────────────────────────────────────────
 function CarrierTile({ courier, selected, onSelect }) {
-  const logoUrl = getCourierLogo(courier.code) || getCourierLogo(courier.name);
+  const logoUrl  = getCourierLogo(courier.code) || getCourierLogo(courier.name);
+  const ready    = isReconciliationReady(courier);
 
   // Fallback initials badge when no logo is found
   const initials = (courier.name || '')
@@ -65,15 +78,18 @@ function CarrierTile({ courier, selected, onSelect }) {
 
   return (
     <button
-      onClick={() => onSelect(courier.id)}
-      title={courier.name}
+      onClick={() => ready && onSelect(courier.id)}
+      title={ready ? courier.name : `${courier.name} — reconciliation not yet configured`}
       style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-        padding: '12px 8px', borderRadius: 10, cursor: 'pointer',
+        padding: '12px 8px', borderRadius: 10,
+        cursor: ready ? 'pointer' : 'not-allowed',
         background: selected ? 'rgba(0,200,83,0.08)' : 'rgba(255,255,255,0.03)',
         border: `2px solid ${selected ? '#00C853' : 'rgba(255,255,255,0.08)'}`,
         transition: 'border-color 0.15s, background 0.15s',
         minWidth: 0, position: 'relative',
+        opacity: ready ? 1 : 0.35,
+        filter: ready ? 'none' : 'grayscale(1)',
       }}
     >
       {/* Logo or fallback initials badge */}
@@ -109,6 +125,17 @@ function CarrierTile({ courier, selected, onSelect }) {
       }}>
         {courier.name}
       </span>
+      {/* "Soon" badge on unsupported couriers */}
+      {!ready && (
+        <span style={{
+          position: 'absolute', bottom: 6, left: '50%', transform: 'translateX(-50%)',
+          fontSize: 9, fontWeight: 700, letterSpacing: '0.05em',
+          background: 'rgba(255,255,255,0.08)', color: '#666',
+          borderRadius: 4, padding: '2px 5px', whiteSpace: 'nowrap',
+        }}>
+          SOON
+        </span>
+      )}
       {/* Selected tick */}
       {selected && (
         <div style={{
