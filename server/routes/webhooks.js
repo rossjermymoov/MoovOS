@@ -210,7 +210,7 @@ router.post('/shipment-verified', authMiddleware, async (req, res, next) => {
 // would receive — use this to verify the API mapping before going live.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { probeShipmentRaw, mapToWebhookPayload } from '../services/voilaClient.js';
+import { probeShipmentRaw, probeShipmentByReference, mapToWebhookPayload } from '../services/voilaClient.js';
 
 router.get('/voila-probe', async (req, res, next) => {
   try {
@@ -219,56 +219,20 @@ router.get('/voila-probe', async (req, res, next) => {
       return res.status(400).json({ error: 'shipment_id or reference required' });
     }
 
-    // Look up the Voila ID from our DB if only a reference was given
-    let voilaId = shipment_id;
-    if (!voilaId && reference) {
-      // Search charges by order_id, and shipments by reference — no null gate
-      const dbRow = await query(
-        `SELECT
-           c.voila_shipment_id,
-           c.order_id,
-           s.reference  AS ship_reference,
-           s.id         AS shipment_db_id
-         FROM charges c
-         JOIN shipments s ON s.id = c.shipment_id
-         WHERE c.order_id = $1
-            OR c.order_id ILIKE $1
-            OR s.reference = $1
-            OR s.reference ILIKE $1
-         ORDER BY c.created_at DESC
-         LIMIT 1`,
-        [reference]
-      );
+    // Call Voila API directly — no DB lookup needed
+    const raw     = shipment_id
+      ? await probeShipmentRaw(shipment_id)
+      : await probeShipmentByReference(reference);
 
-      if (!dbRow.rows.length) {
-        return res.status(404).json({
-          error: `No charge found in DB for reference "${reference}"`,
-          hint:  'Check the exact reference shown in the Finance page — it must match order_id or the shipment reference exactly',
-        });
-      }
-
-      const row = dbRow.rows[0];
-      if (!row.voila_shipment_id) {
-        return res.status(200).json({
-          shipment_found:  false,
-          voila_id_used:   null,
-          db_row:          row,
-          error: `Charge found in DB (order_id: ${row.order_id}) but voila_shipment_id is NULL — this shipment was created before the Voila ID was stored, or the webhook payload didn't include it`,
-        });
-      }
-
-      voilaId = row.voila_shipment_id;
-    }
-
-    const raw     = await probeShipmentRaw(voilaId);
-    const rawList = Array.isArray(raw) ? raw : (raw.shipments || [raw]);
-    const match   = rawList.find(s => String(s.id) === String(voilaId)) || rawList[0];
+    const rawList = Array.isArray(raw) ? raw : (raw.shipments || (raw.id ? [raw] : []));
+    const match   = shipment_id
+      ? rawList.find(s => String(s.id) === String(shipment_id)) || rawList[0]
+      : rawList.find(s => s.reference === reference || s.reference_2 === reference) || rawList[0];
 
     res.json({
-      voila_id_used:   voilaId,
+      shipment_found:  !!match,
       raw_response:    raw,
       mapped_payload:  match ? mapToWebhookPayload(match) : null,
-      shipment_found:  !!match,
     });
   } catch (err) {
     console.error('❌  voila-probe error:', err.message);

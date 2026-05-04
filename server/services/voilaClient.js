@@ -94,7 +94,19 @@ export async function fetchShipmentByReference(reference) {
   return match ? mapToWebhookPayload(match) : null;
 }
 
-// ─── Probe: returns the raw API response for a given ID (for diagnostics) ────
+// ─── Fetch by order reference (direct API call, no DB lookup needed) ─────────
+export async function fetchShipmentByReference(reference) {
+  const data = await voilaGet('/shipments.json', { reference });
+  const list = Array.isArray(data) ? data : (data.shipments || [data]);
+  const match = list.find(s => s.reference === reference || s.reference_2 === reference);
+  return match ? mapToWebhookPayload(match) : null;
+}
+
+// ─── Probe: returns raw API response for a given ID or reference ─────────────
 export async function probeShipmentRaw(voilaId) {
   return voilaGet('/shipments.json', { id: voilaId });
+}
+
+export async function probeShipmentByReference(reference) {
+  return voilaGet('/shipments.json', { reference });
 }
