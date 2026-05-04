@@ -222,17 +222,42 @@ router.get('/voila-probe', async (req, res, next) => {
     // Look up the Voila ID from our DB if only a reference was given
     let voilaId = shipment_id;
     if (!voilaId && reference) {
+      // Search charges by order_id, and shipments by reference — no null gate
       const dbRow = await query(
-        `SELECT voila_shipment_id FROM charges WHERE order_id = $1 AND voila_shipment_id IS NOT NULL LIMIT 1`,
+        `SELECT
+           c.voila_shipment_id,
+           c.order_id,
+           s.reference  AS ship_reference,
+           s.id         AS shipment_db_id
+         FROM charges c
+         JOIN shipments s ON s.id = c.shipment_id
+         WHERE c.order_id = $1
+            OR c.order_id ILIKE $1
+            OR s.reference = $1
+            OR s.reference ILIKE $1
+         ORDER BY c.created_at DESC
+         LIMIT 1`,
         [reference]
       );
-      if (dbRow.rows.length) {
-        voilaId = dbRow.rows[0].voila_shipment_id;
-      } else {
+
+      if (!dbRow.rows.length) {
         return res.status(404).json({
-          error: `No charge found in DB for reference "${reference}" — cannot resolve Voila shipment ID`,
+          error: `No charge found in DB for reference "${reference}"`,
+          hint:  'Check the exact reference shown in the Finance page — it must match order_id or the shipment reference exactly',
         });
       }
+
+      const row = dbRow.rows[0];
+      if (!row.voila_shipment_id) {
+        return res.status(200).json({
+          shipment_found:  false,
+          voila_id_used:   null,
+          db_row:          row,
+          error: `Charge found in DB (order_id: ${row.order_id}) but voila_shipment_id is NULL — this shipment was created before the Voila ID was stored, or the webhook payload didn't include it`,
+        });
+      }
+
+      voilaId = row.voila_shipment_id;
     }
 
     const raw     = await probeShipmentRaw(voilaId);
