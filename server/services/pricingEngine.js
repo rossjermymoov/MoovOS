@@ -387,14 +387,105 @@ export async function processShipment(payload) {
 
   try {
     // ── 1. IDENTIFY CUSTOMER ──────────────────────────────────────────────────
-    const dcId = shipment?.billing?.customer_dc_id || shipment?.account_number;
-    if (!dcId) throw new Error('No customer DC ID in payload (billing.customer_dc_id or account_number)');
+    // Multi-step cascade matching billing.js behaviour so both webhook paths
+    // resolve the same customer regardless of which ID field is populated.
+    //
+    // Voila API payloads (mapToWebhookPayload) expose:
+    //   shipment.account_number — the MOOV-XXXX style account number
+    //   shipment.account_name   — the business name
+    //
+    // DC webhook payloads may also have:
+    //   shipment.billing.customer_dc_id — numeric DC customer ID
+    //
+    // customers table has: account_number, dc_customer_id, dc_id, billing_aliases,
+    // business_name. We try each in turn and take the first match.
+    const accountNumber = (shipment?.account_number || '').trim();
+    const customerDcId  = shipment?.billing?.customer_dc_id || null;
+    const accountName   = (shipment?.account_name || shipment?.ship_to_company_name || '').trim();
 
-    const custRow = await query(
-      'SELECT id, multi_box_pricing FROM customers WHERE dc_id = $1', [dcId]
-    );
-    if (!custRow.rows.length) throw new Error(`No customer found with dc_id = ${dcId}`);
-    const { id: customerId, multi_box_pricing } = custRow.rows[0];
+    let customerId        = null;
+    let multi_box_pricing = null;
+
+    const pickCustomer = (row) => {
+      customerId        = row.id;
+      multi_box_pricing = row.multi_box_pricing;
+    };
+
+    // Step 1: account_number → customers.account_number
+    if (accountNumber) {
+      const r = await query(
+        'SELECT id, multi_box_pricing FROM customers WHERE account_number = $1 LIMIT 1',
+        [accountNumber]
+      );
+      if (r.rows.length) pickCustomer(r.rows[0]);
+    }
+
+    // Step 2: account_number → customers.dc_customer_id (legacy numeric DC ID stored as text)
+    if (!customerId && accountNumber) {
+      const r = await query(
+        'SELECT id, multi_box_pricing FROM customers WHERE dc_customer_id = $1 LIMIT 1',
+        [accountNumber]
+      );
+      if (r.rows.length) pickCustomer(r.rows[0]);
+    }
+
+    // Step 3: account_number → customers.dc_id (alternate DC ID field)
+    if (!customerId && accountNumber) {
+      const r = await query(
+        'SELECT id, multi_box_pricing FROM customers WHERE dc_id = $1 LIMIT 1',
+        [accountNumber]
+      );
+      if (r.rows.length) pickCustomer(r.rows[0]);
+    }
+
+    // Step 4: account_number → customers.billing_aliases array
+    if (!customerId && accountNumber) {
+      try {
+        const r = await query(
+          `SELECT id, multi_box_pricing FROM customers
+           WHERE EXISTS (
+             SELECT 1 FROM unnest(billing_aliases) a
+             WHERE LOWER(a) = LOWER($1)
+           ) LIMIT 1`,
+          [accountNumber]
+        );
+        if (r.rows.length) pickCustomer(r.rows[0]);
+      } catch (_) { /* billing_aliases column may not exist on all installs */ }
+    }
+
+    // Step 5: customerDcId → customers.dc_customer_id / dc_id
+    if (!customerId && customerDcId) {
+      const r = await query(
+        `SELECT id, multi_box_pricing FROM customers
+         WHERE dc_customer_id = $1 OR dc_id = $1 LIMIT 1`,
+        [String(customerDcId)]
+      );
+      if (r.rows.length) pickCustomer(r.rows[0]);
+    }
+
+    // Step 6: accountName → customers.business_name (exact then partial)
+    if (!customerId && accountName) {
+      const r = await query(
+        'SELECT id, multi_box_pricing FROM customers WHERE LOWER(business_name) = LOWER($1) LIMIT 1',
+        [accountName]
+      );
+      if (r.rows.length) pickCustomer(r.rows[0]);
+    }
+    if (!customerId && accountName) {
+      const r = await query(
+        `SELECT id, multi_box_pricing FROM customers
+         WHERE LOWER(business_name) LIKE LOWER($1) LIMIT 1`,
+        [`%${accountName}%`]
+      );
+      if (r.rows.length) pickCustomer(r.rows[0]);
+    }
+
+    if (!customerId) {
+      throw new Error(
+        `No customer found for account_number="${accountNumber}", ` +
+        `dc_id="${customerDcId || ''}", name="${accountName}"`
+      );
+    }
 
     // ── 2. IDENTIFY SERVICE ───────────────────────────────────────────────────
     const serviceCode = shipment?.courier?.service_code || shipment?.dc_service_id;
