@@ -23,6 +23,7 @@ export function SettingsNav() {
     { to: '/settings/volumetric',  label: 'Volumetric Weight' },
     { to: '/settings/billing',     label: 'Billing' },
     { to: '/settings/xero',        label: 'Xero' },
+    { to: '/settings/email',       label: 'Email' },
   ];
   return (
     <div style={{ display: 'flex', gap: 0, marginBottom: 28, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>

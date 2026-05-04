@@ -210,7 +210,7 @@ router.post('/shipment-verified', authMiddleware, async (req, res, next) => {
 // would receive — use this to verify the API mapping before going live.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { probeShipmentRaw, probeShipmentByReference, mapToWebhookPayload } from '../services/voilaClient.js';
+import { probeShipmentRaw, probeShipmentByReference, mapToWebhookPayload, fetchShipmentsByDateRange } from '../services/voilaClient.js';
 
 router.get('/voila-probe', async (req, res, next) => {
   try {
@@ -264,6 +264,83 @@ router.get('/voila-probe', async (req, res, next) => {
   } catch (err) {
     console.error('❌  voila-probe error:', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/v1/webhooks/voila-backfill
+// Disaster-recovery: fetch ALL shipments from Voila API within a date range,
+// price any that don't already have charges, and mark them verified.
+// Body: { start: "2024-06-01T08:00:00", end: "2024-06-01T12:00:00" }
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/voila-backfill', authMiddleware, async (req, res, next) => {
+  try {
+    const { start, end } = req.body;
+    if (!start || !end) {
+      return res.status(400).json({ error: 'start and end datetime strings are required' });
+    }
+
+    console.log(`🔄  Voila bulk backfill: fetching shipments ${start} → ${end}`);
+
+    const payloads = await fetchShipmentsByDateRange(start, end);
+    console.log(`   Fetched ${payloads.length} shipment(s) from Voila API`);
+
+    let created  = 0;
+    let skipped  = 0;
+    let failed   = 0;
+    const errors = [];
+
+    for (const payload of payloads) {
+      const shipmentId = payload.shipment?.id;
+
+      try {
+        // Skip if charges already exist for this shipment
+        const existing = await query(
+          `SELECT id FROM charges WHERE voila_shipment_id = $1 LIMIT 1`,
+          [shipmentId]
+        );
+        if (existing.rows.length) {
+          skipped++;
+          continue;
+        }
+
+        const { charges: newCharges, errors: priceErrors } = await processShipment(payload);
+        if (!newCharges.length) {
+          failed++;
+          errors.push({ shipment_id: shipmentId, errors: priceErrors });
+          continue;
+        }
+
+        const inserted = await insertCharges(newCharges);
+        const insertedIds = inserted.map(c => c.id);
+        if (insertedIds.length) {
+          await query(
+            `UPDATE charges SET verified = true, status = 'verified', updated_at = NOW() WHERE id = ANY($1)`,
+            [insertedIds]
+          );
+        }
+        created += inserted.length;
+      } catch (shipErr) {
+        failed++;
+        errors.push({ shipment_id: shipmentId, error: shipErr.message });
+      }
+    }
+
+    console.log(`✅  Voila bulk backfill complete: ${created} charge(s) created, ${skipped} skipped (already exist), ${failed} failed`);
+
+    res.json({
+      status:           'ok',
+      fetched:          payloads.length,
+      charges_created:  created,
+      shipments_skipped: skipped,
+      shipments_failed:  failed,
+      errors:           errors.slice(0, 20), // cap error detail
+    });
+
+  } catch (err) {
+    console.error('❌  voila-backfill error:', err.message);
+    next(err);
   }
 });
 

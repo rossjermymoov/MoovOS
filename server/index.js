@@ -29,6 +29,8 @@ import pricingRouter from './routes/pricing.js';
 import xeroRouter from './routes/xero.js';
 import authRouter from './routes/auth.js';
 import reconciliationRouter from './routes/reconciliation.js';
+import emailRouter from './routes/email.js';
+import { sendAlert } from './services/emailService.js';
 
 dotenv.config();
 
@@ -69,6 +71,7 @@ app.use('/api/xero',                  xeroRouter);
 // should send to /api/moov-charges/webhook instead
 app.use('/api/moov-charges',          billingRouter);
 app.use('/api/reconciliation',        reconciliationRouter);
+app.use('/api/email',                 emailRouter);
 
 // ─── Health check ────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'moov-os' }));
@@ -111,6 +114,8 @@ async function start() {
     setInterval(activateDueCarrierRateCards, 24 * 60 * 60 * 1000);
     // Billing cycle scheduler — checks every minute whether a billing run is due
     startBillingScheduler();
+    // Webhook health monitor — checks every 5 minutes during UK business hours
+    startWebhookHealthMonitor();
   } catch (err) {
     console.error('❌ Migration failed — server will not start.');
     console.error('   Error code:   ', err.code    || 'unknown');
@@ -160,6 +165,88 @@ function startBillingScheduler() {
   }, 60 * 1000); // every minute
 
   console.log('🗓️  Billing scheduler started');
+}
+
+// ─── Webhook health monitor ───────────────────────────────────────────────────
+// Runs every 5 minutes. During UK business hours (Mon–Fri 08:00–17:00, excluding
+// bank holidays) checks how long ago the last tracking event was received.
+// If the gap exceeds the configured threshold, fires a webhook_gap alert.
+
+// In-memory cache of UK bank holidays (refreshed daily from GOV.UK API)
+let ukBankHolidays = new Set();
+let bankHolidayFetchedDate = null;
+
+async function refreshBankHolidays() {
+  const today = new Date().toISOString().split('T')[0];
+  if (bankHolidayFetchedDate === today) return;
+  try {
+    const res = await fetch('https://www.gov.uk/bank-holidays.json');
+    if (!res.ok) return;
+    const data = await res.json();
+    const events = data['england-and-wales']?.events || [];
+    ukBankHolidays = new Set(events.map(e => e.date));
+    bankHolidayFetchedDate = today;
+  } catch {
+    // Non-fatal — keep using whatever we had before
+  }
+}
+
+function isUkBusinessHours() {
+  // Use UK local time (Europe/London handles GMT/BST automatically)
+  const ukNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
+  const dayOfWeek = ukNow.getDay(); // 0=Sun, 6=Sat
+  const hour      = ukNow.getHours();
+  const dateStr   = ukNow.toISOString().split('T')[0];
+
+  if (dayOfWeek === 0 || dayOfWeek === 6) return false;  // weekend
+  if (ukBankHolidays.has(dateStr))         return false;  // bank holiday
+  if (hour < 8 || hour >= 17)              return false;  // outside 08:00–17:00
+  return true;
+}
+
+function startWebhookHealthMonitor() {
+  setInterval(async () => {
+    try {
+      await refreshBankHolidays();
+      if (!isUkBusinessHours()) return;
+
+      // Load alert settings
+      const alertRes = await dbQuery(
+        `SELECT at.*, (SELECT json_agg(r) FROM email_alert_recipients r WHERE r.alert_type_id = at.id AND r.enabled = true) AS recipients
+         FROM email_alert_types at WHERE code = 'webhook_gap'`
+      );
+      const alert = alertRes.rows[0];
+      if (!alert || !alert.enabled) return;
+
+      const settings       = alert.settings || {};
+      const thresholdMins  = settings.threshold_minutes ?? 10;
+      const cooldownMins   = settings.cooldown_minutes  ?? 30;
+
+      // Cooldown check
+      if (alert.last_alerted_at) {
+        const msSince = Date.now() - new Date(alert.last_alerted_at).getTime();
+        if (msSince < cooldownMins * 60 * 1000) return;
+      }
+
+      // Check last tracking event received
+      const evtRes = await dbQuery(`SELECT MAX(created_at) AS last_at FROM tracking_events`);
+      const lastAt  = evtRes.rows[0]?.last_at;
+      const gapMs   = lastAt ? Date.now() - new Date(lastAt).getTime() : Infinity;
+      const gapMins = gapMs / 60000;
+
+      if (gapMins >= thresholdMins) {
+        console.warn(`⚠️  Webhook health: no events for ${Math.round(gapMins)} min — sending alert`);
+        await sendAlert('webhook_gap', {
+          gap_minutes:      Math.round(gapMins),
+          last_webhook_at:  lastAt || null,
+        });
+      }
+    } catch (err) {
+      console.error('❌ Webhook health monitor error:', err.message);
+    }
+  }, 5 * 60 * 1000); // every 5 minutes
+
+  console.log('📡 Webhook health monitor started');
 }
 
 start();

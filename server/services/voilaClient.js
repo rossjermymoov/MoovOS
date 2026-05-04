@@ -88,6 +88,40 @@ export async function fetchShipmentByReference(reference) {
   return match ? mapToWebhookPayload(match) : null;
 }
 
+// ─── Fetch by date range (paginated) ─────────────────────────────────────────
+// Used for disaster-recovery bulk backfill when a webhook outage is detected.
+// startDate / endDate: ISO 8601 strings e.g. '2024-06-01T08:00:00'
+// Returns an array of mapped webhook payloads (all pages combined).
+export async function fetchShipmentsByDateRange(startDate, endDate, { onProgress } = {}) {
+  const PAGE_SIZE = 50;
+  let page = 1;
+  const allPayloads = [];
+
+  while (true) {
+    const data = await voilaGet('/shipments.json', {
+      startDateFilter: startDate,
+      endDateFilter:   endDate,
+      page,
+      per_page:        PAGE_SIZE,
+    });
+
+    const list = Array.isArray(data) ? data : (data.shipments || []);
+    if (!list.length) break;
+
+    for (const s of list) {
+      allPayloads.push(mapToWebhookPayload(s));
+    }
+
+    if (onProgress) onProgress({ page, fetched: allPayloads.length });
+
+    // Stop if we got fewer results than a full page (last page)
+    if (list.length < PAGE_SIZE) break;
+    page++;
+  }
+
+  return allPayloads;
+}
+
 // ─── Probe: return raw API response (diagnostics only) ───────────────────────
 export async function probeShipmentRaw(voilaId) {
   return voilaGet('/shipments.json', { id: voilaId });
