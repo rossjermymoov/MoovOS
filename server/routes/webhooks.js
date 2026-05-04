@@ -379,87 +379,96 @@ router.post('/voila-backfill', authMiddleware, async (req, res, next) => {
       return res.status(400).json({ error: 'start and end datetime strings are required' });
     }
 
-    console.log(`🔄  Voila bulk backfill: fetching shipments ${start} → ${end}`);
+    // Respond immediately — processing is fire-and-forget.
+    //
+    // Fetching + processing thousands of shipments takes longer than Railway's
+    // request timeout. We return 202 Accepted straight away and run the full
+    // backfill asynchronously in the background. Progress is logged to the
+    // Railway console — check there to confirm completion.
+    res.status(202).json({
+      status:  'started',
+      message: `Backfill running in background for ${start} → ${end}. Check Railway logs for progress.`,
+    });
 
-    const payloads = await fetchShipmentsByDateRange(start, end);
-    console.log(`   Fetched ${payloads.length} shipment(s) from Voila API`);
-
-    let created  = 0;
-    let skipped  = 0;
-    let failed   = 0;
-    const errors = [];
-
-    for (const payload of payloads) {
-      const shipmentId = payload.shipment?.id;
-
+    // ── Background processing ─────────────────────────────────────────────────
+    setImmediate(async () => {
       try {
-        // ALWAYS upsert the shipment record first, even if charges already exist.
-        //
-        // This is critical for the reconciliation pool: the pool indexes by
-        // shipments.tracking_codes (DPD consignment numbers from create_label_parcels).
-        // Historical charges created before the tracking_code extraction bug was fixed
-        // have tracking_code = NULL and their shipments records have tracking_codes = NULL.
-        // Running a backfill with this gate closed means createOrUpdateShipment is never
-        // called → shipments.tracking_codes stays NULL → pool has no key to look up by
-        // → every DPD invoice line misses the pool → falls to external_booking path.
-        //
-        // The ON CONFLICT DO UPDATE in createOrUpdateShipment uses
-        //   tracking_codes = COALESCE(EXCLUDED.tracking_codes, shipments.tracking_codes)
-        // so it is safe to call repeatedly — it only overwrites NULL with a real value,
-        // never overwrites a real value with NULL.
-        //
-        // We need the customer_id for createOrUpdateShipment. Try to get it from
-        // existing charges (avoids running processShipment when charges exist and
-        // pricing is not needed — saves time and avoids re-triggering pricing errors).
-        const existing = await query(
-          `SELECT id, customer_id FROM charges WHERE voila_shipment_id = $1 LIMIT 1`,
-          [shipmentId]
+        console.log(`🔄  Voila bulk backfill: fetching shipments ${start} → ${end}`);
+
+        const payloads = await fetchShipmentsByDateRange(start, end);
+        console.log(`   Fetched ${payloads.length} shipment(s) from Voila API`);
+
+        let created  = 0;
+        let refreshed = 0;
+        let failed   = 0;
+        const errors = [];
+
+        for (const payload of payloads) {
+          const shipmentId = payload.shipment?.id;
+
+          try {
+            // ALWAYS upsert the shipment record, even if charges already exist.
+            //
+            // Critical for reconciliation pool: the pool indexes by
+            // shipments.tracking_codes (DPD consignment numbers from create_label_parcels).
+            // Historical charges have tracking_code = NULL (extraction bug) and their
+            // shipments records have tracking_codes = NULL. Without this upsert,
+            // the pool has no key to look up DPD consignment numbers against, and
+            // every invoice line falls to the external_booking rate-card path.
+            //
+            // ON CONFLICT in createOrUpdateShipment uses COALESCE — safe to call
+            // repeatedly, never overwrites a real tracking_codes with NULL.
+            const existing = await query(
+              `SELECT id, customer_id FROM charges WHERE voila_shipment_id = $1 LIMIT 1`,
+              [shipmentId]
+            );
+
+            if (existing.rows.length) {
+              // Charges exist — refresh the shipment record (tracking_codes, etc.)
+              const existingCustomerId = existing.rows[0]?.customer_id || null;
+              await createOrUpdateShipment(payload, existingCustomerId);
+              refreshed++;
+              continue;
+            }
+
+            // No charges yet — run full pricing pipeline and create everything.
+            const { charges: newCharges, errors: priceErrors } = await processShipment(payload);
+            if (!newCharges.length) {
+              failed++;
+              errors.push({ shipment_id: shipmentId, errors: priceErrors });
+              continue;
+            }
+
+            const bulkCustomerId = newCharges[0]?.customer_id || null;
+            const bulkShipmentId = await createOrUpdateShipment(payload, bulkCustomerId);
+
+            const inserted = await insertCharges(newCharges, bulkShipmentId);
+            const insertedIds = inserted.map(c => c.id);
+            if (insertedIds.length) {
+              await query(
+                `UPDATE charges SET verified = true, status = 'verified', updated_at = NOW() WHERE id = ANY($1)`,
+                [insertedIds]
+              );
+            }
+            created += inserted.length;
+
+          } catch (shipErr) {
+            failed++;
+            errors.push({ shipment_id: shipmentId, error: shipErr.message });
+          }
+        }
+
+        console.log(
+          `✅  Voila bulk backfill complete: ${payloads.length} fetched, ` +
+          `${refreshed} shipment records refreshed, ${created} new charge(s) created, ${failed} failed`
         );
-
-        if (existing.rows.length) {
-          // Charges exist — just refresh the shipment record (tracking_codes, etc.)
-          const existingCustomerId = existing.rows[0]?.customer_id || null;
-          await createOrUpdateShipment(payload, existingCustomerId);
-          skipped++;
-          continue;
+        if (errors.length) {
+          console.warn('   Backfill errors (first 20):', JSON.stringify(errors.slice(0, 20)));
         }
 
-        // No charges yet — run full pricing pipeline and create everything.
-        const { charges: newCharges, errors: priceErrors } = await processShipment(payload);
-        if (!newCharges.length) {
-          failed++;
-          errors.push({ shipment_id: shipmentId, errors: priceErrors });
-          continue;
-        }
-
-        // Create shipment record so reconciliation pool can find these charges
-        const bulkCustomerId = newCharges[0]?.customer_id || null;
-        const bulkShipmentId = await createOrUpdateShipment(payload, bulkCustomerId);
-
-        const inserted = await insertCharges(newCharges, bulkShipmentId);
-        const insertedIds = inserted.map(c => c.id);
-        if (insertedIds.length) {
-          await query(
-            `UPDATE charges SET verified = true, status = 'verified', updated_at = NOW() WHERE id = ANY($1)`,
-            [insertedIds]
-          );
-        }
-        created += inserted.length;
-      } catch (shipErr) {
-        failed++;
-        errors.push({ shipment_id: shipmentId, error: shipErr.message });
+      } catch (bgErr) {
+        console.error('❌  voila-backfill background error:', bgErr.message);
       }
-    }
-
-    console.log(`✅  Voila bulk backfill complete: ${created} charge(s) created, ${skipped} shipment records refreshed, ${failed} failed`);
-
-    res.json({
-      status:              'ok',
-      fetched:             payloads.length,
-      charges_created:     created,
-      shipments_refreshed: skipped,
-      shipments_failed:    failed,
-      errors:              errors.slice(0, 20), // cap error detail
     });
 
   } catch (err) {
