@@ -118,38 +118,60 @@ function authMiddleware(req, res, next) {
 // POST /api/v1/webhooks/shipment-created
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.post('/shipment-created', authMiddleware, async (req, res, next) => {
-  try {
-    const payload = req.body;
+router.post('/shipment-created', authMiddleware, (req, res) => {
+  const payload = req.body;
 
-    if (!payload?.shipment) {
-      return res.status(400).json({ error: 'Invalid payload: missing shipment object' });
-    }
-
-    const { charges, errors } = await processShipment(payload);
-
-    if (!charges.length) {
-      console.warn('⚠️  Webhook: no charges produced', errors);
-      return res.status(422).json({ status: 'no_charges', errors });
-    }
-
-    // Create a shipments record so the reconciliation pool can find this shipment.
-    // The pool queries charges via JOIN shipments — without a linked shipment record
-    // the charge is invisible to reconciliation (treated as an external booking).
-    const customerId = charges[0]?.customer_id || null;
-    const shipmentId = await createOrUpdateShipment(payload, customerId);
-
-    const inserted = await insertCharges(charges, shipmentId);
-
-    console.log(`✅  Shipment ${payload.shipment?.id}: ${inserted.length} charge(s) created, shipment_id=${shipmentId}`);
-    if (errors.length) console.warn('   Warnings:', errors);
-
-    res.json({ status: 'ok', charges_created: inserted.length, warnings: errors });
-
-  } catch (err) {
-    console.error('❌  Webhook error:', err.message);
-    next(err);
+  if (!payload?.shipment) {
+    return res.status(400).json({ error: 'Invalid payload: missing shipment object' });
   }
+
+  // ── Respond immediately so Voila never retries ────────────────────────────
+  // Processing synchronously caused timeouts → Voila retried → duplicate charges.
+  // We return 200 at once and process in the background. Voila considers the
+  // webhook delivered as soon as it gets a 2xx — it will not retry.
+  res.json({ status: 'accepted' });
+
+  setImmediate(async () => {
+    const voilaShipmentId = String(payload.shipment?.id || '');
+    try {
+
+      // ── Idempotency gate ────────────────────────────────────────────────────
+      // If charges already exist for this voila_shipment_id (from a previous
+      // delivery of the same webhook, or from a shipment-verified backfill),
+      // skip silently. Without this guard every retry creates a full duplicate set.
+      if (voilaShipmentId) {
+        const existing = await query(
+          `SELECT id FROM charges
+           WHERE  voila_shipment_id = $1
+             AND  cancelled         = false
+             AND  charge_type       = 'courier'
+           LIMIT  1`,
+          [voilaShipmentId]
+        );
+        if (existing.rows.length) {
+          console.log(`[webhooks] shipment-created ${voilaShipmentId}: charges already exist — skipping (idempotent)`);
+          return;
+        }
+      }
+
+      const { charges, errors } = await processShipment(payload);
+
+      if (!charges.length) {
+        console.warn(`⚠️  Webhook ${voilaShipmentId}: no charges produced`, errors);
+        return;
+      }
+
+      const customerId = charges[0]?.customer_id || null;
+      const shipmentId = await createOrUpdateShipment(payload, customerId);
+      const inserted   = await insertCharges(charges, shipmentId);
+
+      console.log(`✅  Shipment ${voilaShipmentId}: ${inserted.length} charge(s) created, shipment_id=${shipmentId}`);
+      if (errors.length) console.warn('   Warnings:', errors);
+
+    } catch (err) {
+      console.error(`❌  Webhook background error (shipment ${voilaShipmentId}):`, err.message);
+    }
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
