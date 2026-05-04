@@ -393,16 +393,38 @@ router.post('/voila-backfill', authMiddleware, async (req, res, next) => {
       const shipmentId = payload.shipment?.id;
 
       try {
-        // Skip if charges already exist for this shipment
+        // ALWAYS upsert the shipment record first, even if charges already exist.
+        //
+        // This is critical for the reconciliation pool: the pool indexes by
+        // shipments.tracking_codes (DPD consignment numbers from create_label_parcels).
+        // Historical charges created before the tracking_code extraction bug was fixed
+        // have tracking_code = NULL and their shipments records have tracking_codes = NULL.
+        // Running a backfill with this gate closed means createOrUpdateShipment is never
+        // called → shipments.tracking_codes stays NULL → pool has no key to look up by
+        // → every DPD invoice line misses the pool → falls to external_booking path.
+        //
+        // The ON CONFLICT DO UPDATE in createOrUpdateShipment uses
+        //   tracking_codes = COALESCE(EXCLUDED.tracking_codes, shipments.tracking_codes)
+        // so it is safe to call repeatedly — it only overwrites NULL with a real value,
+        // never overwrites a real value with NULL.
+        //
+        // We need the customer_id for createOrUpdateShipment. Try to get it from
+        // existing charges (avoids running processShipment when charges exist and
+        // pricing is not needed — saves time and avoids re-triggering pricing errors).
         const existing = await query(
-          `SELECT id FROM charges WHERE voila_shipment_id = $1 LIMIT 1`,
+          `SELECT id, customer_id FROM charges WHERE voila_shipment_id = $1 LIMIT 1`,
           [shipmentId]
         );
+
         if (existing.rows.length) {
+          // Charges exist — just refresh the shipment record (tracking_codes, etc.)
+          const existingCustomerId = existing.rows[0]?.customer_id || null;
+          await createOrUpdateShipment(payload, existingCustomerId);
           skipped++;
           continue;
         }
 
+        // No charges yet — run full pricing pipeline and create everything.
         const { charges: newCharges, errors: priceErrors } = await processShipment(payload);
         if (!newCharges.length) {
           failed++;
@@ -429,15 +451,15 @@ router.post('/voila-backfill', authMiddleware, async (req, res, next) => {
       }
     }
 
-    console.log(`✅  Voila bulk backfill complete: ${created} charge(s) created, ${skipped} skipped (already exist), ${failed} failed`);
+    console.log(`✅  Voila bulk backfill complete: ${created} charge(s) created, ${skipped} shipment records refreshed, ${failed} failed`);
 
     res.json({
-      status:           'ok',
-      fetched:          payloads.length,
-      charges_created:  created,
-      shipments_skipped: skipped,
-      shipments_failed:  failed,
-      errors:           errors.slice(0, 20), // cap error detail
+      status:              'ok',
+      fetched:             payloads.length,
+      charges_created:     created,
+      shipments_refreshed: skipped,
+      shipments_failed:    failed,
+      errors:              errors.slice(0, 20), // cap error detail
     });
 
   } catch (err) {
