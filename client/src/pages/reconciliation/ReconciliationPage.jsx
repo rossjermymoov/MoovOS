@@ -55,7 +55,7 @@ const inputSt = {
 // Add a courier's normalised name here once its rate card, zone logic, service
 // code mappings and surcharge rules have been set up and verified.
 // Everything else is greyed out and non-interactive in the upload wizard.
-const RECONCILIATION_READY = new Set(['dhl']);
+const RECONCILIATION_READY = new Set(['dhl', 'dpd']);
 
 function isReconciliationReady(courier) {
   const name = (courier.name || '').toLowerCase().trim();
@@ -201,7 +201,16 @@ function AutoBar({ rate }) {
  * That made DHL tracking numbers land on the wrong column and appear as
  * account numbers or dates instead.
  */
-function parseCSV(text) {
+/**
+ * RFC 4180-compliant CSV parser.
+ *
+ * @param {string} text     - raw CSV text
+ * @param {Object} opts
+ * @param {number} opts.skipRows - number of preamble rows to skip before the column
+ *   header row. DPD invoices have 4 rows of invoice summary data before the actual
+ *   column header row. Default 0 (standard DHL format).
+ */
+function parseCSV(text, { skipRows = 0 } = {}) {
   const src = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trimEnd();
   const rows = [];
   let row = [];
@@ -228,9 +237,12 @@ function parseCSV(text) {
   row.push(field.trim());
   if (row.some(c => c)) rows.push(row);
 
-  if (rows.length < 2) return [];
-  const headers = rows[0].map(h => h.toLowerCase().trim());
-  return rows.slice(1).filter(r => r.some(c => c)).map(rowArr => {
+  // skipRows: skip preamble rows before the column header.
+  // DPD invoices have 4 rows (account info, nett value, VAT, gross) before headers.
+  const headerIdx = Math.min(skipRows, rows.length - 1);
+  if (rows.length < headerIdx + 2) return [];
+  const headers = rows[headerIdx].map(h => h.toLowerCase().trim());
+  return rows.slice(headerIdx + 1).filter(r => r.some(c => c)).map(rowArr => {
     const obj = {};
     headers.forEach((h, i) => { obj[h] = rowArr[i] ?? ''; });
     return obj;
@@ -273,9 +285,13 @@ function mapToInvoiceLine(row, colMap) {
     charge_type:      get('charge_type').trim() || 'base',
     carrier_amount:   parseFloat(get('carrier_amount').replace(/[£,]/g, '')) || 0,
     billed_weight_kg: parseFloat(get('billed_weight_kg')) || null,
-    // DHL column J — piece/item count per line. Used to calculate the HGV
-    // aggregate total (sum of parcel_count × HGV rate per parcel).
+    // Piece/item count per line (DHL col J, DPD "items" column).
+    // Used by the engine for multi-parcel expected cost calculation and HGV aggregate total.
     parcel_count:     parseInt(get('parcel_count'), 10) || null,
+    // Carrier-specific parcel pricing mode.
+    // 'all_sub' (DPD): ALL parcels billed at price_sub when items > 1 (including first).
+    // '' / undefined (standard, DHL): first at price_first + (n-1) at price_sub.
+    ...(colMap.parcel_pricing && { parcel_pricing: colMap.parcel_pricing }),
     ...(Object.keys(surcharge_amounts).length > 0 && { surcharge_amounts }),
   };
 }
@@ -286,6 +302,14 @@ const BLANK_MAP = {
   parcel_count: '',
   invoice_ref: '', invoice_date: '',
   surcharge_columns: [],   // [{ col: '<csv header>', surcharge_id: '<uuid>' }]
+  // ── Carrier-format options ─────────────────────────────────────────────────
+  // header_row_skip: number of preamble rows before the column header row.
+  //   0 = standard (DHL). 4 = DPD (4 rows of invoice summary before headers).
+  header_row_skip: 0,
+  // parcel_pricing: how the carrier bills multi-parcel shipments.
+  //   '' = standard — first parcel at price_first + (n-1) at price_sub.
+  //   'all_sub' — ALL parcels at price_sub when items > 1 (DPD-style).
+  parcel_pricing: '',
 };
 
 // ─── Date normalisation ───────────────────────────────────────────────────────
@@ -567,7 +591,11 @@ function UploadModal({ couriers, onClose, onSuccess }) {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const rows = parseCSV(ev.target.result);
+      // Use header_row_skip from the currently loaded profile (e.g. DPD = 4).
+      // This must be read BEFORE autoMap overwrites colMap, so we use the
+      // current colMap state (set from the profile selected in Step 1).
+      const skipRows = parseInt(colMap.header_row_skip) || 0;
+      const rows = parseCSV(ev.target.result, { skipRows });
       if (!rows.length) { setError('CSV appears empty or invalid'); return; }
       const hdrs = Object.keys(rows[0]);
       setHeaders(hdrs);
@@ -735,9 +763,15 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                           )}
                         </div>
                         <div style={{ fontSize: 11, color: '#555', marginTop: 2 }}>
-                          {Object.entries(p.column_map || {}).filter(([k, v]) => k !== 'surcharge_columns' && v).length} columns mapped
+                          {Object.entries(p.column_map || {}).filter(([k, v]) => !['surcharge_columns','header_row_skip','parcel_pricing'].includes(k) && v).length} columns mapped
                           {(p.column_map?.surcharge_columns?.length > 0) && (
                             <span style={{ marginLeft: 6, color: '#666' }}>· {p.column_map.surcharge_columns.length} surcharge col{p.column_map.surcharge_columns.length > 1 ? 's' : ''}</span>
+                          )}
+                          {p.column_map?.header_row_skip > 0 && (
+                            <span style={{ marginLeft: 6, color: '#666' }}>· {p.column_map.header_row_skip} preamble rows</span>
+                          )}
+                          {p.column_map?.parcel_pricing === 'all_sub' && (
+                            <span style={{ marginLeft: 6, color: '#666' }}>· all-sub pricing</span>
                           )}
                         </div>
                       </div>
@@ -794,6 +828,50 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                   </select>
                 </div>
               ))}
+            </div>
+
+            {/* ── Carrier-format options ─────────────────────────────────────────── */}
+            <div style={{
+              marginTop: 20, padding: '12px 16px', borderRadius: 8,
+              background: 'rgba(255,255,255,0.02)',
+              border: '1px solid rgba(255,255,255,0.06)',
+            }}>
+              <div style={{
+                fontSize: 11, color: '#888', fontWeight: 600, marginBottom: 10,
+                paddingBottom: 8, borderBottom: '1px solid rgba(255,255,255,0.06)',
+              }}>
+                CARRIER FORMAT OPTIONS
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {/* header_row_skip */}
+                <div style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: 10, alignItems: 'center' }}>
+                  <label style={{ fontSize: 12, color: '#888' }}>
+                    Preamble rows to skip
+                    <span style={{ color: '#555', fontSize: 10, display: 'block' }}>DPD = 4, DHL = 0</span>
+                  </label>
+                  <input
+                    type='number' min='0' max='20'
+                    style={inputSt}
+                    value={colMap.header_row_skip ?? 0}
+                    onChange={e => setColMap(m => ({ ...m, header_row_skip: parseInt(e.target.value) || 0 }))}
+                  />
+                </div>
+                {/* parcel_pricing */}
+                <div style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: 10, alignItems: 'center' }}>
+                  <label style={{ fontSize: 12, color: '#888' }}>
+                    Multi-parcel pricing
+                    <span style={{ color: '#555', fontSize: 10, display: 'block' }}>How carrier bills multi-parcel</span>
+                  </label>
+                  <select
+                    style={inputSt}
+                    value={colMap.parcel_pricing || ''}
+                    onChange={e => setColMap(m => ({ ...m, parcel_pricing: e.target.value }))}
+                  >
+                    <option value=''>Standard — first at base rate + (n-1) at sub rate</option>
+                    <option value='all_sub'>All at sub rate — DPD (every parcel at sub rate)</option>
+                  </select>
+                </div>
+              </div>
             </div>
 
             {/* Surcharge column mappings */}

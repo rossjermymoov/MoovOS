@@ -1376,8 +1376,15 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
 
   if (parcelCount > 1 && serviceId && charge.zone_id) {
     // Single invoice line for a multi-parcel shipment.
-    // Recompute expected as price_first + (parcel_count − 1) × price_sub.
+    //
+    // Standard carriers (DHL): first parcel at base rate + (n-1) parcels at sub-rate.
+    //   expected = price_first + (parcel_count − 1) × price_sub
+    //
+    // DPD-style carriers (parcel_pricing === 'all_sub'): ALL parcels at sub-rate.
+    //   expected = parcel_count × price_sub
+    //   (including the first — DPD bills a flat per-parcel sub-rate when Items > 1)
     const perParcelKg = round2(parseFloat(line.billed_weight_kg) || 0);
+    const allAtSub    = (line.parcel_pricing || '') === 'all_sub';
     if (perParcelKg > 0) {
       const bandResult = await lookupCarrierBandCost(serviceId, perParcelKg, charge.zone_id);
       if (bandResult && bandResult.pass === 1) {
@@ -1398,12 +1405,24 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
           }
         }
         if (priceSub != null) {
-          const recomputed = round2(bandResult.cost + (parcelCount - 1) * priceSub);
-          console.log(
-            `[recon engine] Multi-parcel single-line (${parcelCount} parcels, ${perParcelKg}kg/parcel):` +
-            ` first=£${bandResult.cost} sub=£${priceSub} → expected=£${recomputed}` +
-            ` (stored cost_price=£${expectedAmount})`
-          );
+          let recomputed;
+          if (allAtSub) {
+            // DPD: all parcels (including first) at sub-rate
+            recomputed = round2(parcelCount * priceSub);
+            console.log(
+              `[recon engine] Multi-parcel single-line DPD-style (${parcelCount} parcels, ${perParcelKg}kg/parcel):` +
+              ` all at sub=£${priceSub} → expected=£${recomputed}` +
+              ` (stored cost_price=£${expectedAmount})`
+            );
+          } else {
+            // Standard: first at base rate, rest at sub-rate
+            recomputed = round2(bandResult.cost + (parcelCount - 1) * priceSub);
+            console.log(
+              `[recon engine] Multi-parcel single-line (${parcelCount} parcels, ${perParcelKg}kg/parcel):` +
+              ` first=£${bandResult.cost} sub=£${priceSub} → expected=£${recomputed}` +
+              ` (stored cost_price=£${expectedAmount})`
+            );
+          }
           expectedAmount        = recomputed;
           effectiveColSurcharge = 0;   // sub-parcel is base, not a surcharge add-on
         }
