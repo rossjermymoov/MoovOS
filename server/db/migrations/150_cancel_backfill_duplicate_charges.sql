@@ -14,33 +14,23 @@
 --     the backfill charge (null zone_id), breaking the rate card comparison for
 --     both DHL and DPD.
 --
--- SCOPE:
---   Two sweeps:
---   Sweep A — backfill charges where a billing.js charge exists for the same
---              consignment (tracking_code match against shipments.tracking_codes[]
---              or shipments.dc_service_id).  This catches every April 20-21
---              shipment that went through the DC webhook (i.e., all of them).
---   Sweep B — any remaining backfill charges created on 2026-04-30 (the date the
---              voila-backfill was executed) that Sweep A missed.  These would be
---              April 20-21 Voila shipments that the DC webhook never processed;
---              they lack a billing.js charge but are still wrong (no zone_id).
+-- IDENTIFICATION:
+--   Backfill charges = voila_shipment_id IS NOT NULL AND despatch_date is April 20-21.
+--   despatch_date is set from shipment.collection_date in the Voila API payload, so
+--   it reflects when the shipment was actually collected — not when the backfill ran.
+--   Legitimate live-webhook charges (April 22+) have despatch_date >= April 22.
 --
 -- WHAT IS NOT TOUCHED:
 --   • billing.js courier charges (voila_shipment_id IS NULL) → never cancelled here
---   • Webhook charges from April 22+ (voila_shipment_id IS NOT NULL, created before
---     2026-04-30) → outside Sweep B date window
+--   • Live webhook charges April 22+ (despatch_date >= 2026-04-22) → safe
 --
 -- IDEMPOTENT: SET cancelled = true WHERE cancelled = false is safe to re-run.
 
 DO $$
 DECLARE
-  v_sweep_a_shipments  BIGINT[];
-  v_sweep_b_shipments  BIGINT[];
-  v_all_shipments      BIGINT[];
-  v_courier_a          INTEGER := 0;
-  v_aux_a              INTEGER := 0;
-  v_courier_b          INTEGER := 0;
-  v_aux_b              INTEGER := 0;
+  v_target_shipments   UUID[];
+  v_cancelled_courier  INTEGER := 0;
+  v_cancelled_aux      INTEGER := 0;
   v_dpd_zone_set       INTEGER := 0;
   v_dpd_zone_null      INTEGER := 0;
 BEGIN
@@ -82,109 +72,82 @@ BEGIN
   END IF;
 
   -- ─────────────────────────────────────────────────────────────────────────
-  -- SWEEP A — Backfill charges with a billing.js counterpart
+  -- TARGET: collect shipment UUIDs for backfill charges
   --
-  -- A backfill courier charge is a confirmed duplicate when a billing.js
-  -- courier charge exists whose shipment carries the same consignment number.
-  -- We check three match patterns to cover DHL "60"-prefix variants:
-  --   (a) tracking_code = ANY(s2.tracking_codes[])    — DPD + DHL direct
-  --   (b) tracking_code = dc_service_id               — DHL exact
-  --   (c) '60' || tracking_code = dc_service_id       — DHL: billing.js stored
-  --                                                       with prefix, Voila bare
-  -- ─────────────────────────────────────────────────────────────────────────
-
-  SELECT ARRAY(
-    SELECT DISTINCT c.shipment_id
-    FROM   charges   c
-    JOIN   charges   c2 ON (
-             c2.voila_shipment_id IS NULL
-             AND c2.cancelled     = false
-             AND c2.charge_type   = 'courier'
-           )
-    JOIN   shipments s2 ON s2.id = c2.shipment_id
-    WHERE  c.voila_shipment_id IS NOT NULL
-      AND  c.cancelled         = false
-      AND  c.charge_type       = 'courier'
-      AND  c.tracking_code     IS NOT NULL
-      AND  c.shipment_id       IS NOT NULL
-      AND  (
-        c.tracking_code = ANY(s2.tracking_codes)
-        OR c.tracking_code = s2.dc_service_id
-        OR '60' || c.tracking_code = s2.dc_service_id
-      )
-  ) INTO v_sweep_a_shipments;
-
-  RAISE NOTICE 'SWEEP A — % backfill shipment records with confirmed billing.js duplicates',
-    COALESCE(array_length(v_sweep_a_shipments, 1), 0);
-
-  -- Cancel Sweep A backfill courier charges
-  IF COALESCE(array_length(v_sweep_a_shipments, 1), 0) > 0 THEN
-    UPDATE charges
-    SET    cancelled   = true,
-           updated_at  = NOW()
-    WHERE  shipment_id        = ANY(v_sweep_a_shipments)
-      AND  charge_type        = 'courier'
-      AND  voila_shipment_id  IS NOT NULL
-      AND  cancelled          = false;
-    GET DIAGNOSTICS v_courier_a = ROW_COUNT;
-
-    -- Cancel Sweep A associated fuel / surcharge charges
-    UPDATE charges
-    SET    cancelled   = true,
-           updated_at  = NOW()
-    WHERE  shipment_id = ANY(v_sweep_a_shipments)
-      AND  charge_type IN ('fuel', 'surcharge')
-      AND  cancelled   = false;
-    GET DIAGNOSTICS v_aux_a = ROW_COUNT;
-
-    RAISE NOTICE 'SWEEP A — Cancelled % courier + % fuel/surcharge charges',
-      v_courier_a, v_aux_a;
-  END IF;
-
-  -- ─────────────────────────────────────────────────────────────────────────
-  -- SWEEP B — Remaining backfill charges created on 2026-04-30
+  -- A charge is a backfill charge for April 20-21 when:
+  --   (a) voila_shipment_id IS NOT NULL  — created via pricingEngine (not billing.js)
+  --   (b) despatch_date BETWEEN April 20-21 — the Voila collection_date confirms the
+  --       shipment was despatched on those days, distinguishing it from April 22+
+  --       live webhook charges which have despatch_date on the booking day.
   --
-  -- Any backfill charges that Sweep A missed (e.g., April 20-21 Voila shipments
-  -- that the DC webhook never processed — so no billing.js counterpart exists).
-  -- These are identified by creation date: the voila-backfill was executed on
-  -- 2026-04-30.  Legitimate webhook charges from April 22-29 were created on
-  -- their respective booking dates and are safely outside this window.
+  -- charges.shipment_id is UUID (migration 020_billing.sql).
   -- ─────────────────────────────────────────────────────────────────────────
 
   SELECT ARRAY(
     SELECT DISTINCT c.shipment_id
     FROM   charges c
-    WHERE  c.voila_shipment_id IS NOT NULL
-      AND  c.cancelled         = false
-      AND  c.charge_type       = 'courier'
-      AND  c.shipment_id       IS NOT NULL
-      AND  c.shipment_id       != ALL(COALESCE(v_sweep_a_shipments, ARRAY[]::BIGINT[]))
-      AND  c.created_at::date  = '2026-04-30'
-  ) INTO v_sweep_b_shipments;
+    WHERE  c.voila_shipment_id  IS NOT NULL
+      AND  c.cancelled          = false
+      AND  c.charge_type        = 'courier'
+      AND  c.shipment_id        IS NOT NULL
+      AND  c.despatch_date::date BETWEEN '2026-04-20' AND '2026-04-21'
+  ) INTO v_target_shipments;
 
-  RAISE NOTICE 'SWEEP B — % additional backfill shipment records (no billing.js counterpart, created 2026-04-30)',
-    COALESCE(array_length(v_sweep_b_shipments, 1), 0);
+  RAISE NOTICE 'TARGET — % backfill shipments identified (April 20-21 by despatch_date)',
+    COALESCE(array_length(v_target_shipments, 1), 0);
 
-  IF COALESCE(array_length(v_sweep_b_shipments, 1), 0) > 0 THEN
+  IF COALESCE(array_length(v_target_shipments, 1), 0) = 0 THEN
+    RAISE NOTICE 'No April 20-21 backfill charges found — checking for charges with NULL despatch_date...';
+
+    -- Fallback notice: if despatch_date is null on all backfill charges, show count for manual review
+    DECLARE
+      v_null_despatch INTEGER;
+    BEGIN
+      SELECT COUNT(*) INTO v_null_despatch
+      FROM   charges
+      WHERE  voila_shipment_id IS NOT NULL
+        AND  cancelled   = false
+        AND  charge_type = 'courier'
+        AND  despatch_date IS NULL;
+
+      IF v_null_despatch > 0 THEN
+        RAISE NOTICE 'NOTE: % backfill courier charges have NULL despatch_date and were not targeted.',
+          v_null_despatch;
+        RAISE NOTICE 'Run the post-run diagnostic to identify these charges by voila_shipment_id range.';
+      END IF;
+    END;
+  END IF;
+
+  -- ─────────────────────────────────────────────────────────────────────────
+  -- CANCEL BACKFILL CHARGES
+  -- ─────────────────────────────────────────────────────────────────────────
+
+  IF COALESCE(array_length(v_target_shipments, 1), 0) > 0 THEN
+
+    -- Cancel backfill courier charges only (billing.js charges guarded by voila_shipment_id IS NOT NULL)
     UPDATE charges
     SET    cancelled   = true,
            updated_at  = NOW()
-    WHERE  shipment_id        = ANY(v_sweep_b_shipments)
+    WHERE  shipment_id        = ANY(v_target_shipments)
       AND  charge_type        = 'courier'
       AND  voila_shipment_id  IS NOT NULL
       AND  cancelled          = false;
-    GET DIAGNOSTICS v_courier_b = ROW_COUNT;
+    GET DIAGNOSTICS v_cancelled_courier = ROW_COUNT;
 
+    -- Cancel associated fuel / surcharge charges for the same shipments
+    -- (no voila_shipment_id guard here — fuel/surcharge charges may predate the
+    -- pricingEngine path and won't have voila_shipment_id set)
     UPDATE charges
     SET    cancelled   = true,
            updated_at  = NOW()
-    WHERE  shipment_id = ANY(v_sweep_b_shipments)
-      AND  charge_type IN ('fuel', 'surcharge')
-      AND  cancelled   = false;
-    GET DIAGNOSTICS v_aux_b = ROW_COUNT;
+    WHERE  shipment_id  = ANY(v_target_shipments)
+      AND  charge_type  IN ('fuel', 'surcharge')
+      AND  cancelled    = false;
+    GET DIAGNOSTICS v_cancelled_aux = ROW_COUNT;
 
-    RAISE NOTICE 'SWEEP B — Cancelled % courier + % fuel/surcharge charges',
-      v_courier_b, v_aux_b;
+    RAISE NOTICE 'CANCELLED: % courier charge(s) + % fuel/surcharge charge(s)',
+      v_cancelled_courier, v_cancelled_aux;
+
   END IF;
 
   -- ─────────────────────────────────────────────────────────────────────────
@@ -192,15 +155,14 @@ BEGIN
   -- ─────────────────────────────────────────────────────────────────────────
 
   RAISE NOTICE '━━━ Migration 150 complete ━━━';
-  RAISE NOTICE 'Total cancelled:  % courier charge(s)  |  % fuel/surcharge charge(s)',
-    v_courier_a + v_courier_b, v_aux_a + v_aux_b;
+  RAISE NOTICE 'Total cancelled: % courier | % fuel/surcharge', v_cancelled_courier, v_cancelled_aux;
   RAISE NOTICE 'billing.js charges remain ACTIVE and are the sole reconciliation pool entries.';
-  RAISE NOTICE 'Next step: run reconciliation engine with ILIKE zone fallback REMOVED (migration 151 / engine patch).';
 
 END $$;
 
 -- ─── Post-run verification (run in Railway console) ───────────────────────────
 --
+-- 1. Source/status breakdown:
 -- SELECT
 --   CASE WHEN c.voila_shipment_id IS NULL THEN 'billing.js' ELSE 'backfill' END AS source,
 --   s.courier,
@@ -213,3 +175,17 @@ END $$;
 --   AND (s.courier ILIKE '%dpd%' OR s.courier ILIKE '%dhl%')
 -- GROUP BY 1, 2
 -- ORDER BY 2, 1;
+--
+-- 2. billing.js DPD zone coverage:
+-- SELECT c.zone_id IS NOT NULL AS has_zone_id, COUNT(*) AS charge_count
+-- FROM charges c JOIN shipments s ON s.id = c.shipment_id
+-- WHERE c.voila_shipment_id IS NULL AND c.cancelled = false
+--   AND c.charge_type = 'courier' AND c.verified = true
+--   AND s.courier ILIKE '%dpd%'
+-- GROUP BY 1;
+--
+-- 3. If backfill charges remain (despatch_date fallback):
+-- SELECT c.despatch_date, c.created_at::date, COUNT(*)
+-- FROM charges c
+-- WHERE c.voila_shipment_id IS NOT NULL AND c.cancelled = false AND c.charge_type = 'courier'
+-- GROUP BY 1, 2 ORDER BY 1 DESC NULLS FIRST;
