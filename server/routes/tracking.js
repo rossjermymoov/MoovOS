@@ -9,6 +9,8 @@
 
 import express from 'express';
 import { query } from '../db/index.js';
+import { fetchShipmentByReference } from '../services/voilaClient.js';
+import { processShipment, insertCharges } from '../services/pricingEngine.js';
 
 const router = express.Router();
 
@@ -166,6 +168,7 @@ export function normalisePayload(body) {
       for (const ev of sorted) {
         events.push({
           _consignment:        consignment,
+          _shipment_reference: shipment.reference || null,
           _courier_name:       shipment.courier || null,
           _courier_code:       shipment.courier ? shipment.courier.toLowerCase() : null,
           _service_name:       shipment.friendly_service_name || null,
@@ -212,6 +215,8 @@ export async function upsertEvent(event, rawBody) {
   const eventAt     = event.timestamp || pick(event,
     'event_time', 'eventTime', 'datetime', 'date_time', 'scanned_at', 'created_at') || new Date().toISOString();
   const eventCode   = event.event_code || pick(event, 'eventCode', 'code', 'status_code', 'update_id');
+
+  const shipmentReference = event._shipment_reference || pick(event, 'shipment_reference', 'order_reference');
 
   const courierName    = event._courier_name    || pick(event, 'courier_name', 'courierName', 'courier', 'carrier', 'carrier_name');
   const courierCode    = event._courier_code    || pick(event, 'courier_code', 'courierCode', 'carrier_code', 'carrierCode');
@@ -336,7 +341,7 @@ export async function upsertEvent(event, rawBody) {
   // couriers recycle numbers every 6–12 months, so a tracking event more than 400 days
   // after a shipment's collection date almost certainly refers to a different parcel.
   if (VERIFIED_STATUSES.has(status)) {
-    await query(`
+    const verifyResult = await query(`
       UPDATE charges
       SET verified = true, updated_at = NOW()
       WHERE verified = false
@@ -350,6 +355,40 @@ export async function upsertEvent(event, rawBody) {
             )
         )
     `, [consignment]);
+
+    // ── Layer 1 backfill ──────────────────────────────────────────────────────
+    // If no charges were updated, the shipment-created webhook was likely missed.
+    // Fire-and-forget: fetch from Voila API, price it, insert and immediately verify.
+    // Non-blocking — the tracking webhook response is never delayed or failed.
+    if (verifyResult.rowCount === 0 && shipmentReference) {
+      ;(async () => {
+        try {
+          console.warn(`⚠️  Tracking backfill: no charges for consignment ${consignment} (ref ${shipmentReference}) — fetching from Voila API`);
+          const payload = await fetchShipmentByReference(shipmentReference);
+          if (!payload) {
+            console.warn(`   Backfill: Voila API returned no shipment for reference ${shipmentReference}`);
+            return;
+          }
+          const { charges, errors } = await processShipment(payload);
+          if (!charges.length) {
+            console.warn(`   Backfill: processShipment produced no charges for ${shipmentReference}`, errors);
+            return;
+          }
+          const inserted = await insertCharges(charges);
+          const insertedIds = inserted.map(c => c.id);
+          if (insertedIds.length) {
+            await query(
+              `UPDATE charges SET verified = true, status = 'verified', updated_at = NOW() WHERE id = ANY($1)`,
+              [insertedIds]
+            );
+          }
+          console.log(`✅  Tracking backfill: created + verified ${inserted.length} charge(s) for ${shipmentReference} (consignment ${consignment})`);
+          if (errors.length) console.warn('   Backfill warnings:', errors);
+        } catch (err) {
+          console.error(`❌  Tracking backfill failed for ${shipmentReference}:`, err.message);
+        }
+      })();
+    }
   }
 
   return { ok: true, consignment, status, parcel_id: parcelId };
