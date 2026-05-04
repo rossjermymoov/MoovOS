@@ -1935,4 +1935,120 @@ router.get('/runs/:id/lines/:lineId/trace', async (req, res) => {
   }
 });
 
+// ─── GET /api/reconciliation/shipment-lookup?tracking=<number> ───────────────
+// Diagnostic: find a shipment and its charges regardless of verified/pool status.
+// Used to investigate why a tracking number is missing from the reconciliation pool.
+router.get('/shipment-lookup', async (req, res) => {
+  try {
+    const raw = (req.query.tracking || '').trim();
+    if (!raw) return res.status(400).json({ error: 'tracking parameter required' });
+
+    // Build variant list to search against dc_service_id and tracking_codes
+    const variants = [raw];
+    const up = raw.toUpperCase();
+    if (up.startsWith('600') && up.length > 5) {
+      variants.push(up.slice(3));   // "600123456789" → "123456789"
+      variants.push(up.slice(2));   // fallback
+      variants.push(up);
+    } else if (up.startsWith('60') && up.length > 4) {
+      variants.push(up.slice(2));   // "60123456789" → "123456789"
+      variants.push(up);
+    } else {
+      variants.push('60' + up);     // bare → add "60" prefix
+      variants.push('600' + up);    // bare → add "600" prefix
+    }
+    const uniqueVariants = [...new Set(variants.map(v => v.toUpperCase()))];
+
+    // Search shipments — no courier gate, no verified gate
+    const shipRes = await query(`
+      SELECT
+        s.id,
+        s.courier,
+        s.dc_service_id,
+        s.tracking_codes,
+        s.total_weight_kg,
+        s.created_at,
+        s.reference,
+        s.ship_to_postcode
+      FROM shipments s
+      WHERE s.dc_service_id = ANY($1)
+         OR s.dc_service_id ILIKE ANY($2)
+         OR s.tracking_codes && $1
+      ORDER BY s.created_at DESC
+      LIMIT 20
+    `, [uniqueVariants, uniqueVariants.map(v => v)]);
+
+    // For each shipment found, get its charges
+    const results = [];
+    for (const ship of shipRes.rows) {
+      const chargeRes = await query(`
+        SELECT
+          c.id,
+          c.charge_type,
+          c.status,
+          c.verified,
+          c.cancelled,
+          c.cost_price,
+          c.zone_name,
+          c.recon_corrected,
+          c.created_at,
+          cu.name AS customer_name,
+          cu.account_number
+        FROM charges c
+        LEFT JOIN customers cu ON cu.id = c.customer_id
+        WHERE c.shipment_id = $1
+        ORDER BY c.charge_type, c.created_at
+      `, [ship.id]);
+
+      results.push({
+        shipment: {
+          id:               ship.id,
+          courier:          ship.courier,
+          dc_service_id:    ship.dc_service_id,
+          tracking_codes:   ship.tracking_codes || [],
+          total_weight_kg:  ship.total_weight_kg,
+          reference:        ship.reference,
+          ship_to_postcode: ship.ship_to_postcode,
+          created_at:       ship.created_at,
+        },
+        charges: chargeRes.rows.map(c => ({
+          id:             c.id,
+          charge_type:    c.charge_type,
+          status:         c.status,
+          verified:       c.verified,
+          cancelled:      c.cancelled,
+          cost_price:     c.cost_price,
+          zone_name:      c.zone_name,
+          recon_corrected: c.recon_corrected,
+          customer_name:  c.customer_name,
+          account_number: c.account_number,
+          created_at:     c.created_at,
+        })),
+        pool_eligible: chargeRes.rows.some(c =>
+          c.charge_type === 'courier' && c.verified === true && c.cancelled === false
+        ),
+        pool_blockers: [
+          ...(!chargeRes.rows.some(c => c.charge_type === 'courier') ? ['No courier charge exists'] : []),
+          ...(chargeRes.rows.some(c => c.charge_type === 'courier' && c.verified === false && c.cancelled === false)
+            ? ['Courier charge exists but verified = false'] : []),
+          ...(chargeRes.rows.some(c => c.charge_type === 'courier' && c.cancelled === true)
+            ? ['Courier charge is cancelled'] : []),
+          ...(!ship.dc_service_id && (!ship.tracking_codes || ship.tracking_codes.length === 0)
+            ? ['Shipment has no dc_service_id and no tracking_codes — pool lookup cannot find it'] : []),
+        ],
+      });
+    }
+
+    return res.json({
+      tracking_searched: raw,
+      variants_tried: uniqueVariants,
+      shipments_found: results.length,
+      results,
+    });
+  } catch (err) {
+    console.error('[reconciliation/shipment-lookup] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
