@@ -4,7 +4,10 @@
 --
 -- DPD invoice format (key differences from DHL):
 --   • 4 preamble rows before the column header row (account info, nett/VAT/gross totals)
---   • Tracking key: "Senders Ref" column — maps to shipments.reference (e.g. MP-XXXXXXXX)
+--   • Tracking key: "Consignment" column — the DPD consignment number stored in
+--     shipments.tracking_codes via create_label_parcels[].tracking_code.
+--     (Senders Ref was the original choice but is often blank or an internal customer
+--     reference with no correspondence to charges.order_id.)
 --   • Service Code: numeric (2=NXTDAY, 1=2DAY, 9=CLASIC, 0=EXPRSS)
 --   • Multi-parcel: one "H" (header) row has all financial data; subsequent "S" (sub-parcel)
 --     rows have blank financials. Filtering by Revenue > 0 naturally excludes sub-rows.
@@ -28,10 +31,13 @@ SELECT
   'DPD Standard Invoice',
   jsonb_build_object(
     -- ── Core fields ────────────────────────────────────────────────────────
-    -- Use Senders Ref as the tracking key — it maps to shipments.reference
-    -- (both MP-XXXXXXXX Voila refs and plain Shopify numeric refs).
-    -- The pool indexes by order_id = charges.order_id = shipments.reference.
-    'tracking_number',   'senders ref',
+    -- Use Consignment as the tracking key — it is the DPD consignment number
+    -- (a 14-15 digit number). For Moov OS-booked DPD shipments this is stored
+    -- in shipments.tracking_codes via create_label_parcels[].tracking_code.
+    -- The pool indexes by tracking_codes, so this is the correct lookup key.
+    -- (Senders Ref was the original choice but is frequently blank or an internal
+    -- customer reference with no match in charges.order_id.)
+    'tracking_number',   'consignment',
     'service_code',      'service code',
     'carrier_amount',    'revenue',
     'billed_weight_kg',  'weight',

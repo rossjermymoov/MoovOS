@@ -2051,4 +2051,212 @@ router.get('/shipment-lookup', async (req, res) => {
   }
 });
 
+// ─── GET /api/reconciliation/carrier-pool-sample ─────────────────────────────
+// Shows sample pool entries for a carrier — reveals what format tracking_codes
+// and references are stored in so you can verify the CSV column mapping is right.
+//
+// Query params:
+//   carrier_id   (required) — couriers.id
+//   limit        (optional, default 20)
+//   customer     (optional) — partial match on customers.business_name to filter
+//
+// Returns the first N verified DPD charges with their tracking_codes/dc_service_id
+// so you can see exactly what the pool would index them under.
+
+router.get('/carrier-pool-sample', async (req, res) => {
+  try {
+    const carrierId = parseInt(req.query.carrier_id);
+    if (!carrierId) return res.status(400).json({ error: 'carrier_id required' });
+
+    const limit    = Math.min(parseInt(req.query.limit) || 20, 100);
+    const customer = (req.query.customer || '').trim();
+
+    const sampleRes = await query(`
+      SELECT
+        c.id                     AS charge_id,
+        c.order_id               AS reference,
+        c.cost_price             AS expected_cost,
+        c.verified,
+        c.cancelled,
+        cu.business_name         AS customer_name,
+        cu.account_number        AS customer_account,
+        s.courier,
+        s.dc_service_id,
+        s.tracking_codes,
+        s.reference              AS shipment_reference,
+        s.reference_2,
+        s.created_at
+      FROM   charges      c
+      JOIN   shipments    s          ON s.id          = c.shipment_id
+      JOIN   couriers     cu_carrier ON cu_carrier.id = $1
+      LEFT JOIN customers cu         ON cu.id         = c.customer_id
+      WHERE  c.charge_type  = 'courier'
+        AND  c.cancelled    = false
+        AND  (
+          s.courier ILIKE cu_carrier.code
+          OR s.courier ILIKE cu_carrier.name
+          OR s.courier ILIKE '%' || cu_carrier.code || '%'
+          OR cu_carrier.code ILIKE '%' || s.courier || '%'
+          OR s.courier ILIKE '%' || cu_carrier.name || '%'
+          OR cu_carrier.name ILIKE '%' || s.courier || '%'
+        )
+        ${customer ? `AND cu.business_name ILIKE '%' || $3 || '%'` : ''}
+      ORDER BY c.created_at DESC
+      LIMIT $2
+    `, customer ? [carrierId, limit, customer] : [carrierId, limit]);
+
+    // Also show overall pool stats
+    const statsRes = await query(`
+      SELECT
+        COUNT(*)                                       AS total_charges,
+        COUNT(*) FILTER (WHERE c.verified = true)      AS verified_charges,
+        COUNT(*) FILTER (WHERE
+          (s.tracking_codes IS NOT NULL AND array_length(s.tracking_codes, 1) > 0)
+          OR s.dc_service_id IS NOT NULL
+        )                                              AS gate_passed,
+        COUNT(*) FILTER (WHERE
+          c.verified = true
+          AND (
+            (s.tracking_codes IS NOT NULL AND array_length(s.tracking_codes, 1) > 0)
+            OR s.dc_service_id IS NOT NULL
+          )
+        )                                              AS pool_eligible,
+        COUNT(DISTINCT cu.id)                          AS unique_customers
+      FROM   charges      c
+      JOIN   shipments    s          ON s.id          = c.shipment_id
+      JOIN   couriers     cu_carrier ON cu_carrier.id = $1
+      LEFT JOIN customers cu         ON cu.id         = c.customer_id
+      WHERE  c.charge_type  = 'courier'
+        AND  c.cancelled    = false
+        AND  (
+          s.courier ILIKE cu_carrier.code
+          OR s.courier ILIKE cu_carrier.name
+          OR s.courier ILIKE '%' || cu_carrier.code || '%'
+          OR cu_carrier.code ILIKE '%' || s.courier || '%'
+          OR s.courier ILIKE '%' || cu_carrier.name || '%'
+          OR cu_carrier.name ILIKE '%' || s.courier || '%'
+        )
+    `, [carrierId]);
+
+    return res.json({
+      carrier_id:  carrierId,
+      pool_stats:  statsRes.rows[0],
+      sample:      sampleRes.rows,
+      note: 'tracking_codes = what the pool indexes. The CSV tracking_number column value must match one of these for a pool hit.',
+    });
+  } catch (err) {
+    console.error('[reconciliation/carrier-pool-sample] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/reconciliation/runs/:id/tracking-probe ─────────────────────────
+// For a completed run, shows:
+//   1. The tracking_numbers that came in from the CSV (from reconciliation_lines)
+//   2. Whether each one would be found in the DB (shipments.tracking_codes or dc_service_id)
+//   3. The unmatched_reason breakdown for the run
+//
+// Use this immediately after a failed run to understand WHY lines didn't match.
+
+router.get('/runs/:id/tracking-probe', async (req, res) => {
+  try {
+    const runId = parseInt(req.params.id);
+
+    // Get run info
+    const runRes = await query(
+      `SELECT rr.id, rr.carrier_id, rr.status, cu.name AS carrier_name, cu.code AS carrier_code
+       FROM reconciliation_runs rr
+       JOIN couriers cu ON cu.id = rr.carrier_id
+       WHERE rr.id = $1`,
+      [runId]
+    );
+    if (!runRes.rows.length) return res.status(404).json({ error: 'Run not found' });
+    const run = runRes.rows[0];
+
+    // Breakdown by status and unmatched_reason
+    const summaryRes = await query(`
+      SELECT
+        status,
+        unmatched_reason,
+        source,
+        COUNT(*) AS line_count,
+        COUNT(*) FILTER (WHERE tracking_number IS NULL OR tracking_number = '') AS blank_tracking
+      FROM reconciliation_lines
+      WHERE run_id = $1
+      GROUP BY status, unmatched_reason, source
+      ORDER BY line_count DESC
+    `, [runId]);
+
+    // Sample of lines with blank tracking numbers (the core problem)
+    const blankTrackingRes = await query(`
+      SELECT id, tracking_number, raw_service_code, carrier_amount, status, unmatched_reason, carrier_account_no
+      FROM reconciliation_lines
+      WHERE run_id = $1
+        AND (tracking_number IS NULL OR tracking_number = '')
+      LIMIT 10
+    `, [runId]);
+
+    // Sample of lines WITH tracking numbers that still didn't match
+    const missedWithTrackingRes = await query(`
+      SELECT id, tracking_number, raw_service_code, carrier_amount, status, unmatched_reason, carrier_account_no
+      FROM reconciliation_lines
+      WHERE run_id = $1
+        AND tracking_number IS NOT NULL AND tracking_number <> ''
+        AND status = 'unmatched'
+      LIMIT 10
+    `, [runId]);
+
+    // For a sample of unmatched tracking numbers, check if they exist in shipments at all
+    const sampleTrackNums = missedWithTrackingRes.rows
+      .map(r => r.tracking_number)
+      .filter(Boolean)
+      .slice(0, 5);
+
+    let shipmentLookup = [];
+    if (sampleTrackNums.length > 0) {
+      const allVariants = [];
+      for (const tn of sampleTrackNums) {
+        const up = tn.toUpperCase();
+        allVariants.push(up);
+        if (!up.startsWith('60')) allVariants.push('60' + up);
+      }
+      const lookupRes = await query(`
+        SELECT
+          s.id          AS shipment_id,
+          s.courier,
+          s.dc_service_id,
+          s.tracking_codes,
+          s.reference,
+          c.verified,
+          c.cancelled,
+          cu.business_name AS customer_name
+        FROM shipments s
+        LEFT JOIN charges  c  ON c.shipment_id = s.id AND c.charge_type = 'courier'
+        LEFT JOIN customers cu ON cu.id = c.customer_id
+        WHERE s.dc_service_id = ANY($1)
+           OR s.tracking_codes && $1
+        LIMIT 20
+      `, [allVariants]);
+      shipmentLookup = lookupRes.rows;
+    }
+
+    return res.json({
+      run,
+      status_breakdown:          summaryRes.rows,
+      blank_tracking_sample:     blankTrackingRes.rows,
+      unmatched_with_tracking:   missedWithTrackingRes.rows,
+      db_lookup_for_unmatched:   shipmentLookup,
+      diagnosis_hints: {
+        blank_tracking_count:    blankTrackingRes.rows.length,
+        note_if_blank_tracking:  'If most lines have blank tracking_number, the CSV column mapped to tracking_number is wrong (e.g. Senders Ref is empty). Fix: map tracking_number to the Consignment column.',
+        note_if_not_in_db:       'If tracking numbers are present but db_lookup_for_unmatched is empty, the DPD consignment numbers are not stored in shipments.tracking_codes. Check billing webhook create_label_parcels payload.',
+        note_if_not_verified:    'If shipments exist but verified=false, the shipment-verified event has not fired. The pool only includes verified=true charges.',
+      },
+    });
+  } catch (err) {
+    console.error('[reconciliation/tracking-probe] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
