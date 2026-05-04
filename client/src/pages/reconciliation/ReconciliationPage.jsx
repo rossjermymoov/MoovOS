@@ -529,8 +529,11 @@ function ProfileManagerModal({ couriers, onClose }) {
 // ─── Upload modal ─────────────────────────────────────────────────────────────
 function UploadModal({ couriers, onClose, onSuccess }) {
   const qc = useQueryClient();
-  const [carrierId,           setCarrierId]           = useState('');
-  const [invoiceRefOverride,  setInvoiceRefOverride]  = useState('');
+  const [carrierId,             setCarrierId]             = useState('');
+  const [invoiceRefOverride,    setInvoiceRefOverride]    = useState('');
+  // Extracted from preamble (e.g. DPD invoice B1) — applied as constant account_number
+  // on every line when the per-row account_number column is unmapped (colMap.account_number = '').
+  const [preambleAccountNumber, setPreambleAccountNumber] = useState('');
   const [csvRows,             setCsvRows]             = useState([]);
   const [headers,             setHeaders]             = useState([]);
   const [colMap,              setColMap]              = useState({ ...BLANK_MAP });
@@ -625,7 +628,10 @@ function UploadModal({ couriers, onClose, onSuccess }) {
       if (!rows.length) { setError('CSV appears empty or invalid'); return; }
       const hdrs = Object.keys(rows[0]);
 
-      // Extract named values from preamble cells (e.g. DPD invoice ref at row 0 col 3).
+      // Extract named values from preamble cells (e.g. DPD invoice ref at row 0 col 3,
+      // account number at row 0 col 1).
+      // Reset preamble-sourced fields so stale values from a previous file don't persist.
+      setPreambleAccountNumber('');
       if (preamble.length > 0 && Array.isArray(colMap.preamble_fields)) {
         for (const pf of colMap.preamble_fields) {
           const pRow = preamble[pf.row];
@@ -635,7 +641,12 @@ function UploadModal({ couriers, onClose, onSuccess }) {
           if (pf.field === 'invoice_ref' && !invoiceRefOverride) {
             setInvoiceRefOverride(val);
           }
-          // account_number_hint: stored in autoMap for preview — not a per-line field
+          if (pf.field === 'account_number') {
+            // Store for injection into every line in buildLines() when no per-row
+            // account_number column is mapped. DPD invoices always have a constant
+            // account number in the preamble (B1) rather than per row.
+            setPreambleAccountNumber(val);
+          }
         }
       }
       setHeaders(hdrs);
@@ -708,7 +719,16 @@ function UploadModal({ couriers, onClose, onSuccess }) {
   }
 
   function buildLines() {
-    return csvRows.map(row => mapToInvoiceLine(row, colMap)).filter(l => l.carrier_amount > 0);
+    return csvRows.map(row => {
+      const line = mapToInvoiceLine(row, colMap);
+      // Inject preamble-extracted account number when no per-row column is mapped.
+      // DPD invoices have a single account number in the header (B1) that applies
+      // to every row — there is no per-shipment account column in the data rows.
+      if (!line.account_number && preambleAccountNumber) {
+        line.account_number = preambleAccountNumber;
+      }
+      return line;
+    }).filter(l => l.carrier_amount > 0);
   }
 
   const FIELDS = [

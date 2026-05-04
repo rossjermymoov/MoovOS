@@ -257,7 +257,11 @@ async function buildVerifiedPool(carrierId) {
         SELECT z_lkp.id
         FROM   zones           z_lkp
         JOIN   courier_services cs_lkp ON cs_lkp.id = z_lkp.courier_service_id
-        WHERE  z_lkp.name    = c.zone_name
+        -- ILIKE for case-insensitive match — charges.zone_name and zones.name
+        -- must agree lexically but may differ in capitalisation (e.g. "mainland"
+        -- vs "Mainland"). Exact = match would produce zone_id = null and silently
+        -- prevent rate-card lookups for every pool hit on that carrier.
+        WHERE  z_lkp.name    ILIKE c.zone_name
           AND  cs_lkp.courier_id = $1
         LIMIT  1
       )                 AS zone_id,
@@ -356,7 +360,20 @@ async function buildVerifiedPool(carrierId) {
   const poolSize = pool.size;
   console.log(`[recon engine] Verified pool built: ${poolSize} unique keys from ${res.rows.length} charge records`);
   if (poolSize === 0) {
-    console.warn(`[recon engine] WARNING: pool is EMPTY — carrier name/code may not match shipments.courier, or no DHL shipments have dc_service_id/tracking_codes`);
+    console.warn(`[recon engine] WARNING: pool is EMPTY — carrier name/code may not match shipments.courier, or no verified shipments have dc_service_id/tracking_codes`);
+  }
+
+  // Zone-id diagnostic — surfaces zone_name mismatches early.
+  // If zone_id is null for many records it means charges.zone_name doesn't match
+  // any zones.name for this carrier (case-insensitive ILIKE already applied above).
+  const nullZoneRows = res.rows.filter(r => !r.zone_id);
+  if (nullZoneRows.length > 0) {
+    const sample = [...new Set(nullZoneRows.map(r => r.zone_name || '(blank)'))].slice(0, 5);
+    console.warn(
+      `[recon engine] Pool zone_id diagnostic: ${nullZoneRows.length}/${res.rows.length} charge records have no zone_id.` +
+      ` Sample zone_name values with no match: ${sample.join(', ')}.` +
+      ` Check that zones.name for this carrier matches charges.zone_name.`
+    );
   }
 
   return { pool, poolSize };
@@ -823,12 +840,22 @@ export async function processReconciliationRun(runId, carrierId, lines) {
     async subRateLookup(serviceId, zoneId) {
       const key = `${serviceId}:${zoneId}`;
       if (_subRateCache.has(key)) return _subRateCache.get(key);
-      const subRes = await query(
-        `SELECT MIN(wb.price_sub) AS price_sub
-         FROM   weight_bands wb JOIN zones z ON z.id = wb.zone_id
-         WHERE  z.courier_service_id = $1 AND wb.zone_id = $2 AND wb.price_sub IS NOT NULL`,
-        [serviceId, zoneId]
-      );
+      // When zoneId is known, pin to that zone. When null, take the minimum
+      // price_sub across all zones for this service (same zone-free fallback
+      // philosophy as lookupCarrierBandCost).
+      const subRes = zoneId
+        ? await query(
+            `SELECT MIN(wb.price_sub) AS price_sub
+             FROM   weight_bands wb JOIN zones z ON z.id = wb.zone_id
+             WHERE  z.courier_service_id = $1 AND wb.zone_id = $2 AND wb.price_sub IS NOT NULL`,
+            [serviceId, zoneId]
+          )
+        : await query(
+            `SELECT MIN(wb.price_sub) AS price_sub
+             FROM   weight_bands wb JOIN zones z ON z.id = wb.zone_id
+             WHERE  z.courier_service_id = $1 AND wb.price_sub IS NOT NULL`,
+            [serviceId]
+          );
       const priceSub = (subRes.rows.length && subRes.rows[0].price_sub != null)
         ? round2(parseFloat(subRes.rows[0].price_sub)) : null;
       _subRateCache.set(key, priceSub);
@@ -1119,8 +1146,10 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
   // directly (not divided by group size) to find the correct weight band.
   let expectedBase;
   const perParcelWeight = round2(parseFloat(firstLine.billed_weight_kg) || 0);
-  if (perParcelWeight > 0 && serviceId && charge.zone_id) {
-    const bandResult = await ctx.bandLookup(serviceId, perParcelWeight, charge.zone_id);
+  // charge.zone_id may be null if charges.zone_name had no match in zones after ILIKE.
+  // Fall through to zone-free band lookup in that case — same behaviour as processLine.
+  if (perParcelWeight > 0 && serviceId) {
+    const bandResult = await ctx.bandLookup(serviceId, perParcelWeight, charge.zone_id || null);
     if (bandResult && bandResult.pass === 1) {
       // Resolve price_sub: use the matched band's value, or fall back to any
       // configured price_sub in the same zone. DHL charges one flat sub rate
@@ -1467,12 +1496,24 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   let expectedAmount        = null;
   let effectiveColSurcharge = colSurchargeTotal;  // default: include named surcharges
 
-  if (serviceId && charge.zone_id && perParcelWeightKg > 0) {
-    const singleBand = await ctx.bandLookup(serviceId, perParcelWeightKg, charge.zone_id);
+  if (serviceId && perParcelWeightKg > 0) {
+    // Prefer zone-pinned lookup when zone_id is known (charges.zone_name matched
+    // zones.name for this carrier). Fall back to zone-free lookup when zone_id is
+    // null — this can happen when charges were created before zones were configured,
+    // or when zone_name has no exact match even after ILIKE normalisation.
+    // Zone-free returns the lowest price band across all zones (safe for flat-rate
+    // services; may be slightly off for multi-zone services but far better than null).
+    const singleBand = await ctx.bandLookup(serviceId, perParcelWeightKg, charge.zone_id || null);
     if (singleBand) expectedAmount = singleBand.cost;
+    if (!charge.zone_id) {
+      console.warn(
+        `[recon engine] Pool hit zone_id is null for charge ${charge.charge_id} — zone-free band fallback used.` +
+        ` zone_name on charge: "${charge.zone_name || '(blank)'}"`
+      );
+    }
   }
 
-  if (parcelCount > 1 && serviceId && charge.zone_id) {
+  if (parcelCount > 1 && serviceId) {
     // Single invoice line for a multi-parcel shipment.
     //
     // Standard carriers (DHL): first parcel at base rate + (n-1) parcels at sub-rate.
