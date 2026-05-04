@@ -458,7 +458,10 @@ export async function processShipment(payload) {
     const totalParcels = parcels.length;
     const voilaId      = shipment.id;
     const orderId      = shipment.reference || shipment.reference_2 || String(voilaId);
-    const trackingCode = shipment?.courier?.tracking_code || null;
+    // Tracking codes come from create_label_parcels (one per physical parcel).
+    // shipment.courier is a string (carrier name), NOT an object with tracking_code.
+    const clParcels    = shipment.create_label_parcels || [];
+    const trackingCode = clParcels.map(p => p.tracking_code).filter(Boolean)[0] || null;
     const despatchDate = shipment.collection_date ? new Date(shipment.collection_date) : null;
 
     const commonFields = {
@@ -684,9 +687,14 @@ export async function processShipment(payload) {
 
 // ─── Insert calculated charges ────────────────────────────────────────────────
 
-export async function insertCharges(charges) {
+// shipmentId — optional UUID from the shipments table.
+// When provided (from webhooks.js after creating the shipment record),
+// every charge is linked to that shipment so the reconciliation pool
+// can find them via its JOIN shipments query.
+export async function insertCharges(charges, shipmentId = null) {
   const inserted = [];
   for (const c of charges) {
+    const effectiveShipmentId = shipmentId || c.shipment_id || null;
     const result = await query(
       `INSERT INTO charges (
          customer_id, voila_shipment_id, order_id, tracking_code,
@@ -694,8 +702,8 @@ export async function insertCharges(charges) {
          weight_actual_kg, weight_dimensional_kg, weight_charged_kg,
          cost_price, sell_price, status,
          despatch_date, ship_to_postcode, ship_to_country_iso, ship_to_name,
-         parcel_count, raw_payload, pricing_logic_trace
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+         parcel_count, raw_payload, pricing_logic_trace, shipment_id
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
        ON CONFLICT DO NOTHING
        RETURNING *`,
       [
@@ -712,6 +720,7 @@ export async function insertCharges(charges) {
         c.parcel_count          || null,
         c.raw_payload ? JSON.parse(c.raw_payload) : null,
         c.pricing_logic_trace   ? JSON.stringify(c.pricing_logic_trace) : null,
+        effectiveShipmentId,
       ]
     );
     if (result.rows.length) inserted.push(result.rows[0]);

@@ -13,6 +13,94 @@ import { query } from '../db/index.js';
 import { processShipment, insertCharges } from '../services/pricingEngine.js';
 import { fetchShipmentById } from '../services/voilaClient.js';
 
+// ─── Helper: create or update a shipments record from a Voila webhook payload ──
+//
+// The new webhook path (webhooks.js → pricingEngine.js) previously did not create
+// shipment records, so charges ended up with shipment_id = NULL. The reconciliation
+// pool queries charges via INNER JOIN shipments, meaning those charges were completely
+// invisible to reconciliation. This function mirrors what billing.js does for its
+// older /api/billing/webhook path.
+//
+// It is called AFTER processShipment so we can pass the resolved customerId
+// (taken from charges[0].customer_id) without duplicating resolution logic.
+//
+// Returns the UUID of the upserted shipment, or null if no platform_shipment_id.
+async function createOrUpdateShipment(payload, customerId) {
+  const ship = payload.shipment || {};
+
+  // Parse request_shipment JSON string → object for dc_service_id extraction
+  let reqShip = {};
+  try {
+    reqShip = typeof payload.request_shipment === 'string'
+      ? JSON.parse(payload.request_shipment)
+      : (payload.request_shipment || {});
+  } catch { /* leave empty */ }
+
+  // platform_shipment_id must be a BIGINT — skip if unparseable
+  const platformId = ship.id ? (parseInt(ship.id, 10) || null) : null;
+  if (!platformId) {
+    console.warn(`[webhooks] createOrUpdateShipment: no valid platform_shipment_id in payload — shipment record skipped`);
+    return null;
+  }
+
+  const courier        = ship.courier        || null;
+  const dcServiceId    = reqShip.dc_service_id || ship.dc_service_id || null;
+  const reference      = ship.reference      || null;
+  const reference2     = ship.reference_2    || null;
+  const shipToPostcode = ship.ship_to_postcode || null;
+  const shipToName     = ship.ship_to_name   || null;
+  const shipToCountry  = ship.ship_to_country_iso || null;
+  const parcelCount    = ship.parcel_count   || 1;
+  const collectionDate = ship.collection_date ? ship.collection_date.split('T')[0] : null;
+
+  // Tracking codes from create_label_parcels — these ARE the carrier tracking/
+  // consignment numbers (e.g. the 14-digit DPD consignment number). The pool
+  // indexes by these so it can match invoice lines to our charge records.
+  const clParcels    = ship.create_label_parcels || [];
+  const trackingCodes = clParcels.map(p => p.tracking_code).filter(Boolean);
+
+  // Total weight from parcels
+  const totalWeightKg = clParcels.length
+    ? (clParcels.reduce((s, p) => s + (parseFloat(p.weight) || 0), 0) || null)
+    : null;
+
+  try {
+    const shipRes = await query(`
+      INSERT INTO shipments (
+        platform_shipment_id, event_type,
+        customer_id, customer_account,
+        courier, dc_service_id,
+        ship_to_name, ship_to_postcode, ship_to_country_iso,
+        reference, reference_2,
+        parcel_count, total_weight_kg, collection_date,
+        tracking_codes, raw_payload
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+      ON CONFLICT (platform_shipment_id) DO UPDATE SET
+        customer_id    = COALESCE(EXCLUDED.customer_id,    shipments.customer_id),
+        tracking_codes = COALESCE(EXCLUDED.tracking_codes, shipments.tracking_codes),
+        dc_service_id  = COALESCE(EXCLUDED.dc_service_id,  shipments.dc_service_id),
+        updated_at     = NOW()
+      RETURNING id
+    `, [
+      platformId, 'shipment.created',
+      customerId, ship.account_number || null,
+      courier, dcServiceId,
+      shipToName, shipToPostcode, shipToCountry,
+      reference, reference2,
+      parcelCount, totalWeightKg, collectionDate,
+      trackingCodes.length ? trackingCodes : null,
+      JSON.stringify(payload),
+    ]);
+
+    const shipmentId = shipRes.rows[0]?.id || null;
+    console.log(`[webhooks] Shipment record ${shipmentId ? 'upserted' : 'failed'} for platform_id=${platformId}, tracking_codes=[${trackingCodes.join(',')}]`);
+    return shipmentId;
+  } catch (err) {
+    console.error(`[webhooks] createOrUpdateShipment failed for platform_id=${platformId}:`, err.message);
+    return null;
+  }
+}
+
 const router = express.Router();
 
 const WEBHOOK_TOKEN = 'M00VH00K5';
@@ -45,9 +133,15 @@ router.post('/shipment-created', authMiddleware, async (req, res, next) => {
       return res.status(422).json({ status: 'no_charges', errors });
     }
 
-    const inserted = await insertCharges(charges);
+    // Create a shipments record so the reconciliation pool can find this shipment.
+    // The pool queries charges via JOIN shipments — without a linked shipment record
+    // the charge is invisible to reconciliation (treated as an external booking).
+    const customerId = charges[0]?.customer_id || null;
+    const shipmentId = await createOrUpdateShipment(payload, customerId);
 
-    console.log(`✅  Shipment ${payload.shipment?.id}: ${inserted.length} charge(s) created`);
+    const inserted = await insertCharges(charges, shipmentId);
+
+    console.log(`✅  Shipment ${payload.shipment?.id}: ${inserted.length} charge(s) created, shipment_id=${shipmentId}`);
     if (errors.length) console.warn('   Warnings:', errors);
 
     res.json({ status: 'ok', charges_created: inserted.length, warnings: errors });
@@ -175,7 +269,11 @@ router.post('/shipment-verified', authMiddleware, async (req, res, next) => {
       return res.json({ status: 'ok', charges_verified: 0, backfilled: false, backfill_errors: errors });
     }
 
-    const inserted = await insertCharges(charges);
+    // Create shipment record so reconciliation pool can find these charges
+    const customerId = charges[0]?.customer_id || null;
+    const backfillShipmentId = await createOrUpdateShipment(payload, customerId);
+
+    const inserted = await insertCharges(charges, backfillShipmentId);
 
     // Immediately mark the freshly inserted charges as verified
     const insertedIds = inserted.map(c => c.id);
@@ -312,7 +410,11 @@ router.post('/voila-backfill', authMiddleware, async (req, res, next) => {
           continue;
         }
 
-        const inserted = await insertCharges(newCharges);
+        // Create shipment record so reconciliation pool can find these charges
+        const bulkCustomerId = newCharges[0]?.customer_id || null;
+        const bulkShipmentId = await createOrUpdateShipment(payload, bulkCustomerId);
+
+        const inserted = await insertCharges(newCharges, bulkShipmentId);
         const insertedIds = inserted.map(c => c.id);
         if (insertedIds.length) {
           await query(

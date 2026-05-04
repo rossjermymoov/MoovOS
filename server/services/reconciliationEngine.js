@@ -253,19 +253,30 @@ async function buildVerifiedPool(carrierId) {
       c.recon_corrected,
       c.shipment_id,
       c.charge_type,
-      (
-        SELECT z_lkp.id
-        FROM   zones           z_lkp
-        JOIN   courier_services cs_lkp ON cs_lkp.id = z_lkp.courier_service_id
-        -- ILIKE for case-insensitive match — charges.zone_name and zones.name
-        -- must agree lexically but may differ in capitalisation (e.g. "mainland"
-        -- vs "Mainland"). Exact = match would produce zone_id = null and silently
-        -- prevent rate-card lookups for every pool hit on that carrier.
-        WHERE  z_lkp.name    ILIKE c.zone_name
-          AND  cs_lkp.courier_id = $1
-        LIMIT  1
+      -- zone_id: prefer c.zone_id (set by pricingEngine.js on new-style charges)
+      -- then fall back to name-lookup subquery for old-style charges (set by billing.js
+      -- which stores zone_name on charges but not zone_id).
+      COALESCE(
+        c.zone_id,
+        (
+          SELECT z_lkp.id
+          FROM   zones           z_lkp
+          JOIN   courier_services cs_lkp ON cs_lkp.id = z_lkp.courier_service_id
+          -- ILIKE for case-insensitive match — charges.zone_name and zones.name
+          -- must agree lexically but may differ in capitalisation (e.g. "mainland"
+          -- vs "Mainland"). Exact = match would produce zone_id = null and silently
+          -- prevent rate-card lookups for every pool hit on that carrier.
+          WHERE  z_lkp.name    ILIKE c.zone_name
+            AND  cs_lkp.courier_id = $1
+          LIMIT  1
+        )
       )                 AS zone_id,
-      s.tracking_codes,
+      -- tracking_codes: from shipment record (old-style) OR single tracking_code
+      -- stored on the charge itself (new-style, extracted from create_label_parcels).
+      COALESCE(
+        s.tracking_codes,
+        CASE WHEN c.tracking_code IS NOT NULL THEN ARRAY[c.tracking_code] ELSE NULL END
+      )                 AS tracking_codes,
       s.dc_service_id,
       s.total_weight_kg AS declared_weight_kg,
       cu.account_number AS customer_account,
@@ -278,31 +289,43 @@ async function buildVerifiedPool(carrierId) {
               AND  sc.cancelled   = false
           ), 0)         AS total_cost_price
     FROM   charges      c
-    JOIN   shipments    s  ON s.id = c.shipment_id
-    JOIN   couriers     cu_carrier ON cu_carrier.id = $1
-    LEFT JOIN customers cu ON cu.id = c.customer_id
+    -- LEFT JOIN so that charges without a shipment record are still included.
+    -- This is a safety net: webhooks.js now creates shipment records, and
+    -- migration 148 backfills existing ones. Without this, a missed shipment
+    -- record silently makes a charge invisible to reconciliation.
+    LEFT JOIN shipments    s  ON s.id = c.shipment_id
+    JOIN      couriers     cu_carrier ON cu_carrier.id = $1
+    LEFT JOIN customers    cu ON cu.id = c.customer_id
     WHERE  c.verified      = true
       AND  c.cancelled     = false
       AND  c.charge_type   = 'courier'
-      -- Carrier matching: use contains variants so "DHL" matches "DHL Parcel UK"
-      -- and vice versa. Pure ILIKE equality fails when our couriers.name/code
-      -- doesn't exactly mirror what DeliveryConnect stored in shipments.courier.
+      -- Carrier matching:
+      --   Old-style: match via shipments.courier (contains variants handle naming differences)
+      --   New-style: match via courier_service_id → courier_services.courier_id
+      --   Both must be accepted so old and new charges work correctly.
       AND (
+        -- Old-style charges (billing.js path, shipment record exists)
         s.courier ILIKE cu_carrier.code
         OR s.courier ILIKE cu_carrier.name
         OR s.courier ILIKE '%' || cu_carrier.code || '%'
         OR cu_carrier.code ILIKE '%' || s.courier || '%'
         OR s.courier ILIKE '%' || cu_carrier.name || '%'
         OR cu_carrier.name ILIKE '%' || s.courier || '%'
+        -- New-style charges (webhooks.js / pricingEngine.js path, courier_service_id set)
+        OR EXISTS (
+          SELECT 1 FROM courier_services cs2
+          WHERE  cs2.id = c.courier_service_id AND cs2.courier_id = $1
+        )
       )
       -- Verification gate: only shipments the carrier has collected.
-      -- A shipment is considered despatched if it has tracking codes OR a
-      -- dc_service_id (the DeliveryConnect consignment reference). For DHL,
-      -- the consignment number lives in dc_service_id; tracking_codes may be
-      -- empty until DC posts a tracking event back.
+      -- Old-style: shipment has tracking_codes or dc_service_id.
+      -- New-style: charge has a tracking_code (from create_label_parcels) or
+      --   voila_shipment_id (created via Voila webhook — carrier collected it).
       AND (
         (s.tracking_codes IS NOT NULL AND array_length(s.tracking_codes, 1) > 0)
-        OR s.dc_service_id IS NOT NULL
+        OR s.dc_service_id    IS NOT NULL
+        OR c.tracking_code    IS NOT NULL
+        OR c.voila_shipment_id IS NOT NULL
       )
   `, [carrierId]);
 
@@ -372,7 +395,7 @@ async function buildVerifiedPool(carrierId) {
     console.warn(
       `[recon engine] Pool zone_id diagnostic: ${nullZoneRows.length}/${res.rows.length} charge records have no zone_id.` +
       ` Sample zone_name values with no match: ${sample.join(', ')}.` +
-      ` Check that zones.name for this carrier matches charges.zone_name.`
+      ` (New-style charges use zone_id directly and should show zone_id=null only if pricing_error.)`
     );
   }
 
