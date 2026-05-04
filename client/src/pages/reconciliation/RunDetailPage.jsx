@@ -605,6 +605,168 @@ function ServiceCodeMappingBanner({ unmatchedLines, runId, courierId, onMapped }
   );
 }
 
+// ─── Shipment lookup panel ────────────────────────────────────────────────────
+function ShipmentLookupPanel() {
+  const [input,   setInput]   = useState('');
+  const [loading, setLoading] = useState(false);
+  const [result,  setResult]  = useState(null);
+  const [err,     setErr]     = useState(null);
+
+  async function handleLookup(e) {
+    e.preventDefault();
+    const tracking = input.trim();
+    if (!tracking) return;
+    setLoading(true); setResult(null); setErr(null);
+    try {
+      const r = await api.get(`/reconciliation/shipment-lookup`, { params: { tracking } });
+      setResult(r.data);
+    } catch (ex) {
+      setErr(ex.response?.data?.error || 'Lookup failed');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const statusColor = v => v ? '#00C853' : '#FF5252';
+
+  return (
+    <div style={card}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: '#E6EDF3', marginBottom: 12 }}>
+        Shipment Lookup
+      </div>
+      <div style={{ fontSize: 11, color: '#555', marginBottom: 12 }}>
+        Search for any tracking / consignment number across all shipments — no reconciliation gates applied.
+        Shows verified status, courier match, pool eligibility, and what's blocking the pool if anything.
+      </div>
+
+      <form onSubmit={handleLookup} style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <input
+          style={{ ...inputSt, flex: 1 }}
+          placeholder="e.g. 60120241068230"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+        />
+        <button type="submit" style={{ ...btnGhost, whiteSpace: 'nowrap' }} disabled={loading}>
+          {loading ? <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Info size={12} />}
+          {loading ? 'Searching…' : 'Look up'}
+        </button>
+      </form>
+
+      {err && <div style={{ color: '#FF5252', fontSize: 12 }}>{err}</div>}
+
+      {result && (
+        <div>
+          <div style={{ fontSize: 11, color: '#555', marginBottom: 10 }}>
+            Searched: <span style={{ fontFamily: 'monospace', color: '#AAA' }}>{result.tracking_searched}</span>
+            {' '}·{' '}
+            Variants tried: <span style={{ fontFamily: 'monospace', color: '#666' }}>{result.variants_tried.join(', ')}</span>
+          </div>
+
+          {result.shipments_found === 0 && (
+            <div style={{
+              padding: '12px 16px', borderRadius: 8,
+              background: 'rgba(255,82,82,0.08)', border: '1px solid rgba(255,82,82,0.2)',
+              fontSize: 12, color: '#FF5252', fontWeight: 600,
+            }}>
+              ✗ No shipment found with this tracking number. The webhook may never have fired, or the shipment was created under a different reference.
+            </div>
+          )}
+
+          {result.results.map((r, i) => (
+            <div key={i} style={{
+              marginBottom: 12, padding: '12px 14px', borderRadius: 8,
+              background: 'rgba(255,255,255,0.025)',
+              border: `1px solid ${r.pool_eligible ? 'rgba(0,200,83,0.2)' : 'rgba(255,143,0,0.2)'}`,
+            }}>
+              {/* Pool eligibility banner */}
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10,
+              }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#E6EDF3', fontFamily: 'monospace' }}>
+                  Shipment {r.shipment.id}
+                </span>
+                <span style={{
+                  fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 9999,
+                  background: r.pool_eligible ? 'rgba(0,200,83,0.12)' : 'rgba(255,143,0,0.12)',
+                  border: `1px solid ${r.pool_eligible ? 'rgba(0,200,83,0.3)' : 'rgba(255,143,0,0.3)'}`,
+                  color: r.pool_eligible ? '#00C853' : '#FF8F00',
+                }}>
+                  {r.pool_eligible ? '✓ Pool eligible' : '✗ Not in pool'}
+                </span>
+              </div>
+
+              {/* Shipment details grid */}
+              <div style={{
+                display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 20px', marginBottom: 10,
+              }}>
+                {[
+                  ['Courier in OMS',   r.shipment.courier || '—'],
+                  ['dc_service_id',     r.shipment.dc_service_id || '(none)'],
+                  ['tracking_codes',    r.shipment.tracking_codes.length ? r.shipment.tracking_codes.join(', ') : '(empty)'],
+                  ['Reference',         r.shipment.reference || '—'],
+                  ['Weight',            r.shipment.total_weight_kg ? `${r.shipment.total_weight_kg} kg` : '—'],
+                  ['Postcode',          r.shipment.ship_to_postcode || '—'],
+                ].map(([k, v]) => (
+                  <div key={k} style={{ fontSize: 10 }}>
+                    <span style={{ color: '#444' }}>{k}: </span>
+                    <span style={{ color: '#888', fontFamily: 'monospace' }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Pool blockers */}
+              {r.pool_blockers.length > 0 && (
+                <div style={{ marginBottom: 10 }}>
+                  {r.pool_blockers.map((b, j) => (
+                    <div key={j} style={{
+                      fontSize: 11, color: '#FF8F00', fontWeight: 600,
+                      padding: '4px 8px', background: 'rgba(255,143,0,0.08)',
+                      borderRadius: 5, marginBottom: 3,
+                    }}>
+                      ⚠ {b}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Charges */}
+              {r.charges.length === 0 ? (
+                <div style={{ fontSize: 11, color: '#FF5252', fontWeight: 600 }}>
+                  ✗ No charges found for this shipment — processShipment may have failed silently
+                </div>
+              ) : (
+                <table style={{ width: '100%', fontSize: 10, borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                      {['Type', 'Status', 'Verified', 'Cancelled', 'Cost', 'Zone', 'Customer'].map(h => (
+                        <th key={h} style={{ padding: '4px 6px', textAlign: 'left', color: '#444', fontWeight: 700, textTransform: 'uppercase', fontSize: 9 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {r.charges.map((c, j) => (
+                      <tr key={j} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                        <td style={{ padding: '4px 6px', color: '#AAA' }}>{c.charge_type}</td>
+                        <td style={{ padding: '4px 6px', color: '#888' }}>{c.status}</td>
+                        <td style={{ padding: '4px 6px', color: statusColor(c.verified), fontWeight: 700 }}>{c.verified ? 'Yes' : 'No'}</td>
+                        <td style={{ padding: '4px 6px', color: c.cancelled ? '#FF5252' : '#555' }}>{c.cancelled ? 'Yes' : 'No'}</td>
+                        <td style={{ padding: '4px 6px', color: '#E6EDF3' }}>{c.cost_price != null ? `£${parseFloat(c.cost_price).toFixed(2)}` : '—'}</td>
+                        <td style={{ padding: '4px 6px', color: '#666' }}>{c.zone_name || '—'}</td>
+                        <td style={{ padding: '4px 6px', color: '#AAA' }}>{c.customer_name || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
 // ─── Trace modal ──────────────────────────────────────────────────────────────
 function TraceModal({ runId, lineId, trackingNumber, onClose }) {
   const [data, setData] = useState(null);
@@ -1214,6 +1376,11 @@ export default function RunDetailPage() {
             <CustomerSummaryPanel runId={parseInt(id)} run={run} />
           </div>
         )}
+
+        {/* Shipment lookup — diagnose missing / unmatched tracking numbers */}
+        <div style={{ marginTop: 20 }}>
+          <ShipmentLookupPanel />
+        </div>
         </>
       )}
 
