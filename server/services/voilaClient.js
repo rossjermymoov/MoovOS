@@ -93,6 +93,7 @@ export async function probeShipmentRaw(voilaId) {
   return voilaGet('/shipments.json', { id: voilaId });
 }
 
-export async function probeShipmentByReference(reference) {
-  return voilaGet('/shipments.json', { reference });
+export async function probeShipmentByReference(reference, paramName = 'reference') {
+  const params = reference && paramName ? { [paramName]: reference } : {};
+  return voilaGet('/shipments.json', params);
 }

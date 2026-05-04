@@ -219,21 +219,48 @@ router.get('/voila-probe', async (req, res, next) => {
       return res.status(400).json({ error: 'shipment_id or reference required' });
     }
 
-    // Call Voila API directly — no DB lookup needed
-    const raw     = shipment_id
-      ? await probeShipmentRaw(shipment_id)
-      : await probeShipmentByReference(reference);
+    if (shipment_id) {
+      const raw     = await probeShipmentRaw(shipment_id);
+      const rawList = Array.isArray(raw) ? raw : (raw.shipments || (raw.id ? [raw] : []));
+      const match   = rawList.find(s => String(s.id) === String(shipment_id)) || rawList[0];
+      return res.json({ shipment_found: !!match, raw_response: raw, mapped_payload: match ? mapToWebhookPayload(match) : null });
+    }
 
-    const rawList = Array.isArray(raw) ? raw : (raw.shipments || (raw.id ? [raw] : []));
-    const match   = shipment_id
-      ? rawList.find(s => String(s.id) === String(shipment_id)) || rawList[0]
-      : rawList.find(s => s.reference === reference || s.reference_2 === reference) || rawList[0];
+    // Try every plausible parameter name the Voila API might use for reference search
+    const paramVariants = ['reference', 'q', 'search', 'order_reference', 'order_id', 'consignment'];
+    const attempts = {};
+    for (const param of paramVariants) {
+      try {
+        const r = await probeShipmentByReference(reference, param);
+        const list = Array.isArray(r) ? r : (r.shipments || []);
+        attempts[param] = { count: list.length, shipments: list.slice(0, 2) };
+        if (list.length > 0) {
+          // Found it — return full result with the winning param
+          const match = list.find(s => s.reference === reference || s.reference_2 === reference) || list[0];
+          return res.json({
+            shipment_found:  true,
+            winning_param:   param,
+            raw_response:    r,
+            mapped_payload:  mapToWebhookPayload(match),
+            all_attempts:    attempts,
+          });
+        }
+      } catch (e) {
+        attempts[param] = { error: e.message };
+      }
+    }
 
-    res.json({
-      shipment_found:  !!match,
-      raw_response:    raw,
-      mapped_payload:  match ? mapToWebhookPayload(match) : null,
+    // Also fetch one page unfiltered so we can see what field names exist
+    const sample = await probeShipmentByReference(null, null);
+    const sampleList = Array.isArray(sample) ? sample : (sample.shipments || []);
+
+    return res.json({
+      shipment_found:   false,
+      all_attempts:     attempts,
+      sample_fields:    sampleList[0] ? Object.keys(sampleList[0]) : [],
+      sample_shipment:  sampleList[0] || null,
     });
+
   } catch (err) {
     console.error('❌  voila-probe error:', err.message);
     res.status(500).json({ error: err.message });
