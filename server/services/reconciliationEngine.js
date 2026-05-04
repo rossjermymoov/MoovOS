@@ -1927,12 +1927,35 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
       // ── Pool HIT: compare carrier_amount against rate card price_first ──────
       // charges.cost_price (charge.expected_cost) is from the billing API / webhook
       // and must never be used. Build expected from first principles: zone + weight.
-      const charge    = poolHits[0];
-      const weightKg  = round2(parseFloat(line.billed_weight_kg) || 0);
+      const charge = poolHits[0];
+
+      // STRICT: zone_id must be set.  If null, emit data_error_no_zone — same
+      // enforcement as processLine.  Do NOT fall back to a zone-free band lookup.
+      if (!charge.zone_id) {
+        console.error(`[recon engine] reprocessMappedLines DATA_ERROR: charge ${charge.charge_id} (tracking=${line.tracking_number}) has zone_id=null.`);
+        await query(`
+          UPDATE reconciliation_lines
+          SET  status           = 'unmatched',
+               service_id       = $1,
+               customer_id      = $2,
+               charge_id        = $3,
+               expected_amount  = NULL,
+               delta            = NULL,
+               unmatched_reason = 'data_error_no_zone',
+               source           = 'internal',
+               corrected_by     = NULL,
+               resolved_at      = NULL,
+               resolved_by      = NULL
+          WHERE id = $4
+        `, [serviceId, charge.customer_id, charge.charge_id, line.line_id]);
+        unmatched++;
+        continue;
+      }
+
+      const weightKg   = round2(parseFloat(line.billed_weight_kg) || 0);
       let expectedCost = null;
-      // Use zone-free fallback when zone_id is null — same behaviour as processLine.
       if (weightKg > 0) {
-        const band = await lookupCarrierBandCost(serviceId, weightKg, charge.zone_id || null);
+        const band = await lookupCarrierBandCost(serviceId, weightKg, charge.zone_id);
         if (band) expectedCost = band.cost;
       }
       const delta   = expectedCost !== null ? round2(carrierAmount - expectedCost) : null;
