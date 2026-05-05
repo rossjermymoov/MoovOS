@@ -70,6 +70,29 @@ function poolLookup(pool, trackKey) {
   return (hits && hits.length) ? hits : [];
 }
 
+// ─── Carrier Profile Options ─────────────────────────────────────────────────
+
+/**
+ * Fetch the default CSV profile options for a carrier.
+ *
+ * separate_fuel_rows (bool, default false):
+ *   Some carriers (DPD) bill fuel, carriage, and energy as separate invoice
+ *   rows rather than bundling them into the freight row amount.
+ *   When true:
+ *     • Freight lines are compared against charges.cost_price (base only),
+ *       not total_cost_price (base + fuel).
+ *     • Rows with no service mapping (fuel, carriage, global energy) are
+ *       auto-accepted as carrier_overhead instead of blocked as unknown_service_code.
+ */
+async function getCarrierProfileOptions(carrierId) {
+  const res = await query(
+    `SELECT column_map FROM carrier_csv_profiles WHERE carrier_id = $1 AND is_default = true LIMIT 1`,
+    [carrierId]
+  );
+  const map = res.rows[0]?.column_map || {};
+  return { separateFuelRows: Boolean(map.separate_fuel_rows) };
+}
+
 // ─── Phase 1b: Service Code Normalisation ────────────────────────────────────
 
 /**
@@ -574,6 +597,12 @@ async function handleCarrierDirect({
 export async function processReconciliationRun(runId, carrierId, lines) {
   const startTime = Date.now();
 
+  // Load carrier profile options (e.g. separate_fuel_rows for DPD)
+  const { separateFuelRows } = await getCarrierProfileOptions(carrierId);
+  if (separateFuelRows) {
+    console.log(`[recon engine] Run ${runId}: separate_fuel_rows=true — freight lines compared against base cost_price only; overhead rows auto-accepted`);
+  }
+
   const reconcilableLines = lines.filter(l => String(l.tracking_number || '').trim());
   const skippedCount      = lines.length - reconcilableLines.length;
   if (skippedCount > 0) {
@@ -602,6 +631,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   // ── Run-scoped customer lookup cache ──────────────────────────────────────
   const _custCache = new Map();
   const ctx = {
+    separateFuelRows,
     async customerLookup(accountNumber) {
       if (!accountNumber) return null;
       const k = String(accountNumber).trim();
@@ -955,6 +985,34 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   }
 
   if (!serviceId) {
+    // ── Carrier overhead (separate_fuel_rows mode) ────────────────────────
+    // DPD (and similar) bill fuel, carriage, and energy as separate invoice
+    // rows with full-description service codes ("Fuel and Energy Charge" etc.).
+    // These are already accounted for in charges.total_cost_price, so we
+    // auto-accept them rather than blocking on unknown_service_code.
+    if (ctx.separateFuelRows) {
+      await insertLine(runId, {
+        tracking_number:          trackingNumber,
+        carrier_account_no:       line.account_number    || null,
+        raw_service_code:         rawServiceCode,
+        charge_type:              'fuel',
+        carrier_amount:           carrierAmount,
+        carrier_billed_weight_kg: line.billed_weight_kg  || null,
+        service_id:               null,
+        customer_id:              null,
+        charge_id:                null,
+        expected_amount:          null,
+        delta:                    null,
+        status:                   'corrected',
+        corrected_by:             'carrier_overhead',
+        unmatched_reason:         null,
+        source:                   'internal',
+        shipment_date:            line.shipment_date     || null,
+        suggested_service_id:     null,
+      });
+      return { status: 'corrected' };
+    }
+
     // Unknown service code — hard gate. Operator must map this code first.
     await insertLine(runId, {
       tracking_number:          trackingNumber,
@@ -1046,7 +1104,13 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   //   These are baked into carrier_amount by the carrier but tracked separately
   //   in our charges, so we add them to expected for an apples-to-apples delta.
   const charge       = poolHits[0];
-  const expectedBase = round2(parseFloat(charge.total_cost_price) || 0);
+  // separate_fuel_rows: carrier bills fuel/carriage/energy as separate invoice
+  // rows, so the freight row's carrier_amount = base only. Compare against
+  // cost_price (base) not total_cost_price (base + fuel). Overhead rows are
+  // already auto-accepted above via the carrier_overhead path.
+  const expectedBase = ctx.separateFuelRows
+    ? round2(parseFloat(charge.expected_cost)    || 0)
+    : round2(parseFloat(charge.total_cost_price) || 0);
   const fullExpected = round2(expectedBase + colSurchargeTotal);
   const delta        = round2(carrierAmount - fullExpected);
 
@@ -1188,6 +1252,8 @@ async function insertLine(runId, data) {
 // Bucket and Bill: expected = charge.total_cost_price (same as processLine).
 
 export async function reprocessMappedLines(runId, rawServiceCode, serviceId, carrierId) {
+  const { separateFuelRows } = await getCarrierProfileOptions(carrierId);
+
   const linesRes = await query(`
     SELECT
       id              AS line_id,
@@ -1220,7 +1286,9 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
     if (poolHits.length > 0) {
       // ── Pool HIT: Bucket and Bill — trust the charge ──────────────────────
       const charge       = poolHits[0];
-      const expectedCost = round2(parseFloat(charge.total_cost_price) || 0);
+      const expectedCost = separateFuelRows
+        ? round2(parseFloat(charge.expected_cost)    || 0)
+        : round2(parseFloat(charge.total_cost_price) || 0);
       const delta        = round2(carrierAmount - expectedCost);
       const isMatch      = Math.abs(delta) < 0.02;
 
