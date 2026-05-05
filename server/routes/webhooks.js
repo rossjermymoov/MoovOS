@@ -136,20 +136,28 @@ router.post('/shipment-created', authMiddleware, (req, res) => {
     try {
 
       // ── Idempotency gate ────────────────────────────────────────────────────
-      // Two checks are needed:
+      // Three checks in order — any hit → skip silently.
       //
-      // Check A — pricingEngine path: charges with this voila_shipment_id already
-      //   exist (previous webhook delivery, backfill retry, or race condition).
-      //   The unique index idx_charges_voila_courier_active also catches races at
-      //   the DB level via ON CONFLICT DO NOTHING in insertCharges.
+      // Check A — pricingEngine path (voila_shipment_id on charge):
+      //   Catches same webhook delivered twice or backfill retries.
+      //   The unique index idx_charges_voila_courier_active also blocks races
+      //   at the DB level via ON CONFLICT DO NOTHING in insertCharges.
       //
-      // Check B — billing.js path: a charge with the same order_id already exists
-      //   from the old DC webhook path (voila_shipment_id=NULL, shipment_id set).
-      //   Without this, voila-backfill creates a second charge set for shipments
-      //   billing.js already processed, producing split-brain duplicates.
+      // Check B — shipments table (platform_shipment_id):
+      //   billing.js always creates a shipments record with platform_shipment_id
+      //   = the Voila shipment ID. If that record exists AND has an active courier
+      //   charge, the shipment was already processed — skip regardless of whether
+      //   the order reference formats match.
+      //   This is the primary guard against Voila replaying old webhooks for
+      //   shipments billing.js already handled.
+      //
+      // Check C — order reference fallback:
+      //   Belt-and-braces for any edge case where the shipment record doesn't
+      //   exist but a billing.js charge does (e.g. old charges pre-shipments table).
 
       if (voilaShipmentId) {
-        const existing = await query(
+        // Check A
+        const existingCharge = await query(
           `SELECT id FROM charges
            WHERE  voila_shipment_id = $1
              AND  cancelled         = false
@@ -157,15 +165,34 @@ router.post('/shipment-created', authMiddleware, (req, res) => {
            LIMIT  1`,
           [voilaShipmentId]
         );
-        if (existing.rows.length) {
-          console.log(`[webhooks] shipment-created ${voilaShipmentId}: pricingEngine charges already exist — skipping (idempotent)`);
+        if (existingCharge.rows.length) {
+          console.log(`[webhooks] ${voilaShipmentId}: pricingEngine charge exists — skipping`);
           return;
+        }
+
+        // Check B — look up via shipments.platform_shipment_id
+        const platformId = parseInt(voilaShipmentId, 10);
+        if (platformId) {
+          const existingShipment = await query(
+            `SELECT c.id
+             FROM   shipments s
+             JOIN   charges   c ON c.shipment_id = s.id
+             WHERE  s.platform_shipment_id = $1
+               AND  c.charge_type          = 'courier'
+               AND  c.cancelled            = false
+             LIMIT  1`,
+            [platformId]
+          );
+          if (existingShipment.rows.length) {
+            console.log(`[webhooks] ${voilaShipmentId}: charge exists via shipment record — skipping (old webhook replay)`);
+            return;
+          }
         }
       }
 
-      // Check B: billing.js charge exists for same order reference
+      // Check C — order reference fallback
       const ship = payload.shipment || {};
-      const orderRef = ship.reference || ship.reference_2 || voilaShipmentId;
+      const orderRef = ship.reference || ship.reference_2 || '';
       if (orderRef) {
         const billingJsCharge = await query(
           `SELECT id FROM charges
@@ -178,7 +205,7 @@ router.post('/shipment-created', authMiddleware, (req, res) => {
           [String(orderRef)]
         );
         if (billingJsCharge.rows.length) {
-          console.log(`[webhooks] shipment-created ${voilaShipmentId}: billing.js charge already exists for order ${orderRef} — skipping (split-brain guard)`);
+          console.log(`[webhooks] ${voilaShipmentId}: billing.js charge exists for order ref ${orderRef} — skipping`);
           return;
         }
       }
