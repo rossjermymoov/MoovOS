@@ -368,12 +368,35 @@ export async function upsertEvent(event, rawBody) {
     // Fire-and-forget: fetch from Voila API, price it, insert and immediately verify.
     // Non-blocking — the tracking webhook response is never delayed or failed.
     if (verifyResult.rowCount === 0 && shipmentReference) {
-      // Skip if a backfill for this reference is already running — concurrent
-      // tracking webhooks for the same consignment would otherwise each trigger
-      // their own fetch + insert, creating duplicate charges.
-      if (backfillInFlight.has(shipmentReference)) {
-        console.log(`[tracking] backfill already in flight for ${shipmentReference}, skipping concurrent trigger`);
+      // ── Guard: only backfill if no charge already exists in Finance ───────────
+      // The verify query above only matches charges via shipments.tracking_codes.
+      // A charge may already exist via billing.js (order_id) or pricingEngine
+      // (voila_shipment_id) without the tracking code being linked yet.
+      // If a charge exists by any path, skip the backfill — don't create a duplicate.
+      const refStr = String(shipmentReference);
+      const existingCharge = await query(`
+        SELECT 1 FROM charges
+        WHERE cancelled    = false
+          AND charge_type  = 'courier'
+          AND (
+            order_id = $1
+            OR voila_shipment_id::text = $1
+            OR shipment_id IN (
+              SELECT id FROM shipments WHERE platform_shipment_id::text = $1
+            )
+          )
+        LIMIT 1
+      `, [refStr]);
+
+      if (existingCharge.rows.length) {
+        // Charge exists but tracking code not yet linked — not a missing shipment,
+        // just a lookup miss. Don't backfill.
+        console.log(`[tracking] charge exists for ref ${shipmentReference} (not linked by tracking code ${consignment}) — skipping backfill`);
+      } else if (backfillInFlight.has(shipmentReference)) {
+        // A concurrent webhook for the same reference is already backfilling.
+        console.log(`[tracking] backfill already in flight for ${shipmentReference} — skipping concurrent trigger`);
       } else {
+        // Truly missing — no charge anywhere for this reference. Backfill.
         backfillInFlight.add(shipmentReference);
         ;(async () => {
           try {
