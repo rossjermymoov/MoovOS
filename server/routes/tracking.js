@@ -14,6 +14,13 @@ import { processShipment, insertCharges } from '../services/pricingEngine.js';
 
 const router = express.Router();
 
+// ─── In-flight backfill guard ─────────────────────────────────────────────────
+// Prevents concurrent tracking webhooks for the same consignment from each
+// triggering their own backfill. First one wins; the rest skip silently.
+// DB-level unique indexes (migration 154) are the final guard, but this stops
+// the noise before it reaches the DB.
+const backfillInFlight = new Set();
+
 // ─── Statuses that confirm physical movement (trigger charge verification) ────
 // "above collected" — parcel has been scanned in transit or beyond
 
@@ -361,33 +368,43 @@ export async function upsertEvent(event, rawBody) {
     // Fire-and-forget: fetch from Voila API, price it, insert and immediately verify.
     // Non-blocking — the tracking webhook response is never delayed or failed.
     if (verifyResult.rowCount === 0 && shipmentReference) {
-      ;(async () => {
-        try {
-          console.warn(`⚠️  Tracking backfill: no charges for consignment ${consignment} (ref ${shipmentReference}) — fetching from Voila API`);
-          const payload = await fetchShipmentByReference(shipmentReference);
-          if (!payload) {
-            console.warn(`   Backfill: Voila API returned no shipment for reference ${shipmentReference}`);
-            return;
+      // Skip if a backfill for this reference is already running — concurrent
+      // tracking webhooks for the same consignment would otherwise each trigger
+      // their own fetch + insert, creating duplicate charges.
+      if (backfillInFlight.has(shipmentReference)) {
+        console.log(`[tracking] backfill already in flight for ${shipmentReference}, skipping concurrent trigger`);
+      } else {
+        backfillInFlight.add(shipmentReference);
+        ;(async () => {
+          try {
+            console.warn(`⚠️  Tracking backfill: no charges for consignment ${consignment} (ref ${shipmentReference}) — fetching from Voila API`);
+            const payload = await fetchShipmentByReference(shipmentReference);
+            if (!payload) {
+              console.warn(`   Backfill: Voila API returned no shipment for reference ${shipmentReference}`);
+              return;
+            }
+            const { charges, errors } = await processShipment(payload);
+            if (!charges.length) {
+              console.warn(`   Backfill: processShipment produced no charges for ${shipmentReference}`, errors);
+              return;
+            }
+            const inserted = await insertCharges(charges);
+            const insertedIds = inserted.map(c => c.id);
+            if (insertedIds.length) {
+              await query(
+                `UPDATE charges SET verified = true, status = 'verified', updated_at = NOW() WHERE id = ANY($1)`,
+                [insertedIds]
+              );
+            }
+            console.log(`✅  Tracking backfill: created + verified ${inserted.length} charge(s) for ${shipmentReference} (consignment ${consignment})`);
+            if (errors.length) console.warn('   Backfill warnings:', errors);
+          } catch (err) {
+            console.error(`❌  Tracking backfill failed for ${shipmentReference}:`, err.message);
+          } finally {
+            backfillInFlight.delete(shipmentReference);
           }
-          const { charges, errors } = await processShipment(payload);
-          if (!charges.length) {
-            console.warn(`   Backfill: processShipment produced no charges for ${shipmentReference}`, errors);
-            return;
-          }
-          const inserted = await insertCharges(charges);
-          const insertedIds = inserted.map(c => c.id);
-          if (insertedIds.length) {
-            await query(
-              `UPDATE charges SET verified = true, status = 'verified', updated_at = NOW() WHERE id = ANY($1)`,
-              [insertedIds]
-            );
-          }
-          console.log(`✅  Tracking backfill: created + verified ${inserted.length} charge(s) for ${shipmentReference} (consignment ${consignment})`);
-          if (errors.length) console.warn('   Backfill warnings:', errors);
-        } catch (err) {
-          console.error(`❌  Tracking backfill failed for ${shipmentReference}:`, err.message);
-        }
-      })();
+        })();
+      }
     }
   }
 
