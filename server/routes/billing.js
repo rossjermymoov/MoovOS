@@ -1849,6 +1849,7 @@ router.get('/charges', async (req, res, next) => {
       date_from, date_to,
       parcel_type,   // 'single' | 'multi' | '' (all)
       unpriced,      // 'true' = price IS NULL
+      source,        // 'carrier_direct' | '' (all) — filter by charge source
       limit = 50, offset = 0,
     } = req.query;
 
@@ -1868,6 +1869,7 @@ router.get('/charges', async (req, res, next) => {
     if (parcel_type === 'single') { conds.push(`c.parcel_qty = 1`); }
     if (parcel_type === 'multi')  { conds.push(`c.parcel_qty > 1`); }
     if (unpriced === 'true')      { conds.push(`c.price IS NULL`); }
+    if (source)                   { conds.push(`c.source = $${idx++}`); vals.push(source); }
     if (search) {
       // ── Tracking-number prefix normalisation ──────────────────────────────
       // DHL PWS consignment numbers appear in two places:

@@ -991,15 +991,16 @@ export async function insertCharges(charges, shipmentId = null) {
   return inserted;
 }
 
-// ─── Ghost Charge pricing helper ─────────────────────────────────────────────
+// ─── Carrier-Direct pricing helper ───────────────────────────────────────────
 //
 // Used by reconciliationEngine when a carrier invoice line has no matching
-// OMS charge record (pool MISS with a known customer account).
+// OMS charge record (pool MISS with a known customer account).  These are real
+// shipments booked directly with the carrier (returns, ad-hoc sends, etc.).
 //
 // Returns { service_code, zone_id, zone_name, cost_price, sell_price }
 //      or { error: string, detail?: string } on failure.
 //
-// Does NOT insert anything — caller (reconciliationEngine.handleGhostCharge)
+// Does NOT insert anything — caller (reconciliationEngine.handleCarrierDirect)
 // owns the charge + line insertion so the recon context is preserved.
 
 export async function computeGhostCharge(serviceId, customerId, weightKg, postcode, countryIso = 'GB') {

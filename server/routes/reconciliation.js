@@ -1111,11 +1111,11 @@ router.post('/runs/:id/bulk-map-service-codes', async (req, res) => {
       }
 
       // 2. Re-process affected lines through the engine:
-      //    pool lookup → cost comparison → proper matched/unmatched/external_booking.
+      //    pool lookup → cost comparison → carrier_direct auto-create on pool MISS.
       //    Never blind-stamp as 'corrected' — we need real expected_amount / delta.
       const reprocessResult = await reprocessMappedLines(runId, raw_service_code, parseInt(service_id), carrierId);
 
-      const count = reprocessResult.matched + reprocessResult.unmatched + reprocessResult.external_booking;
+      const count = reprocessResult.matched + reprocessResult.unmatched + (reprocessResult.carrier_direct_created || 0);
       totalUpdated += count;
       results.push({ raw_service_code, service_id, lines_updated: count, ...reprocessResult });
     }

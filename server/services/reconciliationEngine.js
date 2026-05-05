@@ -406,23 +406,28 @@ async function processAggregateLine(line, runId, carrierId, expectedFuelTotal, h
   return { status };
 }
 
-// ─── Ghost Charge Rule ────────────────────────────────────────────────────────
+// ─── Carrier-Direct Rule ──────────────────────────────────────────────────────
 //
 // Called when a carrier invoice line has no matching OMS charge record (pool
 // MISS) but we CAN identify the customer via their carrier account number.
 //
+// These are real-world shipments — returns, ad-hoc sends, or manual bookings
+// made directly with the carrier without going through the Moov OS platform.
+// We price them from our rate cards so the margin is always known, and tag them
+// source='carrier_direct' so they are clearly distinguished from platform-booked
+// charges and can be filtered in the Finance table.
+//
 // Flow:
 //   1. Call computeGhostCharge — zone + band lookup using invoice service/weight/postcode.
-//   2. Insert a charge row tagged source='invoice_auto_create' so the Finance
-//      page and finalization engine know this was auto-created, not booked through
-//      the platform.
+//   2. Insert a charge row tagged source='carrier_direct' (charge_type='courier',
+//      verified=true) so it appears in Finance and reconciliation pool on future runs.
 //   3. Compare the computed cost_price against the carrier_amount.
 //      GREEN (|delta| < £0.02) → status = 'matched'
-//      AMBER (delta exists)    → status = 'corrected', corrected_by = 'ghost_charge_created'
-//   4. If pricing fails (no zone, no band, weight = 0) → fall through to RED
-//      with unmatched_reason = 'ghost_charge_error_<reason>' for operator review.
+//      AMBER (delta exists)    → status = 'corrected', corrected_by = 'carrier_direct'
+//   4. If pricing fails (no zone, no band, weight = 0) → RED with
+//      unmatched_reason = 'carrier_direct_error_<reason>' for operator review.
 
-async function handleGhostCharge({
+async function handleCarrierDirect({
   serviceId, customer, trackingNumber, carrierAmount,
   weightKg, postcode, countryIso,
   rawServiceCode, runId, line,
@@ -430,13 +435,13 @@ async function handleGhostCharge({
   const kg = parseFloat(weightKg) || 0;
 
   console.log(
-    `[recon engine] Ghost Charge Rule: tracking=${trackingNumber} ` +
+    `[recon engine] Carrier-Direct: tracking=${trackingNumber} ` +
     `customer=${customer.customer_id} weight=${kg}kg postcode=${postcode} country=${countryIso}`
   );
 
   if (kg <= 0) {
     // No weight data from invoice — cannot price without weight.
-    console.warn(`[recon engine] Ghost charge skipped (weight=0): ${trackingNumber}`);
+    console.warn(`[recon engine] Carrier-Direct skipped (weight=0): ${trackingNumber}`);
     await insertLine(runId, {
       tracking_number:          trackingNumber,
       carrier_account_no:       line.account_number    || null,
@@ -451,8 +456,8 @@ async function handleGhostCharge({
       delta:                    null,
       status:                   'unmatched',
       corrected_by:             null,
-      unmatched_reason:         'ghost_charge_error_no_weight',
-      source:                   'invoice_auto_create',
+      unmatched_reason:         'carrier_direct_error_no_weight',
+      source:                   'carrier_direct',
       shipment_date:            line.shipment_date     || null,
       ship_to_postcode:         postcode               || null,
       ship_to_country:          countryIso             || null,
@@ -469,7 +474,7 @@ async function handleGhostCharge({
   );
 
   if (pricing.error) {
-    console.warn(`[recon engine] Ghost charge pricing failed for ${trackingNumber}: ${pricing.error} — ${pricing.detail}`);
+    console.warn(`[recon engine] Carrier-Direct pricing failed for ${trackingNumber}: ${pricing.error} — ${pricing.detail}`);
     await insertLine(runId, {
       tracking_number:          trackingNumber,
       carrier_account_no:       line.account_number    || null,
@@ -484,8 +489,8 @@ async function handleGhostCharge({
       delta:                    null,
       status:                   'unmatched',
       corrected_by:             null,
-      unmatched_reason:         `ghost_charge_error_${pricing.error}`,
-      source:                   'invoice_auto_create',
+      unmatched_reason:         `carrier_direct_error_${pricing.error}`,
+      source:                   'carrier_direct',
       shipment_date:            line.shipment_date     || null,
       ship_to_postcode:         postcode               || null,
       ship_to_country:          countryIso             || null,
@@ -493,12 +498,11 @@ async function handleGhostCharge({
     return { status: 'unmatched' };
   }
 
-  // Insert the ghost charge into the charges table.
+  // Insert the carrier-direct charge.
   // - charge_type = 'courier' so it appears in the Finance page and
   //   reconciliation pool on subsequent runs.
   // - verified = true so it passes buildVerifiedPool's verification gate.
-  // - source = 'invoice_auto_create' so it is clearly distinguished from
-  //   platform-booked charges.
+  // - source = 'carrier_direct' — filterable in Finance table.
   const newCharges = await insertCharges([{
     customer_id:         customer.customer_id,
     voila_shipment_id:   null,
@@ -513,17 +517,17 @@ async function handleGhostCharge({
     status:              'verified',
     ship_to_postcode:    postcode    || null,
     ship_to_country_iso: countryIso || null,
-    source:              'invoice_auto_create',
-    raw_payload:         JSON.stringify({ recon_auto_created: true, run_id: runId }),
+    source:              'carrier_direct',
+    raw_payload:         JSON.stringify({ carrier_direct: true, run_id: runId }),
   }]);
 
-  const insertedId = newCharges[0]?.id || null;
+  const insertedId     = newCharges[0]?.id || null;
   const expectedAmount = round2(pricing.cost_price);
   const delta          = round2(carrierAmount - expectedAmount);
   const isMatch        = Math.abs(delta) < 0.02;
 
   console.log(
-    `[recon engine] Ghost charge inserted id=${insertedId}: ` +
+    `[recon engine] Carrier-Direct charge inserted id=${insertedId}: ` +
     `cost=£${pricing.cost_price} carrier=£${carrierAmount} delta=£${delta} → ${isMatch ? 'matched' : 'corrected'}`
   );
 
@@ -540,9 +544,9 @@ async function handleGhostCharge({
     expected_amount:          expectedAmount,
     delta:                    delta,
     status:                   isMatch ? 'matched' : 'corrected',
-    corrected_by:             isMatch ? null : 'ghost_charge_created',
+    corrected_by:             isMatch ? null : 'carrier_direct',
     unmatched_reason:         null,
-    source:                   'invoice_auto_create',
+    source:                   'carrier_direct',
     shipment_date:            line.shipment_date     || null,
     ship_to_postcode:         postcode               || null,
     ship_to_country:          countryIso             || null,
@@ -1004,10 +1008,11 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       return { status: 'unmatched' };
     }
 
-    // Ghost Charge Rule — we know the customer but have no OMS charge.
-    // Auto-create a charge via pricingEngine using invoice data (service,
-    // weight, postcode/ISO) so the shipment is accounted for and billed.
-    return handleGhostCharge({
+    // Carrier-Direct Rule — we know the customer but have no OMS charge.
+    // This is a real-world shipment (return, ad-hoc send, etc.) booked directly
+    // with the carrier. Price it from our rate cards and create a charge so it
+    // is fully accounted for and billed (source='carrier_direct').
+    return handleCarrierDirect({
       serviceId,
       customer,
       trackingNumber,
@@ -1195,11 +1200,11 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
       AND unmatched_reason   = 'unknown_service_code'
   `, [runId, rawServiceCode]);
 
-  if (!linesRes.rows.length) return { matched: 0, unmatched: 0, ghost_created: 0 };
+  if (!linesRes.rows.length) return { matched: 0, unmatched: 0, carrier_direct_created: 0 };
 
   const { pool } = await buildVerifiedPool(carrierId);
 
-  let matched = 0, unmatched = 0, ghost_created = 0;
+  let matched = 0, unmatched = 0, carrier_direct_created = 0;
 
   for (const line of linesRes.rows) {
     const trackKey      = String(line.tracking_number || '').trim().toUpperCase();
@@ -1288,7 +1293,7 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
             status:              'verified',
             ship_to_postcode:    postcode,
             ship_to_country_iso: country,
-            source:              'invoice_auto_create',
+            source:              'carrier_direct',
             raw_payload:         JSON.stringify({ recon_auto_created: true, run_id: runId }),
           }]);
 
@@ -1306,7 +1311,7 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
                  expected_amount  = $5,
                  delta            = $6,
                  unmatched_reason = NULL,
-                 source           = 'invoice_auto_create',
+                 source           = 'carrier_direct',
                  corrected_by     = $7,
                  resolved_at      = NULL,
                  resolved_by      = NULL
@@ -1318,16 +1323,16 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
             insertedId,
             expected,
             delta,
-            isMatch ? null : 'ghost_charge_created',
+            isMatch ? null : 'carrier_direct',
             line.line_id,
           ]);
 
-          ghost_created++;
+          carrier_direct_created++;
           if (isMatch) matched++; else unmatched++;
           continue;
         }
 
-        console.warn(`[recon engine] reprocessMappedLines ghost charge failed for ${trackKey}: ${pricing.error}`);
+        console.warn(`[recon engine] reprocessMappedLines carrier_direct pricing failed for ${trackKey}: ${pricing.error}`);
       }
 
       // Ghost charge unavailable (no weight or pricing error) — leave as unmatched.
@@ -1340,7 +1345,7 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
              expected_amount  = NULL,
              delta            = NULL,
              unmatched_reason = $3,
-             source           = 'invoice_auto_create',
+             source           = 'carrier_direct',
              corrected_by     = NULL,
              resolved_at      = NULL,
              resolved_by      = NULL
@@ -1348,15 +1353,15 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
       `, [
         serviceId,
         customer.customer_id,
-        kg > 0 ? 'ghost_charge_error_no_zone' : 'ghost_charge_error_no_weight',
+        kg > 0 ? 'carrier_direct_error_no_zone' : 'carrier_direct_error_no_weight',
         line.line_id,
       ]);
       unmatched++;
     }
   }
 
-  console.log(`[recon engine] reprocessMappedLines run=${runId} code="${rawServiceCode}": matched=${matched} ghost_created=${ghost_created} unmatched=${unmatched}`);
-  return { matched, unmatched, ghost_created };
+  console.log(`[recon engine] reprocessMappedLines run=${runId} code="${rawServiceCode}": matched=${matched} carrier_direct_created=${carrier_direct_created} unmatched=${unmatched}`);
+  return { matched, unmatched, carrier_direct_created };
 }
 
 // ─── Age Unmatched lines from previous runs ───────────────────────────────────
