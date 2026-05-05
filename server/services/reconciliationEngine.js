@@ -176,11 +176,17 @@ async function buildVerifiedPool(carrierId) {
       AND  c.charge_type   = 'courier'
       AND (
         -- Strict carrier matching — exact case-insensitive match on code/name,
-        -- or the charge's courier_service_id directly links to this carrier.
-        -- No wildcards: if s.courier contains a partial name match that is a
-        -- data inconsistency and must be fixed in the database.
+        -- known webhook variant aliases, or the charge's courier_service_id.
+        --
+        -- couriers.aliases holds webhook variant strings that differ from code/name
+        -- (e.g. 'DHLParcelUKCloud' for code='DHL').  Add new variants there rather
+        -- than adding fuzzy wildcards here.
         LOWER(s.courier) = LOWER(cu_carrier.code)
         OR LOWER(s.courier) = LOWER(cu_carrier.name)
+        OR EXISTS (
+          SELECT 1 FROM unnest(cu_carrier.aliases) alias
+          WHERE  LOWER(alias) = LOWER(s.courier)
+        )
         OR EXISTS (
           SELECT 1 FROM courier_services cs2
           WHERE  cs2.id = c.courier_service_id AND cs2.courier_id = $1
