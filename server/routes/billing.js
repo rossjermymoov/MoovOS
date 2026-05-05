@@ -1011,10 +1011,16 @@ async function getParcelPricingMode(customerId) {
 
 // ─── POST /api/billing/webhook ────────────────────────────────────────────────
 
-router.post('/webhook', async (req, res, next) => {
-  try {
-    const body = req.body;
-    if (!body) return res.status(400).json({ error: 'Empty payload' });
+router.post('/webhook', (req, res) => {
+  const body = req.body;
+  if (!body) return res.status(400).json({ error: 'Empty payload' });
+
+  // Respond immediately so DC/Voila never times out and retries.
+  // Retries were the root cause of duplicate charges (billing.js was synchronous,
+  // so any slow DB operation caused a timeout → retry → race past idempotency check).
+  res.json({ ok: true, status: 'accepted' });
+
+  (async () => { try {
 
     // Unwrap platform wrapper (handles body.json as object or string)
     const payload = unwrapPayload(body);
@@ -1029,7 +1035,7 @@ router.post('/webhook', async (req, res, next) => {
       for (const event of events) {
         results.push(await upsertTrackingEvent(event, body));
       }
-      return res.json({ ok: true, action: 'tracking_processed', count: results.length, results });
+      return; // response already sent above
     }
 
     // ── Guard: only process recognised shipment lifecycle events ──────────────
@@ -1047,12 +1053,12 @@ router.post('/webhook', async (req, res, next) => {
       for (const event of events) {
         results.push(await upsertTrackingEvent(event, body));
       }
-      return res.json({ ok: true, action: 'tracking_processed', count: results.length });
+      return; // response already sent above
     }
 
     // Anything else unrecognised — skip cleanly
     if (eventType && !SHIPMENT_EVENTS.has(eventType)) {
-      return res.json({ ok: true, action: 'skipped', reason: `unrecognised event_type "${eventType}"` });
+      return; // response already sent above
     }
 
     // ── Intercept: DC tracking payloads with no event_type ───────────────────
@@ -1072,14 +1078,14 @@ router.post('/webhook', async (req, res, next) => {
       for (const event of events) {
         results.push(await upsertTrackingEvent(event, body));
       }
-      return res.json({ ok: true, action: 'tracking_forwarded', processed: results.length, results });
+      return; // response already sent above
     }
 
     // ── Cancellation ──────────────────────────────────────────────────────────
     if (eventType === 'shipment.cancelled' || eventType === 'shipment.deleted') {
       const shipment = payload.shipment || {};
       const platformId = shipment.id;
-      if (!platformId) return res.json({ ok: true, action: 'skipped', reason: 'no shipment id' });
+      if (!platformId) return; // response already sent above
 
       await query(`
         UPDATE shipments
@@ -1095,7 +1101,7 @@ router.post('/webhook', async (req, res, next) => {
         )
       `, [platformId]);
 
-      return res.json({ ok: true, action: 'cancelled', platform_shipment_id: platformId });
+      return; // response already sent above
     }
 
     // ── Created ───────────────────────────────────────────────────────────────
@@ -1255,7 +1261,7 @@ router.post('/webhook', async (req, res, next) => {
       [shipmentId, 'courier']
     );
     if (existingCharge.rows.length) {
-      return res.json({ ok: true, action: 'duplicate', shipment_id: shipmentId });
+      return; // duplicate — response already sent above
     }
 
     // Look up rate card — pass destination postcode + country for zone resolution
@@ -1279,12 +1285,7 @@ router.post('/webhook', async (req, res, next) => {
       );
       if (existing.rows.length) {
         console.log(`[billing] idempotency: courier charge already exists for order ${reference}, skipping`);
-        return res.json({
-          ok: true,
-          action: 'duplicate_skipped',
-          shipment_id: shipmentId,
-          charge_id: existing.rows[0].id,
-        });
+        return; // duplicate — response already sent above
       }
     }
 
@@ -1334,16 +1335,13 @@ router.post('/webhook', async (req, res, next) => {
       parcel_declared_value:  addl.parcelDeclaredValue,
     }, totalCarrierSurchargeCost);
 
-    res.json({
-      ok: true,
-      action: 'created',
-      shipment_id: shipmentId,
-      charge_id:   chargeRes.rows[0].id,
-      price:       totalPrice,
-      price_auto:  rate != null,
-    });
+    // Success — log for observability (response already sent above)
+    console.log(`[billing/webhook] created charge ${chargeRes.rows[0].id} for shipment ${shipmentId}, price=${totalPrice}`);
 
-  } catch (err) { next(err); }
+  } catch (err) {
+    console.error('[billing/webhook] background processing error:', err.message, err.stack);
+  }
+  })().catch(err => console.error('[billing/webhook] unhandled background error:', err.message));
 });
 
 // ─── POST /api/billing/purge-tracking-events ─────────────────────────────────
