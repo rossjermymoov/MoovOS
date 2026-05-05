@@ -1725,6 +1725,170 @@ router.get('/pool-diagnostic', async (req, res) => {
   }
 });
 
+// ─── GET /api/reconciliation/pool-courier-gap ────────────────────────────────
+//
+// Gap 2 diagnostic: finds every distinct shipments.courier string that does NOT
+// match any carrier via the strict exact-match rule used in buildVerifiedPool.
+//
+// A charge whose shipment has a non-matching courier string will be invisible
+// to the reconciliation pool — the engine won't find it and will treat the
+// invoice line as carrier-direct (creating a duplicate charge).
+//
+// Returns:
+//   unmatched_couriers  — distinct s.courier values with no carrier match,
+//                         how many active verified courier charges each has,
+//                         and the closest carrier by name for quick triage.
+//   matched_couriers    — courier strings that DO match (for reference).
+//   total_invisible_charges — total active verified courier charges that won't
+//                             appear in any carrier's reconciliation pool.
+
+router.get('/pool-courier-gap', async (req, res) => {
+  try {
+    const result = await query(`
+      WITH carrier_strings AS (
+        -- All code/name strings from the couriers table (what the pool matches against)
+        SELECT id AS carrier_id, code AS match_str, name AS carrier_name FROM couriers
+        UNION ALL
+        SELECT id, name AS match_str, name AS carrier_name FROM couriers
+      ),
+      shipment_courier_counts AS (
+        -- Distinct courier strings on shipments that have active verified courier charges
+        SELECT
+          s.courier                                         AS courier_str,
+          COUNT(DISTINCT c.id)                              AS active_charge_count,
+          COUNT(DISTINCT c.customer_id)                     AS customer_count,
+          MIN(c.created_at)                                 AS oldest_charge,
+          MAX(c.created_at)                                 AS newest_charge
+        FROM   charges   c
+        JOIN   shipments s ON s.id = c.shipment_id
+        WHERE  c.charge_type = 'courier'
+          AND  c.cancelled   = false
+          AND  c.verified    = true
+          AND  s.courier     IS NOT NULL
+          AND  s.courier     != ''
+        GROUP BY s.courier
+      ),
+      matched AS (
+        SELECT DISTINCT scc.courier_str
+        FROM   shipment_courier_counts scc
+        JOIN   carrier_strings         cs ON LOWER(scc.courier_str) = LOWER(cs.match_str)
+      )
+      SELECT
+        scc.courier_str,
+        scc.active_charge_count,
+        scc.customer_count,
+        scc.oldest_charge,
+        scc.newest_charge,
+        CASE WHEN m.courier_str IS NOT NULL THEN true ELSE false END AS matches_carrier,
+        (
+          -- Nearest carrier name by trigram similarity (best-effort hint)
+          SELECT name FROM couriers
+          ORDER BY similarity(LOWER(couriers.name), LOWER(scc.courier_str)) DESC
+          LIMIT 1
+        ) AS closest_carrier_name
+      FROM   shipment_courier_counts scc
+      LEFT JOIN matched m ON m.courier_str = scc.courier_str
+      ORDER BY matches_carrier ASC, scc.active_charge_count DESC
+    `);
+
+    const matched   = result.rows.filter(r => r.matches_carrier);
+    const unmatched = result.rows.filter(r => !r.matches_carrier);
+    const totalInvisible = unmatched.reduce((s, r) => s + parseInt(r.active_charge_count || 0), 0);
+
+    return res.json({
+      summary: {
+        total_invisible_charges: totalInvisible,
+        unmatched_courier_strings: unmatched.length,
+        matched_courier_strings:   matched.length,
+      },
+      unmatched_couriers: unmatched.map(r => ({
+        courier_str:         r.courier_str,
+        active_charge_count: parseInt(r.active_charge_count),
+        customer_count:      parseInt(r.customer_count),
+        oldest_charge:       r.oldest_charge,
+        newest_charge:       r.newest_charge,
+        closest_carrier:     r.closest_carrier_name,
+      })),
+      matched_couriers: matched.map(r => ({
+        courier_str:         r.courier_str,
+        active_charge_count: parseInt(r.active_charge_count),
+      })),
+    });
+  } catch (err) {
+    console.error('[reconciliation/pool-courier-gap] error:', err.message);
+    // pg_trgm extension may not be installed — retry without similarity()
+    if (err.message.includes('similarity') || err.message.includes('pg_trgm')) {
+      try {
+        const fallback = await query(`
+          WITH carrier_strings AS (
+            SELECT id AS carrier_id, code AS match_str FROM couriers
+            UNION ALL
+            SELECT id, name AS match_str FROM couriers
+          ),
+          shipment_courier_counts AS (
+            SELECT
+              s.courier                  AS courier_str,
+              COUNT(DISTINCT c.id)       AS active_charge_count,
+              COUNT(DISTINCT c.customer_id) AS customer_count,
+              MIN(c.created_at)          AS oldest_charge,
+              MAX(c.created_at)          AS newest_charge
+            FROM   charges   c
+            JOIN   shipments s ON s.id = c.shipment_id
+            WHERE  c.charge_type = 'courier'
+              AND  c.cancelled   = false
+              AND  c.verified    = true
+              AND  s.courier     IS NOT NULL
+              AND  s.courier     != ''
+            GROUP BY s.courier
+          ),
+          matched AS (
+            SELECT DISTINCT scc.courier_str
+            FROM   shipment_courier_counts scc
+            JOIN   carrier_strings         cs ON LOWER(scc.courier_str) = LOWER(cs.match_str)
+          )
+          SELECT
+            scc.courier_str,
+            scc.active_charge_count,
+            scc.customer_count,
+            scc.oldest_charge,
+            scc.newest_charge,
+            CASE WHEN m.courier_str IS NOT NULL THEN true ELSE false END AS matches_carrier
+          FROM   shipment_courier_counts scc
+          LEFT JOIN matched m ON m.courier_str = scc.courier_str
+          ORDER BY matches_carrier ASC, scc.active_charge_count DESC
+        `);
+
+        const matched2   = fallback.rows.filter(r => r.matches_carrier);
+        const unmatched2 = fallback.rows.filter(r => !r.matches_carrier);
+        const totalInvisible2 = unmatched2.reduce((s, r) => s + parseInt(r.active_charge_count || 0), 0);
+
+        return res.json({
+          summary: {
+            total_invisible_charges:   totalInvisible2,
+            unmatched_courier_strings: unmatched2.length,
+            matched_courier_strings:   matched2.length,
+            note: 'pg_trgm not installed — closest_carrier_name omitted',
+          },
+          unmatched_couriers: unmatched2.map(r => ({
+            courier_str:         r.courier_str,
+            active_charge_count: parseInt(r.active_charge_count),
+            customer_count:      parseInt(r.customer_count),
+            oldest_charge:       r.oldest_charge,
+            newest_charge:       r.newest_charge,
+          })),
+          matched_couriers: matched2.map(r => ({
+            courier_str:         r.courier_str,
+            active_charge_count: parseInt(r.active_charge_count),
+          })),
+        });
+      } catch (err2) {
+        return res.status(500).json({ error: err2.message });
+      }
+    }
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── GET /api/reconciliation/runs/:id/lines/:lineId/trace ────────────────────
 // Returns a step-by-step decision trace for a single reconciliation line.
 // Shows exactly what the engine found in the pool, what the rate card said,
