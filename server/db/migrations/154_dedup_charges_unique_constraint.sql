@@ -149,9 +149,44 @@ BEGIN
 
 END $$;
 
--- ── Step 3: Unique index — prevents race condition at DB level going forward ──
--- One active courier charge per voila_shipment_id.
--- ON CONFLICT DO NOTHING in insertCharges will silently reject the second insert.
+-- ── Step 3: Cancel duplicate fuel charges for same voila_shipment_id ─────────
+-- Race condition also creates multiple fuel rows. Step 2 handles split-brain
+-- cases (cancels all pricingEngine charges where billing.js charge exists).
+-- This step catches any remaining fuel duplicates not covered by step 2.
+
+DO $$
+DECLARE
+  v_fuel_dupes INTEGER := 0;
+BEGIN
+  WITH fuel_dupes AS (
+    SELECT
+      id,
+      ROW_NUMBER() OVER (
+        PARTITION BY voila_shipment_id
+        ORDER BY created_at ASC
+      ) AS rn
+    FROM charges
+    WHERE voila_shipment_id IS NOT NULL
+      AND cancelled   = false
+      AND charge_type = 'fuel'
+  ),
+  cancelled AS (
+    UPDATE charges c
+    SET    cancelled  = true,
+           updated_at = NOW()
+    FROM   fuel_dupes fd
+    WHERE  c.id = fd.id
+      AND  fd.rn > 1
+    RETURNING c.id
+  )
+  SELECT COUNT(*) INTO v_fuel_dupes FROM cancelled;
+
+  RAISE NOTICE 'Step 3: cancelled % duplicate fuel charge(s)', v_fuel_dupes;
+END $$;
+
+-- ── Step 4: Unique indexes — prevent race condition at DB level going forward ──
+-- One active courier charge + one active fuel charge per voila_shipment_id.
+-- ON CONFLICT DO NOTHING in insertCharges silently rejects concurrent duplicates.
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_charges_voila_courier_active
   ON charges (voila_shipment_id)
@@ -159,9 +194,18 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_charges_voila_courier_active
     AND cancelled   = false
     AND voila_shipment_id IS NOT NULL;
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_charges_voila_fuel_active
+  ON charges (voila_shipment_id)
+  WHERE charge_type = 'fuel'
+    AND cancelled   = false
+    AND voila_shipment_id IS NOT NULL;
+
 -- ─── Post-run verification ────────────────────────────────────────────────────
--- Should return 0:
--- SELECT voila_shipment_id, COUNT(*)
--- FROM charges
+-- Both should return 0 rows:
+-- SELECT voila_shipment_id, COUNT(*) FROM charges
 -- WHERE charge_type = 'courier' AND cancelled = false AND voila_shipment_id IS NOT NULL
+-- GROUP BY voila_shipment_id HAVING COUNT(*) > 1;
+--
+-- SELECT voila_shipment_id, COUNT(*) FROM charges
+-- WHERE charge_type = 'fuel' AND cancelled = false AND voila_shipment_id IS NOT NULL
 -- GROUP BY voila_shipment_id HAVING COUNT(*) > 1;
