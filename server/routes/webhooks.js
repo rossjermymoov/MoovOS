@@ -136,9 +136,18 @@ router.post('/shipment-created', authMiddleware, (req, res) => {
     try {
 
       // ── Idempotency gate ────────────────────────────────────────────────────
-      // If charges already exist for this voila_shipment_id (from a previous
-      // delivery of the same webhook, or from a shipment-verified backfill),
-      // skip silently. Without this guard every retry creates a full duplicate set.
+      // Two checks are needed:
+      //
+      // Check A — pricingEngine path: charges with this voila_shipment_id already
+      //   exist (previous webhook delivery, backfill retry, or race condition).
+      //   The unique index idx_charges_voila_courier_active also catches races at
+      //   the DB level via ON CONFLICT DO NOTHING in insertCharges.
+      //
+      // Check B — billing.js path: a charge with the same order_id already exists
+      //   from the old DC webhook path (voila_shipment_id=NULL, shipment_id set).
+      //   Without this, voila-backfill creates a second charge set for shipments
+      //   billing.js already processed, producing split-brain duplicates.
+
       if (voilaShipmentId) {
         const existing = await query(
           `SELECT id FROM charges
@@ -149,7 +158,27 @@ router.post('/shipment-created', authMiddleware, (req, res) => {
           [voilaShipmentId]
         );
         if (existing.rows.length) {
-          console.log(`[webhooks] shipment-created ${voilaShipmentId}: charges already exist — skipping (idempotent)`);
+          console.log(`[webhooks] shipment-created ${voilaShipmentId}: pricingEngine charges already exist — skipping (idempotent)`);
+          return;
+        }
+      }
+
+      // Check B: billing.js charge exists for same order reference
+      const ship = payload.shipment || {};
+      const orderRef = ship.reference || ship.reference_2 || voilaShipmentId;
+      if (orderRef) {
+        const billingJsCharge = await query(
+          `SELECT id FROM charges
+           WHERE  order_id          = $1
+             AND  voila_shipment_id IS NULL
+             AND  shipment_id       IS NOT NULL
+             AND  cancelled         = false
+             AND  charge_type       = 'courier'
+           LIMIT  1`,
+          [String(orderRef)]
+        );
+        if (billingJsCharge.rows.length) {
+          console.log(`[webhooks] shipment-created ${voilaShipmentId}: billing.js charge already exists for order ${orderRef} — skipping (split-brain guard)`);
           return;
         }
       }
