@@ -1344,6 +1344,160 @@ router.post('/webhook', (req, res) => {
   })().catch(err => console.error('[billing/webhook] unhandled background error:', err.message));
 });
 
+// ─── GET  /api/billing/dedup-report ──────────────────────────────────────────
+// Sweeps the charges table for duplicate active courier charges.
+// Reports two groups:
+//   1. Same order_id + customer_id (billing.js / race-condition dupes)
+//   2. Same voila_shipment_id (pricingEngine / tracking-backfill dupes)
+// Safe read-only — does not modify any data.
+//
+// POST /api/billing/dedup-report?fix=true  — also cancels all duplicates
+// (keeps the oldest charge per group, cancels the rest + their fuel/surcharge)
+
+router.get('/dedup-report', async (req, res, next) => {
+  try {
+    // ── Group 1: duplicate by order_id + customer_id ──────────────────────────
+    const byOrderId = await query(`
+      SELECT
+        order_id,
+        customer_id,
+        COUNT(*)                                        AS total,
+        COUNT(*) - 1                                    AS dupes,
+        MIN(created_at)                                 AS oldest,
+        ARRAY_AGG(id ORDER BY created_at ASC)           AS charge_ids,
+        ARRAY_AGG(created_at::text ORDER BY created_at ASC) AS created_ats
+      FROM charges
+      WHERE cancelled    = false
+        AND charge_type  = 'courier'
+        AND order_id     IS NOT NULL
+        AND customer_id  IS NOT NULL
+      GROUP BY order_id, customer_id
+      HAVING COUNT(*) > 1
+      ORDER BY COUNT(*) DESC, oldest DESC
+    `);
+
+    // ── Group 2: duplicate by voila_shipment_id ───────────────────────────────
+    const byVoilaId = await query(`
+      SELECT
+        voila_shipment_id,
+        COUNT(*)                                        AS total,
+        COUNT(*) - 1                                    AS dupes,
+        MIN(created_at)                                 AS oldest,
+        ARRAY_AGG(id ORDER BY created_at ASC)           AS charge_ids,
+        ARRAY_AGG(created_at::text ORDER BY created_at ASC) AS created_ats
+      FROM charges
+      WHERE cancelled          = false
+        AND charge_type        = 'courier'
+        AND voila_shipment_id  IS NOT NULL
+      GROUP BY voila_shipment_id
+      HAVING COUNT(*) > 1
+      ORDER BY COUNT(*) DESC, oldest DESC
+    `);
+
+    const totalDupesByOrder = byOrderId.rows.reduce((s, r) => s + parseInt(r.dupes), 0);
+    const totalDupesByVoila = byVoilaId.rows.reduce((s, r) => s + parseInt(r.dupes), 0);
+
+    res.json({
+      ok: true,
+      summary: {
+        duplicate_groups_by_order_id:    byOrderId.rows.length,
+        duplicate_charges_by_order_id:   totalDupesByOrder,
+        duplicate_groups_by_voila_id:    byVoilaId.rows.length,
+        duplicate_charges_by_voila_id:   totalDupesByVoila,
+        total_excess_charges:            totalDupesByOrder + totalDupesByVoila,
+      },
+      by_order_id:    byOrderId.rows,
+      by_voila_id:    byVoilaId.rows,
+      fix_available:  'POST /api/billing/dedup-report?fix=true to cancel all duplicates',
+    });
+  } catch (err) { next(err); }
+});
+
+router.post('/dedup-report', async (req, res, next) => {
+  const fix = req.query.fix === 'true';
+  if (!fix) return res.status(400).json({ error: 'Pass ?fix=true to confirm cancellation' });
+
+  try {
+    // Cancel duplicate courier charges — keep oldest per order_id+customer_id group
+    const byOrder = await query(`
+      WITH ranked AS (
+        SELECT id,
+          ROW_NUMBER() OVER (
+            PARTITION BY order_id, customer_id
+            ORDER BY created_at ASC
+          ) AS rn
+        FROM charges
+        WHERE cancelled   = false
+          AND charge_type = 'courier'
+          AND order_id    IS NOT NULL
+          AND customer_id IS NOT NULL
+      ),
+      cancelled AS (
+        UPDATE charges SET cancelled = true, updated_at = NOW()
+        FROM ranked WHERE charges.id = ranked.id AND ranked.rn > 1
+        RETURNING charges.id
+      )
+      SELECT COUNT(*) AS n FROM cancelled
+    `);
+
+    // Cancel duplicate courier charges — keep oldest per voila_shipment_id
+    const byVoila = await query(`
+      WITH ranked AS (
+        SELECT id,
+          ROW_NUMBER() OVER (
+            PARTITION BY voila_shipment_id
+            ORDER BY created_at ASC
+          ) AS rn
+        FROM charges
+        WHERE cancelled          = false
+          AND charge_type        = 'courier'
+          AND voila_shipment_id  IS NOT NULL
+      ),
+      cancelled AS (
+        UPDATE charges SET cancelled = true, updated_at = NOW()
+        FROM ranked WHERE charges.id = ranked.id AND ranked.rn > 1
+        RETURNING charges.id
+      )
+      SELECT COUNT(*) AS n FROM cancelled
+    `);
+
+    // Cancel orphaned fuel/surcharge rows whose courier was just cancelled
+    const orphans = await query(`
+      WITH orphaned AS (
+        UPDATE charges c SET cancelled = true, updated_at = NOW()
+        WHERE c.cancelled  = false
+          AND c.charge_type IN ('fuel', 'surcharge')
+          AND (
+            -- billing.js path: no active courier for same shipment_id
+            (c.shipment_id IS NOT NULL AND NOT EXISTS (
+              SELECT 1 FROM charges x
+              WHERE x.shipment_id = c.shipment_id
+                AND x.charge_type = 'courier' AND x.cancelled = false
+            ))
+            OR
+            -- pricingEngine path: no active courier for same voila_shipment_id
+            (c.voila_shipment_id IS NOT NULL AND NOT EXISTS (
+              SELECT 1 FROM charges x
+              WHERE x.voila_shipment_id = c.voila_shipment_id
+                AND x.charge_type = 'courier' AND x.cancelled = false
+            ))
+          )
+        RETURNING c.id
+      )
+      SELECT COUNT(*) AS n FROM orphaned
+    `);
+
+    res.json({
+      ok: true,
+      cancelled: {
+        courier_by_order_id:   parseInt(byOrder.rows[0].n),
+        courier_by_voila_id:   parseInt(byVoila.rows[0].n),
+        orphaned_fuel_surcharge: parseInt(orphans.rows[0].n),
+      },
+    });
+  } catch (err) { next(err); }
+});
+
 // ─── POST /api/billing/purge-tracking-events ─────────────────────────────────
 // Remove charges + shipments that were created by tracking webhooks
 // (not by shipment.created). Identified by event_type != 'shipment.created'
