@@ -37,6 +37,7 @@
  */
 
 import { query } from '../db/index.js';
+import { computeGhostCharge, insertCharges } from './pricingEngine.js';
 
 // ─── Types (JSDoc) ────────────────────────────────────────────────────────────
 /**
@@ -174,12 +175,12 @@ async function buildVerifiedPool(carrierId) {
       AND  c.cancelled     = false
       AND  c.charge_type   = 'courier'
       AND (
-        s.courier ILIKE cu_carrier.code
-        OR s.courier ILIKE cu_carrier.name
-        OR s.courier ILIKE '%' || cu_carrier.code || '%'
-        OR cu_carrier.code ILIKE '%' || s.courier || '%'
-        OR s.courier ILIKE '%' || cu_carrier.name || '%'
-        OR cu_carrier.name ILIKE '%' || s.courier || '%'
+        -- Strict carrier matching — exact case-insensitive match on code/name,
+        -- or the charge's courier_service_id directly links to this carrier.
+        -- No wildcards: if s.courier contains a partial name match that is a
+        -- data inconsistency and must be fixed in the database.
+        LOWER(s.courier) = LOWER(cu_carrier.code)
+        OR LOWER(s.courier) = LOWER(cu_carrier.name)
         OR EXISTS (
           SELECT 1 FROM courier_services cs2
           WHERE  cs2.id = c.courier_service_id AND cs2.courier_id = $1
@@ -403,6 +404,151 @@ async function processAggregateLine(line, runId, carrierId, expectedFuelTotal, h
   });
 
   return { status };
+}
+
+// ─── Ghost Charge Rule ────────────────────────────────────────────────────────
+//
+// Called when a carrier invoice line has no matching OMS charge record (pool
+// MISS) but we CAN identify the customer via their carrier account number.
+//
+// Flow:
+//   1. Call computeGhostCharge — zone + band lookup using invoice service/weight/postcode.
+//   2. Insert a charge row tagged source='invoice_auto_create' so the Finance
+//      page and finalization engine know this was auto-created, not booked through
+//      the platform.
+//   3. Compare the computed cost_price against the carrier_amount.
+//      GREEN (|delta| < £0.02) → status = 'matched'
+//      AMBER (delta exists)    → status = 'corrected', corrected_by = 'ghost_charge_created'
+//   4. If pricing fails (no zone, no band, weight = 0) → fall through to RED
+//      with unmatched_reason = 'ghost_charge_error_<reason>' for operator review.
+
+async function handleGhostCharge({
+  serviceId, customer, trackingNumber, carrierAmount,
+  weightKg, postcode, countryIso,
+  rawServiceCode, runId, line,
+}) {
+  const kg = parseFloat(weightKg) || 0;
+
+  console.log(
+    `[recon engine] Ghost Charge Rule: tracking=${trackingNumber} ` +
+    `customer=${customer.customer_id} weight=${kg}kg postcode=${postcode} country=${countryIso}`
+  );
+
+  if (kg <= 0) {
+    // No weight data from invoice — cannot price without weight.
+    console.warn(`[recon engine] Ghost charge skipped (weight=0): ${trackingNumber}`);
+    await insertLine(runId, {
+      tracking_number:          trackingNumber,
+      carrier_account_no:       line.account_number    || null,
+      raw_service_code:         rawServiceCode,
+      charge_type:              line.charge_type       || 'base',
+      carrier_amount:           carrierAmount,
+      carrier_billed_weight_kg: null,
+      service_id:               serviceId,
+      customer_id:              customer.customer_id,
+      charge_id:                null,
+      expected_amount:          null,
+      delta:                    null,
+      status:                   'unmatched',
+      corrected_by:             null,
+      unmatched_reason:         'ghost_charge_error_no_weight',
+      source:                   'invoice_auto_create',
+      shipment_date:            line.shipment_date     || null,
+      ship_to_postcode:         postcode               || null,
+      ship_to_country:          countryIso             || null,
+    });
+    return { status: 'unmatched' };
+  }
+
+  const pricing = await computeGhostCharge(
+    serviceId,
+    customer.customer_id,
+    kg,
+    postcode,
+    countryIso || 'GB'
+  );
+
+  if (pricing.error) {
+    console.warn(`[recon engine] Ghost charge pricing failed for ${trackingNumber}: ${pricing.error} — ${pricing.detail}`);
+    await insertLine(runId, {
+      tracking_number:          trackingNumber,
+      carrier_account_no:       line.account_number    || null,
+      raw_service_code:         rawServiceCode,
+      charge_type:              line.charge_type       || 'base',
+      carrier_amount:           carrierAmount,
+      carrier_billed_weight_kg: kg || null,
+      service_id:               serviceId,
+      customer_id:              customer.customer_id,
+      charge_id:                null,
+      expected_amount:          null,
+      delta:                    null,
+      status:                   'unmatched',
+      corrected_by:             null,
+      unmatched_reason:         `ghost_charge_error_${pricing.error}`,
+      source:                   'invoice_auto_create',
+      shipment_date:            line.shipment_date     || null,
+      ship_to_postcode:         postcode               || null,
+      ship_to_country:          countryIso             || null,
+    });
+    return { status: 'unmatched' };
+  }
+
+  // Insert the ghost charge into the charges table.
+  // - charge_type = 'courier' so it appears in the Finance page and
+  //   reconciliation pool on subsequent runs.
+  // - verified = true so it passes buildVerifiedPool's verification gate.
+  // - source = 'invoice_auto_create' so it is clearly distinguished from
+  //   platform-booked charges.
+  const newCharges = await insertCharges([{
+    customer_id:         customer.customer_id,
+    voila_shipment_id:   null,
+    order_id:            null,
+    tracking_code:       trackingNumber,
+    courier_service_id:  serviceId,
+    zone_id:             pricing.zone_id,
+    charge_type:         'courier',
+    weight_charged_kg:   kg,
+    cost_price:          pricing.cost_price,
+    sell_price:          pricing.sell_price ?? pricing.cost_price,
+    status:              'verified',
+    ship_to_postcode:    postcode    || null,
+    ship_to_country_iso: countryIso || null,
+    source:              'invoice_auto_create',
+    raw_payload:         JSON.stringify({ recon_auto_created: true, run_id: runId }),
+  }]);
+
+  const insertedId = newCharges[0]?.id || null;
+  const expectedAmount = round2(pricing.cost_price);
+  const delta          = round2(carrierAmount - expectedAmount);
+  const isMatch        = Math.abs(delta) < 0.02;
+
+  console.log(
+    `[recon engine] Ghost charge inserted id=${insertedId}: ` +
+    `cost=£${pricing.cost_price} carrier=£${carrierAmount} delta=£${delta} → ${isMatch ? 'matched' : 'corrected'}`
+  );
+
+  await insertLine(runId, {
+    tracking_number:          trackingNumber,
+    carrier_account_no:       line.account_number    || null,
+    raw_service_code:         rawServiceCode,
+    charge_type:              line.charge_type       || 'base',
+    carrier_amount:           carrierAmount,
+    carrier_billed_weight_kg: kg,
+    service_id:               serviceId,
+    customer_id:              customer.customer_id,
+    charge_id:                insertedId,
+    expected_amount:          expectedAmount,
+    delta:                    delta,
+    status:                   isMatch ? 'matched' : 'corrected',
+    corrected_by:             isMatch ? null : 'ghost_charge_created',
+    unmatched_reason:         null,
+    source:                   'invoice_auto_create',
+    shipment_date:            line.shipment_date     || null,
+    ship_to_postcode:         postcode               || null,
+    ship_to_country:          countryIso             || null,
+  });
+
+  return { status: isMatch ? 'matched' : 'corrected' };
 }
 
 // ─── Main engine entry point ──────────────────────────────────────────────────
@@ -829,11 +975,12 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
 
   if (poolHits.length === 0) {
     // Pool MISS — no charge record in the OMS for this tracking number.
-    // No zone or rate card is available without a charge record, so expected = null.
-    // Route to manual review.
+    // Could be a return shipment, a customer booking made directly with the
+    // carrier, or any other "outside the platform" scenario.
     const customer = await ctx.customerLookup(line.account_number);
 
     if (!customer) {
+      // Unknown account — cannot attribute the charge. RED.
       await insertLine(runId, {
         tracking_number:          trackingNumber,
         carrier_account_no:       line.account_number    || null,
@@ -857,29 +1004,21 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       return { status: 'unmatched' };
     }
 
-    // External booking — shipment booked directly with carrier, no OMS charge record.
-    // No expected amount available (no charge to trust). Flag for manual review.
-    await insertLine(runId, {
-      tracking_number:          trackingNumber,
-      carrier_account_no:       line.account_number    || null,
-      raw_service_code:         rawServiceCode,
-      charge_type:              line.charge_type       || 'base',
-      carrier_amount:           carrierAmount,
-      carrier_billed_weight_kg: line.billed_weight_kg  || null,
-      service_id:               serviceId,
-      customer_id:              customer.customer_id,
-      charge_id:                null,
-      expected_amount:          null,
-      delta:                    null,
-      status:                   'unmatched',
-      corrected_by:             null,
-      unmatched_reason:         'external_booking_review',
-      source:                   'external_booking',
-      shipment_date:            line.shipment_date     || null,
-      ship_to_postcode:         line.delivery_postcode || null,
-      ship_to_country:          line.ship_to_country   || null,
+    // Ghost Charge Rule — we know the customer but have no OMS charge.
+    // Auto-create a charge via pricingEngine using invoice data (service,
+    // weight, postcode/ISO) so the shipment is accounted for and billed.
+    return handleGhostCharge({
+      serviceId,
+      customer,
+      trackingNumber,
+      carrierAmount,
+      weightKg:    line.billed_weight_kg  || 0,
+      postcode:    line.delivery_postcode || null,
+      countryIso:  line.ship_to_country   || 'GB',
+      rawServiceCode,
+      runId,
+      line,
     });
-    return { status: 'unmatched' };
   }
 
   // ── Phase 3: Bucket and Bill comparison ───────────────────────────────────
@@ -1046,7 +1185,9 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
       carrier_billed_weight_kg AS billed_weight_kg,
       carrier_account_no       AS account_number,
       parcel_count,
-      correction_metadata
+      correction_metadata,
+      ship_to_postcode,
+      ship_to_country
     FROM reconciliation_lines
     WHERE run_id             = $1
       AND raw_service_code   = $2
@@ -1054,11 +1195,11 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
       AND unmatched_reason   = 'unknown_service_code'
   `, [runId, rawServiceCode]);
 
-  if (!linesRes.rows.length) return { matched: 0, unmatched: 0, external_booking: 0 };
+  if (!linesRes.rows.length) return { matched: 0, unmatched: 0, ghost_created: 0 };
 
   const { pool } = await buildVerifiedPool(carrierId);
 
-  let matched = 0, unmatched = 0, external_booking = 0;
+  let matched = 0, unmatched = 0, ghost_created = 0;
 
   for (const line of linesRes.rows) {
     const trackKey      = String(line.tracking_number || '').trim().toUpperCase();
@@ -1100,27 +1241,11 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
       if (isMatch) matched++; else unmatched++;
 
     } else {
-      // ── Pool MISS: external booking or unknown account ───────────────────
+      // ── Pool MISS ─────────────────────────────────────────────────────────
       const customer = await lookupCustomerByAccount(line.account_number);
 
-      if (customer) {
-        await query(`
-          UPDATE reconciliation_lines
-          SET  status           = 'unmatched',
-               service_id       = $1,
-               customer_id      = $2,
-               charge_id        = NULL,
-               expected_amount  = NULL,
-               delta            = NULL,
-               unmatched_reason = 'external_booking_review',
-               source           = 'external_booking',
-               corrected_by     = NULL,
-               resolved_at      = NULL,
-               resolved_by      = NULL
-          WHERE id = $3
-        `, [serviceId, customer.customer_id, line.line_id]);
-        external_booking++;
-      } else {
+      if (!customer) {
+        // Unknown account — cannot attribute.
         await query(`
           UPDATE reconciliation_lines
           SET  status           = 'unmatched',
@@ -1137,12 +1262,101 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
           WHERE id = $2
         `, [serviceId, line.line_id]);
         unmatched++;
+        continue;
       }
+
+      // Ghost Charge Rule — auto-create charge via pricingEngine.
+      const kg       = parseFloat(line.billed_weight_kg) || 0;
+      const postcode = line.ship_to_postcode || null;
+      const country  = line.ship_to_country  || 'GB';
+
+      if (kg > 0) {
+        const pricing = await computeGhostCharge(serviceId, customer.customer_id, kg, postcode, country);
+
+        if (!pricing.error) {
+          const newCharges = await insertCharges([{
+            customer_id:         customer.customer_id,
+            voila_shipment_id:   null,
+            order_id:            null,
+            tracking_code:       trackKey,
+            courier_service_id:  serviceId,
+            zone_id:             pricing.zone_id,
+            charge_type:         'courier',
+            weight_charged_kg:   kg,
+            cost_price:          pricing.cost_price,
+            sell_price:          pricing.sell_price ?? pricing.cost_price,
+            status:              'verified',
+            ship_to_postcode:    postcode,
+            ship_to_country_iso: country,
+            source:              'invoice_auto_create',
+            raw_payload:         JSON.stringify({ recon_auto_created: true, run_id: runId }),
+          }]);
+
+          const insertedId  = newCharges[0]?.id || null;
+          const expected    = round2(pricing.cost_price);
+          const delta       = round2(carrierAmount - expected);
+          const isMatch     = Math.abs(delta) < 0.02;
+
+          await query(`
+            UPDATE reconciliation_lines
+            SET  status           = $1,
+                 service_id       = $2,
+                 customer_id      = $3,
+                 charge_id        = $4,
+                 expected_amount  = $5,
+                 delta            = $6,
+                 unmatched_reason = NULL,
+                 source           = 'invoice_auto_create',
+                 corrected_by     = $7,
+                 resolved_at      = NULL,
+                 resolved_by      = NULL
+            WHERE id = $8
+          `, [
+            isMatch ? 'matched' : 'corrected',
+            serviceId,
+            customer.customer_id,
+            insertedId,
+            expected,
+            delta,
+            isMatch ? null : 'ghost_charge_created',
+            line.line_id,
+          ]);
+
+          ghost_created++;
+          if (isMatch) matched++; else unmatched++;
+          continue;
+        }
+
+        console.warn(`[recon engine] reprocessMappedLines ghost charge failed for ${trackKey}: ${pricing.error}`);
+      }
+
+      // Ghost charge unavailable (no weight or pricing error) — leave as unmatched.
+      await query(`
+        UPDATE reconciliation_lines
+        SET  status           = 'unmatched',
+             service_id       = $1,
+             customer_id      = $2,
+             charge_id        = NULL,
+             expected_amount  = NULL,
+             delta            = NULL,
+             unmatched_reason = $3,
+             source           = 'invoice_auto_create',
+             corrected_by     = NULL,
+             resolved_at      = NULL,
+             resolved_by      = NULL
+        WHERE id = $4
+      `, [
+        serviceId,
+        customer.customer_id,
+        kg > 0 ? 'ghost_charge_error_no_zone' : 'ghost_charge_error_no_weight',
+        line.line_id,
+      ]);
+      unmatched++;
     }
   }
 
-  console.log(`[recon engine] reprocessMappedLines run=${runId} code="${rawServiceCode}": matched=${matched} external_booking=${external_booking} unmatched=${unmatched}`);
-  return { matched, unmatched, external_booking };
+  console.log(`[recon engine] reprocessMappedLines run=${runId} code="${rawServiceCode}": matched=${matched} ghost_created=${ghost_created} unmatched=${unmatched}`);
+  return { matched, unmatched, ghost_created };
 }
 
 // ─── Age Unmatched lines from previous runs ───────────────────────────────────

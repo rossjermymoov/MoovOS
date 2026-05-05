@@ -962,8 +962,8 @@ export async function insertCharges(charges, shipmentId = null) {
          weight_actual_kg, weight_dimensional_kg, weight_charged_kg,
          cost_price, sell_price, price, status,
          despatch_date, ship_to_postcode, ship_to_country_iso, ship_to_name,
-         parcel_count, raw_payload, pricing_logic_trace, shipment_id
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+         parcel_count, raw_payload, pricing_logic_trace, shipment_id, source
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
        ON CONFLICT DO NOTHING
        RETURNING *`,
       [
@@ -983,11 +983,67 @@ export async function insertCharges(charges, shipmentId = null) {
         c.raw_payload ? JSON.parse(c.raw_payload) : null,
         c.pricing_logic_trace   ? JSON.stringify(c.pricing_logic_trace) : null,
         effectiveShipmentId,
+        c.source                || null,
       ]
     );
     if (result.rows.length) inserted.push(result.rows[0]);
   }
   return inserted;
+}
+
+// ─── Ghost Charge pricing helper ─────────────────────────────────────────────
+//
+// Used by reconciliationEngine when a carrier invoice line has no matching
+// OMS charge record (pool MISS with a known customer account).
+//
+// Returns { service_code, zone_id, zone_name, cost_price, sell_price }
+//      or { error: string, detail?: string } on failure.
+//
+// Does NOT insert anything — caller (reconciliationEngine.handleGhostCharge)
+// owns the charge + line insertion so the recon context is preserved.
+
+export async function computeGhostCharge(serviceId, customerId, weightKg, postcode, countryIso = 'GB') {
+  if (!serviceId) return { error: 'invalid_params', detail: 'serviceId required' };
+  const kg = parseFloat(weightKg) || 0;
+
+  // Get service details (we need service_code string for customer rate lookup)
+  const svcRes = await query(
+    `SELECT service_code FROM courier_services WHERE id = $1`,
+    [serviceId]
+  );
+  if (!svcRes.rows.length) return { error: 'service_not_found', detail: `service_id=${serviceId}` };
+  const serviceCode = svcRes.rows[0].service_code;
+
+  // Zone — strict match, same function as live pricing engine
+  const zone = await matchZone(serviceId, countryIso || 'GB', postcode);
+  if (!zone) {
+    return {
+      error: 'no_zone_matched',
+      detail: `service=${serviceCode} country=${countryIso} postcode=${postcode}`,
+    };
+  }
+
+  // Cost price — carrier band lookup (Pass 1 then Pass 2 overage)
+  const costResult = await lookupCarrierBandCost(serviceId, kg, zone.id);
+  if (!costResult) {
+    return {
+      error: 'no_cost_band',
+      detail: `${kg}kg in zone "${zone.name}"`,
+    };
+  }
+
+  // Sell price — customer rate card (best-effort; null if no rate card configured)
+  const sellResult = customerId
+    ? await lookupCustomerSellPrice(customerId, serviceCode, kg, zone.name)
+    : null;
+
+  return {
+    service_code: serviceCode,
+    zone_id:      zone.id,
+    zone_name:    zone.name,
+    cost_price:   costResult.cost,
+    sell_price:   sellResult?.sellPrice || null,
+  };
 }
 
 // ─── Trace example helper (for verification) ─────────────────────────────────
