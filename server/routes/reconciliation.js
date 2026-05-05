@@ -1746,10 +1746,12 @@ router.get('/pool-courier-gap', async (req, res) => {
   try {
     const result = await query(`
       WITH carrier_strings AS (
-        -- All code/name strings from the couriers table (what the pool matches against)
+        -- All code/name/alias strings from the couriers table (what the pool matches against)
         SELECT id AS carrier_id, code AS match_str, name AS carrier_name FROM couriers
         UNION ALL
         SELECT id, name AS match_str, name AS carrier_name FROM couriers
+        UNION ALL
+        SELECT id, unnest(aliases) AS match_str, name AS carrier_name FROM couriers WHERE array_length(aliases, 1) > 0
       ),
       shipment_courier_counts AS (
         -- Distinct courier strings on shipments that have active verified courier charges
@@ -1824,6 +1826,8 @@ router.get('/pool-courier-gap', async (req, res) => {
             SELECT id AS carrier_id, code AS match_str FROM couriers
             UNION ALL
             SELECT id, name AS match_str FROM couriers
+            UNION ALL
+            SELECT id, unnest(aliases) AS match_str FROM couriers WHERE array_length(aliases, 1) > 0
           ),
           shipment_courier_counts AS (
             SELECT
