@@ -1133,22 +1133,26 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   // rows, so the freight row's carrier_amount = base only. Compare against
   // cost_price (base) not total_cost_price (base + fuel). Overhead rows are
   // already auto-accepted above via the carrier_overhead path.
-  const invoiceParcelCount = line.parcel_count || 1;
+  const invoiceParcelCount   = line.parcel_count || 1;
+  const shipmentParcelCount  = parseInt(charge.shipment_parcel_count) || 0;
   let expectedBase;
   if (ctx.separateFuelRows) {
     const baseFromDb = round2(parseFloat(charge.expected_cost) || 0);
-    if (ctx.parcelPricing === 'all_sub' && invoiceParcelCount > 1) {
-      // DPD all-sub: cost_price may have been stored as a per-parcel amount if the
-      // charge was originally created with parcel_qty=1 (e.g. webhook under-reported
-      // parcel count). Normalise via rate_per_parcel (= cost_price / shipment.parcel_count)
-      // then scale to the invoice parcel count.
-      //   ● Total stored (£6.52), shipment_parcel_count=2 → rate=£3.26 × 2 = £6.52 ✓
-      //   ● Per-parcel stored (£3.26), shipment_parcel_count=1 → rate=£3.26 × 2 = £6.52 ✓
+    if (ctx.parcelPricing === 'all_sub' && invoiceParcelCount > 1 && shipmentParcelCount >= 2) {
+      // DPD all-sub normalisation: rate_per_parcel = cost_price / shipment.parcel_count.
+      // Only safe when shipment_parcel_count >= 2 — if it's null or 1 we can't distinguish
+      // a per-parcel stored amount from a total, and dividing by 1 then multiplying by
+      // invoice_parcel_count would double a correctly-stored total (the "ridiculous" values).
+      //   ● cost_price = total (£5.34), shipment_parcel_count=2 → rate=£2.67 × 2 = £5.34 ✓
+      //   ● cost_price = per-parcel (£2.67), shipment_parcel_count=2 → rate=£1.34?  n/a (Fix Costs handles this)
+      // When shipment_parcel_count is null/1, fall through to baseFromDb — after Fix Costs
+      // all cost_price values are the correct total so this will be accurate.
       const ratePerParcel = parseFloat(charge.rate_per_parcel) || 0;
       expectedBase = ratePerParcel > 0
         ? round2(ratePerParcel * invoiceParcelCount)
         : baseFromDb;
     } else {
+      // Single-parcel, or no reliable shipment parcel count — trust cost_price directly.
       expectedBase = baseFromDb;
     }
   } else {
@@ -1336,12 +1340,13 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
 
     if (poolHits.length > 0) {
       // ── Pool HIT: Bucket and Bill — trust the charge ──────────────────────
-      const charge             = poolHits[0];
-      const invoiceParcelCount = line.parcel_count || 1;
+      const charge              = poolHits[0];
+      const invoiceParcelCount  = line.parcel_count || 1;
+      const shipmentParcelCount = parseInt(charge.shipment_parcel_count) || 0;
       let expectedCost;
       if (separateFuelRows) {
         const baseFromDb = round2(parseFloat(charge.expected_cost) || 0);
-        if (parcelPricing === 'all_sub' && invoiceParcelCount > 1) {
+        if (parcelPricing === 'all_sub' && invoiceParcelCount > 1 && shipmentParcelCount >= 2) {
           const ratePerParcel = parseFloat(charge.rate_per_parcel) || 0;
           expectedCost = ratePerParcel > 0
             ? round2(ratePerParcel * invoiceParcelCount)
