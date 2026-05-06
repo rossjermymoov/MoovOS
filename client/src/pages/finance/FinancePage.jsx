@@ -1101,6 +1101,8 @@ export default function FinancePage() {
   const [batchRunning, setBatchRunning] = useState(false);
   const [fullRepriceRunning, setFullRepriceRunning] = useState(false);
   const [fullRepriceResult, setFullRepriceResult] = useState(null);
+  const [fixCostsRunning, setFixCostsRunning] = useState(false);
+  const [fixCostsResult, setFixCostsResult] = useState(null);
   const [purgeRunning, setPurgeRunning] = useState(false);
   const [relinkRunning, setRelinkRunning] = useState(false);
   const [activeTab, setActiveTab] = useState('created');
@@ -1273,6 +1275,22 @@ export default function FinancePage() {
     }
   }
 
+  async function runFixCosts() {
+    if (!confirm('This will recalculate cost prices on ALL courier charges (including already-billed ones) without changing sell prices or invoices. Use this to fix profit figures after a carrier pricing correction. Continue?')) return;
+    setFixCostsRunning(true);
+    setFixCostsResult(null);
+    try {
+      const result = await billingApi.fullRepriceCostsOnly();
+      setFixCostsResult(result);
+      qc.invalidateQueries(['billing-charges']);
+      qc.invalidateQueries(['billing-stats']);
+    } catch (err) {
+      setFixCostsResult({ error: err.message });
+    } finally {
+      setFixCostsRunning(false);
+    }
+  }
+
   const th = { fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase',
     letterSpacing: '0.06em', padding: '10px 12px', whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.06)' };
 
@@ -1346,6 +1364,22 @@ export default function FinancePage() {
           >
             <RefreshCw size={14} style={fullRepriceRunning ? { animation: 'spin 1s linear infinite' } : {}} />
             {fullRepriceRunning ? 'Repricing all…' : 'Reprice All'}
+          </button>
+          <button
+            onClick={runFixCosts}
+            disabled={fixCostsRunning}
+            title="Recalculate cost prices on all charges (including billed) without changing sell prices or invoices"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: fixCostsRunning ? 'rgba(0,200,83,0.08)' : 'rgba(0,200,83,0.12)',
+              border: '1px solid rgba(0,200,83,0.4)',
+              borderRadius: 8, color: '#00C853',
+              padding: '7px 14px', cursor: fixCostsRunning ? 'not-allowed' : 'pointer',
+              fontSize: 13, fontWeight: 700,
+            }}
+          >
+            <RefreshCw size={14} style={fixCostsRunning ? { animation: 'spin 1s linear infinite' } : {}} />
+            {fixCostsRunning ? 'Fixing costs…' : 'Fix Costs'}
           </button>
           <button
             className="btn-ghost"
@@ -1480,6 +1514,44 @@ export default function FinancePage() {
             </div>
           )}
           <button onClick={() => setFullRepriceResult(null)}
+            style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', padding: 2 }}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* Fix Costs result banner */}
+      {fixCostsResult && (
+        <div style={{
+          background: fixCostsResult.error ? 'rgba(244,67,54,0.08)' : 'rgba(0,200,83,0.08)',
+          border: `1px solid ${fixCostsResult.error ? 'rgba(244,67,54,0.3)' : 'rgba(0,200,83,0.35)'}`,
+          borderRadius: 10, padding: '12px 16px', marginBottom: 16,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        }}>
+          {fixCostsResult.error ? (
+            <span style={{ color: '#F44336', fontSize: 13 }}>Error: {fixCostsResult.error}</span>
+          ) : fixCostsResult.started ? (
+            <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ color: '#00C853', fontWeight: 700 }}>⟳ Cost fix started</span>
+              <span style={{ color: '#00C853' }}>{fixCostsResult.total} charges queued — refresh in a moment to see updated profit figures</span>
+            </div>
+          ) : (
+            <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ color: '#00C853', fontWeight: 700 }}>✓ Cost fix complete</span>
+              <span style={{ color: '#00C853' }}>{fixCostsResult.repriced} cost prices corrected</span>
+              {fixCostsResult.fuel_updated > 0 && (
+                <span style={{ color: '#34D399' }}>{fixCostsResult.fuel_updated} fuel costs recalculated</span>
+              )}
+              {fixCostsResult.no_rate > 0 && (
+                <span style={{ color: '#F59E0B' }}>{fixCostsResult.no_rate} no rate found</span>
+              )}
+              {fixCostsResult.errors > 0 && (
+                <span style={{ color: '#EF4444' }}>{fixCostsResult.errors} errors</span>
+              )}
+              <span style={{ color: '#555' }}>of {fixCostsResult.total} total</span>
+            </div>
+          )}
+          <button onClick={() => setFixCostsResult(null)}
             style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', padding: 2 }}>
             <X size={14} />
           </button>

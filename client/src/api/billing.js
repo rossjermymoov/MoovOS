@@ -13,6 +13,7 @@ export const billingApi = {
   getPayload:    (id)          => api.get(`/billing/charges/${id}/payload`).then(r => r.data),
   batchReprice:         ()     => api.post('/billing/batch-reprice').then(r => r.data),
   fullReprice:          ()     => api.post('/billing/full-reprice').then(r => r.data),
+  fullRepriceCostsOnly: ()     => api.post('/billing/full-reprice?cost_only=true').then(r => r.data),
   purgeTrackingEvents:  ()     => api.post('/billing/purge-tracking-events').then(r => r.data),
   relinkCustomers:      ()     => api.post('/billing/relink-customers').then(r => r.data),
 };

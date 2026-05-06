@@ -2141,15 +2141,28 @@ router.post('/batch-reprice', async (req, res, next) => {
 });
 
 // ─── POST /api/billing/full-reprice ──────────────────────────────────────────
-// Re-price ALL non-cancelled, non-billed courier charges (not just unpriced).
-// For each charge: re-run the rate lookup and update price + zone + weight class.
+// Re-price ALL non-cancelled courier charges (not just unpriced).
+// For each charge: re-run the rate lookup and update price + cost_price + zone.
 // Then recalculate and update any fuel charge on the same shipment.
-// Safe to run at any time — skips already-billed charges to avoid altering invoices.
+//
+// Query parameters:
+//   cost_only=true  — only update cost_price (and fuel cost_price); sell prices
+//                     and zone/weight-class labels are left untouched.
+//                     This allows correcting profit figures on already-billed
+//                     charges without affecting what was invoiced to customers.
+//                     When cost_only is NOT set, billed charges are skipped to
+//                     avoid altering invoices.
+//
+// carrier_direct charges (auto-created from carrier invoices) are always
+// excluded — they have no customer rate card and must not be overwritten.
 //
 router.post('/full-reprice', async (req, res, next) => {
   try {
+    const costOnly = req.query.cost_only === 'true';
+
     const { rows: charges } = await query(`
       SELECT c.id AS charge_id, c.customer_id, c.parcel_qty, c.price AS current_price,
+             c.billed, c.source,
              s.id AS shipment_id,
              s.dc_service_id, s.service_name AS s_service_name,
              s.total_weight_kg, s.parcel_count, s.parcel_weight_kg,
@@ -2158,7 +2171,8 @@ router.post('/full-reprice', async (req, res, next) => {
       LEFT JOIN shipments s ON s.id = c.shipment_id
       WHERE c.charge_type = 'courier'
         AND c.cancelled   = false
-        AND c.billed      = false
+        AND (c.source IS NULL OR c.source != 'carrier_direct')
+        ${costOnly ? '' : 'AND c.billed = false'}
       ORDER BY c.created_at ASC
     `);
 
@@ -2220,86 +2234,123 @@ router.post('/full-reprice', async (req, res, next) => {
           continue;
         }
 
-        const pricingMode   = await getParcelPricingMode(customerId);
-        const newPrice      = parseFloat(calcTotal(rate, parcelQty, pricingMode).toFixed(2));
         const allSubPricing = await isAllSubParcelPricing(dcServiceId);
         const costTotal     = calcCostTotal(rate, parcelQty, allSubPricing);
 
-        await query(`
-          UPDATE charges
-          SET price             = $1,
-              cost_price        = $2,
-              zone_name         = $3,
-              weight_class_name = $4,
-              price_auto        = true,
-              price_failure_reason = NULL,
-              updated_at        = NOW()
-          WHERE id = $5
-        `, [newPrice, costTotal, rate.zone_name, rate.weight_class_name, row.charge_id]);
+        if (costOnly) {
+          // cost_only mode: only update cost_price — sell price and labels unchanged.
+          // Safe on billed charges because we're not changing what was invoiced.
+          if (costTotal != null) {
+            await query(`
+              UPDATE charges
+              SET cost_price = $1,
+                  updated_at = NOW()
+              WHERE id = $2
+            `, [costTotal, row.charge_id]);
+            summary.repriced++;
 
-        summary.repriced++;
-        if (parseFloat(row.current_price) !== newPrice) summary.changed++;
-
-        // Recalculate fuel charge for this shipment
-        if (row.shipment_id && dcServiceId) {
-          try {
-            const fuelRes = await query(`
-              SELECT fg.id AS fuel_group_id,
-                     fg.standard_sell_pct, fg.fuel_surcharge_pct AS carrier_pct,
-                     cfgp.sell_pct AS customer_sell_pct
-              FROM courier_services cs
-              LEFT JOIN fuel_groups fg ON fg.id = cs.fuel_group_id
-              LEFT JOIN customer_fuel_group_pricing cfgp
-                     ON cfgp.fuel_group_id = fg.id AND cfgp.customer_id = $2
-              WHERE cs.service_code ILIKE $1 LIMIT 1
-            `, [dcServiceId, customerId]);
-
-            if (!fuelRes.rows.length || fuelRes.rows[0].fuel_group_id == null) {
-              summary.fuel_no_group++;
-            } else {
-              const fg       = fuelRes.rows[0];
-              const sellPct  = parseFloat(fg.customer_sell_pct ?? fg.standard_sell_pct ?? 0);
-              const costPct  = parseFloat(fg.carrier_pct ?? 0);
-
-              if (sellPct > 0) {
-                const newFuelPrice = Math.round(newPrice * sellPct / 100 * 100) / 100;
-                const newFuelCost  = costPct > 0 && costTotal != null
-                  ? Math.round(costTotal * costPct / 100 * 100) / 100
-                  : null;
-
-                const upd = await query(`
-                  UPDATE charges
-                  SET price      = $1,
-                      cost_price = COALESCE($2, cost_price),
-                      updated_at = NOW()
-                  WHERE shipment_id = $3 AND charge_type = 'fuel' AND cancelled = false
-                  RETURNING id
-                `, [newFuelPrice, newFuelCost, row.shipment_id]);
-
-                if (upd.rows.length) {
-                  summary.fuel_updated++;
-                } else {
-                  // No existing fuel charge — create one
+            // Also fix the fuel cost_price on this shipment (not fuel sell price)
+            if (row.shipment_id && dcServiceId) {
+              try {
+                const fuelRes = await query(`
+                  SELECT fg.fuel_surcharge_pct AS carrier_pct
+                  FROM courier_services cs
+                  LEFT JOIN fuel_groups fg ON fg.id = cs.fuel_group_id
+                  WHERE cs.service_code ILIKE $1 LIMIT 1
+                `, [dcServiceId]);
+                const costPct = parseFloat(fuelRes.rows[0]?.carrier_pct ?? 0);
+                if (costPct > 0) {
+                  const newFuelCost = Math.round(costTotal * costPct / 100 * 100) / 100;
                   await query(`
-                    INSERT INTO charges
-                      (shipment_id, customer_id, charge_type, service_name,
-                       price, cost_price, price_auto, parcel_qty)
-                    VALUES ($1, $2, 'fuel', $3, $4, $5, true, 1)
-                  `, [row.shipment_id, customerId, row.s_service_name || serviceName, newFuelPrice, newFuelCost]);
+                    UPDATE charges
+                    SET cost_price = $1, updated_at = NOW()
+                    WHERE shipment_id = $2 AND charge_type = 'fuel' AND cancelled = false
+                  `, [newFuelCost, row.shipment_id]);
                   summary.fuel_updated++;
                 }
-              }
+              } catch { /* non-fatal */ }
             }
-          } catch { /* non-fatal */ }
-        }
+          }
+        } else {
+          // Standard mode: update sell price + cost_price + labels (billed=false only)
+          const pricingMode = await getParcelPricingMode(customerId);
+          const newPrice    = parseFloat(calcTotal(rate, parcelQty, pricingMode).toFixed(2));
 
-        // Recalculate surcharge charges (e.g. HGV per-parcel after charge_per setting change)
-        if (row.shipment_id) {
-          try {
-            await repriceSurchargesForShipment(
-              row.shipment_id, customerId, dcServiceId, parcelQty, newPrice
-            );
-          } catch { /* non-fatal */ }
+          await query(`
+            UPDATE charges
+            SET price             = $1,
+                cost_price        = $2,
+                zone_name         = $3,
+                weight_class_name = $4,
+                price_auto        = true,
+                price_failure_reason = NULL,
+                updated_at        = NOW()
+            WHERE id = $5
+          `, [newPrice, costTotal, rate.zone_name, rate.weight_class_name, row.charge_id]);
+
+          summary.repriced++;
+          if (parseFloat(row.current_price) !== newPrice) summary.changed++;
+
+          // Recalculate fuel charge (both sell and cost)
+          if (row.shipment_id && dcServiceId) {
+            try {
+              const fuelRes = await query(`
+                SELECT fg.id AS fuel_group_id,
+                       fg.standard_sell_pct, fg.fuel_surcharge_pct AS carrier_pct,
+                       cfgp.sell_pct AS customer_sell_pct
+                FROM courier_services cs
+                LEFT JOIN fuel_groups fg ON fg.id = cs.fuel_group_id
+                LEFT JOIN customer_fuel_group_pricing cfgp
+                       ON cfgp.fuel_group_id = fg.id AND cfgp.customer_id = $2
+                WHERE cs.service_code ILIKE $1 LIMIT 1
+              `, [dcServiceId, customerId]);
+
+              if (!fuelRes.rows.length || fuelRes.rows[0].fuel_group_id == null) {
+                summary.fuel_no_group++;
+              } else {
+                const fg       = fuelRes.rows[0];
+                const sellPct  = parseFloat(fg.customer_sell_pct ?? fg.standard_sell_pct ?? 0);
+                const costPct  = parseFloat(fg.carrier_pct ?? 0);
+
+                if (sellPct > 0) {
+                  const newFuelPrice = Math.round(newPrice * sellPct / 100 * 100) / 100;
+                  const newFuelCost  = costPct > 0 && costTotal != null
+                    ? Math.round(costTotal * costPct / 100 * 100) / 100
+                    : null;
+
+                  const upd = await query(`
+                    UPDATE charges
+                    SET price      = $1,
+                        cost_price = COALESCE($2, cost_price),
+                        updated_at = NOW()
+                    WHERE shipment_id = $3 AND charge_type = 'fuel' AND cancelled = false
+                    RETURNING id
+                  `, [newFuelPrice, newFuelCost, row.shipment_id]);
+
+                  if (upd.rows.length) {
+                    summary.fuel_updated++;
+                  } else {
+                    await query(`
+                      INSERT INTO charges
+                        (shipment_id, customer_id, charge_type, service_name,
+                         price, cost_price, price_auto, parcel_qty)
+                      VALUES ($1, $2, 'fuel', $3, $4, $5, true, 1)
+                    `, [row.shipment_id, customerId, row.s_service_name || serviceName, newFuelPrice, newFuelCost]);
+                    summary.fuel_updated++;
+                  }
+                }
+              }
+            } catch { /* non-fatal */ }
+          }
+
+          // Recalculate surcharge charges (e.g. HGV per-parcel)
+          if (row.shipment_id) {
+            try {
+              await repriceSurchargesForShipment(
+                row.shipment_id, customerId, dcServiceId, parcelQty, newPrice
+              );
+            } catch { /* non-fatal */ }
+          }
         }
 
       } catch (err) {
