@@ -181,7 +181,15 @@ async function buildVerifiedPool(carrierId) {
       )                 AS tracking_codes,
       s.dc_service_id,
       s.total_weight_kg AS declared_weight_kg,
+      s.parcel_count    AS shipment_parcel_count,
       cu.account_number AS customer_account,
+      -- rate_per_parcel: normalised per-parcel base cost regardless of how cost_price was stored.
+      -- For charges created with wrong parcel_qty, cost_price = per-parcel rate and
+      -- shipment_parcel_count = 1 → rate_per_parcel = cost_price.
+      -- For correctly-stored charges, cost_price = total → rate_per_parcel = total / n.
+      -- Multiplying rate_per_parcel × invoice_parcel_count gives the correct expected total
+      -- for DPD all-sub regardless of which format was stored.
+      ROUND(c.cost_price::numeric / GREATEST(COALESCE(s.parcel_count, 1), 1), 4) AS rate_per_parcel,
       -- total_cost_price: base courier cost + all fuel/surcharge charges for this shipment.
       -- This is the single source of truth for what we expect to pay the carrier.
       -- Set correctly at booking time by pricingEngine / billing.js.
@@ -1125,16 +1133,27 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   // rows, so the freight row's carrier_amount = base only. Compare against
   // cost_price (base) not total_cost_price (base + fuel). Overhead rows are
   // already auto-accepted above via the carrier_overhead path.
-  const expectedBase = ctx.separateFuelRows
-    ? round2(parseFloat(charge.expected_cost)    || 0)
-    : round2(parseFloat(charge.total_cost_price) || 0);
-
-  // expectedBase = charges.cost_price — the total cost for ALL parcels in this
-  // shipment, accumulated by pricingEngine.js across the parcel loop before
-  // consolidation (see pricingEngine.js: totalBaseCost = sum of r.baseCost).
-  // Do NOT multiply by parcel_count here: the total is already stored.
-  // (parcel_pricing='all_sub' only affects handleCarrierDirect, which gets a
-  // per-parcel rate from computeGhostCharge and genuinely needs multiplication.)
+  const invoiceParcelCount = line.parcel_count || 1;
+  let expectedBase;
+  if (ctx.separateFuelRows) {
+    const baseFromDb = round2(parseFloat(charge.expected_cost) || 0);
+    if (ctx.parcelPricing === 'all_sub' && invoiceParcelCount > 1) {
+      // DPD all-sub: cost_price may have been stored as a per-parcel amount if the
+      // charge was originally created with parcel_qty=1 (e.g. webhook under-reported
+      // parcel count). Normalise via rate_per_parcel (= cost_price / shipment.parcel_count)
+      // then scale to the invoice parcel count.
+      //   ● Total stored (£6.52), shipment_parcel_count=2 → rate=£3.26 × 2 = £6.52 ✓
+      //   ● Per-parcel stored (£3.26), shipment_parcel_count=1 → rate=£3.26 × 2 = £6.52 ✓
+      const ratePerParcel = parseFloat(charge.rate_per_parcel) || 0;
+      expectedBase = ratePerParcel > 0
+        ? round2(ratePerParcel * invoiceParcelCount)
+        : baseFromDb;
+    } else {
+      expectedBase = baseFromDb;
+    }
+  } else {
+    expectedBase = round2(parseFloat(charge.total_cost_price) || 0);
+  }
   const fullExpected = round2(expectedBase + colSurchargeTotal);
   const delta        = round2(carrierAmount - fullExpected);
 
@@ -1284,7 +1303,7 @@ async function insertLine(runId, data) {
 // Bucket and Bill: expected = charge.total_cost_price (same as processLine).
 
 export async function reprocessMappedLines(runId, rawServiceCode, serviceId, carrierId) {
-  const { separateFuelRows } = await getCarrierProfileOptions(carrierId);
+  const { separateFuelRows, parcelPricing } = await getCarrierProfileOptions(carrierId);
 
   const linesRes = await query(`
     SELECT
@@ -1317,12 +1336,24 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
 
     if (poolHits.length > 0) {
       // ── Pool HIT: Bucket and Bill — trust the charge ──────────────────────
-      const charge       = poolHits[0];
-      const expectedCost = separateFuelRows
-        ? round2(parseFloat(charge.expected_cost)    || 0)
-        : round2(parseFloat(charge.total_cost_price) || 0);
-      const delta        = round2(carrierAmount - expectedCost);
-      const isMatch      = Math.abs(delta) < 0.02;
+      const charge             = poolHits[0];
+      const invoiceParcelCount = line.parcel_count || 1;
+      let expectedCost;
+      if (separateFuelRows) {
+        const baseFromDb = round2(parseFloat(charge.expected_cost) || 0);
+        if (parcelPricing === 'all_sub' && invoiceParcelCount > 1) {
+          const ratePerParcel = parseFloat(charge.rate_per_parcel) || 0;
+          expectedCost = ratePerParcel > 0
+            ? round2(ratePerParcel * invoiceParcelCount)
+            : baseFromDb;
+        } else {
+          expectedCost = baseFromDb;
+        }
+      } else {
+        expectedCost = round2(parseFloat(charge.total_cost_price) || 0);
+      }
+      const delta   = round2(carrierAmount - expectedCost);
+      const isMatch = Math.abs(delta) < 0.02;
 
       await query(`
         UPDATE reconciliation_lines
