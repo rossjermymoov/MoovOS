@@ -589,11 +589,16 @@ export async function processShipment(payload) {
     if (!serviceCode) throw new Error('No service_code in payload — checked shipment.courier.service_code, shipment.dc_service_id, and request_shipment.dc_service_id');
 
     const svcRow = await query(
-      'SELECT id, service_code, fuel_group_id, charges_per_parcel FROM courier_services WHERE service_code = $1',
+      'SELECT id, service_code, fuel_group_id, charges_per_parcel, all_sub_parcel_pricing FROM courier_services WHERE service_code = $1',
       [serviceCode]
     );
     if (!svcRow.rows.length) throw new Error(`No courier service found with code = ${serviceCode}`);
-    const { id: serviceId, fuel_group_id: fuelGroupId, charges_per_parcel: chargesPerParcel } = svcRow.rows[0];
+    const {
+      id: serviceId,
+      fuel_group_id: fuelGroupId,
+      charges_per_parcel: chargesPerParcel,
+      all_sub_parcel_pricing: allSubParcelPricing,
+    } = svcRow.rows[0];
 
     // ── 3. MATCH ZONE ─────────────────────────────────────────────────────────
     // A missing zone is NOT a throw — charges are created with status='pricing_error'
@@ -743,7 +748,11 @@ export async function processShipment(payload) {
       }
 
       // ── Step 4: Dual fuel ──────────────────────────────────────────────────
-      const useFirstParcel = isFirst || !multi_box_pricing;
+      // For carriers with all_sub_parcel_pricing (e.g. DPD), every parcel in a
+      // multi-parcel shipment — including the first — is billed at price_sub.
+      // Standard carriers use price_first for parcel 1, price_sub for the rest.
+      const forceSubRate = allSubParcelPricing && totalParcels > 1;
+      const useFirstParcel = forceSubRate ? false : (isFirst || !multi_box_pricing);
       const baseCost = useFirstParcel
         ? costResult.cost
         : (costResult.costSub ?? costResult.cost);
@@ -786,10 +795,12 @@ export async function processShipment(payload) {
         profit,
         margin_pct:         totalSell > 0 ? round2((profit / totalSell) * 100) : 0,
         // Meta
-        zone:               zone.name,
-        fuel_group:         fuelGroupName,
-        parcel_number:      parcelNum,
-        is_first_parcel:    isFirst,
+        zone:                    zone.name,
+        fuel_group:              fuelGroupName,
+        parcel_number:           parcelNum,
+        is_first_parcel:         isFirst,
+        all_sub_parcel_pricing:  allSubParcelPricing || false,
+        force_sub_rate:          forceSubRate,
       };
 
       console.log(
