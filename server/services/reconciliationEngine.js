@@ -90,7 +90,10 @@ async function getCarrierProfileOptions(carrierId) {
     [carrierId]
   );
   const map = res.rows[0]?.column_map || {};
-  return { separateFuelRows: Boolean(map.separate_fuel_rows) };
+  return {
+    separateFuelRows: Boolean(map.separate_fuel_rows),
+    parcelPricing:    map.parcel_pricing || null,   // 'all_sub' for DPD
+  };
 }
 
 // ─── Phase 1b: Service Code Normalisation ────────────────────────────────────
@@ -598,9 +601,12 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   const startTime = Date.now();
 
   // Load carrier profile options (e.g. separate_fuel_rows for DPD)
-  const { separateFuelRows } = await getCarrierProfileOptions(carrierId);
+  const { separateFuelRows, parcelPricing } = await getCarrierProfileOptions(carrierId);
   if (separateFuelRows) {
     console.log(`[recon engine] Run ${runId}: separate_fuel_rows=true — freight lines compared against base cost_price only; overhead rows auto-accepted`);
+  }
+  if (parcelPricing) {
+    console.log(`[recon engine] Run ${runId}: parcel_pricing=${parcelPricing} — expected scaled by invoice parcel_count`);
   }
 
   const reconcilableLines = lines.filter(l => String(l.tracking_number || '').trim());
@@ -632,6 +638,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   const _custCache = new Map();
   const ctx = {
     separateFuelRows,
+    parcelPricing,
     async customerLookup(accountNumber) {
       if (!accountNumber) return null;
       const k = String(accountNumber).trim();
@@ -1111,7 +1118,14 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   const expectedBase = ctx.separateFuelRows
     ? round2(parseFloat(charge.expected_cost)    || 0)
     : round2(parseFloat(charge.total_cost_price) || 0);
-  const fullExpected = round2(expectedBase + colSurchargeTotal);
+
+  // all_sub parcel pricing (DPD): every parcel in a multi-parcel consignment
+  // is billed at the sub-rate.  Our stored cost_price is the per-parcel rate;
+  // multiply by the invoice parcel_count to get the full expected amount.
+  const invoiceParcelCount = (ctx.parcelPricing === 'all_sub' && (line.parcel_count || 1) > 1)
+    ? (line.parcel_count || 1)
+    : 1;
+  const fullExpected = round2((round2(expectedBase * invoiceParcelCount)) + colSurchargeTotal);
   const delta        = round2(carrierAmount - fullExpected);
 
   line._expected_amount = fullExpected;
