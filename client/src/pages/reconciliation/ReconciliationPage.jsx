@@ -1176,9 +1176,33 @@ function StartRunButton({ carrierId, invoiceRef, invoiceDate, lines, onSuccess, 
 export default function ReconciliationPage() {
   const navigate     = useNavigate();
   const qc           = useQueryClient();
-  const [showUpload,  setShowUpload]  = useState(false);
-  const [showProfiles, setShowProfiles] = useState(false);
+  const [showUpload,    setShowUpload]    = useState(false);
+  const [showProfiles,  setShowProfiles]  = useState(false);
   const [deletingRunId, setDeletingRunId] = useState(null);
+  const [pollingRunId,  setPollingRunId]  = useState(null);
+
+  // Poll run status after submission until it leaves 'processing'
+  useEffect(() => {
+    if (!pollingRunId) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const res = await api.get(`/reconciliation/runs/${pollingRunId}`);
+        const status = res.data?.run?.status || res.data?.status;
+        if (!cancelled && status && status !== 'processing') {
+          setPollingRunId(null);
+          qc.invalidateQueries({ queryKey: ['recon-runs'] });
+          navigate(`/reconciliation/${pollingRunId}`);
+        } else if (!cancelled) {
+          setTimeout(poll, 2000);
+        }
+      } catch {
+        if (!cancelled) setTimeout(poll, 3000);
+      }
+    };
+    poll();
+    return () => { cancelled = true; };
+  }, [pollingRunId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: runsData, isLoading: runsLoading } = useQuery({
     queryKey: ['recon-runs'],
@@ -1202,8 +1226,7 @@ export default function ReconciliationPage() {
 
   function handleRunSuccess(runId) {
     setShowUpload(false);
-    qc.invalidateQueries({ queryKey: ['recon-runs'] });
-    setTimeout(() => navigate(`/reconciliation/${runId}`), 800);
+    setPollingRunId(runId);
   }
 
   async function handleDeleteRun(e, runId) {
@@ -1221,6 +1244,29 @@ export default function ReconciliationPage() {
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+
+      {/* Processing overlay — shown while engine runs in background */}
+      {pollingRunId && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          background: 'rgba(13,17,23,0.85)', backdropFilter: 'blur(4px)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          gap: 20,
+        }}>
+          <style>{`
+            @keyframes recon-spin { to { transform: rotate(360deg); } }
+          `}</style>
+          <div style={{
+            width: 56, height: 56, borderRadius: '50%',
+            border: '4px solid rgba(255,255,255,0.1)',
+            borderTopColor: '#3FB950',
+            animation: 'recon-spin 0.9s linear infinite',
+          }} />
+          <div style={{ color: '#E6EDF3', fontSize: 16, fontWeight: 600 }}>Processing invoice…</div>
+          <div style={{ color: '#888', fontSize: 13 }}>Matching {' '}lines against your verified shipments</div>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
         <div>
