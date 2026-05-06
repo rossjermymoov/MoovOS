@@ -2843,6 +2843,44 @@ router.get('/raw-trace/:tracking', async (req, res) => {
       }
     }
 
+    // ── Profile: what surcharge_columns are stored in the DPD profile ────────
+    const profileRes = await query(`
+      SELECT p.column_map
+      FROM   carrier_csv_profiles p
+      JOIN   couriers cu ON cu.id = p.carrier_id
+      WHERE  (cu.code ILIKE 'DPD' OR cu.name ILIKE 'DPD%')
+        AND  p.profile_name = 'DPD Standard Invoice'
+      LIMIT 1
+    `);
+
+    let profileSurchargeColumns = null;
+    let profileExcludedColumns  = null;
+
+    if (profileRes.rows.length > 0) {
+      const cm = profileRes.rows[0].column_map;
+      profileSurchargeColumns = cm.surcharge_columns || [];
+      profileExcludedColumns  = cm.excluded_columns  || [];
+    }
+
+    // Simulate what findRowKey() does for each surcharge column.
+    // We don't have the actual CSV row here, but we can show what col values
+    // are stored and what the fuzzy suffix-strip produces — so the operator
+    // can see immediately if the stored col name can never match a CSV header.
+    const stripSuffix = s => s.replace(/\s+(charge|charges|fee|fees|surcharge|surcharges)$/i, '').trim();
+    const surchargeColAnalysis = Array.isArray(profileSurchargeColumns)
+      ? profileSurchargeColumns.map(entry => ({
+          stored_col:         entry.col,
+          surcharge_id:       entry.surcharge_id,
+          normalized:         (entry.col || '').toLowerCase().trim(),
+          suffix_stripped:    stripSuffix((entry.col || '').toLowerCase().trim()),
+          note: !entry.col
+            ? 'EMPTY — col is blank, will never extract anything'
+            : !entry.surcharge_id
+            ? 'NO_SURCHARGE_ID — surcharge_id is missing, amount extracted but ignored'
+            : 'OK — will match exact col name or any CSV header that suffix-strips to the same value',
+        }))
+      : [];
+
     // ── Gap 2: courier name visibility ────────────────────────────────────────
     const gapRes = await query(`
       WITH carrier_strings AS (
@@ -2904,6 +2942,11 @@ router.get('/raw-trace/:tracking', async (req, res) => {
         }[poolResult] || '',
       },
       maths,
+      profile_surcharge_columns: surchargeColAnalysis,
+      profile_excluded_columns:  profileExcludedColumns,
+      profile_note: surchargeColAnalysis.length === 0
+        ? 'NO SURCHARGE COLUMNS CONFIGURED — profile.surcharge_columns is empty. No column amounts will ever be extracted. This is why colSurchargeTotal = 0.'
+        : `${surchargeColAnalysis.length} surcharge column(s) configured. Check stored_col vs your CSV headers — they must match exactly or the suffix-stripped form must match.`,
       gap2_unmatched_couriers: gap2Unmatched.map(r => ({ courier: r.courier_str, active_verified_charges: r.n })),
       gap2_note: gap2Unmatched.length === 0
         ? 'All courier strings match a carrier — no pool visibility gaps.'
