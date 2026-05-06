@@ -2881,6 +2881,33 @@ router.get('/raw-trace/:tracking', async (req, res) => {
         }))
       : [];
 
+    // ── Latest reconciliation line for this tracking number ──────────────────
+    // Shows exactly what the engine stored: expected_amount, delta, status,
+    // and correction_metadata (which contains col_surcharge_total if > 0,
+    // and raw_col_values showing unmapped monetary columns).
+    const lineRes = await query(`
+      SELECT
+        rl.id,
+        rl.status,
+        rl.carrier_amount,
+        rl.expected_amount,
+        rl.delta,
+        rl.unmatched_reason,
+        rl.corrected_by,
+        rl.correction_metadata,
+        rl.raw_service_code,
+        rl.charge_type,
+        rl.created_at,
+        rr.id         AS run_id,
+        rr.created_at AS run_created_at,
+        rr.invoice_ref
+      FROM   reconciliation_lines rl
+      JOIN   reconciliation_runs  rr ON rr.id = rl.run_id
+      WHERE  rl.tracking_number = $1
+      ORDER  BY rl.created_at DESC
+      LIMIT  5
+    `, [tracking]);
+
     // ── Gap 2: courier name visibility ────────────────────────────────────────
     const gapRes = await query(`
       WITH carrier_strings AS (
@@ -2942,6 +2969,24 @@ router.get('/raw-trace/:tracking', async (req, res) => {
         }[poolResult] || '',
       },
       maths,
+      latest_recon_lines: lineRes.rows.map(l => ({
+        run_id:              l.run_id,
+        run_created_at:      l.run_created_at,
+        invoice_ref:         l.invoice_ref,
+        line_id:             l.id,
+        status:              l.status,
+        carrier_amount:      l.carrier_amount,
+        expected_amount:     l.expected_amount,
+        delta:               l.delta,
+        unmatched_reason:    l.unmatched_reason,
+        corrected_by:        l.corrected_by,
+        raw_service_code:    l.raw_service_code,
+        charge_type:         l.charge_type,
+        correction_metadata: l.correction_metadata,
+        col_surcharge_total_in_metadata: l.correction_metadata?.col_surcharge_total ?? null,
+        raw_col_values_in_metadata:      l.correction_metadata?.raw_col_values ?? null,
+        created_at:          l.created_at,
+      })),
       profile_surcharge_columns: surchargeColAnalysis,
       profile_excluded_columns:  profileExcludedColumns,
       profile_note: surchargeColAnalysis.length === 0
