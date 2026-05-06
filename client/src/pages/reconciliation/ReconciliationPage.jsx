@@ -258,6 +258,28 @@ function parseCSV(text, { skipRows = 0, returnPreamble = false } = {}) {
   return returnPreamble ? { rows, preamble } : rows;
 }
 
+// ─── Fuzzy column lookup ──────────────────────────────────────────────────────
+//
+// DPD invoice column names sometimes include a trailing " Charge" suffix that
+// may or may not be present in the saved profile (e.g. the profile stores
+// "Oversized/Overweight" but the CSV header is "Oversized/Overweight Charge").
+// parseCSV lowercases all headers, so row keys are always lowercase.
+//
+// Strategy: try exact match first, then try stripping common trailing words
+// ("charge", "charges", "fee", "fees", "surcharge", "surcharges") from both
+// the target and all row keys and match on the stripped form.
+//
+// Returns the actual row key that matches, or null.
+function findRowKey(row, colNormalized) {
+  // 1. Exact match (already lowercase/trimmed)
+  if (Object.prototype.hasOwnProperty.call(row, colNormalized)) return colNormalized;
+  // 2. Suffix-stripped match
+  const stripSuffix = s => s.replace(/\s+(charge|charges|fee|fees|surcharge|surcharges)$/i, '').trim();
+  const strippedTarget = stripSuffix(colNormalized);
+  const match = Object.keys(row).find(k => stripSuffix(k) === strippedTarget);
+  return match || null;
+}
+
 function mapToInvoiceLine(row, colMap) {
   const get = (field) => {
     const key = colMap[field];
@@ -270,17 +292,20 @@ function mapToInvoiceLine(row, colMap) {
   // surcharge_columns = [{ col: '<csv header>', surcharge_id: '<uuid>' }, ...]
   // The engine will sum these across multi-parcel groups and insert corrected lines.
   //
-  // IMPORTANT: parseCSV lowercases all column headers, so row keys are always lowercase.
-  // Normalise col with toLowerCase().trim() before lookup to guard against profiles
-  // that were saved before this normalisation was in place (e.g. "Oversized/Overweight"
-  // instead of "oversized/overweight") — a mismatch causes row[col] to return undefined
-  // and silently drops the surcharge, causing a price_mismatch that should have matched.
+  // Uses findRowKey() for a two-stage lookup:
+  //   1. Exact match after lowercasing (handles profiles stored in mixed case)
+  //   2. Suffix-stripped fuzzy match (handles "Oversized/Overweight" → "Oversized/Overweight Charge")
+  // Build a map of normCol → actual row key so we can also exclude matched cols from raw_col_values.
+  const surchargeColKeyMap = {};   // { normCol: actualRowKey | null }
   const surcharge_amounts = {};
   if (Array.isArray(colMap.surcharge_columns)) {
     for (const { col, surcharge_id } of colMap.surcharge_columns) {
       if (!col || !surcharge_id) continue;
       const normCol = col.toLowerCase().trim();
-      const val = row[normCol];
+      const rowKey = findRowKey(row, normCol);
+      surchargeColKeyMap[normCol] = rowKey;
+      if (!rowKey) continue;
+      const val = row[rowKey];
       const amt = parseFloat(String(val || '').replace(/[£,]/g, '')) || 0;
       if (amt > 0) surcharge_amounts[surcharge_id] = amt;
     }
@@ -290,12 +315,23 @@ function mapToInvoiceLine(row, colMap) {
   // by the profile (not a core field, not a mapped surcharge column).
   // These are stored on price_mismatch lines in correction_metadata so operators
   // can see exactly which CSV column is causing the delta (e.g. "Oversized/Overweight: £6.00").
-  // Normalise col values to lowercase so they match the lowercased row keys from parseCSV.
+  //
+  // A column is considered "handled" if:
+  //   a) it's a core profile field (tracking number, revenue, weight, etc.)
+  //   b) it's the actual row key resolved by findRowKey for a surcharge column
+  //   c) it's explicitly excluded (fuel/carriage/energy — profile.excluded_columns)
   const mappedProfileCols = new Set([
+    // Core profile fields (already lowercase via parseCSV)
     ...Object.entries(colMap)
-      .filter(([k, v]) => typeof v === 'string' && v && !['surcharge_columns','header_row_skip','parcel_pricing','preamble_fields'].includes(k))
+      .filter(([k, v]) => typeof v === 'string' && v &&
+        !['surcharge_columns','header_row_skip','parcel_pricing','preamble_fields','excluded_columns'].includes(k))
       .map(([, v]) => v.toLowerCase().trim()),
-    ...(Array.isArray(colMap.surcharge_columns) ? colMap.surcharge_columns.map(sc => sc.col?.toLowerCase().trim()).filter(Boolean) : []),
+    // Actual row keys resolved for each surcharge column (exact OR fuzzy-matched)
+    ...Object.values(surchargeColKeyMap).filter(Boolean),
+    // Explicitly excluded columns (fuel, carriage, global energy — not surcharges)
+    ...(Array.isArray(colMap.excluded_columns)
+      ? colMap.excluded_columns.map(ec => ec.col?.toLowerCase().trim()).filter(Boolean)
+      : []),
   ]);
   const raw_col_values = {};
   for (const [header, val] of Object.entries(row)) {
@@ -1137,14 +1173,22 @@ function UploadModal({ couriers, onClose, onSuccess }) {
         {/* ── Step 3 — Confirm ──────────────────────────────────────────────── */}
         {step === 3 && (() => {
           // Diagnose surcharge column mappings against actual CSV headers.
-          // parseCSV lowercases all headers, so compare case-insensitively.
-          const csvHeaderSet = new Set(headers.map(h => h.toLowerCase().trim()));
+          // Use the same two-stage findRowKey logic as mapToInvoiceLine:
+          //   1. Exact match (case-insensitive via toLowerCase)
+          //   2. Suffix-stripped fuzzy match (e.g. "oversized/overweight" → "oversized/overweight charge")
+          // This means "matched" here means the engine WILL successfully extract the amount.
+          const diagRow = csvRows[0] || {};
           const surchargeColDiag = Array.isArray(colMap.surcharge_columns)
-            ? colMap.surcharge_columns.map(sc => ({
-                col:          sc.col || '',
-                surcharge_id: sc.surcharge_id,
-                matched:      csvHeaderSet.has((sc.col || '').toLowerCase().trim()),
-              }))
+            ? colMap.surcharge_columns.map(sc => {
+                const normCol  = (sc.col || '').toLowerCase().trim();
+                const rowKey   = findRowKey(diagRow, normCol);
+                return {
+                  col:          sc.col || '',
+                  surcharge_id: sc.surcharge_id,
+                  matched:      Boolean(rowKey),
+                  actualHeader: rowKey || null,   // the real CSV header found (may differ by "Charge" suffix)
+                };
+              })
             : [];
           const unmatchedSurchargeCols = surchargeColDiag.filter(d => d.col && !d.matched);
 
@@ -1171,34 +1215,43 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                     SURCHARGE COLUMN CHECK
                   </div>
                   {surchargeColDiag.map(d => (
-                    <div key={d.col} style={{
-                      display: 'flex', alignItems: 'center', gap: 8,
-                      fontSize: 12, marginBottom: 4,
-                    }}>
-                      <span style={{
-                        width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-                        background: d.matched ? '#00C853' : '#FFAA00',
-                      }} />
-                      <span style={{ color: d.matched ? '#CCC' : '#FFAA00', fontFamily: 'monospace' }}>
-                        {d.col || <em style={{ color: '#555' }}>no column</em>}
-                      </span>
-                      {!d.matched && d.col && (
-                        <span style={{ color: '#888', fontSize: 11 }}>
-                          — not found in this CSV&apos;s headers
+                    <div key={d.col} style={{ marginBottom: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                        <span style={{
+                          width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                          background: d.matched ? '#00C853' : '#FF5252',
+                        }} />
+                        <span style={{ color: d.matched ? '#CCC' : '#FF5252', fontFamily: 'monospace' }}>
+                          {d.col || <em style={{ color: '#555' }}>no column</em>}
                         </span>
-                      )}
+                        {d.matched && d.actualHeader && d.actualHeader !== d.col.toLowerCase().trim() && (
+                          <span style={{ color: '#888', fontSize: 11 }}>
+                            → matched as <span style={{ fontFamily: 'monospace', color: '#00C853' }}>{d.actualHeader}</span>
+                          </span>
+                        )}
+                        {d.matched && !d.actualHeader && (
+                          <span style={{ color: '#00C853', fontSize: 11 }}>✓</span>
+                        )}
+                        {!d.matched && d.col && (
+                          <span style={{ color: '#888', fontSize: 11 }}>— not found in this CSV</span>
+                        )}
+                      </div>
                     </div>
                   ))}
                   {unmatchedSurchargeCols.length > 0 && (
                     <div style={{
                       marginTop: 10, padding: '8px 10px',
-                      background: 'rgba(255,170,0,0.08)',
-                      border: '1px solid rgba(255,170,0,0.25)',
-                      borderRadius: 6, fontSize: 11, color: '#FFAA00',
+                      background: 'rgba(213,0,0,0.08)',
+                      border: '1px solid rgba(213,0,0,0.25)',
+                      borderRadius: 6, fontSize: 11, color: '#FF5252',
                     }}>
-                      ⚠ {unmatchedSurchargeCols.length} surcharge column{unmatchedSurchargeCols.length > 1 ? 's' : ''} not found in this
-                      invoice&apos;s headers. Those surcharges will not be deducted from the delta.
-                      Go back to Step 2 and update the column name to match exactly what appears in this file.
+                      ✗ {unmatchedSurchargeCols.length} surcharge column{unmatchedSurchargeCols.length > 1 ? 's' : ''} not found.
+                      Go back to Step 2, remove the broken entry, and re-add it by selecting the correct column name from the dropdown.
+                    </div>
+                  )}
+                  {unmatchedSurchargeCols.length === 0 && surchargeColDiag.length > 0 && (
+                    <div style={{ marginTop: 8, fontSize: 11, color: '#00C853' }}>
+                      All {surchargeColDiag.length} surcharge column{surchargeColDiag.length > 1 ? 's' : ''} matched — these will be automatically deducted from any price difference.
                     </div>
                   )}
                 </div>
