@@ -360,7 +360,22 @@ function mapToInvoiceLine(row, colMap) {
     account_number:   get('account_number').trim(),
     service_code:     get('service_code').trim(),
     charge_type:      get('charge_type').trim() || 'base',
-    carrier_amount:   parseFloat(get('carrier_amount').replace(/[£,]/g, '')) || 0,
+    // carrier_amount = Revenue column + all surcharge column amounts.
+    //
+    // DPD (and similar carriers) report the base delivery charge in Revenue and
+    // surcharges (Oversized/Overweight, Clearance, etc.) in SEPARATE columns on
+    // the SAME row.  The engine compares carrier_amount against:
+    //   fullExpected = cost_price + colSurchargeTotal
+    // so carrier_amount must be the TOTAL the carrier billed (base + surcharges),
+    // not just Revenue.  Without this addition the delta is always -£surcharge
+    // (carrier looks under-charged relative to our expected total).
+    //
+    // For carriers where Revenue already includes all surcharges (e.g. DHL),
+    // surcharge_amounts will be empty and this addition is 0 — no impact.
+    carrier_amount: Math.round((
+      (parseFloat(get('carrier_amount').replace(/[£,]/g, '')) || 0)
+      + Object.values(surcharge_amounts).reduce((s, v) => s + v, 0)
+    ) * 100) / 100,
     billed_weight_kg: parseFloat(get('billed_weight_kg')) || null,
     // Piece/item count per line (DHL col J, DPD "items" column).
     // Used by the engine for multi-parcel expected cost calculation and HGV aggregate total.
