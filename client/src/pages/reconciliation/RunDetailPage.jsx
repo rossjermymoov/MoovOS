@@ -5,7 +5,8 @@
  * Tabs: Overview | Matched | Corrected | Unmatched (human review queue) | Mappings
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -87,14 +88,18 @@ function ReasonLabel({ reason, correctedBy }) {
 }
 
 // ─── Resolve drawer ───────────────────────────────────────────────────────────
-function ResolveDrawer({ line, courierId, onClose, onResolved }) {
+function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolutionType }) {
   const isUnknownCode = line.unmatched_reason === 'unknown_service_code';
 
-  // For unknown service code lines default straight into the mapping flow
+  // For unknown service code lines default straight into the mapping flow.
+  // defaultResolutionType lets callers (e.g. the DeltaCell tooltip) pre-select
+  // a resolution type without the operator having to pick it manually.
   const [scope,           setScope]           = useState('once');
   const [saveRule,        setSaveRule]        = useState(isUnknownCode);   // "Save as Permanent Rule" checkbox
   const [ruleScope,       setRuleScope]       = useState('global');        // 'global' | 'customer'
-  const [resolutionType,  setResolutionType]  = useState(isUnknownCode ? 'map_to_service' : '');
+  const [resolutionType,  setResolutionType]  = useState(
+    defaultResolutionType || (isUnknownCode ? 'map_to_service' : '')
+  );
   const [resolutionValue, setResolutionValue] = useState(
     // Pre-populate with suggested service if the engine found one
     isUnknownCode && line.suggested_service_id ? String(line.suggested_service_id) : ''
@@ -876,8 +881,115 @@ function TraceModal({ runId, lineId, trackingNumber, onClose }) {
   );
 }
 
+// ─── Delta tooltip cell ───────────────────────────────────────────────────────
+// For price_mismatch lines: hover reveals a breakdown popover with a quick
+// "Map to surcharge" shortcut so the operator doesn't have to open the full
+// Resolve drawer just to identify what a carrier surcharge is.
+function DeltaCell({ line, onResolveAsSurcharge }) {
+  const [tooltipPos, setTooltipPos] = useState(null);
+  const ref = useRef(null);
+
+  const delta    = parseFloat(line.delta           || 0);
+  const carrier  = parseFloat(line.carrier_amount  || 0);
+  const expected = parseFloat(line.expected_amount || 0);
+
+  if (line.delta == null) return <span style={{ color: '#555' }}>—</span>;
+
+  const isPriceMismatch = line.unmatched_reason === 'price_mismatch';
+  const isPositive = delta > 0.01;
+  const color = isPositive ? '#FF5252' : delta < -0.01 ? '#00C853' : '#555';
+
+  function handleMouseEnter() {
+    if (!isPriceMismatch || !ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    setTooltipPos({ top: rect.top, left: rect.left + rect.width / 2 });
+  }
+
+  return (
+    <>
+      <span
+        ref={ref}
+        style={{ color, fontWeight: 600, cursor: isPriceMismatch ? 'help' : 'default', display: 'inline-block' }}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={() => setTooltipPos(null)}
+      >
+        {delta > 0 ? '+' : ''}£{delta.toFixed(2)}
+      </span>
+
+      {tooltipPos && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            top:  tooltipPos.top,
+            left: tooltipPos.left,
+            transform: 'translate(-50%, calc(-100% - 10px))',
+            zIndex: 9999,
+            background: '#0D1117',
+            border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: 8, padding: '12px 14px', width: 230,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
+            pointerEvents: 'all',
+          }}
+          onMouseEnter={() => {/* keep visible */}}
+          onMouseLeave={() => setTooltipPos(null)}
+        >
+          {/* Arrow */}
+          <div style={{
+            position: 'absolute', bottom: -6, left: '50%', transform: 'translateX(-50%)',
+            width: 10, height: 10, background: '#0D1117',
+            borderRight: '1px solid rgba(255,255,255,0.15)',
+            borderBottom: '1px solid rgba(255,255,255,0.15)',
+            transform: 'translateX(-50%) rotate(45deg)',
+          }} />
+
+          <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+            Price Mismatch
+          </div>
+
+          {/* Breakdown */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+              <span style={{ color: '#888' }}>Carrier charged</span>
+              <span style={{ color: '#E6EDF3', fontWeight: 600 }}>£{carrier.toFixed(2)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+              <span style={{ color: '#888' }}>Expected</span>
+              <span style={{ color: '#888' }}>£{expected.toFixed(2)}</span>
+            </div>
+            <div style={{
+              borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 5,
+              display: 'flex', justifyContent: 'space-between', fontSize: 11,
+            }}>
+              <span style={{ color: '#888' }}>{isPositive ? 'Carrier surplus' : 'Carrier deficit'}</span>
+              <span style={{ color, fontWeight: 700 }}>{delta > 0 ? '+' : ''}£{delta.toFixed(2)}</span>
+            </div>
+          </div>
+
+          <div style={{ fontSize: 10, color: '#555', marginBottom: 10, lineHeight: 1.5 }}>
+            {isPositive
+              ? 'Carrier charged more than expected — common causes: heavyweight surcharge, out-of-zone fee, or address correction.'
+              : 'Carrier charged less than expected — possible credit, discount, or data error.'}
+          </div>
+
+          <button
+            onClick={() => { setTooltipPos(null); onResolveAsSurcharge(line); }}
+            style={{
+              width: '100%', padding: '7px 10px', borderRadius: 6, cursor: 'pointer',
+              background: 'rgba(0,200,83,0.12)', border: '1px solid rgba(0,200,83,0.35)',
+              color: '#00C853', fontSize: 11, fontWeight: 700,
+            }}
+          >
+            Map to surcharge →
+          </button>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
+
 // ─── Lines table ──────────────────────────────────────────────────────────────
-function LinesTable({ lines, showResolve, onResolve, runId }) {
+function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, runId }) {
   const [traceLine, setTraceLine] = useState(null);
   return (
     <div style={{ overflowX: 'auto' }}>
@@ -915,11 +1027,10 @@ function LinesTable({ lines, showResolve, onResolve, runId }) {
                 {line.expected_amount != null ? `£${parseFloat(line.expected_amount).toFixed(2)}` : '—'}
               </td>
               <td style={{ padding: '9px 10px', fontWeight: 600 }}>
-                {line.delta != null ? (
-                  <span style={{ color: parseFloat(line.delta) > 0.01 ? '#FF5252' : parseFloat(line.delta) < -0.01 ? '#00C853' : '#555' }}>
-                    {parseFloat(line.delta) > 0 ? '+' : ''}£{parseFloat(line.delta).toFixed(2)}
-                  </span>
-                ) : '—'}
+                <DeltaCell
+                  line={line}
+                  onResolveAsSurcharge={onResolveAsSurcharge || (() => {})}
+                />
               </td>
               <td style={{ padding: '9px 10px' }}><StatusBadge status={line.status} /></td>
               <td style={{ padding: '9px 10px' }}>
@@ -1121,10 +1232,11 @@ export default function RunDetailPage() {
   const { id }     = useParams();
   const navigate   = useNavigate();
   const qc         = useQueryClient();
-  const [activeTab,     setActiveTab]     = useState('overview');
-  const [resolvingLine, setResolvingLine] = useState(null);
-  const [finalizing,    setFinalizing]    = useState(false);
-  const [finalizeError, setFinalizeError] = useState('');
+  const [activeTab,         setActiveTab]         = useState('overview');
+  const [resolvingLine,     setResolvingLine]     = useState(null);
+  const [defaultResolveType, setDefaultResolveType] = useState(null);
+  const [finalizing,        setFinalizing]        = useState(false);
+  const [finalizeError,     setFinalizeError]     = useState('');
 
   const { data: run, isLoading: runLoading, refetch: refetchRun } = useQuery({
     queryKey: ['recon-run', id],
@@ -1401,7 +1513,8 @@ export default function RunDetailPage() {
             <LinesTable
               lines={unmatchedLines}
               showResolve
-              onResolve={setResolvingLine}
+              onResolve={(line) => { setDefaultResolveType(null); setResolvingLine(line); }}
+              onResolveAsSurcharge={(line) => { setDefaultResolveType('map_to_surcharge'); setResolvingLine(line); }}
               runId={id}
             />
           </div>
@@ -1414,7 +1527,8 @@ export default function RunDetailPage() {
           <LinesTable
             lines={currentLines}
             showResolve={false}
-            onResolve={setResolvingLine}
+            onResolve={(line) => { setDefaultResolveType(null); setResolvingLine(line); }}
+            onResolveAsSurcharge={(line) => { setDefaultResolveType('map_to_surcharge'); setResolvingLine(line); }}
             runId={id}
           />
         </div>
@@ -1425,11 +1539,13 @@ export default function RunDetailPage() {
         <ResolveDrawer
           line={resolvingLine}
           courierId={run.carrier_id}
-          onClose={() => setResolvingLine(null)}
+          defaultResolutionType={defaultResolveType}
+          onClose={() => { setResolvingLine(null); setDefaultResolveType(null); }}
           onResolved={() => {
             qc.invalidateQueries({ queryKey: ['recon-run', id] });
             qc.invalidateQueries({ queryKey: ['recon-lines', id] });
             setResolvingLine(null);
+            setDefaultResolveType(null);
           }}
         />
       )}
