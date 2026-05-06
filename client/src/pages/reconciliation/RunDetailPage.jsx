@@ -965,11 +965,43 @@ function DeltaCell({ line, onResolveAsSurcharge }) {
             </div>
           </div>
 
-          <div style={{ fontSize: 10, color: '#555', marginBottom: 10, lineHeight: 1.5 }}>
-            {isPositive
-              ? 'Carrier charged more than expected — common causes: heavyweight surcharge, out-of-zone fee, or address correction.'
-              : 'Carrier charged less than expected — possible credit, discount, or data error.'}
-          </div>
+          {/* Show raw CSV column values — highlight any that match the delta */}
+          {(() => {
+            const rawCols = line.correction_metadata?.raw_col_values || {};
+            const entries = Object.entries(rawCols).filter(([, v]) => v > 0);
+            if (!entries.length) return (
+              <div style={{ fontSize: 10, color: '#555', marginBottom: 10, lineHeight: 1.5 }}>
+                {isPositive ? 'No unmapped column values found — may be an out-of-zone or address correction fee.' : 'Carrier charged less than expected.'}
+              </div>
+            );
+            const absDelta = Math.abs(delta);
+            return (
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>
+                  Unmapped CSV columns
+                </div>
+                {entries.map(([col, amt]) => {
+                  const isMatch = Math.abs(amt - absDelta) < 0.02;
+                  return (
+                    <div key={col} style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      fontSize: 11, padding: '3px 6px', borderRadius: 4, marginBottom: 2,
+                      background: isMatch ? 'rgba(0,200,83,0.08)' : 'transparent',
+                      border: isMatch ? '1px solid rgba(0,200,83,0.2)' : '1px solid transparent',
+                    }}>
+                      <span style={{ color: isMatch ? '#E6EDF3' : '#888', fontWeight: isMatch ? 700 : 400 }}>
+                        {isMatch && <span style={{ color: '#00C853', marginRight: 4 }}>✓</span>}
+                        {col}
+                      </span>
+                      <span style={{ color: isMatch ? '#00C853' : '#888', fontWeight: 600 }}>
+                        £{parseFloat(amt).toFixed(2)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           <button
             onClick={() => { setTooltipPos(null); onResolveAsSurcharge(line); }}

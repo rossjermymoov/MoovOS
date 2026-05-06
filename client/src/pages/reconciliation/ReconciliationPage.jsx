@@ -279,6 +279,24 @@ function mapToInvoiceLine(row, colMap) {
     }
   }
 
+  // Capture ALL other non-zero numeric column values that are NOT already handled
+  // by the profile (not a core field, not a mapped surcharge column).
+  // These are stored on price_mismatch lines in correction_metadata so operators
+  // can see exactly which CSV column is causing the delta (e.g. "Oversized/Overweight: £6.00").
+  const mappedProfileCols = new Set([
+    ...Object.entries(colMap)
+      .filter(([k, v]) => typeof v === 'string' && v && !['surcharge_columns','header_row_skip','parcel_pricing','preamble_fields'].includes(k))
+      .map(([, v]) => v),
+    ...(Array.isArray(colMap.surcharge_columns) ? colMap.surcharge_columns.map(sc => sc.col).filter(Boolean) : []),
+  ]);
+  const raw_col_values = {};
+  for (const [header, val] of Object.entries(row)) {
+    if (mappedProfileCols.has(header)) continue;
+    const str = String(val || '').replace(/[£,\s]/g, '');
+    const amt = parseFloat(str);
+    if (!isNaN(amt) && amt > 0 && amt < 100000) raw_col_values[header] = amt;
+  }
+
   return {
     // ── Tracking number: ALWAYS a string ─────────────────────────────────────
     // DHL consignment numbers (e.g. "600123456789") look like integers but MUST
@@ -311,6 +329,7 @@ function mapToInvoiceLine(row, colMap) {
     delivery_postcode: get('delivery_postcode').trim() || null,
     ship_to_country:   get('ship_to_country').trim()   || null,
     ...(Object.keys(surcharge_amounts).length > 0 && { surcharge_amounts }),
+    ...(Object.keys(raw_col_values).length  > 0 && { raw_col_values }),
   };
 }
 

@@ -1206,6 +1206,13 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     `[recon engine] UNMATCHED: tracking=${trackingNumber} ` +
     `carrier=£${carrierAmount} expected=£${fullExpected} delta=£${delta}`
   );
+
+  // Store any unmapped CSV column values in correction_metadata so the UI can
+  // show the operator exactly which column is causing the delta (e.g. "Oversized/Overweight: £6.00").
+  const rawColMeta = (line.raw_col_values && Object.keys(line.raw_col_values).length > 0)
+    ? { raw_col_values: line.raw_col_values }
+    : null;
+
   await insertLine(runId, {
     tracking_number:          trackingNumber,
     carrier_account_no:       line.account_number    || null,
@@ -1225,6 +1232,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     shipment_date:            line.shipment_date     || null,
     ship_to_postcode:         line.delivery_postcode || null,
     ship_to_country:          line.ship_to_country   || null,
+    correction_metadata:      rawColMeta,
   });
   return { status: 'unmatched' };
 }
