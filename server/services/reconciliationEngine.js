@@ -462,9 +462,15 @@ async function processAggregateLine(line, runId, carrierId, expectedFuelTotal, h
 async function handleCarrierDirect({
   serviceId, customer, trackingNumber, carrierAmount,
   weightKg, postcode, countryIso,
-  rawServiceCode, runId, line,
+  rawServiceCode, runId, line, ctx,
 }) {
   const kg = parseFloat(weightKg) || 0;
+
+  // all_sub parcel pricing: DPD bills every parcel at the sub-rate.
+  // computeGhostCharge returns the per-parcel rate; multiply by parcel_count.
+  const parcelCount = (ctx?.parcelPricing === 'all_sub' && (line.parcel_count || 1) > 1)
+    ? (line.parcel_count || 1)
+    : 1;
 
   console.log(
     `[recon engine] Carrier-Direct: tracking=${trackingNumber} ` +
@@ -535,6 +541,9 @@ async function handleCarrierDirect({
   //   reconciliation pool on subsequent runs.
   // - verified = true so it passes buildVerifiedPool's verification gate.
   // - source = 'carrier_direct' — filterable in Finance table.
+  const totalCostPrice = round2(pricing.cost_price * parcelCount);
+  const totalSellPrice = round2((pricing.sell_price ?? pricing.cost_price) * parcelCount);
+
   const newCharges = await insertCharges([{
     customer_id:         customer.customer_id,
     voila_shipment_id:   null,
@@ -544,23 +553,23 @@ async function handleCarrierDirect({
     zone_id:             pricing.zone_id,
     charge_type:         'courier',
     weight_charged_kg:   kg,
-    cost_price:          pricing.cost_price,
-    sell_price:          pricing.sell_price ?? pricing.cost_price,
+    cost_price:          totalCostPrice,
+    sell_price:          totalSellPrice,
     status:              'verified',
     ship_to_postcode:    postcode    || null,
     ship_to_country_iso: countryIso || null,
     source:              'carrier_direct',
-    raw_payload:         JSON.stringify({ carrier_direct: true, run_id: runId }),
+    raw_payload:         JSON.stringify({ carrier_direct: true, run_id: runId, parcel_count: parcelCount }),
   }]);
 
   const insertedId     = newCharges[0]?.id || null;
-  const expectedAmount = round2(pricing.cost_price);
+  const expectedAmount = totalCostPrice;
   const delta          = round2(carrierAmount - expectedAmount);
   const isMatch        = Math.abs(delta) < 0.02;
 
   console.log(
     `[recon engine] Carrier-Direct charge inserted id=${insertedId}: ` +
-    `cost=£${pricing.cost_price} carrier=£${carrierAmount} delta=£${delta} → ${isMatch ? 'matched' : 'corrected'}`
+    `cost=£${totalCostPrice} (${parcelCount} parcel(s) × £${pricing.cost_price}) carrier=£${carrierAmount} delta=£${delta} → ${isMatch ? 'matched' : 'corrected'}`
   );
 
   await insertLine(runId, {
@@ -1094,6 +1103,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       rawServiceCode,
       runId,
       line,
+      ctx,
     });
   }
 
