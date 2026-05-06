@@ -2694,4 +2694,226 @@ router.get('/consignment-trace', async (req, res) => {
   }
 });
 
+// ─── GET /api/reconciliation/raw-trace/:tracking ─────────────────────────────
+//
+// Zero-config deep trace for a single consignment number.
+// Auto-detects the carrier from shipments.courier — no carrier_id needed.
+// Returns raw DB data exactly as stored: charge records, pool eligibility,
+// the exact maths, and Gap 2 (courier name visibility check).
+//
+// Usage (paste in browser):
+//   /api/reconciliation/raw-trace/2313756977?amount=21.70
+//
+// Query params:
+//   amount   (optional) — carrier invoice amount for delta calculation
+
+router.get('/raw-trace/:tracking', async (req, res) => {
+  try {
+    const tracking   = (req.params.tracking || '').trim();
+    const carrierAmt = req.query.amount ? parseFloat(req.query.amount) : null;
+
+    if (!tracking) return res.status(400).json({ error: 'tracking number is required' });
+
+    const trackKey = tracking.toUpperCase();
+    const variants = [trackKey];
+    if (trackKey.startsWith('600') && trackKey.length > 5) {
+      variants.push(trackKey.slice(3), trackKey.slice(2));
+    } else if (trackKey.startsWith('60') && trackKey.length > 4) {
+      variants.push(trackKey.slice(2));
+    } else {
+      variants.push('60' + trackKey);
+    }
+
+    // ── Step 1: shipment lookup ───────────────────────────────────────────────
+    const shipRes = await query(`
+      SELECT
+        s.id              AS shipment_id,
+        s.courier,
+        s.dc_service_id,
+        s.tracking_codes,
+        s.reference,
+        s.total_weight_kg,
+        s.parcel_count,
+        s.ship_to_postcode,
+        s.created_at
+      FROM shipments s
+      WHERE EXISTS (
+        SELECT 1 FROM unnest(s.tracking_codes) tc WHERE UPPER(tc) = ANY($1)
+      ) OR s.dc_service_id = ANY($1)
+      ORDER BY s.created_at DESC
+      LIMIT 3
+    `, [variants]);
+
+    if (shipRes.rows.length === 0) {
+      return res.json({
+        tracking,
+        variants_searched: variants,
+        verdict: 'NOT_IN_DB',
+        note: 'No shipment found with this tracking number. It is not in our OMS — pool miss by definition.',
+        shipment: null,
+        charges: [],
+        pool: null,
+        maths: null,
+      });
+    }
+
+    const shipment = shipRes.rows[0];
+
+    // ── Step 2: all charge records for this shipment ──────────────────────────
+    const chargeRes = await query(`
+      SELECT
+        c.id              AS charge_id,
+        c.charge_type,
+        c.cost_price,
+        c.verified,
+        c.cancelled,
+        c.source,
+        c.zone_id,
+        c.courier_service_id,
+        c.created_at,
+        c.customer_id,
+        cu.business_name  AS customer_name,
+        COALESCE(c.cost_price, 0)
+          + COALESCE((
+              SELECT SUM(sc.cost_price)
+              FROM   charges sc
+              WHERE  sc.shipment_id = c.shipment_id
+                AND  sc.charge_type IN ('fuel','surcharge')
+                AND  sc.cancelled   = false
+            ), 0)         AS total_cost_price
+      FROM   charges c
+      LEFT JOIN customers cu ON cu.id = c.customer_id
+      WHERE  c.shipment_id = $1
+      ORDER BY c.charge_type, c.created_at DESC
+    `, [shipment.shipment_id]);
+
+    // ── Step 3: carrier match check ───────────────────────────────────────────
+    const carrierRes = await query(`
+      SELECT id, code, name, aliases
+      FROM   couriers
+      WHERE  code ILIKE 'DPD' OR name ILIKE 'DPD%'
+         OR  LOWER($1) = LOWER(code) OR LOWER($1) = LOWER(name)
+         OR  EXISTS (SELECT 1 FROM unnest(aliases) a WHERE LOWER(a) = LOWER($1))
+      ORDER BY id
+      LIMIT 5
+    `, [shipment.courier || '']);
+
+    const courierLower = (shipment.courier || '').toLowerCase();
+    let matchedCarrier = null;
+    let matchedVia     = null;
+    for (const c of carrierRes.rows) {
+      if ((c.code || '').toLowerCase() === courierLower)   { matchedCarrier = c; matchedVia = 'code';  break; }
+      if ((c.name || '').toLowerCase() === courierLower)   { matchedCarrier = c; matchedVia = 'name';  break; }
+      if ((c.aliases || []).some(a => a.toLowerCase() === courierLower)) { matchedCarrier = c; matchedVia = 'alias'; break; }
+    }
+
+    const courierCharge = chargeRes.rows.find(r => r.charge_type === 'courier' && !r.cancelled);
+    const hasTrackingGate = (shipment.tracking_codes && shipment.tracking_codes.length > 0)
+      || !!shipment.dc_service_id;
+
+    let poolResult;
+    if (!courierCharge)        poolResult = 'NO_COURIER_CHARGE';
+    else if (!courierCharge.verified) poolResult = 'NOT_VERIFIED';
+    else if (!matchedCarrier)  poolResult = 'CARRIER_MISMATCH';
+    else if (!hasTrackingGate) poolResult = 'NO_TRACKING_GATE';
+    else                       poolResult = 'IN_POOL';
+
+    // ── Step 4: the maths ─────────────────────────────────────────────────────
+    let maths = null;
+    if (courierCharge) {
+      const expectedBase   = Math.round(parseFloat(courierCharge.cost_price        || 0) * 100) / 100;
+      const totalCostPrice = Math.round(parseFloat(courierCharge.total_cost_price  || 0) * 100) / 100;
+      maths = {
+        cost_price_base:   expectedBase,
+        total_cost_price:  totalCostPrice,
+        note_separate_fuel_rows: 'DPD uses separate_fuel_rows=true — engine compares carrier_amount vs cost_price (base only). Fuel/carriage rows are auto-accepted separately.',
+        carrier_amount_provided: carrierAmt,
+      };
+      if (carrierAmt !== null) {
+        const deltaVsBase  = Math.round((carrierAmt - expectedBase)   * 100) / 100;
+        const deltaVsTotal = Math.round((carrierAmt - totalCostPrice) * 100) / 100;
+        maths.delta_vs_cost_price_base  = deltaVsBase;
+        maths.delta_vs_total_cost_price = deltaVsTotal;
+        maths.required_col_surcharge_total = deltaVsBase;
+        maths.interpretation = deltaVsBase > 0
+          ? `Carrier charged £${deltaVsBase.toFixed(2)} more than stored base cost. For this to match, surcharge_amounts must sum to £${deltaVsBase.toFixed(2)}.`
+          : deltaVsBase < 0
+          ? `Carrier charged £${Math.abs(deltaVsBase).toFixed(2)} LESS than stored base cost. Possible overpayment or wrong cost_price.`
+          : 'Carrier amount = stored base cost. Should be matched (if in pool).';
+      }
+    }
+
+    // ── Gap 2: courier name visibility ────────────────────────────────────────
+    const gapRes = await query(`
+      WITH carrier_strings AS (
+        SELECT code AS match_str FROM couriers
+        UNION ALL SELECT name FROM couriers
+        UNION ALL SELECT unnest(aliases) FROM couriers WHERE array_length(aliases,1)>0
+      ),
+      scc AS (
+        SELECT s.courier AS courier_str, COUNT(DISTINCT c.id) AS n
+        FROM charges c JOIN shipments s ON s.id=c.shipment_id
+        WHERE c.charge_type='courier' AND c.cancelled=false AND c.verified=true
+          AND s.courier IS NOT NULL AND s.courier!=''
+        GROUP BY s.courier
+      )
+      SELECT scc.courier_str, scc.n,
+             EXISTS(SELECT 1 FROM carrier_strings cs WHERE LOWER(cs.match_str)=LOWER(scc.courier_str)) AS matches
+      FROM scc ORDER BY matches ASC, scc.n DESC
+    `);
+    const gap2Unmatched = gapRes.rows.filter(r => !r.matches);
+
+    return res.json({
+      tracking,
+      variants_searched: variants,
+      shipment: {
+        shipment_id:    shipment.shipment_id,
+        courier:        shipment.courier,
+        tracking_codes: shipment.tracking_codes,
+        dc_service_id:  shipment.dc_service_id,
+        reference:      shipment.reference,
+        weight_kg:      shipment.total_weight_kg,
+        parcel_count:   shipment.parcel_count,
+        postcode:       shipment.ship_to_postcode,
+        created_at:     shipment.created_at,
+      },
+      charges: chargeRes.rows.map(c => ({
+        charge_id:         c.charge_id,
+        charge_type:       c.charge_type,
+        cost_price:        c.cost_price,
+        total_cost_price:  c.total_cost_price,
+        zone_id:           c.zone_id,
+        verified:          c.verified,
+        cancelled:         c.cancelled,
+        source:            c.source,
+        customer:          c.customer_name,
+        customer_id:       c.customer_id,
+        created_at:        c.created_at,
+      })),
+      pool: {
+        result:           poolResult,
+        matched_carrier:  matchedCarrier ? { id: matchedCarrier.id, code: matchedCarrier.code, name: matchedCarrier.name } : null,
+        matched_via:      matchedVia,
+        carriers_checked: carrierRes.rows.map(c => ({ id: c.id, code: c.code, name: c.name, aliases: c.aliases })),
+        note: {
+          IN_POOL:           'Charge is verified and carrier matches — this consignment WILL be found in the pool on next upload.',
+          NOT_VERIFIED:      'Courier charge exists but verified=false. Pool only includes verified=true charges.',
+          CARRIER_MISMATCH:  `shipments.courier="${shipment.courier}" does not match any carrier code/name/alias. This charge is invisible to the pool.`,
+          NO_COURIER_CHARGE: 'No active courier charge exists for this shipment.',
+          NO_TRACKING_GATE:  'Charge is verified but tracking_codes is empty and dc_service_id is null — cannot index into pool by tracking number.',
+        }[poolResult] || '',
+      },
+      maths,
+      gap2_unmatched_couriers: gap2Unmatched.map(r => ({ courier: r.courier_str, active_verified_charges: r.n })),
+      gap2_note: gap2Unmatched.length === 0
+        ? 'All courier strings match a carrier — no pool visibility gaps.'
+        : `${gap2Unmatched.length} courier string(s) are invisible to all carrier pools — ${gap2Unmatched.reduce((s,r)=>s+parseInt(r.n),0)} affected charges.`,
+    });
+
+  } catch (err) {
+    console.error('[reconciliation/raw-trace] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
