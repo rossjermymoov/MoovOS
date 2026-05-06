@@ -965,35 +965,45 @@ function DeltaCell({ line, onResolveAsSurcharge }) {
             </div>
           </div>
 
-          {/* Show raw CSV column values — highlight any that match the delta */}
+          {/* Show raw CSV column values — only those close to the delta */}
           {(() => {
             const rawCols = line.correction_metadata?.raw_col_values || {};
-            const entries = Object.entries(rawCols).filter(([, v]) => v > 0);
-            if (!entries.length) return (
+            const absDelta = Math.abs(delta);
+            // Sort all entries by proximity to the delta, closest first.
+            // Only show entries within 20% of the delta (or ±£0.10, whichever is larger)
+            // so that unrelated numeric columns (overhead charges already in cost_price,
+            // etc.) don't create noise.
+            const tolerance = Math.max(absDelta * 0.20, 0.10);
+            const relevant = Object.entries(rawCols)
+              .filter(([, v]) => v > 0)
+              .map(([col, amt]) => ({ col, amt, diff: Math.abs(amt - absDelta) }))
+              .filter(e => e.diff <= tolerance)
+              .sort((a, b) => a.diff - b.diff);
+
+            if (!relevant.length) return (
               <div style={{ fontSize: 10, color: '#555', marginBottom: 10, lineHeight: 1.5 }}>
-                {isPositive ? 'No unmapped column values found — may be an out-of-zone or address correction fee.' : 'Carrier charged less than expected.'}
+                No CSV column closely matches this delta — may be a relabel, credit, zone correction, or a column not yet in the profile.
               </div>
             );
-            const absDelta = Math.abs(delta);
             return (
               <div style={{ marginBottom: 10 }}>
                 <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>
-                  Unmapped CSV columns
+                  Likely source column{relevant.length > 1 ? 's' : ''}
                 </div>
-                {entries.map(([col, amt]) => {
-                  const isMatch = Math.abs(amt - absDelta) < 0.02;
+                {relevant.map(({ col, amt, diff }) => {
+                  const isExact = diff < 0.02;
                   return (
                     <div key={col} style={{
                       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                       fontSize: 11, padding: '3px 6px', borderRadius: 4, marginBottom: 2,
-                      background: isMatch ? 'rgba(0,200,83,0.08)' : 'transparent',
-                      border: isMatch ? '1px solid rgba(0,200,83,0.2)' : '1px solid transparent',
+                      background: isExact ? 'rgba(0,200,83,0.08)' : 'rgba(255,255,255,0.03)',
+                      border: isExact ? '1px solid rgba(0,200,83,0.2)' : '1px solid rgba(255,255,255,0.06)',
                     }}>
-                      <span style={{ color: isMatch ? '#E6EDF3' : '#888', fontWeight: isMatch ? 700 : 400 }}>
-                        {isMatch && <span style={{ color: '#00C853', marginRight: 4 }}>✓</span>}
+                      <span style={{ color: isExact ? '#E6EDF3' : '#AAA', fontWeight: isExact ? 700 : 400 }}>
+                        {isExact && <span style={{ color: '#00C853', marginRight: 4 }}>✓</span>}
                         {col}
                       </span>
-                      <span style={{ color: isMatch ? '#00C853' : '#888', fontWeight: 600 }}>
+                      <span style={{ color: isExact ? '#00C853' : '#888', fontWeight: 600, marginLeft: 8, flexShrink: 0 }}>
                         £{parseFloat(amt).toFixed(2)}
                       </span>
                     </div>

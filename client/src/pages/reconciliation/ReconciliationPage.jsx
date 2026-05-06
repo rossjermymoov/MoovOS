@@ -292,8 +292,14 @@ function mapToInvoiceLine(row, colMap) {
   const raw_col_values = {};
   for (const [header, val] of Object.entries(row)) {
     if (mappedProfileCols.has(header)) continue;
-    const str = String(val || '').replace(/[£,\s]/g, '');
-    const amt = parseFloat(str);
+    const raw = String(val || '').trim();
+    // Only treat as a monetary amount if the source value looks like one —
+    // i.e. contains a £/$ sign OR has exactly 2 decimal places (e.g. "6.00", "0.22").
+    // This filters out plain integer IDs like depot numbers ("22") and product codes ("1")
+    // that would otherwise be misread as £22.00 and £1.00.
+    const looksMonetary = /[£$]/.test(raw) || /\.\d{2}$/.test(raw.replace(/[,\s]/g, ''));
+    if (!looksMonetary) continue;
+    const amt = parseFloat(raw.replace(/[£,$,\s]/g, ''));
     if (!isNaN(amt) && amt > 0 && amt < 100000) raw_col_values[header] = amt;
   }
 
