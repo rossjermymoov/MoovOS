@@ -615,7 +615,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
     console.log(`[recon engine] Run ${runId}: separate_fuel_rows=true — freight lines compared against base cost_price only; overhead rows auto-accepted`);
   }
   if (parcelPricing) {
-    console.log(`[recon engine] Run ${runId}: parcel_pricing=${parcelPricing} — expected scaled by invoice parcel_count`);
+    console.log(`[recon engine] Run ${runId}: parcel_pricing=${parcelPricing} — all-sub carrier: carrier_direct charges use n×price_sub; pool hits use stored total cost_price`);
   }
 
   const reconcilableLines = lines.filter(l => String(l.tracking_number || '').trim());
@@ -1129,13 +1129,13 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     ? round2(parseFloat(charge.expected_cost)    || 0)
     : round2(parseFloat(charge.total_cost_price) || 0);
 
-  // all_sub parcel pricing (DPD): every parcel in a multi-parcel consignment
-  // is billed at the sub-rate.  Our stored cost_price is the per-parcel rate;
-  // multiply by the invoice parcel_count to get the full expected amount.
-  const invoiceParcelCount = (ctx.parcelPricing === 'all_sub' && (line.parcel_count || 1) > 1)
-    ? (line.parcel_count || 1)
-    : 1;
-  const fullExpected = round2((round2(expectedBase * invoiceParcelCount)) + colSurchargeTotal);
+  // expectedBase = charges.cost_price — the total cost for ALL parcels in this
+  // shipment, accumulated by pricingEngine.js across the parcel loop before
+  // consolidation (see pricingEngine.js: totalBaseCost = sum of r.baseCost).
+  // Do NOT multiply by parcel_count here: the total is already stored.
+  // (parcel_pricing='all_sub' only affects handleCarrierDirect, which gets a
+  // per-parcel rate from computeGhostCharge and genuinely needs multiplication.)
+  const fullExpected = round2(expectedBase + colSurchargeTotal);
   const delta        = round2(carrierAmount - fullExpected);
 
   line._expected_amount = fullExpected;
