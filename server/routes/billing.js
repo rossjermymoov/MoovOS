@@ -590,6 +590,40 @@ async function lookupRateWithReason(customerId, serviceCode, _serviceName, weigh
   return lookupViaCustomerRates(customerId, serviceCode, weightKg, postcode, iso);
 }
 
+// Returns true when the carrier bills ALL parcels (including the first) at
+// price_sub rather than using price_first for parcel 1 (e.g. DPD).
+// Reads courier_services.all_sub_parcel_pricing added in migration 162.
+async function isAllSubParcelPricing(serviceCode) {
+  if (!serviceCode) return false;
+  try {
+    const r = await query(
+      'SELECT all_sub_parcel_pricing FROM courier_services WHERE service_code ILIKE $1 LIMIT 1',
+      [serviceCode]
+    );
+    return r.rows[0]?.all_sub_parcel_pricing === true;
+  } catch {
+    return false; // column may not exist yet if migration hasn't run
+  }
+}
+
+// Compute total cost_price for a multi-parcel shipment.
+// allSub = true  → all n parcels billed at price_sub (DPD model)
+// allSub = false → parcel 1 at price_first, parcels 2..n at price_sub (standard)
+function calcCostTotal(rate, n, allSub = false) {
+  if (rate == null || rate.cost_price == null) return null;
+  const priceSub  = rate.cost_price_sub ?? rate.cost_price;
+  const numParcels = Math.max(1, parseInt(n) || 1);
+  let raw;
+  if (allSub && numParcels > 1) {
+    raw = numParcels * priceSub;                                      // DPD: n × price_sub
+  } else if (rate.cost_price_sub != null && numParcels > 1) {
+    raw = rate.cost_price + (numParcels - 1) * rate.cost_price_sub;  // standard: first + (n-1)×sub
+  } else {
+    raw = rate.cost_price * numParcels;                               // single parcel
+  }
+  return Math.round(raw * 100) / 100;
+}
+
 function normaliseWeightBand(rawName) {
   // Uppercase + strip all whitespace, then strip the unit suffix in order from
   // longest to shortest so "KILOGRAMS" doesn't leave a trailing "S" etc.
@@ -1304,13 +1338,7 @@ router.post('/webhook', (req, res) => {
       shipmentId, customerId, 'courier',
       reference, parcelCount, serviceName,
       totalPrice,
-      rate?.cost_price != null ? (() => {
-        const n = Math.max(1, parseInt(parcelCount) || 1);
-        const costTotal = rate.cost_price_sub != null && n > 1
-          ? rate.cost_price + (n - 1) * rate.cost_price_sub
-          : rate.cost_price * n;
-        return Math.round(costTotal * 100) / 100;
-      })() : null,
+      calcCostTotal(rate, parcelCount, await isAllSubParcelPricing(dcServiceId)),
       rate?.zone_name || null,
       rate?.weight_class_name || null,
       rate != null,
@@ -2192,18 +2220,10 @@ router.post('/full-reprice', async (req, res, next) => {
           continue;
         }
 
-        const pricingMode = await getParcelPricingMode(customerId);
-        const newPrice    = parseFloat(calcTotal(rate, parcelQty, pricingMode).toFixed(2));
-
-        const costTotal = rate.cost_price != null
-          ? (() => {
-              const n = parcelQty || 1;
-              const raw = rate.cost_price_sub != null && n > 1
-                ? rate.cost_price + (n - 1) * rate.cost_price_sub
-                : rate.cost_price * n;
-              return Math.round(raw * 100) / 100;
-            })()
-          : null;
+        const pricingMode   = await getParcelPricingMode(customerId);
+        const newPrice      = parseFloat(calcTotal(rate, parcelQty, pricingMode).toFixed(2));
+        const allSubPricing = await isAllSubParcelPricing(dcServiceId);
+        const costTotal     = calcCostTotal(rate, parcelQty, allSubPricing);
 
         await query(`
           UPDATE charges
@@ -3209,16 +3229,8 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
     const pricingMode = await getParcelPricingMode(row.customer_id);
     const totalPrice  = parseFloat(calcTotal(rate, parcelQty, pricingMode).toFixed(2));
 
-    // Calculate cost_price total (same rounding as webhook handler)
-    const costTotal = rate.cost_price != null
-      ? (() => {
-          const n = parcelQty || 1;
-          const raw = rate.cost_price_sub != null && n > 1
-            ? rate.cost_price + (n - 1) * rate.cost_price_sub
-            : rate.cost_price * n;
-          return Math.round(raw * 100) / 100;
-        })()
-      : null;
+    // Calculate cost_price total
+    const costTotal = calcCostTotal(rate, parcelQty, await isAllSubParcelPricing(dcServiceId));
 
     await query(`
       UPDATE charges
