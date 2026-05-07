@@ -510,20 +510,28 @@ async function handleCarrierDirect({
       shipment_date:            line.shipment_date     || null,
       ship_to_postcode:         postcode               || null,
       ship_to_country:          countryIso             || null,
+      parcel_count:             parcelCount > 1 ? parcelCount : null,
     });
     return { status: 'unmatched' };
   }
 
+  // For all_sub carriers (DPD) pass the per-parcel weight to the band lookup so
+  // the weight threshold is evaluated against individual parcels, not the full
+  // consignment weight. A 2×17.5 kg shipment should hit the 20 kg band, not the
+  // 35 kg band (which may not exist and returns no_cost_band).
+  const isAllSub    = ctx?.parcelPricing === 'all_sub';
+  const perParcelKg = (isAllSub && parcelCount > 1) ? round2(kg / parcelCount) : kg;
+
   const pricing = await computeGhostCharge(
     serviceId,
     customer.customer_id,
-    kg,
+    perParcelKg,   // per-parcel weight for band lookup
     postcode,
     countryIso || 'GB'
   );
 
   if (pricing.error) {
-    console.warn(`[recon engine] Carrier-Direct pricing failed for ${trackingNumber}: ${pricing.error} — ${pricing.detail}`);
+    console.warn(`[recon engine] Carrier-Direct pricing failed for ${trackingNumber}: ${pricing.error} — ${pricing.detail} (perParcelKg=${perParcelKg}kg, totalKg=${kg}kg, parcels=${parcelCount})`);
     await insertLine(runId, {
       tracking_number:          trackingNumber,
       carrier_account_no:       line.account_number    || null,
@@ -543,6 +551,7 @@ async function handleCarrierDirect({
       shipment_date:            line.shipment_date     || null,
       ship_to_postcode:         postcode               || null,
       ship_to_country:          countryIso             || null,
+      parcel_count:             parcelCount > 1 ? parcelCount : null,
     });
     return { status: 'unmatched' };
   }
@@ -550,13 +559,13 @@ async function handleCarrierDirect({
   // ── Rate selection ─────────────────────────────────────────────────────────
   // For all_sub carriers (DPD): every parcel — including the first — is billed
   // at price_sub, not price_first. computeGhostCharge now returns both.
-  //   • cost_price = price_first  (single-parcel base rate)
+  //   • cost_price = price_first  (single-parcel base rate, looked up using perParcelKg)
   //   • cost_sub   = price_sub    (per-parcel rate when all_sub; null otherwise)
   //
   // Rule:
   //   parcelCount > 1 AND all_sub AND cost_sub is not null → use cost_sub × N
   //   otherwise                                            → use cost_price × N
-  const isAllSub      = ctx?.parcelPricing === 'all_sub';
+  // (isAllSub is defined above, before computeGhostCharge, so perParcelKg could be computed)
   const perParcelRate = (isAllSub && parcelCount > 1 && pricing.cost_sub != null)
     ? pricing.cost_sub   // price_sub × N
     : pricing.cost_price; // price_first (× N for non-all_sub, or × 1 for single parcel)
@@ -567,7 +576,7 @@ async function handleCarrierDirect({
   // ── Full diagnostic trace ─────────────────────────────────────────────────
   console.log(
     `[carrier-direct] TRACE tracking=${trackingNumber} ` +
-    `| items=${parcelCount} | weight=${kg}kg ` +
+    `| items=${parcelCount} | weight=${kg}kg (per_parcel=${perParcelKg}kg) ` +
     `| zone_id=${pricing.zone_id} zone="${pricing.zone_name}" band="${pricing.band_label}" ` +
     `| price_first=£${pricing.cost_price} price_sub=£${pricing.cost_sub ?? 'n/a'} ` +
     `| per_parcel_rate=£${perParcelRate} (${isAllSub && parcelCount > 1 ? 'all_sub → price_sub' : 'price_first'}) ` +
@@ -631,6 +640,7 @@ async function handleCarrierDirect({
     shipment_date:            line.shipment_date     || null,
     ship_to_postcode:         postcode               || null,
     ship_to_country:          countryIso             || null,
+    parcel_count:             parcelCount > 1 ? parcelCount : null,
   });
 
   return { status: isMatch ? 'matched' : 'corrected' };
@@ -1182,19 +1192,24 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       // first is billed at price_sub. Looking up price_sub from the stored zone_id and
       // invoice weight gives the correct expected total regardless of how cost_price was
       // stored. Falls back to stored cost_price only if zone or band data is missing.
-      const invoiceWeightKg = parseFloat(line.billed_weight_kg) || 0;
-      const chargeZoneId    = charge.zone_id || null;
-      let rateCardExpected  = null;
+      const invoiceWeightKg   = parseFloat(line.billed_weight_kg) || 0;
+      // Use per-parcel weight for the band lookup: a 2×17.5 kg shipment should
+      // hit the 20 kg band, not the 35 kg band (which may have no entry → no_cost_band).
+      const perParcelWeightKg = invoiceParcelCount > 1 ? round2(invoiceWeightKg / invoiceParcelCount) : invoiceWeightKg;
+      const chargeZoneId      = charge.zone_id || null;
+      let rateCardExpected    = null;
 
-      if (invoiceWeightKg > 0 && chargeZoneId && serviceId) {
-        const bandResult = await lookupCarrierBandCost(serviceId, invoiceWeightKg, chargeZoneId);
-        if (bandResult && bandResult.costSub != null) {
-          rateCardExpected = round2(bandResult.costSub * invoiceParcelCount);
+      if (perParcelWeightKg > 0 && chargeZoneId && serviceId) {
+        const bandResult = await lookupCarrierBandCost(serviceId, perParcelWeightKg, chargeZoneId);
+        if (bandResult) {
+          // Prefer price_sub; fall back to price_first if price_sub is null in the rate card.
+          const perParcelRate = bandResult.costSub ?? bandResult.cost;
+          rateCardExpected = round2(perParcelRate * invoiceParcelCount);
           console.log(
             `[recon engine] all_sub rate-card recompute: tracking=${trackingNumber} ` +
-            `zone=${chargeZoneId} weight=${invoiceWeightKg}kg ` +
-            `price_sub=£${bandResult.costSub} × ${invoiceParcelCount} = £${rateCardExpected} ` +
-            `(stored cost_price=£${baseFromDb})`
+            `zone=${chargeZoneId} weight=${invoiceWeightKg}kg (per_parcel=${perParcelWeightKg}kg) ` +
+            `rate=£${perParcelRate} (${bandResult.costSub != null ? 'price_sub' : 'price_first fallback'}) ` +
+            `× ${invoiceParcelCount} = £${rateCardExpected} (stored cost_price=£${baseFromDb})`
           );
         }
       }
@@ -1233,6 +1248,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       shipment_date:            line.shipment_date     || null,
       ship_to_postcode:         line.delivery_postcode || null,
       ship_to_country:          line.ship_to_country   || null,
+      parcel_count:             line.parcel_count      || null,
       correction_metadata:      colSurchargeTotal > 0
         ? { col_surcharge_total: colSurchargeTotal, col_surcharges: colSurchargeBreakdown }
         : null,
@@ -1266,6 +1282,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       shipment_date:            line.shipment_date     || null,
       ship_to_postcode:         line.delivery_postcode || null,
       ship_to_country:          line.ship_to_country   || null,
+      parcel_count:             line.parcel_count      || null,
       mapping_id:               mappingResult.mappingId,
     });
     return { status: 'corrected' };
@@ -1304,6 +1321,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     shipment_date:            line.shipment_date     || null,
     ship_to_postcode:         line.delivery_postcode || null,
     ship_to_country:          line.ship_to_country   || null,
+    parcel_count:             line.parcel_count      || null,
     correction_metadata:      rawColMeta,
   });
   return { status: 'unmatched' };
@@ -1318,9 +1336,9 @@ async function insertLine(runId, data) {
        carrier_amount, carrier_billed_weight_kg, service_id, customer_id, charge_id,
        expected_amount, delta, status, corrected_by, unmatched_reason, source,
        mapping_id, is_fuel, suggested_service_id, correction_metadata, shipment_date,
-       ship_to_postcode, ship_to_country)
+       ship_to_postcode, ship_to_country, parcel_count)
     VALUES
-      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
   `, [
     runId,
     data.tracking_number          ?? null,
@@ -1345,6 +1363,7 @@ async function insertLine(runId, data) {
     data.shipment_date            || null,
     data.ship_to_postcode         || null,
     data.ship_to_country          || null,
+    data.parcel_count             || null,
   ]);
 }
 
@@ -1396,14 +1415,16 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
         const baseFromDb = round2(parseFloat(charge.expected_cost) || 0);
         if (parcelPricing === 'all_sub' && invoiceParcelCount > 1) {
           // Same rate-card recompute as processLine — see comment there for rationale.
-          const invoiceWeightKg = parseFloat(line.billed_weight_kg) || 0;
-          const chargeZoneId    = charge.zone_id || null;
-          let rateCardExpected  = null;
+          const invoiceWeightKg   = parseFloat(line.billed_weight_kg) || 0;
+          const perParcelWeightKg = invoiceParcelCount > 1 ? round2(invoiceWeightKg / invoiceParcelCount) : invoiceWeightKg;
+          const chargeZoneId      = charge.zone_id || null;
+          let rateCardExpected    = null;
 
-          if (invoiceWeightKg > 0 && chargeZoneId && serviceId) {
-            const bandResult = await lookupCarrierBandCost(serviceId, invoiceWeightKg, chargeZoneId);
-            if (bandResult && bandResult.costSub != null) {
-              rateCardExpected = round2(bandResult.costSub * invoiceParcelCount);
+          if (perParcelWeightKg > 0 && chargeZoneId && serviceId) {
+            const bandResult = await lookupCarrierBandCost(serviceId, perParcelWeightKg, chargeZoneId);
+            if (bandResult) {
+              const perParcelRate = bandResult.costSub ?? bandResult.cost;
+              rateCardExpected = round2(perParcelRate * invoiceParcelCount);
             }
           }
           expectedCost = rateCardExpected != null ? rateCardExpected : baseFromDb;
