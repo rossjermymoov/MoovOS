@@ -15,7 +15,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Upload, RefreshCw, CheckCircle2, AlertTriangle, Clock,
   ChevronRight, TrendingUp, X, Plus, FileText, Trash2,
-  BookOpen, Save, Star, Pencil, Check,
+  BookOpen, Save, Star, Pencil, Check, Hash,
 } from 'lucide-react';
 import axios from 'axios';
 import { getCourierLogo } from '../../utils/courierLogos';
@@ -1437,6 +1437,9 @@ export default function ReconciliationPage() {
         <div style={{ display: 'flex', gap: 10 }}>
           <button style={btnGhost} onClick={() => navigate('/reconciliation/margin-report')}>
             <TrendingUp size={15} />Margin Report
+          </button>
+          <button style={btnGhost} onClick={() => navigate('/reconciliation/service-code-mappings')}>
+            <Hash size={15} />Service Codes
           </button>
           <button style={btnGhost} onClick={() => setShowProfiles(true)}>
             <BookOpen size={15} />Column Profiles

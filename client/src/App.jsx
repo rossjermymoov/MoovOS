@@ -24,6 +24,7 @@ import RateCardEditor from './pages/pricing/RateCardEditor';
 import ReconciliationPage from './pages/reconciliation/ReconciliationPage';
 import RunDetailPage from './pages/reconciliation/RunDetailPage';
 import MarginReportPage from './pages/reconciliation/MarginReportPage';
+import ServiceCodeMappingsPage from './pages/reconciliation/ServiceCodeMappingsPage';
 
 // Placeholder pages for other sections (to be built)
 const Placeholder = ({ name }) => (
@@ -99,6 +100,7 @@ function AppRoutes() {
         <Route path="reconciliation">
           <Route index element={<ReconciliationPage />} />
           <Route path="margin-report" element={<MarginReportPage />} />
+          <Route path="service-code-mappings" element={<ServiceCodeMappingsPage />} />
           <Route path=":id" element={<RunDetailPage />} />
         </Route>
         <Route path="reports"   element={<Placeholder name="Dashboards & Reporting" />} />
