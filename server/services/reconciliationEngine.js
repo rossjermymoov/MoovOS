@@ -474,15 +474,18 @@ async function handleCarrierDirect({
 }) {
   const kg = parseFloat(weightKg) || 0;
 
-  // all_sub parcel pricing: DPD bills every parcel at the sub-rate.
-  // computeGhostCharge returns the per-parcel rate; multiply by parcel_count.
-  const parcelCount = (ctx?.parcelPricing === 'all_sub' && (line.parcel_count || 1) > 1)
-    ? (line.parcel_count || 1)
-    : 1;
+  // Parcel count: always take from the invoice line.
+  // For all_sub carriers (DPD) every parcel — including the first — is billed
+  // at price_sub. We need the actual item count to compute the correct expected.
+  // For non-all_sub carriers the invoice normally has 1 line per parcel anyway,
+  // so parcelCount=1 is correct for those single-line rows.
+  const parcelCount = (line.parcel_count || 1) > 1 ? (line.parcel_count || 1) : 1;
 
   console.log(
-    `[recon engine] Carrier-Direct: tracking=${trackingNumber} ` +
-    `customer=${customer.customer_id} weight=${kg}kg postcode=${postcode} country=${countryIso}`
+    `[carrier-direct] tracking=${trackingNumber} ` +
+    `customer=${customer.customer_id} items=${parcelCount} weight=${kg}kg ` +
+    `postcode=${postcode ?? 'null'} country=${countryIso ?? 'null'} ` +
+    `parcelPricing=${ctx?.parcelPricing ?? 'standard'}`
   );
 
   if (kg <= 0) {
@@ -544,14 +547,37 @@ async function handleCarrierDirect({
     return { status: 'unmatched' };
   }
 
-  // Insert the carrier-direct charge.
-  // - charge_type = 'courier' so it appears in the Finance page and
-  //   reconciliation pool on subsequent runs.
-  // - verified = true so it passes buildVerifiedPool's verification gate.
-  // - source = 'carrier_direct' — filterable in Finance table.
-  const totalCostPrice = round2(pricing.cost_price * parcelCount);
-  const totalSellPrice = round2((pricing.sell_price ?? pricing.cost_price) * parcelCount);
+  // ── Rate selection ─────────────────────────────────────────────────────────
+  // For all_sub carriers (DPD): every parcel — including the first — is billed
+  // at price_sub, not price_first. computeGhostCharge now returns both.
+  //   • cost_price = price_first  (single-parcel base rate)
+  //   • cost_sub   = price_sub    (per-parcel rate when all_sub; null otherwise)
+  //
+  // Rule:
+  //   parcelCount > 1 AND all_sub AND cost_sub is not null → use cost_sub × N
+  //   otherwise                                            → use cost_price × N
+  const isAllSub      = ctx?.parcelPricing === 'all_sub';
+  const perParcelRate = (isAllSub && parcelCount > 1 && pricing.cost_sub != null)
+    ? pricing.cost_sub   // price_sub × N
+    : pricing.cost_price; // price_first (× N for non-all_sub, or × 1 for single parcel)
 
+  const totalCostPrice = round2(perParcelRate * parcelCount);
+  const totalSellPrice = round2((pricing.sell_price ?? perParcelRate) * parcelCount);
+
+  // ── Full diagnostic trace ─────────────────────────────────────────────────
+  console.log(
+    `[carrier-direct] TRACE tracking=${trackingNumber} ` +
+    `| items=${parcelCount} | weight=${kg}kg ` +
+    `| zone_id=${pricing.zone_id} zone="${pricing.zone_name}" band="${pricing.band_label}" ` +
+    `| price_first=£${pricing.cost_price} price_sub=£${pricing.cost_sub ?? 'n/a'} ` +
+    `| per_parcel_rate=£${perParcelRate} (${isAllSub && parcelCount > 1 ? 'all_sub → price_sub' : 'price_first'}) ` +
+    `| total_cost=£${totalCostPrice} carrier=£${carrierAmount}`
+  );
+
+  // ── Insert the carrier-direct charge ─────────────────────────────────────
+  // - charge_type = 'courier' so it appears in Finance and pool on next runs.
+  // - verified = true so it passes buildVerifiedPool's gate.
+  // - source = 'carrier_direct' — filterable in Finance table.
   const newCharges = await insertCharges([{
     customer_id:         customer.customer_id,
     voila_shipment_id:   null,
@@ -567,7 +593,13 @@ async function handleCarrierDirect({
     ship_to_postcode:    postcode    || null,
     ship_to_country_iso: countryIso || null,
     source:              'carrier_direct',
-    raw_payload:         JSON.stringify({ carrier_direct: true, run_id: runId, parcel_count: parcelCount }),
+    raw_payload:         JSON.stringify({
+      carrier_direct: true, run_id: runId,
+      parcel_count: parcelCount, per_parcel_rate: perParcelRate,
+      zone_id: pricing.zone_id, zone_name: pricing.zone_name,
+      band_label: pricing.band_label,
+      rate_basis: isAllSub && parcelCount > 1 ? 'price_sub' : 'price_first',
+    }),
   }]);
 
   const insertedId     = newCharges[0]?.id || null;
@@ -576,8 +608,8 @@ async function handleCarrierDirect({
   const isMatch        = Math.abs(delta) < 0.02;
 
   console.log(
-    `[recon engine] Carrier-Direct charge inserted id=${insertedId}: ` +
-    `cost=£${totalCostPrice} (${parcelCount} parcel(s) × £${pricing.cost_price}) carrier=£${carrierAmount} delta=£${delta} → ${isMatch ? 'matched' : 'corrected'}`
+    `[carrier-direct] charge inserted id=${insertedId}: ` +
+    `expected=£${expectedAmount} carrier=£${carrierAmount} delta=£${delta} → ${isMatch ? 'MATCHED' : 'CORRECTED'}`
   );
 
   await insertLine(runId, {

@@ -1280,6 +1280,82 @@ router.delete('/learned-mappings/:id', async (req, res) => {
   }
 });
 
+// ─── GET /api/reconciliation/runs/:id/carrier-direct-errors ──────────────────
+// Diagnostic: for a given run, break down carrier_direct errors and unmatched
+// lines by type. Helps identify why pool-miss lines have no expected price.
+
+router.get('/runs/:id/carrier-direct-errors', async (req, res) => {
+  try {
+    const runId = parseInt(req.params.id);
+    if (!runId) return res.status(400).json({ error: 'runId required' });
+
+    // Summary counts by unmatched_reason across ALL unmatched lines
+    const summary = await query(`
+      SELECT
+        COALESCE(unmatched_reason, 'unknown') AS reason,
+        source,
+        COUNT(*)                              AS count,
+        MIN(carrier_amount)                   AS min_carrier,
+        MAX(carrier_amount)                   AS max_carrier,
+        SUM(carrier_amount)                   AS total_carrier
+      FROM   reconciliation_lines
+      WHERE  run_id = $1
+        AND  status = 'unmatched'
+      GROUP  BY reason, source
+      ORDER  BY count DESC
+    `, [runId]);
+
+    // Sample lines for each carrier_direct error type (first 5 per reason)
+    const samples = await query(`
+      SELECT DISTINCT ON (unmatched_reason, raw_service_code)
+        tracking_number,
+        raw_service_code,
+        unmatched_reason,
+        carrier_amount,
+        carrier_billed_weight_kg,
+        ship_to_postcode,
+        ship_to_country,
+        carrier_account_no,
+        source
+      FROM   reconciliation_lines
+      WHERE  run_id = $1
+        AND  source = 'carrier_direct'
+        AND  status = 'unmatched'
+      ORDER  BY unmatched_reason, raw_service_code, carrier_amount DESC
+      LIMIT  20
+    `, [runId]);
+
+    // Check zone availability for DPD domestic services used in this run
+    const zoneCheck = await query(`
+      SELECT
+        cs.service_code,
+        z.id    AS zone_id,
+        z.name  AS zone_name,
+        COUNT(DISTINCT zcc.country_iso) FILTER (WHERE zcc.country_iso IS NOT NULL) AS country_code_count,
+        BOOL_OR(zcc.country_iso = 'GB') AS has_gb,
+        COUNT(wb.id)                    AS weight_band_count
+      FROM   zones z
+      JOIN   courier_services cs ON cs.id = z.courier_service_id
+      JOIN   couriers c          ON c.id  = cs.courier_id
+      LEFT JOIN zone_country_codes zcc ON zcc.zone_id = z.id
+      LEFT JOIN weight_bands wb        ON wb.zone_id  = z.id
+      WHERE  (c.code ILIKE 'DPD' OR c.name ILIKE 'DPD%')
+      GROUP  BY cs.service_code, z.id, z.name
+      ORDER  BY cs.service_code, z.name
+    `, []);
+
+    return res.json({
+      run_id:    runId,
+      summary:   summary.rows,
+      samples:   samples.rows,
+      zone_check: zoneCheck.rows,
+    });
+  } catch (err) {
+    console.error('[reconciliation/carrier-direct-errors] GET error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── DELETE /api/reconciliation/runs/:id ──────────────────────────────────────
 // Hard-delete a reconciliation run and all its data.
 // Order: finalized_billing_lines (no CASCADE) → run (cascades to recon lines).

@@ -1053,7 +1053,9 @@ export async function computeGhostCharge(serviceId, customerId, weightKg, postco
     service_code: serviceCode,
     zone_id:      zone.id,
     zone_name:    zone.name,
-    cost_price:   costResult.cost,
+    cost_price:   costResult.cost,         // price_first — single-parcel / first-parcel rate
+    cost_sub:     costResult.costSub,      // price_sub   — per-parcel rate for all_sub carriers; null if not set
+    band_label:   costResult.bandLabel,    // e.g. "0–2kg" — for trace/diagnostics
     sell_price:   sellResult?.sellPrice || null,
   };
 }
