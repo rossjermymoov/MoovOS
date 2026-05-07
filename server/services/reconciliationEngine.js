@@ -37,7 +37,7 @@
  */
 
 import { query } from '../db/index.js';
-import { computeGhostCharge, insertCharges } from './pricingEngine.js';
+import { computeGhostCharge, insertCharges, lookupCarrierBandCost } from './pricingEngine.js';
 
 // ─── Types (JSDoc) ────────────────────────────────────────────────────────────
 /**
@@ -1166,25 +1166,42 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   // cost_price (base) not total_cost_price (base + fuel). Overhead rows are
   // already auto-accepted above via the carrier_overhead path.
   const invoiceParcelCount   = line.parcel_count || 1;
-  const shipmentParcelCount  = parseInt(charge.shipment_parcel_count) || 0;
   let expectedBase;
   if (ctx.separateFuelRows) {
     const baseFromDb = round2(parseFloat(charge.expected_cost) || 0);
-    if (ctx.parcelPricing === 'all_sub' && invoiceParcelCount > 1 && shipmentParcelCount >= 2) {
-      // DPD all-sub normalisation: rate_per_parcel = cost_price / shipment.parcel_count.
-      // Only safe when shipment_parcel_count >= 2 — if it's null or 1 we can't distinguish
-      // a per-parcel stored amount from a total, and dividing by 1 then multiplying by
-      // invoice_parcel_count would double a correctly-stored total (the "ridiculous" values).
-      //   ● cost_price = total (£5.34), shipment_parcel_count=2 → rate=£2.67 × 2 = £5.34 ✓
-      //   ● cost_price = per-parcel (£2.67), shipment_parcel_count=2 → rate=£1.34?  n/a (Fix Costs handles this)
-      // When shipment_parcel_count is null/1, fall through to baseFromDb — after Fix Costs
-      // all cost_price values are the correct total so this will be accurate.
-      const ratePerParcel = parseFloat(charge.rate_per_parcel) || 0;
-      expectedBase = ratePerParcel > 0
-        ? round2(ratePerParcel * invoiceParcelCount)
-        : baseFromDb;
+    if (ctx.parcelPricing === 'all_sub' && invoiceParcelCount > 1) {
+      // DPD all-sub multi-parcel: recompute expected from the rate card using the zone
+      // already stored on the charge and the invoice billed weight.
+      //
+      // Historical charges (before billing.js task #212) stored cost_price = price_first
+      // (single-parcel rate) instead of N × price_sub. The rate_per_parcel normalisation
+      // guard cannot correct this — dividing price_first by N then multiplying back gives
+      // price_first again, not N × price_sub.
+      //
+      // The rate card is authoritative: for all_sub carriers every parcel including the
+      // first is billed at price_sub. Looking up price_sub from the stored zone_id and
+      // invoice weight gives the correct expected total regardless of how cost_price was
+      // stored. Falls back to stored cost_price only if zone or band data is missing.
+      const invoiceWeightKg = parseFloat(line.billed_weight_kg) || 0;
+      const chargeZoneId    = charge.zone_id || null;
+      let rateCardExpected  = null;
+
+      if (invoiceWeightKg > 0 && chargeZoneId && serviceId) {
+        const bandResult = await lookupCarrierBandCost(serviceId, invoiceWeightKg, chargeZoneId);
+        if (bandResult && bandResult.costSub != null) {
+          rateCardExpected = round2(bandResult.costSub * invoiceParcelCount);
+          console.log(
+            `[recon engine] all_sub rate-card recompute: tracking=${trackingNumber} ` +
+            `zone=${chargeZoneId} weight=${invoiceWeightKg}kg ` +
+            `price_sub=£${bandResult.costSub} × ${invoiceParcelCount} = £${rateCardExpected} ` +
+            `(stored cost_price=£${baseFromDb})`
+          );
+        }
+      }
+
+      expectedBase = rateCardExpected != null ? rateCardExpected : baseFromDb;
     } else {
-      // Single-parcel, or no reliable shipment parcel count — trust cost_price directly.
+      // Single-parcel or no all_sub mode — trust stored cost_price directly.
       expectedBase = baseFromDb;
     }
   } else {
@@ -1372,17 +1389,24 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
 
     if (poolHits.length > 0) {
       // ── Pool HIT: Bucket and Bill — trust the charge ──────────────────────
-      const charge              = poolHits[0];
-      const invoiceParcelCount  = line.parcel_count || 1;
-      const shipmentParcelCount = parseInt(charge.shipment_parcel_count) || 0;
+      const charge             = poolHits[0];
+      const invoiceParcelCount = line.parcel_count || 1;
       let expectedCost;
       if (separateFuelRows) {
         const baseFromDb = round2(parseFloat(charge.expected_cost) || 0);
-        if (parcelPricing === 'all_sub' && invoiceParcelCount > 1 && shipmentParcelCount >= 2) {
-          const ratePerParcel = parseFloat(charge.rate_per_parcel) || 0;
-          expectedCost = ratePerParcel > 0
-            ? round2(ratePerParcel * invoiceParcelCount)
-            : baseFromDb;
+        if (parcelPricing === 'all_sub' && invoiceParcelCount > 1) {
+          // Same rate-card recompute as processLine — see comment there for rationale.
+          const invoiceWeightKg = parseFloat(line.billed_weight_kg) || 0;
+          const chargeZoneId    = charge.zone_id || null;
+          let rateCardExpected  = null;
+
+          if (invoiceWeightKg > 0 && chargeZoneId && serviceId) {
+            const bandResult = await lookupCarrierBandCost(serviceId, invoiceWeightKg, chargeZoneId);
+            if (bandResult && bandResult.costSub != null) {
+              rateCardExpected = round2(bandResult.costSub * invoiceParcelCount);
+            }
+          }
+          expectedCost = rateCardExpected != null ? rateCardExpected : baseFromDb;
         } else {
           expectedCost = baseFromDb;
         }

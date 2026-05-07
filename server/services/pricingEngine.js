@@ -202,7 +202,7 @@ async function calcWeight(serviceId, parcel) {
 //
 // Returns { cost, pass, overageKg, bandLabel } or null if no band configured.
 
-async function lookupCarrierBandCost(serviceId, weightKg, zoneId) {
+export async function lookupCarrierBandCost(serviceId, weightKg, zoneId) {
   if (!serviceId || !(weightKg > 0)) return null;
 
   // Pass 1
