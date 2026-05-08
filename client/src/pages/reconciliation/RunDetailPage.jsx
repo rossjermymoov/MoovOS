@@ -125,14 +125,22 @@ function CorrectionDetail({ line, surchargeLookup }) {
 
   // mapping: a saved reconciliation mapping rule explained the delta
   if (cb === 'mapping') {
+    const mappingLabels = {
+      delta_acceptance:  'Delta accepted',
+      service_code:      'Service code rule',
+      account_number:    'Account number rule',
+      surcharge_code:    'Surcharge code rule',
+      weight_adjustment: 'Weight adjustment rule',
+      map_to_surcharge:  'Mapped to surcharge',
+    };
+    const mappingLabel = mappingLabels[line.mapping_type_applied] || 'Saved rule applied';
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-        <span style={{ fontSize: 10, color: '#79AAFF', fontWeight: 600 }}>Mapping rule applied</span>
-        {line.mapping_name && (
-          <span style={{ fontSize: 10, color: '#666' }}>{line.mapping_name}</span>
-        )}
-        {line.mapping_notes && !line.mapping_name && (
-          <span style={{ fontSize: 10, color: '#666' }}>{line.mapping_notes}</span>
+        <span style={{ fontSize: 10, color: '#79AAFF', fontWeight: 600 }}>{mappingLabel}</span>
+        {line.mapping_match_field && line.mapping_match_value && (
+          <span style={{ fontSize: 10, color: '#555' }}>
+            {line.mapping_match_field}: {line.mapping_match_value}
+          </span>
         )}
       </div>
     );

@@ -851,8 +851,11 @@ router.get('/runs/:id/lines', async (req, res) => {
         s.full_name          AS resolved_by_name,
         cs_sug.name         AS suggested_service_name,
         cs_sug.service_code  AS suggested_service_code,
-        rm.name             AS mapping_name,
-        rm.notes            AS mapping_notes
+        rm.mapping_type     AS mapping_type_applied,
+        rm.resolution_type  AS mapping_resolution_type,
+        rm.resolution_value AS mapping_resolution_value,
+        rm.match_field      AS mapping_match_field,
+        rm.match_value      AS mapping_match_value
       FROM   reconciliation_lines rl
       LEFT JOIN courier_services      cs     ON cs.id     = rl.service_id
       LEFT JOIN courier_services      cs_sug ON cs_sug.id = rl.suggested_service_id
