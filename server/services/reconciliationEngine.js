@@ -621,6 +621,14 @@ async function handleCarrierDirect({
     `expected=£${expectedAmount} carrier=£${carrierAmount} delta=£${delta} → ${isMatch ? 'MATCHED' : 'CORRECTED'}`
   );
 
+  // For corrected carrier_direct lines, store any unmapped CSV monetary columns in
+  // correction_metadata so the UI can show which carrier surcharges explain the delta
+  // (e.g. "Oversized/Overweight Charge: £6.00", "Congestion Charge: £0.95").
+  // These columns arrive via line.raw_col_values populated by mapToInvoiceLine().
+  const carrierDirectMeta = (!isMatch && line.raw_col_values && Object.keys(line.raw_col_values).length > 0)
+    ? { raw_col_values: line.raw_col_values }
+    : null;
+
   await insertLine(runId, {
     tracking_number:          trackingNumber,
     carrier_account_no:       line.account_number    || null,
@@ -641,6 +649,7 @@ async function handleCarrierDirect({
     ship_to_postcode:         postcode               || null,
     ship_to_country:          countryIso             || null,
     parcel_count:             parcelCount > 1 ? parcelCount : null,
+    correction_metadata:      carrierDirectMeta,
   });
 
   return { status: isMatch ? 'matched' : 'corrected' };

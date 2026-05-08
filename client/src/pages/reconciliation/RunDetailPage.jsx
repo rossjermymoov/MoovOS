@@ -146,9 +146,25 @@ function CorrectionDetail({ line, surchargeLookup }) {
     );
   }
 
-  // carrier_direct: shipment booked outside OMS, priced from rate card
+  // carrier_direct: shipment not booked through OMS — priced from rate card at reconciliation.
+  // Show any unmapped CSV monetary columns (e.g. "Oversized/Overweight Charge: £6.00") so
+  // the operator can see what the carrier applied on top of the base rate.
   if (cb === 'carrier_direct') {
-    return <span style={{ fontSize: 10, color: '#79AAFF', fontWeight: 600 }}>Priced from rate card</span>;
+    const rawCols = meta?.raw_col_values || {};
+    const rawEntries = Object.entries(rawCols).filter(([, v]) => parseFloat(v) !== 0);
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span style={{ fontSize: 10, color: '#79AAFF', fontWeight: 600 }}>External booking — rate card</span>
+        {rawEntries.map(([col, val], i) => (
+          <span key={i} style={{ fontSize: 10, color: '#FFB300', fontWeight: 600 }}>
+            {col.replace(/ Charge$/i, '')}: +£{parseFloat(val).toFixed(2)}
+          </span>
+        ))}
+        {rawEntries.length === 0 && (
+          <span style={{ fontSize: 10, color: '#555' }}>No surcharge breakdown available</span>
+        )}
+      </div>
+    );
   }
 
   // surcharge_mapping: overhead or surcharge row auto-accepted
