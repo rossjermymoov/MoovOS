@@ -621,13 +621,31 @@ async function handleCarrierDirect({
     `expected=£${expectedAmount} carrier=£${carrierAmount} delta=£${delta} → ${isMatch ? 'MATCHED' : 'CORRECTED'}`
   );
 
-  // For corrected carrier_direct lines, store any unmapped CSV monetary columns in
-  // correction_metadata so the UI can show which carrier surcharges explain the delta
-  // (e.g. "Oversized/Overweight Charge: £6.00", "Congestion Charge: £0.95").
-  // These columns arrive via line.raw_col_values populated by mapToInvoiceLine().
-  const carrierDirectMeta = (!isMatch && line.raw_col_values && Object.keys(line.raw_col_values).length > 0)
-    ? { raw_col_values: line.raw_col_values }
-    : null;
+  // For corrected carrier_direct lines, store the surcharge breakdown in
+  // correction_metadata so CorrectionDetail can show which carrier surcharges
+  // explain the delta (e.g. "Oversized/Overweight: +£6.00", "Congestion: +£0.95").
+  //
+  // Two sources:
+  //   col_surcharges: surcharges mapped in the CSV profile's surcharge_columns
+  //     (keyed by surcharge UUID, added to carrier_amount by mapToInvoiceLine).
+  //     These are excluded from raw_col_values — so we capture them separately.
+  //   raw_col_values: unmapped monetary CSV columns not in any profile field.
+  //     Captures any surcharges that aren't yet in surcharge_columns.
+  let carrierDirectMeta = null;
+  if (!isMatch) {
+    const colSurcharges = (line.surcharge_amounts && Object.keys(line.surcharge_amounts).length > 0)
+      ? Object.entries(line.surcharge_amounts).map(([surcharge_id, amount]) => ({ surcharge_id, amount }))
+      : [];
+    const rawCols = (line.raw_col_values && Object.keys(line.raw_col_values).length > 0)
+      ? line.raw_col_values
+      : null;
+    if (colSurcharges.length > 0 || rawCols) {
+      carrierDirectMeta = {
+        ...(colSurcharges.length > 0 && { col_surcharges: colSurcharges }),
+        ...(rawCols                   && { raw_col_values: rawCols }),
+      };
+    }
+  }
 
   await insertLine(runId, {
     tracking_number:          trackingNumber,

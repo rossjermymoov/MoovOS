@@ -147,20 +147,29 @@ function CorrectionDetail({ line, surchargeLookup }) {
   }
 
   // carrier_direct: shipment not booked through OMS — priced from rate card at reconciliation.
-  // Show any unmapped CSV monetary columns (e.g. "Oversized/Overweight Charge: £6.00") so
-  // the operator can see what the carrier applied on top of the base rate.
+  // Show mapped surcharges (col_surcharges, looked up by UUID) and any remaining unmapped
+  // monetary columns (raw_col_values) so the operator can see what the carrier applied.
   if (cb === 'carrier_direct') {
-    const rawCols = meta?.raw_col_values || {};
-    const rawEntries = Object.entries(rawCols).filter(([, v]) => parseFloat(v) !== 0);
+    const mappedSurcharges = meta?.col_surcharges || [];
+    const rawCols = Object.entries(meta?.raw_col_values || {}).filter(([, v]) => parseFloat(v) !== 0);
+    const hasBreakdown = mappedSurcharges.length > 0 || rawCols.length > 0;
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <span style={{ fontSize: 10, color: '#79AAFF', fontWeight: 600 }}>External booking — rate card</span>
-        {rawEntries.map(([col, val], i) => (
-          <span key={i} style={{ fontSize: 10, color: '#FFB300', fontWeight: 600 }}>
+        {mappedSurcharges.map((s, i) => {
+          const name = surchargeLookup[s.surcharge_id]?.name || s.surcharge_id;
+          return (
+            <span key={`ms-${i}`} style={{ fontSize: 10, color: '#FFB300', fontWeight: 600 }}>
+              {name}: +£{parseFloat(s.amount).toFixed(2)}
+            </span>
+          );
+        })}
+        {rawCols.map(([col, val], i) => (
+          <span key={`rc-${i}`} style={{ fontSize: 10, color: '#FFB300', fontWeight: 600 }}>
             {col.replace(/ Charge$/i, '')}: +£{parseFloat(val).toFixed(2)}
           </span>
         ))}
-        {rawEntries.length === 0 && (
+        {!hasBreakdown && (
           <span style={{ fontSize: 10, color: '#555' }}>No surcharge breakdown available</span>
         )}
       </div>
