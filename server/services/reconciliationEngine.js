@@ -37,7 +37,7 @@
  */
 
 import { query } from '../db/index.js';
-import { computeGhostCharge, insertCharges, lookupCarrierBandCost } from './pricingEngine.js';
+import { computeGhostCharge, insertCharges, lookupCarrierBandCost, matchZone } from './pricingEngine.js';
 
 // ─── Types (JSDoc) ────────────────────────────────────────────────────────────
 /**
@@ -1196,7 +1196,27 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       // Use per-parcel weight for the band lookup: a 2×17.5 kg shipment should
       // hit the 20 kg band, not the 35 kg band (which may have no entry → no_cost_band).
       const perParcelWeightKg = invoiceParcelCount > 1 ? round2(invoiceWeightKg / invoiceParcelCount) : invoiceWeightKg;
-      const chargeZoneId      = charge.zone_id || null;
+      let chargeZoneId        = charge.zone_id || null;
+
+      // Zone fallback: if zone_id was not stored on the charge (older shipments),
+      // resolve it from the invoice delivery postcode so the rate-card recompute
+      // can still run. Requires delivery_postcode to be mapped in the CSV profile
+      // (migration 166 adds 'delivery_postcode': 'delivery' to the DPD profile).
+      if (!chargeZoneId && line.delivery_postcode && serviceId) {
+        const resolvedZone = await matchZone(
+          serviceId,
+          line.ship_to_country || 'GB',
+          line.delivery_postcode
+        );
+        if (resolvedZone) {
+          chargeZoneId = resolvedZone.id;
+          console.log(
+            `[recon engine] Zone resolved from postcode ${line.delivery_postcode} → zone_id=${chargeZoneId} ` +
+            `(charge had no zone_id) for tracking=${trackingNumber}`
+          );
+        }
+      }
+
       let rateCardExpected    = null;
 
       if (perParcelWeightKg > 0 && chargeZoneId && serviceId) {
@@ -1417,7 +1437,19 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
           // Same rate-card recompute as processLine — see comment there for rationale.
           const invoiceWeightKg   = parseFloat(line.billed_weight_kg) || 0;
           const perParcelWeightKg = invoiceParcelCount > 1 ? round2(invoiceWeightKg / invoiceParcelCount) : invoiceWeightKg;
-          const chargeZoneId      = charge.zone_id || null;
+          let chargeZoneId        = charge.zone_id || null;
+
+          // Zone fallback (same logic as processLine) — resolve from postcode
+          // when zone_id is null on the charge.
+          if (!chargeZoneId && line.delivery_postcode && serviceId) {
+            const resolvedZone = await matchZone(
+              serviceId,
+              line.ship_to_country || 'GB',
+              line.delivery_postcode
+            );
+            if (resolvedZone) chargeZoneId = resolvedZone.id;
+          }
+
           let rateCardExpected    = null;
 
           if (perParcelWeightKg > 0 && chargeZoneId && serviceId) {
