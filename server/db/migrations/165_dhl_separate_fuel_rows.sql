@@ -45,8 +45,8 @@ BEGIN
   END IF;
 
   -- Create a minimal default profile if one does not exist yet
-  INSERT INTO carrier_csv_profiles (carrier_id, name, is_default, column_map, preamble_rows)
-  SELECT v_carrier_id, 'Default', true, '{"separate_fuel_rows": true}'::jsonb, 0
+  INSERT INTO carrier_csv_profiles (carrier_id, profile_name, is_default, column_map)
+  SELECT v_carrier_id, 'Default', true, '{"separate_fuel_rows": true}'::jsonb
   WHERE  NOT EXISTS (
     SELECT 1 FROM carrier_csv_profiles
     WHERE  carrier_id = v_carrier_id AND is_default = true
