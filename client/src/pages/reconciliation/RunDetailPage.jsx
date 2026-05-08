@@ -87,6 +87,92 @@ function ReasonLabel({ reason, correctedBy }) {
   return <span style={{ fontSize: 10, color: cfg.color, fontWeight: 600 }}>{cfg.text}</span>;
 }
 
+// ─── Correction detail — plain-English "why corrected" explanation ────────────
+// Shows inline in the Corrected tab's Reason column so operators can see exactly
+// which surcharge was applied, which mapping rule fired, or why the engine
+// accepted a delta without further action.
+function CorrectionDetail({ line, surchargeLookup }) {
+  const cb   = line.corrected_by;
+  const meta = line.correction_metadata;
+
+  // column_surcharge: carrier applied named per-shipment surcharges from the CSV.
+  // This is a legacy corrected_by value — current engine matches these lines (delta=0)
+  // since the expected already includes the surcharge. Legacy DB rows with this value
+  // will have correction_metadata.col_surcharges with the breakdown.
+  if (cb === 'column_surcharge') {
+    const surcharges = meta?.col_surcharges || [];
+    if (surcharges.length === 0) {
+      return <span style={{ fontSize: 10, color: '#FFB300', fontWeight: 600 }}>Column surcharge</span>;
+    }
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {surcharges.map((s, i) => {
+          const name = surchargeLookup[s.surcharge_id]?.name || s.surcharge_id;
+          return (
+            <span key={i} style={{ fontSize: 10, color: '#FFB300', fontWeight: 600 }}>
+              {name}: +£{parseFloat(s.amount).toFixed(2)}
+            </span>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // pricing_rules: legacy engine value — rate card confirmed the carrier's charge
+  if (cb === 'pricing_rules') {
+    return <span style={{ fontSize: 10, color: '#79AAFF', fontWeight: 600 }}>Rate card confirmed</span>;
+  }
+
+  // mapping: a saved reconciliation mapping rule explained the delta
+  if (cb === 'mapping') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <span style={{ fontSize: 10, color: '#79AAFF', fontWeight: 600 }}>Mapping rule applied</span>
+        {line.mapping_name && (
+          <span style={{ fontSize: 10, color: '#666' }}>{line.mapping_name}</span>
+        )}
+        {line.mapping_notes && !line.mapping_name && (
+          <span style={{ fontSize: 10, color: '#666' }}>{line.mapping_notes}</span>
+        )}
+      </div>
+    );
+  }
+
+  // carrier_direct: shipment booked outside OMS, priced from rate card
+  if (cb === 'carrier_direct') {
+    return <span style={{ fontSize: 10, color: '#79AAFF', fontWeight: 600 }}>Priced from rate card</span>;
+  }
+
+  // surcharge_mapping: overhead or surcharge row auto-accepted
+  if (cb === 'surcharge_mapping') {
+    return <span style={{ fontSize: 10, color: '#00C853', fontWeight: 600 }}>Auto-accepted surcharge</span>;
+  }
+
+  // carrier_overhead: DPD-style overhead row (fuel/carriage) auto-accepted
+  if (cb === 'carrier_overhead') {
+    return <span style={{ fontSize: 10, color: '#00C853', fontWeight: 600 }}>Carrier overhead</span>;
+  }
+
+  // human: manually resolved by a staff member
+  if (cb === 'human') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <span style={{ fontSize: 10, color: '#888', fontWeight: 600 }}>Manually approved</span>
+        {line.resolved_by_name && (
+          <span style={{ fontSize: 10, color: '#555' }}>by {line.resolved_by_name}</span>
+        )}
+      </div>
+    );
+  }
+
+  // fallback for any future corrected_by values
+  if (cb) {
+    return <span style={{ fontSize: 10, color: '#666' }}>via {cb}</span>;
+  }
+
+  return null;
+}
+
 // ─── Resolve drawer ───────────────────────────────────────────────────────────
 function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolutionType }) {
   const isUnknownCode = line.unmatched_reason === 'unknown_service_code';
@@ -1031,8 +1117,18 @@ function DeltaCell({ line, onResolveAsSurcharge }) {
 }
 
 // ─── Lines table ──────────────────────────────────────────────────────────────
-function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, runId }) {
+function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, runId, courierId }) {
   const [traceLine, setTraceLine] = useState(null);
+
+  // Load surcharges for this carrier so CorrectionDetail can show names next to amounts.
+  // Keyed by surcharge UUID so correction_metadata.col_surcharges can look them up.
+  const { data: surcharges = [] } = useQuery({
+    queryKey: ['recon-surcharges', courierId],
+    queryFn:  () => api.get(`/reconciliation/surcharges?carrier_id=${courierId}`).then(r => r.data),
+    enabled:  !!courierId,
+    staleTime: 5 * 60 * 1000,
+  });
+  const surchargeLookup = Object.fromEntries(surcharges.map(s => [String(s.id), s]));
   return (
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
@@ -1076,10 +1172,10 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, runId
               </td>
               <td style={{ padding: '9px 10px' }}><StatusBadge status={line.status} /></td>
               <td style={{ padding: '9px 10px' }}>
-                <ReasonLabel reason={line.unmatched_reason} correctedBy={line.corrected_by} />
-                {line.corrected_by && line.corrected_by !== 'surcharge_mapping' && (
-                  <span style={{ fontSize: 10, color: '#666' }}>via {line.corrected_by}</span>
-                )}
+                {line.status === 'corrected' && line.corrected_by
+                  ? <CorrectionDetail line={line} surchargeLookup={surchargeLookup} />
+                  : <ReasonLabel reason={line.unmatched_reason} correctedBy={line.corrected_by} />
+                }
               </td>
               <td style={{ padding: '9px 10px' }}>
                 <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
@@ -1558,6 +1654,7 @@ export default function RunDetailPage() {
               onResolve={(line) => { setDefaultResolveType(null); setResolvingLine(line); }}
               onResolveAsSurcharge={(line) => { setDefaultResolveType('map_to_surcharge'); setResolvingLine(line); }}
               runId={id}
+              courierId={run.carrier_id}
             />
           </div>
         </>
@@ -1572,6 +1669,7 @@ export default function RunDetailPage() {
             onResolve={(line) => { setDefaultResolveType(null); setResolvingLine(line); }}
             onResolveAsSurcharge={(line) => { setDefaultResolveType('map_to_surcharge'); setResolvingLine(line); }}
             runId={id}
+            courierId={run.carrier_id}
           />
         </div>
       )}

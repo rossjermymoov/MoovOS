@@ -850,12 +850,15 @@ router.get('/runs/:id/lines', async (req, res) => {
         cu.business_name     AS customer_name,
         s.full_name          AS resolved_by_name,
         cs_sug.name         AS suggested_service_name,
-        cs_sug.service_code  AS suggested_service_code
+        cs_sug.service_code  AS suggested_service_code,
+        rm.name             AS mapping_name,
+        rm.notes            AS mapping_notes
       FROM   reconciliation_lines rl
-      LEFT JOIN courier_services cs     ON cs.id     = rl.service_id
-      LEFT JOIN courier_services cs_sug ON cs_sug.id = rl.suggested_service_id
-      LEFT JOIN customers        cu     ON cu.id      = rl.customer_id
-      LEFT JOIN staff             s     ON s.id       = rl.resolved_by
+      LEFT JOIN courier_services      cs     ON cs.id     = rl.service_id
+      LEFT JOIN courier_services      cs_sug ON cs_sug.id = rl.suggested_service_id
+      LEFT JOIN customers             cu     ON cu.id      = rl.customer_id
+      LEFT JOIN staff                 s      ON s.id       = rl.resolved_by
+      LEFT JOIN reconciliation_mappings rm   ON rm.id      = rl.mapping_id
       WHERE  ${conditions.join(' AND ')}
       ORDER  BY rl.aged DESC, rl.carrier_amount DESC
       LIMIT  $${params.length - 1} OFFSET $${params.length}
