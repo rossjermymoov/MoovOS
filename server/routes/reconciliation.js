@@ -1601,6 +1601,56 @@ router.get('/runs/:id/customers', async (req, res) => {
   }
 });
 
+// ─── GET /api/reconciliation/runs/:id/customers/preview ──────────────────────
+// Pre-finalization customer billing preview — aggregated sell totals per customer
+// using live reconciliation_lines + charges table (no finalized_billing_lines needed).
+
+router.get('/runs/:id/customers/preview', async (req, res) => {
+  try {
+    const runId = parseInt(req.params.id);
+    const result = await query(`
+      WITH sell_prices AS (
+        SELECT
+          base.id                                                                        AS charge_id,
+          base.price                                                                     AS sell_base,
+          COALESCE(SUM(CASE WHEN sc.charge_type = 'fuel'      THEN sc.price ELSE 0 END), 0) AS sell_fuel,
+          COALESCE(SUM(CASE WHEN sc.charge_type = 'surcharge' THEN sc.price ELSE 0 END), 0) AS sell_surcharge
+        FROM   charges base
+        LEFT JOIN charges sc ON sc.shipment_id = base.shipment_id
+          AND sc.charge_type IN ('fuel', 'surcharge')
+          AND sc.cancelled = false
+        WHERE  base.charge_type IN ('courier', 'base')
+          AND  base.cancelled = false
+        GROUP BY base.id, base.price
+      )
+      SELECT
+        rl.customer_id,
+        cu.business_name                                                                 AS customer_name,
+        COUNT(*)::int                                                                    AS line_count,
+        COALESCE(SUM(sp.sell_base),      SUM(rl.expected_amount))                       AS total_base,
+        COALESCE(SUM(sp.sell_fuel),      0)                                             AS total_fuel,
+        COALESCE(SUM(sp.sell_surcharge), 0)                                             AS total_surcharge,
+        COALESCE(
+          SUM(sp.sell_base + sp.sell_fuel + sp.sell_surcharge),
+          SUM(rl.expected_amount)
+        )                                                                                AS total_sell,
+        SUM(rl.carrier_amount)                                                           AS total_carrier_cost
+      FROM   reconciliation_lines rl
+      LEFT JOIN customers   cu ON cu.id        = rl.customer_id
+      LEFT JOIN sell_prices sp ON sp.charge_id = rl.charge_id
+      WHERE  rl.run_id = $1
+        AND  rl.status IN ('matched', 'corrected')
+        AND  rl.is_fuel = false
+      GROUP  BY rl.customer_id, cu.business_name
+      ORDER  BY cu.business_name
+    `, [runId]);
+    return res.json(result.rows);
+  } catch (err) {
+    console.error('[reconciliation/customers/preview] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── GET /api/reconciliation/runs/:id/finalized-lines ────────────────────────
 // Finalized line detail for one customer (or all if no customer_id).
 
