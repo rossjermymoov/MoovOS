@@ -1642,23 +1642,34 @@ router.get('/runs/:id/customers/preview', async (req, res) => {
     const result = await query(`
       WITH charge_prices AS (
         -- Pull sell AND cost from the charges table for each base courier charge.
-        -- Related fuel/surcharge charges are joined on shipment_id so we get the
-        -- full per-shipment sell and cost — both computed on the same basis.
+        -- IMPORTANT: charges use TWO sell columns depending on when they were created:
+        --   billing.js (old path):      price      ← populated, sell_price = null
+        --   pricingEngine / recon-engine: sell_price ← populated, price = null
+        -- We always use COALESCE(sell_price, price) so both paths produce correct values.
+        -- reconciliation_excluded surcharges are intentional billing-engine duplicates
+        -- that exist only for internal recon use; exclude from sell totals to avoid
+        -- double-counting (e.g. EPS: 15p real + 15p phantom = 30p without this filter).
         SELECT
-          base.id                                                                           AS charge_id,
-          base.price                                                                        AS sell_base,
-          COALESCE(base.cost_price, 0)                                                     AS cost_base,
-          COALESCE(SUM(CASE WHEN sc.charge_type = 'fuel'      THEN sc.price      ELSE 0 END), 0) AS sell_fuel,
-          COALESCE(SUM(CASE WHEN sc.charge_type = 'fuel'      THEN sc.cost_price ELSE 0 END), 0) AS cost_fuel,
-          COALESCE(SUM(CASE WHEN sc.charge_type = 'surcharge' THEN sc.price      ELSE 0 END), 0) AS sell_surcharge,
-          COALESCE(SUM(CASE WHEN sc.charge_type = 'surcharge' THEN sc.cost_price ELSE 0 END), 0) AS cost_surcharge
+          base.id                                                                                AS charge_id,
+          COALESCE(base.sell_price, base.price)                                                  AS sell_base,
+          COALESCE(base.cost_price, 0)                                                           AS cost_base,
+          COALESCE(SUM(CASE WHEN sc.charge_type = 'fuel'
+                              THEN COALESCE(sc.sell_price, sc.price) ELSE 0 END), 0)            AS sell_fuel,
+          COALESCE(SUM(CASE WHEN sc.charge_type = 'fuel'
+                              THEN sc.cost_price                     ELSE 0 END), 0)            AS cost_fuel,
+          COALESCE(SUM(CASE WHEN sc.charge_type = 'surcharge'
+                             AND COALESCE(sx.reconciliation_excluded, false) = false
+                              THEN COALESCE(sc.sell_price, sc.price) ELSE 0 END), 0)            AS sell_surcharge,
+          COALESCE(SUM(CASE WHEN sc.charge_type = 'surcharge'
+                              THEN sc.cost_price                     ELSE 0 END), 0)            AS cost_surcharge
         FROM   charges base
-        LEFT JOIN charges sc ON sc.shipment_id = base.shipment_id
+        LEFT JOIN charges    sc ON sc.shipment_id = base.shipment_id
           AND sc.charge_type IN ('fuel', 'surcharge')
           AND sc.cancelled = false
+        LEFT JOIN surcharges sx ON sx.id = sc.surcharge_id
         WHERE  base.charge_type = 'courier'
           AND  base.cancelled   = false
-        GROUP BY base.id, base.price, base.cost_price
+        GROUP BY base.id, base.sell_price, base.price, base.cost_price
       )
       SELECT
         rl.customer_id,
@@ -1709,22 +1720,29 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
 
     const result = await query(`
       WITH charge_prices AS (
-        -- Pull sell AND cost symmetrically so margin is apples-to-apples.
+        -- Same CTE as the summary endpoint — see comment there for the
+        -- sell_price / price dual-column rationale and reconciliation_excluded logic.
         SELECT
           base.id                                                                                AS charge_id,
-          base.price                                                                             AS sell_base,
-          COALESCE(base.cost_price, 0)                                                          AS cost_base,
-          COALESCE(SUM(CASE WHEN sc.charge_type = 'fuel'      THEN sc.price      ELSE 0 END), 0) AS sell_fuel,
-          COALESCE(SUM(CASE WHEN sc.charge_type = 'fuel'      THEN sc.cost_price ELSE 0 END), 0) AS cost_fuel,
-          COALESCE(SUM(CASE WHEN sc.charge_type = 'surcharge' THEN sc.price      ELSE 0 END), 0) AS sell_surcharge,
-          COALESCE(SUM(CASE WHEN sc.charge_type = 'surcharge' THEN sc.cost_price ELSE 0 END), 0) AS cost_surcharge
+          COALESCE(base.sell_price, base.price)                                                  AS sell_base,
+          COALESCE(base.cost_price, 0)                                                           AS cost_base,
+          COALESCE(SUM(CASE WHEN sc.charge_type = 'fuel'
+                              THEN COALESCE(sc.sell_price, sc.price) ELSE 0 END), 0)            AS sell_fuel,
+          COALESCE(SUM(CASE WHEN sc.charge_type = 'fuel'
+                              THEN sc.cost_price                     ELSE 0 END), 0)            AS cost_fuel,
+          COALESCE(SUM(CASE WHEN sc.charge_type = 'surcharge'
+                             AND COALESCE(sx.reconciliation_excluded, false) = false
+                              THEN COALESCE(sc.sell_price, sc.price) ELSE 0 END), 0)            AS sell_surcharge,
+          COALESCE(SUM(CASE WHEN sc.charge_type = 'surcharge'
+                              THEN sc.cost_price                     ELSE 0 END), 0)            AS cost_surcharge
         FROM   charges base
-        LEFT JOIN charges sc ON sc.shipment_id = base.shipment_id
+        LEFT JOIN charges    sc ON sc.shipment_id = base.shipment_id
           AND sc.charge_type IN ('fuel', 'surcharge')
           AND sc.cancelled = false
+        LEFT JOIN surcharges sx ON sx.id = sc.surcharge_id
         WHERE  base.charge_type = 'courier'
           AND  base.cancelled   = false
-        GROUP BY base.id, base.price, base.cost_price
+        GROUP BY base.id, base.sell_price, base.price, base.cost_price
       )
       SELECT
         rl.id,
