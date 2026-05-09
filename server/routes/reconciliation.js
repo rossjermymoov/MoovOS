@@ -1619,7 +1619,7 @@ router.get('/runs/:id/customers/preview', async (req, res) => {
         LEFT JOIN charges sc ON sc.shipment_id = base.shipment_id
           AND sc.charge_type IN ('fuel', 'surcharge')
           AND sc.cancelled = false
-        WHERE  base.charge_type IN ('courier', 'base')
+        WHERE  base.charge_type = 'courier'
           AND  base.cancelled = false
         GROUP BY base.id, base.price
       )
