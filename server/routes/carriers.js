@@ -114,13 +114,16 @@ router.get('/services', async (req, res, next) => {
   try {
     const { courier_id } = req.query;
     let sql = `SELECT cs.*, c.name AS courier_name, c.code AS courier_code,
-                COUNT(z.id)::int AS zone_count
+                COUNT(z.id)::int AS zone_count,
+                fb.service_code AS rate_fallback_service_code,
+                fb.name         AS rate_fallback_service_name
                FROM courier_services cs
                JOIN couriers c ON c.id = cs.courier_id
-               LEFT JOIN zones z ON z.courier_service_id = cs.id`;
+               LEFT JOIN zones z ON z.courier_service_id = cs.id
+               LEFT JOIN courier_services fb ON fb.id = cs.rate_fallback_service_id`;
     const values = [];
     if (courier_id) { sql += ' WHERE cs.courier_id = $1'; values.push(courier_id); }
-    sql += ' GROUP BY cs.id, c.id ORDER BY c.name, cs.sort_order NULLS LAST, cs.name';
+    sql += ' GROUP BY cs.id, c.id, fb.service_code, fb.name ORDER BY c.name, cs.sort_order NULLS LAST, cs.name';
     const result = await query(sql, values);
     res.json(result.rows);
   } catch (err) { next(err); }
@@ -130,8 +133,12 @@ router.get('/services', async (req, res, next) => {
 router.get('/services/:id', async (req, res, next) => {
   try {
     const svc = await query(
-      `SELECT cs.*, c.name AS courier_name, c.code AS courier_code
-       FROM courier_services cs JOIN couriers c ON c.id = cs.courier_id
+      `SELECT cs.*, c.name AS courier_name, c.code AS courier_code,
+              fb.service_code AS rate_fallback_service_code,
+              fb.name         AS rate_fallback_service_name
+       FROM courier_services cs
+       JOIN couriers c ON c.id = cs.courier_id
+       LEFT JOIN courier_services fb ON fb.id = cs.rate_fallback_service_id
        WHERE cs.id = $1`, [req.params.id]
     );
     if (!svc.rows.length) return res.status(404).json({ error: 'Service not found' });
@@ -215,7 +222,7 @@ router.put('/couriers/:id/services/reorder', async (req, res, next) => {
 // PATCH /api/carriers/services/:id
 router.patch('/services/:id', async (req, res, next) => {
   try {
-    const allowed = ['service_code', 'name', 'fuel_surcharge_pct', 'service_type', 'fuel_group_id', 'is_bespoke'];
+    const allowed = ['service_code', 'name', 'fuel_surcharge_pct', 'service_type', 'fuel_group_id', 'is_bespoke', 'rate_fallback_service_id'];
     const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));
     if (!updates.length) return res.status(400).json({ error: 'No valid fields to update' });
     const setClauses = updates.map(([k], i) => `${k} = $${i + 2}`).join(', ');
