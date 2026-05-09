@@ -1295,9 +1295,9 @@ function CustomerLinesDrilldown({ runId, customerId }) {
               return (
                 <tr key={l.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
                   <td style={{ ...tdStyle, color: '#79AAFF', fontFamily: 'monospace', fontSize: 10 }}>{l.tracking_number || '—'}</td>
-                  <td style={{ ...tdStyle, color: '#888' }}>{l.despatch_date ? new Date(l.despatch_date).toLocaleDateString('en-GB') : '—'}</td>
+                  <td style={{ ...tdStyle, color: '#888' }}>{l.shipment_date ? new Date(l.shipment_date).toLocaleDateString('en-GB') : '—'}</td>
                   <td style={{ ...tdStyle, color: '#AAA' }}>{l.service_name || '—'}</td>
-                  <td style={{ ...tdStyle, color: '#888' }}>{l.item_count || 1}</td>
+                  <td style={{ ...tdStyle, color: '#888' }}>{l.parcel_count || 1}</td>
                   <td style={{ ...tdStyle, color: '#AAA', textAlign: 'right' }}>£{carrier.toFixed(2)}</td>
                   <td style={{ ...tdStyle, color: '#888', textAlign: 'right' }}>£{parseFloat(l.sell_base || 0).toFixed(2)}</td>
                   <td style={{ ...tdStyle, color: '#888', textAlign: 'right' }}>£{parseFloat(l.sell_fuel || 0).toFixed(2)}</td>

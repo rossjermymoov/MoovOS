@@ -1684,13 +1684,13 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
       SELECT
         rl.id,
         rl.tracking_number,
-        rl.despatch_date,
+        rl.shipment_date,
         rl.carrier_amount,
         rl.expected_amount,
         rl.status,
         rl.corrected_by,
-        rl.item_count,
-        rl.weight_kg,
+        rl.parcel_count,
+        rl.carrier_billed_weight_kg,
         cs.name                                                                            AS service_name,
         COALESCE(sp.sell_base,      rl.expected_amount)                                   AS sell_base,
         COALESCE(sp.sell_fuel,      0)                                                    AS sell_fuel,
@@ -1706,7 +1706,7 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
         AND  rl.status IN ('matched', 'corrected')
         AND  rl.is_fuel = false
         ${custFilter}
-      ORDER  BY rl.despatch_date ASC NULLS LAST, rl.tracking_number
+      ORDER  BY rl.shipment_date ASC NULLS LAST, rl.tracking_number
     `, params);
 
     return res.json(result.rows);
