@@ -1248,8 +1248,95 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, runId
 }
 
 // ─── Customer summary panel (post-finalization) ───────────────────────────────
+// ─── Customer preview — line-level drill-down ─────────────────────────────────
+function CustomerLinesDrilldown({ runId, customerId }) {
+  const { data: lines = [], isLoading } = useQuery({
+    queryKey: ['recon-preview-lines', runId, customerId],
+    queryFn:  () => api.get(`/reconciliation/runs/${runId}/customers/preview/lines`, {
+      params: { customer_id: customerId },
+    }).then(r => r.data),
+    staleTime: 30_000,
+  });
+
+  if (isLoading) return (
+    <tr><td colSpan={9} style={{ padding: '12px 16px', color: '#555', fontSize: 11 }}>Loading lines…</td></tr>
+  );
+  if (!lines.length) return (
+    <tr><td colSpan={9} style={{ padding: '12px 16px', color: '#555', fontSize: 11 }}>No lines found</td></tr>
+  );
+
+  const thStyle = { padding: '6px 10px', textAlign: 'left', color: '#444', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', background: 'rgba(255,255,255,0.02)' };
+  const tdStyle = { padding: '7px 10px', fontSize: 11, borderBottom: '1px solid rgba(255,255,255,0.03)' };
+
+  return (
+    <tr>
+      <td colSpan={9} style={{ padding: 0, background: 'rgba(0,0,0,0.25)' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              <th style={thStyle}>Tracking</th>
+              <th style={thStyle}>Date</th>
+              <th style={thStyle}>Service</th>
+              <th style={thStyle}>Items</th>
+              <th style={{ ...thStyle, textAlign: 'right' }}>Carrier £</th>
+              <th style={{ ...thStyle, textAlign: 'right' }}>Sell Base</th>
+              <th style={{ ...thStyle, textAlign: 'right' }}>Fuel</th>
+              <th style={{ ...thStyle, textAlign: 'right' }}>Surcharges</th>
+              <th style={{ ...thStyle, textAlign: 'right', color: '#00C853' }}>Total Sell</th>
+              <th style={{ ...thStyle, textAlign: 'right' }}>Margin</th>
+              <th style={thStyle}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lines.map(l => {
+              const carrier = parseFloat(l.carrier_amount || 0);
+              const sell    = parseFloat(l.sell_total || 0);
+              const margin  = sell - carrier;
+              return (
+                <tr key={l.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
+                  <td style={{ ...tdStyle, color: '#79AAFF', fontFamily: 'monospace', fontSize: 10 }}>{l.tracking_number || '—'}</td>
+                  <td style={{ ...tdStyle, color: '#888' }}>{l.despatch_date ? new Date(l.despatch_date).toLocaleDateString('en-GB') : '—'}</td>
+                  <td style={{ ...tdStyle, color: '#AAA' }}>{l.service_name || '—'}</td>
+                  <td style={{ ...tdStyle, color: '#888' }}>{l.item_count || 1}</td>
+                  <td style={{ ...tdStyle, color: '#AAA', textAlign: 'right' }}>£{carrier.toFixed(2)}</td>
+                  <td style={{ ...tdStyle, color: '#888', textAlign: 'right' }}>£{parseFloat(l.sell_base || 0).toFixed(2)}</td>
+                  <td style={{ ...tdStyle, color: '#888', textAlign: 'right' }}>£{parseFloat(l.sell_fuel || 0).toFixed(2)}</td>
+                  <td style={{ ...tdStyle, color: '#888', textAlign: 'right' }}>£{parseFloat(l.sell_surcharge || 0).toFixed(2)}</td>
+                  <td style={{ ...tdStyle, color: '#00C853', fontWeight: 700, textAlign: 'right' }}>£{sell.toFixed(2)}</td>
+                  <td style={{ ...tdStyle, color: margin >= 0 ? '#00C853' : '#FF5252', fontWeight: 600, textAlign: 'right' }}>£{margin.toFixed(2)}</td>
+                  <td style={{ ...tdStyle }}><StatusBadge status={l.status} /></td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <td colSpan={4} style={{ ...tdStyle, color: '#555', fontWeight: 700, fontSize: 10 }}>SUBTOTAL ({lines.length} lines)</td>
+              <td style={{ ...tdStyle, color: '#AAA', fontWeight: 700, textAlign: 'right' }}>
+                £{lines.reduce((s, l) => s + parseFloat(l.carrier_amount || 0), 0).toFixed(2)}
+              </td>
+              <td style={{ ...tdStyle, textAlign: 'right' }} />
+              <td style={{ ...tdStyle, textAlign: 'right' }} />
+              <td style={{ ...tdStyle, textAlign: 'right' }} />
+              <td style={{ ...tdStyle, color: '#00C853', fontWeight: 800, textAlign: 'right' }}>
+                £{lines.reduce((s, l) => s + parseFloat(l.sell_total || 0), 0).toFixed(2)}
+              </td>
+              <td style={{ ...tdStyle, fontWeight: 700, textAlign: 'right', color: (() => { const m = lines.reduce((s, l) => s + parseFloat(l.sell_total || 0) - parseFloat(l.carrier_amount || 0), 0); return m >= 0 ? '#00C853' : '#FF5252'; })() }}>
+                £{lines.reduce((s, l) => s + parseFloat(l.sell_total || 0) - parseFloat(l.carrier_amount || 0), 0).toFixed(2)}
+              </td>
+              <td />
+            </tr>
+          </tfoot>
+        </table>
+      </td>
+    </tr>
+  );
+}
+
 // ─── Customer preview panel (pre-finalization) ────────────────────────────────
 function CustomerPreviewPanel({ runId }) {
+  const [expandedId, setExpandedId] = useState(null);
+
   const { data: customers = [], isLoading } = useQuery({
     queryKey: ['recon-customers-preview', runId],
     queryFn:  () => api.get(`/reconciliation/runs/${runId}/customers/preview`).then(r => r.data),
@@ -1267,13 +1354,17 @@ function CustomerPreviewPanel({ runId }) {
   const totalCost   = customers.reduce((s, c) => s + parseFloat(c.total_carrier_cost || 0), 0);
   const totalMargin = totalSell - totalCost;
 
+  function toggleExpand(customerId) {
+    setExpandedId(prev => prev === customerId ? null : customerId);
+  }
+
   return (
     <div style={card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#E6EDF3' }}>Customer Billing Preview</div>
           <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
-            {customers.length} customer{customers.length !== 1 ? 's' : ''} · {customers.reduce((s, c) => s + (c.line_count || 0), 0)} shipments · Finalise to push to Xero
+            {customers.length} customer{customers.length !== 1 ? 's' : ''} · {customers.reduce((s, c) => s + (c.line_count || 0), 0)} shipments · Click a row to see line detail · Finalise to push to Xero
           </div>
         </div>
         <span style={{ fontSize: 11, color: '#FFB300', fontWeight: 600 }}>
@@ -1284,6 +1375,7 @@ function CustomerPreviewPanel({ runId }) {
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
           <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            <th style={{ width: 24, padding: '7px 6px' }} />
             {['Customer', 'Shipments', 'Base', 'Fuel', 'Surcharges', 'Total Sell', 'Carrier Cost', 'Margin'].map(h => (
               <th key={h} style={{ padding: '7px 10px', textAlign: 'left', color: '#555', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
             ))}
@@ -1291,27 +1383,50 @@ function CustomerPreviewPanel({ runId }) {
         </thead>
         <tbody>
           {customers.map(c => {
-            const sell   = parseFloat(c.total_sell || 0);
-            const cost   = parseFloat(c.total_carrier_cost || 0);
-            const margin = sell - cost;
+            const sell      = parseFloat(c.total_sell || 0);
+            const cost      = parseFloat(c.total_carrier_cost || 0);
+            const margin    = sell - cost;
+            const expanded  = expandedId === (c.customer_id || 'null');
+            const rowKey    = c.customer_id || 'null';
             return (
-              <tr key={c.customer_id || 'unknown'} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                <td style={{ padding: '9px 10px', color: '#E6EDF3', fontWeight: 600 }}>{c.customer_name || '—'}</td>
-                <td style={{ padding: '9px 10px', color: '#AAA' }}>{c.line_count}</td>
-                <td style={{ padding: '9px 10px', color: '#888' }}>£{parseFloat(c.total_base || 0).toFixed(2)}</td>
-                <td style={{ padding: '9px 10px', color: '#888' }}>£{parseFloat(c.total_fuel || 0).toFixed(2)}</td>
-                <td style={{ padding: '9px 10px', color: '#888' }}>£{parseFloat(c.total_surcharge || 0).toFixed(2)}</td>
-                <td style={{ padding: '9px 10px', color: '#00C853', fontWeight: 700 }}>£{sell.toFixed(2)}</td>
-                <td style={{ padding: '9px 10px', color: '#AAA' }}>£{cost.toFixed(2)}</td>
-                <td style={{ padding: '9px 10px', color: margin >= 0 ? '#00C853' : '#FF5252', fontWeight: 600 }}>
-                  £{margin.toFixed(2)}
-                </td>
-              </tr>
+              <>
+                <tr
+                  key={rowKey}
+                  onClick={() => toggleExpand(rowKey)}
+                  style={{
+                    borderBottom: expanded ? 'none' : '1px solid rgba(255,255,255,0.04)',
+                    cursor: 'pointer',
+                    background: expanded ? 'rgba(255,255,255,0.03)' : 'transparent',
+                  }}
+                >
+                  <td style={{ padding: '9px 6px', color: '#555', textAlign: 'center', fontSize: 10 }}>
+                    {expanded ? '▾' : '▸'}
+                  </td>
+                  <td style={{ padding: '9px 10px', color: '#E6EDF3', fontWeight: 600 }}>{c.customer_name || '—'}</td>
+                  <td style={{ padding: '9px 10px', color: '#AAA' }}>{c.line_count}</td>
+                  <td style={{ padding: '9px 10px', color: '#888' }}>£{parseFloat(c.total_base || 0).toFixed(2)}</td>
+                  <td style={{ padding: '9px 10px', color: '#888' }}>£{parseFloat(c.total_fuel || 0).toFixed(2)}</td>
+                  <td style={{ padding: '9px 10px', color: '#888' }}>£{parseFloat(c.total_surcharge || 0).toFixed(2)}</td>
+                  <td style={{ padding: '9px 10px', color: '#00C853', fontWeight: 700 }}>£{sell.toFixed(2)}</td>
+                  <td style={{ padding: '9px 10px', color: '#AAA' }}>£{cost.toFixed(2)}</td>
+                  <td style={{ padding: '9px 10px', color: margin >= 0 ? '#00C853' : '#FF5252', fontWeight: 600 }}>
+                    £{margin.toFixed(2)}
+                  </td>
+                </tr>
+                {expanded && (
+                  <CustomerLinesDrilldown
+                    key={`lines-${rowKey}`}
+                    runId={runId}
+                    customerId={c.customer_id}
+                  />
+                )}
+              </>
             );
           })}
         </tbody>
         <tfoot>
           <tr style={{ borderTop: '2px solid rgba(255,255,255,0.1)' }}>
+            <td />
             <td style={{ padding: '9px 10px', color: '#888', fontSize: 12, fontWeight: 700 }}>TOTAL</td>
             <td style={{ padding: '9px 10px', color: '#AAA' }}>{customers.reduce((s, c) => s + (c.line_count || 0), 0)}</td>
             <td colSpan={3} />

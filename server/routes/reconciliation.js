@@ -1651,6 +1651,71 @@ router.get('/runs/:id/customers/preview', async (req, res) => {
   }
 });
 
+// ─── GET /api/reconciliation/runs/:id/customers/preview/lines ────────────────
+// Per-line detail for one customer — used in the pre-finalization drill-down.
+// Returns every matched/corrected non-fuel line with sell price breakdown.
+
+router.get('/runs/:id/customers/preview/lines', async (req, res) => {
+  try {
+    const runId      = parseInt(req.params.id);
+    const customerId = req.query.customer_id || null;
+    const params     = [runId];
+    let   custFilter = '';
+    if (customerId) {
+      params.push(customerId);
+      custFilter = `AND rl.customer_id = $${params.length}`;
+    }
+
+    const result = await query(`
+      WITH sell_prices AS (
+        SELECT
+          base.id                                                                           AS charge_id,
+          base.price                                                                        AS sell_base,
+          COALESCE(SUM(CASE WHEN sc.charge_type = 'fuel'      THEN sc.price ELSE 0 END), 0) AS sell_fuel,
+          COALESCE(SUM(CASE WHEN sc.charge_type = 'surcharge' THEN sc.price ELSE 0 END), 0) AS sell_surcharge
+        FROM   charges base
+        LEFT JOIN charges sc ON sc.shipment_id = base.shipment_id
+          AND sc.charge_type IN ('fuel', 'surcharge')
+          AND sc.cancelled = false
+        WHERE  base.charge_type = 'courier'
+          AND  base.cancelled   = false
+        GROUP BY base.id, base.price
+      )
+      SELECT
+        rl.id,
+        rl.tracking_number,
+        rl.despatch_date,
+        rl.carrier_amount,
+        rl.expected_amount,
+        rl.status,
+        rl.corrected_by,
+        rl.item_count,
+        rl.weight_kg,
+        cs.name                                                                            AS service_name,
+        COALESCE(sp.sell_base,      rl.expected_amount)                                   AS sell_base,
+        COALESCE(sp.sell_fuel,      0)                                                    AS sell_fuel,
+        COALESCE(sp.sell_surcharge, 0)                                                    AS sell_surcharge,
+        COALESCE(
+          sp.sell_base + sp.sell_fuel + sp.sell_surcharge,
+          rl.expected_amount
+        )                                                                                  AS sell_total
+      FROM   reconciliation_lines rl
+      LEFT JOIN courier_services cs ON cs.id        = rl.service_id
+      LEFT JOIN sell_prices      sp ON sp.charge_id = rl.charge_id
+      WHERE  rl.run_id = $1
+        AND  rl.status IN ('matched', 'corrected')
+        AND  rl.is_fuel = false
+        ${custFilter}
+      ORDER  BY rl.despatch_date ASC NULLS LAST, rl.tracking_number
+    `, params);
+
+    return res.json(result.rows);
+  } catch (err) {
+    console.error('[reconciliation/customers/preview/lines] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── GET /api/reconciliation/runs/:id/finalized-lines ────────────────────────
 // Finalized line detail for one customer (or all if no customer_id).
 
