@@ -1634,7 +1634,12 @@ router.get('/runs/:id/customers/preview', async (req, res) => {
           SUM(sp.sell_base + sp.sell_fuel + sp.sell_surcharge),
           SUM(rl.expected_amount)
         )                                                                                AS total_sell,
-        SUM(rl.carrier_amount)                                                           AS total_carrier_cost
+        -- expected_amount = total_cost_price from pool (base + fuel + surcharges).
+        -- carrier_amount is per-line only (e.g. base freight for DHL; aggregate fuel
+        -- rows are excluded by is_fuel=false). expected_amount gives a fair like-for-like
+        -- margin against sell_total which also includes fuel and surcharges.
+        SUM(rl.expected_amount)                                                          AS total_our_cost,
+        SUM(rl.carrier_amount)                                                           AS total_invoice_amount
       FROM   reconciliation_lines rl
       LEFT JOIN customers   cu ON cu.id        = rl.customer_id
       LEFT JOIN sell_prices sp ON sp.charge_id = rl.charge_id

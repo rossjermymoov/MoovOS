@@ -1277,8 +1277,8 @@ function CustomerLinesDrilldown({ runId, customerId }) {
               <th style={thStyle}>Tracking</th>
               <th style={thStyle}>Date</th>
               <th style={thStyle}>Service</th>
-              <th style={thStyle}>Items</th>
-              <th style={{ ...thStyle, textAlign: 'right' }}>Carrier £</th>
+              <th style={thStyle}>Parcels</th>
+              <th style={{ ...thStyle, textAlign: 'right' }}>Our Cost</th>
               <th style={{ ...thStyle, textAlign: 'right' }}>Sell Base</th>
               <th style={{ ...thStyle, textAlign: 'right' }}>Fuel</th>
               <th style={{ ...thStyle, textAlign: 'right' }}>Surcharges</th>
@@ -1289,16 +1289,16 @@ function CustomerLinesDrilldown({ runId, customerId }) {
           </thead>
           <tbody>
             {lines.map(l => {
-              const carrier = parseFloat(l.carrier_amount || 0);
-              const sell    = parseFloat(l.sell_total || 0);
-              const margin  = sell - carrier;
+              const cost   = parseFloat(l.expected_amount || 0);
+              const sell   = parseFloat(l.sell_total || 0);
+              const margin = sell - cost;
               return (
                 <tr key={l.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
                   <td style={{ ...tdStyle, color: '#79AAFF', fontFamily: 'monospace', fontSize: 10 }}>{l.tracking_number || '—'}</td>
                   <td style={{ ...tdStyle, color: '#888' }}>{l.shipment_date ? new Date(l.shipment_date).toLocaleDateString('en-GB') : '—'}</td>
                   <td style={{ ...tdStyle, color: '#AAA' }}>{l.service_name || '—'}</td>
                   <td style={{ ...tdStyle, color: '#888' }}>{l.parcel_count || 1}</td>
-                  <td style={{ ...tdStyle, color: '#AAA', textAlign: 'right' }}>£{carrier.toFixed(2)}</td>
+                  <td style={{ ...tdStyle, color: '#AAA', textAlign: 'right' }}>£{cost.toFixed(2)}</td>
                   <td style={{ ...tdStyle, color: '#888', textAlign: 'right' }}>£{parseFloat(l.sell_base || 0).toFixed(2)}</td>
                   <td style={{ ...tdStyle, color: '#888', textAlign: 'right' }}>£{parseFloat(l.sell_fuel || 0).toFixed(2)}</td>
                   <td style={{ ...tdStyle, color: '#888', textAlign: 'right' }}>£{parseFloat(l.sell_surcharge || 0).toFixed(2)}</td>
@@ -1313,7 +1313,7 @@ function CustomerLinesDrilldown({ runId, customerId }) {
             <tr style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
               <td colSpan={4} style={{ ...tdStyle, color: '#555', fontWeight: 700, fontSize: 10 }}>SUBTOTAL ({lines.length} lines)</td>
               <td style={{ ...tdStyle, color: '#AAA', fontWeight: 700, textAlign: 'right' }}>
-                £{lines.reduce((s, l) => s + parseFloat(l.carrier_amount || 0), 0).toFixed(2)}
+                £{lines.reduce((s, l) => s + parseFloat(l.expected_amount || 0), 0).toFixed(2)}
               </td>
               <td style={{ ...tdStyle, textAlign: 'right' }} />
               <td style={{ ...tdStyle, textAlign: 'right' }} />
@@ -1321,8 +1321,8 @@ function CustomerLinesDrilldown({ runId, customerId }) {
               <td style={{ ...tdStyle, color: '#00C853', fontWeight: 800, textAlign: 'right' }}>
                 £{lines.reduce((s, l) => s + parseFloat(l.sell_total || 0), 0).toFixed(2)}
               </td>
-              <td style={{ ...tdStyle, fontWeight: 700, textAlign: 'right', color: (() => { const m = lines.reduce((s, l) => s + parseFloat(l.sell_total || 0) - parseFloat(l.carrier_amount || 0), 0); return m >= 0 ? '#00C853' : '#FF5252'; })() }}>
-                £{lines.reduce((s, l) => s + parseFloat(l.sell_total || 0) - parseFloat(l.carrier_amount || 0), 0).toFixed(2)}
+              <td style={{ ...tdStyle, fontWeight: 700, textAlign: 'right', color: (() => { const m = lines.reduce((s, l) => s + parseFloat(l.sell_total || 0) - parseFloat(l.expected_amount || 0), 0); return m >= 0 ? '#00C853' : '#FF5252'; })() }}>
+                £{lines.reduce((s, l) => s + parseFloat(l.sell_total || 0) - parseFloat(l.expected_amount || 0), 0).toFixed(2)}
               </td>
               <td />
             </tr>
@@ -1350,8 +1350,8 @@ function CustomerPreviewPanel({ runId }) {
     </div>
   );
 
-  const totalSell   = customers.reduce((s, c) => s + parseFloat(c.total_sell || 0), 0);
-  const totalCost   = customers.reduce((s, c) => s + parseFloat(c.total_carrier_cost || 0), 0);
+  const totalSell   = customers.reduce((s, c) => s + parseFloat(c.total_sell     || 0), 0);
+  const totalCost   = customers.reduce((s, c) => s + parseFloat(c.total_our_cost || 0), 0);
   const totalMargin = totalSell - totalCost;
 
   function toggleExpand(customerId) {
@@ -1376,15 +1376,15 @@ function CustomerPreviewPanel({ runId }) {
         <thead>
           <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
             <th style={{ width: 24, padding: '7px 6px' }} />
-            {['Customer', 'Shipments', 'Base', 'Fuel', 'Surcharges', 'Total Sell', 'Carrier Cost', 'Margin'].map(h => (
+            {['Customer', 'Shipments', 'Sell Base', 'Fuel', 'Surcharges', 'Total Sell', 'Our Cost', 'Margin'].map(h => (
               <th key={h} style={{ padding: '7px 10px', textAlign: 'left', color: '#555', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {customers.map(c => {
-            const sell      = parseFloat(c.total_sell || 0);
-            const cost      = parseFloat(c.total_carrier_cost || 0);
+            const sell      = parseFloat(c.total_sell     || 0);
+            const cost      = parseFloat(c.total_our_cost || 0);
             const margin    = sell - cost;
             const expanded  = expandedId === (c.customer_id || 'null');
             const rowKey    = c.customer_id || 'null';
