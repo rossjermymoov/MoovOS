@@ -91,6 +91,46 @@ export async function finalizeRun(runId, staffId = null) {
     }
   }
 
+  // ── Write reconciled cost + sell back to charges ──────────────────────────
+  //
+  // For corrected pool-matched lines the reconciliation engine computed:
+  //   corrected_cost_price = carrier_amount          (actual billed cost)
+  //   corrected_sell_price = customer rate at billed weight (actual sell)
+  //
+  // We now write these back to the charges table so the finance table and
+  // any downstream reports reflect the permanently reconciled figures.
+  //   - cost_price → corrected_cost_price (what the carrier actually billed)
+  //   - sell_price → corrected_sell_price (customer rate at billed weight)
+  //   - price      → corrected_sell_price (legacy sell column mirrors sell_price)
+  //   - recon_corrected → true (guard against double-finalization)
+  //
+  // Only applies to lines that have corrected values AND a linked charge.
+  // Matched lines (cost ≈ expected, sell unchanged) are not touched.
+  // Carrier-direct charges already have correct cost/sell from creation time.
+  try {
+    const writeBackRes = await query(`
+      UPDATE charges c
+      SET    cost_price     = rl.corrected_cost_price,
+             sell_price     = rl.corrected_sell_price,
+             price          = rl.corrected_sell_price,
+             recon_corrected = true,
+             updated_at     = NOW()
+      FROM   reconciliation_lines rl
+      WHERE  rl.run_id               = $1
+        AND  rl.charge_id            = c.id
+        AND  rl.corrected_sell_price IS NOT NULL
+        AND  rl.corrected_cost_price IS NOT NULL
+        AND  c.recon_corrected       = false
+    `, [runId]);
+    const wbCount = writeBackRes.rowCount || 0;
+    if (wbCount > 0) {
+      console.log(`[finalization] Run ${runId}: wrote reconciled cost/sell back to ${wbCount} charge(s)`);
+    }
+  } catch (wbErr) {
+    console.error(`[finalization] Run ${runId}: charge write-back failed (non-fatal):`, wbErr.message);
+    // Non-fatal — finalization continues; charges retain booking-time values
+  }
+
   // ── Mark run as finalized ─────────────────────────────────────────────────
   await query(`
     UPDATE reconciliation_runs
@@ -221,7 +261,13 @@ async function buildSnapshot(line, run) {
 
     if (enrichRes.rows.length) {
       const d = enrichRes.rows[0];
-      const sellBase      = round4(parseFloat(d.sell_base       || 0));
+      // corrected_sell_price: recomputed at billed weight by the reconciliation engine
+      // for corrected (mapping-adjusted) pool-matched lines. Takes priority over
+      // the booking-time charges.price so the snapshot reflects the reconciled sell.
+      const correctedSell = line.corrected_sell_price != null
+        ? round4(parseFloat(line.corrected_sell_price))
+        : null;
+      const sellBase      = correctedSell ?? round4(parseFloat(d.sell_base || 0));
       const sellFuel      = round4(parseFloat(d.sell_fuel       || 0));
       const sellSurcharge = round4(parseFloat(d.sell_surcharge  || 0));
 

@@ -1675,16 +1675,18 @@ router.get('/runs/:id/customers/preview', async (req, res) => {
         rl.customer_id,
         cu.business_name                                                                   AS customer_name,
         COUNT(*)::int                                                                      AS line_count,
-        -- Sell: from charges table (customer pricing); fall back to carrier_amount if no charge linked.
-        COALESCE(SUM(cp.sell_base),      SUM(rl.carrier_amount))                          AS total_base,
+        -- Sell: use corrected_sell_price when available (recomputed at billed weight for
+        -- corrected lines); otherwise use the charge's sell_base; fall back to carrier_amount.
+        -- corrected_sell_price is set by the engine for pool-matched lines where the carrier
+        -- billed at a different weight/amount than booked.
+        COALESCE(SUM(COALESCE(rl.corrected_sell_price, cp.sell_base)), SUM(rl.carrier_amount)) AS total_base,
         COALESCE(SUM(cp.sell_fuel),      0)                                               AS total_fuel,
         COALESCE(SUM(cp.sell_surcharge), 0)                                               AS total_surcharge,
         COALESCE(
-          SUM(cp.sell_base + cp.sell_fuel + cp.sell_surcharge),
+          SUM(COALESCE(rl.corrected_sell_price, cp.sell_base) + cp.sell_fuel + cp.sell_surcharge),
           SUM(rl.carrier_amount)
         )                                                                                  AS total_sell,
         -- Cost: always carrier_amount (what the carrier actually billed us per invoice line).
-        -- Using this directly means summary always equals the sum of per-line costs.
         SUM(rl.carrier_amount)                                                             AS total_our_cost
       FROM   reconciliation_lines rl
       LEFT JOIN customers   cu ON cu.id        = rl.customer_id
@@ -1750,13 +1752,13 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
         rl.parcel_count,
         rl.carrier_billed_weight_kg,
         cs.name                                                                                 AS service_name,
-        -- Sell: from charges table (customer pricing); fall back to carrier_amount if no charge linked.
-        -- Fallback to carrier_amount (not expected_amount) keeps cost/sell consistent when unlinked.
-        COALESCE(cp.sell_base,      rl.carrier_amount)                                         AS sell_base,
+        -- Sell: corrected_sell_price takes priority (recomputed at billed weight for corrected lines).
+        -- Falls back to charge's sell_base (booking-time sell), then carrier_amount (0 margin, no rate card).
+        COALESCE(rl.corrected_sell_price, cp.sell_base, rl.carrier_amount)                     AS sell_base,
         COALESCE(cp.sell_fuel,      0)                                                         AS sell_fuel,
         COALESCE(cp.sell_surcharge, 0)                                                         AS sell_surcharge,
         COALESCE(
-          cp.sell_base + cp.sell_fuel + cp.sell_surcharge,
+          COALESCE(rl.corrected_sell_price, cp.sell_base) + cp.sell_fuel + cp.sell_surcharge,
           rl.carrier_amount
         )                                                                                       AS sell_total,
         -- Cost: always carrier_amount (the carrier's actual invoice amount for this line).

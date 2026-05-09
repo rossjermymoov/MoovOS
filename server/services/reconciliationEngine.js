@@ -99,18 +99,21 @@ async function getCarrierProfileOptions(carrierId) {
 // ─── Phase 1b: Service Code Normalisation ────────────────────────────────────
 
 /**
- * Returns { serviceMap, surchargeMap } for this carrier.
+ * Returns { serviceMap, surchargeMap, serviceIdToCodeMap } for this carrier.
  *
- * serviceMap:  { [RAW_CODE_UPPER]: service_id }   — delivery service mappings
- * surchargeMap: { [RAW_CODE_UPPER]: surcharge_id } — surcharge mappings
+ * serviceMap:       { [RAW_CODE_UPPER]: service_id }   — delivery service mappings
+ * surchargeMap:     { [RAW_CODE_UPPER]: surcharge_id } — surcharge mappings
+ * serviceIdToCodeMap: { [service_id]: service_code }   — reverse map, used to
+ *                     look up the service_code string for corrected sell lookups
  *
  * TWO-LAYER LOOKUP:
  *   Layer 1 — Explicit mappings from courier_service_code_mappings (highest priority)
  *   Layer 2 — Implied mappings derived from courier_services.service_code suffix
  */
 async function buildServiceCodeMap(carrierId) {
-  const serviceMap   = {};
-  const surchargeMap = {};
+  const serviceMap         = {};
+  const surchargeMap       = {};
+  const serviceIdToCodeMap = {};  // id → service_code string
 
   // ── Layer 2 first (lower priority) — implied from service_code suffix ────
   const svcs = await query(
@@ -127,6 +130,9 @@ async function buildServiceCodeMap(carrierId) {
 
     if (!serviceMap[codeUp]) serviceMap[codeUp] = row.service_id;
     if (suffix && suffix !== codeUp && !serviceMap[suffix]) serviceMap[suffix] = row.service_id;
+
+    // Always populate reverse map (no priority needed — one code per id)
+    serviceIdToCodeMap[row.service_id] = code;
   }
 
   // ── Layer 1 (higher priority) — explicit saved rules ─────────────────────
@@ -150,7 +156,44 @@ async function buildServiceCodeMap(carrierId) {
   const impliedCount   = Object.keys(serviceMap).length - (explicit.rows.filter(r => r.service_id).length);
   console.log(`[recon engine] Code map for carrier ${carrierId}: ${explicit.rows.length} explicit (${surchargeCount} surcharge) + ${impliedCount} implied service entries`);
 
-  return { serviceMap, surchargeMap };
+  return { serviceMap, surchargeMap, serviceIdToCodeMap };
+}
+
+// ─── Corrected sell price helper ──────────────────────────────────────────────
+//
+// For pool-matched lines where the carrier billed at a different amount than
+// expected, recompute the customer sell price at the carrier's billed weight.
+// This is what the customer will be charged at finalization.
+//
+// Returns null if lookup fails (missing zone, missing rate card, etc.).
+// In that case the billing preview falls back to the original charges.sell_price
+// and finalization skips the write-back for sell.
+
+async function computeCorrectedSell(charge, serviceId, billedWeightKg, parcelCount, serviceIdToCodeMap) {
+  if (!charge?.customer_id || !serviceId || !(billedWeightKg > 0)) return null;
+
+  const serviceCode = serviceIdToCodeMap[serviceId];
+  if (!serviceCode) return null;
+
+  if (!charge.zone_id) return null;
+  const zoneRes = await query(`SELECT name FROM zones WHERE id = $1`, [charge.zone_id]);
+  if (!zoneRes.rows.length) return null;
+  const zoneName = zoneRes.rows[0].name;
+
+  // Per-parcel weight for band lookup (multi-parcel DPD: total / N → per-parcel band)
+  const n           = Math.max(parseInt(parcelCount) || 1, 1);
+  const perParcelKg = n > 1 ? Math.round((billedWeightKg / n) * 1000) / 1000 : billedWeightKg;
+
+  const sellResult = await lookupCustomerSellPrice(charge.customer_id, serviceCode, perParcelKg, zoneName);
+  if (!sellResult) return null;
+
+  const totalSell = Math.round(sellResult.sellPrice * n * 100) / 100;
+  console.log(
+    `[recon engine] correctedSell: customer=${charge.customer_id} service=${serviceCode} ` +
+    `zone="${zoneName}" weight=${billedWeightKg}kg (per_parcel=${perParcelKg}kg × ${n}) ` +
+    `→ sell=£${totalSell}`
+  );
+  return totalSell;
 }
 
 // ─── Pre-condition: Build Verified Pool ──────────────────────────────────────
@@ -707,7 +750,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   );
 
   // ── Phase 1b: Build service code map ──────────────────────────────────────
-  const { serviceMap: serviceCodeMap, surchargeMap } = await buildServiceCodeMap(carrierId);
+  const { serviceMap: serviceCodeMap, surchargeMap, serviceIdToCodeMap } = await buildServiceCodeMap(carrierId);
 
   // ── Pre-condition: Build Verified Pool ────────────────────────────────────
   const { pool, poolSize } = await buildVerifiedPool(carrierId);
@@ -725,6 +768,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   const ctx = {
     separateFuelRows,
     parcelPricing,
+    serviceIdToCodeMap,
     async customerLookup(accountNumber) {
       if (!accountNumber) return null;
       const k = String(accountNumber).trim();
@@ -1011,6 +1055,19 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
     ? { col_surcharge_total: colSurchargeTotal, col_surcharges: colSurchargeBreakdown }
     : null;
 
+  // For corrected groups, recompute customer sell at the billed weight
+  // so the billing preview and finalization have the correct post-reconciliation sell.
+  let groupCorrSell = null;
+  let groupCorrCost = null;
+  if (groupStatus === 'corrected') {
+    const groupBilledKg  = parseFloat(firstLine.billed_weight_kg) || 0;
+    const groupParcels   = freightLines.reduce((s, l) => s + (parseInt(l.parcel_count) || 1), 0);
+    if (groupBilledKg > 0) {
+      groupCorrSell = await computeCorrectedSell(charge, serviceId, groupBilledKg, groupParcels, ctx.serviceIdToCodeMap);
+    }
+    groupCorrCost = totalCarrierAmount;
+  }
+
   for (const line of freightLines) {
     await insertLine(runId, {
       tracking_number:          String(line.tracking_number || '').trim(),
@@ -1031,6 +1088,8 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
       shipment_date:            line.shipment_date || null,
       mapping_id:               mappingId,
       correction_metadata:      colSurchargeMeta,
+      corrected_sell_price:     groupCorrSell,
+      corrected_cost_price:     groupCorrCost,
     });
   }
 
@@ -1310,13 +1369,22 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       `UPDATE reconciliation_mappings SET applied_count = applied_count + 1, last_applied_at = NOW() WHERE id = $1`,
       [mappingResult.mappingId]
     );
+    // Carrier billed a different amount than expected (explained by a mapping rule).
+    // Recompute the customer sell price at the carrier's billed weight so the billing
+    // preview and finalization use the correct post-reconciliation sell, not the
+    // booking-time sell at the declared weight.
+    const billedKg      = parseFloat(line.billed_weight_kg) || 0;
+    const invoiceParcels = parseInt(line.parcel_count) || 1;
+    const corrSell = billedKg > 0
+      ? await computeCorrectedSell(charge, serviceId, billedKg, invoiceParcels, ctx.serviceIdToCodeMap)
+      : null;
     await insertLine(runId, {
       tracking_number:          trackingNumber,
       carrier_account_no:       line.account_number    || null,
       raw_service_code:         rawServiceCode,
       charge_type:              line.charge_type       || 'base',
       carrier_amount:           carrierAmount,
-      carrier_billed_weight_kg: line.billed_weight_kg  || null,
+      carrier_billed_weight_kg: billedKg || null,
       service_id:               serviceId,
       customer_id:              charge.customer_id,
       charge_id:                charge.charge_id,
@@ -1329,8 +1397,10 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       shipment_date:            line.shipment_date     || null,
       ship_to_postcode:         line.delivery_postcode || null,
       ship_to_country:          line.ship_to_country   || null,
-      parcel_count:             line.parcel_count      || null,
+      parcel_count:             invoiceParcels > 1 ? invoiceParcels : null,
       mapping_id:               mappingResult.mappingId,
+      corrected_sell_price:     corrSell,
+      corrected_cost_price:     carrierAmount,  // carrier_amount IS the actual cost
     });
     return { status: 'corrected' };
   }
@@ -1383,9 +1453,10 @@ async function insertLine(runId, data) {
        carrier_amount, carrier_billed_weight_kg, service_id, customer_id, charge_id,
        expected_amount, delta, status, corrected_by, unmatched_reason, source,
        mapping_id, is_fuel, suggested_service_id, correction_metadata, shipment_date,
-       ship_to_postcode, ship_to_country, parcel_count)
+       ship_to_postcode, ship_to_country, parcel_count,
+       corrected_sell_price, corrected_cost_price)
     VALUES
-      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
   `, [
     runId,
     data.tracking_number          ?? null,
@@ -1411,6 +1482,8 @@ async function insertLine(runId, data) {
     data.ship_to_postcode         || null,
     data.ship_to_country          || null,
     data.parcel_count             || null,
+    data.corrected_sell_price     ?? null,
+    data.corrected_cost_price     ?? null,
   ]);
 }
 
