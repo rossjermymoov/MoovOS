@@ -1609,40 +1609,45 @@ router.get('/runs/:id/customers/preview', async (req, res) => {
   try {
     const runId = parseInt(req.params.id);
     const result = await query(`
-      WITH sell_prices AS (
+      WITH charge_prices AS (
+        -- Pull sell AND cost from the charges table for each base courier charge.
+        -- Related fuel/surcharge charges are joined on shipment_id so we get the
+        -- full per-shipment sell and cost — both computed on the same basis.
         SELECT
-          base.id                                                                        AS charge_id,
-          base.price                                                                     AS sell_base,
-          COALESCE(SUM(CASE WHEN sc.charge_type = 'fuel'      THEN sc.price ELSE 0 END), 0) AS sell_fuel,
-          COALESCE(SUM(CASE WHEN sc.charge_type = 'surcharge' THEN sc.price ELSE 0 END), 0) AS sell_surcharge
+          base.id                                                                           AS charge_id,
+          base.price                                                                        AS sell_base,
+          COALESCE(base.cost_price, 0)                                                     AS cost_base,
+          COALESCE(SUM(CASE WHEN sc.charge_type = 'fuel'      THEN sc.price      ELSE 0 END), 0) AS sell_fuel,
+          COALESCE(SUM(CASE WHEN sc.charge_type = 'fuel'      THEN sc.cost_price ELSE 0 END), 0) AS cost_fuel,
+          COALESCE(SUM(CASE WHEN sc.charge_type = 'surcharge' THEN sc.price      ELSE 0 END), 0) AS sell_surcharge,
+          COALESCE(SUM(CASE WHEN sc.charge_type = 'surcharge' THEN sc.cost_price ELSE 0 END), 0) AS cost_surcharge
         FROM   charges base
         LEFT JOIN charges sc ON sc.shipment_id = base.shipment_id
           AND sc.charge_type IN ('fuel', 'surcharge')
           AND sc.cancelled = false
         WHERE  base.charge_type = 'courier'
-          AND  base.cancelled = false
-        GROUP BY base.id, base.price
+          AND  base.cancelled   = false
+        GROUP BY base.id, base.price, base.cost_price
       )
       SELECT
         rl.customer_id,
-        cu.business_name                                                                 AS customer_name,
-        COUNT(*)::int                                                                    AS line_count,
-        COALESCE(SUM(sp.sell_base),      SUM(rl.expected_amount))                       AS total_base,
-        COALESCE(SUM(sp.sell_fuel),      0)                                             AS total_fuel,
-        COALESCE(SUM(sp.sell_surcharge), 0)                                             AS total_surcharge,
+        cu.business_name                                                                   AS customer_name,
+        COUNT(*)::int                                                                      AS line_count,
+        COALESCE(SUM(cp.sell_base),      SUM(rl.expected_amount))                         AS total_base,
+        COALESCE(SUM(cp.sell_fuel),      0)                                               AS total_fuel,
+        COALESCE(SUM(cp.sell_surcharge), 0)                                               AS total_surcharge,
         COALESCE(
-          SUM(sp.sell_base + sp.sell_fuel + sp.sell_surcharge),
+          SUM(cp.sell_base + cp.sell_fuel + cp.sell_surcharge),
           SUM(rl.expected_amount)
-        )                                                                                AS total_sell,
-        -- expected_amount = total_cost_price from pool (base + fuel + surcharges).
-        -- carrier_amount is per-line only (e.g. base freight for DHL; aggregate fuel
-        -- rows are excluded by is_fuel=false). expected_amount gives a fair like-for-like
-        -- margin against sell_total which also includes fuel and surcharges.
-        SUM(rl.expected_amount)                                                          AS total_our_cost,
-        SUM(rl.carrier_amount)                                                           AS total_invoice_amount
+        )                                                                                  AS total_sell,
+        COALESCE(
+          SUM(cp.cost_base + cp.cost_fuel + cp.cost_surcharge),
+          SUM(rl.expected_amount)
+        )                                                                                  AS total_our_cost,
+        SUM(rl.carrier_amount)                                                             AS total_invoice_amount
       FROM   reconciliation_lines rl
       LEFT JOIN customers   cu ON cu.id        = rl.customer_id
-      LEFT JOIN sell_prices sp ON sp.charge_id = rl.charge_id
+      LEFT JOIN charge_prices cp ON cp.charge_id = rl.charge_id
       WHERE  rl.run_id = $1
         AND  rl.status IN ('matched', 'corrected')
         AND  rl.is_fuel = false
@@ -1672,19 +1677,23 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
     }
 
     const result = await query(`
-      WITH sell_prices AS (
+      WITH charge_prices AS (
+        -- Pull sell AND cost symmetrically so margin is apples-to-apples.
         SELECT
-          base.id                                                                           AS charge_id,
-          base.price                                                                        AS sell_base,
-          COALESCE(SUM(CASE WHEN sc.charge_type = 'fuel'      THEN sc.price ELSE 0 END), 0) AS sell_fuel,
-          COALESCE(SUM(CASE WHEN sc.charge_type = 'surcharge' THEN sc.price ELSE 0 END), 0) AS sell_surcharge
+          base.id                                                                                AS charge_id,
+          base.price                                                                             AS sell_base,
+          COALESCE(base.cost_price, 0)                                                          AS cost_base,
+          COALESCE(SUM(CASE WHEN sc.charge_type = 'fuel'      THEN sc.price      ELSE 0 END), 0) AS sell_fuel,
+          COALESCE(SUM(CASE WHEN sc.charge_type = 'fuel'      THEN sc.cost_price ELSE 0 END), 0) AS cost_fuel,
+          COALESCE(SUM(CASE WHEN sc.charge_type = 'surcharge' THEN sc.price      ELSE 0 END), 0) AS sell_surcharge,
+          COALESCE(SUM(CASE WHEN sc.charge_type = 'surcharge' THEN sc.cost_price ELSE 0 END), 0) AS cost_surcharge
         FROM   charges base
         LEFT JOIN charges sc ON sc.shipment_id = base.shipment_id
           AND sc.charge_type IN ('fuel', 'surcharge')
           AND sc.cancelled = false
         WHERE  base.charge_type = 'courier'
           AND  base.cancelled   = false
-        GROUP BY base.id, base.price
+        GROUP BY base.id, base.price, base.cost_price
       )
       SELECT
         rl.id,
@@ -1696,17 +1705,24 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
         rl.corrected_by,
         rl.parcel_count,
         rl.carrier_billed_weight_kg,
-        cs.name                                                                            AS service_name,
-        COALESCE(sp.sell_base,      rl.expected_amount)                                   AS sell_base,
-        COALESCE(sp.sell_fuel,      0)                                                    AS sell_fuel,
-        COALESCE(sp.sell_surcharge, 0)                                                    AS sell_surcharge,
+        cs.name                                                                                 AS service_name,
+        COALESCE(cp.sell_base,      rl.expected_amount)                                        AS sell_base,
+        COALESCE(cp.sell_fuel,      0)                                                         AS sell_fuel,
+        COALESCE(cp.sell_surcharge, 0)                                                         AS sell_surcharge,
         COALESCE(
-          sp.sell_base + sp.sell_fuel + sp.sell_surcharge,
+          cp.sell_base + cp.sell_fuel + cp.sell_surcharge,
           rl.expected_amount
-        )                                                                                  AS sell_total
+        )                                                                                       AS sell_total,
+        COALESCE(cp.cost_base,      rl.expected_amount)                                        AS cost_base,
+        COALESCE(cp.cost_fuel,      0)                                                         AS cost_fuel,
+        COALESCE(cp.cost_surcharge, 0)                                                         AS cost_surcharge,
+        COALESCE(
+          cp.cost_base + cp.cost_fuel + cp.cost_surcharge,
+          rl.expected_amount
+        )                                                                                       AS cost_total
       FROM   reconciliation_lines rl
-      LEFT JOIN courier_services cs ON cs.id        = rl.service_id
-      LEFT JOIN sell_prices      sp ON sp.charge_id = rl.charge_id
+      LEFT JOIN courier_services cs ON cs.id         = rl.service_id
+      LEFT JOIN charge_prices    cp ON cp.charge_id  = rl.charge_id
       WHERE  rl.run_id = $1
         AND  rl.status IN ('matched', 'corrected')
         AND  rl.is_fuel = false

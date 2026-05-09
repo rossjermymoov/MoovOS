@@ -1289,7 +1289,7 @@ function CustomerLinesDrilldown({ runId, customerId }) {
           </thead>
           <tbody>
             {lines.map(l => {
-              const cost   = parseFloat(l.expected_amount || 0);
+              const cost   = parseFloat(l.cost_total || 0);
               const sell   = parseFloat(l.sell_total || 0);
               const margin = sell - cost;
               return (
@@ -1313,7 +1313,7 @@ function CustomerLinesDrilldown({ runId, customerId }) {
             <tr style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
               <td colSpan={4} style={{ ...tdStyle, color: '#555', fontWeight: 700, fontSize: 10 }}>SUBTOTAL ({lines.length} lines)</td>
               <td style={{ ...tdStyle, color: '#AAA', fontWeight: 700, textAlign: 'right' }}>
-                £{lines.reduce((s, l) => s + parseFloat(l.expected_amount || 0), 0).toFixed(2)}
+                £{lines.reduce((s, l) => s + parseFloat(l.cost_total || 0), 0).toFixed(2)}
               </td>
               <td style={{ ...tdStyle, textAlign: 'right' }} />
               <td style={{ ...tdStyle, textAlign: 'right' }} />
@@ -1321,8 +1321,8 @@ function CustomerLinesDrilldown({ runId, customerId }) {
               <td style={{ ...tdStyle, color: '#00C853', fontWeight: 800, textAlign: 'right' }}>
                 £{lines.reduce((s, l) => s + parseFloat(l.sell_total || 0), 0).toFixed(2)}
               </td>
-              <td style={{ ...tdStyle, fontWeight: 700, textAlign: 'right', color: (() => { const m = lines.reduce((s, l) => s + parseFloat(l.sell_total || 0) - parseFloat(l.expected_amount || 0), 0); return m >= 0 ? '#00C853' : '#FF5252'; })() }}>
-                £{lines.reduce((s, l) => s + parseFloat(l.sell_total || 0) - parseFloat(l.expected_amount || 0), 0).toFixed(2)}
+              <td style={{ ...tdStyle, fontWeight: 700, textAlign: 'right', color: (() => { const m = lines.reduce((s, l) => s + parseFloat(l.sell_total || 0) - parseFloat(l.cost_total || 0), 0); return m >= 0 ? '#00C853' : '#FF5252'; })() }}>
+                £{lines.reduce((s, l) => s + parseFloat(l.sell_total || 0) - parseFloat(l.cost_total || 0), 0).toFixed(2)}
               </td>
               <td />
             </tr>
