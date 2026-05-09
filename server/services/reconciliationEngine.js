@@ -37,7 +37,7 @@
  */
 
 import { query } from '../db/index.js';
-import { computeGhostCharge, insertCharges, lookupCarrierBandCost, matchZone } from './pricingEngine.js';
+import { computeGhostCharge, insertCharges, lookupCarrierBandCost, lookupCustomerSellPrice, matchZone } from './pricingEngine.js';
 
 // ─── Types (JSDoc) ────────────────────────────────────────────────────────────
 /**
@@ -176,20 +176,33 @@ async function computeCorrectedSell(charge, serviceId, billedWeightKg, parcelCou
   if (!serviceCode) return null;
 
   if (!charge.zone_id) return null;
-  const zoneRes = await query(`SELECT name FROM zones WHERE id = $1`, [charge.zone_id]);
+
+  // Fetch zone name + fallback service code in one round-trip
+  const [zoneRes, svcRes] = await Promise.all([
+    query(`SELECT name FROM zones WHERE id = $1`, [charge.zone_id]),
+    query(
+      `SELECT fb.service_code AS rate_fallback_service_code
+       FROM   courier_services cs
+       LEFT JOIN courier_services fb ON fb.id = cs.rate_fallback_service_id
+       WHERE  cs.id = $1`,
+      [serviceId]
+    ),
+  ]);
   if (!zoneRes.rows.length) return null;
-  const zoneName = zoneRes.rows[0].name;
+  const zoneName              = zoneRes.rows[0].name;
+  const fallbackServiceCode   = svcRes.rows[0]?.rate_fallback_service_code || null;
 
   // Per-parcel weight for band lookup (multi-parcel DPD: total / N → per-parcel band)
   const n           = Math.max(parseInt(parcelCount) || 1, 1);
   const perParcelKg = n > 1 ? Math.round((billedWeightKg / n) * 1000) / 1000 : billedWeightKg;
 
-  const sellResult = await lookupCustomerSellPrice(charge.customer_id, serviceCode, perParcelKg, zoneName);
+  const sellResult = await lookupCustomerSellPrice(charge.customer_id, serviceCode, perParcelKg, zoneName, fallbackServiceCode);
   if (!sellResult) return null;
 
   const totalSell = Math.round(sellResult.sellPrice * n * 100) / 100;
   console.log(
-    `[recon engine] correctedSell: customer=${charge.customer_id} service=${serviceCode} ` +
+    `[recon engine] correctedSell: customer=${charge.customer_id} service=${serviceCode}` +
+    `${sellResult.resolvedCode !== serviceCode ? ` (fallback: ${sellResult.resolvedCode})` : ''} ` +
     `zone="${zoneName}" weight=${billedWeightKg}kg (per_parcel=${perParcelKg}kg × ${n}) ` +
     `→ sell=£${totalSell}`
   );

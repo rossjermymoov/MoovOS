@@ -304,75 +304,97 @@ export async function lookupCarrierBandCost(serviceId, weightKg, zoneId) {
 //
 // Returns { sellPrice, sellSub, pass, overageKg, bandLabel } or null.
 
-async function lookupCustomerSellPrice(customerId, serviceCode, weightKg, zoneName) {
+export async function lookupCustomerSellPrice(customerId, serviceCode, weightKg, zoneName, fallbackServiceCode = null) {
   if (!customerId || !serviceCode || !(weightKg > 0)) return null;
 
-  // Pass 1 — finite band
-  const p1 = await query(`
-    SELECT id, price, price_sub, per_kg_rate, per_kg_threshold_kg,
-           min_weight_kg, max_weight_kg
-    FROM   customer_rates
-    WHERE  customer_id  = $1
-      AND  service_code ILIKE $2
-      AND  zone_name    ILIKE $3
-      AND  max_weight_kg IS NOT NULL
-      AND  $4 >  COALESCE(min_weight_kg, 0)
-      AND  $4 <= max_weight_kg
-    ORDER  BY min_weight_kg DESC
-    LIMIT  1
-  `, [customerId, serviceCode, zoneName, weightKg]);
+  // ── Internal helper: try one service_code against both band passes ──────────
+  async function tryServiceCode(code) {
+    // Pass 1 — finite band (weight falls within a bounded range)
+    const p1 = await query(`
+      SELECT id, price, price_sub, per_kg_rate, per_kg_threshold_kg,
+             min_weight_kg, max_weight_kg
+      FROM   customer_rates
+      WHERE  customer_id  = $1
+        AND  service_code ILIKE $2
+        AND  zone_name    ILIKE $3
+        AND  max_weight_kg IS NOT NULL
+        AND  $4 >  COALESCE(min_weight_kg, 0)
+        AND  $4 <= max_weight_kg
+      ORDER  BY min_weight_kg DESC
+      LIMIT  1
+    `, [customerId, code, zoneName, weightKg]);
 
-  if (p1.rows.length) {
-    const r = p1.rows[0];
-    let sellPrice = round2(parseFloat(r.price || 0));
-    let overageKg = null;
-
-    // Per-kg overage above threshold (e.g. customer rate: £X + £Y/kg above 30kg)
-    if (r.per_kg_rate != null && r.per_kg_threshold_kg != null && weightKg > parseFloat(r.per_kg_threshold_kg)) {
-      overageKg  = round2(weightKg - parseFloat(r.per_kg_threshold_kg));
-      sellPrice  = round2(sellPrice + overageKg * parseFloat(r.per_kg_rate));
+    if (p1.rows.length) {
+      const r = p1.rows[0];
+      let sellPrice = round2(parseFloat(r.price || 0));
+      let overageKg = null;
+      if (r.per_kg_rate != null && r.per_kg_threshold_kg != null && weightKg > parseFloat(r.per_kg_threshold_kg)) {
+        overageKg = round2(weightKg - parseFloat(r.per_kg_threshold_kg));
+        sellPrice = round2(sellPrice + overageKg * parseFloat(r.per_kg_rate));
+      }
+      return {
+        sellPrice,
+        sellSub:       r.price_sub != null ? round2(parseFloat(r.price_sub)) : null,
+        pass:          1,
+        overageKg,
+        bandLabel:     `${r.min_weight_kg ?? 0}–${r.max_weight_kg}kg`,
+        resolvedCode:  code,
+      };
     }
 
-    return {
-      sellPrice,
-      sellSub:   r.price_sub != null ? round2(parseFloat(r.price_sub)) : null,
-      pass:      1,
-      overageKg,
-      bandLabel: `${r.min_weight_kg ?? 0}–${r.max_weight_kg}kg`,
-    };
+    // Pass 2 — open-ended top band (max IS NULL)
+    const p2 = await query(`
+      SELECT id, price, price_sub, per_kg_rate, per_kg_threshold_kg,
+             min_weight_kg, max_weight_kg
+      FROM   customer_rates
+      WHERE  customer_id  = $1
+        AND  service_code ILIKE $2
+        AND  zone_name    ILIKE $3
+        AND  max_weight_kg IS NULL
+        AND  $4 > COALESCE(min_weight_kg, 0)
+      ORDER  BY min_weight_kg DESC NULLS LAST
+      LIMIT  1
+    `, [customerId, code, zoneName, weightKg]);
+
+    if (p2.rows.length) {
+      const r = p2.rows[0];
+      let sellPrice = round2(parseFloat(r.price || 0));
+      let overageKg = null;
+      if (r.per_kg_rate != null && r.per_kg_threshold_kg != null && weightKg > parseFloat(r.per_kg_threshold_kg)) {
+        overageKg = round2(weightKg - parseFloat(r.per_kg_threshold_kg));
+        sellPrice = round2(sellPrice + overageKg * parseFloat(r.per_kg_rate));
+      }
+      return {
+        sellPrice,
+        sellSub:       r.price_sub != null ? round2(parseFloat(r.price_sub)) : null,
+        pass:          2,
+        overageKg,
+        bandLabel:     `>${r.min_weight_kg ?? 0}kg (open-ended)`,
+        resolvedCode:  code,
+      };
+    }
+
+    return null;
   }
 
-  // Pass 2-equivalent — open-ended top band (max IS NULL)
-  const p2 = await query(`
-    SELECT id, price, price_sub, per_kg_rate, per_kg_threshold_kg,
-           min_weight_kg, max_weight_kg
-    FROM   customer_rates
-    WHERE  customer_id  = $1
-      AND  service_code ILIKE $2
-      AND  zone_name    ILIKE $3
-      AND  max_weight_kg IS NULL
-      AND  $4 > COALESCE(min_weight_kg, 0)
-    ORDER  BY min_weight_kg DESC NULLS LAST
-    LIMIT  1
-  `, [customerId, serviceCode, zoneName, weightKg]);
+  // ── Primary lookup ─────────────────────────────────────────────────────────
+  const primary = await tryServiceCode(serviceCode);
+  if (primary) return primary;
 
-  if (p2.rows.length) {
-    const r = p2.rows[0];
-    let sellPrice = round2(parseFloat(r.price || 0));
-    let overageKg = null;
-
-    if (r.per_kg_rate != null && r.per_kg_threshold_kg != null && weightKg > parseFloat(r.per_kg_threshold_kg)) {
-      overageKg  = round2(weightKg - parseFloat(r.per_kg_threshold_kg));
-      sellPrice  = round2(sellPrice + overageKg * parseFloat(r.per_kg_rate));
+  // ── Fallback lookup ────────────────────────────────────────────────────────
+  // If the primary service has no rate card for this customer/zone/weight, retry
+  // using the fallback service code (e.g. DDP variant → standard variant).
+  // This allows a single rate card to cover both DDP and non-DDP variants of
+  // the same service without duplicating every zone/weight-band row.
+  if (fallbackServiceCode && fallbackServiceCode !== serviceCode) {
+    const fallback = await tryServiceCode(fallbackServiceCode);
+    if (fallback) {
+      console.log(
+        `[pricing] sell fallback: no rate for "${serviceCode}" → used fallback "${fallbackServiceCode}" ` +
+        `(customer=${customerId} zone="${zoneName}" weight=${weightKg}kg)`
+      );
+      return fallback;
     }
-
-    return {
-      sellPrice,
-      sellSub:   r.price_sub != null ? round2(parseFloat(r.price_sub)) : null,
-      pass:      2,
-      overageKg,
-      bandLabel: `>${r.min_weight_kg ?? 0}kg (open-ended)`,
-    };
   }
 
   return null;
@@ -589,7 +611,11 @@ export async function processShipment(payload) {
     if (!serviceCode) throw new Error('No service_code in payload — checked shipment.courier.service_code, shipment.dc_service_id, and request_shipment.dc_service_id');
 
     const svcRow = await query(
-      'SELECT id, service_code, fuel_group_id, charges_per_parcel, all_sub_parcel_pricing FROM courier_services WHERE service_code = $1',
+      `SELECT cs.id, cs.service_code, cs.fuel_group_id, cs.charges_per_parcel, cs.all_sub_parcel_pricing,
+              fb.service_code AS rate_fallback_service_code
+       FROM   courier_services cs
+       LEFT JOIN courier_services fb ON fb.id = cs.rate_fallback_service_id
+       WHERE  cs.service_code = $1`,
       [serviceCode]
     );
     if (!svcRow.rows.length) throw new Error(`No courier service found with code = ${serviceCode}`);
@@ -598,6 +624,7 @@ export async function processShipment(payload) {
       fuel_group_id: fuelGroupId,
       charges_per_parcel: chargesPerParcel,
       all_sub_parcel_pricing: allSubParcelPricing,
+      rate_fallback_service_code: rateFallbackServiceCode,
     } = svcRow.rows[0];
 
     // ── 3. MATCH ZONE ─────────────────────────────────────────────────────────
@@ -699,8 +726,9 @@ export async function processShipment(payload) {
 
       // ── Step 3: Sell price (customer rate card) ────────────────────────────
       // Only attempt if zone AND cost were resolved.
+      // rateFallbackServiceCode allows DDP ↔ standard service sharing a rate card.
       const sellResult = (zone && costResult)
-        ? await lookupCustomerSellPrice(customerId, serviceCode, chargedKg, zone.name)
+        ? await lookupCustomerSellPrice(customerId, serviceCode, chargedKg, zone.name, rateFallbackServiceCode || null)
         : null;
 
       // ── Hard stop: any missing step → pricing_error, NULL prices ──────────
@@ -1044,19 +1072,32 @@ export async function computeGhostCharge(serviceId, customerId, weightKg, postco
     };
   }
 
+  // Fallback service code — if this service has a rate_fallback_service_id configured,
+  // lookupCustomerSellPrice will retry with the fallback's service_code when the
+  // primary lookup finds no rate. This covers DDP ↔ standard variants sharing one
+  // rate card (e.g. "International Express DDP" falls back to "International Express").
+  const fallbackRes = await query(`
+    SELECT cs2.service_code AS fallback_code
+    FROM   courier_services cs
+    JOIN   courier_services cs2 ON cs2.id = cs.rate_fallback_service_id
+    WHERE  cs.id = $1
+  `, [serviceId]);
+  const fallbackServiceCode = fallbackRes.rows[0]?.fallback_code || null;
+
   // Sell price — customer rate card (best-effort; null if no rate card configured)
   const sellResult = customerId
-    ? await lookupCustomerSellPrice(customerId, serviceCode, kg, zone.name)
+    ? await lookupCustomerSellPrice(customerId, serviceCode, kg, zone.name, fallbackServiceCode)
     : null;
 
   return {
-    service_code: serviceCode,
-    zone_id:      zone.id,
-    zone_name:    zone.name,
-    cost_price:   costResult.cost,         // price_first — single-parcel / first-parcel rate
-    cost_sub:     costResult.costSub,      // price_sub   — per-parcel rate for all_sub carriers; null if not set
-    band_label:   costResult.bandLabel,    // e.g. "0–2kg" — for trace/diagnostics
-    sell_price:   sellResult?.sellPrice || null,
+    service_code:          serviceCode,
+    zone_id:               zone.id,
+    zone_name:             zone.name,
+    cost_price:            costResult.cost,         // price_first — single-parcel / first-parcel rate
+    cost_sub:              costResult.costSub,      // price_sub   — per-parcel rate for all_sub carriers; null if not set
+    band_label:            costResult.bandLabel,    // e.g. "0–2kg" — for trace/diagnostics
+    sell_price:            sellResult?.sellPrice || null,
+    fallback_service_code: fallbackServiceCode,     // propagated for use in correctedSell helpers
   };
 }
 
@@ -1066,13 +1107,18 @@ export async function computeGhostCharge(serviceId, customerId, weightKg, postco
 
 export async function getTrace(serviceCode, customerId, physicalKg, dims, postcode, countryIso = 'GB') {
   const svcRow = await query(
-    `SELECT id, service_code, fuel_group_id, volumetric_divisor FROM courier_services WHERE service_code = $1`,
+    `SELECT cs.id, cs.service_code, cs.fuel_group_id, cs.volumetric_divisor,
+            fb.service_code AS rate_fallback_service_code
+     FROM   courier_services cs
+     LEFT JOIN courier_services fb ON fb.id = cs.rate_fallback_service_id
+     WHERE  cs.service_code = $1`,
     [serviceCode]
   );
   if (!svcRow.rows.length) return { error: `No service: ${serviceCode}` };
-  const svc       = svcRow.rows[0];
-  const serviceId = svc.id;
-  const divisor   = parseInt(svc.volumetric_divisor || 0);
+  const svc                    = svcRow.rows[0];
+  const serviceId              = svc.id;
+  const divisor                = parseInt(svc.volumetric_divisor || 0);
+  const traceRateFallbackCode  = svc.rate_fallback_service_code || null;
 
   // Volumetric
   let volumetricKg = 0;
@@ -1098,8 +1144,8 @@ export async function getTrace(serviceCode, customerId, physicalKg, dims, postco
     input: { serviceCode, customerId, physicalKg, dims, chargedKg, weightBasis, volumetricDivisor: divisor || null, zone: zone.name },
   };
 
-  // Sell — hard stop if null
-  const sellResult = await lookupCustomerSellPrice(customerId, serviceCode, chargedKg, zone.name);
+  // Sell — hard stop if null; pass fallback so trace matches live pricing
+  const sellResult = await lookupCustomerSellPrice(customerId, serviceCode, chargedKg, zone.name, traceRateFallbackCode);
   if (!sellResult) return {
     error: 'no_sell_price',
     error_detail: `No customer rate for ${chargedKg}kg in zone "${zone.name}", service "${serviceCode}", customer ${customerId}`,
