@@ -734,7 +734,7 @@ router.get('/runs', async (req, res) => {
 
 router.post('/runs', async (req, res) => {
   try {
-    const { carrier_id, invoice_ref, invoice_date, lines, notes } = req.body;
+    const { carrier_id, invoice_ref, invoice_date, lines, notes, force } = req.body;
 
     if (!carrier_id) return res.status(400).json({ error: 'carrier_id is required' });
     if (!Array.isArray(lines) || lines.length === 0) {
@@ -748,6 +748,37 @@ router.post('/runs', async (req, res) => {
     const carrierRes = await query('SELECT id FROM couriers WHERE id = $1', [carrier_id]);
     if (!carrierRes.rows.length) {
       return res.status(400).json({ error: 'Carrier not found' });
+    }
+
+    // Duplicate detection — warn (don't block) if a run for the same carrier + invoice_ref
+    // already exists. The caller can bypass with force=true.
+    if (invoice_ref && !force) {
+      const dupRes = await query(`
+        SELECT rr.id, rr.status, rr.total_lines, rr.created_at, rr.invoice_date,
+               c.name AS carrier_name
+        FROM   reconciliation_runs rr
+        JOIN   couriers c ON c.id = rr.carrier_id
+        WHERE  rr.carrier_id  = $1
+          AND  TRIM(LOWER(rr.invoice_ref)) = TRIM(LOWER($2))
+          AND  rr.status NOT IN ('failed')
+        ORDER  BY rr.created_at DESC
+        LIMIT  1
+      `, [parseInt(carrier_id), invoice_ref]);
+      if (dupRes.rows.length) {
+        const dup = dupRes.rows[0];
+        return res.status(409).json({
+          duplicate:    true,
+          existing_run: {
+            id:           dup.id,
+            status:       dup.status,
+            total_lines:  dup.total_lines,
+            created_at:   dup.created_at,
+            invoice_date: dup.invoice_date,
+            carrier_name: dup.carrier_name,
+          },
+          message: `A run for invoice "${invoice_ref}" already exists (Run #${dup.id}, ${dup.status}).`,
+        });
+      }
     }
 
     // Age any previously unresolved Unmatched lines from prior runs

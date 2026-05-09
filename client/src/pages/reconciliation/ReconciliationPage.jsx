@@ -1307,26 +1307,74 @@ function UploadModal({ couriers, onClose, onSuccess }) {
 
 // ─── Start Run Button (mutation) ──────────────────────────────────────────────
 function StartRunButton({ carrierId, invoiceRef, invoiceDate, lines, onSuccess, setError }) {
-  const [loading, setLoading] = useState(false);
+  const [loading,  setLoading]  = useState(false);
+  const [dupWarn,  setDupWarn]  = useState(null); // { existing_run, message }
 
-  async function handleStart() {
+  async function submit(force = false) {
     setLoading(true);
+    setDupWarn(null);
     try {
       const res = await api.post('/reconciliation/runs', {
         carrier_id:   parseInt(carrierId),
         invoice_ref:  invoiceRef,
         invoice_date: toISODate(invoiceDate),
         lines,
+        force,
       });
       onSuccess(res.data.run_id);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to start run');
-      setLoading(false);
+      if (err.response?.status === 409 && err.response?.data?.duplicate) {
+        setDupWarn(err.response.data);
+        setLoading(false);
+      } else {
+        setError(err.response?.data?.error || 'Failed to start run');
+        setLoading(false);
+      }
     }
   }
 
+  if (dupWarn) {
+    const ex = dupWarn.existing_run;
+    const exDate = ex.invoice_date ? new Date(ex.invoice_date).toLocaleDateString('en-GB') : null;
+    return (
+      <div style={{
+        background: 'rgba(255,143,0,0.10)', border: '1px solid rgba(255,143,0,0.35)',
+        borderRadius: 8, padding: '14px 16px', fontSize: 12,
+      }}>
+        <div style={{ color: '#FF8F00', fontWeight: 700, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <AlertTriangle size={14} /> Duplicate invoice detected
+        </div>
+        <div style={{ color: '#CCC', lineHeight: 1.6 }}>
+          Invoice <span style={{ color: '#E6EDF3', fontWeight: 600 }}>{invoiceRef}</span> was
+          already imported as{' '}
+          <span style={{ color: '#E6EDF3', fontWeight: 600 }}>Run #{ex.id}</span>
+          {exDate && <> ({exDate})</>}
+          {' '}— {ex.total_lines?.toLocaleString()} lines, status:{' '}
+          <span style={{ color: ex.status === 'completed' ? '#00C853' : '#FF8F00', fontWeight: 600 }}>{ex.status}</span>.
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <button
+            style={{ ...btnGreen, opacity: loading ? 0.7 : 1 }}
+            onClick={() => submit(true)}
+            disabled={loading}
+          >
+            {loading ? <RefreshCw size={14} /> : <Upload size={14} />}
+            {loading ? 'Starting…' : 'Import anyway'}
+          </button>
+          <button
+            style={{ ...btnGhost, color: '#AAA' }}
+            onClick={() => setDupWarn(null)}
+            disabled={loading}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <button style={{ ...btnGreen, opacity: loading ? 0.7 : 1 }} onClick={handleStart} disabled={loading}>
+    <button style={{ ...btnGreen, opacity: loading ? 0.7 : 1 }} onClick={() => submit(false)} disabled={loading}>
       {loading ? <RefreshCw size={14} /> : <Upload size={14} />}
       {loading ? 'Starting…' : 'Start Reconciliation'}
     </button>
