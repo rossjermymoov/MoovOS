@@ -1212,7 +1212,8 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
   let groupCorrSell = null;
   let groupCorrCost = null;
   if (groupStatus === 'matched' || groupStatus === 'corrected') {
-    const groupBilledKg  = parseFloat(firstLine.billed_weight_kg) || 0;
+    // Fall back to declared_weight_kg when invoice has no weight column (e.g. DPD/Europa).
+    const groupBilledKg  = parseFloat(firstLine.billed_weight_kg) || parseFloat(charge.declared_weight_kg) || 0;
     const groupParcels   = freightLines.reduce((s, l) => s + (parseInt(l.parcel_count) || 1), 0);
     if (groupBilledKg > 0) {
       groupCorrSell = await computeCorrectedSell(charge, serviceId, groupBilledKg, groupParcels, ctx.serviceIdToCodeMap);
@@ -1503,8 +1504,14 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     // even for matched lines. This ensures billing preview is accurate regardless of
     // what sell_price was stored on the charge at booking time (charges created via
     // carrier_direct before a rate card was loaded may have sell_price = cost_price).
-    const billedKg       = parseFloat(line.billed_weight_kg) || 0;
+    //
+    // Fall back to declared_weight_kg (from shipment) when the carrier invoice does
+    // not include a weight column (e.g. DPD/Europa invoices omit weight).
+    const billedKg       = parseFloat(line.billed_weight_kg) || parseFloat(charge.declared_weight_kg) || 0;
     const invoiceParcels = parseInt(line.parcel_count) || 1;
+    if (!parseFloat(line.billed_weight_kg) && billedKg > 0) {
+      console.log(`[recon engine] matchedSell: no invoice weight for ${trackingNumber} — using declared_weight_kg=${billedKg}kg`);
+    }
     const matchedSell = billedKg > 0
       ? await computeCorrectedSell(charge, serviceId, billedKg, invoiceParcels, ctx.serviceIdToCodeMap)
       : null;
@@ -1551,8 +1558,9 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     // Carrier billed a different amount than expected (explained by a mapping rule).
     // Recompute the customer sell price at the carrier's billed weight so the billing
     // preview and finalization use the correct post-reconciliation sell, not the
-    // booking-time sell at the declared weight.
-    const billedKg       = parseFloat(line.billed_weight_kg) || 0;
+    // booking-time sell at the declared weight. Fall back to declared_weight_kg when
+    // the carrier invoice does not include a weight column (e.g. DPD/Europa).
+    const billedKg       = parseFloat(line.billed_weight_kg) || parseFloat(charge.declared_weight_kg) || 0;
     const invoiceParcels = parseInt(line.parcel_count) || 1;
     const corrSell = billedKg > 0
       ? await computeCorrectedSell(charge, serviceId, billedKg, invoiceParcels, ctx.serviceIdToCodeMap)
