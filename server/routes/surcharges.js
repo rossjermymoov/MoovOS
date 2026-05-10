@@ -55,15 +55,15 @@ router.get('/', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { courier_id, code, name, description, calc_type, calc_base, default_value, cost_price, applies_when, charge_per, effective_date } = req.body;
+    const { courier_id, code, name, description, calc_type, calc_base, default_value, cost_price, applies_when, charge_per, effective_date, csv_column } = req.body;
     if (!courier_id || !code || !name) {
       return res.status(400).json({ error: 'courier_id, code, and name are required' });
     }
     const sellPrice = parseFloat(default_value) || 0;
     const costPrice = cost_price !== undefined ? parseFloat(cost_price) : sellPrice;
     const { rows } = await query(
-      `INSERT INTO surcharges (courier_id, code, name, description, calc_type, calc_base, default_value, cost_price, applies_when, charge_per, effective_date)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      `INSERT INTO surcharges (courier_id, code, name, description, calc_type, calc_base, default_value, cost_price, applies_when, charge_per, effective_date, csv_column)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        RETURNING *`,
       [
         courier_id, code.toUpperCase().trim(), name.trim(),
@@ -75,6 +75,7 @@ router.post('/', async (req, res, next) => {
         applies_when || 'reconciliation',
         charge_per || 'shipment',
         effective_date || null,
+        csv_column?.trim() || null,
       ]
     );
     res.status(201).json(rows[0]);
@@ -83,7 +84,7 @@ router.post('/', async (req, res, next) => {
 
 router.patch('/:id', async (req, res, next) => {
   try {
-    const allowed = ['code', 'name', 'description', 'calc_type', 'calc_base', 'default_value', 'cost_price', 'active', 'applies_when', 'charge_per', 'effective_date'];
+    const allowed = ['code', 'name', 'description', 'calc_type', 'calc_base', 'default_value', 'cost_price', 'active', 'applies_when', 'charge_per', 'effective_date', 'csv_column'];
     const sets = []; const vals = [];
     for (const k of allowed) {
       if (req.body[k] !== undefined) {

@@ -1758,7 +1758,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
   const [groupForm, setGroupForm]       = useState({ name:'', fuel_surcharge_pct:'' });
   const [carrierTab, setCarrierTab]     = useState('services'); // 'services' | 'rate-cards' | 'fuel' | 'surcharges'
   const [addingSurcharge, setAddingSurcharge] = useState(false);
-  const [surchargeForm, setSurchargeForm] = useState({ code:'', name:'', description:'', calc_type:'flat', calc_base:'fixed', default_value:'', applies_when:'reconciliation', charge_per:'shipment' });
+  const [surchargeForm, setSurchargeForm] = useState({ code:'', name:'', description:'', calc_type:'flat', calc_base:'fixed', default_value:'', applies_when:'reconciliation', charge_per:'shipment', csv_column:'' });
   const [expandedSurcharge, setExpandedSurcharge] = useState(null);
   const [editingSurcharge, setEditingSurcharge]   = useState(null);
   const [editSForm, setEditSForm]                 = useState({});
@@ -1798,10 +1798,10 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
   };
 
   const addSurcharge = useMutation({
-    mutationFn: () => api.post('/surcharges', { ...surchargeForm, courier_id: carrierId, default_value: parseFloat(surchargeForm.default_value) || 0 }).then(r => r.data),
+    mutationFn: () => api.post('/surcharges', { ...surchargeForm, courier_id: carrierId, default_value: parseFloat(surchargeForm.default_value) || 0, csv_column: surchargeForm.csv_column?.trim() || null }).then(r => r.data),
     onSuccess: (data) => {
       setAddingSurcharge(false);
-      setSurchargeForm({ code:'', name:'', description:'', calc_type:'flat', calc_base:'fixed', default_value:'', applies_when:'reconciliation', charge_per:'shipment' });
+      setSurchargeForm({ code:'', name:'', description:'', calc_type:'flat', calc_base:'fixed', default_value:'', applies_when:'reconciliation', charge_per:'shipment', csv_column:'' });
       refetchSurcharges();
       if (data.applies_when === 'always') triggerBackfill(carrier.code);
     },
@@ -2229,13 +2229,21 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
               ].map(([l, el]) => <div key={l}><label style={{ fontSize:11, color:'#AAAAAA', display:'block', marginBottom:4 }}>{l}</label>{el}</div>)}
             </div>
             <div style={{ marginBottom:10 }}>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:10 }}>
-                {[['Charge Per', <select value={surchargeForm.charge_per} onChange={e => setSurchargeForm(f=>({...f,charge_per:e.target.value}))} style={{ width:'100%', height:34, background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, color:'#fff', fontSize:13, padding:'0 10px' }}><option value="shipment">Per Shipment</option><option value="parcel">Per Parcel</option></select>]].map(([l,el]) => <div key={l}><label style={{ fontSize:11, color:'#AAAAAA', display:'block', marginBottom:4 }}>{l}</label>{el}</div>)}
-              </div>
+              <label style={{ fontSize:11, color:'#AAAAAA', display:'block', marginBottom:4 }}>
+                Invoice CSV Column
+                <span style={{ marginLeft:6, color:'#555', fontStyle:'italic', fontSize:10 }}>— exact column header in carrier invoice file (leave blank if surcharge arrives as a separate invoice row)</span>
+              </label>
+              <div className="pill-input-wrap"><input value={surchargeForm.csv_column} onChange={e => setSurchargeForm(f=>({...f,csv_column:e.target.value}))} placeholder="e.g. Global Energy Charge" style={{ fontSize:13 }}/></div>
             </div>
-            <div style={{ marginBottom:12 }}>
-              <label style={{ fontSize:11, color:'#AAAAAA', display:'block', marginBottom:4 }}>Description (optional)</label>
-              <div className="pill-input-wrap"><input value={surchargeForm.description} onChange={e => setSurchargeForm(f=>({...f,description:e.target.value}))} placeholder="e.g. Applied for deliveries to remote postcodes" style={{ fontSize:13 }}/></div>
+            <div style={{ display:'grid', gridTemplateColumns:'140px 1fr', gap:10, marginBottom:12 }}>
+              <div>
+                <label style={{ fontSize:11, color:'#AAAAAA', display:'block', marginBottom:4 }}>Charge Per</label>
+                <select value={surchargeForm.charge_per} onChange={e => setSurchargeForm(f=>({...f,charge_per:e.target.value}))} style={{ width:'100%', height:34, background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, color:'#fff', fontSize:13, padding:'0 10px' }}><option value="shipment">Per Shipment</option><option value="parcel">Per Parcel</option></select>
+              </div>
+              <div>
+                <label style={{ fontSize:11, color:'#AAAAAA', display:'block', marginBottom:4 }}>Description (optional)</label>
+                <div className="pill-input-wrap"><input value={surchargeForm.description} onChange={e => setSurchargeForm(f=>({...f,description:e.target.value}))} placeholder="e.g. Applied for deliveries to remote postcodes" style={{ fontSize:13 }}/></div>
+              </div>
             </div>
             <div style={{ display:'flex', gap:8 }}>
               <button onClick={() => addSurcharge.mutate()} disabled={addSurcharge.isPending || !surchargeForm.code.trim() || !surchargeForm.name.trim()} className="btn-primary" style={{ background:'rgba(233,30,140,0.2)', border:'1px solid rgba(233,30,140,0.4)', color:'#E91E8C' }}><Check size={13}/> Create</button>
@@ -2267,6 +2275,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                       <div style={{ display:'flex', alignItems:'center', gap:7, flexWrap:'wrap' }}>
                         <span style={{ fontSize:13, fontWeight:700, color:'#fff' }}>{s.name}</span>
                         <span style={{ ...pill('rgba(233,30,140,0.15)', '#E91E8C'), fontSize:10 }}>{s.code}</span>
+                        {s.csv_column && <span style={{ ...pill('rgba(0,188,212,0.1)', '#00BCD4'), fontSize:10 }}>📋 {s.csv_column}</span>}
                         <span style={{ ...pill(s.active ? 'rgba(0,200,83,0.1)' : 'rgba(255,255,255,0.04)', s.active ? '#00C853' : '#555'), fontSize:10 }}>{s.active ? 'Active' : 'Inactive'}</span>
                       </div>
                       {s.description && <div style={{ fontSize:11, color:'#777', marginTop:2 }}>{s.description}</div>}
@@ -2274,7 +2283,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
 
                     {/* Value + firing mode — click to edit */}
                     <div
-                      onClick={() => { if (!isEditing) { setEditingSurcharge(s.id); setEditSForm({ name: s.name, default_value: String(s.default_value||0), cost_price: String(s.cost_price ?? s.default_value ?? 0), applies_when: s.applies_when, charge_per: s.charge_per, calc_type: s.calc_type, active: s.active }); } }}
+                      onClick={() => { if (!isEditing) { setEditingSurcharge(s.id); setEditSForm({ code: s.code || '', name: s.name, description: s.description || '', csv_column: s.csv_column || '', default_value: String(s.default_value||0), cost_price: String(s.cost_price ?? s.default_value ?? 0), applies_when: s.applies_when, charge_per: s.charge_per, calc_type: s.calc_type, active: s.active }); } }}
                       style={{ cursor:'pointer', textAlign:'right', padding:'4px 8px', borderRadius:6, background: isEditing ? 'rgba(233,30,140,0.08)' : 'transparent', border: isEditing ? '1px solid rgba(233,30,140,0.25)' : '1px solid transparent' }}
                       title="Click to edit"
                     >
@@ -2300,10 +2309,26 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                   {/* ── Inline edit panel ── */}
                   {isEditing && (
                     <div style={{ borderTop:'1px solid rgba(233,30,140,0.15)', padding:'12px 14px', background:'rgba(233,30,140,0.04)' }}>
-                      <div style={{ marginBottom:10 }}>
-                        <label style={{ fontSize:10, color:'#AAAAAA', display:'block', marginBottom:3 }}>Name</label>
-                        <div className="pill-input-wrap" style={{ height:30 }}><input value={editSForm.name||''} onChange={e => setEditSForm(f=>({...f,name:e.target.value}))} style={{ fontSize:12 }}/></div>
+                      {/* Row 1: Code + Name */}
+                      <div style={{ display:'grid', gridTemplateColumns:'140px 1fr', gap:10, marginBottom:10 }}>
+                        <div>
+                          <label style={{ fontSize:10, color:'#AAAAAA', display:'block', marginBottom:3 }}>Carrier Code</label>
+                          <div className="pill-input-wrap" style={{ height:30 }}><input value={editSForm.code||''} onChange={e => setEditSForm(f=>({...f,code:e.target.value.toUpperCase()}))} placeholder="e.g. U" style={{ fontSize:12, fontFamily:'monospace', letterSpacing:'0.05em' }}/></div>
+                        </div>
+                        <div>
+                          <label style={{ fontSize:10, color:'#AAAAAA', display:'block', marginBottom:3 }}>Name</label>
+                          <div className="pill-input-wrap" style={{ height:30 }}><input value={editSForm.name||''} onChange={e => setEditSForm(f=>({...f,name:e.target.value}))} style={{ fontSize:12 }}/></div>
+                        </div>
                       </div>
+                      {/* Row 2: Invoice CSV Column (full width) */}
+                      <div style={{ marginBottom:10 }}>
+                        <label style={{ fontSize:10, color:'#AAAAAA', display:'block', marginBottom:3 }}>
+                          Invoice CSV Column
+                          <span style={{ marginLeft:6, color:'#555', fontStyle:'italic' }}>— exact column header in carrier invoice file where this amount appears (leave blank if it arrives as a separate invoice row)</span>
+                        </label>
+                        <div className="pill-input-wrap" style={{ height:30 }}><input value={editSForm.csv_column||''} onChange={e => setEditSForm(f=>({...f,csv_column:e.target.value}))} placeholder="e.g. Global Energy Charge" style={{ fontSize:12 }}/></div>
+                      </div>
+                      {/* Row 3: Type, Sell, Cost, Fires when */}
                       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:10, marginBottom:10 }}>
                         {[
                           ['Type', <select value={editSForm.calc_type} onChange={e => setEditSForm(f=>({...f,calc_type:e.target.value}))} style={{ width:'100%', height:30, background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:6, color:'#fff', fontSize:12, padding:'0 8px' }}><option value="flat">Flat £</option><option value="percentage">Percentage %</option></select>],
@@ -2312,11 +2337,19 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                           ['Fires when', <select value={editSForm.applies_when} onChange={e => setEditSForm(f=>({...f,applies_when:e.target.value}))} style={{ width:'100%', height:30, background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:6, color:'#fff', fontSize:12, padding:'0 8px' }}><option value="always">Auto (always)</option><option value="reconciliation">Reconciliation only</option></select>],
                         ].map(([l, el]) => <div key={l}><label style={{ fontSize:10, color:'#AAAAAA', display:'block', marginBottom:3 }}>{l}</label>{el}</div>)}
                       </div>
-                      <div style={{ marginBottom:10 }}>
-                        {[['Charge Per', <select value={editSForm.charge_per} onChange={e => setEditSForm(f=>({...f,charge_per:e.target.value}))} style={{ width:'100%', height:30, background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:6, color:'#fff', fontSize:12, padding:'0 8px' }}><option value="shipment">Per Shipment</option><option value="parcel">Per Parcel</option></select>]].map(([l,el]) => <div key={l}><label style={{ fontSize:10, color:'#AAAAAA', display:'block', marginBottom:3 }}>{l}</label>{el}</div>)}
+                      {/* Row 4: Charge Per + Description */}
+                      <div style={{ display:'grid', gridTemplateColumns:'140px 1fr', gap:10, marginBottom:10 }}>
+                        <div>
+                          <label style={{ fontSize:10, color:'#AAAAAA', display:'block', marginBottom:3 }}>Charge Per</label>
+                          <select value={editSForm.charge_per} onChange={e => setEditSForm(f=>({...f,charge_per:e.target.value}))} style={{ width:'100%', height:30, background:'#1A1A2E', border:'1px solid rgba(255,255,255,0.1)', borderRadius:6, color:'#fff', fontSize:12, padding:'0 8px' }}><option value="shipment">Per Shipment</option><option value="parcel">Per Parcel</option></select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize:10, color:'#AAAAAA', display:'block', marginBottom:3 }}>Description</label>
+                          <div className="pill-input-wrap" style={{ height:30 }}><input value={editSForm.description||''} onChange={e => setEditSForm(f=>({...f,description:e.target.value}))} placeholder="Optional notes" style={{ fontSize:12 }}/></div>
+                        </div>
                       </div>
                       <div style={{ display:'flex', gap:8 }}>
-                        <button onClick={() => patchSurcharge.mutate({ id:s.id, ...editSForm, name: editSForm.name?.trim(), default_value: parseFloat(editSForm.default_value)||0, cost_price: parseFloat(editSForm.cost_price)||0 })} disabled={patchSurcharge.isPending} className="btn-primary" style={{ height:28, fontSize:12, background:'rgba(233,30,140,0.2)', border:'1px solid rgba(233,30,140,0.4)', color:'#E91E8C' }}><Check size={11}/> Save</button>
+                        <button onClick={() => patchSurcharge.mutate({ id:s.id, ...editSForm, code: editSForm.code?.trim().toUpperCase(), name: editSForm.name?.trim(), description: editSForm.description?.trim() || null, csv_column: editSForm.csv_column?.trim() || null, default_value: parseFloat(editSForm.default_value)||0, cost_price: parseFloat(editSForm.cost_price)||0 })} disabled={patchSurcharge.isPending} className="btn-primary" style={{ height:28, fontSize:12, background:'rgba(233,30,140,0.2)', border:'1px solid rgba(233,30,140,0.4)', color:'#E91E8C' }}><Check size={11}/> Save</button>
                         <button onClick={() => setEditingSurcharge(null)} className="btn-ghost" style={{ height:28, fontSize:12, padding:'0 10px' }}>Cancel</button>
                       </div>
                     </div>
