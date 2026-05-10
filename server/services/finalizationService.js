@@ -110,16 +110,17 @@ export async function finalizeRun(runId, staffId = null) {
   try {
     const writeBackRes = await query(`
       UPDATE charges c
-      SET    cost_price     = rl.corrected_cost_price,
-             sell_price     = rl.corrected_sell_price,
-             price          = rl.corrected_sell_price,
+      SET    cost_price      = rl.corrected_cost_price,
+             sell_price      = rl.corrected_sell_price,
+             price           = rl.corrected_sell_price,
              recon_corrected = true,
-             updated_at     = NOW()
+             updated_at      = NOW()
       FROM   reconciliation_lines rl
       WHERE  rl.run_id               = $1
         AND  rl.charge_id            = c.id
         AND  rl.corrected_sell_price IS NOT NULL
         AND  rl.corrected_cost_price IS NOT NULL
+        AND  rl.surcharge_id         IS NULL      -- exclude CSV-column surcharge lines
         AND  c.recon_corrected       = false
     `, [runId]);
     const wbCount = writeBackRes.rowCount || 0;

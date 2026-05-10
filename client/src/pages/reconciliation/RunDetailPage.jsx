@@ -1289,20 +1289,27 @@ function CustomerLinesDrilldown({ runId, customerId }) {
           </thead>
           <tbody>
             {lines.map(l => {
-              const cost   = parseFloat(l.cost_total || 0);
-              const sell   = parseFloat(l.sell_total || 0);
-              const margin = sell - cost;
+              const cost      = parseFloat(l.cost_total || 0);
+              const sell      = parseFloat(l.sell_total || 0);
+              const margin    = sell - cost;
+              const isSurcharge = !!l.surcharge_id;
+              const rowBg     = isSurcharge ? 'rgba(0,188,212,0.04)' : 'transparent';
               return (
-                <tr key={l.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
-                  <td style={{ ...tdStyle, color: '#79AAFF', fontFamily: 'monospace', fontSize: 10 }}>{l.tracking_number || '—'}</td>
+                <tr key={l.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)', background: rowBg }}>
+                  <td style={{ ...tdStyle, color: isSurcharge ? '#00BCD4' : '#79AAFF', fontFamily: 'monospace', fontSize: 10 }}>
+                    {isSurcharge ? <span style={{ color: '#888', fontFamily: 'sans-serif' }}>↳</span> : null}
+                    {' '}{l.tracking_number || '—'}
+                  </td>
                   <td style={{ ...tdStyle, color: '#888' }}>{l.shipment_date ? new Date(l.shipment_date).toLocaleDateString('en-GB') : '—'}</td>
-                  <td style={{ ...tdStyle, color: '#AAA' }}>{l.service_name || '—'}</td>
-                  <td style={{ ...tdStyle, color: '#888' }}>{l.parcel_count || 1}</td>
+                  <td style={{ ...tdStyle, color: isSurcharge ? '#00BCD4' : '#AAA' }}>
+                    {isSurcharge ? (l.surcharge_name || l.raw_service_code || 'Surcharge') : (l.service_name || '—')}
+                  </td>
+                  <td style={{ ...tdStyle, color: '#888' }}>{isSurcharge ? '—' : (l.parcel_count || 1)}</td>
                   <td style={{ ...tdStyle, color: '#AAA', textAlign: 'right' }}>£{cost.toFixed(2)}</td>
                   <td style={{ ...tdStyle, color: '#888', textAlign: 'right' }}>£{parseFloat(l.sell_base || 0).toFixed(2)}</td>
                   <td style={{ ...tdStyle, color: '#888', textAlign: 'right' }}>£{parseFloat(l.sell_fuel || 0).toFixed(2)}</td>
                   <td style={{ ...tdStyle, color: '#888', textAlign: 'right' }}>£{parseFloat(l.sell_surcharge || 0).toFixed(2)}</td>
-                  <td style={{ ...tdStyle, color: '#00C853', fontWeight: 700, textAlign: 'right' }}>£{sell.toFixed(2)}</td>
+                  <td style={{ ...tdStyle, color: isSurcharge ? '#00BCD4' : '#00C853', fontWeight: 700, textAlign: 'right' }}>£{sell.toFixed(2)}</td>
                   <td style={{ ...tdStyle, color: margin >= 0 ? '#00C853' : '#FF5252', fontWeight: 600, textAlign: 'right' }}>£{margin.toFixed(2)}</td>
                   <td style={{ ...tdStyle }}><StatusBadge status={l.status} /></td>
                 </tr>
@@ -1406,7 +1413,7 @@ function CustomerPreviewPanel({ runId }) {
                   <td style={{ padding: '9px 10px', color: '#AAA' }}>{c.line_count}</td>
                   <td style={{ padding: '9px 10px', color: '#888' }}>£{parseFloat(c.total_base || 0).toFixed(2)}</td>
                   <td style={{ padding: '9px 10px', color: '#888' }}>£{parseFloat(c.total_fuel || 0).toFixed(2)}</td>
-                  <td style={{ padding: '9px 10px', color: '#888' }}>£{parseFloat(c.total_surcharge || 0).toFixed(2)}</td>
+                  <td style={{ padding: '9px 10px', color: '#888' }}>£{(parseFloat(c.total_surcharge || 0) + parseFloat(c.total_recon_surcharge || 0)).toFixed(2)}</td>
                   <td style={{ padding: '9px 10px', color: '#00C853', fontWeight: 700 }}>£{sell.toFixed(2)}</td>
                   <td style={{ padding: '9px 10px', color: '#AAA' }}>£{cost.toFixed(2)}</td>
                   <td style={{ padding: '9px 10px', color: margin >= 0 ? '#00C853' : '#FF5252', fontWeight: 600 }}>

@@ -1431,15 +1431,46 @@ router.get('/csv-profiles', async (req, res) => {
     const { carrier_id } = req.query;
     if (!carrier_id) return res.status(400).json({ error: 'carrier_id is required' });
 
-    const result = await query(`
-      SELECT p.*, c.name AS carrier_name
-      FROM   carrier_csv_profiles p
-      JOIN   couriers c ON c.id = p.carrier_id
-      WHERE  p.carrier_id = $1
-      ORDER  BY p.is_default DESC, p.updated_at DESC
-    `, [parseInt(carrier_id)]);
+    const cidInt = parseInt(carrier_id);
 
-    return res.json(result.rows);
+    const [profileResult, surchargeResult] = await Promise.all([
+      query(`
+        SELECT p.*, c.name AS carrier_name
+        FROM   carrier_csv_profiles p
+        JOIN   couriers c ON c.id = p.carrier_id
+        WHERE  p.carrier_id = $1
+        ORDER  BY p.is_default DESC, p.updated_at DESC
+      `, [cidInt]),
+      // Auto-derive surcharge_columns from the surcharges table.
+      // Each surcharge with csv_column set becomes a { col, surcharge_id } entry —
+      // this is the source of truth, replacing the manually-maintained JSON array.
+      query(`
+        SELECT id AS surcharge_id, csv_column AS col, name, code
+        FROM   surcharges
+        WHERE  courier_id = $1
+          AND  csv_column IS NOT NULL
+          AND  active = true
+        ORDER  BY name
+      `, [cidInt]),
+    ]);
+
+    // Merge auto-derived surcharge_columns into every profile's column_map.
+    // The surcharges table is authoritative; any manually-stored surcharge_columns
+    // in the profile JSON are replaced with the live data.
+    const derivedSurchargeColumns = surchargeResult.rows.map(r => ({
+      col:          r.col,
+      surcharge_id: r.surcharge_id,
+    }));
+
+    const profiles = profileResult.rows.map(p => ({
+      ...p,
+      column_map: {
+        ...(p.column_map || {}),
+        surcharge_columns: derivedSurchargeColumns,
+      },
+    }));
+
+    return res.json(profiles);
   } catch (err) {
     console.error('[reconciliation/csv-profiles] GET error:', err);
     return res.status(500).json({ error: err.message });
@@ -1674,23 +1705,38 @@ router.get('/runs/:id/customers/preview', async (req, res) => {
       SELECT
         rl.customer_id,
         cu.business_name                                                                   AS customer_name,
-        COUNT(*)::int                                                                      AS line_count,
-        -- Sell: use corrected_sell_price when available (recomputed at billed weight for
-        -- corrected lines); otherwise use the charge's sell_base; fall back to carrier_amount.
-        -- corrected_sell_price is set by the engine for pool-matched lines where the carrier
-        -- billed at a different weight/amount than booked.
-        COALESCE(SUM(COALESCE(rl.corrected_sell_price, cp.sell_base)), SUM(rl.carrier_amount)) AS total_base,
-        COALESCE(SUM(cp.sell_fuel),      0)                                               AS total_fuel,
-        COALESCE(SUM(cp.sell_surcharge), 0)                                               AS total_surcharge,
+        -- line_count counts only freight base lines (surcharge lines are supporting detail)
+        COUNT(CASE WHEN rl.surcharge_id IS NULL THEN 1 END)::int                          AS line_count,
+        -- Freight sell: corrected_sell_price takes priority (recomputed at billed weight for
+        -- corrected lines); falls back to charge's sell_base, then carrier_amount.
+        -- Surcharge reconciliation lines are excluded here — they contribute to total_recon_surcharge.
         COALESCE(
-          SUM(COALESCE(rl.corrected_sell_price, cp.sell_base) + cp.sell_fuel + cp.sell_surcharge),
+          SUM(CASE WHEN rl.surcharge_id IS NULL THEN COALESCE(rl.corrected_sell_price, cp.sell_base) END),
+          SUM(CASE WHEN rl.surcharge_id IS NULL THEN rl.carrier_amount END)
+        )                                                                                  AS total_base,
+        -- Fuel sell: from booking-time charges (freight lines only, surcharge lines share charge_id
+        -- and would otherwise double-count fuel if included here).
+        COALESCE(SUM(CASE WHEN rl.surcharge_id IS NULL THEN cp.sell_fuel      END), 0)   AS total_fuel,
+        -- Booking-time surcharge sell (EPS etc from charges table) — freight lines only.
+        COALESCE(SUM(CASE WHEN rl.surcharge_id IS NULL THEN cp.sell_surcharge END), 0)   AS total_surcharge,
+        -- Reconciliation-time surcharge sell: CSV-column surcharges (GEC, Peak, Oversized etc.)
+        -- discovered at invoice time and priced from surcharges.default_value / customer overrides.
+        COALESCE(SUM(CASE WHEN rl.surcharge_id IS NOT NULL THEN rl.corrected_sell_price END), 0) AS total_recon_surcharge,
+        -- Total sell = freight + fuel + booking surcharges + recon surcharges.
+        COALESCE(
+          SUM(CASE WHEN rl.surcharge_id IS NULL
+                   THEN COALESCE(rl.corrected_sell_price, cp.sell_base) + COALESCE(cp.sell_fuel, 0) + COALESCE(cp.sell_surcharge, 0)
+                   ELSE rl.corrected_sell_price
+              END),
           SUM(rl.carrier_amount)
         )                                                                                  AS total_sell,
-        -- Cost: always carrier_amount (what the carrier actually billed us per invoice line).
+        -- Cost: sum of ALL carrier amounts (freight base + all surcharges = total carrier invoice).
         SUM(rl.carrier_amount)                                                             AS total_our_cost
       FROM   reconciliation_lines rl
       LEFT JOIN customers   cu ON cu.id        = rl.customer_id
-      LEFT JOIN charge_prices cp ON cp.charge_id = rl.charge_id
+      -- Only join charge_prices for freight base lines — surcharge lines share charge_id
+      -- with the freight line, and joining charge_prices to them would duplicate fuel/surcharge sells.
+      LEFT JOIN charge_prices cp ON cp.charge_id = rl.charge_id AND rl.surcharge_id IS NULL
       WHERE  rl.run_id = $1
         AND  rl.status IN ('matched', 'corrected')
         AND  rl.is_fuel = false
@@ -1749,18 +1795,30 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
         rl.expected_amount,
         rl.status,
         rl.corrected_by,
+        rl.charge_type,
+        rl.surcharge_id,
+        s.name                                                                                  AS surcharge_name,
         rl.parcel_count,
         rl.carrier_billed_weight_kg,
         cs.name                                                                                 AS service_name,
-        -- Sell: corrected_sell_price takes priority (recomputed at billed weight for corrected lines).
-        -- Falls back to charge's sell_base (booking-time sell), then carrier_amount (0 margin, no rate card).
-        COALESCE(rl.corrected_sell_price, cp.sell_base, rl.carrier_amount)                     AS sell_base,
-        COALESCE(cp.sell_fuel,      0)                                                         AS sell_fuel,
-        COALESCE(cp.sell_surcharge, 0)                                                         AS sell_surcharge,
-        COALESCE(
-          COALESCE(rl.corrected_sell_price, cp.sell_base) + cp.sell_fuel + cp.sell_surcharge,
-          rl.carrier_amount
-        )                                                                                       AS sell_total,
+        -- Freight lines: corrected_sell_price takes priority (recomputed at billed weight for corrected lines).
+        -- Surcharge lines: corrected_sell_price IS the sell price (surcharge.default_value / customer override).
+        -- Falls back to charge's sell_base for freight lines, then carrier_amount (0 margin, no rate card).
+        CASE WHEN rl.surcharge_id IS NULL
+             THEN COALESCE(rl.corrected_sell_price, cp.sell_base, rl.carrier_amount)
+             ELSE COALESCE(rl.corrected_sell_price, 0)
+        END                                                                                     AS sell_base,
+        -- Fuel/surcharge from charges table only applies to freight lines (surcharge lines
+        -- share charge_id with freight, so we guard against double-counting here).
+        CASE WHEN rl.surcharge_id IS NULL THEN COALESCE(cp.sell_fuel,      0) ELSE 0 END       AS sell_fuel,
+        CASE WHEN rl.surcharge_id IS NULL THEN COALESCE(cp.sell_surcharge, 0) ELSE 0 END       AS sell_surcharge,
+        CASE WHEN rl.surcharge_id IS NULL
+             THEN COALESCE(
+               COALESCE(rl.corrected_sell_price, cp.sell_base) + COALESCE(cp.sell_fuel, 0) + COALESCE(cp.sell_surcharge, 0),
+               rl.carrier_amount
+             )
+             ELSE COALESCE(rl.corrected_sell_price, 0)
+        END                                                                                     AS sell_total,
         -- Cost: always carrier_amount (the carrier's actual invoice amount for this line).
         -- This is the only correct source regardless of whether the line is pool-matched,
         -- corrected, or carrier_direct. Weight corrections and service corrections are already
@@ -1768,12 +1826,15 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
         rl.carrier_amount                                                                       AS cost_total
       FROM   reconciliation_lines rl
       LEFT JOIN courier_services cs ON cs.id         = rl.service_id
-      LEFT JOIN charge_prices    cp ON cp.charge_id  = rl.charge_id
+      -- Only join charge_prices for freight base lines — surcharge lines share charge_id
+      -- with freight lines and joining would duplicate fuel/surcharge sell amounts.
+      LEFT JOIN charge_prices    cp ON cp.charge_id  = rl.charge_id AND rl.surcharge_id IS NULL
+      LEFT JOIN surcharges       s  ON s.id          = rl.surcharge_id
       WHERE  rl.run_id = $1
         AND  rl.status IN ('matched', 'corrected')
         AND  rl.is_fuel = false
         ${custFilter}
-      ORDER  BY rl.shipment_date ASC NULLS LAST, rl.tracking_number
+      ORDER  BY rl.shipment_date ASC NULLS LAST, rl.tracking_number, rl.charge_type
     `, params);
 
     return res.json(result.rows);
