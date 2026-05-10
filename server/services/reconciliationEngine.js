@@ -682,14 +682,34 @@ async function handleCarrierDirect({
     }),
   }]);
 
-  const insertedId     = newCharges[0]?.id || null;
+  // insertCharges uses ON CONFLICT DO NOTHING — if a carrier_direct charge was
+  // already created for this tracking number in a prior run, the INSERT returns
+  // 0 rows. Look up the existing charge so charge_id is always linked correctly.
+  let insertedId = newCharges[0]?.id || null;
+  if (!insertedId) {
+    const existing = await query(
+      `SELECT id FROM charges
+       WHERE  tracking_code       = $1
+         AND  courier_service_id  = $2
+         AND  source              = 'carrier_direct'
+         AND  cancelled           = false
+       ORDER  BY created_at DESC
+       LIMIT  1`,
+      [trackingNumber, serviceId]
+    );
+    insertedId = existing.rows[0]?.id || null;
+    if (insertedId) {
+      console.log(`[carrier-direct] reused existing charge id=${insertedId} for tracking=${trackingNumber}`);
+    }
+  }
+
   const expectedAmount = totalCostPrice;
   const delta          = round2(carrierAmount - expectedAmount);
   const isMatch        = Math.abs(delta) < 0.02;
 
   console.log(
-    `[carrier-direct] charge inserted id=${insertedId}: ` +
-    `expected=£${expectedAmount} carrier=£${carrierAmount} delta=£${delta} → ${isMatch ? 'MATCHED' : 'CORRECTED'}`
+    `[carrier-direct] charge id=${insertedId}: ` +
+    `expected=£${expectedAmount} carrier=£${carrierAmount} delta=£${delta} sell=£${totalSellPrice} → ${isMatch ? 'MATCHED' : 'CORRECTED'}`
   );
 
   // For corrected carrier_direct lines, store any unmapped column values in
@@ -728,6 +748,10 @@ async function handleCarrierDirect({
     ship_to_country:          countryIso             || null,
     parcel_count:             parcelCount > 1 ? parcelCount : null,
     correction_metadata:      carrierDirectMeta,
+    // Always set sell/cost so billing preview shows correct margin even for
+    // carrier_direct lines that have no pool charge to fall back on.
+    corrected_sell_price:     totalSellPrice,
+    corrected_cost_price:     totalCostPrice,
   });
 
   return { status: isMatch ? 'matched' : 'corrected' };
