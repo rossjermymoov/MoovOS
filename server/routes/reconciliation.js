@@ -1663,6 +1663,61 @@ router.get('/runs/:id/customers', async (req, res) => {
   }
 });
 
+// ─── GET /api/reconciliation/runs/:id/debug-sell ─────────────────────────────
+// Temporary diagnostic: for the first 10 matched freight lines in a run, show
+// all the data that computeCorrectedSell uses so we can see why sell = cost.
+
+router.get('/runs/:id/debug-sell', async (req, res) => {
+  try {
+    const runId = parseInt(req.params.id);
+    const result = await query(`
+      SELECT
+        rl.id                         AS line_id,
+        rl.tracking_number,
+        rl.status,
+        rl.carrier_amount,
+        rl.carrier_billed_weight_kg,
+        rl.corrected_sell_price,
+        rl.corrected_cost_price,
+        rl.charge_id,
+        -- From the charge
+        ch.customer_id,
+        ch.zone_id,
+        ch.cost_price                 AS charge_cost,
+        ch.sell_price                 AS charge_sell_price,
+        ch.price                      AS charge_price,
+        COALESCE(ch.sell_price, ch.price) AS effective_charge_sell,
+        -- From the shipment
+        s.total_weight_kg             AS declared_weight_kg,
+        -- Zone name (if zone_id exists)
+        z.name                        AS zone_name,
+        -- Service code
+        cs.service_code,
+        -- Customer rate card entry for this combo (first band found)
+        (SELECT cr.price FROM customer_rates cr
+         WHERE  cr.customer_id = ch.customer_id
+           AND  cr.service_code ILIKE cs.service_code
+           AND  cr.zone_name    ILIKE z.name
+         ORDER  BY cr.min_weight_kg DESC NULLS LAST
+         LIMIT  1)                    AS rate_card_sample_price
+      FROM   reconciliation_lines rl
+      LEFT JOIN charges ch   ON ch.id  = rl.charge_id
+      LEFT JOIN shipments s  ON s.id   = ch.shipment_id
+      LEFT JOIN zones z      ON z.id   = ch.zone_id
+      LEFT JOIN courier_services cs ON cs.id = rl.service_id
+      WHERE  rl.run_id      = $1
+        AND  rl.status      IN ('matched', 'corrected')
+        AND  rl.surcharge_id IS NULL
+      ORDER  BY rl.id
+      LIMIT  10
+    `, [runId]);
+    return res.json({ run_id: runId, lines: result.rows });
+  } catch (err) {
+    console.error('[reconciliation/debug-sell] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── GET /api/reconciliation/runs/:id/customers/preview ──────────────────────
 // Pre-finalization customer billing preview — aggregated sell totals per customer
 // using live reconciliation_lines + charges table (no finalized_billing_lines needed).
