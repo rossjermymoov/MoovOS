@@ -1016,10 +1016,36 @@ async function insertSurchargeLines(runId, surchargeAmounts, line, trackingNumbe
     if (carrierAmt <= 0) continue;
     const isPercent   = (surcharge.calc_type === 'percentage');
 
-    // Resolve customer sell price: check override cache, then DB, then default.
-    // For percentage surcharges: default_value is a % applied to freightSellPrice.
-    // Override for percentage surcharges stores the override percentage.
+    // Resolve the sell percentage for percentage surcharges.
+    // Priority:
+    //   1. Customer-level override (customer_surcharge_overrides)     — checked below
+    //   2. Fuel group sell_pct for this service + customer             — authoritative
+    //      (same source the booking engine uses: COALESCE(customer_fuel_group_pricing.sell_pct,
+    //       fuel_groups.standard_sell_pct))
+    //   3. surcharge.default_value                                    — fallback only
+    //
+    // Using the fuel group means reconciliation billing stays consistent with
+    // booking-time pricing. e.g. Europa domestic fuel group = 7.9%, DPD = 9.5%.
     let rawDefault = parseFloat(surcharge.default_value) || 0;
+    if (isPercent && serviceId) {
+      const fuelGroupRes = await query(
+        `SELECT COALESCE(cfgp.sell_pct, fg.standard_sell_pct) AS sell_pct
+         FROM   courier_services cs
+         JOIN   fuel_groups fg ON fg.id = cs.fuel_group_id
+         LEFT JOIN customer_fuel_group_pricing cfgp
+                   ON cfgp.fuel_group_id = fg.id AND cfgp.customer_id = $2
+         WHERE  cs.id = $1`,
+        [serviceId, customerId]
+      );
+      if (fuelGroupRes.rows[0]?.sell_pct != null) {
+        const fuelPct = parseFloat(fuelGroupRes.rows[0].sell_pct);
+        if (fuelPct > 0) {
+          console.log(`[recon engine] Surcharge "${surcharge.name}": using fuel_group sell_pct=${fuelPct}% (overrides default_value=${rawDefault}%)`);
+          rawDefault = fuelPct;
+        }
+      }
+    }
+
     let sellPrice;
     if (isPercent && freightSellPrice != null && freightSellPrice > 0) {
       sellPrice = round2(freightSellPrice * rawDefault / 100);
