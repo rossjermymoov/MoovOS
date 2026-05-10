@@ -1675,31 +1675,37 @@ router.get('/runs/:id/debug-sell', async (req, res) => {
         rl.id                         AS line_id,
         rl.tracking_number,
         rl.status,
+        rl.source,
+        rl.corrected_by,
         rl.carrier_amount,
         rl.carrier_billed_weight_kg,
         rl.corrected_sell_price,
         rl.corrected_cost_price,
+        -- Direct from the line (not via charge JOIN)
         rl.charge_id,
-        -- From the charge
-        ch.customer_id,
-        ch.zone_id,
+        rl.customer_id                AS line_customer_id,
+        rl.service_id                 AS line_service_id,
+        -- From the charge (only populated when charge_id is not null)
+        ch.zone_id                    AS charge_zone_id,
         ch.cost_price                 AS charge_cost,
         ch.sell_price                 AS charge_sell_price,
         ch.price                      AS charge_price,
         COALESCE(ch.sell_price, ch.price) AS effective_charge_sell,
         -- From the shipment
         s.total_weight_kg             AS declared_weight_kg,
-        -- Zone name (if zone_id exists)
+        -- Zone name
         z.name                        AS zone_name,
-        -- Service code
+        -- Service code from courier_services
         cs.service_code,
-        -- Customer rate card entry for this combo (first band found)
-        (SELECT cr.price FROM customer_rates cr
-         WHERE  cr.customer_id = ch.customer_id
-           AND  cr.service_code ILIKE cs.service_code
-           AND  cr.zone_name    ILIKE z.name
-         ORDER  BY cr.min_weight_kg DESC NULLS LAST
-         LIMIT  1)                    AS rate_card_sample_price
+        -- Rate card: how many entries exist for this customer+service
+        (SELECT COUNT(*) FROM customer_rates cr
+         WHERE  cr.customer_id = rl.customer_id
+           AND  cr.service_code ILIKE cs.service_code) AS rate_card_row_count,
+        -- Rate card: zone names available for this customer+service
+        (SELECT string_agg(DISTINCT cr.zone_name, ', ' ORDER BY cr.zone_name)
+         FROM   customer_rates cr
+         WHERE  cr.customer_id = rl.customer_id
+           AND  cr.service_code ILIKE cs.service_code) AS rate_card_zones
       FROM   reconciliation_lines rl
       LEFT JOIN charges ch   ON ch.id  = rl.charge_id
       LEFT JOIN shipments s  ON s.id   = ch.shipment_id
