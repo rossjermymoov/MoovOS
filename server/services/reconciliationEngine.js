@@ -759,7 +759,8 @@ async function handleCarrierDirect({
 
   // Insert separate reconciliation_lines for each named CSV-column surcharge.
   // carrier_direct lines were previously missing these entirely. Pass totalSellPrice
-  // so percentage surcharges (e.g. Fuel/Energy at 9.5%) compute correctly.
+  // so percentage surcharges (e.g. Fuel/Energy) compute correctly against the
+  // rate-card sell — the actual percentage comes from surcharges.default_value per carrier.
   await insertSurchargeLines(
     runId, line.surcharge_amounts, line,
     trackingNumber, serviceId, customer.customer_id, insertedId,
