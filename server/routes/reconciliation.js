@@ -1724,6 +1724,68 @@ router.get('/runs/:id/debug-sell', async (req, res) => {
   }
 });
 
+// ─── GET /api/reconciliation/runs/:id/debug-surcharge-coverage ───────────────
+// Diagnostic: shows which freight lines have NO surcharge sub-rows, grouped by
+// source and service code, so we can see why some lines are missing GEC/fuel.
+
+router.get('/runs/:id/debug-surcharge-coverage', async (req, res) => {
+  try {
+    const runId = parseInt(req.params.id);
+
+    // Overall counts: freight lines with and without surcharge sub-rows
+    const summary = await query(`
+      SELECT
+        rl.source,
+        cs.service_code,
+        COUNT(DISTINCT rl.tracking_number) AS freight_lines,
+        COUNT(DISTINCT sub.tracking_number) AS lines_with_surcharges,
+        COUNT(DISTINCT rl.tracking_number) - COUNT(DISTINCT sub.tracking_number) AS lines_without_surcharges
+      FROM reconciliation_lines rl
+      LEFT JOIN courier_services cs ON cs.id = rl.service_id
+      LEFT JOIN (
+        SELECT DISTINCT tracking_number
+        FROM   reconciliation_lines
+        WHERE  run_id = $1 AND surcharge_id IS NOT NULL
+      ) sub ON sub.tracking_number = rl.tracking_number
+      WHERE rl.run_id = $1
+        AND rl.surcharge_id IS NULL
+        AND rl.status NOT IN ('unmatched', 'carrier_overhead')
+      GROUP BY rl.source, cs.service_code
+      ORDER BY freight_lines DESC
+    `, [runId]);
+
+    // Sample 5 freight lines that have NO surcharge sub-rows — show their corrected_sell_price and source
+    const samples = await query(`
+      SELECT
+        rl.tracking_number,
+        rl.source,
+        rl.status,
+        rl.corrected_sell_price,
+        rl.corrected_cost_price,
+        rl.carrier_amount,
+        cs.service_code,
+        rl.charge_id
+      FROM reconciliation_lines rl
+      LEFT JOIN courier_services cs ON cs.id = rl.service_id
+      WHERE rl.run_id = $1
+        AND rl.surcharge_id IS NULL
+        AND rl.status NOT IN ('unmatched', 'carrier_overhead')
+        AND rl.tracking_number NOT IN (
+          SELECT DISTINCT tracking_number
+          FROM   reconciliation_lines
+          WHERE  run_id = $1 AND surcharge_id IS NOT NULL
+        )
+      ORDER BY rl.id
+      LIMIT 5
+    `, [runId]);
+
+    return res.json({ run_id: runId, summary: summary.rows, samples_without_surcharges: samples.rows });
+  } catch (err) {
+    console.error('[reconciliation/debug-surcharge-coverage] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── GET /api/reconciliation/runs/:id/customers/preview ──────────────────────
 // Pre-finalization customer billing preview — aggregated sell totals per customer
 // using live reconciliation_lines + charges table (no finalized_billing_lines needed).
