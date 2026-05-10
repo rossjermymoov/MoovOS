@@ -907,7 +907,7 @@ function sumGroupColumnSurcharges(lines) {
  */
 async function loadCarrierSurcharges(carrierId) {
   const res = await query(
-    `SELECT id, code, name, cost_price, default_value
+    `SELECT id, code, name, cost_price, default_value, calc_type
      FROM   surcharges
      WHERE  courier_id = $1 AND active = true`,
     [carrierId]
@@ -926,17 +926,24 @@ async function loadCarrierSurcharges(carrierId) {
  * corrected_sell_price is set to the customer's override (if any) or the
  * surcharge's default_value — this is what we will charge the customer.
  *
- * @param {number} runId
- * @param {Object} surchargeAmounts  { [surcharge_id]: amount }
- * @param {Object} line              the parsed invoice line (for metadata)
- * @param {string} trackingNumber
+ * For surcharges with calc_type = 'percentage', default_value is a percentage
+ * (e.g. 9.5 = 9.5%) applied to the customer's freight sell price. An override
+ * for these surcharges is also treated as a percentage unless the override is a
+ * fixed-amount value. freightSellPrice must be passed so the percentage can be
+ * computed correctly.
+ *
+ * @param {number}      runId
+ * @param {Object}      surchargeAmounts  { [surcharge_id]: amount }
+ * @param {Object}      line              the parsed invoice line (for metadata)
+ * @param {string}      trackingNumber
  * @param {number|null} serviceId
  * @param {string|null} customerId
  * @param {number|null} chargeId
- * @param {Object} surchargeById     preloaded map from loadCarrierSurcharges
- * @param {Map}    overrideCache     run-scoped cache: `${customerId}:${surchargeId}` → sell_price
+ * @param {Object}      surchargeById     preloaded map from loadCarrierSurcharges
+ * @param {Map}         overrideCache     run-scoped cache: `${customerId}:${surchargeId}` → override_value
+ * @param {number|null} freightSellPrice  customer's freight sell (for percentage surcharges)
  */
-async function insertSurchargeLines(runId, surchargeAmounts, line, trackingNumber, serviceId, customerId, chargeId, surchargeById, overrideCache) {
+async function insertSurchargeLines(runId, surchargeAmounts, line, trackingNumber, serviceId, customerId, chargeId, surchargeById, overrideCache, freightSellPrice = null) {
   if (!surchargeAmounts || !Object.keys(surchargeAmounts).length) return;
 
   for (const [surchargeId, rawAmount] of Object.entries(surchargeAmounts)) {
@@ -946,16 +953,30 @@ async function insertSurchargeLines(runId, surchargeAmounts, line, trackingNumbe
       continue;
     }
 
-    const carrierAmt = round2(parseFloat(rawAmount) || 0);
+    const carrierAmt  = round2(parseFloat(rawAmount) || 0);
     if (carrierAmt <= 0) continue;
+    const isPercent   = (surcharge.calc_type === 'percentage');
 
     // Resolve customer sell price: check override cache, then DB, then default.
-    let sellPrice = parseFloat(surcharge.default_value) || 0;
+    // For percentage surcharges: default_value is a % applied to freightSellPrice.
+    // Override for percentage surcharges stores the override percentage.
+    let rawDefault = parseFloat(surcharge.default_value) || 0;
+    let sellPrice;
+    if (isPercent && freightSellPrice != null && freightSellPrice > 0) {
+      sellPrice = round2(freightSellPrice * rawDefault / 100);
+    } else {
+      sellPrice = round2(rawDefault);
+    }
+
     if (customerId) {
       const cacheKey = `${customerId}:${surchargeId}`;
       if (overrideCache.has(cacheKey)) {
         const cached = overrideCache.get(cacheKey);
-        if (cached !== null) sellPrice = cached;
+        if (cached !== null) {
+          sellPrice = isPercent && freightSellPrice != null && freightSellPrice > 0
+            ? round2(freightSellPrice * cached / 100)
+            : round2(cached);
+        }
       } else {
         const ovRes = await query(
           `SELECT override_value FROM customer_surcharge_overrides
@@ -965,7 +986,12 @@ async function insertSurchargeLines(runId, surchargeAmounts, line, trackingNumbe
         );
         const overrideVal = ovRes.rows[0]?.override_value ?? null;
         overrideCache.set(cacheKey, overrideVal !== null ? parseFloat(overrideVal) : null);
-        if (overrideVal !== null) sellPrice = parseFloat(overrideVal);
+        if (overrideVal !== null) {
+          const pct = parseFloat(overrideVal);
+          sellPrice = isPercent && freightSellPrice != null && freightSellPrice > 0
+            ? round2(freightSellPrice * pct / 100)
+            : round2(pct);
+        }
       }
     }
 
@@ -1164,11 +1190,13 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
     }
   }
 
-  // For corrected groups, recompute customer sell at the billed weight
-  // so the billing preview and finalization have the correct post-reconciliation sell.
+  // Recompute customer sell at the billed weight for matched and corrected groups.
+  // This ensures billing preview is accurate regardless of what sell_price was
+  // stored on the charge at booking time (e.g. carrier_direct charges created before
+  // a rate card was loaded may have sell_price = cost_price as a fallback).
   let groupCorrSell = null;
   let groupCorrCost = null;
-  if (groupStatus === 'corrected') {
+  if (groupStatus === 'matched' || groupStatus === 'corrected') {
     const groupBilledKg  = parseFloat(firstLine.billed_weight_kg) || 0;
     const groupParcels   = freightLines.reduce((s, l) => s + (parseInt(l.parcel_count) || 1), 0);
     if (groupBilledKg > 0) {
@@ -1203,6 +1231,7 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
 
   // Produce one surcharge line per named CSV-column surcharge (summed across the group).
   // Uses firstLine for metadata (tracking_number, shipment_date, etc.).
+  // Pass groupCorrSell so percentage surcharges (e.g. fuel/energy) compute correctly.
   if (colSurchargeTotal > 0 && charge.customer_id) {
     const groupSurchargeAmounts = Object.fromEntries(
       colSurchargeBreakdown.map(({ surcharge_id, amount }) => [surcharge_id, amount])
@@ -1211,7 +1240,7 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
       runId, groupSurchargeAmounts, firstLine,
       String(firstLine.tracking_number || '').trim(),
       serviceId, charge.customer_id, charge.charge_id,
-      ctx.surchargeById, ctx.surchargeOverrideCache
+      ctx.surchargeById, ctx.surchargeOverrideCache, groupCorrSell
     );
   }
 
@@ -1454,13 +1483,23 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
 
   if (Math.abs(delta) < 0.02) {
     // GREEN — carrier charged within £0.01 of what we booked.
+    //
+    // Always compute corrected_sell_price from the rate card at the invoiced weight,
+    // even for matched lines. This ensures billing preview is accurate regardless of
+    // what sell_price was stored on the charge at booking time (charges created via
+    // carrier_direct before a rate card was loaded may have sell_price = cost_price).
+    const billedKg       = parseFloat(line.billed_weight_kg) || 0;
+    const invoiceParcels = parseInt(line.parcel_count) || 1;
+    const matchedSell = billedKg > 0
+      ? await computeCorrectedSell(charge, serviceId, billedKg, invoiceParcels, ctx.serviceIdToCodeMap)
+      : null;
     await insertLine(runId, {
       tracking_number:          trackingNumber,
       carrier_account_no:       line.account_number    || null,
       raw_service_code:         rawServiceCode,
       charge_type:              line.charge_type       || 'base',
       carrier_amount:           carrierAmount,
-      carrier_billed_weight_kg: line.billed_weight_kg  || null,
+      carrier_billed_weight_kg: billedKg || null,
       service_id:               serviceId,
       customer_id:              charge.customer_id,
       charge_id:                charge.charge_id,
@@ -1473,13 +1512,16 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       shipment_date:            line.shipment_date     || null,
       ship_to_postcode:         line.delivery_postcode || null,
       ship_to_country:          line.ship_to_country   || null,
-      parcel_count:             line.parcel_count      || null,
+      parcel_count:             invoiceParcels > 1 ? invoiceParcels : null,
+      corrected_sell_price:     matchedSell,
+      corrected_cost_price:     carrierAmount,
     });
     // Insert separate reconciliation_lines for each named surcharge column.
+    // Pass matchedSell so percentage surcharges compute correctly.
     await insertSurchargeLines(
       runId, line.surcharge_amounts, line,
       trackingNumber, serviceId, charge.customer_id, charge.charge_id,
-      ctx.surchargeById, ctx.surchargeOverrideCache
+      ctx.surchargeById, ctx.surchargeOverrideCache, matchedSell
     );
     return { status: 'matched' };
   }
@@ -1525,10 +1567,11 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       corrected_cost_price:     carrierAmount,  // carrier_amount IS the actual cost
     });
     // Insert separate reconciliation_lines for each named surcharge column.
+    // Pass corrSell so percentage surcharges compute correctly.
     await insertSurchargeLines(
       runId, line.surcharge_amounts, line,
       trackingNumber, serviceId, charge.customer_id, charge.charge_id,
-      ctx.surchargeById, ctx.surchargeOverrideCache
+      ctx.surchargeById, ctx.surchargeOverrideCache, corrSell
     );
     return { status: 'corrected' };
   }
@@ -1571,10 +1614,12 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   });
   // Still produce surcharge lines even on unmatched freight — surcharges are
   // independently priced and their sell values are still needed for billing.
+  // Freight sell is null for unmatched lines; percentage surcharges will produce
+  // a zero sell (no sell known without a matched rate card hit on the freight).
   await insertSurchargeLines(
     runId, line.surcharge_amounts, line,
     trackingNumber, serviceId, charge.customer_id, charge.charge_id,
-    ctx.surchargeById, ctx.surchargeOverrideCache
+    ctx.surchargeById, ctx.surchargeOverrideCache, null
   );
   return { status: 'unmatched' };
 }
