@@ -170,12 +170,21 @@ async function buildServiceCodeMap(carrierId) {
 // and finalization skips the write-back for sell.
 
 async function computeCorrectedSell(charge, serviceId, billedWeightKg, parcelCount, serviceIdToCodeMap) {
-  if (!charge?.customer_id || !serviceId || !(billedWeightKg > 0)) return null;
+  if (!charge?.customer_id || !serviceId || !(billedWeightKg > 0)) {
+    console.log(`[recon engine] correctedSell SKIP: customer=${charge?.customer_id} serviceId=${serviceId} weight=${billedWeightKg} — missing prerequisite`);
+    return null;
+  }
 
   const serviceCode = serviceIdToCodeMap[serviceId];
-  if (!serviceCode) return null;
+  if (!serviceCode) {
+    console.log(`[recon engine] correctedSell SKIP: serviceId=${serviceId} not in serviceIdToCodeMap (keys: ${Object.keys(serviceIdToCodeMap).join(',')})`);
+    return null;
+  }
 
-  if (!charge.zone_id) return null;
+  if (!charge.zone_id) {
+    console.log(`[recon engine] correctedSell SKIP: charge ${charge.charge_id} has no zone_id — customer=${charge.customer_id} service=${serviceCode}`);
+    return null;
+  }
 
   // Fetch zone name + fallback service code in one round-trip
   const [zoneRes, svcRes] = await Promise.all([
@@ -188,7 +197,10 @@ async function computeCorrectedSell(charge, serviceId, billedWeightKg, parcelCou
       [serviceId]
     ),
   ]);
-  if (!zoneRes.rows.length) return null;
+  if (!zoneRes.rows.length) {
+    console.log(`[recon engine] correctedSell SKIP: zone_id=${charge.zone_id} not found in zones table — charge=${charge.charge_id}`);
+    return null;
+  }
   const zoneName              = zoneRes.rows[0].name;
   const fallbackServiceCode   = svcRes.rows[0]?.rate_fallback_service_code || null;
 
@@ -197,7 +209,10 @@ async function computeCorrectedSell(charge, serviceId, billedWeightKg, parcelCou
   const perParcelKg = n > 1 ? Math.round((billedWeightKg / n) * 1000) / 1000 : billedWeightKg;
 
   const sellResult = await lookupCustomerSellPrice(charge.customer_id, serviceCode, perParcelKg, zoneName, fallbackServiceCode);
-  if (!sellResult) return null;
+  if (!sellResult) {
+    console.log(`[recon engine] correctedSell MISS: no customer_rates row — customer=${charge.customer_id} service="${serviceCode}" zone="${zoneName}" weight=${perParcelKg}kg`);
+    return null;
+  }
 
   const totalSell = Math.round(sellResult.sellPrice * n * 100) / 100;
   console.log(
