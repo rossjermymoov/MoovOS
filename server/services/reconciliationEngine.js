@@ -261,6 +261,10 @@ async function buildVerifiedPool(carrierId) {
       -- Multiplying rate_per_parcel × invoice_parcel_count gives the correct expected total
       -- for DPD all-sub regardless of which format was stored.
       ROUND(c.cost_price::numeric / GREATEST(COALESCE(s.parcel_count, 1), 1), 4) AS rate_per_parcel,
+      -- stored_sell_price: what we booked to charge the customer at booking time.
+      -- Used as fallback freightSellPrice for percentage surcharges when
+      -- computeCorrectedSell returns null (e.g. missing zone, no rate card row).
+      COALESCE(c.sell_price, c.price) AS stored_sell_price,
       -- total_cost_price: base courier cost + all fuel/surcharge charges for this shipment.
       -- This is the single source of truth for what we expect to pay the carrier.
       -- Set correctly at booking time by pricingEngine / billing.js.
@@ -946,7 +950,7 @@ function sumGroupColumnSurcharges(lines) {
  */
 async function loadCarrierSurcharges(carrierId) {
   const res = await query(
-    `SELECT id, code, name, cost_price, default_value, calc_type
+    `SELECT id, code, name, cost_price, default_value, calc_type, reconciliation_excluded
      FROM   surcharges
      WHERE  courier_id = $1 AND active = true`,
     [carrierId]
@@ -989,6 +993,13 @@ async function insertSurchargeLines(runId, surchargeAmounts, line, trackingNumbe
     const surcharge = surchargeById[surchargeId];
     if (!surcharge) {
       console.warn(`[recon engine] surcharge_amounts has id ${surchargeId} but no matching surcharge definition — skipping`);
+      continue;
+    }
+
+    // Operator-excluded surcharges (e.g. Carriage) are absorbed internally and
+    // must never appear on customer invoices. Skip them entirely.
+    if (surcharge.reconciliation_excluded) {
+      console.log(`[recon engine] Surcharge "${surcharge.name}" (id=${surchargeId}) is reconciliation_excluded — not billing to customer`);
       continue;
     }
 
@@ -1271,16 +1282,17 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
 
   // Produce one surcharge line per named CSV-column surcharge (summed across the group).
   // Uses firstLine for metadata (tracking_number, shipment_date, etc.).
-  // Pass groupCorrSell so percentage surcharges (e.g. fuel/energy) compute correctly.
+  // Pass groupCorrSell (rate-card computed) with fallback to stored sell for percentage surcharges.
   if (colSurchargeTotal > 0 && charge.customer_id) {
     const groupSurchargeAmounts = Object.fromEntries(
       colSurchargeBreakdown.map(({ surcharge_id, amount }) => [surcharge_id, amount])
     );
+    const effectiveSellForGroupSurcharges = groupCorrSell ?? (parseFloat(charge.stored_sell_price) || null);
     await insertSurchargeLines(
       runId, groupSurchargeAmounts, firstLine,
       String(firstLine.tracking_number || '').trim(),
       serviceId, charge.customer_id, charge.charge_id,
-      ctx.surchargeById, ctx.surchargeOverrideCache, groupCorrSell
+      ctx.surchargeById, ctx.surchargeOverrideCache, effectiveSellForGroupSurcharges
     );
   }
 
@@ -1563,11 +1575,15 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       corrected_cost_price:     carrierAmount,
     });
     // Insert separate reconciliation_lines for each named surcharge column.
-    // Pass matchedSell so percentage surcharges compute correctly.
+    // Pass matchedSell (rate-card computed) as the freight sell for percentage
+    // surcharges. Fall back to the charge's stored sell_price when
+    // computeCorrectedSell returned null (e.g. missing zone / no rate card row)
+    // so percentage surcharges still produce a correct sell rather than £9.50 flat.
+    const effectiveSellForSurcharges = matchedSell ?? (parseFloat(charge.stored_sell_price) || null);
     await insertSurchargeLines(
       runId, line.surcharge_amounts, line,
       trackingNumber, serviceId, charge.customer_id, charge.charge_id,
-      ctx.surchargeById, ctx.surchargeOverrideCache, matchedSell
+      ctx.surchargeById, ctx.surchargeOverrideCache, effectiveSellForSurcharges
     );
     return { status: 'matched' };
   }
@@ -1614,11 +1630,12 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       corrected_cost_price:     carrierAmount,  // carrier_amount IS the actual cost
     });
     // Insert separate reconciliation_lines for each named surcharge column.
-    // Pass corrSell so percentage surcharges compute correctly.
+    // Pass corrSell (rate-card computed) with fallback to stored sell for percentage surcharges.
+    const effectiveSellForCorrSurcharges = corrSell ?? (parseFloat(charge.stored_sell_price) || null);
     await insertSurchargeLines(
       runId, line.surcharge_amounts, line,
       trackingNumber, serviceId, charge.customer_id, charge.charge_id,
-      ctx.surchargeById, ctx.surchargeOverrideCache, corrSell
+      ctx.surchargeById, ctx.surchargeOverrideCache, effectiveSellForCorrSurcharges
     );
     return { status: 'corrected' };
   }

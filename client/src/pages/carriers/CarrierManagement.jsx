@@ -2276,6 +2276,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                         <span style={{ fontSize:13, fontWeight:700, color:'#fff' }}>{s.name}</span>
                         <span style={{ ...pill('rgba(233,30,140,0.15)', '#E91E8C'), fontSize:10 }}>{s.code}</span>
                         {s.csv_column && <span style={{ ...pill('rgba(0,188,212,0.1)', '#00BCD4'), fontSize:10 }}>📋 {s.csv_column}</span>}
+                        {s.reconciliation_excluded && <span style={{ ...pill('rgba(255,82,82,0.15)', '#FF5252'), fontSize:10 }}>🚫 hidden from invoices</span>}
                         <span style={{ ...pill(s.active ? 'rgba(0,200,83,0.1)' : 'rgba(255,255,255,0.04)', s.active ? '#00C853' : '#555'), fontSize:10 }}>{s.active ? 'Active' : 'Inactive'}</span>
                       </div>
                       {s.description && <div style={{ fontSize:11, color:'#777', marginTop:2 }}>{s.description}</div>}
@@ -2298,7 +2299,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                     <div style={{ display:'flex', gap:4, alignItems:'center' }}>
                       <button onClick={() => patchSurcharge.mutate({ id:s.id, active:!s.active })} style={{ fontSize:11, padding:'3px 9px', borderRadius:6, border:'none', cursor:'pointer', background: s.active ? 'rgba(255,200,0,0.1)' : 'rgba(0,200,83,0.1)', color: s.active ? '#FFC107' : '#00C853', fontWeight:700 }}>{s.active ? 'Deactivate' : 'Activate'}</button>
                       <button
-                        onClick={() => { if (isEditing) { setEditingSurcharge(null); } else { setEditingSurcharge(s.id); setEditSForm({ code: s.code || '', name: s.name, description: s.description || '', csv_column: s.csv_column || '', default_value: String(s.default_value||0), cost_price: String(s.cost_price ?? s.default_value ?? 0), applies_when: s.applies_when, charge_per: s.charge_per, calc_type: s.calc_type, active: s.active }); } }}
+                        onClick={() => { if (isEditing) { setEditingSurcharge(null); } else { setEditingSurcharge(s.id); setEditSForm({ code: s.code || '', name: s.name, description: s.description || '', csv_column: s.csv_column || '', default_value: String(s.default_value||0), cost_price: String(s.cost_price ?? s.default_value ?? 0), applies_when: s.applies_when, charge_per: s.charge_per, calc_type: s.calc_type, active: s.active, reconciliation_excluded: !!s.reconciliation_excluded }); } }}
                         style={{ background: isEditing ? 'rgba(233,30,140,0.15)' : 'none', border: isEditing ? '1px solid rgba(233,30,140,0.3)' : 'none', cursor:'pointer', color: isEditing ? '#E91E8C' : '#888', padding:'4px 6px', borderRadius:6 }}
                         title="Edit surcharge"
                       ><Edit2 size={13}/></button>
@@ -2349,8 +2350,18 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                           <div className="pill-input-wrap" style={{ height:30 }}><input value={editSForm.description||''} onChange={e => setEditSForm(f=>({...f,description:e.target.value}))} placeholder="Optional notes" style={{ fontSize:12 }}/></div>
                         </div>
                       </div>
+                      {/* Row 5: Hide from invoices toggle */}
+                      <div style={{ marginBottom:12 }}>
+                        <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', userSelect:'none' }}>
+                          <input type="checkbox" checked={!!editSForm.reconciliation_excluded} onChange={e => setEditSForm(f=>({...f,reconciliation_excluded:e.target.checked}))} style={{ width:14, height:14, accentColor:'#FF5252', cursor:'pointer' }}/>
+                          <span style={{ fontSize:12, color: editSForm.reconciliation_excluded ? '#FF5252' : '#888' }}>
+                            Hide from customer invoices
+                            <span style={{ marginLeft:6, fontSize:11, color:'#555', fontStyle:'italic' }}>— carrier cost is tracked but nothing is billed to the customer</span>
+                          </span>
+                        </label>
+                      </div>
                       <div style={{ display:'flex', gap:8 }}>
-                        <button onClick={() => patchSurcharge.mutate({ id:s.id, ...editSForm, code: editSForm.code?.trim().toUpperCase(), name: editSForm.name?.trim(), description: editSForm.description?.trim() || null, csv_column: editSForm.csv_column?.trim() || null, default_value: parseFloat(editSForm.default_value)||0, cost_price: parseFloat(editSForm.cost_price)||0 })} disabled={patchSurcharge.isPending} className="btn-primary" style={{ height:28, fontSize:12, background:'rgba(233,30,140,0.2)', border:'1px solid rgba(233,30,140,0.4)', color:'#E91E8C' }}><Check size={11}/> Save</button>
+                        <button onClick={() => patchSurcharge.mutate({ id:s.id, ...editSForm, code: editSForm.code?.trim().toUpperCase(), name: editSForm.name?.trim(), description: editSForm.description?.trim() || null, csv_column: editSForm.csv_column?.trim() || null, default_value: parseFloat(editSForm.default_value)||0, cost_price: parseFloat(editSForm.cost_price)||0, reconciliation_excluded: !!editSForm.reconciliation_excluded })} disabled={patchSurcharge.isPending} className="btn-primary" style={{ height:28, fontSize:12, background:'rgba(233,30,140,0.2)', border:'1px solid rgba(233,30,140,0.4)', color:'#E91E8C' }}><Check size={11}/> Save</button>
                         <button onClick={() => setEditingSurcharge(null)} className="btn-ghost" style={{ height:28, fontSize:12, padding:'0 10px' }}>Cancel</button>
                       </div>
                     </div>

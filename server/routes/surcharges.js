@@ -84,7 +84,7 @@ router.post('/', async (req, res, next) => {
 
 router.patch('/:id', async (req, res, next) => {
   try {
-    const allowed = ['code', 'name', 'description', 'calc_type', 'calc_base', 'default_value', 'cost_price', 'active', 'applies_when', 'charge_per', 'effective_date', 'csv_column'];
+    const allowed = ['code', 'name', 'description', 'calc_type', 'calc_base', 'default_value', 'cost_price', 'active', 'applies_when', 'charge_per', 'effective_date', 'csv_column', 'reconciliation_excluded'];
     const sets = []; const vals = [];
     for (const k of allowed) {
       if (req.body[k] !== undefined) {
