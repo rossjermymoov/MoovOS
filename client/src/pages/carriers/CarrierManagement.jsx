@@ -2281,12 +2281,8 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                       {s.description && <div style={{ fontSize:11, color:'#777', marginTop:2 }}>{s.description}</div>}
                     </div>
 
-                    {/* Value + firing mode — click to edit */}
-                    <div
-                      onClick={() => { if (!isEditing) { setEditingSurcharge(s.id); setEditSForm({ code: s.code || '', name: s.name, description: s.description || '', csv_column: s.csv_column || '', default_value: String(s.default_value||0), cost_price: String(s.cost_price ?? s.default_value ?? 0), applies_when: s.applies_when, charge_per: s.charge_per, calc_type: s.calc_type, active: s.active }); } }}
-                      style={{ cursor:'pointer', textAlign:'right', padding:'4px 8px', borderRadius:6, background: isEditing ? 'rgba(233,30,140,0.08)' : 'transparent', border: isEditing ? '1px solid rgba(233,30,140,0.25)' : '1px solid transparent' }}
-                      title="Click to edit"
-                    >
+                    {/* Value + firing mode — read-only display */}
+                    <div style={{ textAlign:'right', padding:'4px 8px' }}>
                       <div style={{ fontSize:14, fontWeight:700, color:'#E91E8C', fontFamily:'monospace' }}>{valStr}</div>
                       <div style={{ fontSize:10, color:'#888' }}>
                         per {s.charge_per} · {s.applies_when === 'always' ? '⚡ auto' : '📋 reconciliation'}
@@ -2301,7 +2297,12 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                     {/* Controls */}
                     <div style={{ display:'flex', gap:4, alignItems:'center' }}>
                       <button onClick={() => patchSurcharge.mutate({ id:s.id, active:!s.active })} style={{ fontSize:11, padding:'3px 9px', borderRadius:6, border:'none', cursor:'pointer', background: s.active ? 'rgba(255,200,0,0.1)' : 'rgba(0,200,83,0.1)', color: s.active ? '#FFC107' : '#00C853', fontWeight:700 }}>{s.active ? 'Deactivate' : 'Activate'}</button>
-                      <button onClick={() => setExpandedSurcharge(isExpanded ? null : s.id)} style={{ background:'none', border:'none', cursor:'pointer', color:'#888', padding:'4px 6px' }} title="Rules">{isExpanded ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}</button>
+                      <button
+                        onClick={() => { if (isEditing) { setEditingSurcharge(null); } else { setEditingSurcharge(s.id); setEditSForm({ code: s.code || '', name: s.name, description: s.description || '', csv_column: s.csv_column || '', default_value: String(s.default_value||0), cost_price: String(s.cost_price ?? s.default_value ?? 0), applies_when: s.applies_when, charge_per: s.charge_per, calc_type: s.calc_type, active: s.active }); } }}
+                        style={{ background: isEditing ? 'rgba(233,30,140,0.15)' : 'none', border: isEditing ? '1px solid rgba(233,30,140,0.3)' : 'none', cursor:'pointer', color: isEditing ? '#E91E8C' : '#888', padding:'4px 6px', borderRadius:6 }}
+                        title="Edit surcharge"
+                      ><Edit2 size={13}/></button>
+                      <button onClick={() => setExpandedSurcharge(isExpanded ? null : s.id)} style={{ background:'none', border:'none', cursor:'pointer', color:'#888', padding:'4px 6px' }} title="Trigger rules">{isExpanded ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}</button>
                       <button onClick={() => { if (window.confirm(`Delete "${s.name}"?`)) delSurcharge.mutate(s.id); }} style={{ background:'none', border:'none', cursor:'pointer', color:'#444', padding:'4px 6px' }}><Trash2 size={13}/></button>
                     </div>
                   </div>
