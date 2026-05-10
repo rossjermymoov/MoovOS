@@ -719,8 +719,7 @@ async function handleCarrierDirect({
   // For corrected carrier_direct lines, store any unmapped column values in
   // correction_metadata so CorrectionDetail can show what columns caused the delta.
   // Named surcharges (surcharge_amounts) are no longer baked into carrier_amount,
-  // so they do not explain freight deltas here. TODO: produce separate surcharge
-  // lines for carrier_direct shipments in a future iteration.
+  // so they do not explain freight deltas here.
   let carrierDirectMeta = null;
   if (!isMatch) {
     const rawCols = (line.raw_col_values && Object.keys(line.raw_col_values).length > 0)
@@ -757,6 +756,15 @@ async function handleCarrierDirect({
     corrected_sell_price:     totalSellPrice,
     corrected_cost_price:     totalCostPrice,
   });
+
+  // Insert separate reconciliation_lines for each named CSV-column surcharge.
+  // carrier_direct lines were previously missing these entirely. Pass totalSellPrice
+  // so percentage surcharges (e.g. Fuel/Energy at 9.5%) compute correctly.
+  await insertSurchargeLines(
+    runId, line.surcharge_amounts, line,
+    trackingNumber, serviceId, customer.customer_id, insertedId,
+    ctx.surchargeById, ctx.surchargeOverrideCache, totalSellPrice
+  );
 
   return { status: isMatch ? 'matched' : 'corrected' };
 }
