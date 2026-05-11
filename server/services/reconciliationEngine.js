@@ -975,7 +975,7 @@ function sumGroupColumnSurcharges(lines) {
  */
 async function loadCarrierSurcharges(carrierId) {
   const res = await query(
-    `SELECT id, code, name, cost_price, default_value, calc_type, reconciliation_excluded
+    `SELECT id, code, name, cost_price, default_value, calc_type, charge_per, csv_column, reconciliation_excluded
      FROM   surcharges
      WHERE  courier_id = $1 AND active = true`,
     [carrierId]
@@ -1068,11 +1068,17 @@ async function insertSurchargeLines(runId, surchargeAmounts, line, trackingNumbe
       }
     }
 
+    // For per-parcel surcharges, multiply the unit rate by the invoice parcel count
+    // so the sell matches what the carrier charged (e.g. 15p × 3 parcels = 45p).
+    // Percentage surcharges are unaffected — the freight sell already reflects all parcels.
+    const invoiceParcels = parseInt(line.parcel_count) || 1;
+    const perParcel      = (surcharge.charge_per === 'parcel');
+
     let sellPrice;
     if (isPercent && freightSellPrice != null && freightSellPrice > 0) {
       sellPrice = round2(freightSellPrice * rawDefault / 100);
     } else {
-      sellPrice = round2(rawDefault);
+      sellPrice = round2(rawDefault * (perParcel ? invoiceParcels : 1));
     }
 
     if (customerId) {
@@ -1082,7 +1088,7 @@ async function insertSurchargeLines(runId, surchargeAmounts, line, trackingNumbe
         if (cached !== null) {
           sellPrice = isPercent && freightSellPrice != null && freightSellPrice > 0
             ? round2(freightSellPrice * cached / 100)
-            : round2(cached);
+            : round2(cached * (perParcel ? invoiceParcels : 1));
         }
       } else {
         const ovRes = await query(
@@ -1097,12 +1103,12 @@ async function insertSurchargeLines(runId, surchargeAmounts, line, trackingNumbe
           const pct = parseFloat(overrideVal);
           sellPrice = isPercent && freightSellPrice != null && freightSellPrice > 0
             ? round2(freightSellPrice * pct / 100)
-            : round2(pct);
+            : round2(pct * (perParcel ? invoiceParcels : 1));
         }
       }
     }
 
-    const expectedCost = round2(parseFloat(surcharge.cost_price) || 0);
+    const expectedCost = round2((parseFloat(surcharge.cost_price) || 0) * (perParcel ? invoiceParcels : 1));
     const delta        = round2(carrierAmt - expectedCost);
     const status       = Math.abs(delta) < 0.02 ? 'matched' : 'corrected';
 
