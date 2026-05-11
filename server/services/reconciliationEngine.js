@@ -214,12 +214,21 @@ async function computeCorrectedSell(charge, serviceId, billedWeightKg, parcelCou
     return null;
   }
 
-  const totalSell = Math.round(sellResult.sellPrice * n * 100) / 100;
+  // For all_sub carriers (DPD): parcel 1 = price_first, parcels 2..N = price_sub each.
+  // This matches how billing.js and the finance page compute it at booking time.
+  // Single-parcel or non-all_sub: totalSell = sellPrice × n (n=1 in most cases).
+  let totalSell;
+  if (n > 1 && sellResult.sellSub != null) {
+    totalSell = round2(sellResult.sellPrice + sellResult.sellSub * (n - 1));
+  } else {
+    totalSell = round2(sellResult.sellPrice * n);
+  }
   console.log(
     `[recon engine] correctedSell: customer=${charge.customer_id} service=${serviceCode}` +
     `${sellResult.resolvedCode !== serviceCode ? ` (fallback: ${sellResult.resolvedCode})` : ''} ` +
     `zone="${zoneName}" weight=${billedWeightKg}kg (per_parcel=${perParcelKg}kg × ${n}) ` +
-    `→ sell=£${totalSell}`
+    `price_first=£${sellResult.sellPrice} price_sub=${sellResult.sellSub != null ? `£${sellResult.sellSub}` : 'n/a'} ` +
+    `→ total_sell=£${totalSell}`
   );
   return totalSell;
 }
@@ -646,7 +655,13 @@ async function handleCarrierDirect({
     : pricing.cost_price; // price_first (× N for non-all_sub, or × 1 for single parcel)
 
   const totalCostPrice = round2(perParcelRate * parcelCount);
-  const totalSellPrice = round2((pricing.sell_price ?? perParcelRate) * parcelCount);
+
+  // Sell: price_first for parcel 1 + price_sub for parcels 2..N (all_sub carriers).
+  // Mirrors how billing.js computes sell at booking time.
+  const baseSellFirst = pricing.sell_price ?? perParcelRate;
+  const totalSellPrice = (isAllSub && parcelCount > 1 && pricing.sell_sub != null)
+    ? round2(baseSellFirst + pricing.sell_sub * (parcelCount - 1))
+    : round2(baseSellFirst * parcelCount);
 
   // ── Full diagnostic trace ─────────────────────────────────────────────────
   console.log(

@@ -1097,7 +1097,8 @@ export async function computeGhostCharge(serviceId, customerId, weightKg, postco
     cost_sub:              costResult.costSub,      // price_sub   — per-parcel rate for all_sub carriers; null if not set
     band_label:            costResult.bandLabel,    // e.g. "0–2kg" — for trace/diagnostics
     sell_price:            sellResult?.sellPrice || null,
-    fallback_service_code: fallbackServiceCode,     // propagated for use in correctedSell helpers
+    sell_sub:              sellResult?.sellSub   || null,  // price_sub sell — for all_sub multi-parcel sell calc
+    fallback_service_code: fallbackServiceCode,            // propagated for use in correctedSell helpers
   };
 }
 
