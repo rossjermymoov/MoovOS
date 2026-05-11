@@ -764,7 +764,7 @@ async function handleCarrierDirect({
   await insertSurchargeLines(
     runId, line.surcharge_amounts, line,
     trackingNumber, serviceId, customer.customer_id, insertedId,
-    ctx.surchargeById, ctx.surchargeOverrideCache, totalSellPrice
+    ctx.surchargeById, ctx.surchargeOverrideCache, totalSellPrice, ctx.globallyExcludedColumns
   );
 
   return { status: isMatch ? 'matched' : 'corrected' };
@@ -820,6 +820,21 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   // ── Load surcharge definitions for CSV-column surcharge line production ───
   const surchargeById = await loadCarrierSurcharges(carrierId);
 
+  // ── Load globally excluded CSV column names ───────────────────────────────
+  // If ANY carrier has a surcharge with reconciliation_excluded=true for a given
+  // csv_column, that column is excluded on ALL carriers. This means you only need
+  // to flag e.g. "Carriage" on DPD's surcharge definition — Europa (and any other
+  // carrier billing a "Carriage" CSV column) will also exclude it automatically.
+  const globalExclRes = await query(
+    `SELECT DISTINCT csv_column
+     FROM   surcharges
+     WHERE  reconciliation_excluded = true AND csv_column IS NOT NULL AND csv_column <> ''`
+  );
+  const globallyExcludedColumns = new Set(globalExclRes.rows.map(r => r.csv_column.trim().toLowerCase()));
+  if (globallyExcludedColumns.size > 0) {
+    console.log(`[recon engine] Globally excluded CSV columns: ${[...globallyExcludedColumns].join(', ')}`);
+  }
+
   // ── Run-scoped caches ──────────────────────────────────────────────────────
   const _custCache    = new Map();
   // surcharge override cache: `${customerId}:${surchargeId}` → sell price (number|null)
@@ -829,6 +844,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
     parcelPricing,
     serviceIdToCodeMap,
     surchargeById,
+    globallyExcludedColumns,
     surchargeOverrideCache: _surchargeOverrideCache,
     async customerLookup(accountNumber) {
       if (!accountNumber) return null;
@@ -995,7 +1011,7 @@ async function loadCarrierSurcharges(carrierId) {
  * @param {Map}         overrideCache     run-scoped cache: `${customerId}:${surchargeId}` → override_value
  * @param {number|null} freightSellPrice  customer's freight sell (for percentage surcharges)
  */
-async function insertSurchargeLines(runId, surchargeAmounts, line, trackingNumber, serviceId, customerId, chargeId, surchargeById, overrideCache, freightSellPrice = null) {
+async function insertSurchargeLines(runId, surchargeAmounts, line, trackingNumber, serviceId, customerId, chargeId, surchargeById, overrideCache, freightSellPrice = null, globallyExcludedColumns = new Set()) {
   if (!surchargeAmounts || !Object.keys(surchargeAmounts).length) return;
 
   for (const [surchargeId, rawAmount] of Object.entries(surchargeAmounts)) {
@@ -1005,10 +1021,16 @@ async function insertSurchargeLines(runId, surchargeAmounts, line, trackingNumbe
       continue;
     }
 
-    // Operator-excluded surcharges (e.g. Carriage) are absorbed internally and
-    // must never appear on customer invoices. Skip them entirely.
-    if (surcharge.reconciliation_excluded) {
-      console.log(`[recon engine] Surcharge "${surcharge.name}" (id=${surchargeId}) is reconciliation_excluded — not billing to customer`);
+    // Excluded surcharges (e.g. Carriage) are absorbed internally and must never
+    // appear on customer invoices. Two ways a surcharge can be excluded:
+    //   1. reconciliation_excluded=true on THIS carrier's surcharge definition
+    //   2. The surcharge's csv_column is in the globally excluded set — i.e. ANY
+    //      carrier has flagged that column name as excluded (set it once on DPD,
+    //      it automatically applies to Europa and every other carrier too).
+    const colKey = (surcharge.csv_column || '').trim().toLowerCase();
+    const isExcluded = surcharge.reconciliation_excluded || (colKey && globallyExcludedColumns.has(colKey));
+    if (isExcluded) {
+      console.log(`[recon engine] Surcharge "${surcharge.name}" (id=${surchargeId}) excluded — not billing to customer`);
       continue;
     }
 
@@ -1327,7 +1349,7 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
       runId, groupSurchargeAmounts, firstLine,
       String(firstLine.tracking_number || '').trim(),
       serviceId, charge.customer_id, charge.charge_id,
-      ctx.surchargeById, ctx.surchargeOverrideCache, effectiveSellForGroupSurcharges
+      ctx.surchargeById, ctx.surchargeOverrideCache, effectiveSellForGroupSurcharges, ctx.globallyExcludedColumns
     );
   }
 
@@ -1618,7 +1640,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     await insertSurchargeLines(
       runId, line.surcharge_amounts, line,
       trackingNumber, serviceId, charge.customer_id, charge.charge_id,
-      ctx.surchargeById, ctx.surchargeOverrideCache, effectiveSellForSurcharges
+      ctx.surchargeById, ctx.surchargeOverrideCache, effectiveSellForSurcharges, ctx.globallyExcludedColumns
     );
     return { status: 'matched' };
   }
@@ -1670,7 +1692,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     await insertSurchargeLines(
       runId, line.surcharge_amounts, line,
       trackingNumber, serviceId, charge.customer_id, charge.charge_id,
-      ctx.surchargeById, ctx.surchargeOverrideCache, effectiveSellForCorrSurcharges
+      ctx.surchargeById, ctx.surchargeOverrideCache, effectiveSellForCorrSurcharges, ctx.globallyExcludedColumns
     );
     return { status: 'corrected' };
   }
@@ -1718,7 +1740,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   await insertSurchargeLines(
     runId, line.surcharge_amounts, line,
     trackingNumber, serviceId, charge.customer_id, charge.charge_id,
-    ctx.surchargeById, ctx.surchargeOverrideCache, null
+    ctx.surchargeById, ctx.surchargeOverrideCache, null, ctx.globallyExcludedColumns
   );
   return { status: 'unmatched' };
 }
