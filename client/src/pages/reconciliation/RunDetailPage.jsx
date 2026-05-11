@@ -1282,7 +1282,6 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, runId
         </div>
       )}
     </div>{/* end overflowX wrapper */}
-    </div>{/* end outer wrapper */}
       {traceLine && runId && (
         <TraceModal
           runId={runId}
