@@ -1044,12 +1044,44 @@ async function insertSurchargeLines(runId, surchargeAmounts, line, trackingNumbe
     //      it automatically applies to Europa and every other carrier too).
     const colKey = (surcharge.csv_column || '').trim().toLowerCase();
     const isExcluded = surcharge.reconciliation_excluded || (colKey && globallyExcludedColumns.has(colKey));
+
+    const carrierAmt  = round2(parseFloat(rawAmount) || 0);
+
     if (isExcluded) {
-      console.log(`[recon engine] Surcharge "${surcharge.name}" (id=${surchargeId}) excluded — not billing to customer`);
+      // Absorbed cost line: carrier charged us but we don't pass this on to the customer.
+      // We still record the line so the cost appears in margin/profitability figures.
+      // corrected_sell_price = 0  → no revenue against this line
+      // corrected_cost_price = carrierAmt → full carrier charge sits in our cost base
+      // The customer invoice drill-down filters these out server-side (sell = 0 + surcharge_id set).
+      if (carrierAmt > 0) {
+        console.log(`[recon engine] Surcharge "${surcharge.name}" (id=${surchargeId}) excluded — absorbed as cost only (£${carrierAmt})`);
+        await insertLine(runId, {
+          tracking_number:          trackingNumber,
+          carrier_account_no:       line.account_number || null,
+          raw_service_code:         surcharge.code || surcharge.name,
+          charge_type:              'surcharge',
+          carrier_amount:           carrierAmt,
+          carrier_billed_weight_kg: null,
+          service_id:               serviceId,
+          customer_id:              customerId,
+          charge_id:                chargeId,
+          expected_amount:          carrierAmt,
+          delta:                    0,
+          status:                   'matched',
+          corrected_by:             null,
+          unmatched_reason:         null,
+          source:                   'internal',
+          shipment_date:            line.shipment_date     || null,
+          ship_to_postcode:         line.delivery_postcode || null,
+          ship_to_country:          line.ship_to_country   || null,
+          corrected_sell_price:     0,
+          corrected_cost_price:     carrierAmt,
+          surcharge_id:             surchargeId,
+        });
+      }
       continue;
     }
 
-    const carrierAmt  = round2(parseFloat(rawAmount) || 0);
     if (carrierAmt <= 0) continue;
     const isPercent   = (surcharge.calc_type === 'percentage');
 

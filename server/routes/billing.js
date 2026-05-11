@@ -760,7 +760,13 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData, 
 
     if (!courierId) return; // can't resolve carrier — skip surcharges
 
-    // Step 2: fetch all active auto-apply surcharges for this carrier
+    // Step 2: fetch all active surcharges for this carrier.
+    // Two categories are included:
+    //   a) Normal auto-apply surcharges (applies_when = 'always' / null) — billed to customer.
+    //   b) Absorbed-cost surcharges (reconciliation_excluded = true) — regardless of applies_when.
+    //      These are costs we pay the carrier but never pass on.  We still need a charge row
+    //      so that booking-day cost_price is accurate and profitability figures are correct.
+    //      Their sell price (price) is forced to 0 further down.
     const { rows: surcharges } = await query(`
       SELECT s.*,
              COALESCE((
@@ -771,7 +777,10 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData, 
       FROM surcharges s
       WHERE s.active = true
         AND s.courier_id = $1
-        AND (s.applies_when = 'always' OR s.applies_when IS NULL)
+        AND (
+          (s.applies_when = 'always' OR s.applies_when IS NULL)
+          OR s.reconciliation_excluded = true
+        )
         AND (s.effective_date IS NULL OR s.effective_date <= CURRENT_DATE)
     `, [courierId]);
 
@@ -837,11 +846,17 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData, 
         carrierSurchargeCost = carrierCostRate;
       }
 
+      // Absorbed surcharges (reconciliation_excluded = true, e.g. Carriage) are costs
+      // we pay the carrier but never pass on to the customer.  Set sell price (price) to
+      // zero so they reduce margin correctly without inflating revenue.  The cost still
+      // flows through cost_price so profitability figures are accurate from booking day.
+      const sellPrice = surcharge.reconciliation_excluded ? 0 : price;
+
       await query(`
         INSERT INTO charges
           (shipment_id, customer_id, charge_type, service_name, price, cost_price, price_auto, surcharge_id, parcel_qty)
         VALUES ($1, $2, 'surcharge', $3, $4, $5, true, $6, 1)
-      `, [shipmentId, customerId, surcharge.name, price, carrierSurchargeCost, surcharge.id]);
+      `, [shipmentId, customerId, surcharge.name, sellPrice, carrierSurchargeCost, surcharge.id]);
     }
 
     // ── Fuel group charge ─────────────────────────────────────────────────────
@@ -953,13 +968,17 @@ async function repriceSurchargesForShipment(shipmentId, customerId, dcServiceId,
     }
     if (!courierId) return counts;
 
-    // Get active surcharges for this courier
+    // Get active surcharges for this courier — same two-category logic as applySurcharges:
+    // always-apply surcharges + any absorbed-cost (reconciliation_excluded) surcharges.
     const { rows: surcharges } = await query(`
-      SELECT s.id, s.name, s.calc_type, s.charge_per, s.default_value
+      SELECT s.id, s.name, s.calc_type, s.charge_per, s.default_value, s.reconciliation_excluded
       FROM surcharges s
       WHERE s.active = true
         AND s.courier_id = $1
-        AND (s.applies_when = 'always' OR s.applies_when IS NULL)
+        AND (
+          (s.applies_when = 'always' OR s.applies_when IS NULL)
+          OR s.reconciliation_excluded = true
+        )
         AND (s.effective_date IS NULL OR s.effective_date <= CURRENT_DATE)
     `, [courierId]);
 
@@ -982,9 +1001,12 @@ async function repriceSurchargesForShipment(shipmentId, customerId, dcServiceId,
         ? parseFloat(overrides[0].override_value)
         : parseFloat(surcharge.default_value);
 
-      // Recalculate using current charge_per / calc_type
+      // Recalculate using current charge_per / calc_type.
+      // Absorbed surcharges (reconciliation_excluded) are never billed to customers — sell price = 0.
       let newPrice;
-      if (surcharge.calc_type === 'percentage') {
+      if (surcharge.reconciliation_excluded) {
+        newPrice = 0;
+      } else if (surcharge.calc_type === 'percentage') {
         newPrice = parseFloat(((baseSellPrice || 0) * effectiveValue / 100).toFixed(2));
       } else if (surcharge.charge_per === 'parcel') {
         newPrice = parseFloat((effectiveValue * (parcelQty || 1)).toFixed(2));

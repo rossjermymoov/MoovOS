@@ -1956,6 +1956,11 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
       WHERE  rl.run_id = $1
         AND  rl.status IN ('matched', 'corrected')
         AND  rl.is_fuel = false
+        -- Exclude absorbed-cost surcharge lines (excluded from customer invoices).
+        -- These have surcharge_id set and corrected_sell_price = 0, meaning we absorbed
+        -- the carrier charge internally. They contribute to our cost base / margin but
+        -- must NOT appear as customer invoice line items.
+        AND  NOT (rl.surcharge_id IS NOT NULL AND rl.corrected_sell_price = 0)
         ${custFilter}
       ORDER  BY rl.shipment_date ASC NULLS LAST, rl.tracking_number, rl.charge_type
     `, params);
