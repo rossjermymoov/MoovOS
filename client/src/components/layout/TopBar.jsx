@@ -1,10 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Bell, Calendar, Settings } from 'lucide-react';
 
 export default function TopBar({ userName = 'Ross' }) {
   const [search, setSearch] = useState('');
+  const [now, setNow] = useState(new Date());
 
-  const now = new Date();
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   const dateStr = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
 
