@@ -1151,7 +1151,8 @@ function DeltaCell({ line, onResolveAsSurcharge }) {
 
 // ─── Lines table ──────────────────────────────────────────────────────────────
 function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, runId, courierId }) {
-  const [traceLine, setTraceLine] = useState(null);
+  const [traceLine,      setTraceLine]      = useState(null);
+  const [surchargeFilter, setSurchargeFilter] = useState('all'); // 'all' | 'freight' | surcharge_id
 
   // Load surcharges for this carrier so CorrectionDetail can show names next to amounts.
   // Keyed by surcharge UUID so correction_metadata.col_surcharges can look them up.
@@ -1162,7 +1163,50 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, runId
     staleTime: 5 * 60 * 1000,
   });
   const surchargeLookup = Object.fromEntries(surcharges.map(s => [String(s.id), s]));
+
+  // Build list of surcharge types present in this set of lines (for filter chips).
+  const surchargeTypes = [];
+  const seen = new Set();
+  for (const l of lines) {
+    if (l.surcharge_id && !seen.has(l.surcharge_id)) {
+      seen.add(l.surcharge_id);
+      surchargeTypes.push({ id: String(l.surcharge_id), name: l.surcharge_name || l.raw_service_code || 'Surcharge' });
+    }
+  }
+
+  // Apply filter.
+  const filteredLines = surchargeFilter === 'all'     ? lines
+    : surchargeFilter === 'freight' ? lines.filter(l => !l.surcharge_id)
+    : lines.filter(l => String(l.surcharge_id) === surchargeFilter);
+
+  const pillBase = { display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: '1px solid', userSelect: 'none', transition: 'all 0.1s' };
+  const pill = (active, color = '#79AAFF') => ({
+    ...pillBase,
+    background: active ? `${color}22` : 'transparent',
+    borderColor: active ? `${color}66` : 'rgba(255,255,255,0.1)',
+    color:       active ? color        : '#555',
+  });
+
   return (
+    <div>
+      {/* Surcharge filter — only shown when there are surcharge lines in this set */}
+      {surchargeTypes.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', padding: '10px 4px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: 4 }}>
+          <span style={{ fontSize: 10, color: '#444', textTransform: 'uppercase', letterSpacing: '0.06em', marginRight: 4 }}>Show</span>
+          <span style={pill(surchargeFilter === 'all')} onClick={() => setSurchargeFilter('all')}>All lines</span>
+          <span style={pill(surchargeFilter === 'freight', '#00C853')} onClick={() => setSurchargeFilter('freight')}>Freight only</span>
+          {surchargeTypes.map(s => (
+            <span key={s.id} style={pill(surchargeFilter === s.id, '#00BCD4')} onClick={() => setSurchargeFilter(s.id)}>
+              {s.name}
+            </span>
+          ))}
+          {surchargeFilter !== 'all' && (
+            <span style={{ fontSize: 10, color: '#555', marginLeft: 6 }}>
+              {filteredLines.length} line{filteredLines.length !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+      )}
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
         <thead>
@@ -1173,7 +1217,7 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, runId
           </tr>
         </thead>
         <tbody>
-          {lines.map(line => (
+          {filteredLines.map(line => (
             <tr key={line.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
               <td style={{ padding: '9px 10px', fontFamily: 'monospace', color: '#AAA', fontSize: 10 }}>
                 {line.aged && <span title='Aged' style={{ color: '#FF5252', marginRight: 4 }}>⚠</span>}
@@ -1232,9 +1276,13 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, runId
           ))}
         </tbody>
       </table>
-      {lines.length === 0 && (
-        <div style={{ textAlign: 'center', color: '#555', fontSize: 12, padding: '30px 0' }}>No lines in this category</div>
+      {filteredLines.length === 0 && (
+        <div style={{ textAlign: 'center', color: '#555', fontSize: 12, padding: '30px 0' }}>
+          {surchargeFilter === 'all' ? 'No lines in this category' : 'No lines match this filter'}
+        </div>
       )}
+    </div>{/* end overflowX wrapper */}
+    </div>{/* end outer wrapper */}
       {traceLine && runId && (
         <TraceModal
           runId={runId}
