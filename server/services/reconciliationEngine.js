@@ -1029,12 +1029,15 @@ async function loadCarrierSurcharges(carrierId) {
 async function insertSurchargeLines(runId, surchargeAmounts, line, trackingNumber, serviceId, customerId, chargeId, surchargeById, overrideCache, freightSellPrice = null, globallyExcludedColumns = new Set()) {
   if (!surchargeAmounts || !Object.keys(surchargeAmounts).length) return;
 
+  console.log(`[recon engine] insertSurchargeLines: tracking=${trackingNumber} surchargeIds=[${Object.keys(surchargeAmounts).join(',')}] globallyExcluded=[${[...globallyExcludedColumns].join(',')}]`);
+
   for (const [surchargeId, rawAmount] of Object.entries(surchargeAmounts)) {
     const surcharge = surchargeById[surchargeId];
     if (!surcharge) {
       console.warn(`[recon engine] surcharge_amounts has id ${surchargeId} but no matching surcharge definition — skipping`);
       continue;
     }
+    console.log(`[recon engine]   surcharge id=${surchargeId} name="${surcharge.name}" csv_column="${surcharge.csv_column}" reconciliation_excluded=${surcharge.reconciliation_excluded} rawAmount=${rawAmount}`);
 
     // Excluded surcharges (e.g. Carriage) are absorbed internally and must never
     // appear on customer invoices. Two ways a surcharge can be excluded:
