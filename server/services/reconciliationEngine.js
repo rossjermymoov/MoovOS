@@ -926,19 +926,21 @@ export async function processReconciliationRun(runId, carrierId, lines) {
 
   // ── Finalise run — derive counts from actual DB rows ─────────────────────
   // Use subqueries against reconciliation_lines rather than in-memory counters.
-  // The in-memory counters only track freight/base line results; they miss any
-  // lines inserted by insertSurchargeLines (surcharge lines) and any divergence
-  // in multi-line group paths. Counting from the DB guarantees the number at
-  // the top of the UI always matches the list shown below it.
+  // IMPORTANT: exclude surcharge breakdown lines (surcharge_id IS NOT NULL) —
+  // these are secondary lines produced per named CSV column and are not invoice
+  // rows in their own right. Counting them would inflate totals above total_lines.
+  // Only primary lines (freight, overhead, carrier_direct) reflect invoice rows.
+  // The unmatched check uses ALL lines (including surcharges) so a surcharge
+  // discrepancy still surfaces as needs_review.
   const finalRes = await query(`
     UPDATE reconciliation_runs rr
-    SET matched_count   = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'matched'),
-        corrected_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'corrected'),
+    SET matched_count   = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'matched'   AND surcharge_id IS NULL),
+        corrected_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'corrected' AND surcharge_id IS NULL),
         unmatched_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'unmatched'),
-        ignored_count   = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'ignored'),
+        ignored_count   = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'ignored'   AND surcharge_id IS NULL),
         automation_rate = CASE WHEN rr.total_lines > 0 THEN
           ROUND(
-            (SELECT COUNT(*)::numeric FROM reconciliation_lines WHERE run_id = $1 AND status IN ('matched','corrected'))
+            (SELECT COUNT(*)::numeric FROM reconciliation_lines WHERE run_id = $1 AND status IN ('matched','corrected') AND surcharge_id IS NULL)
             / rr.total_lines * 100, 2
           )
         ELSE 0 END,
