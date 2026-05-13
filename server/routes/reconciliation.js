@@ -1942,11 +1942,24 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
              )
              ELSE COALESCE(rl.corrected_sell_price, 0)
         END                                                                                     AS sell_total,
-        -- Cost: always carrier_amount (the carrier's actual invoice amount for this line).
-        -- This is the only correct source regardless of whether the line is pool-matched,
-        -- corrected, or carrier_direct. Weight corrections and service corrections are already
-        -- reflected in carrier_amount. Charges.cost_price is a booking-time estimate only.
-        rl.carrier_amount                                                                       AS cost_total
+        -- Cost: carrier_amount for this line, PLUS any absorbed-cost surcharge lines for the
+        -- same tracking number in this run (e.g. Carriage Surcharge that is excluded from
+        -- customer invoices but is a real carrier cost). Absorbed lines are filtered from
+        -- display (see WHERE clause below) so we fold their cost into the freight line here
+        -- to ensure margin = sell_total - cost_total is accurate.
+        -- Only applies to freight lines (surcharge_id IS NULL); visible surcharge lines
+        -- already carry their own carrier_amount so no absorption needed there.
+        CASE WHEN rl.surcharge_id IS NULL
+             THEN rl.carrier_amount + COALESCE((
+               SELECT SUM(abs_line.carrier_amount)
+               FROM   reconciliation_lines abs_line
+               WHERE  abs_line.run_id          = rl.run_id
+                 AND  abs_line.tracking_number = rl.tracking_number
+                 AND  abs_line.surcharge_id    IS NOT NULL
+                 AND  abs_line.corrected_sell_price = 0
+             ), 0)
+             ELSE rl.carrier_amount
+        END                                                                                     AS cost_total
       FROM   reconciliation_lines rl
       LEFT JOIN courier_services cs ON cs.id         = rl.service_id
       -- Only join charge_prices for freight base lines — surcharge lines share charge_id
