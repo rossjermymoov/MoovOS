@@ -2374,10 +2374,17 @@ router.get('/runs/:id/lines/:lineId/trace', async (req, res) => {
         rl.*,
         cs.name          AS service_name,
         cs.service_code  AS service_code_internal,
-        cu.business_name AS customer_name
+        cu.business_name AS customer_name,
+        s.name           AS surcharge_name,
+        s.cost_price     AS surcharge_cost_price,
+        s.default_value  AS surcharge_default_value,
+        s.calc_type      AS surcharge_calc_type,
+        s.csv_column     AS surcharge_csv_column,
+        s.reconciliation_excluded AS surcharge_excluded
       FROM   reconciliation_lines rl
       LEFT JOIN courier_services cs ON cs.id = rl.service_id
       LEFT JOIN customers        cu ON cu.id = rl.customer_id
+      LEFT JOIN surcharges       s  ON s.id  = rl.surcharge_id
       WHERE  rl.id = $1 AND rl.run_id = $2
     `, [lineId, runId]);
 
@@ -2552,6 +2559,23 @@ router.get('/runs/:id/lines/:lineId/trace', async (req, res) => {
         statusExplain = `Status: ${line.status}, corrected_by: ${line.corrected_by || 'none'}`;
       }
       steps.push({ phase: 'Status Decision', result: line.status.toUpperCase(), detail: statusExplain });
+
+      // Surcharge detail — shown when this line is a surcharge line
+      if (line.surcharge_id) {
+        const sName    = line.surcharge_name    || '(unknown)';
+        const sCost    = line.surcharge_cost_price != null ? `£${parseFloat(line.surcharge_cost_price).toFixed(2)}` : 'not set';
+        const sSell    = line.surcharge_default_value != null ? `${line.surcharge_default_value}${line.surcharge_calc_type === 'percentage' ? '%' : ' (£)'}` : 'not set';
+        const sCol     = line.surcharge_csv_column || 'not mapped';
+        const sExcl    = line.surcharge_excluded ? 'YES — absorbed internally, never billed to customer' : 'NO — billed to customer';
+        const costWarn = line.surcharge_cost_price != null && Math.abs(parseFloat(line.surcharge_cost_price) - expectedAmount) < 0.02
+          ? ''
+          : ` ⚠ cost_price (${sCost}) does not match stored expected_amount (£${expectedAmount.toFixed(2)}) — may indicate a data entry error`;
+        steps.push({
+          phase:  'Surcharge Definition',
+          result: line.surcharge_id,
+          detail: `Surcharge: "${sName}" | CSV column: "${sCol}" | cost_price: ${sCost}${costWarn} | sell default: ${sSell} | excluded: ${sExcl}`,
+        });
+      }
 
       // Correction metadata if present
       if (line.correction_metadata) {
