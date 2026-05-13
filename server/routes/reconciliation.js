@@ -2562,18 +2562,31 @@ router.get('/runs/:id/lines/:lineId/trace', async (req, res) => {
 
       // Surcharge detail — shown when this line is a surcharge line
       if (line.surcharge_id) {
-        const sName    = line.surcharge_name    || '(unknown)';
-        const sCost    = line.surcharge_cost_price != null ? `£${parseFloat(line.surcharge_cost_price).toFixed(2)}` : 'not set';
-        const sSell    = line.surcharge_default_value != null ? `${line.surcharge_default_value}${line.surcharge_calc_type === 'percentage' ? '%' : ' (£)'}` : 'not set';
-        const sCol     = line.surcharge_csv_column || 'not mapped';
-        const sExcl    = line.surcharge_excluded ? 'YES — absorbed internally, never billed to customer' : 'NO — billed to customer';
-        const costWarn = line.surcharge_cost_price != null && Math.abs(parseFloat(line.surcharge_cost_price) - expectedAmount) < 0.02
-          ? ''
-          : ` ⚠ cost_price (${sCost}) does not match stored expected_amount (£${expectedAmount.toFixed(2)}) — may indicate a data entry error`;
+        const sName      = line.surcharge_name    || '(unknown)';
+        const isPercSurch = line.surcharge_calc_type === 'percentage';
+        const costRate    = line.surcharge_cost_price != null ? parseFloat(line.surcharge_cost_price) : null;
+        // For percentage surcharges cost_price is a carrier % rate, not a flat £ amount.
+        // Display it as such and show the derived expected alongside for clarity.
+        const sCost = costRate == null
+          ? 'not set'
+          : isPercSurch
+            ? `${costRate}% of freight (→ expected £${expectedAmount.toFixed(2)})`
+            : `£${costRate.toFixed(2)}`;
+        const sSell = line.surcharge_default_value != null
+          ? `${line.surcharge_default_value}${isPercSurch ? '%' : ' (£)'}`
+          : 'not set';
+        const sCol  = line.surcharge_csv_column || 'not mapped';
+        const sExcl = line.surcharge_excluded ? 'YES — absorbed internally, never billed to customer' : 'NO — billed to customer';
+        // Only warn about data entry errors on flat surcharges — for percentage
+        // surcharges cost_price is a rate so comparing it to expected_amount (a £ value)
+        // is meaningless and always produces a false positive.
+        const costWarn = (!isPercSurch && costRate != null && Math.abs(costRate - expectedAmount) >= 0.02)
+          ? ` ⚠ cost_price (£${costRate.toFixed(2)}) does not match stored expected_amount (£${expectedAmount.toFixed(2)}) — may indicate a data entry error`
+          : '';
         steps.push({
           phase:  'Surcharge Definition',
           result: line.surcharge_id,
-          detail: `Surcharge: "${sName}" | CSV column: "${sCol}" | cost_price: ${sCost}${costWarn} | sell default: ${sSell} | excluded: ${sExcl}`,
+          detail: `Surcharge: "${sName}" | CSV column: "${sCol}" | carrier cost: ${sCost}${costWarn} | sell default: ${sSell} | excluded: ${sExcl}`,
         });
       }
 
