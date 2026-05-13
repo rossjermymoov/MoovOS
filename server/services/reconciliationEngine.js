@@ -773,13 +773,12 @@ async function handleCarrierDirect({
   });
 
   // Insert separate reconciliation_lines for each named CSV-column surcharge.
-  // carrier_direct lines were previously missing these entirely. Pass totalSellPrice
-  // so percentage surcharges (e.g. Fuel/Energy) compute correctly against the
-  // rate-card sell — the actual percentage comes from surcharges.default_value per carrier.
+  // Pass totalSellPrice (sell) and carrierAmount (cost) so percentage surcharges
+  // compute both sides correctly against the actual freight amounts.
   await insertSurchargeLines(
     runId, line.surcharge_amounts, line,
     trackingNumber, serviceId, customer.customer_id, insertedId,
-    ctx.surchargeById, ctx.surchargeOverrideCache, totalSellPrice, ctx.globallyExcludedColumns
+    ctx.surchargeById, ctx.surchargeOverrideCache, totalSellPrice, ctx.globallyExcludedColumns, carrierAmount
   );
 
   return { status: isMatch ? 'matched' : 'corrected' };
@@ -1009,27 +1008,29 @@ async function loadCarrierSurcharges(carrierId) {
  * corrected_sell_price is set to the customer's override (if any) or the
  * surcharge's default_value — this is what we will charge the customer.
  *
- * For surcharges with calc_type = 'percentage', default_value is a percentage
- * (e.g. 9.5 = 9.5%) applied to the customer's freight sell price. An override
- * for these surcharges is also treated as a percentage unless the override is a
- * fixed-amount value. freightSellPrice must be passed so the percentage can be
- * computed correctly.
+ * For surcharges with calc_type = 'percentage':
+ *   - default_value (sell side): percentage applied to the customer's freight sell
+ *     e.g. 9.5 → we charge Europa 9.5% of freight
+ *   - cost_price (cost side): percentage the carrier charges US on the freight base
+ *     e.g. 3.72 → DPD charges Moov 3.72% of freight as fuel
+ *   Both interpretations match how billing.js computes these at booking time.
+ *   freightSellPrice and freightCarrierAmount must be passed for these to work correctly.
  *
  * @param {number}      runId
- * @param {Object}      surchargeAmounts  { [surcharge_id]: amount }
- * @param {Object}      line              the parsed invoice line (for metadata)
+ * @param {Object}      surchargeAmounts     { [surcharge_id]: amount }
+ * @param {Object}      line                 the parsed invoice line (for metadata)
  * @param {string}      trackingNumber
  * @param {number|null} serviceId
  * @param {string|null} customerId
  * @param {number|null} chargeId
- * @param {Object}      surchargeById     preloaded map from loadCarrierSurcharges
- * @param {Map}         overrideCache     run-scoped cache: `${customerId}:${surchargeId}` → override_value
- * @param {number|null} freightSellPrice  customer's freight sell (for percentage surcharges)
+ * @param {Object}      surchargeById        preloaded map from loadCarrierSurcharges
+ * @param {Map}         overrideCache        run-scoped cache: `${customerId}:${surchargeId}` → override_value
+ * @param {number|null} freightSellPrice     customer's freight sell (for percentage sell computation)
+ * @param {Set}         globallyExcludedColumns
+ * @param {number|null} freightCarrierAmount carrier's freight base amount (for percentage cost computation)
  */
-async function insertSurchargeLines(runId, surchargeAmounts, line, trackingNumber, serviceId, customerId, chargeId, surchargeById, overrideCache, freightSellPrice = null, globallyExcludedColumns = new Set()) {
+async function insertSurchargeLines(runId, surchargeAmounts, line, trackingNumber, serviceId, customerId, chargeId, surchargeById, overrideCache, freightSellPrice = null, globallyExcludedColumns = new Set(), freightCarrierAmount = null) {
   if (!surchargeAmounts || !Object.keys(surchargeAmounts).length) return;
-
-  console.log(`[recon engine] insertSurchargeLines: tracking=${trackingNumber} surchargeIds=[${Object.keys(surchargeAmounts).join(',')}] globallyExcluded=[${[...globallyExcludedColumns].join(',')}]`);
 
   for (const [surchargeId, rawAmount] of Object.entries(surchargeAmounts)) {
     const surcharge = surchargeById[surchargeId];
@@ -1037,7 +1038,6 @@ async function insertSurchargeLines(runId, surchargeAmounts, line, trackingNumbe
       console.warn(`[recon engine] surcharge_amounts has id ${surchargeId} but no matching surcharge definition — skipping`);
       continue;
     }
-    console.log(`[recon engine]   surcharge id=${surchargeId} name="${surcharge.name}" csv_column="${surcharge.csv_column}" reconciliation_excluded=${surcharge.reconciliation_excluded} rawAmount=${rawAmount}`);
 
     // Excluded surcharges (e.g. Carriage) are absorbed internally and must never
     // appear on customer invoices. Two ways a surcharge can be excluded:
@@ -1158,9 +1158,19 @@ async function insertSurchargeLines(runId, surchargeAmounts, line, trackingNumbe
       }
     }
 
-    const expectedCost = round2((parseFloat(surcharge.cost_price) || 0) * (perParcel ? invoiceParcels : 1));
-    const delta        = round2(carrierAmt - expectedCost);
-    const status       = Math.abs(delta) < 0.02 ? 'matched' : 'corrected';
+    // Expected cost mirrors billing.js applySurcharges exactly:
+    //   - percentage surcharges: cost_price is a carrier % rate → expectedCost = freight × rate / 100
+    //   - flat surcharges: cost_price is a £ amount → expectedCost = cost_price × parcelCount
+    // This ensures the recon engine and the booking engine agree on what we expect to pay.
+    const costRate = parseFloat(surcharge.cost_price) || 0;
+    let expectedCost;
+    if (isPercent && freightCarrierAmount != null && freightCarrierAmount > 0) {
+      expectedCost = round2(freightCarrierAmount * costRate / 100);
+    } else {
+      expectedCost = round2(costRate * (perParcel ? invoiceParcels : 1));
+    }
+    const delta  = round2(carrierAmt - expectedCost);
+    const status = Math.abs(delta) < 0.02 ? 'matched' : 'corrected';
 
     await insertLine(runId, {
       tracking_number:          trackingNumber,
@@ -1405,7 +1415,7 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
       runId, groupSurchargeAmounts, firstLine,
       String(firstLine.tracking_number || '').trim(),
       serviceId, charge.customer_id, charge.charge_id,
-      ctx.surchargeById, ctx.surchargeOverrideCache, effectiveSellForGroupSurcharges, ctx.globallyExcludedColumns
+      ctx.surchargeById, ctx.surchargeOverrideCache, effectiveSellForGroupSurcharges, ctx.globallyExcludedColumns, totalCarrierAmount
     );
   }
 
@@ -1696,7 +1706,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     await insertSurchargeLines(
       runId, line.surcharge_amounts, line,
       trackingNumber, serviceId, charge.customer_id, charge.charge_id,
-      ctx.surchargeById, ctx.surchargeOverrideCache, effectiveSellForSurcharges, ctx.globallyExcludedColumns
+      ctx.surchargeById, ctx.surchargeOverrideCache, effectiveSellForSurcharges, ctx.globallyExcludedColumns, carrierAmount
     );
     return { status: 'matched' };
   }
@@ -1748,7 +1758,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     await insertSurchargeLines(
       runId, line.surcharge_amounts, line,
       trackingNumber, serviceId, charge.customer_id, charge.charge_id,
-      ctx.surchargeById, ctx.surchargeOverrideCache, effectiveSellForCorrSurcharges, ctx.globallyExcludedColumns
+      ctx.surchargeById, ctx.surchargeOverrideCache, effectiveSellForCorrSurcharges, ctx.globallyExcludedColumns, carrierAmount
     );
     return { status: 'corrected' };
   }
@@ -1793,10 +1803,11 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   // independently priced and their sell values are still needed for billing.
   // Freight sell is null for unmatched lines; percentage surcharges will produce
   // a zero sell (no sell known without a matched rate card hit on the freight).
+  // We do pass carrierAmount so the cost side (expected) is still computed correctly.
   await insertSurchargeLines(
     runId, line.surcharge_amounts, line,
     trackingNumber, serviceId, charge.customer_id, charge.charge_id,
-    ctx.surchargeById, ctx.surchargeOverrideCache, null, ctx.globallyExcludedColumns
+    ctx.surchargeById, ctx.surchargeOverrideCache, null, ctx.globallyExcludedColumns, carrierAmount
   );
   return { status: 'unmatched' };
 }
