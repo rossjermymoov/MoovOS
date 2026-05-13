@@ -924,38 +924,52 @@ export async function processReconciliationRun(runId, carrierId, lines) {
     }
   }
 
-  // ── Calculate automation rate ─────────────────────────────────────────────
-  const total          = reconcilableLines.length;
-  const autoResolved   = matched + corrected;
-  const automationRate = total > 0 ? round2((autoResolved / total) * 100) : 0;
-
-  // ── Finalise run ──────────────────────────────────────────────────────────
-  const overallStatus = unmatched > 0 ? 'needs_review' : 'complete';
-
-  await query(`
-    UPDATE reconciliation_runs
-    SET status          = $2,
-        matched_count   = $3,
-        corrected_count = $4,
-        unmatched_count = $5,
-        ignored_count   = $6,
-        automation_rate = $7,
+  // ── Finalise run — derive counts from actual DB rows ─────────────────────
+  // Use subqueries against reconciliation_lines rather than in-memory counters.
+  // The in-memory counters only track freight/base line results; they miss any
+  // lines inserted by insertSurchargeLines (surcharge lines) and any divergence
+  // in multi-line group paths. Counting from the DB guarantees the number at
+  // the top of the UI always matches the list shown below it.
+  const finalRes = await query(`
+    UPDATE reconciliation_runs rr
+    SET matched_count   = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'matched'),
+        corrected_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'corrected'),
+        unmatched_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'unmatched'),
+        ignored_count   = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'ignored'),
+        automation_rate = CASE WHEN rr.total_lines > 0 THEN
+          ROUND(
+            (SELECT COUNT(*)::numeric FROM reconciliation_lines WHERE run_id = $1 AND status IN ('matched','corrected'))
+            / rr.total_lines * 100, 2
+          )
+        ELSE 0 END,
+        status          = CASE
+          WHEN (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'unmatched') > 0
+          THEN 'needs_review' ELSE 'complete' END,
         completed_at    = NOW()
-    WHERE id = $1
-  `, [runId, overallStatus, matched, corrected, unmatched, ignored, automationRate]);
+    WHERE  rr.id = $1
+    RETURNING matched_count, corrected_count, unmatched_count, ignored_count, automation_rate, status
+  `, [runId]);
+
+  const fin = finalRes.rows[0] || {};
+  const dbMatched    = parseInt(fin.matched_count)   || 0;
+  const dbCorrected  = parseInt(fin.corrected_count) || 0;
+  const dbUnmatched  = parseInt(fin.unmatched_count) || 0;
+  const dbIgnored    = parseInt(fin.ignored_count)   || 0;
+  const overallStatus = fin.status || (dbUnmatched > 0 ? 'needs_review' : 'complete');
+  const automationRate = parseFloat(fin.automation_rate) || 0;
 
   console.log(`[recon engine] Run ${runId} complete in ${Date.now() - startTime}ms — ` +
-    `${matched} matched, ${corrected} corrected, ${unmatched} unmatched, ` +
-    `${skippedCount} aggregate skipped, automation: ${automationRate}%`);
+    `${dbMatched} matched, ${dbCorrected} corrected, ${dbUnmatched} unmatched, ${dbIgnored} ignored, ` +
+    `${skippedCount} aggregate skipped, automation: ${automationRate}% (in-memory: ${matched}m/${corrected}c/${unmatched}u)`);
 
   return {
     run_id:          runId,
     status:          overallStatus,
-    total:           total,
-    matched:         matched,
-    corrected:       corrected,
-    unmatched:       unmatched,
-    ignored:         ignored,
+    total:           reconcilableLines.length,
+    matched:         dbMatched,
+    corrected:       dbCorrected,
+    unmatched:       dbUnmatched,
+    ignored:         dbIgnored,
     automation_rate: automationRate,
     pool_size:       poolSize,
     duration_ms:     Date.now() - startTime,
@@ -1723,6 +1737,53 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       ctx.surchargeById, ctx.surchargeOverrideCache, effectiveSellForSurcharges, ctx.globallyExcludedColumns, carrierAmount
     );
     return { status: 'matched' };
+  }
+
+  // ── Phase 3b: Undercharge Rule ────────────────────────────────────────────
+  // If the carrier billed LESS than we expected, that's in our favour.
+  // Accept it automatically — no need for operator review.
+  // We still record the line so the cost sits correctly in margin figures,
+  // and use carrier_amount (not expected) as the actual cost on record.
+  if (delta < -0.02) {
+    console.log(
+      `[recon engine] UNDERCHARGE: tracking=${trackingNumber} ` +
+      `carrier=£${carrierAmount} expected=£${fullExpected} delta=£${delta} — auto-accepted`
+    );
+    const billedKg       = parseFloat(line.billed_weight_kg) || parseFloat(charge.declared_weight_kg) || 0;
+    const invoiceParcels = parseInt(line.parcel_count) || 1;
+    const underchargeSell = billedKg > 0
+      ? await computeCorrectedSell(charge, serviceId, billedKg, invoiceParcels, ctx.serviceIdToCodeMap)
+      : null;
+    await insertLine(runId, {
+      tracking_number:          trackingNumber,
+      carrier_account_no:       line.account_number    || null,
+      raw_service_code:         rawServiceCode,
+      charge_type:              line.charge_type       || 'base',
+      carrier_amount:           carrierAmount,
+      carrier_billed_weight_kg: billedKg || null,
+      service_id:               serviceId,
+      customer_id:              charge.customer_id,
+      charge_id:                charge.charge_id,
+      expected_amount:          fullExpected,
+      delta:                    delta,
+      status:                   'corrected',
+      corrected_by:             'carrier_undercharge',
+      unmatched_reason:         null,
+      source:                   'internal',
+      shipment_date:            line.shipment_date     || null,
+      ship_to_postcode:         line.delivery_postcode || null,
+      ship_to_country:          line.ship_to_country   || null,
+      parcel_count:             invoiceParcels > 1 ? invoiceParcels : null,
+      corrected_sell_price:     underchargeSell,
+      corrected_cost_price:     carrierAmount,
+    });
+    const effectiveSellForUndSurcharges = underchargeSell ?? (parseFloat(charge.stored_sell_price) || null);
+    await insertSurchargeLines(
+      runId, line.surcharge_amounts, line,
+      trackingNumber, serviceId, charge.customer_id, charge.charge_id,
+      ctx.surchargeById, ctx.surchargeOverrideCache, effectiveSellForUndSurcharges, ctx.globallyExcludedColumns, carrierAmount
+    );
+    return { status: 'corrected' };
   }
 
   // ── Phase 4a: Mapping Engine ──────────────────────────────────────────────

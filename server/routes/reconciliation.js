@@ -2553,6 +2553,8 @@ router.get('/runs/:id/lines/:lineId/trace', async (req, res) => {
         statusExplain = `Delta £${delta.toFixed(2)} explained by column surcharges → CORRECTED (column_surcharge)`;
       } else if (line.corrected_by === 'mapping') {
         statusExplain = `Delta £${delta.toFixed(2)} explained by saved mapping → CORRECTED (mapping)`;
+      } else if (line.corrected_by === 'carrier_undercharge') {
+        statusExplain = `Delta £${delta.toFixed(2)} — carrier billed LESS than expected (undercharge) → auto-accepted, no review needed → CORRECTED (carrier_undercharge)`;
       } else if (line.status === 'unmatched') {
         statusExplain = `Delta £${delta.toFixed(2)} — neither rate card nor saved mapping explains it → UNMATCHED (${line.unmatched_reason || 'unknown'})`;
       } else {
