@@ -722,64 +722,54 @@ async function handleCarrierDirect({
     }
   }
 
-  const expectedAmount = totalCostPrice;
-  const delta          = round2(carrierAmount - expectedAmount);
-  const isMatch        = Math.abs(delta) < 0.02;
+  const cdParcels  = parcelCount > 1 ? parcelCount : 1;
+  const rollup     = buildSurchargeRollup(
+    line.surcharge_amounts, ctx.surchargeById, carrierAmount, cdParcels, ctx.globallyExcludedColumns
+  );
+  const totalCarrierFull  = round2(carrierAmount   + rollup.addCarrierAmt);
+  const totalExpectedFull = round2(totalCostPrice  + rollup.addExpectedCost);
+  const delta   = round2(totalCarrierFull - totalExpectedFull);
+  const isMatch = Math.abs(delta) < 0.02;
 
   console.log(
     `[carrier-direct] charge id=${insertedId}: ` +
-    `expected=£${expectedAmount} carrier=£${carrierAmount} delta=£${delta} sell=£${totalSellPrice} → ${isMatch ? 'MATCHED' : 'CORRECTED'}`
+    `expected=£${totalExpectedFull} carrier=£${totalCarrierFull} delta=£${delta} sell=£${totalSellPrice} → ${isMatch ? 'MATCHED' : 'CORRECTED'}`
   );
 
-  // For corrected carrier_direct lines, store any unmapped column values in
-  // correction_metadata so CorrectionDetail can show what columns caused the delta.
-  // Named surcharges (surcharge_amounts) are no longer baked into carrier_amount,
-  // so they do not explain freight deltas here.
-  let carrierDirectMeta = null;
+  let cdMeta = null;
   if (!isMatch) {
-    const rawCols = (line.raw_col_values && Object.keys(line.raw_col_values).length > 0)
-      ? line.raw_col_values
-      : null;
-    if (rawCols) {
-      carrierDirectMeta = { raw_col_values: rawCols };
-    }
+    const rawCols = (line.raw_col_values && Object.keys(line.raw_col_values).length > 0) ? line.raw_col_values : null;
+    if (rawCols) cdMeta = { raw_col_values: rawCols };
   }
+  const addSell  = await resolveSurchargeSells(rollup.items, totalSellPrice, cdParcels, ctx.surchargeOverrideCache, customer.customer_id, serviceId);
+  const finalSell = round2(totalSellPrice + addSell);
+  const sMeta     = surchargeMeta(rollup.items);
+  const combinedMeta = (cdMeta || sMeta) ? { ...cdMeta, ...sMeta } : null;
 
   await insertLine(runId, {
     tracking_number:          trackingNumber,
     carrier_account_no:       line.account_number    || null,
     raw_service_code:         rawServiceCode,
     charge_type:              line.charge_type       || 'base',
-    carrier_amount:           carrierAmount,
+    carrier_amount:           totalCarrierFull,
     carrier_billed_weight_kg: kg,
     service_id:               serviceId,
     customer_id:              customer.customer_id,
     charge_id:                insertedId,
-    expected_amount:          expectedAmount,
-    delta:                    delta,
+    expected_amount:          totalExpectedFull,
+    delta,
     status:                   isMatch ? 'matched' : 'corrected',
     corrected_by:             isMatch ? null : 'carrier_direct',
     unmatched_reason:         null,
     source:                   'carrier_direct',
     shipment_date:            line.shipment_date     || null,
     ship_to_postcode:         postcode               || null,
-    ship_to_country:          countryIso             || null,
+    ship_to_country:          countryIso             || 'GB',
     parcel_count:             parcelCount > 1 ? parcelCount : null,
-    correction_metadata:      carrierDirectMeta,
-    // Always set sell/cost so billing preview shows correct margin even for
-    // carrier_direct lines that have no pool charge to fall back on.
-    corrected_sell_price:     totalSellPrice,
-    corrected_cost_price:     totalCostPrice,
+    correction_metadata:      combinedMeta,
+    corrected_sell_price:     finalSell,
+    corrected_cost_price:     totalCarrierFull,
   });
-
-  // Insert separate reconciliation_lines for each named CSV-column surcharge.
-  // Pass totalSellPrice (sell) and carrierAmount (cost) so percentage surcharges
-  // compute both sides correctly against the actual freight amounts.
-  await insertSurchargeLines(
-    runId, line.surcharge_amounts, line,
-    trackingNumber, serviceId, customer.customer_id, insertedId,
-    ctx.surchargeById, ctx.surchargeOverrideCache, totalSellPrice, ctx.globallyExcludedColumns, carrierAmount
-  );
 
   return { status: isMatch ? 'matched' : 'corrected' };
 }
@@ -926,21 +916,17 @@ export async function processReconciliationRun(runId, carrierId, lines) {
 
   // ── Finalise run — derive counts from actual DB rows ─────────────────────
   // Use subqueries against reconciliation_lines rather than in-memory counters.
-  // IMPORTANT: exclude surcharge breakdown lines (surcharge_id IS NOT NULL) —
-  // these are secondary lines produced per named CSV column and are not invoice
-  // rows in their own right. Counting them would inflate totals above total_lines.
-  // Only primary lines (freight, overhead, carrier_direct) reflect invoice rows.
-  // The unmatched check uses ALL lines (including surcharges) so a surcharge
-  // discrepancy still surfaces as needs_review.
+  // With the rollup architecture there are no separate surcharge rows — each
+  // shipment produces exactly one reconciliation_line, so all rows count equally.
   const finalRes = await query(`
     UPDATE reconciliation_runs rr
-    SET matched_count   = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'matched'   AND surcharge_id IS NULL),
-        corrected_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'corrected' AND surcharge_id IS NULL),
+    SET matched_count   = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'matched'),
+        corrected_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'corrected'),
         unmatched_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'unmatched'),
-        ignored_count   = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'ignored'   AND surcharge_id IS NULL),
+        ignored_count   = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'ignored'),
         automation_rate = CASE WHEN rr.total_lines > 0 THEN
           ROUND(
-            (SELECT COUNT(*)::numeric FROM reconciliation_lines WHERE run_id = $1 AND status IN ('matched','corrected') AND surcharge_id IS NULL)
+            (SELECT COUNT(*)::numeric FROM reconciliation_lines WHERE run_id = $1 AND status IN ('matched','corrected'))
             / rr.total_lines * 100, 2
           )
         ELSE 0 END,
@@ -1016,107 +1002,80 @@ async function loadCarrierSurcharges(carrierId) {
   return byId;
 }
 
-/**
- * Insert one reconciliation_line per entry in surchargeAmounts.
- *
- * Each line represents the carrier's actual surcharge amount (from a named CSV
- * column) versus the expected cost_price stored on the surcharge definition.
- * corrected_sell_price is set to the customer's override (if any) or the
- * surcharge's default_value — this is what we will charge the customer.
- *
- * For surcharges with calc_type = 'percentage':
- *   - default_value (sell side): percentage applied to the customer's freight sell
- *     e.g. 9.5 → we charge Europa 9.5% of freight
- *   - cost_price (cost side): percentage the carrier charges US on the freight base
- *     e.g. 3.72 → DPD charges Moov 3.72% of freight as fuel
- *   Both interpretations match how billing.js computes these at booking time.
- *   freightSellPrice and freightCarrierAmount must be passed for these to work correctly.
- *
- * @param {number}      runId
- * @param {Object}      surchargeAmounts     { [surcharge_id]: amount }
- * @param {Object}      line                 the parsed invoice line (for metadata)
- * @param {string}      trackingNumber
- * @param {number|null} serviceId
- * @param {string|null} customerId
- * @param {number|null} chargeId
- * @param {Object}      surchargeById        preloaded map from loadCarrierSurcharges
- * @param {Map}         overrideCache        run-scoped cache: `${customerId}:${surchargeId}` → override_value
- * @param {number|null} freightSellPrice     customer's freight sell (for percentage sell computation)
- * @param {Set}         globallyExcludedColumns
- * @param {number|null} freightCarrierAmount carrier's freight base amount (for percentage cost computation)
- */
-async function insertSurchargeLines(runId, surchargeAmounts, line, trackingNumber, serviceId, customerId, chargeId, surchargeById, overrideCache, freightSellPrice = null, globallyExcludedColumns = new Set(), freightCarrierAmount = null) {
-  if (!surchargeAmounts || !Object.keys(surchargeAmounts).length) return;
+// ─── Surcharge Rollup ─────────────────────────────────────────────────────────
+// One shipment = one reconciliation line.
+// Surcharge amounts are rolled into the freight line totals rather than
+// producing separate rows.  buildSurchargeRollup (sync) computes carrier
+// amounts and expected costs; resolveSurchargeSells (async) adds sell prices
+// once the freight sell is known.
 
+/**
+ * @param {Object}      surchargeAmounts   { [surcharge_id]: amount }
+ * @param {Object}      surchargeById      preloaded map
+ * @param {number}      freightCarrierAmt  carrier's freight-only amount (percentage base)
+ * @param {number}      invoiceParcels     for per-parcel flat surcharges
+ * @param {Set}         globallyExcludedColumns
+ * @returns {{ addCarrierAmt, addExpectedCost, items }}
+ */
+function buildSurchargeRollup(surchargeAmounts, surchargeById, freightCarrierAmt, invoiceParcels, globallyExcludedColumns) {
+  if (!surchargeAmounts || !Object.keys(surchargeAmounts).length) {
+    return { addCarrierAmt: 0, addExpectedCost: 0, items: [] };
+  }
+
+  const items = [];
   for (const [surchargeId, rawAmount] of Object.entries(surchargeAmounts)) {
     const surcharge = surchargeById[surchargeId];
     if (!surcharge) {
       console.warn(`[recon engine] surcharge_amounts has id ${surchargeId} but no matching surcharge definition — skipping`);
       continue;
     }
-
-    // Excluded surcharges (e.g. Carriage) are absorbed internally and must never
-    // appear on customer invoices. Two ways a surcharge can be excluded:
-    //   1. reconciliation_excluded=true on THIS carrier's surcharge definition
-    //   2. The surcharge's csv_column is in the globally excluded set — i.e. ANY
-    //      carrier has flagged that column name as excluded (set it once on DPD,
-    //      it automatically applies to Europa and every other carrier too).
-    const colKey = (surcharge.csv_column || '').trim().toLowerCase();
-    const isExcluded = surcharge.reconciliation_excluded || (colKey && globallyExcludedColumns.has(colKey));
-
-    const carrierAmt  = round2(parseFloat(rawAmount) || 0);
-
-    if (isExcluded) {
-      // Absorbed cost line: carrier charged us but we don't pass this on to the customer.
-      // We still record the line so the cost appears in margin/profitability figures.
-      // corrected_sell_price = 0  → no revenue against this line
-      // corrected_cost_price = carrierAmt → full carrier charge sits in our cost base
-      // The customer invoice drill-down filters these out server-side (sell = 0 + surcharge_id set).
-      if (carrierAmt > 0) {
-        console.log(`[recon engine] Surcharge "${surcharge.name}" (id=${surchargeId}) excluded — absorbed as cost only (£${carrierAmt})`);
-        await insertLine(runId, {
-          tracking_number:          trackingNumber,
-          carrier_account_no:       line.account_number || null,
-          raw_service_code:         surcharge.code || surcharge.name,
-          charge_type:              'surcharge',
-          carrier_amount:           carrierAmt,
-          carrier_billed_weight_kg: null,
-          service_id:               serviceId,
-          customer_id:              customerId,
-          charge_id:                chargeId,
-          expected_amount:          carrierAmt,
-          delta:                    0,
-          status:                   'matched',
-          corrected_by:             null,
-          unmatched_reason:         null,
-          source:                   'internal',
-          shipment_date:            line.shipment_date     || null,
-          ship_to_postcode:         line.delivery_postcode || null,
-          ship_to_country:          line.ship_to_country   || null,
-          corrected_sell_price:     0,
-          corrected_cost_price:     carrierAmt,
-          surcharge_id:             surchargeId,
-        });
-      }
-      continue;
-    }
-
+    const colKey     = (surcharge.csv_column || '').trim().toLowerCase();
+    const isAbsorbed = surcharge.reconciliation_excluded || (colKey && globallyExcludedColumns.has(colKey));
+    const carrierAmt = round2(parseFloat(rawAmount) || 0);
     if (carrierAmt <= 0) continue;
-    const isPercent   = (surcharge.calc_type === 'percentage');
+    items.push({ surchargeId, surcharge, carrierAmt, isAbsorbed });
+  }
 
-    // Resolve the sell percentage for percentage surcharges.
-    // Priority:
-    //   1. Customer-level override (customer_surcharge_overrides)     — checked below
-    //   2. Fuel group sell_pct for this service + customer             — authoritative
-    //      (same source the booking engine uses: COALESCE(customer_fuel_group_pricing.sell_pct,
-    //       fuel_groups.standard_sell_pct))
-    //   3. surcharge.default_value                                    — fallback only
-    //
-    // Using the fuel group means reconciliation billing stays consistent with
-    // booking-time pricing. e.g. Europa domestic fuel group = 7.9%, DPD = 9.5%.
+  const addCarrierAmt = round2(items.reduce((s, i) => s + i.carrierAmt, 0));
+
+  let addExpectedCost = 0;
+  for (const item of items) {
+    const { surcharge, surchargeId, carrierAmt, isAbsorbed } = item;
+    if (isAbsorbed) {
+      item.expectedCost = carrierAmt;
+    } else {
+      const isPercent = surcharge.calc_type === 'percentage';
+      const perParcel  = surcharge.charge_per === 'parcel';
+      const costRate   = parseFloat(surcharge.cost_price) || 0;
+      if (isPercent && freightCarrierAmt > 0) {
+        const otherTotal = items.filter(i => i.surchargeId !== surchargeId).reduce((s, i) => s + i.carrierAmt, 0);
+        item.expectedCost = round2((freightCarrierAmt + otherTotal) * costRate / 100);
+      } else {
+        item.expectedCost = round2(costRate * (perParcel ? invoiceParcels : 1));
+      }
+    }
+    addExpectedCost += item.expectedCost;
+  }
+
+  return { addCarrierAmt, addExpectedCost: round2(addExpectedCost), items };
+}
+
+/**
+ * Resolve sell prices for rollup items (async — DB lookups for fuel group + overrides).
+ * Mutates item.sellPrice in place and returns the total sell addition.
+ */
+async function resolveSurchargeSells(items, freightSellPrice, invoiceParcels, overrideCache, customerId, serviceId) {
+  if (!items.length) return 0;
+  let addSellAmt = 0;
+  for (const item of items) {
+    if (item.isAbsorbed) { item.sellPrice = 0; continue; }
+    const { surcharge, surchargeId } = item;
+    const isPercent = surcharge.calc_type === 'percentage';
+    const perParcel  = surcharge.charge_per === 'parcel';
+
     let rawDefault = parseFloat(surcharge.default_value) || 0;
     if (isPercent && serviceId) {
-      const fuelGroupRes = await query(
+      const fgRes = await query(
         `SELECT COALESCE(cfgp.sell_pct, fg.standard_sell_pct) AS sell_pct
          FROM   courier_services cs
          JOIN   fuel_groups fg ON fg.id = cs.fuel_group_id
@@ -1125,27 +1084,15 @@ async function insertSurchargeLines(runId, surchargeAmounts, line, trackingNumbe
          WHERE  cs.id = $1`,
         [serviceId, customerId]
       );
-      if (fuelGroupRes.rows[0]?.sell_pct != null) {
-        const fuelPct = parseFloat(fuelGroupRes.rows[0].sell_pct);
-        if (fuelPct > 0) {
-          console.log(`[recon engine] Surcharge "${surcharge.name}": using fuel_group sell_pct=${fuelPct}% (overrides default_value=${rawDefault}%)`);
-          rawDefault = fuelPct;
-        }
+      if (fgRes.rows[0]?.sell_pct != null) {
+        const fp = parseFloat(fgRes.rows[0].sell_pct);
+        if (fp > 0) rawDefault = fp;
       }
     }
 
-    // For per-parcel surcharges, multiply the unit rate by the invoice parcel count
-    // so the sell matches what the carrier charged (e.g. 15p × 3 parcels = 45p).
-    // Percentage surcharges are unaffected — the freight sell already reflects all parcels.
-    const invoiceParcels = parseInt(line.parcel_count) || 1;
-    const perParcel      = (surcharge.charge_per === 'parcel');
-
-    let sellPrice;
-    if (isPercent && freightSellPrice != null && freightSellPrice > 0) {
-      sellPrice = round2(freightSellPrice * rawDefault / 100);
-    } else {
-      sellPrice = round2(rawDefault * (perParcel ? invoiceParcels : 1));
-    }
+    let sellPrice = isPercent && freightSellPrice != null && freightSellPrice > 0
+      ? round2(freightSellPrice * rawDefault / 100)
+      : round2(rawDefault * (perParcel ? invoiceParcels : 1));
 
     if (customerId) {
       const cacheKey = `${customerId}:${surchargeId}`;
@@ -1159,14 +1106,13 @@ async function insertSurchargeLines(runId, surchargeAmounts, line, trackingNumbe
       } else {
         const ovRes = await query(
           `SELECT override_value FROM customer_surcharge_overrides
-           WHERE  surcharge_id = $1 AND customer_id = $2 AND active = true
-           LIMIT  1`,
+           WHERE  surcharge_id = $1 AND customer_id = $2 AND active = true LIMIT 1`,
           [surchargeId, customerId]
         );
-        const overrideVal = ovRes.rows[0]?.override_value ?? null;
-        overrideCache.set(cacheKey, overrideVal !== null ? parseFloat(overrideVal) : null);
-        if (overrideVal !== null) {
-          const pct = parseFloat(overrideVal);
+        const ov = ovRes.rows[0]?.override_value ?? null;
+        overrideCache.set(cacheKey, ov !== null ? parseFloat(ov) : null);
+        if (ov !== null) {
+          const pct = parseFloat(ov);
           sellPrice = isPercent && freightSellPrice != null && freightSellPrice > 0
             ? round2(freightSellPrice * pct / 100)
             : round2(pct * (perParcel ? invoiceParcels : 1));
@@ -1174,63 +1120,26 @@ async function insertSurchargeLines(runId, surchargeAmounts, line, trackingNumbe
       }
     }
 
-    // Expected cost for percentage surcharges:
-    //   DPD (and most carriers) apply their fuel/energy surcharge as a percentage
-    //   of the TOTAL carrier charges on the invoice row — freight PLUS all other
-    //   surcharges (residential, extended area, etc.) — not just the base freight.
-    //
-    //   e.g. freight £5.34 + residential £2.00 + extended £3.95 = £11.29
-    //        fuel @ 3.72%: £11.29 × 3.72% = £0.42  ✓
-    //        (computing against freight only: £5.34 × 3.72% = £0.20  ✗ — too low)
-    //
-    //   We sum all the other surcharge amounts from the same invoice row
-    //   (excluding this surcharge itself) and add them to freightCarrierAmount
-    //   to get the correct base.
-    //
-    //   Flat surcharges: cost_price is a £ amount → expectedCost = cost_price × parcelCount
-    const costRate = parseFloat(surcharge.cost_price) || 0;
-    let expectedCost;
-    if (isPercent && freightCarrierAmount != null && freightCarrierAmount > 0) {
-      const otherSurchargesTotal = Object.entries(surchargeAmounts)
-        .filter(([id]) => id !== surchargeId)
-        .reduce((sum, [, amt]) => sum + (round2(parseFloat(amt) || 0)), 0);
-      const totalCarrierBase = freightCarrierAmount + otherSurchargesTotal;
-      expectedCost = round2(totalCarrierBase * costRate / 100);
-    } else {
-      expectedCost = round2(costRate * (perParcel ? invoiceParcels : 1));
-    }
-    const delta  = round2(carrierAmt - expectedCost);
-    const status = Math.abs(delta) < 0.02 ? 'matched' : 'corrected';
-
-    await insertLine(runId, {
-      tracking_number:          trackingNumber,
-      carrier_account_no:       line.account_number || null,
-      raw_service_code:         surcharge.code || surcharge.name,
-      charge_type:              'surcharge',
-      carrier_amount:           carrierAmt,
-      carrier_billed_weight_kg: null,
-      service_id:               serviceId,
-      customer_id:              customerId,
-      charge_id:                chargeId,
-      expected_amount:          expectedCost,
-      delta:                    delta,
-      status:                   status,
-      corrected_by:             status === 'corrected' ? 'surcharge_column' : null,
-      unmatched_reason:         null,
-      source:                   'internal',
-      shipment_date:            line.shipment_date     || null,
-      ship_to_postcode:         line.delivery_postcode || null,
-      ship_to_country:          line.ship_to_country   || null,
-      corrected_sell_price:     sellPrice,
-      corrected_cost_price:     carrierAmt,
-      surcharge_id:             surchargeId,
-    });
-
-    console.log(
-      `[recon engine] Surcharge line: tracking=${trackingNumber} surcharge="${surcharge.name}" ` +
-      `carrier=£${carrierAmt} expected=£${expectedCost} sell=£${sellPrice} → ${status}`
-    );
+    item.sellPrice = sellPrice;
+    addSellAmt += sellPrice;
+    console.log(`[recon engine] Surcharge rollup: "${surcharge.name}" carrier=£${item.carrierAmt} expected=£${item.expectedCost} sell=£${sellPrice}`);
   }
+  return round2(addSellAmt);
+}
+
+/** Build correction_metadata surcharge block from rollup items. */
+function surchargeMeta(items) {
+  if (!items.length) return null;
+  return {
+    surcharges: items.map(i => ({
+      name:          i.surcharge.name,
+      csv_column:    i.surcharge.csv_column || null,
+      carrier_amt:   i.carrierAmt,
+      expected_cost: i.expectedCost,
+      sell_price:    i.sellPrice ?? null,
+      absorbed:      i.isAbsorbed,
+    })),
+  };
 }
 
 async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings, ctx) {
@@ -1354,16 +1263,19 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
   );
 
   // ── Bucket and Bill comparison ─────────────────────────────────────────────
-  // expected = what we booked the shipment for (set at booking time by billing.js).
-  // Surcharge amounts from named CSV columns (surcharge_amounts) are no longer
-  // baked into carrier_amount — they produce their own reconciliation_lines via
-  // insertSurchargeLines() below, so the freight delta compares base vs base only.
-  const expectedBase   = round2(parseFloat(charge.total_cost_price) || 0);
-  const { total: colSurchargeTotal, breakdown: colSurchargeBreakdown } = sumGroupColumnSurcharges(group);
-  const fullExpected   = round2(expectedBase);
-  const delta          = round2(totalCarrierAmount - fullExpected);
+  const expectedBase      = round2(parseFloat(charge.total_cost_price) || 0);
+  const groupSurchargeMap = Object.fromEntries(
+    sumGroupColumnSurcharges(group).breakdown.map(({ surcharge_id, amount }) => [surcharge_id, amount])
+  );
+  const groupParcels = freightLines.reduce((s, l) => s + (parseInt(l.parcel_count) || 1), 0);
+  const rollup       = buildSurchargeRollup(
+    groupSurchargeMap, ctx.surchargeById, totalCarrierAmount, groupParcels, ctx.globallyExcludedColumns
+  );
+  const totalCarrierFull  = round2(totalCarrierAmount + rollup.addCarrierAmt);
+  const totalExpectedFull = round2(expectedBase        + rollup.addExpectedCost);
+  const delta             = round2(totalCarrierFull    - totalExpectedFull);
 
-  firstLine._expected_amount = fullExpected;
+  firstLine._expected_amount = totalExpectedFull;
 
   let groupStatus     = 'unmatched';
   let correctedBy     = null;
@@ -1371,11 +1283,11 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
   let unmatchedReason = null;
 
   if (Math.abs(delta) < 0.02) {
-    // GREEN — carrier charged within £0.01 of what we booked.
     groupStatus = 'matched';
-
+  } else if (delta < -0.02) {
+    groupStatus = 'corrected';
+    correctedBy = 'carrier_undercharge';
   } else {
-    // Phase 4a — Mapping Engine
     const mappingResult = applyMappings(mappings, firstLine, delta);
     if (mappingResult?.applied) {
       await query(
@@ -1385,71 +1297,48 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
       groupStatus = 'corrected';
       correctedBy = 'mapping';
       mappingId   = mappingResult.mappingId;
-
     } else {
-      // RED — unexplained delta.
       groupStatus     = 'unmatched';
       unmatchedReason = 'price_mismatch';
     }
   }
 
-  // Recompute customer sell at the billed weight for matched and corrected groups.
-  // This ensures billing preview is accurate regardless of what sell_price was
-  // stored on the charge at booking time (e.g. carrier_direct charges created before
-  // a rate card was loaded may have sell_price = cost_price as a fallback).
-  let groupCorrSell = null;
-  let groupCorrCost = null;
-  if (groupStatus === 'matched' || groupStatus === 'corrected') {
-    // Fall back to declared_weight_kg when invoice has no weight column (e.g. DPD/Europa).
-    const groupBilledKg  = parseFloat(firstLine.billed_weight_kg) || parseFloat(charge.declared_weight_kg) || 0;
-    const groupParcels   = freightLines.reduce((s, l) => s + (parseInt(l.parcel_count) || 1), 0);
+  let groupFreightSell = null;
+  if (groupStatus !== 'unmatched') {
+    const groupBilledKg = parseFloat(firstLine.billed_weight_kg) || parseFloat(charge.declared_weight_kg) || 0;
     if (groupBilledKg > 0) {
-      groupCorrSell = await computeCorrectedSell(charge, serviceId, groupBilledKg, groupParcels, ctx.serviceIdToCodeMap);
+      groupFreightSell = await computeCorrectedSell(charge, serviceId, groupBilledKg, groupParcels, ctx.serviceIdToCodeMap);
     }
-    groupCorrCost = totalCarrierAmount;
   }
+  const addSell   = await resolveSurchargeSells(rollup.items, groupFreightSell, groupParcels, ctx.surchargeOverrideCache, charge.customer_id, serviceId);
+  const totalSell = groupFreightSell != null ? round2(groupFreightSell + addSell) : null;
+  const sMeta     = surchargeMeta(rollup.items);
 
-  for (const line of freightLines) {
-    await insertLine(runId, {
-      tracking_number:          String(line.tracking_number || '').trim(),
-      carrier_account_no:       line.account_number || null,
-      raw_service_code:         rawServiceCode,
-      charge_type:              line.charge_type || 'base',
-      carrier_amount:           round2(parseFloat(line.carrier_amount) || 0),
-      carrier_billed_weight_kg: line.billed_weight_kg || null,
-      service_id:               serviceId,
-      customer_id:              charge.customer_id,
-      charge_id:                charge.charge_id,
-      expected_amount:          fullExpected,
-      delta:                    delta,
-      status:                   groupStatus,
-      corrected_by:             correctedBy,
-      unmatched_reason:         unmatchedReason,
-      source:                   'internal',
-      shipment_date:            line.shipment_date || null,
-      mapping_id:               mappingId,
-      corrected_sell_price:     groupCorrSell,
-      corrected_cost_price:     groupCorrCost,
-    });
-  }
+  await insertLine(runId, {
+    tracking_number:          String(firstLine.tracking_number || '').trim(),
+    carrier_account_no:       firstLine.account_number || null,
+    raw_service_code:         rawServiceCode,
+    charge_type:              firstLine.charge_type || 'base',
+    carrier_amount:           totalCarrierFull,
+    carrier_billed_weight_kg: firstLine.billed_weight_kg || null,
+    service_id:               serviceId,
+    customer_id:              charge.customer_id,
+    charge_id:                charge.charge_id,
+    expected_amount:          totalExpectedFull,
+    delta,
+    status:                   groupStatus,
+    corrected_by:             correctedBy,
+    unmatched_reason:         unmatchedReason,
+    source:                   'internal',
+    shipment_date:            firstLine.shipment_date || null,
+    mapping_id:               mappingId,
+    parcel_count:             groupParcels > 1 ? groupParcels : null,
+    corrected_sell_price:     totalSell,
+    corrected_cost_price:     groupStatus !== 'unmatched' ? totalCarrierFull : null,
+    correction_metadata:      sMeta,
+  });
 
-  // Produce one surcharge line per named CSV-column surcharge (summed across the group).
-  // Uses firstLine for metadata (tracking_number, shipment_date, etc.).
-  // Pass groupCorrSell (rate-card computed) with fallback to stored sell for percentage surcharges.
-  if (colSurchargeTotal > 0 && charge.customer_id) {
-    const groupSurchargeAmounts = Object.fromEntries(
-      colSurchargeBreakdown.map(({ surcharge_id, amount }) => [surcharge_id, amount])
-    );
-    const effectiveSellForGroupSurcharges = groupCorrSell ?? (parseFloat(charge.stored_sell_price) || null);
-    await insertSurchargeLines(
-      runId, groupSurchargeAmounts, firstLine,
-      String(firstLine.tracking_number || '').trim(),
-      serviceId, charge.customer_id, charge.charge_id,
-      ctx.surchargeById, ctx.surchargeOverrideCache, effectiveSellForGroupSurcharges, ctx.globallyExcludedColumns, totalCarrierAmount
-    );
-  }
-
-  return [...results, ...freightLines.map(() => ({ status: groupStatus }))];
+  return [...results, { status: groupStatus }];
 }
 
 // ─── Process a single line ────────────────────────────────────────────────────
@@ -1606,9 +1495,8 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   // This is what we booked the shipment for. We trust it completely.
   // No weight band re-derivation. No zone lookup. No rate card comparison.
   //
-  // Named CSV-column surcharges (surcharge_amounts) are now handled separately:
-  // each surcharge produces its own reconciliation_line via insertSurchargeLines().
-  // carrier_amount is the freight base ONLY (surcharges no longer baked in).
+  // Named CSV-column surcharges (surcharge_amounts) are rolled up into this single
+  // shipment line via buildSurchargeRollup — no separate rows are produced.
   const charge       = poolHits[0];
   // separate_fuel_rows: carrier bills fuel/carriage/energy as separate invoice
   // rows, so the freight row's carrier_amount = base only. Compare against
@@ -1681,41 +1569,40 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   } else {
     expectedBase = round2(parseFloat(charge.total_cost_price) || 0);
   }
-  const fullExpected = round2(expectedBase);
-  const delta        = round2(carrierAmount - fullExpected);
-
+  const fullExpected    = round2(expectedBase);
   line._expected_amount = fullExpected;
 
+  // Roll up all named CSV-column surcharges into the single shipment line.
+  const invoiceParcels = parseInt(line.parcel_count) || 1;
+  const rollup         = buildSurchargeRollup(
+    line.surcharge_amounts, ctx.surchargeById, carrierAmount, invoiceParcels, ctx.globallyExcludedColumns
+  );
+  const totalCarrier  = round2(carrierAmount + rollup.addCarrierAmt);
+  const totalExpected = round2(fullExpected  + rollup.addExpectedCost);
+  const delta         = round2(totalCarrier  - totalExpected);
+
   if (Math.abs(delta) < 0.02) {
-    // GREEN — carrier charged within £0.01 of what we booked.
-    //
-    // Always compute corrected_sell_price from the rate card at the invoiced weight,
-    // even for matched lines. This ensures billing preview is accurate regardless of
-    // what sell_price was stored on the charge at booking time (charges created via
-    // carrier_direct before a rate card was loaded may have sell_price = cost_price).
-    //
-    // Fall back to declared_weight_kg (from shipment) when the carrier invoice does
-    // not include a weight column (e.g. DPD/Europa invoices omit weight).
-    const billedKg       = parseFloat(line.billed_weight_kg) || parseFloat(charge.declared_weight_kg) || 0;
-    const invoiceParcels = parseInt(line.parcel_count) || 1;
+    const billedKg    = parseFloat(line.billed_weight_kg) || parseFloat(charge.declared_weight_kg) || 0;
     if (!parseFloat(line.billed_weight_kg) && billedKg > 0) {
       console.log(`[recon engine] matchedSell: no invoice weight for ${trackingNumber} — using declared_weight_kg=${billedKg}kg`);
     }
-    const matchedSell = billedKg > 0
+    const freightSell = billedKg > 0
       ? await computeCorrectedSell(charge, serviceId, billedKg, invoiceParcels, ctx.serviceIdToCodeMap)
       : null;
+    const addSell  = await resolveSurchargeSells(rollup.items, freightSell, invoiceParcels, ctx.surchargeOverrideCache, charge.customer_id, serviceId);
+    const totalSell = freightSell != null ? round2(freightSell + addSell) : null;
     await insertLine(runId, {
       tracking_number:          trackingNumber,
       carrier_account_no:       line.account_number    || null,
       raw_service_code:         rawServiceCode,
       charge_type:              line.charge_type       || 'base',
-      carrier_amount:           carrierAmount,
+      carrier_amount:           totalCarrier,
       carrier_billed_weight_kg: billedKg || null,
       service_id:               serviceId,
       customer_id:              charge.customer_id,
       charge_id:                charge.charge_id,
-      expected_amount:          fullExpected,
-      delta:                    delta,
+      expected_amount:          totalExpected,
+      delta,
       status:                   'matched',
       corrected_by:             null,
       unmatched_reason:         null,
@@ -1724,50 +1611,34 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       ship_to_postcode:         line.delivery_postcode || null,
       ship_to_country:          line.ship_to_country   || null,
       parcel_count:             invoiceParcels > 1 ? invoiceParcels : null,
-      corrected_sell_price:     matchedSell,
-      corrected_cost_price:     carrierAmount,
+      corrected_sell_price:     totalSell,
+      corrected_cost_price:     totalCarrier,
+      correction_metadata:      surchargeMeta(rollup.items),
     });
-    // Insert separate reconciliation_lines for each named surcharge column.
-    // Pass matchedSell (rate-card computed) as the freight sell for percentage
-    // surcharges. Fall back to the charge's stored sell_price when
-    // computeCorrectedSell returned null (e.g. missing zone / no rate card row)
-    // so percentage surcharges still produce a correct sell rather than £9.50 flat.
-    const effectiveSellForSurcharges = matchedSell ?? (parseFloat(charge.stored_sell_price) || null);
-    await insertSurchargeLines(
-      runId, line.surcharge_amounts, line,
-      trackingNumber, serviceId, charge.customer_id, charge.charge_id,
-      ctx.surchargeById, ctx.surchargeOverrideCache, effectiveSellForSurcharges, ctx.globallyExcludedColumns, carrierAmount
-    );
     return { status: 'matched' };
   }
 
-  // ── Phase 3b: Undercharge Rule ────────────────────────────────────────────
-  // If the carrier billed LESS than we expected, that's in our favour.
-  // Accept it automatically — no need for operator review.
-  // We still record the line so the cost sits correctly in margin figures,
-  // and use carrier_amount (not expected) as the actual cost on record.
+  // Phase 3b: Undercharge Rule
   if (delta < -0.02) {
-    console.log(
-      `[recon engine] UNDERCHARGE: tracking=${trackingNumber} ` +
-      `carrier=£${carrierAmount} expected=£${fullExpected} delta=£${delta} — auto-accepted`
-    );
-    const billedKg       = parseFloat(line.billed_weight_kg) || parseFloat(charge.declared_weight_kg) || 0;
-    const invoiceParcels = parseInt(line.parcel_count) || 1;
-    const underchargeSell = billedKg > 0
+    console.log(`[recon engine] UNDERCHARGE: tracking=${trackingNumber} carrier=£${totalCarrier} expected=£${totalExpected} delta=£${delta} — auto-accepted`);
+    const billedKg    = parseFloat(line.billed_weight_kg) || parseFloat(charge.declared_weight_kg) || 0;
+    const freightSell = billedKg > 0
       ? await computeCorrectedSell(charge, serviceId, billedKg, invoiceParcels, ctx.serviceIdToCodeMap)
       : null;
+    const addSell   = await resolveSurchargeSells(rollup.items, freightSell, invoiceParcels, ctx.surchargeOverrideCache, charge.customer_id, serviceId);
+    const totalSell  = freightSell != null ? round2(freightSell + addSell) : null;
     await insertLine(runId, {
       tracking_number:          trackingNumber,
       carrier_account_no:       line.account_number    || null,
       raw_service_code:         rawServiceCode,
       charge_type:              line.charge_type       || 'base',
-      carrier_amount:           carrierAmount,
+      carrier_amount:           totalCarrier,
       carrier_billed_weight_kg: billedKg || null,
       service_id:               serviceId,
       customer_id:              charge.customer_id,
       charge_id:                charge.charge_id,
-      expected_amount:          fullExpected,
-      delta:                    delta,
+      expected_amount:          totalExpected,
+      delta,
       status:                   'corrected',
       corrected_by:             'carrier_undercharge',
       unmatched_reason:         null,
@@ -1776,47 +1647,38 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       ship_to_postcode:         line.delivery_postcode || null,
       ship_to_country:          line.ship_to_country   || null,
       parcel_count:             invoiceParcels > 1 ? invoiceParcels : null,
-      corrected_sell_price:     underchargeSell,
-      corrected_cost_price:     carrierAmount,
+      corrected_sell_price:     totalSell,
+      corrected_cost_price:     totalCarrier,
+      correction_metadata:      surchargeMeta(rollup.items),
     });
-    const effectiveSellForUndSurcharges = underchargeSell ?? (parseFloat(charge.stored_sell_price) || null);
-    await insertSurchargeLines(
-      runId, line.surcharge_amounts, line,
-      trackingNumber, serviceId, charge.customer_id, charge.charge_id,
-      ctx.surchargeById, ctx.surchargeOverrideCache, effectiveSellForUndSurcharges, ctx.globallyExcludedColumns, carrierAmount
-    );
     return { status: 'corrected' };
   }
 
-  // ── Phase 4a: Mapping Engine ──────────────────────────────────────────────
+  // Phase 4a: Mapping Engine
   const mappingResult = applyMappings(mappings, line, delta);
   if (mappingResult?.applied) {
     await query(
       `UPDATE reconciliation_mappings SET applied_count = applied_count + 1, last_applied_at = NOW() WHERE id = $1`,
       [mappingResult.mappingId]
     );
-    // Carrier billed a different amount than expected (explained by a mapping rule).
-    // Recompute the customer sell price at the carrier's billed weight so the billing
-    // preview and finalization use the correct post-reconciliation sell, not the
-    // booking-time sell at the declared weight. Fall back to declared_weight_kg when
-    // the carrier invoice does not include a weight column (e.g. DPD/Europa).
-    const billedKg       = parseFloat(line.billed_weight_kg) || parseFloat(charge.declared_weight_kg) || 0;
-    const invoiceParcels = parseInt(line.parcel_count) || 1;
-    const corrSell = billedKg > 0
+    const billedKg    = parseFloat(line.billed_weight_kg) || parseFloat(charge.declared_weight_kg) || 0;
+    const freightSell = billedKg > 0
       ? await computeCorrectedSell(charge, serviceId, billedKg, invoiceParcels, ctx.serviceIdToCodeMap)
       : null;
+    const addSell   = await resolveSurchargeSells(rollup.items, freightSell, invoiceParcels, ctx.surchargeOverrideCache, charge.customer_id, serviceId);
+    const totalSell  = freightSell != null ? round2(freightSell + addSell) : null;
     await insertLine(runId, {
       tracking_number:          trackingNumber,
       carrier_account_no:       line.account_number    || null,
       raw_service_code:         rawServiceCode,
       charge_type:              line.charge_type       || 'base',
-      carrier_amount:           carrierAmount,
+      carrier_amount:           totalCarrier,
       carrier_billed_weight_kg: billedKg || null,
       service_id:               serviceId,
       customer_id:              charge.customer_id,
       charge_id:                charge.charge_id,
-      expected_amount:          fullExpected,
-      delta:                    delta,
+      expected_amount:          totalExpected,
+      delta,
       status:                   'corrected',
       corrected_by:             'mapping',
       unmatched_reason:         null,
@@ -1826,46 +1688,30 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       ship_to_country:          line.ship_to_country   || null,
       parcel_count:             invoiceParcels > 1 ? invoiceParcels : null,
       mapping_id:               mappingResult.mappingId,
-      corrected_sell_price:     corrSell,
-      corrected_cost_price:     carrierAmount,  // carrier_amount IS the actual cost
+      corrected_sell_price:     totalSell,
+      corrected_cost_price:     totalCarrier,
+      correction_metadata:      surchargeMeta(rollup.items),
     });
-    // Insert separate reconciliation_lines for each named surcharge column.
-    // Pass corrSell (rate-card computed) with fallback to stored sell for percentage surcharges.
-    const effectiveSellForCorrSurcharges = corrSell ?? (parseFloat(charge.stored_sell_price) || null);
-    await insertSurchargeLines(
-      runId, line.surcharge_amounts, line,
-      trackingNumber, serviceId, charge.customer_id, charge.charge_id,
-      ctx.surchargeById, ctx.surchargeOverrideCache, effectiveSellForCorrSurcharges, ctx.globallyExcludedColumns, carrierAmount
-    );
     return { status: 'corrected' };
   }
 
-  // ── RED — unexplained price difference ────────────────────────────────────
-  // The carrier charged a different amount than what we booked.
-  // The delta is real and must be reviewed by the operator.
-  console.log(
-    `[recon engine] UNMATCHED: tracking=${trackingNumber} ` +
-    `carrier=£${carrierAmount} expected=£${fullExpected} delta=£${delta}`
-  );
-
-  // Store any unmapped CSV column values in correction_metadata so the UI can
-  // show the operator exactly which column is causing the delta (e.g. "Oversized/Overweight: £6.00").
-  const rawColMeta = (line.raw_col_values && Object.keys(line.raw_col_values).length > 0)
-    ? { raw_col_values: line.raw_col_values }
-    : null;
-
+  // RED — unexplained price difference
+  console.log(`[recon engine] UNMATCHED: tracking=${trackingNumber} carrier=£${totalCarrier} expected=£${totalExpected} delta=£${delta}`);
+  const rawColMeta   = (line.raw_col_values && Object.keys(line.raw_col_values).length > 0) ? { raw_col_values: line.raw_col_values } : null;
+  const sMeta        = surchargeMeta(rollup.items);
+  const combinedMeta = (rawColMeta || sMeta) ? { ...rawColMeta, ...sMeta } : null;
   await insertLine(runId, {
     tracking_number:          trackingNumber,
     carrier_account_no:       line.account_number    || null,
     raw_service_code:         rawServiceCode,
     charge_type:              line.charge_type       || 'base',
-    carrier_amount:           carrierAmount,
+    carrier_amount:           totalCarrier,
     carrier_billed_weight_kg: line.billed_weight_kg  || null,
     service_id:               serviceId,
     customer_id:              charge.customer_id,
     charge_id:                charge.charge_id,
-    expected_amount:          fullExpected,
-    delta:                    delta,
+    expected_amount:          totalExpected,
+    delta,
     status:                   'unmatched',
     corrected_by:             null,
     unmatched_reason:         'price_mismatch',
@@ -1874,18 +1720,8 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     ship_to_postcode:         line.delivery_postcode || null,
     ship_to_country:          line.ship_to_country   || null,
     parcel_count:             line.parcel_count      || null,
-    correction_metadata:      rawColMeta,
+    correction_metadata:      combinedMeta,
   });
-  // Still produce surcharge lines even on unmatched freight — surcharges are
-  // independently priced and their sell values are still needed for billing.
-  // Freight sell is null for unmatched lines; percentage surcharges will produce
-  // a zero sell (no sell known without a matched rate card hit on the freight).
-  // We do pass carrierAmount so the cost side (expected) is still computed correctly.
-  await insertSurchargeLines(
-    runId, line.surcharge_amounts, line,
-    trackingNumber, serviceId, charge.customer_id, charge.charge_id,
-    ctx.surchargeById, ctx.surchargeOverrideCache, null, ctx.globallyExcludedColumns, carrierAmount
-  );
   return { status: 'unmatched' };
 }
 

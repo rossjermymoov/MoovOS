@@ -1794,72 +1794,31 @@ router.get('/runs/:id/customers/preview', async (req, res) => {
   try {
     const runId = parseInt(req.params.id);
     const result = await query(`
-      WITH charge_prices AS (
-        -- Pull SELL prices from the charges table for each base courier charge.
-        -- IMPORTANT: charges use TWO sell columns depending on when they were created:
-        --   billing.js (old path):        price      ← populated, sell_price = null
-        --   pricingEngine / recon-engine: sell_price ← populated, price = null
-        -- We always use COALESCE(sell_price, price) so both paths produce correct values.
-        -- reconciliation_excluded surcharges are intentional billing-engine duplicates
-        -- that exist only for internal recon use; exclude from sell totals to avoid
-        -- double-counting (e.g. EPS: 15p real + 15p phantom = 30p without this filter).
-        --
-        -- NOTE: We do NOT pull cost from the charges table here.
-        -- OUR COST = rl.carrier_amount (what the carrier actually invoiced us).
-        -- This is the only correct source — charges.cost_price reflects booking-time
-        -- estimates which may differ from the actual billed amount (weight corrections etc).
-        SELECT
-          base.id                                                                                AS charge_id,
-          COALESCE(base.sell_price, base.price)                                                  AS sell_base,
-          COALESCE(SUM(CASE WHEN sc.charge_type = 'fuel'
-                              THEN COALESCE(sc.sell_price, sc.price) ELSE 0 END), 0)            AS sell_fuel,
-          COALESCE(SUM(CASE WHEN sc.charge_type = 'surcharge'
-                             AND COALESCE(sx.reconciliation_excluded, false) = false
-                              THEN COALESCE(sc.sell_price, sc.price) ELSE 0 END), 0)            AS sell_surcharge
-        FROM   charges base
-        LEFT JOIN charges    sc ON sc.shipment_id = base.shipment_id
-          AND sc.charge_type IN ('fuel', 'surcharge')
-          AND sc.cancelled = false
-        LEFT JOIN surcharges sx ON sx.id = sc.surcharge_id
-        WHERE  base.charge_type = 'courier'
-          AND  base.cancelled   = false
-        GROUP BY base.id, base.sell_price, base.price
-      )
+      -- Each reconciliation line is now one shipment (freight + all surcharges rolled in).
+      -- corrected_sell_price = total sell (freight sell + all surcharge sells).
+      -- carrier_amount       = total cost (freight + all surcharges including absorbed).
+      -- No separate surcharge lines exist; the charge_prices CTE is no longer needed.
       SELECT
         rl.customer_id,
-        cu.business_name                                                                   AS customer_name,
-        -- line_count counts only freight base lines (surcharge lines are supporting detail)
-        COUNT(CASE WHEN rl.surcharge_id IS NULL THEN 1 END)::int                          AS line_count,
-        -- Freight sell: corrected_sell_price takes priority (recomputed at billed weight for
-        -- corrected lines); falls back to charge's sell_base, then carrier_amount.
-        -- Surcharge reconciliation lines are excluded here — they contribute to total_recon_surcharge.
+        cu.business_name                                                                    AS customer_name,
+        COUNT(*)::int                                                                       AS line_count,
+        -- total_sell: corrected_sell_price is the full shipment sell (engine-computed).
+        -- Falls back to booking-time sell from charges, then carrier_amount (0 margin).
         COALESCE(
-          SUM(CASE WHEN rl.surcharge_id IS NULL THEN COALESCE(rl.corrected_sell_price, cp.sell_base) END),
-          SUM(CASE WHEN rl.surcharge_id IS NULL THEN rl.carrier_amount END)
-        )                                                                                  AS total_base,
-        -- Fuel sell: from booking-time charges (freight lines only, surcharge lines share charge_id
-        -- and would otherwise double-count fuel if included here).
-        COALESCE(SUM(CASE WHEN rl.surcharge_id IS NULL THEN cp.sell_fuel      END), 0)   AS total_fuel,
-        -- Booking-time surcharge sell (EPS etc from charges table) — freight lines only.
-        COALESCE(SUM(CASE WHEN rl.surcharge_id IS NULL THEN cp.sell_surcharge END), 0)   AS total_surcharge,
-        -- Reconciliation-time surcharge sell: CSV-column surcharges (GEC, Peak, Oversized etc.)
-        -- discovered at invoice time and priced from surcharges.default_value / customer overrides.
-        COALESCE(SUM(CASE WHEN rl.surcharge_id IS NOT NULL THEN rl.corrected_sell_price END), 0) AS total_recon_surcharge,
-        -- Total sell = freight + fuel + booking surcharges + recon surcharges.
-        COALESCE(
-          SUM(CASE WHEN rl.surcharge_id IS NULL
-                   THEN COALESCE(rl.corrected_sell_price, cp.sell_base) + COALESCE(cp.sell_fuel, 0) + COALESCE(cp.sell_surcharge, 0)
-                   ELSE rl.corrected_sell_price
-              END),
+          SUM(COALESCE(rl.corrected_sell_price, COALESCE(base.sell_price, base.price))),
           SUM(rl.carrier_amount)
-        )                                                                                  AS total_sell,
-        -- Cost: sum of ALL carrier amounts (freight base + all surcharges = total carrier invoice).
-        SUM(rl.carrier_amount)                                                             AS total_our_cost
+        )                                                                                   AS total_sell,
+        -- Legacy columns kept for API compatibility — set to 0 since surcharges are now
+        -- rolled into corrected_sell_price rather than tracked separately.
+        0                                                                                   AS total_base,
+        0                                                                                   AS total_fuel,
+        0                                                                                   AS total_surcharge,
+        0                                                                                   AS total_recon_surcharge,
+        -- Cost: carrier_amount is the full carrier invoice total per shipment.
+        SUM(rl.carrier_amount)                                                              AS total_our_cost
       FROM   reconciliation_lines rl
-      LEFT JOIN customers   cu ON cu.id        = rl.customer_id
-      -- Only join charge_prices for freight base lines — surcharge lines share charge_id
-      -- with the freight line, and joining charge_prices to them would duplicate fuel/surcharge sells.
-      LEFT JOIN charge_prices cp ON cp.charge_id = rl.charge_id AND rl.surcharge_id IS NULL
+      LEFT JOIN customers cu   ON cu.id   = rl.customer_id
+      LEFT JOIN charges   base ON base.id = rl.charge_id AND base.charge_type = 'courier' AND base.cancelled = false
       WHERE  rl.run_id = $1
         AND  rl.status IN ('matched', 'corrected')
         AND  rl.is_fuel = false
@@ -1889,27 +1848,6 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
     }
 
     const result = await query(`
-      WITH charge_prices AS (
-        -- Same sell-price CTE as the summary endpoint.
-        -- See summary endpoint comment for dual-column and reconciliation_excluded rationale.
-        -- Cost is NOT pulled from the charges table — see cost_total below.
-        SELECT
-          base.id                                                                                AS charge_id,
-          COALESCE(base.sell_price, base.price)                                                  AS sell_base,
-          COALESCE(SUM(CASE WHEN sc.charge_type = 'fuel'
-                              THEN COALESCE(sc.sell_price, sc.price) ELSE 0 END), 0)            AS sell_fuel,
-          COALESCE(SUM(CASE WHEN sc.charge_type = 'surcharge'
-                             AND COALESCE(sx.reconciliation_excluded, false) = false
-                              THEN COALESCE(sc.sell_price, sc.price) ELSE 0 END), 0)            AS sell_surcharge
-        FROM   charges base
-        LEFT JOIN charges    sc ON sc.shipment_id = base.shipment_id
-          AND sc.charge_type IN ('fuel', 'surcharge')
-          AND sc.cancelled = false
-        LEFT JOIN surcharges sx ON sx.id = sc.surcharge_id
-        WHERE  base.charge_type = 'courier'
-          AND  base.cancelled   = false
-        GROUP BY base.id, base.sell_price, base.price
-      )
       SELECT
         rl.id,
         rl.tracking_number,
@@ -1919,63 +1857,24 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
         rl.status,
         rl.corrected_by,
         rl.charge_type,
-        rl.surcharge_id,
-        s.name                                                                                  AS surcharge_name,
         rl.parcel_count,
         rl.carrier_billed_weight_kg,
-        cs.name                                                                                 AS service_name,
-        -- Freight lines: corrected_sell_price takes priority (recomputed at billed weight for corrected lines).
-        -- Surcharge lines: corrected_sell_price IS the sell price (surcharge.default_value / customer override).
-        -- Falls back to charge's sell_base for freight lines, then carrier_amount (0 margin, no rate card).
-        CASE WHEN rl.surcharge_id IS NULL
-             THEN COALESCE(rl.corrected_sell_price, cp.sell_base, rl.carrier_amount)
-             ELSE COALESCE(rl.corrected_sell_price, 0)
-        END                                                                                     AS sell_base,
-        -- Fuel/surcharge from charges table only applies to freight lines (surcharge lines
-        -- share charge_id with freight, so we guard against double-counting here).
-        CASE WHEN rl.surcharge_id IS NULL THEN COALESCE(cp.sell_fuel,      0) ELSE 0 END       AS sell_fuel,
-        CASE WHEN rl.surcharge_id IS NULL THEN COALESCE(cp.sell_surcharge, 0) ELSE 0 END       AS sell_surcharge,
-        CASE WHEN rl.surcharge_id IS NULL
-             THEN COALESCE(
-               COALESCE(rl.corrected_sell_price, cp.sell_base) + COALESCE(cp.sell_fuel, 0) + COALESCE(cp.sell_surcharge, 0),
-               rl.carrier_amount
-             )
-             ELSE COALESCE(rl.corrected_sell_price, 0)
-        END                                                                                     AS sell_total,
-        -- Cost: carrier_amount for this line, PLUS any absorbed-cost surcharge lines for the
-        -- same tracking number in this run (e.g. Carriage Surcharge that is excluded from
-        -- customer invoices but is a real carrier cost). Absorbed lines are filtered from
-        -- display (see WHERE clause below) so we fold their cost into the freight line here
-        -- to ensure margin = sell_total - cost_total is accurate.
-        -- Only applies to freight lines (surcharge_id IS NULL); visible surcharge lines
-        -- already carry their own carrier_amount so no absorption needed there.
-        CASE WHEN rl.surcharge_id IS NULL
-             THEN rl.carrier_amount + COALESCE((
-               SELECT SUM(abs_line.carrier_amount)
-               FROM   reconciliation_lines abs_line
-               WHERE  abs_line.run_id          = rl.run_id
-                 AND  abs_line.tracking_number = rl.tracking_number
-                 AND  abs_line.surcharge_id    IS NOT NULL
-                 AND  abs_line.corrected_sell_price = 0
-             ), 0)
-             ELSE rl.carrier_amount
-        END                                                                                     AS cost_total
+        cs.name                                                          AS service_name,
+        COALESCE(
+          rl.corrected_sell_price,
+          COALESCE(base.sell_price, base.price),
+          rl.carrier_amount
+        )                                                                AS sell_total,
+        rl.carrier_amount                                                AS cost_total
       FROM   reconciliation_lines rl
-      LEFT JOIN courier_services cs ON cs.id         = rl.service_id
-      -- Only join charge_prices for freight base lines — surcharge lines share charge_id
-      -- with freight lines and joining would duplicate fuel/surcharge sell amounts.
-      LEFT JOIN charge_prices    cp ON cp.charge_id  = rl.charge_id AND rl.surcharge_id IS NULL
-      LEFT JOIN surcharges       s  ON s.id          = rl.surcharge_id
+      LEFT JOIN courier_services cs   ON cs.id  = rl.service_id
+      LEFT JOIN charges          base ON base.id = rl.charge_id AND base.charge_type = 'courier' AND base.cancelled = false
       WHERE  rl.run_id = $1
         AND  rl.status IN ('matched', 'corrected')
         AND  rl.is_fuel = false
-        -- Exclude absorbed-cost surcharge lines (excluded from customer invoices).
-        -- These have surcharge_id set and corrected_sell_price = 0, meaning we absorbed
-        -- the carrier charge internally. They contribute to our cost base / margin but
-        -- must NOT appear as customer invoice line items.
-        AND  NOT (rl.surcharge_id IS NOT NULL AND rl.corrected_sell_price = 0)
+        AND  rl.surcharge_id IS NULL
         ${custFilter}
-      ORDER  BY rl.shipment_date ASC NULLS LAST, rl.tracking_number, rl.charge_type
+      ORDER  BY rl.shipment_date ASC NULLS LAST, rl.tracking_number
     `, params);
 
     return res.json(result.rows);
@@ -2374,17 +2273,10 @@ router.get('/runs/:id/lines/:lineId/trace', async (req, res) => {
         rl.*,
         cs.name          AS service_name,
         cs.service_code  AS service_code_internal,
-        cu.business_name AS customer_name,
-        s.name           AS surcharge_name,
-        s.cost_price     AS surcharge_cost_price,
-        s.default_value  AS surcharge_default_value,
-        s.calc_type      AS surcharge_calc_type,
-        s.csv_column     AS surcharge_csv_column,
-        s.reconciliation_excluded AS surcharge_excluded
+        cu.business_name AS customer_name
       FROM   reconciliation_lines rl
       LEFT JOIN courier_services cs ON cs.id = rl.service_id
       LEFT JOIN customers        cu ON cu.id = rl.customer_id
-      LEFT JOIN surcharges       s  ON s.id  = rl.surcharge_id
       WHERE  rl.id = $1 AND rl.run_id = $2
     `, [lineId, runId]);
 
@@ -2561,36 +2453,6 @@ router.get('/runs/:id/lines/:lineId/trace', async (req, res) => {
         statusExplain = `Status: ${line.status}, corrected_by: ${line.corrected_by || 'none'}`;
       }
       steps.push({ phase: 'Status Decision', result: line.status.toUpperCase(), detail: statusExplain });
-
-      // Surcharge detail — shown when this line is a surcharge line
-      if (line.surcharge_id) {
-        const sName      = line.surcharge_name    || '(unknown)';
-        const isPercSurch = line.surcharge_calc_type === 'percentage';
-        const costRate    = line.surcharge_cost_price != null ? parseFloat(line.surcharge_cost_price) : null;
-        // For percentage surcharges cost_price is a carrier % rate, not a flat £ amount.
-        // Display it as such and show the derived expected alongside for clarity.
-        const sCost = costRate == null
-          ? 'not set'
-          : isPercSurch
-            ? `${costRate}% of total carrier charges (freight + surcharges) (→ expected £${expectedAmount.toFixed(2)})`
-            : `£${costRate.toFixed(2)}`;
-        const sSell = line.surcharge_default_value != null
-          ? `${line.surcharge_default_value}${isPercSurch ? '%' : ' (£)'}`
-          : 'not set';
-        const sCol  = line.surcharge_csv_column || 'not mapped';
-        const sExcl = line.surcharge_excluded ? 'YES — absorbed internally, never billed to customer' : 'NO — billed to customer';
-        // Only warn about data entry errors on flat surcharges — for percentage
-        // surcharges cost_price is a rate so comparing it to expected_amount (a £ value)
-        // is meaningless and always produces a false positive.
-        const costWarn = (!isPercSurch && costRate != null && Math.abs(costRate - expectedAmount) >= 0.02)
-          ? ` ⚠ cost_price (£${costRate.toFixed(2)}) does not match stored expected_amount (£${expectedAmount.toFixed(2)}) — may indicate a data entry error`
-          : '';
-        steps.push({
-          phase:  'Surcharge Definition',
-          result: line.surcharge_id,
-          detail: `Surcharge: "${sName}" | CSV column: "${sCol}" | carrier cost: ${sCost}${costWarn} | sell default: ${sSell} | excluded: ${sExcl}`,
-        });
-      }
 
       // Correction metadata if present
       if (line.correction_metadata) {
