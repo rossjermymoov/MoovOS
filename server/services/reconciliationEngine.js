@@ -1158,14 +1158,28 @@ async function insertSurchargeLines(runId, surchargeAmounts, line, trackingNumbe
       }
     }
 
-    // Expected cost mirrors billing.js applySurcharges exactly:
-    //   - percentage surcharges: cost_price is a carrier % rate → expectedCost = freight × rate / 100
-    //   - flat surcharges: cost_price is a £ amount → expectedCost = cost_price × parcelCount
-    // This ensures the recon engine and the booking engine agree on what we expect to pay.
+    // Expected cost for percentage surcharges:
+    //   DPD (and most carriers) apply their fuel/energy surcharge as a percentage
+    //   of the TOTAL carrier charges on the invoice row — freight PLUS all other
+    //   surcharges (residential, extended area, etc.) — not just the base freight.
+    //
+    //   e.g. freight £5.34 + residential £2.00 + extended £3.95 = £11.29
+    //        fuel @ 3.72%: £11.29 × 3.72% = £0.42  ✓
+    //        (computing against freight only: £5.34 × 3.72% = £0.20  ✗ — too low)
+    //
+    //   We sum all the other surcharge amounts from the same invoice row
+    //   (excluding this surcharge itself) and add them to freightCarrierAmount
+    //   to get the correct base.
+    //
+    //   Flat surcharges: cost_price is a £ amount → expectedCost = cost_price × parcelCount
     const costRate = parseFloat(surcharge.cost_price) || 0;
     let expectedCost;
     if (isPercent && freightCarrierAmount != null && freightCarrierAmount > 0) {
-      expectedCost = round2(freightCarrierAmount * costRate / 100);
+      const otherSurchargesTotal = Object.entries(surchargeAmounts)
+        .filter(([id]) => id !== surchargeId)
+        .reduce((sum, [, amt]) => sum + (round2(parseFloat(amt) || 0)), 0);
+      const totalCarrierBase = freightCarrierAmount + otherSurchargesTotal;
+      expectedCost = round2(totalCarrierBase * costRate / 100);
     } else {
       expectedCost = round2(costRate * (perParcel ? invoiceParcels : 1));
     }

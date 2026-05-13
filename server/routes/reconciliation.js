@@ -2570,7 +2570,7 @@ router.get('/runs/:id/lines/:lineId/trace', async (req, res) => {
         const sCost = costRate == null
           ? 'not set'
           : isPercSurch
-            ? `${costRate}% of freight (→ expected £${expectedAmount.toFixed(2)})`
+            ? `${costRate}% of total carrier charges (freight + surcharges) (→ expected £${expectedAmount.toFixed(2)})`
             : `£${costRate.toFixed(2)}`;
         const sSell = line.surcharge_default_value != null
           ? `${line.surcharge_default_value}${isPercSurch ? '%' : ' (£)'}`
