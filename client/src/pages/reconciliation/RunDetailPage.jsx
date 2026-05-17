@@ -72,16 +72,17 @@ function ReasonLabel({ reason, correctedBy }) {
     return <span style={{ fontSize: 10, color: '#00C853', fontWeight: 600 }}>Surcharge mapping</span>;
   }
   const labels = {
-    unknown_service_code:    { text: 'Unknown service code', color: '#FF5252' },
-    no_account_mapping:      { text: 'Account not mapped',   color: '#FFB300' },
-    not_in_verified_pool:    { text: 'Not verified',         color: '#FF5252' },
-    no_pricing_rules:        { text: 'No pricing rules',     color: '#FFB300' },
-    unexplained_delta:       { text: 'Unexplained delta',    color: '#FFB300' },
-    external_booking_review: { text: 'External booking',     color: '#79AAFF' },
-    fuel_aggregate_mismatch: { text: 'Fuel mismatch',        color: '#FFB300' },
+    unknown_service_code:    { text: 'Unknown service code',  color: '#FF5252' },
+    no_account_mapping:      { text: 'Account not mapped',    color: '#FFB300' },
+    not_in_verified_pool:    { text: 'Not verified',          color: '#FF5252' },
+    no_pricing_rules:        { text: 'No pricing rules',      color: '#FFB300' },
+    unexplained_delta:       { text: 'Unexplained delta',     color: '#FFB300' },
+    external_booking_review: { text: 'External booking',      color: '#79AAFF' },
+    fuel_aggregate_mismatch: { text: 'Fuel mismatch',         color: '#FFB300' },
     hgv_aggregate_mismatch:  { text: 'HGV mismatch',         color: '#FFB300' },
-    no_hgv_rate:             { text: 'No HGV rate on file',  color: '#FF5252' },
-    aggregate_mismatch:      { text: 'Aggregate mismatch',   color: '#FFB300' },
+    no_hgv_rate:             { text: 'No HGV rate on file',   color: '#FF5252' },
+    aggregate_mismatch:      { text: 'Aggregate mismatch',    color: '#FFB300' },
+    parcel_count_mismatch:   { text: '⚠ Parcel count overbill', color: '#FF5252' },
   };
   const cfg = labels[reason] || { text: reason || '—', color: '#888' };
   return <span style={{ fontSize: 10, color: cfg.color, fontWeight: 600 }}>{cfg.text}</span>;
@@ -325,6 +326,16 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
               </div>
             )}
             <div><span style={{ color: '#888' }}>Reason:</span> <span style={{ marginLeft: 4 }}><ReasonLabel reason={line.unmatched_reason} /></span></div>
+            {line.unmatched_reason === 'parcel_count_mismatch' && line.correction_metadata && (
+              <div style={{
+                marginTop: 6, padding: '8px 12px',
+                background: 'rgba(255,82,82,0.08)', border: '1px solid rgba(255,82,82,0.3)',
+                borderRadius: 6, fontSize: 11,
+              }}>
+                <span style={{ color: '#FF5252', fontWeight: 700 }}>DPD invoiced {line.correction_metadata.invoice_parcel_count} parcel{line.correction_metadata.invoice_parcel_count !== 1 ? 's' : ''} — booking was for {line.correction_metadata.booked_parcel_count} parcel{line.correction_metadata.booked_parcel_count !== 1 ? 's' : ''}</span>
+                <span style={{ color: '#888', marginLeft: 8 }}>Dispute this charge with DPD before finalising.</span>
+              </div>
+            )}
             {line.aged && (
               <div style={{ marginTop: 4 }}>
                 <span style={{ background: 'rgba(213,0,0,0.15)', border: '1px solid rgba(213,0,0,0.3)', borderRadius: 9999, padding: '2px 8px', fontSize: 10, color: '#FF5252', fontWeight: 700 }}>

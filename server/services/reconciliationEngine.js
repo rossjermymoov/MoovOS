@@ -1498,11 +1498,59 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   // Named CSV-column surcharges (surcharge_amounts) are rolled up into this single
   // shipment line via buildSurchargeRollup — no separate rows are produced.
   const charge       = poolHits[0];
+
+  // ── Parcel count mismatch guard ───────────────────────────────────────────
+  // If the carrier has invoiced MORE parcels than the booking recorded, every
+  // downstream amount (expected, carrier, corrected sell) is meaningless.
+  // Flag immediately as unmatched so the operator can dispute the invoice
+  // rather than silently accepting an overbill as "carrier_undercharge".
+  //
+  // bookedParcelCount comes from shipments.parcel_count via the pool query.
+  // invoiceParcelCount comes from the carrier CSV items/parcel_count column.
+  //
+  // We only trigger on overbilling (invoice > booking) because underbilling
+  // is uncommon for DPD and carrier-side splits are rarer, whereas overbilling
+  // by parcel count is a direct financial loss that must be surfaced.
+  const invoiceParcelCount = line.parcel_count || 1;
+  const bookedParcelCount  = parseInt(charge.shipment_parcel_count) || 1;
+  if (invoiceParcelCount > bookedParcelCount) {
+    console.warn(
+      `[recon engine] PARCEL COUNT MISMATCH: tracking=${trackingNumber} ` +
+      `invoice_parcels=${invoiceParcelCount} booked_parcels=${bookedParcelCount} ` +
+      `carrier=£${carrierAmount} — flagging as unmatched for operator dispute`
+    );
+    await insertLine(runId, {
+      tracking_number:          trackingNumber,
+      carrier_account_no:       line.account_number     || null,
+      raw_service_code:         rawServiceCode,
+      charge_type:              line.charge_type         || 'base',
+      carrier_amount:           carrierAmount,
+      carrier_billed_weight_kg: parseFloat(line.billed_weight_kg) || null,
+      service_id:               serviceId,
+      customer_id:              charge.customer_id,
+      charge_id:                charge.charge_id,
+      expected_amount:          null,
+      delta:                    null,
+      status:                   'unmatched',
+      corrected_by:             null,
+      unmatched_reason:         'parcel_count_mismatch',
+      source:                   'internal',
+      shipment_date:            line.shipment_date       || null,
+      ship_to_postcode:         line.delivery_postcode   || null,
+      ship_to_country:          line.ship_to_country     || 'GB',
+      parcel_count:             invoiceParcelCount,
+      correction_metadata:      {
+        invoice_parcel_count: invoiceParcelCount,
+        booked_parcel_count:  bookedParcelCount,
+      },
+    });
+    return { status: 'unmatched' };
+  }
+
   // separate_fuel_rows: carrier bills fuel/carriage/energy as separate invoice
   // rows, so the freight row's carrier_amount = base only. Compare against
   // cost_price (base) not total_cost_price (base + fuel). Overhead rows are
   // already auto-accepted above via the carrier_overhead path.
-  const invoiceParcelCount   = line.parcel_count || 1;
   let expectedBase;
   if (ctx.separateFuelRows) {
     const baseFromDb = round2(parseFloat(charge.expected_cost) || 0);
