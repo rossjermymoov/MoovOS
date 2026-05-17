@@ -30,7 +30,7 @@
 --   1. Update DPD-11 Isle of Man weight band: £10.45 → £9.20.
 --   2. Create DPD-12 Isle of Man zone with GB country code, IM postcode include
 --      rule, and carrier weight band at £9.20.
---   3. Data correction: update cost_price (and total_cost_price) on DPD charges
+--   3. Data correction: update cost_price on DPD charges
 --      where ship_to_postcode starts with 'IM' and the stored zone is incorrect
 --      (Mainland, Highlands and Islands, or NULL).
 --      Total_cost_price = cost_price for DPD (fuel is handled via separate rows).
@@ -164,19 +164,14 @@ BEGIN
   --   • cost_price does not equal £9.20 (or is NULL)
   --   • zone_id is not the Isle of Man zone for that service
   --
-  -- Update: cost_price → £9.20, total_cost_price → £9.20
-  --         zone_id    → Isle of Man zone for the respective service
-  --
-  -- NOTE: total_cost_price = cost_price for DPD because DPD fuel/overhead
-  -- charges are handled as separate reconciliation rows (separate_fuel_rows=true).
+  -- Update: cost_price → £9.20, zone_id → Isle of Man zone for the respective service.
   -- ────────────────────────────────────────────────────────────────────────
 
   IF v_dpd11_svc_id IS NOT NULL AND v_dpd11_iom_zone_id IS NOT NULL THEN
     UPDATE charges c
-    SET    cost_price       = 9.20,
-           total_cost_price = 9.20,
-           zone_id          = v_dpd11_iom_zone_id,
-           updated_at       = NOW()
+    SET    cost_price  = 9.20,
+           zone_id     = v_dpd11_iom_zone_id,
+           updated_at  = NOW()
     WHERE  c.courier_service_id = v_dpd11_svc_id
       AND  c.ship_to_postcode   ILIKE 'IM%'
       AND  c.cancelled          = false
@@ -194,10 +189,9 @@ BEGIN
     v_updated_charges := 0;
 
     UPDATE charges c
-    SET    cost_price       = 9.20,
-           total_cost_price = 9.20,
-           zone_id          = v_dpd12_iom_zone_id,
-           updated_at       = NOW()
+    SET    cost_price  = 9.20,
+           zone_id     = v_dpd12_iom_zone_id,
+           updated_at  = NOW()
     WHERE  c.courier_service_id = v_dpd12_svc_id
       AND  c.ship_to_postcode   ILIKE 'IM%'
       AND  c.cancelled          = false
