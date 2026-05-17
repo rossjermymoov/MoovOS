@@ -390,6 +390,12 @@ function mapToInvoiceLine(row, colMap) {
     // for operator visibility in RunDetailPage.
     delivery_postcode: get('delivery_postcode').trim() || null,
     ship_to_country:   get('ship_to_country').trim()   || null,
+    // DPD-specific row type: 'H' = header row (has all financials), 'S' = sub-parcel row
+    // (blank financials — same consignment number as the H-row). Populated only when
+    // the profile maps row_type to a carrier CSV column (e.g. DPD's "Header" column).
+    // Used by buildLines() to filter S-rows without discarding zero-Revenue H-rows
+    // (e.g. DPD credit notes or free-delivery shipments where carrier_amount = 0).
+    row_type: get('row_type').trim().toUpperCase() || null,
     ...(Object.keys(surcharge_amounts).length > 0 && { surcharge_amounts }),
     ...(Object.keys(raw_col_values).length  > 0 && { raw_col_values }),
   };
@@ -809,8 +815,22 @@ function UploadModal({ couriers, onClose, onSuccess }) {
         line.account_number = preambleAccountNumber;
       }
       return line;
-    }).filter(l => l.carrier_amount > 0);
-  }
+    }).filter(l => {
+      // DPD S-rows (sub-parcel rows): same consignment number as the H-row but all
+      // financial columns are blank → carrier_amount = 0.  These must always be
+      // filtered — they carry no independent billing information.
+      // When the DPD profile maps row_type → 'Header' column, row_type = 'S' here.
+      if (l.row_type === 'S') return false;
+
+      // Keep any row with a positive carrier amount (normal case for all carriers).
+      if (l.carrier_amount > 0) return true;
+
+      // Keep zero/negative-amount rows that have a tracking number — these are
+      // genuine DPD H-rows where Revenue = 0 (credit note, free delivery, or
+      // carrier refund).  The engine will surface them as unmatched/corrected so
+      // an operator can review rather than the row silently disappearing.
+      return String(l.tracking_number || '').trim().length > 0;
+    });
 
   const FIELDS = [
     { key: 'tracking_number',  label: 'Tracking Number',  required: true },
