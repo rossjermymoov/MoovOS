@@ -816,20 +816,23 @@ function UploadModal({ couriers, onClose, onSuccess }) {
       }
       return line;
     }).filter(l => {
-      // DPD S-rows (sub-parcel rows): same consignment number as the H-row but all
-      // financial columns are blank → carrier_amount = 0.  These must always be
-      // filtered — they carry no independent billing information.
-      // When the DPD profile maps row_type → 'Header' column, row_type = 'S' here.
+      // DPD S-rows (sub-parcel rows): same consignment number as the H-row but
+      // all financial columns are blank → carrier_amount = 0.  Always discard.
+      // row_type = 'S' only when the profile maps row_type → 'Header' column
+      // (migration 179).  Without that mapping row_type is null and S-rows are
+      // caught by the carrier_amount > 0 check below.
       if (l.row_type === 'S') return false;
 
-      // Keep any row with a positive carrier amount (normal case for all carriers).
+      // Normal case for all carriers: keep rows with a positive carrier amount.
       if (l.carrier_amount > 0) return true;
 
-      // Keep zero/negative-amount rows that have a tracking number — these are
-      // genuine DPD H-rows where Revenue = 0 (credit note, free delivery, or
-      // carrier refund).  The engine will surface them as unmatched/corrected so
-      // an operator can review rather than the row silently disappearing.
-      return String(l.tracking_number || '').trim().length > 0;
+      // Keep zero/negative-amount rows ONLY when row_type is explicitly set by
+      // the carrier profile (i.e. the profile has a row_type column mapping and
+      // the value is not 'S').  This handles DPD credit notes / free-delivery
+      // H-rows without accidentally passing through S-rows on profiles that do
+      // not yet have the row_type mapping configured — in that case row_type is
+      // null and the carrier_amount > 0 guard above applies as before.
+      return l.row_type !== null && String(l.tracking_number || '').trim().length > 0;
     });
   }
 
