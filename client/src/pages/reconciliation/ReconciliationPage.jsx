@@ -817,22 +817,16 @@ function UploadModal({ couriers, onClose, onSuccess }) {
       return line;
     }).filter(l => {
       // DPD S-rows (sub-parcel rows): same consignment number as the H-row but
-      // all financial columns are blank → carrier_amount = 0.  Always discard.
-      // row_type = 'S' only when the profile maps row_type → 'Header' column
-      // (migration 179).  Without that mapping row_type is null and S-rows are
-      // caught by the carrier_amount > 0 check below.
+      // all financial columns are blank → carrier_amount = 0.  Discard explicitly
+      // when the profile has a row_type mapping (migration 179) so they never
+      // reach the engine even if future logic changes the carrier_amount check.
       if (l.row_type === 'S') return false;
 
-      // Normal case for all carriers: keep rows with a positive carrier amount.
-      if (l.carrier_amount > 0) return true;
-
-      // Keep zero/negative-amount rows ONLY when row_type is explicitly set by
-      // the carrier profile (i.e. the profile has a row_type column mapping and
-      // the value is not 'S').  This handles DPD credit notes / free-delivery
-      // H-rows without accidentally passing through S-rows on profiles that do
-      // not yet have the row_type mapping configured — in that case row_type is
-      // null and the carrier_amount > 0 guard above applies as before.
-      return l.row_type !== null && String(l.tracking_number || '').trim().length > 0;
+      // Primary gate: only pass rows that carry a positive carrier amount.
+      // This intentionally drops zero/negative-amount rows (DPD credit notes,
+      // free-delivery lines, adjustment rows) — the engine cannot match them
+      // against a charge and they would surface as false positives.
+      return l.carrier_amount > 0;
     });
   }
 
