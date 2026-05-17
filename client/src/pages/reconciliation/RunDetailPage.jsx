@@ -1743,7 +1743,7 @@ export default function RunDetailPage() {
 
   const linesQuery = (status) => useQuery({
     queryKey: ['recon-lines', id, status],
-    queryFn:  () => api.get(`/reconciliation/runs/${id}/lines${status ? `?status=${status}` : ''}&limit=500`).then(r => r.data),
+    queryFn:  () => api.get(`/reconciliation/runs/${id}/lines?${status ? `status=${status}&` : ''}limit=500`).then(r => r.data),
     enabled:  activeTab !== 'overview',
   });
 
