@@ -3542,4 +3542,165 @@ router.get('/raw-trace/:tracking', async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// COURIER QUERIES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── POST /api/reconciliation/queries ────────────────────────────────────────
+// Raise a new courier query from a reconciliation line.
+router.post('/queries', async (req, res) => {
+  try {
+    const {
+      run_id, reconciliation_line_id, carrier_id, invoice_ref, tracking_number,
+      query_type, carrier_charged, expected_charged, details, charge_ids = [],
+    } = req.body;
+
+    if (!carrier_id || !query_type) {
+      return res.status(400).json({ error: 'carrier_id and query_type are required' });
+    }
+
+    const result = await query(`
+      INSERT INTO courier_queries
+        (run_id, reconciliation_line_id, carrier_id, invoice_ref, tracking_number,
+         query_type, carrier_charged, expected_charged, details, status, created_at, updated_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'open',NOW(),NOW())
+      RETURNING *
+    `, [
+      run_id || null, reconciliation_line_id || null, carrier_id,
+      invoice_ref || null, tracking_number || null,
+      query_type, carrier_charged || null, expected_charged || null,
+      details || null,
+    ]);
+    const cq = result.rows[0];
+
+    // Link associated OMS charges
+    if (charge_ids.length > 0) {
+      for (const cid of charge_ids) {
+        await query(
+          `INSERT INTO courier_query_charges (query_id, charge_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+          [cq.id, cid]
+        );
+      }
+    }
+
+    return res.status(201).json(cq);
+  } catch (err) {
+    console.error('[courier-queries/create] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/reconciliation/queries ─────────────────────────────────────────
+// List courier queries. Optional filters: carrier_id, run_id, status.
+router.get('/queries', async (req, res) => {
+  try {
+    const { carrier_id, run_id, status, limit = 100, offset = 0 } = req.query;
+    const params = [];
+    const conditions = [];
+
+    if (carrier_id) { params.push(parseInt(carrier_id)); conditions.push(`cq.carrier_id = $${params.length}`); }
+    if (run_id)     { params.push(parseInt(run_id));     conditions.push(`cq.run_id = $${params.length}`); }
+    if (status)     { params.push(status);               conditions.push(`cq.status = $${params.length}`); }
+
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    params.push(parseInt(limit), parseInt(offset));
+
+    const result = await query(`
+      SELECT
+        cq.*,
+        cu.name        AS carrier_name,
+        cu.code        AS carrier_code,
+        rr.invoice_ref AS run_invoice_ref
+      FROM   courier_queries cq
+      LEFT JOIN couriers              cu ON cu.id = cq.carrier_id
+      LEFT JOIN reconciliation_runs   rr ON rr.id = cq.run_id
+      ${where}
+      ORDER  BY cq.created_at DESC
+      LIMIT  $${params.length - 1} OFFSET $${params.length}
+    `, params);
+
+    const countParams = params.slice(0, -2);
+    const countRes = await query(
+      `SELECT COUNT(*) FROM courier_queries cq ${where}`,
+      countParams
+    );
+
+    return res.json({ queries: result.rows, total: parseInt(countRes.rows[0].count) });
+  } catch (err) {
+    console.error('[courier-queries/list] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PATCH /api/reconciliation/queries/:id ───────────────────────────────────
+// Update query status, carrier reference, or credit amount.
+router.patch('/queries/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { status, carrier_reference, credit_amount, resolution_notes, details } = req.body;
+
+    const fields = [];
+    const vals   = [];
+
+    if (status !== undefined) {
+      fields.push(`status = $${vals.length + 1}`);
+      vals.push(status);
+      if (status === 'raised') {
+        fields.push(`raised_at = NOW()`);
+      }
+      if (['credited','rejected','written_off'].includes(status)) {
+        fields.push(`resolved_at = NOW()`);
+      }
+    }
+    if (carrier_reference !== undefined) { fields.push(`carrier_reference = $${vals.length + 1}`); vals.push(carrier_reference); }
+    if (credit_amount     !== undefined) { fields.push(`credit_amount = $${vals.length + 1}`);     vals.push(credit_amount); }
+    if (resolution_notes  !== undefined) { fields.push(`resolution_notes = $${vals.length + 1}`);  vals.push(resolution_notes); }
+    if (details           !== undefined) { fields.push(`details = $${vals.length + 1}`);           vals.push(details); }
+
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+
+    fields.push(`updated_at = NOW()`);
+    vals.push(id);
+
+    const result = await query(
+      `UPDATE courier_queries SET ${fields.join(', ')} WHERE id = $${vals.length} RETURNING *`,
+      vals
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Query not found' });
+    return res.json(result.rows[0]);
+  } catch (err) {
+    console.error('[courier-queries/update] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/reconciliation/queries/summary ─────────────────────────────────
+// Summary stats for the queries dashboard — total open, total disputed, total credited.
+router.get('/queries/summary', async (req, res) => {
+  try {
+    const { carrier_id } = req.query;
+    const params = carrier_id ? [parseInt(carrier_id)] : [];
+    const where  = carrier_id ? 'WHERE carrier_id = $1' : '';
+
+    const result = await query(`
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'open')                    AS open_count,
+        COUNT(*) FILTER (WHERE status = 'raised')                  AS raised_count,
+        COUNT(*) FILTER (WHERE status = 'acknowledged')            AS acknowledged_count,
+        COUNT(*) FILTER (WHERE status NOT IN ('credited','rejected','written_off')) AS active_count,
+        COUNT(*) FILTER (WHERE status = 'credited')                AS credited_count,
+        COALESCE(SUM(disputed_amount) FILTER (
+          WHERE status NOT IN ('credited','rejected','written_off')
+        ), 0)                                                       AS total_disputed,
+        COALESCE(SUM(credit_amount)   FILTER (WHERE status = 'credited'), 0) AS total_credited
+      FROM courier_queries ${where}
+    `, params);
+
+    return res.json(result.rows[0]);
+  } catch (err) {
+    console.error('[courier-queries/summary] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

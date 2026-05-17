@@ -396,6 +396,13 @@ function mapToInvoiceLine(row, colMap) {
     // Used by buildLines() to filter S-rows without discarding zero-Revenue H-rows
     // (e.g. DPD credit notes or free-delivery shipments where carrier_amount = 0).
     row_type: get('row_type').trim().toUpperCase() || null,
+    // sender_ref: the carrier's "Senders Ref" column (e.g. DPD "senders ref").
+    // On H-rows this is the reference of the primary/first parcel.
+    // On S-rows this is the reference of each consolidated sub-parcel.
+    // buildLines() collects S-row sender_refs and attaches them to the parent
+    // H-row as consolidated_refs so the engine can find individual OMS charges
+    // for multi-shipment consolidation matching.
+    sender_ref: get('sender_ref').trim() || null,
     ...(Object.keys(surcharge_amounts).length > 0 && { surcharge_amounts }),
     ...(Object.keys(raw_col_values).length  > 0 && { raw_col_values }),
   };
@@ -406,7 +413,7 @@ const BLANK_MAP = {
   charge_type: '', carrier_amount: '', billed_weight_kg: '',
   parcel_count: '', shipment_date: '',
   invoice_ref: '', invoice_date: '',
-  delivery_postcode: '', ship_to_country: '',
+  delivery_postcode: '', ship_to_country: '', sender_ref: '',
   surcharge_columns: [],   // [{ col: '<csv header>', surcharge_id: '<uuid>' }]
   // ── Carrier-format options ─────────────────────────────────────────────────
   // header_row_skip: number of preamble rows before the column header row.
@@ -806,7 +813,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
   }
 
   function buildLines() {
-    return csvRows.map(row => {
+    const allLines = csvRows.map(row => {
       const line = mapToInvoiceLine(row, colMap);
       // Inject preamble-extracted account number when no per-row column is mapped.
       // DPD invoices have a single account number in the header (B1) that applies
@@ -815,9 +822,45 @@ function UploadModal({ couriers, onClose, onSuccess }) {
         line.account_number = preambleAccountNumber;
       }
       return line;
-    }).filter(l => {
+    });
+
+    // ── Consolidation ref collection ──────────────────────────────────────────
+    // Before filtering S-rows out, collect the sender_ref from every S-row and
+    // attach the full set to the parent H-row as consolidated_refs.
+    // This lets the reconciliation engine find individual OMS charges for
+    // consignments that DPD consolidated from multiple separate bookings.
+    //
+    // Example: 3 single-parcel OMS shipments (refs MP-001, MP-002, MP-003)
+    //   picked up together → DPD groups them under one consignment.
+    //   H-row: consignment=XYZ, items=3, sender_ref=MP-001
+    //   S-row: consignment=XYZ, sender_ref=MP-002
+    //   S-row: consignment=XYZ, sender_ref=MP-003
+    //   → consolidated_refs on the H-row: ['MP-001','MP-002','MP-003']
+    if (allLines.some(l => l.row_type === 'S' && l.sender_ref)) {
+      // Build a map: tracking_number → [sender_refs from S-rows]
+      const sRowRefs = {};
+      for (const l of allLines) {
+        if (l.row_type === 'S' && l.tracking_number && l.sender_ref) {
+          const key = l.tracking_number;
+          if (!sRowRefs[key]) sRowRefs[key] = [];
+          sRowRefs[key].push(l.sender_ref);
+        }
+      }
+      // Attach to matching H-rows
+      for (const l of allLines) {
+        if (l.row_type === 'H' && l.tracking_number && sRowRefs[l.tracking_number]) {
+          const refs = new Set();
+          if (l.sender_ref) refs.add(l.sender_ref);
+          for (const r of sRowRefs[l.tracking_number]) refs.add(r);
+          l.consolidated_refs = [...refs];
+        }
+      }
+    }
+
+    return allLines.filter(l => {
       // DPD S-rows (sub-parcel rows): same consignment number as the H-row but
       // all financial columns are blank → carrier_amount = 0.  Always discard.
+      // Their sender_ref data has already been collected above.
       if (l.row_type === 'S') return false;
 
       // Normal case: rows with a positive carrier amount always pass through.
@@ -845,6 +888,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
     { key: 'ship_to_country',    label: 'Destination Country', required: false, hint: 'ISO country code (e.g. GB, IE, DE)' },
     { key: 'invoice_ref',        label: 'Invoice Reference',  required: false, hint: 'Read from CSV' },
     { key: 'invoice_date',       label: 'Invoice Date',       required: false, hint: 'Read from CSV' },
+    { key: 'sender_ref',         label: 'Senders Reference',  required: false, hint: 'Per-parcel customer ref — used to match consolidated DPD consignments to individual OMS shipments' },
   ];
 
   const canProceed = carrierId && FIELDS.filter(f => f.required).every(f => colMap[f.key]);
