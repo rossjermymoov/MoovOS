@@ -1549,15 +1549,26 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       if (perParcelWeightKg > 0 && chargeZoneId && serviceId) {
         const bandResult = await lookupCarrierBandCost(serviceId, perParcelWeightKg, chargeZoneId);
         if (bandResult) {
-          // Prefer price_sub; fall back to price_first if price_sub is null in the rate card.
-          const perParcelRate = bandResult.costSub ?? bandResult.cost;
-          rateCardExpected = round2(perParcelRate * invoiceParcelCount);
-          console.log(
-            `[recon engine] all_sub rate-card recompute: tracking=${trackingNumber} ` +
-            `zone=${chargeZoneId} weight=${invoiceWeightKg}kg (per_parcel=${perParcelWeightKg}kg) ` +
-            `rate=£${perParcelRate} (${bandResult.costSub != null ? 'price_sub' : 'price_first fallback'}) ` +
-            `× ${invoiceParcelCount} = £${rateCardExpected} (stored cost_price=£${baseFromDb})`
-          );
+          // Only recompute using rate card when price_sub (costSub) is explicitly configured.
+          // price_first is the single-parcel / first-parcel rate and MUST NOT be multiplied by
+          // N parcels — that would produce an inflated expected (e.g. £15.07 × 3 = £45.21
+          // instead of the correct £4.15 × 3 = £12.45).  When price_sub is null in the weight
+          // band, fall through so expectedBase falls back to baseFromDb (stored cost_price).
+          if (bandResult.costSub != null) {
+            rateCardExpected = round2(bandResult.costSub * invoiceParcelCount);
+            console.log(
+              `[recon engine] all_sub rate-card recompute: tracking=${trackingNumber} ` +
+              `zone=${chargeZoneId} weight=${invoiceWeightKg}kg (per_parcel=${perParcelWeightKg}kg) ` +
+              `price_sub=£${bandResult.costSub} × ${invoiceParcelCount} = £${rateCardExpected} ` +
+              `(stored cost_price=£${baseFromDb})`
+            );
+          } else {
+            console.log(
+              `[recon engine] all_sub rate-card recompute SKIPPED: tracking=${trackingNumber} ` +
+              `zone=${chargeZoneId} weight=${perParcelWeightKg}kg — price_sub not set on band, ` +
+              `falling back to stored cost_price=£${baseFromDb}`
+            );
+          }
         }
       }
 
@@ -1836,9 +1847,9 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
 
           if (perParcelWeightKg > 0 && chargeZoneId && serviceId) {
             const bandResult = await lookupCarrierBandCost(serviceId, perParcelWeightKg, chargeZoneId);
-            if (bandResult) {
-              const perParcelRate = bandResult.costSub ?? bandResult.cost;
-              rateCardExpected = round2(perParcelRate * invoiceParcelCount);
+            if (bandResult && bandResult.costSub != null) {
+              // Only recompute if price_sub is configured — never multiply price_first × N.
+              rateCardExpected = round2(bandResult.costSub * invoiceParcelCount);
             }
           }
           expectedCost = rateCardExpected != null ? rateCardExpected : baseFromDb;
