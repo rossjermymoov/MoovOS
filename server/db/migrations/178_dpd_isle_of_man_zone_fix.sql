@@ -91,10 +91,9 @@ BEGIN
 
     IF v_dpd11_iom_zone_id IS NOT NULL THEN
       UPDATE weight_bands
-      SET    price = 9.20,
-             updated_at = NOW()
-      WHERE  zone_id    = v_dpd11_iom_zone_id
-        AND  price      <> 9.20;
+      SET    price_first = 9.20
+      WHERE  zone_id     = v_dpd11_iom_zone_id
+        AND  price_first <> 9.20;
 
       GET DIAGNOSTICS v_updated_bands = ROW_COUNT;
 
@@ -138,7 +137,7 @@ BEGIN
 
       -- Carrier weight band: DPD charges £9.20 for Isle of Man Next Day regardless of weight.
       -- Single band covering 0–999 kg mirrors the pattern used for DPD-11 Isle of Man.
-      INSERT INTO weight_bands (zone_id, min_kg, max_kg, price)
+      INSERT INTO weight_bands (zone_id, min_weight_kg, max_weight_kg, price_first)
       VALUES (v_dpd12_iom_zone_id, 0.0, 999.0, 9.20)
       ON CONFLICT DO NOTHING;
 
