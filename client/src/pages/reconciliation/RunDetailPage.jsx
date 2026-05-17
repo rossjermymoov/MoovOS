@@ -1477,7 +1477,7 @@ function CustomerPreviewPanel({ runId }) {
         <thead>
           <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
             <th style={{ width: 24, padding: '7px 6px' }} />
-            {['Customer', 'Shipments', 'Sell Base', 'Fuel', 'Surcharges', 'Total Sell', 'Our Cost', 'Margin'].map(h => (
+            {['Customer', 'Shipments', 'Sell Base', 'Fuel', 'Surcharges', 'Total Sell', 'Our Cost', 'Margin', 'CSV'].map(h => (
               <th key={h} style={{ padding: '7px 10px', textAlign: 'left', color: '#555', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
             ))}
           </tr>
@@ -1513,6 +1513,22 @@ function CustomerPreviewPanel({ runId }) {
                   <td style={{ padding: '9px 10px', color: margin >= 0 ? '#00C853' : '#FF5252', fontWeight: 600 }}>
                     £{margin.toFixed(2)}
                   </td>
+                  <td style={{ padding: '9px 6px' }} onClick={e => e.stopPropagation()}>
+                    <a
+                      href={`/api/reconciliation/runs/${runId}/export/preview-csv?customer_id=${c.customer_id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 3,
+                        fontSize: 10, fontWeight: 600, color: '#58A6FF',
+                        background: 'rgba(88,166,255,0.08)', border: '1px solid rgba(88,166,255,0.25)',
+                        borderRadius: 4, padding: '3px 7px', textDecoration: 'none',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      ↓ CSV
+                    </a>
+                  </td>
                 </tr>
                 {expanded && (
                   <CustomerLinesDrilldown
@@ -1534,6 +1550,7 @@ function CustomerPreviewPanel({ runId }) {
             <td style={{ padding: '9px 10px', color: '#00C853', fontWeight: 800, fontSize: 14 }}>£{totalSell.toFixed(2)}</td>
             <td style={{ padding: '9px 10px', color: '#AAA', fontWeight: 700 }}>£{totalCost.toFixed(2)}</td>
             <td style={{ padding: '9px 10px', color: totalMargin >= 0 ? '#00C853' : '#FF5252', fontWeight: 800 }}>£{totalMargin.toFixed(2)}</td>
+            <td />
           </tr>
         </tfoot>
       </table>
