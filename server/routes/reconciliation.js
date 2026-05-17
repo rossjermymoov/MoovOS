@@ -2654,9 +2654,10 @@ router.get('/shipment-lookup', async (req, res) => {
     }
     const uniqueVariants = [...new Set(variants.map(v => v.toUpperCase()))];
 
-    // Search shipments — no courier gate, no verified gate
+    // Search shipments — no courier gate, no verified gate.
+    // Also searches by charges.order_id so operators can look up by customer reference.
     const shipRes = await query(`
-      SELECT
+      SELECT DISTINCT
         s.id,
         s.courier,
         s.dc_service_id,
@@ -2667,9 +2668,12 @@ router.get('/shipment-lookup', async (req, res) => {
         s.reference,
         s.ship_to_postcode
       FROM shipments s
+      LEFT JOIN charges c ON c.shipment_id = s.id
       WHERE s.dc_service_id = ANY($1)
          OR s.dc_service_id ILIKE ANY($2)
          OR s.tracking_codes && $1
+         OR s.reference ILIKE ANY($2)
+         OR c.order_id   ILIKE ANY($2)
       ORDER BY s.created_at DESC
       LIMIT 20
     `, [uniqueVariants, uniqueVariants.map(v => v)]);

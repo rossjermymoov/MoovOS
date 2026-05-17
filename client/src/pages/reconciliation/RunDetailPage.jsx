@@ -836,12 +836,13 @@ function ShipmentLookupPanel() {
               }}>
                 {[
                   ['Courier in OMS',   r.shipment.courier || '—'],
-                  ['dc_service_id',     r.shipment.dc_service_id || '(none)'],
-                  ['tracking_codes',    r.shipment.tracking_codes.length ? r.shipment.tracking_codes.join(', ') : '(empty)'],
-                  ['Reference',         r.shipment.reference || '—'],
-                  ['Weight',            r.shipment.total_weight_kg ? `${r.shipment.total_weight_kg} kg` : '—'],
-                  ['Parcels (booked)',  r.shipment.parcel_count ?? '—'],
-                  ['Postcode',          r.shipment.ship_to_postcode || '—'],
+                  ['Booked',           r.shipment.created_at ? new Date(r.shipment.created_at).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }) : '—'],
+                  ['Reference',        r.shipment.reference || '—'],
+                  ['dc_service_id',    r.shipment.dc_service_id || '(none)'],
+                  ['tracking_codes',   r.shipment.tracking_codes.length ? r.shipment.tracking_codes.join(', ') : '(empty)'],
+                  ['Weight',           r.shipment.total_weight_kg ? `${r.shipment.total_weight_kg} kg` : '—'],
+                  ['Parcels (booked)', r.shipment.parcel_count ?? '—'],
+                  ['Postcode',         r.shipment.ship_to_postcode || '—'],
                 ].map(([k, v]) => (
                   <div key={k} style={{ fontSize: 10 }}>
                     <span style={{ color: '#444' }}>{k}: </span>
