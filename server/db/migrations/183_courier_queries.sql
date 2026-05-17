@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS courier_queries (
   resolved_at             TIMESTAMPTZ,
 
   -- Audit
-  created_by              INTEGER      REFERENCES staff(id) ON DELETE SET NULL,
+  created_by              UUID         REFERENCES staff(id) ON DELETE SET NULL,
   created_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   raised_at               TIMESTAMPTZ
