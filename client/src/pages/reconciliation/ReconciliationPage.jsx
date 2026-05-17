@@ -831,6 +831,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
       // an operator can review rather than the row silently disappearing.
       return String(l.tracking_number || '').trim().length > 0;
     });
+  }
 
   const FIELDS = [
     { key: 'tracking_number',  label: 'Tracking Number',  required: true },
