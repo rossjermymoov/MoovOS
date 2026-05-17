@@ -73,7 +73,7 @@ CREATE INDEX IF NOT EXISTS courier_queries_tracking_idx   ON courier_queries(tra
 -- Linked OMS charges (junction — one query may span multiple consolidated charges)
 CREATE TABLE IF NOT EXISTS courier_query_charges (
   query_id    INTEGER NOT NULL REFERENCES courier_queries(id) ON DELETE CASCADE,
-  charge_id   INTEGER NOT NULL REFERENCES charges(id)         ON DELETE CASCADE,
+  charge_id   UUID    NOT NULL REFERENCES charges(id)         ON DELETE CASCADE,
   PRIMARY KEY (query_id, charge_id)
 );
 
