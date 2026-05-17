@@ -840,6 +840,7 @@ function ShipmentLookupPanel() {
                   ['tracking_codes',    r.shipment.tracking_codes.length ? r.shipment.tracking_codes.join(', ') : '(empty)'],
                   ['Reference',         r.shipment.reference || '—'],
                   ['Weight',            r.shipment.total_weight_kg ? `${r.shipment.total_weight_kg} kg` : '—'],
+                  ['Parcels (booked)',  r.shipment.parcel_count ?? '—'],
                   ['Postcode',          r.shipment.ship_to_postcode || '—'],
                 ].map(([k, v]) => (
                   <div key={k} style={{ fontSize: 10 }}>
@@ -848,6 +849,18 @@ function ShipmentLookupPanel() {
                   </div>
                 ))}
               </div>
+
+              {/* Reconciliation expected_amount summary */}
+              {r.total_cost_price != null && (
+                <div style={{
+                  marginBottom: 10, padding: '7px 10px', borderRadius: 6,
+                  background: 'rgba(88,166,255,0.07)', border: '1px solid rgba(88,166,255,0.2)',
+                  fontSize: 11,
+                }}>
+                  <span style={{ color: '#58A6FF', fontWeight: 700 }}>Reconciliation expected_amount: £{r.total_cost_price.toFixed(2)}</span>
+                  <span style={{ color: '#555', marginLeft: 8 }}>(base cost + fuel + surcharges — this is what the engine compares against the carrier invoice)</span>
+                </div>
+              )}
 
               {/* Pool blockers */}
               {r.pool_blockers.length > 0 && (
@@ -873,20 +886,28 @@ function ShipmentLookupPanel() {
                 <table style={{ width: '100%', fontSize: 10, borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                      {['Type', 'Status', 'Verified', 'Cancelled', 'Cost', 'Zone', 'Customer'].map(h => (
+                      {['Type', 'Service', 'V', 'X', 'Cost (our cost)', 'Sell (customer)', 'Zone', 'Source', 'Customer'].map(h => (
                         <th key={h} style={{ padding: '4px 6px', textAlign: 'left', color: '#444', fontWeight: 700, textTransform: 'uppercase', fontSize: 9 }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {r.charges.map((c, j) => (
-                      <tr key={j} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                      <tr key={j} style={{
+                        borderBottom: '1px solid rgba(255,255,255,0.03)',
+                        opacity: c.cancelled ? 0.4 : 1,
+                      }}>
                         <td style={{ padding: '4px 6px', color: '#AAA' }}>{c.charge_type}</td>
-                        <td style={{ padding: '4px 6px', color: '#888' }}>{c.status}</td>
-                        <td style={{ padding: '4px 6px', color: statusColor(c.verified), fontWeight: 700 }}>{c.verified ? 'Yes' : 'No'}</td>
-                        <td style={{ padding: '4px 6px', color: c.cancelled ? '#FF5252' : '#555' }}>{c.cancelled ? 'Yes' : 'No'}</td>
-                        <td style={{ padding: '4px 6px', color: '#E6EDF3' }}>{c.cost_price != null ? `£${parseFloat(c.cost_price).toFixed(2)}` : '—'}</td>
+                        <td style={{ padding: '4px 6px', color: '#666', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.service_name}>{c.service_code || c.service_name || '—'}</td>
+                        <td style={{ padding: '4px 6px', color: statusColor(c.verified), fontWeight: 700, fontSize: 9 }}>{c.verified ? '✓' : '✗'}</td>
+                        <td style={{ padding: '4px 6px', color: c.cancelled ? '#FF5252' : '#333', fontWeight: c.cancelled ? 700 : 400, fontSize: 9 }}>{c.cancelled ? '✗' : '—'}</td>
+                        <td style={{ padding: '4px 6px', color: '#E6EDF3', fontWeight: 600 }}>
+                          {c.cost_price != null ? `£${parseFloat(c.cost_price).toFixed(2)}` : '—'}
+                          {c.recon_corrected && <span title="Updated by reconciliation" style={{ marginLeft: 4, color: '#FFB300', fontSize: 8 }}>●R</span>}
+                        </td>
+                        <td style={{ padding: '4px 6px', color: '#00C853', fontWeight: 600 }}>{c.sell_price != null ? `£${parseFloat(c.sell_price).toFixed(2)}` : '—'}</td>
                         <td style={{ padding: '4px 6px', color: '#666' }}>{c.zone_name || '—'}</td>
+                        <td style={{ padding: '4px 6px', color: '#555', fontSize: 9 }}>{c.source || '—'}</td>
                         <td style={{ padding: '4px 6px', color: '#AAA' }}>{c.customer_name || '—'}</td>
                       </tr>
                     ))}

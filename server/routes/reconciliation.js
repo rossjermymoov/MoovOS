@@ -1919,6 +1919,155 @@ router.get('/runs/:id/finalized-lines', async (req, res) => {
   }
 });
 
+// ─── GET /api/reconciliation/runs/:id/export/preview-csv ────────────────────
+// Pre-finalization billing CSV for one customer.
+// Same format as /export/csv but sourced from reconciliation_lines + charges
+// so it can be downloaded before the run is finalized.
+// Query param: customer_id (required)
+
+router.get('/runs/:id/export/preview-csv', async (req, res) => {
+  try {
+    const runId      = parseInt(req.params.id);
+    const { customer_id } = req.query;
+    if (!customer_id) return res.status(400).json({ error: 'customer_id is required' });
+
+    // Run metadata
+    const runRes = await query(
+      `SELECT rr.*, co.name AS carrier_name
+       FROM   reconciliation_runs rr
+       LEFT JOIN couriers co ON co.id = rr.carrier_id
+       WHERE  rr.id = $1`, [runId]
+    );
+    if (!runRes.rows.length) return res.status(404).json({ error: 'Run not found' });
+    const run = runRes.rows[0];
+
+    // Lines joined to charges for full billing detail
+    const linesRes = await query(`
+      SELECT
+        rl.tracking_number,
+        rl.shipment_date,
+        rl.charge_type,
+        rl.parcel_count,
+        rl.carrier_billed_weight_kg,
+        rl.surcharge_id,
+        rl.status,
+        cs.name                                                   AS service_name,
+        cu.business_name                                          AS customer_name,
+        -- Sell amounts
+        COALESCE(rl.corrected_sell_price, ch.sell_price, ch.price, rl.carrier_amount) AS sell_base,
+        COALESCE(fuel.corrected_sell_price, fuel_ch.sell_price, fuel_ch.price, 0)     AS sell_fuel,
+        -- Charge metadata
+        ch.order_id                                               AS order_reference,
+        ch.ship_to_name                                           AS recipient_name,
+        ch.ship_to_postcode                                       AS postcode,
+        COALESCE(rl.carrier_billed_weight_kg, ch.declared_weight_kg) AS weight_kg,
+        -- Surcharge info (for surcharge lines)
+        s.name                                                    AS surcharge_name,
+        COALESCE(rl.corrected_sell_price, rl.expected_amount)     AS surcharge_sell
+      FROM   reconciliation_lines rl
+      LEFT JOIN courier_services cs  ON cs.id  = rl.service_id
+      LEFT JOIN customers        cu  ON cu.id  = rl.customer_id
+      LEFT JOIN charges          ch  ON ch.id  = rl.charge_id AND ch.charge_type = 'courier' AND ch.cancelled = false
+      -- Fuel line for same tracking number in this run
+      LEFT JOIN reconciliation_lines fuel
+             ON fuel.run_id         = rl.run_id
+            AND fuel.tracking_number = rl.tracking_number
+            AND fuel.customer_id    = rl.customer_id
+            AND fuel.is_fuel        = true
+      LEFT JOIN charges fuel_ch ON fuel_ch.id = fuel.charge_id AND fuel_ch.cancelled = false
+      LEFT JOIN surcharges s    ON s.id = rl.surcharge_id
+      WHERE  rl.run_id      = $1
+        AND  rl.customer_id = $2
+        AND  rl.status      IN ('matched', 'corrected')
+        AND  rl.is_fuel     = false
+      ORDER  BY rl.shipment_date ASC NULLS LAST, rl.tracking_number, rl.charge_type
+    `, [runId, customer_id]);
+
+    const allLines = linesRes.rows;
+    if (!allLines.length) return res.status(404).json({ error: 'No matched/corrected lines for this customer' });
+
+    // Separate freight and surcharge rows; group surcharges by tracking number
+    const freightLines  = allLines.filter(l => !l.surcharge_id);
+    const surchargeRows = allLines.filter(l =>  l.surcharge_id);
+
+    // Collect distinct surcharge names for dynamic columns
+    const surchargeNames = [...new Set(surchargeRows.map(s => s.surcharge_name).filter(Boolean))].sort();
+
+    // Build per-tracking surcharge map
+    const surchMap = {};
+    for (const s of surchargeRows) {
+      const k = s.tracking_number;
+      if (!surchMap[k]) surchMap[k] = {};
+      surchMap[k][s.surcharge_name] = (surchMap[k][s.surcharge_name] || 0) + parseFloat(s.surcharge_sell || 0);
+    }
+
+    const esc = v => { const s = String(v == null ? '' : v); return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s; };
+
+    const headers = [
+      'Tracking Number', 'Order Reference', 'Despatch Date',
+      'Recipient Name', 'Postcode', 'Service', 'Weight (kg)',
+      'Base Charge (£)', 'Fuel Charge (£)',
+      ...surchargeNames.map(n => `${n} (£)`),
+      'Total Surcharges (£)', 'Line Total (£)', 'Status',
+    ];
+
+    let totalBase = 0, totalFuel = 0, totalSurch = 0;
+    const surchargeColTotals = Object.fromEntries(surchargeNames.map(n => [n, 0]));
+
+    const rows = freightLines.map(l => {
+      const base  = parseFloat(l.sell_base || 0);
+      const fuel  = parseFloat(l.sell_fuel || 0);
+      const sm    = surchMap[l.tracking_number] || {};
+      const surch = surchargeNames.reduce((s, n) => s + (sm[n] || 0), 0);
+      const total = base + fuel + surch;
+      totalBase  += base; totalFuel += fuel; totalSurch += surch;
+      surchargeNames.forEach(n => { surchargeColTotals[n] += (sm[n] || 0); });
+      return [
+        l.tracking_number   || '',
+        l.order_reference   || '',
+        l.shipment_date ? new Date(l.shipment_date).toLocaleDateString('en-GB') : '',
+        l.recipient_name    || '',
+        l.postcode          || '',
+        l.service_name      || '',
+        l.weight_kg != null ? parseFloat(l.weight_kg).toFixed(3) : '',
+        base.toFixed(2),
+        fuel.toFixed(2),
+        ...surchargeNames.map(n => (sm[n] || 0).toFixed(2)),
+        surch.toFixed(2),
+        total.toFixed(2),
+        l.status            || '',
+      ];
+    });
+
+    rows.push([]);
+    rows.push(['TOTAL', '', '', '', '', '', '',
+      totalBase.toFixed(2), totalFuel.toFixed(2),
+      ...surchargeNames.map(n => surchargeColTotals[n].toFixed(2)),
+      totalSurch.toFixed(2),
+      (totalBase + totalFuel + totalSurch).toFixed(2), '',
+    ]);
+
+    const custName = (allLines[0]?.customer_name || 'customer').replace(/[^a-z0-9]/gi, '_');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="preview_run_${runId}_${custName}.csv"`);
+    return res.send([
+      `"Moov OS — Billing Preview (Pre-Finalization)"`,
+      `"Carrier: ${run.carrier_name || ''}"`,
+      `"Invoice Ref: ${run.invoice_ref || ''}"`,
+      `"Run ID: ${run.id}"`,
+      `"Customer: ${allLines[0]?.customer_name || ''}"`,
+      `"Generated: ${new Date().toLocaleString('en-GB')}"`,
+      '',
+      headers.map(esc).join(','),
+      ...rows.map(r => r.map(esc).join(',')),
+    ].join('\r\n'));
+
+  } catch (err) {
+    console.error('[reconciliation/export/preview-csv] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── GET /api/reconciliation/runs/:id/export/csv ─────────────────────────────
 // Generate and download an itemized CSV for one customer.
 // Query param: customer_id (required)
@@ -2513,6 +2662,7 @@ router.get('/shipment-lookup', async (req, res) => {
         s.dc_service_id,
         s.tracking_codes,
         s.total_weight_kg,
+        s.parcel_count,
         s.created_at,
         s.reference,
         s.ship_to_postcode
@@ -2535,16 +2685,31 @@ router.get('/shipment-lookup', async (req, res) => {
           c.verified,
           c.cancelled,
           c.cost_price,
+          COALESCE(c.sell_price, c.price) AS sell_price,
           c.zone_name,
           c.recon_corrected,
+          c.source,
           c.created_at,
-          cu.name AS customer_name,
+          cs.name              AS service_name,
+          cs.service_code      AS service_code,
+          cu.business_name     AS customer_name,
           cu.account_number
         FROM charges c
-        LEFT JOIN customers cu ON cu.id = c.customer_id
+        LEFT JOIN customers       cu ON cu.id = c.customer_id
+        LEFT JOIN courier_services cs ON cs.id = c.courier_service_id
         WHERE c.shipment_id = $1
         ORDER BY c.charge_type, c.created_at
       `, [ship.id]);
+
+      // total_cost_price = what the reconciliation engine uses as expected_amount:
+      // base courier cost_price + SUM of fuel/surcharge cost_prices (non-cancelled).
+      const baseCourier = chargeRes.rows.find(c => c.charge_type === 'courier' && !c.cancelled);
+      const surchargeSum = chargeRes.rows
+        .filter(c => ['fuel', 'surcharge'].includes(c.charge_type) && !c.cancelled)
+        .reduce((s, c) => s + (parseFloat(c.cost_price) || 0), 0);
+      const totalCostPrice = baseCourier
+        ? Math.round(((parseFloat(baseCourier.cost_price) || 0) + surchargeSum) * 100) / 100
+        : null;
 
       results.push({
         shipment: {
@@ -2553,22 +2718,28 @@ router.get('/shipment-lookup', async (req, res) => {
           dc_service_id:    ship.dc_service_id,
           tracking_codes:   ship.tracking_codes || [],
           total_weight_kg:  ship.total_weight_kg,
+          parcel_count:     ship.parcel_count,
           reference:        ship.reference,
           ship_to_postcode: ship.ship_to_postcode,
           created_at:       ship.created_at,
         },
+        total_cost_price: totalCostPrice,
         charges: chargeRes.rows.map(c => ({
-          id:             c.id,
-          charge_type:    c.charge_type,
-          status:         c.status,
-          verified:       c.verified,
-          cancelled:      c.cancelled,
-          cost_price:     c.cost_price,
-          zone_name:      c.zone_name,
+          id:              c.id,
+          charge_type:     c.charge_type,
+          status:          c.status,
+          verified:        c.verified,
+          cancelled:       c.cancelled,
+          cost_price:      c.cost_price,
+          sell_price:      c.sell_price,
+          zone_name:       c.zone_name,
+          service_name:    c.service_name,
+          service_code:    c.service_code,
+          source:          c.source,
           recon_corrected: c.recon_corrected,
-          customer_name:  c.customer_name,
-          account_number: c.account_number,
-          created_at:     c.created_at,
+          customer_name:   c.customer_name,
+          account_number:  c.account_number,
+          created_at:      c.created_at,
         })),
         pool_eligible: chargeRes.rows.some(c =>
           c.charge_type === 'courier' && c.verified === true && c.cancelled === false
