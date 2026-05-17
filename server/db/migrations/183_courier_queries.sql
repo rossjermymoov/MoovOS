@@ -77,4 +77,6 @@ CREATE TABLE IF NOT EXISTS courier_query_charges (
   PRIMARY KEY (query_id, charge_id)
 );
 
-RAISE NOTICE 'Migration 183: courier_queries and courier_query_charges tables created';
+DO $$ BEGIN
+  RAISE NOTICE 'Migration 183: courier_queries and courier_query_charges tables created';
+END $$;
