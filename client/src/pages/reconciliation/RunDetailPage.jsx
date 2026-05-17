@@ -1150,7 +1150,43 @@ function DeltaCell({ line, onResolveAsSurcharge }) {
 }
 
 // ─── Lines table ──────────────────────────────────────────────────────────────
-function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, runId, courierId }) {
+function exportLinesToCSV(lines, filename) {
+  const esc = v => {
+    const s = v == null ? '' : String(v);
+    return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const headers = [
+    'Tracking Number', 'Service (Raw)', 'Service', 'Customer',
+    'Type', 'Carrier £', 'Expected £', 'Delta £',
+    'Status', 'Reason', 'Corrected By',
+    'Postcode', 'Shipment Date', 'Parcels', 'Account No',
+  ];
+  const rows = lines.map(l => [
+    l.tracking_number          || '',
+    l.raw_service_code         || '',
+    l.service_name             || '',
+    l.customer_name            || '',
+    l.charge_type              || 'base',
+    l.carrier_amount  != null  ? parseFloat(l.carrier_amount).toFixed(2)  : '',
+    l.expected_amount != null  ? parseFloat(l.expected_amount).toFixed(2) : '',
+    l.delta           != null  ? parseFloat(l.delta).toFixed(2)           : '',
+    l.status                   || '',
+    l.unmatched_reason         || '',
+    l.corrected_by             || '',
+    l.ship_to_postcode         || '',
+    l.shipment_date ? new Date(l.shipment_date).toLocaleDateString('en-GB') : '',
+    l.parcel_count             || '',
+    l.carrier_account_no       || '',
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(esc).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = Object.assign(document.createElement('a'), { href: url, download: filename });
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+}
+
+function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, runId, courierId, exportFilename }) {
   const [traceLine,      setTraceLine]      = useState(null);
   const [surchargeFilter, setSurchargeFilter] = useState('all'); // 'all' | 'freight' | surcharge_id
 
@@ -1189,24 +1225,35 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, runId
 
   return (
     <div>
-      {/* Surcharge filter — only shown when there are surcharge lines in this set */}
-      {surchargeTypes.length > 0 && (
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', padding: '10px 4px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: 4 }}>
-          <span style={{ fontSize: 10, color: '#444', textTransform: 'uppercase', letterSpacing: '0.06em', marginRight: 4 }}>Show</span>
-          <span style={pill(surchargeFilter === 'all')} onClick={() => setSurchargeFilter('all')}>All lines</span>
-          <span style={pill(surchargeFilter === 'freight', '#00C853')} onClick={() => setSurchargeFilter('freight')}>Freight only</span>
-          {surchargeTypes.map(s => (
-            <span key={s.id} style={pill(surchargeFilter === s.id, '#00BCD4')} onClick={() => setSurchargeFilter(s.id)}>
-              {s.name}
-            </span>
-          ))}
-          {surchargeFilter !== 'all' && (
-            <span style={{ fontSize: 10, color: '#555', marginLeft: 6 }}>
-              {filteredLines.length} line{filteredLines.length !== 1 ? 's' : ''}
-            </span>
-          )}
-        </div>
-      )}
+      {/* Toolbar: surcharge filter (when present) + CSV export */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 4px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: 4 }}>
+        {surchargeTypes.length > 0 ? (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontSize: 10, color: '#444', textTransform: 'uppercase', letterSpacing: '0.06em', marginRight: 4 }}>Show</span>
+            <span style={pill(surchargeFilter === 'all')} onClick={() => setSurchargeFilter('all')}>All lines</span>
+            <span style={pill(surchargeFilter === 'freight', '#00C853')} onClick={() => setSurchargeFilter('freight')}>Freight only</span>
+            {surchargeTypes.map(s => (
+              <span key={s.id} style={pill(surchargeFilter === s.id, '#00BCD4')} onClick={() => setSurchargeFilter(s.id)}>
+                {s.name}
+              </span>
+            ))}
+            {surchargeFilter !== 'all' && (
+              <span style={{ fontSize: 10, color: '#555', marginLeft: 6 }}>
+                {filteredLines.length} line{filteredLines.length !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+        ) : (
+          <span style={{ fontSize: 10, color: '#555' }}>{filteredLines.length} line{filteredLines.length !== 1 ? 's' : ''}</span>
+        )}
+        <button
+          style={{ ...btnGhost, padding: '4px 10px', fontSize: 11 }}
+          onClick={() => exportLinesToCSV(filteredLines, exportFilename || 'reconciliation.csv')}
+          title="Download visible lines as CSV"
+        >
+          <Download size={12} /> Export CSV
+        </button>
+      </div>
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
         <thead>
@@ -1935,6 +1982,7 @@ export default function RunDetailPage() {
               onResolveAsSurcharge={(line) => { setDefaultResolveType('map_to_surcharge'); setResolvingLine(line); }}
               runId={id}
               courierId={run.carrier_id}
+              exportFilename={`${run.carrier_name || 'recon'}_${run.invoice_ref || id}_unmatched.csv`}
             />
           </div>
         </>
@@ -1957,6 +2005,7 @@ export default function RunDetailPage() {
             onResolveAsSurcharge={(line) => { setDefaultResolveType('map_to_surcharge'); setResolvingLine(line); }}
             runId={id}
             courierId={run.carrier_id}
+            exportFilename={`${run.carrier_name || 'recon'}_${run.invoice_ref || id}_${activeTab}.csv`}
           />
         </div>
       )}
