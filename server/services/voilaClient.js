@@ -88,6 +88,23 @@ export async function fetchShipmentByReference(reference) {
   return match ? mapToWebhookPayload(match) : null;
 }
 
+// ─── Fetch by reference + tracking code (handles shared-reference consolidations) ──
+// When two bookings share the same sender reference (e.g. consolidated DPD parcels),
+// this picks the correct one by matching the tracking code in create_label_parcels.
+// Returns null if no shipment has that tracking code.
+export async function fetchShipmentByReferenceAndTracking(reference, trackingCode) {
+  const data = await voilaGet('/shipments.json', { reference });
+  const list = Array.isArray(data) ? data : (data.shipments || [data]);
+  // Find the shipment whose create_label_parcels contains the specific tracking code
+  const match = list.find(s =>
+    (s.create_label_parcels || []).some(p => p.tracking_code === trackingCode)
+  );
+  // Fall back to any reference match if tracking code not found in parcels
+  // (handles edge case where tracking code is on the shipment level)
+  const fallback = match || list.find(s => s.reference === reference || s.reference_2 === reference);
+  return fallback ? mapToWebhookPayload(fallback) : null;
+}
+
 // ─── Fetch by date range (paginated) ─────────────────────────────────────────
 // Used for disaster-recovery bulk backfill when a webhook outage is detected.
 // startDate / endDate: ISO 8601 strings e.g. '2024-06-01T08:00:00'

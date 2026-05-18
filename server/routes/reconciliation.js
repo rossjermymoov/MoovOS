@@ -16,7 +16,7 @@ import express from 'express';
 import { query } from '../db/index.js';
 import { processReconciliationRun, ageUnmatchedLines, reprocessMappedLines } from '../services/reconciliationEngine.js';
 import { finalizeRun, getCustomerSummaries, generateCustomerCSV, getMarginReport } from '../services/finalizationService.js';
-import { fetchShipmentById, fetchShipmentByReference, probeShipmentRaw } from '../services/voilaClient.js';
+import { fetchShipmentById, fetchShipmentByReference, fetchShipmentByReferenceAndTracking, probeShipmentRaw } from '../services/voilaClient.js';
 import { processShipment, insertCharges } from '../services/pricingEngine.js';
 
 const router = express.Router();
@@ -3711,47 +3711,67 @@ router.get('/queries/summary', async (req, res) => {
 
 // ─── POST /api/reconciliation/backfill-shipment ───────────────────────────────
 // Manual recovery for shipments whose shipment-created webhook was never fired.
-// Operator supplies the Voila platform_shipment_id (from Dispatch Cloud admin).
-// Fetches from Voila API, prices, creates charges, and marks them verified.
 //
-// Body: { voila_shipment_id: number | string }
-// Returns: { created: number, charge_ids: [], warnings: [] }
+// Preferred: Body: { reference: '472393', tracking_number: '2313467491' }
+//   Searches DC by sender reference, picks the shipment whose create_label_parcels
+//   contains the specific tracking code. Handles consolidated shipments where two
+//   bookings share the same sender reference.
+//
+// Fallback: Body: { voila_shipment_id: 249492859 }
+//   Direct ID lookup — only works if DC API supports ?id= parameter.
+//
+// Returns: { created: number, charge_ids: [], warnings: [], shipment_ref: string }
 router.post('/backfill-shipment', async (req, res) => {
   try {
-    const rawId = req.body?.voila_shipment_id;
-    if (!rawId) return res.status(400).json({ error: 'voila_shipment_id is required' });
+    const { reference, tracking_number, voila_shipment_id } = req.body || {};
 
-    const voilaId = String(rawId).trim();
-    const platformInt = parseInt(voilaId, 10);
+    if (!reference && !tracking_number && !voila_shipment_id) {
+      return res.status(400).json({ error: 'Provide either reference + tracking_number, or voila_shipment_id' });
+    }
 
-    if (!platformInt) return res.status(400).json({ error: 'voila_shipment_id must be a valid integer' });
+    // ── Dedup guard ───────────────────────────────────────────────────────────
+    // Check if charges already exist for this tracking code to avoid duplicates.
+    if (tracking_number) {
+      const existing = await query(`
+        SELECT c.id FROM charges c
+        JOIN   shipments s ON s.id = c.shipment_id
+        WHERE  c.cancelled   = false
+          AND  c.charge_type = 'courier'
+          AND  $1 = ANY(s.tracking_codes)
+        LIMIT 1
+      `, [String(tracking_number)]);
+      if (existing.rows.length) {
+        return res.status(409).json({
+          error: 'Charges already exist for this tracking number — backfill not needed',
+          existing_charge_ids: existing.rows.map(r => r.id),
+        });
+      }
+    }
 
-    // Guard: check if charges already exist for this platform shipment ID
-    const existing = await query(`
-      SELECT c.id, c.voila_shipment_id, c.charge_type, c.cancelled
-      FROM   charges c
-      WHERE  c.cancelled   = false
-        AND  c.charge_type = 'courier'
-        AND  (
-          c.voila_shipment_id::text = $1
-          OR c.shipment_id IN (SELECT id FROM shipments WHERE platform_shipment_id = $2)
-        )
-      LIMIT 5
-    `, [voilaId, platformInt]);
+    // ── Fetch from Voila API ──────────────────────────────────────────────────
+    let payload = null;
 
-    if (existing.rows.length) {
-      return res.status(409).json({
-        error: 'Charges already exist for this shipment — backfill not needed',
-        existing_charge_ids: existing.rows.map(r => r.id),
+    if (reference && tracking_number) {
+      // Primary path: search by sender reference, pick the right shipment by
+      // matching tracking code — handles shared-reference consolidations
+      payload = await fetchShipmentByReferenceAndTracking(
+        String(reference).trim(),
+        String(tracking_number).trim()
+      );
+    } else if (reference) {
+      payload = await fetchShipmentByReference(String(reference).trim());
+    } else if (voila_shipment_id) {
+      payload = await fetchShipmentById(String(voila_shipment_id).trim());
+    }
+
+    if (!payload) {
+      return res.status(404).json({
+        error: 'Voila API returned no matching shipment. Check the sender reference is correct.',
+        tried: { reference, tracking_number, voila_shipment_id },
       });
     }
 
-    // Fetch from Voila
-    const payload = await fetchShipmentById(voilaId);
-    if (!payload) {
-      return res.status(404).json({ error: `Voila API returned no shipment for ID ${voilaId}` });
-    }
-
+    // ── Price and insert ──────────────────────────────────────────────────────
     const { charges, errors } = await processShipment(payload);
     if (!charges.length) {
       return res.status(422).json({
@@ -3761,7 +3781,6 @@ router.post('/backfill-shipment', async (req, res) => {
       });
     }
 
-    // Insert charges (no shipment_id — we let the pool pick them up via voila_shipment_id / order_id)
     const inserted = await insertCharges(charges);
     const insertedIds = inserted.map(c => c.id);
 
@@ -3772,12 +3791,12 @@ router.post('/backfill-shipment', async (req, res) => {
       );
     }
 
-    console.log(`✅  Manual backfill: created + verified ${inserted.length} charge(s) for Voila shipment ${voilaId}`);
+    console.log(`✅  Manual backfill: created + verified ${inserted.length} charge(s) for ref=${reference} tracking=${tracking_number}`);
 
     return res.json({
-      created:    inserted.length,
-      charge_ids: insertedIds,
-      warnings:   errors,
+      created:      inserted.length,
+      charge_ids:   insertedIds,
+      warnings:     errors,
       shipment_ref: payload.shipment?.reference || null,
     });
   } catch (err) {

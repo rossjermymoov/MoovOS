@@ -746,18 +746,23 @@ function ShipmentLookupPanel() {
   const [loading,       setLoading]       = useState(false);
   const [result,        setResult]        = useState(null);
   const [err,           setErr]           = useState(null);
-  const [backfillId,    setBackfillId]    = useState('');
-  const [backfilling,   setBackfilling]   = useState(false);
+  const [backfillRef,    setBackfillRef]    = useState('');
+  const [backfillTracking, setBackfillTracking] = useState('');
+  const [backfilling,    setBackfilling]   = useState(false);
   const [backfillResult, setBackfillResult] = useState(null);
-  const [backfillErr,   setBackfillErr]   = useState('');
+  const [backfillErr,    setBackfillErr]   = useState('');
 
   async function handleBackfill(e) {
     e.preventDefault();
-    const voilaId = backfillId.trim();
-    if (!voilaId) return;
+    const ref      = backfillRef.trim();
+    const tracking = backfillTracking.trim();
+    if (!ref && !tracking) return;
     setBackfilling(true); setBackfillResult(null); setBackfillErr('');
     try {
-      const r = await api.post('/reconciliation/backfill-shipment', { voila_shipment_id: voilaId });
+      const r = await api.post('/reconciliation/backfill-shipment', {
+        reference:      ref      || undefined,
+        tracking_number: tracking || undefined,
+      });
       setBackfillResult(r.data);
     } catch (ex) {
       setBackfillErr(ex.response?.data?.error || 'Backfill failed');
@@ -826,7 +831,7 @@ function ShipmentLookupPanel() {
                 ✗ No shipment found — the shipment-created webhook may never have fired for this tracking number.
               </div>
 
-              {/* Manual backfill — recover a missed shipment using the Voila platform ID */}
+              {/* Manual backfill — recover a missed shipment using sender ref + tracking */}
               <div style={{
                 padding: '12px 16px', borderRadius: 8,
                 background: 'rgba(255,179,0,0.06)', border: '1px solid rgba(255,179,0,0.2)',
@@ -835,22 +840,26 @@ function ShipmentLookupPanel() {
                   Recover missed shipment
                 </div>
                 <div style={{ fontSize: 11, color: '#888', marginBottom: 10, lineHeight: 1.5 }}>
-                  If you can see this shipment in Dispatch Cloud, enter its numeric Voila shipment ID
-                  (visible in the DC admin URL or shipment detail) to pull it in and create charges now.
-                  For tracking <span style={{ fontFamily: 'monospace', color: '#AAA' }}>2313467491</span> the ID would be{' '}
-                  <span style={{ fontFamily: 'monospace', color: '#FFB300' }}>249492859</span>.
+                  Enter the <strong style={{ color: '#AAA' }}>sender reference</strong> (the customer ref used when booking — visible in DC) and the
+                  tracking number. We'll search DC for that booking and pull it in.
                 </div>
-                <form onSubmit={handleBackfill} style={{ display: 'flex', gap: 8 }}>
+                <form onSubmit={handleBackfill} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <input
+                    style={{ ...inputSt, width: 130 }}
+                    placeholder="Sender ref e.g. 472393"
+                    value={backfillRef}
+                    onChange={e => setBackfillRef(e.target.value)}
+                  />
                   <input
                     style={{ ...inputSt, width: 160, fontFamily: 'monospace' }}
-                    placeholder="e.g. 249492859"
-                    value={backfillId}
-                    onChange={e => setBackfillId(e.target.value)}
+                    placeholder="Tracking number"
+                    value={backfillTracking || input}
+                    onChange={e => setBackfillTracking(e.target.value)}
                   />
                   <button
                     type="submit"
                     style={{ ...btnGhost, whiteSpace: 'nowrap', opacity: backfilling ? 0.7 : 1 }}
-                    disabled={backfilling}
+                    disabled={backfilling || !backfillRef.trim()}
                   >
                     {backfilling ? <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Download size={12} />}
                     {backfilling ? 'Recovering…' : 'Recover shipment'}
