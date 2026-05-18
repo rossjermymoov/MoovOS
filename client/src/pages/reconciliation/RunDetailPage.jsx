@@ -742,10 +742,29 @@ function ServiceCodeMappingBanner({ unmatchedLines, runId, courierId, onMapped }
 
 // ─── Shipment lookup panel ────────────────────────────────────────────────────
 function ShipmentLookupPanel() {
-  const [input,   setInput]   = useState('');
-  const [loading, setLoading] = useState(false);
-  const [result,  setResult]  = useState(null);
-  const [err,     setErr]     = useState(null);
+  const [input,         setInput]         = useState('');
+  const [loading,       setLoading]       = useState(false);
+  const [result,        setResult]        = useState(null);
+  const [err,           setErr]           = useState(null);
+  const [backfillId,    setBackfillId]    = useState('');
+  const [backfilling,   setBackfilling]   = useState(false);
+  const [backfillResult, setBackfillResult] = useState(null);
+  const [backfillErr,   setBackfillErr]   = useState('');
+
+  async function handleBackfill(e) {
+    e.preventDefault();
+    const voilaId = backfillId.trim();
+    if (!voilaId) return;
+    setBackfilling(true); setBackfillResult(null); setBackfillErr('');
+    try {
+      const r = await api.post('/reconciliation/backfill-shipment', { voila_shipment_id: voilaId });
+      setBackfillResult(r.data);
+    } catch (ex) {
+      setBackfillErr(ex.response?.data?.error || 'Backfill failed');
+    } finally {
+      setBackfilling(false);
+    }
+  }
 
   async function handleLookup(e) {
     e.preventDefault();
@@ -798,12 +817,67 @@ function ShipmentLookupPanel() {
           </div>
 
           {result.shipments_found === 0 && (
-            <div style={{
-              padding: '12px 16px', borderRadius: 8,
-              background: 'rgba(255,82,82,0.08)', border: '1px solid rgba(255,82,82,0.2)',
-              fontSize: 12, color: '#FF5252', fontWeight: 600,
-            }}>
-              ✗ No shipment found with this tracking number. The webhook may never have fired, or the shipment was created under a different reference.
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{
+                padding: '12px 16px', borderRadius: 8,
+                background: 'rgba(255,82,82,0.08)', border: '1px solid rgba(255,82,82,0.2)',
+                fontSize: 12, color: '#FF5252', fontWeight: 600,
+              }}>
+                ✗ No shipment found — the shipment-created webhook may never have fired for this tracking number.
+              </div>
+
+              {/* Manual backfill — recover a missed shipment using the Voila platform ID */}
+              <div style={{
+                padding: '12px 16px', borderRadius: 8,
+                background: 'rgba(255,179,0,0.06)', border: '1px solid rgba(255,179,0,0.2)',
+              }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#FFB300', marginBottom: 4 }}>
+                  Recover missed shipment
+                </div>
+                <div style={{ fontSize: 11, color: '#888', marginBottom: 10, lineHeight: 1.5 }}>
+                  If you can see this shipment in Dispatch Cloud, enter its numeric Voila shipment ID
+                  (visible in the DC admin URL or shipment detail) to pull it in and create charges now.
+                  For tracking <span style={{ fontFamily: 'monospace', color: '#AAA' }}>2313467491</span> the ID would be{' '}
+                  <span style={{ fontFamily: 'monospace', color: '#FFB300' }}>249492859</span>.
+                </div>
+                <form onSubmit={handleBackfill} style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    style={{ ...inputSt, width: 160, fontFamily: 'monospace' }}
+                    placeholder="e.g. 249492859"
+                    value={backfillId}
+                    onChange={e => setBackfillId(e.target.value)}
+                  />
+                  <button
+                    type="submit"
+                    style={{ ...btnGhost, whiteSpace: 'nowrap', opacity: backfilling ? 0.7 : 1 }}
+                    disabled={backfilling}
+                  >
+                    {backfilling ? <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Download size={12} />}
+                    {backfilling ? 'Recovering…' : 'Recover shipment'}
+                  </button>
+                </form>
+                {backfillErr && (
+                  <div style={{ marginTop: 8, fontSize: 11, color: '#FF5252' }}>{backfillErr}</div>
+                )}
+                {backfillResult && (
+                  <div style={{
+                    marginTop: 8, padding: '8px 12px', borderRadius: 6,
+                    background: 'rgba(0,200,83,0.08)', border: '1px solid rgba(0,200,83,0.25)',
+                    fontSize: 11, color: '#00C853',
+                  }}>
+                    ✓ Created and verified {backfillResult.created} charge{backfillResult.created !== 1 ? 's' : ''} for ref{' '}
+                    <span style={{ fontFamily: 'monospace' }}>{backfillResult.shipment_ref}</span>.
+                    {backfillResult.warnings?.length > 0 && (
+                      <div style={{ color: '#FFB300', marginTop: 4 }}>
+                        Warnings: {backfillResult.warnings.join(', ')}
+                      </div>
+                    )}
+                    <div style={{ marginTop: 4, color: '#888' }}>
+                      Search the tracking number above again to confirm it is now in the pool.
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -1219,7 +1293,7 @@ function exportLinesToCSV(lines, filename) {
   setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
 }
 
-function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, runId, courierId, exportFilename }) {
+function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, onRaiseQuery, runId, courierId, exportFilename }) {
   const [traceLine,      setTraceLine]      = useState(null);
   const [surchargeFilter, setSurchargeFilter] = useState('all'); // 'all' | 'freight' | surcharge_id
 
@@ -1335,10 +1409,19 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, runId
                 }
               </td>
               <td style={{ padding: '9px 10px' }}>
-                <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
                   {showResolve && line.status === 'unmatched' && (
                     <button style={{ ...btnGhost, padding: '4px 8px', fontSize: 10 }} onClick={() => onResolve(line)}>
                       Resolve
+                    </button>
+                  )}
+                  {onRaiseQuery && line.status === 'unmatched' && (
+                    <button
+                      title="Raise a query with the carrier about this line"
+                      style={{ ...btnRed, padding: '4px 8px', fontSize: 10 }}
+                      onClick={() => onRaiseQuery(line)}
+                    >
+                      Raise Query
                     </button>
                   )}
                   {runId && (
@@ -1741,6 +1824,439 @@ function CustomerSummaryPanel({ runId, run }) {
   );
 }
 
+// ─── Raise Query modal ───────────────────────────────────────────────────────
+// Pre-fills a new courier query from a reconciliation line.
+// query_type is inferred from unmatched_reason but the operator can change it.
+const QUERY_TYPE_OPTS = [
+  { value: 'parcel_count_overbill',  label: 'Parcel count overbill' },
+  { value: 'consolidation_mismatch', label: 'Consolidation mismatch' },
+  { value: 'rate_dispute',           label: 'Rate dispute' },
+  { value: 'unrecognised_charge',    label: 'Unrecognised charge' },
+  { value: 'other',                  label: 'Other' },
+];
+
+function inferQueryType(reason) {
+  if (reason === 'parcel_count_mismatch') return 'parcel_count_overbill';
+  if (reason === 'unexplained_delta' || reason === 'aggregate_mismatch') return 'rate_dispute';
+  return 'other';
+}
+
+function RaiseQueryModal({ line, runId, carrierId, invoiceRef, onClose, onRaised }) {
+  const [queryType,   setQueryType]   = useState(inferQueryType(line.unmatched_reason));
+  const [details,     setDetails]     = useState(() => {
+    if (line.unmatched_reason === 'parcel_count_mismatch' && line.correction_metadata) {
+      const m = line.correction_metadata;
+      return `DPD invoiced ${m.invoice_parcel_count} parcel${m.invoice_parcel_count !== 1 ? 's' : ''} but booking was for ${m.booked_parcel_count} parcel${m.booked_parcel_count !== 1 ? 's' : ''}. Disputed amount: £${Math.abs(parseFloat(line.carrier_amount || 0) - parseFloat(line.expected_amount || 0)).toFixed(2)}.`;
+    }
+    return '';
+  });
+  const [carrierRef,  setCarrierRef]  = useState('');
+  const [saving,      setSaving]      = useState(false);
+  const [err,         setErr]         = useState('');
+
+  const disputed = (parseFloat(line.carrier_amount || 0) - parseFloat(line.expected_amount || 0)).toFixed(2);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setSaving(true); setErr('');
+    try {
+      const payload = {
+        run_id:                runId,
+        reconciliation_line_id: line.id,
+        carrier_id:            carrierId,
+        invoice_ref:           invoiceRef || null,
+        tracking_number:       line.tracking_number || null,
+        query_type:            queryType,
+        carrier_charged:       parseFloat(line.carrier_amount) || null,
+        expected_charged:      parseFloat(line.expected_amount) || null,
+        details:               details.trim() || null,
+        carrier_reference:     carrierRef.trim() || null,
+        charge_ids:            line.charge_id ? [line.charge_id] : [],
+      };
+      await api.post('/reconciliation/queries', payload);
+      onRaised();
+      onClose();
+    } catch (ex) {
+      setErr(ex.response?.data?.error || 'Failed to raise query');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const overlay = {
+    position: 'fixed', inset: 0, zIndex: 1000,
+    background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+  };
+  const modal = {
+    background: '#0d1117', border: '1px solid rgba(255,255,255,0.12)',
+    borderRadius: 12, padding: 24, width: 500, maxHeight: '90vh',
+    overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
+  };
+
+  return (
+    <div style={overlay} onClick={onClose}>
+      <div style={modal} onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#E6EDF3' }}>Raise Carrier Query</div>
+            <div style={{ fontSize: 11, color: '#555', marginTop: 2 }}>Log a dispute to follow up with the carrier</div>
+          </div>
+          <button style={{ ...btnGhost, padding: '4px 8px' }} onClick={onClose}><X size={14} /></button>
+        </div>
+
+        {/* Line summary */}
+        <div style={{
+          marginBottom: 20, padding: '10px 14px', borderRadius: 8,
+          background: 'rgba(255,82,82,0.06)', border: '1px solid rgba(255,82,82,0.2)',
+          display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10,
+        }}>
+          <div>
+            <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Tracking</div>
+            <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#AAA' }}>{line.tracking_number || '—'}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Carrier charged</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#FF5252' }}>£{parseFloat(line.carrier_amount || 0).toFixed(2)}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Disputed</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#FFB300' }}>{parseFloat(disputed) > 0 ? '+' : ''}£{disputed}</div>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          {/* Query type */}
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 11, color: '#888', fontWeight: 700, display: 'block', marginBottom: 6 }}>
+              QUERY TYPE
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              {QUERY_TYPE_OPTS.map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setQueryType(opt.value)}
+                  style={{
+                    padding: '7px 10px', borderRadius: 6, cursor: 'pointer',
+                    textAlign: 'left', fontSize: 11, fontWeight: 600,
+                    background: queryType === opt.value ? 'rgba(255,179,0,0.12)' : 'rgba(255,255,255,0.03)',
+                    border: queryType === opt.value ? '1px solid rgba(255,179,0,0.5)' : '1px solid rgba(255,255,255,0.08)',
+                    color: queryType === opt.value ? '#FFB300' : '#666',
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Details */}
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 11, color: '#888', fontWeight: 700, display: 'block', marginBottom: 6 }}>
+              DETAILS
+            </label>
+            <textarea
+              style={{ ...inputSt, minHeight: 80, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.5 }}
+              placeholder="Describe the discrepancy…"
+              value={details}
+              onChange={e => setDetails(e.target.value)}
+            />
+          </div>
+
+          {/* Carrier ref (optional) */}
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ fontSize: 11, color: '#888', fontWeight: 700, display: 'block', marginBottom: 6 }}>
+              CARRIER CASE REFERENCE <span style={{ color: '#555', fontWeight: 400 }}>(optional — add after raising with carrier)</span>
+            </label>
+            <input
+              style={inputSt}
+              placeholder="e.g. DPD case number"
+              value={carrierRef}
+              onChange={e => setCarrierRef(e.target.value)}
+            />
+          </div>
+
+          {err && (
+            <div style={{ marginBottom: 14, padding: '8px 12px', borderRadius: 6, background: 'rgba(213,0,0,0.1)', border: '1px solid rgba(213,0,0,0.3)', color: '#FF5252', fontSize: 12 }}>
+              {err}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button type="button" style={btnGhost} onClick={onClose}>Cancel</button>
+            <button type="submit" style={{ ...btnRed, opacity: saving ? 0.7 : 1 }} disabled={saving}>
+              {saving ? <RefreshCw size={13} /> : null}
+              {saving ? 'Saving…' : 'Raise Query'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Status badge for courier queries ────────────────────────────────────────
+const QUERY_STATUS_CFG = {
+  open:         { color: '#FFB300', bg: 'rgba(255,179,0,0.12)',  border: 'rgba(255,179,0,0.3)',  label: 'Open' },
+  raised:       { color: '#79AAFF', bg: 'rgba(121,170,255,0.12)', border: 'rgba(121,170,255,0.3)', label: 'Raised' },
+  acknowledged: { color: '#FF8F00', bg: 'rgba(255,143,0,0.12)',  border: 'rgba(255,143,0,0.3)',  label: 'Acknowledged' },
+  credited:     { color: '#00C853', bg: 'rgba(0,200,83,0.12)',   border: 'rgba(0,200,83,0.3)',   label: 'Credited' },
+  rejected:     { color: '#FF5252', bg: 'rgba(213,0,0,0.12)',    border: 'rgba(213,0,0,0.3)',    label: 'Rejected' },
+  written_off:  { color: '#555',    bg: 'rgba(255,255,255,0.04)', border: 'rgba(255,255,255,0.1)', label: 'Written off' },
+};
+
+function QueryStatusBadge({ status }) {
+  const cfg = QUERY_STATUS_CFG[status] || { color: '#AAA', bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.1)', label: status };
+  return (
+    <span style={{
+      display: 'inline-block', padding: '1px 8px', borderRadius: 9999,
+      fontSize: 10, fontWeight: 700,
+      background: cfg.bg, border: `1px solid ${cfg.border}`, color: cfg.color,
+    }}>
+      {cfg.label}
+    </span>
+  );
+}
+
+// ─── Courier Queries panel ────────────────────────────────────────────────────
+function CourierQueriesPanel({ runId, carrierId }) {
+  const qc = useQueryClient();
+  const [updatingId, setUpdatingId] = useState(null);
+  const [editingId,  setEditingId]  = useState(null); // ID of query being edited inline
+  const [editRef,    setEditRef]    = useState('');
+  const [editCredit, setEditCredit] = useState('');
+  const [editNotes,  setEditNotes]  = useState('');
+
+  const { data: result, isLoading, error } = useQuery({
+    queryKey: ['courier-queries', runId],
+    queryFn: () => api.get(`/reconciliation/queries`, { params: { run_id: runId, limit: 200 } }).then(r => r.data),
+    staleTime: 30_000,
+  });
+
+  const queries = result?.queries || [];
+
+  async function updateStatus(id, status) {
+    setUpdatingId(id);
+    try {
+      await api.patch(`/reconciliation/queries/${id}`, { status });
+      qc.invalidateQueries({ queryKey: ['courier-queries', runId] });
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  function startEdit(q) {
+    setEditingId(q.id);
+    setEditRef(q.carrier_reference || '');
+    setEditCredit(q.credit_amount != null ? String(parseFloat(q.credit_amount).toFixed(2)) : '');
+    setEditNotes(q.resolution_notes || '');
+  }
+
+  async function saveEdit(id) {
+    setUpdatingId(id);
+    try {
+      await api.patch(`/reconciliation/queries/${id}`, {
+        carrier_reference: editRef.trim() || null,
+        credit_amount:     editCredit ? parseFloat(editCredit) : null,
+        resolution_notes:  editNotes.trim() || null,
+      });
+      qc.invalidateQueries({ queryKey: ['courier-queries', runId] });
+      setEditingId(null);
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  if (isLoading) return <div style={{ color: '#555', fontSize: 12, padding: 20 }}>Loading queries…</div>;
+  if (error) return <div style={{ color: '#FF5252', fontSize: 12, padding: 20 }}>Failed to load queries</div>;
+
+  const totalDisputed = queries.reduce((s, q) => s + parseFloat(q.disputed_amount || 0), 0);
+  const totalCredited = queries.reduce((s, q) => s + parseFloat(q.credit_amount || 0), 0);
+  const activeCount   = queries.filter(q => !['credited','rejected','written_off'].includes(q.status)).length;
+
+  return (
+    <div style={card}>
+      {/* Summary header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#E6EDF3' }}>Carrier Queries</div>
+          <div style={{ fontSize: 11, color: '#555', marginTop: 2 }}>
+            Disputes and queries raised with the carrier for this run
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 20 }}>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Active</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: activeCount > 0 ? '#FFB300' : '#555' }}>{activeCount}</div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total disputed</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: '#FF5252' }}>£{totalDisputed.toFixed(2)}</div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Credited back</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: totalCredited > 0 ? '#00C853' : '#555' }}>£{totalCredited.toFixed(2)}</div>
+          </div>
+        </div>
+      </div>
+
+      {queries.length === 0 ? (
+        <div style={{ textAlign: 'center', color: '#555', fontSize: 12, padding: '30px 0' }}>
+          No queries raised for this run yet. Use the Needs Review tab to raise a query against a specific line.
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                {['Tracking', 'Type', 'Carrier £', 'Expected £', 'Disputed', 'Carrier Ref', 'Status', 'Raised', ''].map(h => (
+                  <th key={h} style={{ padding: '8px 10px', textAlign: 'left', color: '#555', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {queries.map(q => {
+                const isEditing = editingId === q.id;
+                const isUpdating = updatingId === q.id;
+                const disputed = parseFloat(q.disputed_amount || 0);
+                return (
+                  <tr key={q.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                    <td style={{ padding: '9px 10px', fontFamily: 'monospace', color: '#AAA', fontSize: 10 }}>{q.tracking_number || '—'}</td>
+                    <td style={{ padding: '9px 10px', color: '#888' }}>
+                      {QUERY_TYPE_OPTS.find(o => o.value === q.query_type)?.label || q.query_type}
+                    </td>
+                    <td style={{ padding: '9px 10px', color: '#E6EDF3', fontWeight: 600 }}>
+                      {q.carrier_charged != null ? `£${parseFloat(q.carrier_charged).toFixed(2)}` : '—'}
+                    </td>
+                    <td style={{ padding: '9px 10px', color: '#888' }}>
+                      {q.expected_charged != null ? `£${parseFloat(q.expected_charged).toFixed(2)}` : '—'}
+                    </td>
+                    <td style={{ padding: '9px 10px', fontWeight: 700, color: disputed > 0 ? '#FF5252' : '#00C853' }}>
+                      {disputed > 0 ? '+' : ''}£{disputed.toFixed(2)}
+                    </td>
+                    <td style={{ padding: '9px 10px' }}>
+                      {isEditing ? (
+                        <input
+                          style={{ ...inputSt, width: 120, padding: '3px 6px', fontSize: 10 }}
+                          value={editRef}
+                          onChange={e => setEditRef(e.target.value)}
+                          placeholder="Carrier case #"
+                        />
+                      ) : (
+                        <span style={{ color: q.carrier_reference ? '#E6EDF3' : '#333', fontFamily: q.carrier_reference ? 'monospace' : 'inherit', fontSize: 10 }}>
+                          {q.carrier_reference || 'Not yet raised'}
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ padding: '9px 10px' }}><QueryStatusBadge status={q.status} /></td>
+                    <td style={{ padding: '9px 10px', color: '#555', fontSize: 10 }}>
+                      {q.raised_at ? new Date(q.raised_at).toLocaleDateString('en-GB') : '—'}
+                    </td>
+                    <td style={{ padding: '9px 6px' }}>
+                      {isEditing ? (
+                        <div style={{ display: 'flex', gap: 4, flexDirection: 'column', minWidth: 200 }}>
+                          <input
+                            style={{ ...inputSt, padding: '3px 6px', fontSize: 10 }}
+                            value={editCredit}
+                            onChange={e => setEditCredit(e.target.value)}
+                            placeholder="Credit amount £"
+                            type="number" step="0.01"
+                          />
+                          <input
+                            style={{ ...inputSt, padding: '3px 6px', fontSize: 10 }}
+                            value={editNotes}
+                            onChange={e => setEditNotes(e.target.value)}
+                            placeholder="Resolution notes"
+                          />
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button style={{ ...btnGhost, padding: '3px 8px', fontSize: 10, flex: 1 }} onClick={() => setEditingId(null)}>
+                              Cancel
+                            </button>
+                            <button style={{ ...btnGreen, padding: '3px 8px', fontSize: 10, flex: 1, opacity: isUpdating ? 0.7 : 1 }} onClick={() => saveEdit(q.id)} disabled={isUpdating}>
+                              {isUpdating ? <RefreshCw size={10} /> : <Check size={10} />} Save
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                          {/* Status progression buttons */}
+                          {q.status === 'open' && (
+                            <button
+                              style={{ ...btnGhost, padding: '3px 8px', fontSize: 10, opacity: isUpdating ? 0.7 : 1 }}
+                              onClick={() => updateStatus(q.id, 'raised')}
+                              disabled={isUpdating}
+                              title="Mark as raised with carrier"
+                            >
+                              <Send size={10} /> Raised
+                            </button>
+                          )}
+                          {q.status === 'raised' && (
+                            <button
+                              style={{ ...btnGhost, padding: '3px 8px', fontSize: 10, opacity: isUpdating ? 0.7 : 1 }}
+                              onClick={() => updateStatus(q.id, 'acknowledged')}
+                              disabled={isUpdating}
+                            >
+                              <Check size={10} /> Acknowledged
+                            </button>
+                          )}
+                          {q.status === 'acknowledged' && (
+                            <>
+                              <button
+                                style={{ ...btnGreen, padding: '3px 8px', fontSize: 10, opacity: isUpdating ? 0.7 : 1 }}
+                                onClick={() => updateStatus(q.id, 'credited')}
+                                disabled={isUpdating}
+                              >
+                                <Check size={10} /> Credited
+                              </button>
+                              <button
+                                style={{ ...btnRed, padding: '3px 8px', fontSize: 10, opacity: isUpdating ? 0.7 : 1 }}
+                                onClick={() => updateStatus(q.id, 'rejected')}
+                                disabled={isUpdating}
+                              >
+                                <X size={10} /> Rejected
+                              </button>
+                            </>
+                          )}
+                          {!['credited','rejected','written_off'].includes(q.status) && (
+                            <button
+                              style={{ ...btnGhost, padding: '3px 7px', fontSize: 10 }}
+                              onClick={() => startEdit(q)}
+                              title="Edit carrier reference or credit amount"
+                            >
+                              ✎
+                            </button>
+                          )}
+                          {!['credited','rejected','written_off'].includes(q.status) && (
+                            <button
+                              style={{ ...btnGhost, padding: '3px 8px', fontSize: 10, opacity: isUpdating ? 0.7 : 1 }}
+                              onClick={() => updateStatus(q.id, 'written_off')}
+                              disabled={isUpdating}
+                              title="Write off — not worth pursuing"
+                            >
+                              Write off
+                            </button>
+                          )}
+                          {/* Show credit amount if credited */}
+                          {q.status === 'credited' && q.credit_amount != null && (
+                            <span style={{ fontSize: 10, color: '#00C853', fontWeight: 700 }}>
+                              ✓ £{parseFloat(q.credit_amount).toFixed(2)} credited
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function RunDetailPage() {
   const { id }     = useParams();
@@ -1751,6 +2267,7 @@ export default function RunDetailPage() {
   const [defaultResolveType, setDefaultResolveType] = useState(null);
   const [finalizing,        setFinalizing]        = useState(false);
   const [finalizeError,     setFinalizeError]     = useState('');
+  const [raisingQueryLine,  setRaisingQueryLine]  = useState(null);
 
   const { data: run, isLoading: runLoading, refetch: refetchRun } = useQuery({
     queryKey: ['recon-run', id],
@@ -1785,6 +2302,15 @@ export default function RunDetailPage() {
   const matchedLines   = linesQuery('matched').data?.lines   || [];
   const correctedLines = linesQuery('corrected').data?.lines || [];
 
+  const { data: queriesData } = useQuery({
+    queryKey: ['courier-queries', parseInt(id)],
+    queryFn: () => api.get(`/reconciliation/queries`, { params: { run_id: id, limit: 200 } }).then(r => r.data),
+    staleTime: 60_000,
+  });
+  const activeQueryCount = (queriesData?.queries || []).filter(q =>
+    !['credited','rejected','written_off'].includes(q.status)
+  ).length;
+
   const tabs = [
     { key: 'overview',   label: 'Overview' },
     { key: 'unmatched',  label: `Needs Review (${run?.unmatched_count || 0})`, alert: (run?.unmatched_count || 0) > 0 },
@@ -1792,6 +2318,7 @@ export default function RunDetailPage() {
     { key: 'corrected',  label: `Corrected (${run?.corrected_count || 0})` },
     { key: 'all',        label: 'All Lines' },
     { key: 'customers',  label: run?.finalized ? 'Customers ✓' : 'Customers' },
+    { key: 'queries',    label: 'Carrier Queries', alert: activeQueryCount > 0 },
   ];
 
   const currentLines = {
@@ -2030,6 +2557,7 @@ export default function RunDetailPage() {
               showResolve
               onResolve={(line) => { setDefaultResolveType(null); setResolvingLine(line); }}
               onResolveAsSurcharge={(line) => { setDefaultResolveType('map_to_surcharge'); setResolvingLine(line); }}
+              onRaiseQuery={(line) => setRaisingQueryLine(line)}
               runId={id}
               courierId={run.carrier_id}
               exportFilename={`${run.carrier_name || 'recon'}_${run.invoice_ref || id}_unmatched.csv`}
@@ -2045,8 +2573,13 @@ export default function RunDetailPage() {
           : <CustomerPreviewPanel runId={parseInt(id)} />
       )}
 
+      {/* Carrier Queries tab */}
+      {activeTab === 'queries' && (
+        <CourierQueriesPanel runId={parseInt(id)} carrierId={run.carrier_id} />
+      )}
+
       {/* Line tables for other tabs */}
-      {activeTab !== 'overview' && activeTab !== 'unmatched' && activeTab !== 'customers' && (
+      {activeTab !== 'overview' && activeTab !== 'unmatched' && activeTab !== 'customers' && activeTab !== 'queries' && (
         <div style={card}>
           <LinesTable
             lines={currentLines}
@@ -2072,6 +2605,21 @@ export default function RunDetailPage() {
             qc.invalidateQueries({ queryKey: ['recon-lines', id] });
             setResolvingLine(null);
             setDefaultResolveType(null);
+          }}
+        />
+      )}
+
+      {/* Raise Query modal */}
+      {raisingQueryLine && (
+        <RaiseQueryModal
+          line={raisingQueryLine}
+          runId={parseInt(id)}
+          carrierId={run.carrier_id}
+          invoiceRef={run.invoice_ref}
+          onClose={() => setRaisingQueryLine(null)}
+          onRaised={() => {
+            qc.invalidateQueries({ queryKey: ['courier-queries', parseInt(id)] });
+            qc.invalidateQueries({ queryKey: ['courier-queries-summary', id] });
           }}
         />
       )}

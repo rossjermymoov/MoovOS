@@ -16,6 +16,8 @@ import express from 'express';
 import { query } from '../db/index.js';
 import { processReconciliationRun, ageUnmatchedLines, reprocessMappedLines } from '../services/reconciliationEngine.js';
 import { finalizeRun, getCustomerSummaries, generateCustomerCSV, getMarginReport } from '../services/finalizationService.js';
+import { fetchShipmentById, fetchShipmentByReference, probeShipmentRaw } from '../services/voilaClient.js';
+import { processShipment, insertCharges } from '../services/pricingEngine.js';
 
 const router = express.Router();
 
@@ -3703,6 +3705,97 @@ router.get('/queries/summary', async (req, res) => {
     return res.json(result.rows[0]);
   } catch (err) {
     console.error('[courier-queries/summary] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/reconciliation/backfill-shipment ───────────────────────────────
+// Manual recovery for shipments whose shipment-created webhook was never fired.
+// Operator supplies the Voila platform_shipment_id (from Dispatch Cloud admin).
+// Fetches from Voila API, prices, creates charges, and marks them verified.
+//
+// Body: { voila_shipment_id: number | string }
+// Returns: { created: number, charge_ids: [], warnings: [] }
+router.post('/backfill-shipment', async (req, res) => {
+  try {
+    const rawId = req.body?.voila_shipment_id;
+    if (!rawId) return res.status(400).json({ error: 'voila_shipment_id is required' });
+
+    const voilaId = String(rawId).trim();
+    const platformInt = parseInt(voilaId, 10);
+
+    if (!platformInt) return res.status(400).json({ error: 'voila_shipment_id must be a valid integer' });
+
+    // Guard: check if charges already exist for this platform shipment ID
+    const existing = await query(`
+      SELECT c.id, c.voila_shipment_id, c.charge_type, c.cancelled
+      FROM   charges c
+      WHERE  c.cancelled   = false
+        AND  c.charge_type = 'courier'
+        AND  (
+          c.voila_shipment_id::text = $1
+          OR c.shipment_id IN (SELECT id FROM shipments WHERE platform_shipment_id = $2)
+        )
+      LIMIT 5
+    `, [voilaId, platformInt]);
+
+    if (existing.rows.length) {
+      return res.status(409).json({
+        error: 'Charges already exist for this shipment — backfill not needed',
+        existing_charge_ids: existing.rows.map(r => r.id),
+      });
+    }
+
+    // Fetch from Voila
+    const payload = await fetchShipmentById(voilaId);
+    if (!payload) {
+      return res.status(404).json({ error: `Voila API returned no shipment for ID ${voilaId}` });
+    }
+
+    const { charges, errors } = await processShipment(payload);
+    if (!charges.length) {
+      return res.status(422).json({
+        error: 'Pricing engine produced no charges for this shipment',
+        warnings: errors,
+        shipment_ref: payload.shipment?.reference || null,
+      });
+    }
+
+    // Insert charges (no shipment_id — we let the pool pick them up via voila_shipment_id / order_id)
+    const inserted = await insertCharges(charges);
+    const insertedIds = inserted.map(c => c.id);
+
+    if (insertedIds.length) {
+      await query(
+        `UPDATE charges SET verified = true, status = 'verified', updated_at = NOW() WHERE id = ANY($1)`,
+        [insertedIds]
+      );
+    }
+
+    console.log(`✅  Manual backfill: created + verified ${inserted.length} charge(s) for Voila shipment ${voilaId}`);
+
+    return res.json({
+      created:    inserted.length,
+      charge_ids: insertedIds,
+      warnings:   errors,
+      shipment_ref: payload.shipment?.reference || null,
+    });
+  } catch (err) {
+    console.error('[backfill-shipment] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/reconciliation/probe-shipment ───────────────────────────────────
+// Diagnostic: fetches raw Voila API data for a shipment ID without creating anything.
+// Lets operators verify a shipment exists in DC before triggering backfill.
+router.get('/probe-shipment', async (req, res) => {
+  try {
+    const { voila_shipment_id } = req.query;
+    if (!voila_shipment_id) return res.status(400).json({ error: 'voila_shipment_id is required' });
+    const raw = await probeShipmentRaw(voila_shipment_id);
+    return res.json(raw);
+  } catch (err) {
     return res.status(500).json({ error: err.message });
   }
 });

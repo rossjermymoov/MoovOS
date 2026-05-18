@@ -9,7 +9,7 @@
 
 import express from 'express';
 import { query } from '../db/index.js';
-import { fetchShipmentByReference } from '../services/voilaClient.js';
+import { fetchShipmentByReference, fetchShipmentById } from '../services/voilaClient.js';
 import { processShipment, insertCharges } from '../services/pricingEngine.js';
 
 const router = express.Router();
@@ -174,8 +174,15 @@ export function normalisePayload(body) {
 
       for (const ev of sorted) {
         events.push({
-          _consignment:        consignment,
-          _shipment_reference: shipment.reference || null,
+          _consignment:           consignment,
+          // platform_shipment_id is the unique Voila/DC shipment ID (e.g. 249492859).
+          // This is always unique per booking — unlike shipment.reference which is the
+          // customer's sender ref and can be shared across multiple consolidated parcels
+          // (e.g. two separate DPD bookings both using reference '472393').
+          // The backfill guard MUST use platform ID to avoid silently skipping the second
+          // booking when the first one already has a charge for the same reference.
+          _platform_shipment_id:  shipment.id ? String(shipment.id) : null,
+          _shipment_reference:    shipment.reference || null,
           _courier_name:       shipment.courier || null,
           _courier_code:       shipment.courier ? shipment.courier.toLowerCase() : null,
           _service_name:       shipment.friendly_service_name || null,
@@ -223,7 +230,10 @@ export async function upsertEvent(event, rawBody) {
     'event_time', 'eventTime', 'datetime', 'date_time', 'scanned_at', 'created_at') || new Date().toISOString();
   const eventCode   = event.event_code || pick(event, 'eventCode', 'code', 'status_code', 'update_id');
 
-  const shipmentReference = event._shipment_reference || pick(event, 'shipment_reference', 'order_reference');
+  const shipmentReference    = event._shipment_reference    || pick(event, 'shipment_reference', 'order_reference');
+  // Prefer numeric platform ID for dedup — more specific than reference (which may be shared)
+  const platformShipmentId   = event._platform_shipment_id  || null;
+  const platformShipmentInt  = platformShipmentId ? (parseInt(platformShipmentId, 10) || null) : null;
 
   const courierName    = event._courier_name    || pick(event, 'courier_name', 'courierName', 'courier', 'carrier', 'carrier_name');
   const courierCode    = event._courier_code    || pick(event, 'courier_code', 'courierCode', 'carrier_code', 'carrierCode');
@@ -367,48 +377,79 @@ export async function upsertEvent(event, rawBody) {
     // If no charges were updated, the shipment-created webhook was likely missed.
     // Fire-and-forget: fetch from Voila API, price it, insert and immediately verify.
     // Non-blocking — the tracking webhook response is never delayed or failed.
-    if (verifyResult.rowCount === 0 && shipmentReference) {
-      // ── Guard: only backfill if no charge already exists in Finance ───────────
-      // The verify query above only matches charges via shipments.tracking_codes.
-      // A charge may already exist via billing.js (order_id) or pricingEngine
-      // (voila_shipment_id) without the tracking code being linked yet.
-      // If a charge exists by any path, skip the backfill — don't create a duplicate.
-      const refStr = String(shipmentReference);
-      const existingCharge = await query(`
-        SELECT 1 FROM charges
-        WHERE cancelled    = false
-          AND charge_type  = 'courier'
-          AND (
-            order_id = $1
-            OR voila_shipment_id::text = $1
-            OR shipment_id IN (
-              SELECT id FROM shipments WHERE platform_shipment_id::text = $1
+    //
+    // KEY: We use platformShipmentId (Voila's unique numeric shipment ID, e.g. 249492859)
+    // as the dedup key wherever possible. shipment.reference is the customer's sender ref
+    // and is NOT unique — two separate DPD bookings with the same sender ref (e.g. two
+    // parcels consolidated under one DPD consignment) will share the same reference.
+    // Using reference alone causes the second booking to be silently skipped when the
+    // first booking's charge already exists for that reference.
+    const backfillKey = platformShipmentId || shipmentReference;
+
+    if (verifyResult.rowCount === 0 && backfillKey) {
+      // ── Guard: only backfill if no charge already exists ─────────────────────
+      // When a platform ID is available, check by voila_shipment_id / platform_shipment_id
+      // only — not by order_id / reference, which may falsely match a different booking
+      // that happens to share the same customer reference.
+      let existingCharge;
+      if (platformShipmentInt) {
+        existingCharge = await query(`
+          SELECT 1 FROM charges
+          WHERE cancelled   = false
+            AND charge_type = 'courier'
+            AND (
+              voila_shipment_id::text = $1
+              OR shipment_id IN (
+                SELECT id FROM shipments WHERE platform_shipment_id = $2
+              )
             )
-          )
-        LIMIT 1
-      `, [refStr]);
+          LIMIT 1
+        `, [String(platformShipmentInt), platformShipmentInt]);
+      } else if (shipmentReference) {
+        // No platform ID available — fall back to reference match (legacy path)
+        const refStr = String(shipmentReference);
+        existingCharge = await query(`
+          SELECT 1 FROM charges
+          WHERE cancelled   = false
+            AND charge_type = 'courier'
+            AND (
+              order_id = $1
+              OR voila_shipment_id::text = $1
+              OR shipment_id IN (SELECT id FROM shipments WHERE platform_shipment_id::text = $1)
+            )
+          LIMIT 1
+        `, [refStr]);
+      } else {
+        existingCharge = { rows: [] };
+      }
 
       if (existingCharge.rows.length) {
         // Charge exists but tracking code not yet linked — not a missing shipment,
         // just a lookup miss. Don't backfill.
-        console.log(`[tracking] charge exists for ref ${shipmentReference} (not linked by tracking code ${consignment}) — skipping backfill`);
-      } else if (backfillInFlight.has(shipmentReference)) {
-        // A concurrent webhook for the same reference is already backfilling.
-        console.log(`[tracking] backfill already in flight for ${shipmentReference} — skipping concurrent trigger`);
+        console.log(`[tracking] charge exists for ${backfillKey} (consignment ${consignment}) — skipping backfill`);
+      } else if (backfillInFlight.has(backfillKey)) {
+        // A concurrent webhook for the same shipment is already backfilling.
+        console.log(`[tracking] backfill already in flight for ${backfillKey} — skipping concurrent trigger`);
       } else {
-        // Truly missing — no charge anywhere for this reference. Backfill.
-        backfillInFlight.add(shipmentReference);
+        // Truly missing — no charge anywhere for this shipment. Backfill.
+        backfillInFlight.add(backfillKey);
         ;(async () => {
           try {
-            console.warn(`⚠️  Tracking backfill: no charges for consignment ${consignment} (ref ${shipmentReference}) — fetching from Voila API`);
-            const payload = await fetchShipmentByReference(shipmentReference);
+            console.warn(`⚠️  Tracking backfill: no charges for consignment ${consignment} (key ${backfillKey}) — fetching from Voila API`);
+
+            // Prefer fetching by platform ID (exact, unique) over reference (may match
+            // the wrong shipment when two bookings share the same customer reference)
+            const payload = platformShipmentInt
+              ? await fetchShipmentById(String(platformShipmentInt))
+              : await fetchShipmentByReference(String(shipmentReference));
+
             if (!payload) {
-              console.warn(`   Backfill: Voila API returned no shipment for reference ${shipmentReference}`);
+              console.warn(`   Backfill: Voila API returned no shipment for key ${backfillKey}`);
               return;
             }
             const { charges, errors } = await processShipment(payload);
             if (!charges.length) {
-              console.warn(`   Backfill: processShipment produced no charges for ${shipmentReference}`, errors);
+              console.warn(`   Backfill: processShipment produced no charges for ${backfillKey}`, errors);
               return;
             }
             const inserted = await insertCharges(charges);
@@ -419,12 +460,12 @@ export async function upsertEvent(event, rawBody) {
                 [insertedIds]
               );
             }
-            console.log(`✅  Tracking backfill: created + verified ${inserted.length} charge(s) for ${shipmentReference} (consignment ${consignment})`);
+            console.log(`✅  Tracking backfill: created + verified ${inserted.length} charge(s) for ${backfillKey} (consignment ${consignment})`);
             if (errors.length) console.warn('   Backfill warnings:', errors);
           } catch (err) {
-            console.error(`❌  Tracking backfill failed for ${shipmentReference}:`, err.message);
+            console.error(`❌  Tracking backfill failed for ${backfillKey}:`, err.message);
           } finally {
-            backfillInFlight.delete(shipmentReference);
+            backfillInFlight.delete(backfillKey);
           }
         })();
       }
