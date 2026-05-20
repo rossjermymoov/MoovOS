@@ -3903,4 +3903,7 @@ router.get('/probe-shipment', async (req, res) => {
   }
 });
 
+// ─── GET /api/reconciliation/ping ─────────────────────────────────────────────
+router.get('/ping', (_req, res) => res.json({ ok: true, ts: Date.now() }));
+
 export default router;
