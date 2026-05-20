@@ -3805,6 +3805,90 @@ router.post('/backfill-shipment', async (req, res) => {
   }
 });
 
+// ─── GET /api/reconciliation/origin-analysis ─────────────────────────────────
+// Extracts ship_from postcodes from raw_payload across all shipments.
+// Groups by customer account and postcode, returns volumes and postcode districts.
+// Used for rate negotiation / courier tender preparation.
+router.get('/origin-analysis', async (req, res) => {
+  try {
+    // Extract ship_from.postcode from raw_payload JSON for shipments that have it.
+    // Also try request_shipment JSON string (stored on the billing.js / webhooks path).
+    // Group by customer account name and postcode district (first part of postcode).
+    const result = await query(`
+      WITH extracted AS (
+        SELECT
+          -- Customer name from charges or shipment customer_account
+          COALESCE(
+            (SELECT cu.business_name FROM customers cu WHERE cu.id = s.customer_id LIMIT 1),
+            s.customer_account,
+            'Unknown'
+          ) AS customer_name,
+
+          -- Full postcode from raw_payload.shipment.ship_from... or request_shipment
+          TRIM(UPPER(COALESCE(
+            -- webhooks.js path: raw_payload->shipment->... doesn't store ship_from postcode
+            -- billing.js path: raw_payload->'request_shipment' is a JSON string
+            (
+              SELECT rsp->>'postcode'
+              FROM   jsonb_path_query(
+                       CASE
+                         WHEN jsonb_typeof(s.raw_payload->'request_shipment') = 'string'
+                         THEN (s.raw_payload->>'request_shipment')::jsonb
+                         ELSE s.raw_payload->'request_shipment'
+                       END,
+                       '$.ship_from'
+                     ) AS rsp
+              LIMIT 1
+            )
+          ))) AS origin_postcode,
+
+          s.collection_date,
+          COALESCE(s.parcel_count, 1) AS parcel_count
+        FROM shipments s
+        WHERE s.raw_payload IS NOT NULL
+          AND s.cancelled = false
+      )
+      SELECT
+        customer_name,
+        origin_postcode,
+        -- Postcode district = everything up to the space (e.g. LU2 from LU2 9NH)
+        REGEXP_REPLACE(origin_postcode, '\\s.*$', '') AS postcode_district,
+        COUNT(*)::int                                  AS shipment_count,
+        SUM(parcel_count)::int                         AS parcel_count,
+        MIN(collection_date)                           AS first_seen,
+        MAX(collection_date)                           AS last_seen
+      FROM extracted
+      WHERE origin_postcode IS NOT NULL
+        AND origin_postcode != ''
+        AND LENGTH(origin_postcode) >= 5
+      GROUP BY customer_name, origin_postcode
+      ORDER BY shipment_count DESC
+    `);
+
+    // Also compute totals per postcode district across all customers
+    const byDistrict = {};
+    for (const row of result.rows) {
+      const d = row.postcode_district;
+      if (!byDistrict[d]) byDistrict[d] = { postcode_district: d, shipment_count: 0, parcel_count: 0, customers: [] };
+      byDistrict[d].shipment_count += row.shipment_count;
+      byDistrict[d].parcel_count   += row.parcel_count;
+      if (!byDistrict[d].customers.includes(row.customer_name)) {
+        byDistrict[d].customers.push(row.customer_name);
+      }
+    }
+
+    return res.json({
+      by_customer_postcode: result.rows,
+      by_district: Object.values(byDistrict).sort((a, b) => b.shipment_count - a.shipment_count),
+      total_shipments: result.rows.reduce((s, r) => s + r.shipment_count, 0),
+      total_parcels:   result.rows.reduce((s, r) => s + r.parcel_count, 0),
+    });
+  } catch (err) {
+    console.error('[origin-analysis] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── GET /api/reconciliation/probe-shipment ───────────────────────────────────
 // Diagnostic: fetches raw Voila API data for a shipment ID without creating anything.
 // Lets operators verify a shipment exists in DC before triggering backfill.
