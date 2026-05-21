@@ -257,14 +257,17 @@ function ParcelDrawer({ consignment, onClose }) {
               // Build tracking URL: use stored URL first, then fall back to known courier patterns
               const stored = data?.tracking_url;
               const code = (data?.courier_code || '').toLowerCase();
+              const post = encodeURIComponent((data?.recipient_postcode || '').trim());
+              // Yodel tracking numbers always start with JJD (covers AGL parcels too)
+              const isYodel = consignment.toUpperCase().startsWith('JJD') || code === 'yodel' || code === 'agl';
               const fallback =
-                code === 'dpd'                          ? `https://track.dpd.co.uk/parcels/${consignment}`
-                : code === 'dpd_local' || code === 'dpdlocal' ? `https://www.dpdlocal-online.co.uk/track?parcel=${consignment}`
+                isYodel                                 ? `https://www.yodel.co.uk/tracking/${consignment}/${post}`
+                : code === 'dpd' || code === 'dpd_local' || code === 'dpdlocal' ? `https://www.dpd.co.uk/apps/tracking/?reference=${consignment}`
+                : code === 'dhl' || code === 'dhl_parcel' ? `https://track.dhlparcel.co.uk/?con=${consignment}`
                 : code === 'evri' || code === 'hermes'  ? `https://www.evri.com/track-a-parcel/${consignment}`
-                : code === 'yodel'                      ? `https://www.yodel.co.uk/track/${consignment}`
                 : code === 'royal_mail' || code === 'royalmail' ? `https://www.royalmail.com/track-your-item#/tracking-results/${consignment}`
                 : code === 'parcelforce'                ? `https://www.parcelforce.com/track-trace?trackNumber=${consignment}`
-                : code === 'ups'                        ? `https://www.ups.com/track?tracknum=${consignment}`
+                : code === 'ups'                        ? `https://www.ups.com/track?loc=en_GB&tracknum=${consignment}`
                 : code === 'fedex'                      ? `https://www.fedex.com/en-gb/tracking.html?tracknumbers=${consignment}`
                 : null;
               const url = stored || fallback;
