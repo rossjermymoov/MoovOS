@@ -275,9 +275,99 @@ const PRIORITY_BAR = {
   low:    'rgba(125,133,144,0.4)',
 };
 
+const PRIORITY_LABEL = { urgent: 'Urgent', high: 'High', medium: 'Medium', low: 'Low' };
+
+// ─── Hover popup ──────────────────────────────────────────────────────────────
+
+function TicketPopup({ q, pos, logoUrl, assigneeName }) {
+  const priColor = q.priority === 'urgent' ? C.red
+                 : q.priority === 'high'   ? C.amber
+                 : q.priority === 'medium' ? C.blue
+                 : C.muted;
+
+  const left = Math.min(pos.x + 10, window.innerWidth - 370);
+  const top  = Math.max(8, Math.min(pos.y - 8, window.innerHeight - 300));
+
+  return (
+    <div style={{
+      position: 'fixed', left, top,
+      width: 355,
+      background: '#1E252D',
+      border: '1px solid rgba(255,255,255,0.16)',
+      borderRadius: 10,
+      boxShadow: '0 24px 64px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.04)',
+      padding: '14px 16px',
+      zIndex: 9999,
+      pointerEvents: 'none',
+    }}>
+      {/* Customer + ticket number */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 9 }}>
+        <div style={{ fontSize: 17, fontWeight: 800, color: C.text, lineHeight: 1.2 }}>{q.customer_name}</div>
+        <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, flexShrink: 0, paddingTop: 2 }}>#{q.ticket_number}</span>
+      </div>
+
+      {/* Badges row: topic + status + priority */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+        {q.query_type && <TypeBadge type={q.query_type} />}
+        <StatusBadge status={q.status} />
+        {q.priority && q.priority !== 'medium' && (
+          <span style={{ fontSize: 10, fontWeight: 700, color: priColor, background: `${priColor}18`,
+            padding: '2px 8px', borderRadius: 4, border: `1px solid ${priColor}33`, textTransform: 'capitalize' }}>
+            {PRIORITY_LABEL[q.priority]}
+          </span>
+        )}
+      </div>
+
+      {/* Consignment strip */}
+      {q.consignment_number && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10,
+          padding: '7px 10px', background: 'rgba(255,255,255,0.04)',
+          borderRadius: 6, border: `1px solid ${C.border}` }}>
+          {logoUrl && (
+            <div style={{ width: 22, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: '#fff', borderRadius: 3, flexShrink: 0, padding: 2 }}>
+              <img src={logoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+            </div>
+          )}
+          <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: C.text, letterSpacing: '0.02em' }}>
+            {q.consignment_number}
+          </span>
+          {q.courier_name && (
+            <span style={{ fontSize: 11, color: C.muted, marginLeft: 2 }}>{q.courier_name}</span>
+          )}
+        </div>
+      )}
+
+      {/* Subject */}
+      <div style={{ fontSize: 13, fontWeight: 600, color: C.sub, marginBottom: 8, lineHeight: 1.45 }}>
+        {q.subject || '(no subject)'}
+      </div>
+
+      {/* Preview — up to 4 lines */}
+      {q.latest_email_preview && (
+        <div style={{ fontSize: 12, color: '#6B7784', lineHeight: 1.6, marginBottom: 10,
+          display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+          {q.latest_email_preview}
+        </div>
+      )}
+
+      {/* Footer */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 10,
+        borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+        <User size={11} color={C.muted} />
+        <span style={{ fontSize: 11, color: C.muted, flex: 1 }}>{assigneeName || 'Unassigned'}</span>
+        <Clock size={10} color={C.muted} />
+        <span style={{ fontSize: 11, color: C.muted }}>{timeAgo(q.created_at)}</span>
+      </div>
+    </div>
+  );
+}
+
 function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   const [statusSaving,   setStatusSaving]   = useState(false);
   const [assigneeSaving, setAssigneeSaving] = useState(false);
+  const [popup,          setPopup]          = useState(null); // { x, y } | null
+  const rowRef = useRef(null);
 
   const hasAttention   = q.requires_attention;
   const hasSlaBreached = q.sla_breached;
@@ -285,15 +375,14 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   const unread         = parseInt(q.unread_emails) || 0;
   const hasNewReply    = q.has_new_reply;
 
-  // Left bar: attention > new reply > sla breach > priority
   const barColor = hasAttention   ? C.red
                  : hasNewReply    ? C.blue
                  : hasSlaBreached ? C.amber
                  : PRIORITY_BAR[q.priority] || PRIORITY_BAR.medium;
 
-  const logoUrl        = q.courier_code ? getCourierLogo(q.courier_code) : null;
-  const statusCfg      = STATUS_CFG[q.status] || { label: q.status, color: C.muted };
-  const assigneeName   = staffList.find(s => s.id === q.assigned_to)?.full_name;
+  const logoUrl      = q.courier_code ? getCourierLogo(q.courier_code) : null;
+  const statusCfg    = STATUS_CFG[q.status] || { label: q.status, color: C.muted };
+  const assigneeName = staffList.find(s => s.id === q.assigned_to)?.full_name;
 
   async function handleStatusChange(e) {
     e.stopPropagation();
@@ -315,193 +404,178 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
     finally { setAssigneeSaving(false); }
   }
 
+  function handleMouseEnter() {
+    const rect = rowRef.current?.getBoundingClientRect();
+    if (rect) setPopup({ x: rect.right, y: rect.top });
+  }
+
   return (
-    <div
-      onClick={onClick}
-      style={{
-        display: 'flex', alignItems: 'stretch', gap: 0,
-        cursor: 'pointer',
-        borderBottom: `1px solid ${C.border}`,
-        background: hasNewReply ? 'rgba(88,166,255,0.04)' : 'transparent',
-        transition: 'background 0.1s',
-      }}
-      onMouseEnter={e => { e.currentTarget.style.background = C.hover; }}
-      onMouseLeave={e => { e.currentTarget.style.background = hasNewReply ? 'rgba(88,166,255,0.04)' : 'transparent'; }}
-    >
-      {/* Priority / status accent bar */}
-      <div style={{ width: 4, flexShrink: 0, background: barColor, borderRadius: '2px 0 0 2px' }} />
-
-      {/* Avatar */}
-      <div style={{
-        width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-        margin: 'auto 14px auto 14px',
-        background: hasNewReply ? `${C.blue}22` : 'rgba(255,255,255,0.06)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 14, fontWeight: 800, color: hasNewReply ? C.blue : C.muted,
-        border: `1px solid ${hasNewReply ? `${C.blue}33` : C.border}`,
-      }}>
-        {(q.customer_name || '?')[0].toUpperCase()}
-      </div>
-
-      {/* ── Middle: main content ── */}
-      <div style={{ flex: 1, minWidth: 0, padding: '10px 0 10px' }}>
-
-        {/* Row 1: ticket number + subject (big + bold) */}
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
-          {q.ticket_number && (
-            <span style={{
-              fontSize: 12, fontWeight: 800, color: hasNewReply ? C.blue : C.muted,
-              flexShrink: 0, letterSpacing: '-0.01em',
-            }}>
-              #{q.ticket_number}
-            </span>
-          )}
-          <span style={{
-            fontSize: 14, fontWeight: hasNewReply ? 700 : 600,
-            color: hasNewReply ? C.text : C.sub,
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
-          }}>
-            {q.subject || q.customer_name || 'No subject'}
-          </span>
-        </div>
-
-        {/* Row 2: customer · courier · consignment */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5, overflow: 'hidden' }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: C.sub, flexShrink: 0 }}>
-            {q.customer_name}
-          </span>
-          {q.courier_name && (
-            <>
-              <span style={{ color: C.muted, fontSize: 11, flexShrink: 0 }}>·</span>
-              {logoUrl && (
-                <img src={logoUrl} alt="" style={{ width: 14, height: 10, objectFit: 'contain', flexShrink: 0 }} />
-              )}
-              <span style={{ fontSize: 11, color: C.muted, flexShrink: 0 }}>{q.courier_name}</span>
-            </>
-          )}
-          {q.consignment_number && (
-            <>
-              <span style={{ color: C.muted, fontSize: 11, flexShrink: 0 }}>·</span>
-              <span style={{ fontSize: 11, fontFamily: 'monospace', color: C.muted, flexShrink: 0,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
-                {q.consignment_number}
-              </span>
-            </>
-          )}
-        </div>
-
-        {/* Row 3: preview snippet */}
-        {q.latest_email_preview && (
-          <div style={{ fontSize: 12, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '95%' }}>
-            {q.latest_email_preview.substring(0, 120)}
-          </div>
-        )}
-      </div>
-
-      {/* ── Right: inline controls + meta ── */}
+    <>
       <div
+        ref={rowRef}
+        onClick={onClick}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={() => setPopup(null)}
         style={{
-          flexShrink: 0, display: 'flex', flexDirection: 'column',
-          alignItems: 'flex-end', justifyContent: 'center',
-          gap: 5, padding: '10px 14px 10px 10px', minWidth: 180,
+          display: 'flex', alignItems: 'stretch',
+          cursor: 'pointer',
+          borderBottom: `1px solid ${C.border}`,
+          background: hasNewReply ? 'rgba(88,166,255,0.04)' : 'transparent',
+          transition: 'background 0.1s',
         }}
-        onClick={e => e.stopPropagation()} /* prevent card nav when clicking dropdowns */
+        onMouseOver={e => { e.currentTarget.style.background = C.hover; }}
+        onMouseOut={e => { e.currentTarget.style.background = hasNewReply ? 'rgba(88,166,255,0.04)' : 'transparent'; }}
       >
-        {/* Timestamp + unread badge */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 1 }}>
-          <span style={{ fontSize: 11, color: hasNewReply ? C.blue : C.muted, fontWeight: hasNewReply ? 700 : 400 }}>
-            {timeAgo(q.latest_email_at || q.created_at)}
-          </span>
-          {unread > 0 && (
+        {/* Left accent bar */}
+        <div style={{ width: 4, flexShrink: 0, background: barColor, borderRadius: '2px 0 0 2px' }} />
+
+        {/* ── Main content ── */}
+        <div style={{ flex: 1, minWidth: 0, padding: '12px 14px 11px 14px' }}>
+
+          {/* Row 1: customer name · topic · consignment · ticket# */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, overflow: 'hidden' }}>
             <span style={{
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              minWidth: 18, height: 18, borderRadius: 9999,
-              background: C.blue, color: '#fff', fontSize: 10, fontWeight: 800, padding: '0 5px',
+              fontSize: 15, fontWeight: 800,
+              color: hasNewReply ? C.text : C.sub,
+              flexShrink: 0, maxWidth: '36%',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
-              {unread}
+              {q.customer_name || '—'}
             </span>
+
+            {q.query_type && (
+              <>
+                <span style={{ color: C.muted, fontSize: 12, flexShrink: 0 }}>·</span>
+                <TypeBadge type={q.query_type} small />
+              </>
+            )}
+
+            {q.consignment_number && (
+              <>
+                <span style={{ color: C.muted, fontSize: 12, flexShrink: 0 }}>·</span>
+                <span style={{
+                  fontSize: 12, fontFamily: 'monospace', fontWeight: 700,
+                  color: hasNewReply ? C.blue : '#8B96A3',
+                  flexShrink: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  letterSpacing: '0.01em',
+                }}>
+                  {q.consignment_number}
+                </span>
+              </>
+            )}
+
+            {logoUrl && (
+              <img src={logoUrl} alt="" style={{ width: 16, height: 12, objectFit: 'contain', flexShrink: 0, opacity: 0.75 }} />
+            )}
+
+            {q.ticket_number && (
+              <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: C.muted, flexShrink: 0 }}>
+                #{q.ticket_number}
+              </span>
+            )}
+          </div>
+
+          {/* Row 2: subject */}
+          <div style={{
+            fontSize: 13, fontWeight: hasNewReply ? 600 : 400,
+            color: hasNewReply ? C.sub : '#5E6978',
+            marginBottom: 5,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {q.subject || '(no subject)'}
+          </div>
+
+          {/* Row 3–4: preview (2 lines) */}
+          {q.latest_email_preview && (
+            <div style={{
+              fontSize: 12, color: '#4A5260', lineHeight: 1.55,
+              display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+            }}>
+              {q.latest_email_preview}
+            </div>
           )}
         </div>
 
-        {/* Inline status dropdown */}
-        <div style={{ position: 'relative', width: '100%' }}>
-          <select
-            value={q.status || ''}
-            onChange={handleStatusChange}
-            disabled={statusSaving}
-            style={{
-              width: '100%', appearance: 'none',
-              background: `${statusCfg.color}18`,
-              border: `1px solid ${statusCfg.color}44`,
-              borderRadius: 5, color: statusCfg.color,
-              fontSize: 11, fontWeight: 700, padding: '4px 22px 4px 8px',
-              cursor: 'pointer', outline: 'none',
-              opacity: statusSaving ? 0.6 : 1,
-            }}
-          >
-            {Object.entries(STATUS_CFG).map(([k, v]) => (
-              <option key={k} value={k} style={{ background: '#1C2128', color: '#E6EDF3', fontWeight: 400 }}>
-                {v.label}
-              </option>
-            ))}
-          </select>
-          <ChevronDown size={11} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', color: statusCfg.color, pointerEvents: 'none' }} />
-        </div>
+        {/* ── Right: controls + meta ── */}
+        <div
+          style={{ flexShrink: 0, display: 'flex', flexDirection: 'column',
+            alignItems: 'flex-end', justifyContent: 'center',
+            gap: 5, padding: '10px 14px 10px 10px', minWidth: 175 }}
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Time + unread */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 1 }}>
+            <span style={{ fontSize: 11, color: hasNewReply ? C.blue : C.muted, fontWeight: hasNewReply ? 700 : 400 }}>
+              {timeAgo(q.latest_email_at || q.created_at)}
+            </span>
+            {unread > 0 && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                minWidth: 18, height: 18, borderRadius: 9999,
+                background: C.blue, color: '#fff', fontSize: 10, fontWeight: 800, padding: '0 5px' }}>
+                {unread}
+              </span>
+            )}
+          </div>
 
-        {/* Inline assignee dropdown */}
-        <div style={{ position: 'relative', width: '100%' }}>
-          <select
-            value={q.assigned_to || ''}
-            onChange={handleAssigneeChange}
-            disabled={assigneeSaving}
-            style={{
-              width: '100%', appearance: 'none',
-              background: 'rgba(255,255,255,0.04)',
-              border: `1px solid ${C.border}`,
-              borderRadius: 5, color: assigneeName ? C.sub : C.muted,
-              fontSize: 11, fontWeight: assigneeName ? 600 : 400,
-              padding: '4px 22px 4px 8px',
-              cursor: 'pointer', outline: 'none',
-              opacity: assigneeSaving ? 0.6 : 1,
-            }}
-          >
-            <option value="" style={{ background: '#1C2128', color: '#7D8590' }}>Unassigned</option>
-            {staffList.map(s => (
-              <option key={s.id} value={s.id} style={{ background: '#1C2128', color: '#E6EDF3' }}>
-                {s.full_name}
-              </option>
-            ))}
-          </select>
-          <ChevronDown size={11} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', color: C.muted, pointerEvents: 'none' }} />
-        </div>
+          {/* Status dropdown */}
+          <div style={{ position: 'relative', width: '100%' }}>
+            <select value={q.status || ''} onChange={handleStatusChange} disabled={statusSaving}
+              style={{ width: '100%', appearance: 'none',
+                background: `${statusCfg.color}18`, border: `1px solid ${statusCfg.color}44`,
+                borderRadius: 5, color: statusCfg.color, fontSize: 11, fontWeight: 700,
+                padding: '4px 22px 4px 8px', cursor: 'pointer', outline: 'none',
+                opacity: statusSaving ? 0.6 : 1 }}>
+              {Object.entries(STATUS_CFG).map(([k, v]) => (
+                <option key={k} value={k} style={{ background: '#1C2128', color: '#E6EDF3', fontWeight: 400 }}>{v.label}</option>
+              ))}
+            </select>
+            <ChevronDown size={11} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', color: statusCfg.color, pointerEvents: 'none' }} />
+          </div>
 
-        {/* Alert / claim chips */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          {hasAttention && (
-            <span style={{ fontSize: 9, fontWeight: 700, color: C.red, background: C.redDim,
-              padding: '1px 6px', borderRadius: 3, border: `1px solid ${C.red}33` }}>
-              ⚠ ATTN
-            </span>
-          )}
-          {hasNewReply && !hasAttention && (
-            <span style={{ fontSize: 9, fontWeight: 700, color: C.blue,
-              background: 'rgba(88,166,255,0.12)', padding: '1px 6px',
-              borderRadius: 3, border: `1px solid ${C.blue}44` }}>
-              ↩ REPLY
-            </span>
-          )}
-          {isClaim && (
-            <span style={{ fontSize: 9, fontWeight: 700, color: C.red, background: C.redDim,
-              padding: '1px 6px', borderRadius: 3, border: `1px solid ${C.red}33` }}>
-              CLAIM
-            </span>
-          )}
-          {q.sla_mins_remaining !== null && q.sla_mins_remaining !== undefined && (
-            <SlaChip mins={parseFloat(q.sla_mins_remaining)} policyName={q.sla_policy_name} />
-          )}
+          {/* Assignee dropdown */}
+          <div style={{ position: 'relative', width: '100%' }}>
+            <select value={q.assigned_to || ''} onChange={handleAssigneeChange} disabled={assigneeSaving}
+              style={{ width: '100%', appearance: 'none',
+                background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.border}`,
+                borderRadius: 5, color: assigneeName ? C.sub : C.muted,
+                fontSize: 11, fontWeight: assigneeName ? 600 : 400,
+                padding: '4px 22px 4px 8px', cursor: 'pointer', outline: 'none',
+                opacity: assigneeSaving ? 0.6 : 1 }}>
+              <option value="" style={{ background: '#1C2128', color: '#7D8590' }}>Unassigned</option>
+              {staffList.map(s => (
+                <option key={s.id} value={s.id} style={{ background: '#1C2128', color: '#E6EDF3' }}>{s.full_name}</option>
+              ))}
+            </select>
+            <ChevronDown size={11} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', color: C.muted, pointerEvents: 'none' }} />
+          </div>
+
+          {/* Alert chips */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {hasAttention && (
+              <span style={{ fontSize: 9, fontWeight: 700, color: C.red, background: C.redDim,
+                padding: '1px 6px', borderRadius: 3, border: `1px solid ${C.red}33` }}>⚠ ATTN</span>
+            )}
+            {hasNewReply && !hasAttention && (
+              <span style={{ fontSize: 9, fontWeight: 700, color: C.blue,
+                background: 'rgba(88,166,255,0.12)', padding: '1px 6px',
+                borderRadius: 3, border: `1px solid ${C.blue}44` }}>↩ REPLY</span>
+            )}
+            {isClaim && (
+              <span style={{ fontSize: 9, fontWeight: 700, color: C.red, background: C.redDim,
+                padding: '1px 6px', borderRadius: 3, border: `1px solid ${C.red}33` }}>CLAIM</span>
+            )}
+            {q.sla_mins_remaining !== null && q.sla_mins_remaining !== undefined && (
+              <SlaChip mins={parseFloat(q.sla_mins_remaining)} policyName={q.sla_policy_name} />
+            )}
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* Hover popup — rendered in-place but fixed-position so it escapes the list */}
+      {popup && (
+        <TicketPopup q={q} pos={popup} logoUrl={logoUrl} assigneeName={assigneeName} />
+      )}
+    </>
   );
 }
 
