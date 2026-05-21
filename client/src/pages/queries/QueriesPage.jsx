@@ -20,6 +20,8 @@ const api = axios.create({ baseURL: '/api' });
 
 // ─── Design tokens — professional dark, not neon ──────────────────────────────
 
+const _BUILD = '2026-05-21-v2'; // cache bust — queries detail redesign
+
 const C = {
   bg:       '#0D1117',
   surface:  '#161B22',
