@@ -1,6 +1,6 @@
 [build]
 builder = "nixpacks"
-buildCommand = "npm install --prefix server && npm install --include=dev --prefix client && npm run build --prefix client"
+buildCommand = "npm install --prefix server"
 
 [deploy]
 startCommand = "node server/index.js"
