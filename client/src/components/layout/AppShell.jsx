@@ -13,10 +13,11 @@ export default function AppShell() {
 
   const isFullHeight = FULL_HEIGHT_ROUTES.some(r => location.pathname.startsWith(r));
 
-  // For non-full-height pages, scroll to top on route change
+  // Always reset scroll on route change — scrollTop persists on the DOM node
+  // and shifts content even with overflow:hidden, breaking full-height pages
   useEffect(() => {
-    if (mainRef.current && !isFullHeight) mainRef.current.scrollTop = 0;
-  }, [location.pathname, isFullHeight]);
+    if (mainRef.current) mainRef.current.scrollTop = 0;
+  }, [location.pathname]);
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#0A0B1E' }}>
