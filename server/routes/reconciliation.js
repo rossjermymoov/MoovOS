@@ -3906,4 +3906,65 @@ router.get('/probe-shipment', async (req, res) => {
 // ─── GET /api/reconciliation/ping ─────────────────────────────────────────────
 router.get('/ping', (_req, res) => res.json({ ok: true, ts: Date.now() }));
 
+// ─── GET /api/reconciliation/customer-volume ──────────────────────────────────
+// One-off export: shipment volumes per customer, using the customer's registered
+// postcode as the origin. Covers ALL billing charges (all carriers).
+// Optional ?from=YYYY-MM-DD&to=YYYY-MM-DD to filter by shipment collection_date.
+router.get('/customer-volume', async (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const conditions = [
+      `c.cancelled = false`,
+      `c.charge_type = 'courier'`,
+      `cu.postcode IS NOT NULL`,
+      `cu.postcode NOT IN ('TBC', '', 'N/A', 'tbc', 'n/a')`,
+      `LENGTH(TRIM(cu.postcode)) >= 5`,
+    ];
+    const params = [];
+    if (from) { params.push(from); conditions.push(`s.collection_date >= $${params.length}`); }
+    if (to)   { params.push(to);   conditions.push(`s.collection_date <= $${params.length}`); }
+
+    const result = await query(`
+      SELECT
+        cu.account_number,
+        cu.business_name,
+        TRIM(UPPER(cu.postcode))                                           AS postcode,
+        REGEXP_REPLACE(TRIM(UPPER(cu.postcode)), '\\\\s.*$', '')           AS postcode_district,
+        COUNT(DISTINCT s.id)::int                                          AS shipment_count,
+        SUM(COALESCE(s.parcel_count, 1))::int                              AS parcel_count,
+        MIN(s.collection_date)                                             AS first_seen,
+        MAX(s.collection_date)                                             AS last_seen
+      FROM customers cu
+      JOIN charges   c ON c.customer_id = cu.id
+      JOIN shipments s ON s.id          = c.shipment_id
+      WHERE ${conditions.join(' AND ')}
+      GROUP BY cu.id, cu.account_number, cu.business_name, cu.postcode
+      ORDER BY shipment_count DESC
+    `, params);
+
+    // Aggregate by postcode district
+    const byDistrict = {};
+    for (const row of result.rows) {
+      const d = row.postcode_district;
+      if (!byDistrict[d]) byDistrict[d] = { postcode_district: d, shipment_count: 0, parcel_count: 0, postcodes: new Set() };
+      byDistrict[d].shipment_count += row.shipment_count;
+      byDistrict[d].parcel_count   += row.parcel_count;
+      byDistrict[d].postcodes.add(row.postcode);
+    }
+    const districtList = Object.values(byDistrict)
+      .map(d => ({ ...d, postcodes: [...d.postcodes] }))
+      .sort((a, b) => b.shipment_count - a.shipment_count);
+
+    return res.json({
+      by_customer:     result.rows,
+      by_district:     districtList,
+      total_shipments: result.rows.reduce((s, r) => s + r.shipment_count, 0),
+      total_parcels:   result.rows.reduce((s, r) => s + r.parcel_count,   0),
+    });
+  } catch (err) {
+    console.error('[customer-volume] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
