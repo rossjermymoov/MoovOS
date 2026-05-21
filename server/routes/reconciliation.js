@@ -3929,7 +3929,7 @@ router.get('/customer-volume', async (req, res) => {
         cu.account_number,
         cu.business_name,
         TRIM(UPPER(cu.postcode))                                           AS postcode,
-        REGEXP_REPLACE(TRIM(UPPER(cu.postcode)), '\\\\s.*$', '')           AS postcode_district,
+        REGEXP_REPLACE(TRIM(UPPER(cu.postcode)), '\\s.*$', '')             AS postcode_district,
         COUNT(DISTINCT s.id)::int                                          AS shipment_count,
         SUM(COALESCE(s.parcel_count, 1))::int                              AS parcel_count,
         MIN(s.collection_date)                                             AS first_seen,
