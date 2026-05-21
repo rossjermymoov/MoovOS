@@ -193,6 +193,7 @@ export function normalisePayload(body) {
           _recipient_address:  shipment.ship_to_address || null,
           _weight_kg:          parcel.weight || null,
           _estimated_delivery: tu.expected_delivery || shipment.tracking_expected_delivery_date || null,
+          _tracking_url:       parcel.tracking_url || parcel.trackingUrl || null,
           _raw:                ev,
           // Dispatch Cloud sends the numeric code in status_code (1-18)
           // and the verbatim courier description in status / status_description.
@@ -245,6 +246,7 @@ export async function upsertEvent(event, rawBody) {
   const recipientAddr  = event._recipient_address  || pick(event, 'recipient.address', 'address', 'delivery_address', 'recipientAddress');
   const weightKg       = event._weight_kg       || pick(event, 'weight_kg', 'weightKg', 'weight', 'gross_weight');
   const estDelivery    = event._estimated_delivery || pick(event, 'estimated_delivery', 'estimatedDelivery', 'eta', 'due_date');
+  const trackingUrl    = event._tracking_url    || pick(event, 'tracking_url', 'trackingUrl', 'track_url', 'parcel_tracking_url');
 
   // Resolve customer_id from account number
   let customerId = null;
@@ -259,9 +261,9 @@ export async function upsertEvent(event, rawBody) {
       (consignment_number, courier_name, courier_code, service_name,
        customer_id, customer_name, customer_account,
        recipient_name, recipient_postcode, recipient_address,
-       weight_kg, estimated_delivery,
+       weight_kg, estimated_delivery, tracking_url,
        status, status_description, last_location, last_event_at)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
     ON CONFLICT (consignment_number) DO UPDATE SET
       courier_name       = COALESCE(EXCLUDED.courier_name,       parcels.courier_name),
       courier_code       = COALESCE(EXCLUDED.courier_code,       parcels.courier_code),
@@ -274,6 +276,7 @@ export async function upsertEvent(event, rawBody) {
       recipient_address  = COALESCE(EXCLUDED.recipient_address,  parcels.recipient_address),
       weight_kg          = COALESCE(EXCLUDED.weight_kg,          parcels.weight_kg),
       estimated_delivery = COALESCE(EXCLUDED.estimated_delivery, parcels.estimated_delivery),
+      tracking_url       = COALESCE(EXCLUDED.tracking_url,       parcels.tracking_url),
       -- Only advance status/location if this event is newer than what we already have.
       -- delivered is terminal — once a parcel is delivered it cannot regress to any
       -- other status regardless of subsequent events (DC sometimes sends a stale
@@ -308,6 +311,7 @@ export async function upsertEvent(event, rawBody) {
     recipientName, recipientPost, recipientAddr,
     weightKg ? parseFloat(weightKg) : null,
     estDelivery || null,
+    trackingUrl || null,
     status, description, location, eventAt,
   ]);
 

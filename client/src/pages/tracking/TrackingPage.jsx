@@ -253,7 +253,37 @@ function ParcelDrawer({ consignment, onClose }) {
         <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 11, color: '#AAAAAA', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Consignment</div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: '#fff', fontFamily: 'monospace' }}>{consignment}</div>
+            {(() => {
+              // Build tracking URL: use stored URL first, then fall back to known courier patterns
+              const stored = data?.tracking_url;
+              const code = (data?.courier_code || '').toLowerCase();
+              const fallback =
+                code === 'dpd'                          ? `https://track.dpd.co.uk/parcels/${consignment}`
+                : code === 'dpd_local' || code === 'dpdlocal' ? `https://www.dpdlocal-online.co.uk/track?parcel=${consignment}`
+                : code === 'evri' || code === 'hermes'  ? `https://www.evri.com/track-a-parcel/${consignment}`
+                : code === 'yodel'                      ? `https://www.yodel.co.uk/track/${consignment}`
+                : code === 'royal_mail' || code === 'royalmail' ? `https://www.royalmail.com/track-your-item#/tracking-results/${consignment}`
+                : code === 'parcelforce'                ? `https://www.parcelforce.com/track-trace?trackNumber=${consignment}`
+                : code === 'ups'                        ? `https://www.ups.com/track?tracknum=${consignment}`
+                : code === 'fedex'                      ? `https://www.fedex.com/en-gb/tracking.html?tracknumbers=${consignment}`
+                : null;
+              const url = stored || fallback;
+              return url ? (
+                <a href={url} target="_blank" rel="noopener noreferrer" title="Track on courier website" style={{
+                  fontSize: 18, fontWeight: 900, color: '#fff', fontFamily: 'monospace',
+                  textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 7,
+                  borderBottom: '2px solid rgba(26,115,232,0.5)',
+                  paddingBottom: 1,
+                }}>
+                  {consignment}
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1a73e8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginBottom: 1 }}>
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                  </svg>
+                </a>
+              ) : (
+                <div style={{ fontSize: 18, fontWeight: 900, color: '#fff', fontFamily: 'monospace' }}>{consignment}</div>
+              );
+            })()}
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer' }}><X size={18} /></button>
         </div>
