@@ -4,21 +4,35 @@ import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import KatanaWidget from '../katana/KatanaWidget';
 
+// Routes that need the full height with no padding/scrolling
+const FULL_HEIGHT_ROUTES = ['/queries'];
+
 export default function AppShell() {
   const mainRef = useRef(null);
   const location = useLocation();
 
-  // Scroll to top on every route change so full-height pages always start at the top
+  const isFullHeight = FULL_HEIGHT_ROUTES.some(r => location.pathname.startsWith(r));
+
+  // For non-full-height pages, scroll to top on route change
   useEffect(() => {
-    if (mainRef.current) mainRef.current.scrollTop = 0;
-  }, [location.pathname]);
+    if (mainRef.current && !isFullHeight) mainRef.current.scrollTop = 0;
+  }, [location.pathname, isFullHeight]);
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#0A0B1E' }}>
       <Sidebar />
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
         <TopBar />
-        <main ref={mainRef} style={{ flex: 1, padding: 24, overflowY: 'auto' }}>
+        <main
+          ref={mainRef}
+          style={{
+            flex: 1,
+            padding: isFullHeight ? 0 : 24,
+            overflowY: isFullHeight ? 'hidden' : 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
           <Outlet />
         </main>
       </div>
