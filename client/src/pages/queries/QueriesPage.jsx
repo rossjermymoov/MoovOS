@@ -579,233 +579,314 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   );
 }
 
-// ─── Email thread item ────────────────────────────────────────────────────────
+// ─── Message bubble ───────────────────────────────────────────────────────────
 
-function EmailItem({ email, onApprove, onEdit, approving, courierName, courierCode }) {
+function MessageBubble({ email, onApprove, onEdit, approving, courierName, courierCode }) {
   const [editMode, setEditMode] = useState(false);
   const [editBody, setEditBody] = useState(email.body_text || '');
-  const isDraft = email.is_ai_draft && !email.sent_at && !email.ai_draft_approved_by;
-  const isSent  = !!email.sent_at;
-  const dir     = email.direction;
+  const isDraft  = email.is_ai_draft && !email.sent_at && !email.ai_draft_approved_by;
+  const isSent   = !!email.sent_at;
+  const dir      = email.direction;
+  const isNote   = dir === 'internal_note';
+  const isInbound = dir === 'inbound_customer' || dir === 'inbound_courier';
+  const isCourier = dir === 'inbound_courier' || dir === 'outbound_courier';
 
-  const isCustomerThread = dir === 'inbound_customer' || dir === 'outbound_customer';
-  const isCourierThread  = dir === 'inbound_courier'  || dir === 'outbound_courier';
-  const isNote           = dir === 'internal_note';
+  let bubbleBg, bubbleBorderStyle, accentColor, bubbleRadius;
+  if (isNote) {
+    bubbleBg = 'rgba(210,153,34,0.08)';
+    bubbleBorderStyle = `1px dashed ${C.amber}44`;
+    accentColor = C.amber;
+    bubbleRadius = 8;
+  } else if (dir === 'inbound_customer') {
+    bubbleBg = C.card;
+    bubbleBorderStyle = `1px solid ${C.border}`;
+    accentColor = C.blue;
+    bubbleRadius = '2px 10px 10px 10px';
+  } else if (dir === 'outbound_customer') {
+    bubbleBg = isDraft ? `${C.green}08` : 'rgba(88,166,255,0.08)';
+    bubbleBorderStyle = isDraft ? `1px solid ${C.green}33` : `1px solid ${C.blue}33`;
+    accentColor = isDraft ? C.green : C.blue;
+    bubbleRadius = '10px 2px 10px 10px';
+  } else if (dir === 'inbound_courier') {
+    bubbleBg = C.card;
+    bubbleBorderStyle = `1px solid ${C.amber}33`;
+    accentColor = C.amber;
+    bubbleRadius = '2px 10px 10px 10px';
+  } else {
+    bubbleBg = 'rgba(210,153,34,0.08)';
+    bubbleBorderStyle = `1px solid ${C.amber}33`;
+    accentColor = C.amber;
+    bubbleRadius = '10px 2px 10px 10px';
+  }
 
-  let threadColor, threadLabel, logo;
-  if (dir === 'inbound_customer')  { threadColor = C.blue;  threadLabel = 'From Customer'; }
-  else if (dir === 'outbound_customer') { threadColor = C.green; threadLabel = 'To Customer'; }
-  else if (dir === 'inbound_courier')   { threadColor = C.amber; threadLabel = `From ${courierName || 'Courier'}`; logo = courierCode; }
-  else if (dir === 'outbound_courier')  { threadColor = C.amber; threadLabel = `To ${courierName || 'Courier'}`; logo = courierCode; }
-  else { threadColor = C.muted; threadLabel = 'Internal Note'; }
+  const logoUrl = isCourier && courierCode ? getCourierLogo(courierCode) : null;
+  const senderLabel = isNote
+    ? 'Internal Note'
+    : dir === 'inbound_customer'  ? (email.from_address || 'Customer')
+    : dir === 'outbound_customer' ? 'You → Customer'
+    : dir === 'inbound_courier'   ? (courierName || 'Courier')
+    :                               `You → ${courierName || 'Courier'}`;
 
-  const logoUrl = logo ? getCourierLogo(logo) : null;
+  const align = isNote ? 'center' : isInbound ? 'flex-start' : 'flex-end';
 
   return (
-    <div style={{
-      border: `1px solid ${isDraft ? `${C.green}44` : C.border}`,
-      borderRadius: 8,
-      overflow: 'hidden',
-      background: isDraft ? `${C.green}06` : isNote ? 'rgba(210,153,34,0.04)' : C.card,
-    }}>
-      {/* Header */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '9px 13px', borderBottom: `1px solid ${C.border}`, flexWrap: 'wrap',
-      }}>
-        {logoUrl && (
-          <img src={logoUrl} alt="" style={{ width: 20, height: 14, objectFit: 'contain', flexShrink: 0 }} />
-        )}
-        <span style={{ fontSize: 10, fontWeight: 700, color: threadColor, background: `${threadColor}18`,
-          padding: '2px 8px', borderRadius: 4, border: `1px solid ${threadColor}33` }}>
-          {threadLabel}
-        </span>
-        {isDraft && (
-          <span style={{ fontSize: 10, fontWeight: 700, color: C.green, background: C.greenDim,
-            padding: '2px 8px', borderRadius: 4, border: `1px solid ${C.green}33` }}>
-            AI Draft — Pending Approval
+    <div style={{ display: 'flex', justifyContent: align, marginBottom: 12 }}>
+      <div style={{ maxWidth: isNote ? '100%' : '74%', minWidth: 180 }}>
+        {/* Sender + time */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4,
+          justifyContent: isNote || isInbound ? 'flex-start' : 'flex-end' }}>
+          {logoUrl && <img src={logoUrl} alt="" style={{ width: 16, height: 11, objectFit: 'contain' }} />}
+          <span style={{ fontSize: 10, fontWeight: 700, color: accentColor }}>{senderLabel}</span>
+          {isDraft && (
+            <span style={{ fontSize: 10, fontWeight: 700, color: C.green, background: C.greenDim,
+              padding: '1px 6px', borderRadius: 3, border: `1px solid ${C.green}33` }}>
+              AI Draft
+            </span>
+          )}
+          <span style={{ fontSize: 10, color: C.muted }}>
+            {isSent ? fmtDate(email.sent_at) : fmtDate(email.received_at || email.created_at)}
           </span>
-        )}
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: C.muted }}>
-          {email.from_address || email.to_address}
-        </span>
-        <span style={{ fontSize: 10, color: C.muted }}>
-          {isSent ? `Sent ${fmtDate(email.sent_at)}` : `${fmtDate(email.received_at || email.created_at)}`}
-        </span>
-      </div>
-
-      {/* Subject */}
-      {email.subject && (
-        <div style={{ padding: '6px 13px 0', fontSize: 12, fontWeight: 600, color: C.sub }}>
-          {email.subject}
         </div>
-      )}
 
-      {/* Body */}
-      <div style={{ padding: '10px 13px' }}>
-        {editMode ? (
-          <textarea value={editBody} onChange={e => setEditBody(e.target.value)} style={{
-            width: '100%', minHeight: 130, background: C.surface,
-            border: `1px solid ${C.green}44`, borderRadius: 6,
-            color: C.text, fontSize: 12, padding: 10, resize: 'vertical',
-            fontFamily: 'inherit', boxSizing: 'border-box',
-          }} />
-        ) : (
-          <pre style={{
-            margin: 0, fontSize: 12, color: C.sub,
-            whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-            lineHeight: 1.65, maxHeight: 240, overflow: 'auto',
-          }}>
-            {email.body_text || '(no body)'}
-          </pre>
-        )}
-      </div>
+        {/* Bubble */}
+        <div style={{
+          background: bubbleBg,
+          border: isNote ? `1px dashed ${C.amber}44` : bubbleBorderStyle,
+          borderLeft: isNote ? `3px solid ${C.amber}` : bubbleBorderStyle,
+          borderRadius: bubbleRadius,
+          overflow: 'hidden',
+        }}>
+          {email.subject && (
+            <div style={{ padding: '7px 13px 6px', fontSize: 11, fontWeight: 700, color: C.sub,
+              borderBottom: `1px solid ${C.border}` }}>
+              {email.subject}
+            </div>
+          )}
+          <div style={{ padding: '10px 13px' }}>
+            {editMode ? (
+              <textarea value={editBody} onChange={e => setEditBody(e.target.value)} style={{
+                width: '100%', minHeight: 120, background: C.surface,
+                border: `1px solid ${C.green}44`, borderRadius: 5,
+                color: C.text, fontSize: 12, padding: 9, resize: 'vertical',
+                fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none',
+              }} />
+            ) : (
+              <pre style={{
+                margin: 0, fontSize: 12, color: C.sub, whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word', lineHeight: 1.65, maxHeight: 220,
+                overflow: 'auto', fontFamily: 'inherit',
+              }}>
+                {email.body_text || '(no body)'}
+              </pre>
+            )}
+          </div>
 
-      {isDraft && (
-        <div style={{ display: 'flex', gap: 8, padding: '9px 13px', borderTop: `1px solid ${C.border}` }}>
-          {editMode ? (
-            <>
-              <button onClick={() => { onEdit(email.id, editBody); setEditMode(false); }}
-                style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: C.green, color: '#000', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                Save &amp; Approve
-              </button>
-              <button onClick={() => { setEditMode(false); setEditBody(email.body_text || ''); }}
-                style={{ padding: '6px 12px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer' }}>
-                Cancel
-              </button>
-            </>
-          ) : (
-            <>
-              <button onClick={() => onApprove(email.id, email.body_text)} disabled={approving}
-                style={{ padding: '6px 16px', borderRadius: 6, border: 'none', background: C.green, color: '#000', fontSize: 12, fontWeight: 700, cursor: approving ? 'default' : 'pointer', opacity: approving ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Send size={12} />{approving ? 'Sending…' : 'Approve & Send'}
-              </button>
-              <button onClick={() => setEditMode(true)}
-                style={{ padding: '6px 12px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
-                <Edit2 size={11} /> Edit first
-              </button>
-            </>
+          {isDraft && (
+            <div style={{ display: 'flex', gap: 8, padding: '8px 13px', borderTop: `1px solid ${C.border}` }}>
+              {editMode ? (
+                <>
+                  <button onClick={() => { onEdit(email.id, editBody); setEditMode(false); }}
+                    style={{ padding: '5px 12px', borderRadius: 5, border: 'none', background: C.green,
+                      color: '#000', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <Send size={11} /> Save & Approve
+                  </button>
+                  <button onClick={() => { setEditMode(false); setEditBody(email.body_text || ''); }}
+                    style={{ padding: '5px 10px', borderRadius: 5, border: `1px solid ${C.border}`,
+                      background: 'transparent', color: C.muted, fontSize: 11, cursor: 'pointer' }}>
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button onClick={() => onApprove(email.id, email.body_text)} disabled={approving}
+                    style={{ padding: '5px 14px', borderRadius: 5, border: 'none', background: C.green,
+                      color: '#000', fontSize: 11, fontWeight: 700, cursor: approving ? 'default' : 'pointer',
+                      opacity: approving ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <Send size={11} />{approving ? 'Sending…' : 'Approve & Send'}
+                  </button>
+                  <button onClick={() => setEditMode(true)}
+                    style={{ padding: '5px 10px', borderRadius: 5, border: `1px solid ${C.border}`,
+                      background: 'transparent', color: C.muted, fontSize: 11, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Edit2 size={10} /> Edit
+                  </button>
+                </>
+              )}
+            </div>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
 
-// ─── Thread tab — groups emails into Customer / Courier threads ───────────────
+// ─── Thread view ──────────────────────────────────────────────────────────────
 
-function EmailThreads({ emails, onApprove, onEdit, approving, courierName, courierCode }) {
+function ThreadView({ emails, onApprove, onEdit, approving, courierName, courierCode }) {
   const [activeThread, setActiveThread] = useState('customer');
+  const bottomRef = useRef(null);
 
   const customerEmails = emails.filter(e => e.direction === 'inbound_customer' || e.direction === 'outbound_customer');
   const courierEmails  = emails.filter(e => e.direction === 'inbound_courier'  || e.direction === 'outbound_courier');
   const internalNotes  = emails.filter(e => e.direction === 'internal_note');
+  const logoUrl = courierCode ? getCourierLogo(courierCode) : null;
 
   const tabs = [
-    { key: 'customer', label: `Customer (${customerEmails.length})`, color: C.blue },
-    { key: 'courier',  label: `${courierName || 'Courier'} (${courierEmails.length})`, color: C.amber },
-    ...(internalNotes.length > 0 ? [{ key: 'internal', label: `Notes (${internalNotes.length})`, color: C.muted }] : []),
+    { key: 'customer', label: 'Customer',               count: customerEmails.length, color: C.blue },
+    { key: 'courier',  label: courierName || 'Courier',  count: courierEmails.length,  color: C.amber, logo: logoUrl },
+    { key: 'notes',    label: 'Notes',                  count: internalNotes.length,  color: C.muted },
   ];
-
-  const logoUrl = courierCode ? getCourierLogo(courierCode) : null;
 
   const threadEmails = activeThread === 'customer' ? customerEmails
                      : activeThread === 'courier'  ? courierEmails
                      : internalNotes;
 
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [activeThread, emails.length]);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-      {/* Thread switcher */}
-      <div style={{ display: 'flex', gap: 0, marginBottom: 12, background: C.surface, borderRadius: 8, padding: 3, alignSelf: 'flex-start', border: `1px solid ${C.border}` }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Thread tab bar */}
+      <div style={{ display: 'flex', flexShrink: 0, borderBottom: `1px solid ${C.border}`, background: C.surface }}>
         {tabs.map(t => (
           <button key={t.key} onClick={() => setActiveThread(t.key)} style={{
-            padding: '6px 14px', borderRadius: 6, border: 'none',
-            background: activeThread === t.key ? C.card : 'transparent',
+            padding: '8px 16px', border: 'none',
+            borderBottom: `2px solid ${activeThread === t.key ? t.color : 'transparent'}`,
+            background: 'transparent',
             color: activeThread === t.key ? t.color : C.muted,
-            fontSize: 11, fontWeight: 600, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: 5, transition: 'all 0.1s',
+            fontSize: 11, fontWeight: activeThread === t.key ? 700 : 500,
+            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.1s',
           }}>
-            {t.key === 'courier' && logoUrl && (
-              <img src={logoUrl} alt="" style={{ width: 16, height: 11, objectFit: 'contain' }} />
-            )}
+            {t.logo && <img src={t.logo} alt="" style={{ width: 14, height: 10, objectFit: 'contain' }} />}
             {t.label}
+            <span style={{
+              fontSize: 10, fontWeight: 700, minWidth: 16, textAlign: 'center',
+              padding: '0 5px', borderRadius: 8,
+              background: activeThread === t.key ? `${t.color}22` : C.card,
+              color: activeThread === t.key ? t.color : C.muted,
+            }}>{t.count}</span>
           </button>
         ))}
       </div>
 
-      {/* Emails */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {threadEmails.length === 0 && (
-          <div style={{ textAlign: 'center', color: C.muted, fontSize: 13, padding: '30px 0' }}>
+      {/* Messages */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 16px 4px' }}>
+        {threadEmails.length === 0 ? (
+          <div style={{ textAlign: 'center', color: C.muted, fontSize: 13, padding: '40px 0' }}>
             No messages in this thread yet
           </div>
+        ) : (
+          [...threadEmails]
+            .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+            .map(email => (
+              <MessageBubble key={email.id} email={email}
+                onApprove={onApprove} onEdit={onEdit} approving={approving}
+                courierName={courierName} courierCode={courierCode} />
+            ))
         )}
-        {[...threadEmails]
-          .sort((a, b) => {
-            const aD = a.is_ai_draft && !a.sent_at ? 0 : 1;
-            const bD = b.is_ai_draft && !b.sent_at ? 0 : 1;
-            if (aD !== bD) return aD - bD;
-            return new Date(a.created_at) - new Date(b.created_at);
-          })
-          .map(email => (
-            <EmailItem key={email.id} email={email} onApprove={onApprove} onEdit={onEdit}
-              approving={approving} courierName={courierName} courierCode={courierCode} />
-          ))
-        }
+        <div ref={bottomRef} />
       </div>
     </div>
   );
 }
 
-// ─── Draft footer — fixed bottom compose bar ──────────────────────────────────
+// ─── Compose bar ──────────────────────────────────────────────────────────────
 
-function DraftFooter({ q, draft, setDraft, generateDraft }) {
-  const [active, setActive] = useState(null); // null | 'customer' | 'courier'
+function ComposeBar({ q, draft, setDraft, generateDraft }) {
+  const [active, setActive] = useState(null);
+  const [noteText, setNoteText] = useState('');
 
-  // Auto-open when a draft arrives
   useEffect(() => {
     if (draft.customer && active === null) setActive('customer');
     else if (draft.courier && active === null) setActive('courier');
   }, [draft.customer, draft.courier]);
 
-  const current = active ? draft[active] : null;
-  const loading  = active === 'customer' ? draft.loadingCustomer : draft.loadingCourier;
-  const accent   = active === 'customer' ? C.blue : C.amber;
-  const label    = active === 'customer' ? `Reply to ${q.sender_email || q.customer_name}` : `Email ${q.courier_name || 'Courier'}`;
+  const tabs = [
+    { key: 'customer', label: 'Reply to Customer',                    icon: Mail,           color: C.blue,  has: !!draft.customer },
+    { key: 'courier',  label: `Email ${q.courier_name || 'Courier'}`, icon: Truck,          color: C.amber, has: !!draft.courier  },
+    { key: 'note',     label: 'Internal Note',                        icon: MessageSquare,  color: C.muted, has: false            },
+  ];
+
+  const current = active === 'customer' ? draft.customer : active === 'courier' ? draft.courier : null;
+  const loading  = active === 'customer' ? draft.loadingCustomer : active === 'courier' ? draft.loadingCourier : false;
+  const accent   = active === 'customer' ? C.blue : active === 'courier' ? C.amber : C.muted;
 
   return (
     <div style={{ flexShrink: 0, borderTop: `1px solid ${C.border}`, background: C.surface }}>
+      {/* Tab bar */}
+      <div style={{ display: 'flex', borderBottom: active ? `1px solid ${C.border}` : 'none' }}>
+        {tabs.map(t => (
+          <button key={t.key}
+            onClick={() => setActive(a => a === t.key ? null : t.key)}
+            style={{
+              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+              padding: '9px 8px', border: 'none',
+              borderTop: `2px solid ${active === t.key ? t.color : 'transparent'}`,
+              background: active === t.key ? `${t.color}10` : 'transparent',
+              color: active === t.key ? t.color : C.muted,
+              fontSize: 11, fontWeight: active === t.key ? 700 : 500,
+              cursor: 'pointer', transition: 'all 0.1s',
+              borderRight: t.key !== 'note' ? `1px solid ${C.border}` : 'none',
+            }}>
+            <t.icon size={11} />
+            {t.label}
+            {t.has && <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.color, flexShrink: 0 }} />}
+          </button>
+        ))}
+      </div>
 
-      {/* Compose area — expands upward when a panel is active */}
+      {/* Compose area */}
       {active && (
-        <div style={{ padding: '10px 14px', borderBottom: `1px solid ${C.border}` }}>
-          {/* Simulation banner */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8,
-            padding: '4px 9px', borderRadius: 5, background: 'rgba(210,153,34,0.12)',
-            border: `1px solid ${C.amber}33` }}>
-            <AlertTriangle size={11} color={C.amber} />
-            <span style={{ fontSize: 10, fontWeight: 700, color: C.amber, textTransform: 'uppercase',
-              letterSpacing: '0.4px' }}>Simulation — no emails will be sent</span>
-          </div>
-          {current?.subject && (
-            <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>
-              Subject: <span style={{ color: C.sub }}>{current.subject}</span>
+        <div style={{ padding: '10px 14px' }}>
+          {active !== 'note' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8,
+              padding: '4px 9px', borderRadius: 5, background: C.amberDim, border: `1px solid ${C.amber}33` }}>
+              <AlertTriangle size={11} color={C.amber} />
+              <span style={{ fontSize: 10, fontWeight: 700, color: C.amber, textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                Simulation — no emails will be sent
+              </span>
             </div>
           )}
-          {loading ? (
-            <div style={{ padding: '18px 0', textAlign: 'center', color: C.muted, fontSize: 12 }}>
-              <Sparkles size={14} style={{ marginBottom: 6, display: 'block', margin: '0 auto 6px' }} />
+
+          {active === 'note' ? (
+            <>
+              <textarea value={noteText} onChange={e => setNoteText(e.target.value)}
+                placeholder="Add an internal note visible only to your team…"
+                style={{ width: '100%', boxSizing: 'border-box', background: C.card,
+                  border: `1px solid ${C.amber}33`, borderRadius: 6, color: C.text,
+                  fontSize: 12, padding: 10, resize: 'none', height: 90,
+                  fontFamily: 'inherit', lineHeight: 1.55, outline: 'none', display: 'block' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                <button onClick={() => alert('SIMULATION MODE\n\nNotes will be saved in a future build.')}
+                  style={{ padding: '5px 14px', borderRadius: 5, border: `1px solid ${C.muted}44`,
+                    background: C.card, color: C.muted, fontSize: 12, fontWeight: 700, cursor: 'not-allowed',
+                    display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Send size={11} /> Save Note (sim)
+                </button>
+              </div>
+            </>
+          ) : loading ? (
+            <div style={{ padding: '16px 0', textAlign: 'center', color: C.muted, fontSize: 12 }}>
+              <Sparkles size={14} style={{ display: 'block', margin: '0 auto 6px' }} />
               Generating AI draft…
             </div>
           ) : current ? (
             <>
+              {current.subject && (
+                <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>
+                  Subject: <span style={{ color: C.sub }}>{current.subject}</span>
+                </div>
+              )}
               <textarea
                 value={current.text}
                 onChange={e => setDraft(d => ({ ...d, [active]: { ...d[active], text: e.target.value } }))}
                 style={{ width: '100%', boxSizing: 'border-box', background: C.card,
-                  border: `1px solid ${accent}33`, borderRadius: 6, color: C.text, fontSize: 12,
-                  padding: 10, resize: 'none', height: 160, fontFamily: 'inherit',
-                  lineHeight: 1.55, outline: 'none', display: 'block' }}
+                  border: `1px solid ${accent}33`, borderRadius: 6, color: C.text,
+                  fontSize: 12, padding: 10, resize: 'none', height: 140,
+                  fontFamily: 'inherit', lineHeight: 1.55, outline: 'none', display: 'block' }}
               />
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
                 <button onClick={() => generateDraft(active)} disabled={loading}
@@ -813,8 +894,7 @@ function DraftFooter({ q, draft, setDraft, generateDraft }) {
                     background: 'transparent', color: accent, fontSize: 11, cursor: 'pointer' }}>
                   Regenerate
                 </button>
-                <button
-                  onClick={() => alert('SIMULATION MODE\n\nThis email has not been sent. Real sending is not yet connected.')}
+                <button onClick={() => alert('SIMULATION MODE\n\nThis email has not been sent.')}
                   style={{ padding: '5px 14px', borderRadius: 5, border: `1px solid ${C.muted}44`,
                     background: C.card, color: C.muted, fontSize: 12, fontWeight: 700, cursor: 'not-allowed',
                     display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -823,7 +903,7 @@ function DraftFooter({ q, draft, setDraft, generateDraft }) {
               </div>
             </>
           ) : (
-            <div style={{ padding: '14px 0', textAlign: 'center' }}>
+            <div style={{ padding: '12px 0', textAlign: 'center' }}>
               <button onClick={() => generateDraft(active)}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 16px',
                   borderRadius: 6, border: `1px solid ${accent}55`, background: `${accent}14`,
@@ -834,32 +914,6 @@ function DraftFooter({ q, draft, setDraft, generateDraft }) {
           )}
         </div>
       )}
-
-      {/* Button bar — always visible */}
-      <div style={{ display: 'flex', gap: 0 }}>
-        {[
-          { key: 'customer', label: 'Reply to Customer', icon: Mail, color: C.blue,
-            has: !!draft.customer, loading: draft.loadingCustomer },
-          { key: 'courier',  label: `Email ${q.courier_name || 'Courier'}`, icon: Truck, color: C.amber,
-            has: !!draft.courier, loading: draft.loadingCourier },
-        ].map(btn => (
-          <button key={btn.key}
-            onClick={() => setActive(a => a === btn.key ? null : btn.key)}
-            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              padding: '9px 12px', border: 'none', borderRight: btn.key === 'customer' ? `1px solid ${C.border}` : 'none',
-              background: active === btn.key ? `${btn.color}15` : 'transparent',
-              color: active === btn.key ? btn.color : C.muted,
-              fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
-              borderTop: active === btn.key ? `2px solid ${btn.color}` : '2px solid transparent',
-            }}>
-            <btn.icon size={11} />
-            {btn.label}
-            {btn.has && (
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: btn.color, flexShrink: 0 }} />
-            )}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }
@@ -870,7 +924,6 @@ function QueryDetail({ queryId, onUpdated }) {
   const navigate = useNavigate();
   const [data,           setData]           = useState(null);
   const [loading,        setLoading]        = useState(true);
-  const [tab,            setTab]            = useState('emails');
   const [approving,      setApproving]      = useState(false);
   const [attentionNote,  setAttentionNote]  = useState('');
   const [showFlag,       setShowFlag]       = useState(false);
@@ -881,7 +934,6 @@ function QueryDetail({ queryId, onUpdated }) {
   const onUpdatedRef = useRef(onUpdated);
   useEffect(() => { onUpdatedRef.current = onUpdated; }, [onUpdated]);
   const [trackingEvents, setTrackingEvents] = useState([]);
-  const [showTracking,   setShowTracking]   = useState(false);
   const [draft,          setDraft]          = useState({ customer: null, courier: null, loadingCustomer: false, loadingCourier: false });
   const [phoneCall,      setPhoneCall]      = useState(null); // { reason, target }
 
@@ -995,343 +1047,306 @@ function QueryDetail({ queryId, onUpdated }) {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'row', minWidth: 0, overflow: 'hidden' }}>
-    {/* Left column: all detail content */}
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
 
-      {/* ── Header ── */}
-      <div style={{ flexShrink: 0, padding: '16px 20px', borderBottom: `1px solid ${C.border}`, background: C.surface }}>
+      {/* ── Left column: header + conversation + compose ── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
 
-        {/* Block 1: customer name + subject + status */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 12 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-              <div style={{ fontSize: 22, fontWeight: 800, color: C.text, lineHeight: 1.1,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
-                {q.customer_name}
-              </div>
-              {/* Unread badge — shows on open, clears once mark-read fires */}
-              {(() => {
-                const n = emails.filter(e =>
-                  (e.direction === 'inbound_customer' || e.direction === 'inbound_courier') &&
-                  !e.read_at && !e.is_ai_draft
-                ).length;
-                return n > 0 ? (
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 4,
-                    fontSize: 10, fontWeight: 700, color: C.blue,
-                    background: 'rgba(41,121,255,0.12)', padding: '2px 8px',
-                    borderRadius: 20, border: `1px solid ${C.blue}44`, flexShrink: 0,
-                  }}>
-                    <Mail size={9} /> {n} unread
-                  </span>
-                ) : null;
-              })()}
-            </div>
-            <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.4,
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {q.subject}
-            </div>
-          </div>
-          <select value={q.status} onChange={handleStatusChange} disabled={statusUpdating}
-            style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, color: C.text,
-              fontSize: 12, padding: '6px 10px', cursor: 'pointer', flexShrink: 0, marginTop: 2 }}>
-            {Object.entries(STATUS_CFG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-          </select>
-        </div>
-
-        {/* Block 2: info strip — consignment · courier · type · parcel status · phone · buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10,
-          padding: '9px 13px', background: C.card, borderRadius: 8, border: `1px solid ${C.border}` }}>
-          {logoUrl && (
-            <div style={{ width: 28, height: 20, display: 'flex', alignItems: 'center',
-              justifyContent: 'center', background: '#fff', borderRadius: 4, flexShrink: 0, padding: 2 }}>
-              <img src={logoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
-            </div>
-          )}
-          {q.consignment_number && (
-            <span style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, color: C.text, letterSpacing: '0.02em' }}>
-              {q.consignment_number}
-            </span>
-          )}
-          <span style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
-            letterSpacing: '0.5px', flexShrink: 0 }}>Reported</span>
-          <TypeBadge type={q.query_type} />
-
-          {/* Separator */}
-          <div style={{ width: 1, height: 18, background: C.border, flexShrink: 0 }} />
-
-          {/* Parcel status + postcode */}
-          {parcel && (
-            <span style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
-              letterSpacing: '0.5px', flexShrink: 0 }}>Courier</span>
-          )}
-          {parcel && (
-            <span style={{ fontSize: 13, fontWeight: 700, color: parcelColor, textTransform: 'capitalize', whiteSpace: 'nowrap' }}>
-              {parcel.status?.replace(/_/g, ' ')}
-            </span>
-          )}
-          {parcel?.recipient_postcode && (
-            <span style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>
-              {parcel.recipient_postcode}
-            </span>
-          )}
-          {parcel?.last_event_at && (
-            <span style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>
-              {fmtDate(parcel.last_event_at)}
-            </span>
-          )}
-
-          {/* Phone call chip */}
-          {showPhoneCall && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700,
-              color: C.red, background: C.redDim, padding: '3px 8px', borderRadius: 5,
-              border: `1px solid ${C.red}33`, whiteSpace: 'nowrap', flexShrink: 0 }}>
-              <Phone size={11} /> Phone call
-            </span>
-          )}
-          {showAttention && !showPhoneCall && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700,
-              color: C.amber, background: C.amberDim, padding: '3px 8px', borderRadius: 5,
-              border: `1px solid ${C.amber}33`, whiteSpace: 'nowrap', flexShrink: 0 }}>
-              ⚠ Attention
-            </span>
-          )}
-
-          <div style={{ flex: 1 }} />
-
-          {/* Action buttons */}
-          <button onClick={() => setShowTracking(s => !s)}
-            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 12px', borderRadius: 5,
-              border: `1px solid ${showTracking ? C.blue : C.blue + '44'}`,
-              background: showTracking ? `${C.blue}22` : `${C.blue}0D`,
-              color: C.blue, fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            <Truck size={11} /> {showTracking ? 'Hide' : 'Track'}
-          </button>
-          <button onClick={() => navigate(`/tracking?q=${encodeURIComponent(q.consignment_number)}`)}
-            title="Full tracking page"
-            style={{ display: 'flex', alignItems: 'center', padding: '5px 7px', borderRadius: 5,
-              border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, cursor: 'pointer' }}>
-            <ExternalLink size={12} />
-          </button>
-        </div>
-      </div>
-
-      {/* ── Tabs ── */}
-      <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, background: C.surface, flexShrink: 0 }}>
-        {[
-          { key: 'emails',   label: `Emails (${emails.length})`,        icon: Mail },
-          { key: 'evidence', label: `Evidence (${evidence.length})`,    icon: FileText },
-          { key: 'info',     label: 'Info',                             icon: Package },
-          { key: 'notes',    label: `Alerts (${notifications.length})`, icon: AlertCircle },
-        ].map(({ key, label, icon: Icon }) => (
-          <button key={key} onClick={() => setTab(key)} style={{
-            flex: 1, padding: '9px 4px', border: 'none',
-            borderBottom: `2px solid ${tab === key ? C.blue : 'transparent'}`,
-            background: 'transparent', color: tab === key ? C.blue : C.muted,
-            fontSize: 11, fontWeight: tab === key ? 700 : 500, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-          }}>
-            <Icon size={11} />{label}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Tab content (only scroll zone) ── */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px' }}>
-
-        {tab === 'emails' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <EmailThreads
-              emails={emails}
-              onApprove={handleApprove}
-              onEdit={handleEdit}
-              approving={approving}
-              courierName={q.courier_name}
-              courierCode={q.courier_code}
-            />
-            {/* Flag for attention */}
-            <div style={{ paddingTop: 4 }}>
-              {showFlag ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <textarea placeholder="Why does this need attention?" value={attentionNote}
-                    onChange={e => setAttentionNote(e.target.value)}
-                    style={{ background: C.card, border: `1px solid ${C.red}44`, borderRadius: 6,
-                      color: C.text, fontSize: 12, padding: 10, resize: 'vertical', minHeight: 56,
-                      fontFamily: 'inherit', outline: 'none' }} />
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={handleFlagAttention}
-                      style={{ padding: '5px 12px', borderRadius: 6, border: 'none', background: C.red,
-                        color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                      Flag
-                    </button>
-                    <button onClick={() => setShowFlag(false)}
-                      style={{ padding: '5px 10px', borderRadius: 6, border: `1px solid ${C.border}`,
-                        background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer' }}>
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button onClick={() => setShowFlag(true)}
-                  style={{ padding: '5px 10px', borderRadius: 6, border: `1px solid ${C.border}`,
-                    background: 'transparent', color: C.muted, fontSize: 11, cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <Flag size={10} /> Flag for attention
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {tab === 'evidence' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {evidence.length === 0 && <div style={{ textAlign: 'center', color: C.muted, fontSize: 13, padding: 40 }}>No evidence collected yet</div>}
-            {evidence.map(ev => (
-              <div key={ev.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '11px 13px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: C.blue, background: C.blueDim, padding: '2px 7px', borderRadius: 4, border: `1px solid ${C.blue}33` }}>
-                    {ev.evidence_type.replace(/_/g, ' ')}
-                  </span>
-                  <span style={{ fontSize: 10, color: C.muted }}>{fmtDate(ev.created_at)}</span>
-                  {ev.is_courier_approved && <span style={{ fontSize: 10, fontWeight: 600, color: C.green, marginLeft: 'auto' }}>✓ Courier Approved</span>}
-                </div>
-                {ev.value_text && <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.5 }}>{ev.value_text}</div>}
-                {ev.value_numeric != null && <div style={{ fontSize: 12, color: C.sub }}>£{Number(ev.value_numeric).toFixed(2)}</div>}
-                {ev.file_name && <div style={{ fontSize: 11, color: C.blue, marginTop: 4 }}>📎 {ev.file_name}</div>}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {tab === 'info' && (
-          <div>
-            {[
-              ['Consignment', q.consignment_number],
-              ['Customer',    q.customer_name],
-              ['Courier',     q.courier_name],
-              ['Service',     q.service_name],
-              ['Type',        TYPE_CFG[q.query_type]?.label || q.query_type],
-              ['Status',      STATUS_CFG[q.status]?.label  || q.status],
-              ['Sender',      q.sender_email],
-              ['Created',     fmtDate(q.created_at)],
-              ['First Reply', q.first_response_at ? fmtDate(q.first_response_at) : '—'],
-              ['Resolved',    q.resolved_at ? fmtDate(q.resolved_at) : '—'],
-            ].map(([k, v]) => (
-              <div key={k} style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: `1px solid ${C.border}` }}>
-                <span style={{ fontSize: 11, color: C.muted, fontWeight: 600, width: 100, flexShrink: 0 }}>{k}</span>
-                <span style={{ fontSize: 12, color: C.sub }}>{v || '—'}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {tab === 'notes' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {notifications.length === 0 && <div style={{ textAlign: 'center', color: C.muted, fontSize: 13, padding: 40 }}>No alerts for this query</div>}
-            {notifications.map(n => (
-              <div key={n.id} style={{ background: C.card, border: `1px solid ${n.read_at ? C.border : `${C.amber}44`}`, borderRadius: 8, padding: '11px 13px', opacity: n.read_at ? 0.6 : 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: C.amber }}>{n.notification_type.replace(/_/g, ' ')}</span>
-                  <span style={{ fontSize: 10, color: C.muted }}>{fmtDate(n.created_at)}</span>
-                  {n.read_at && <span style={{ fontSize: 10, color: C.green, marginLeft: 'auto' }}>Read</span>}
-                </div>
-                <div style={{ fontSize: 12, color: C.sub }}>{n.message}</div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-      <DraftFooter
-        q={q}
-        draft={draft}
-        setDraft={setDraft}
-        generateDraft={generateDraft}
-      />
-    </div>
-      {showTracking && (
-        <div style={{
-          width: 300, flexShrink: 0,
-          borderLeft: `1px solid ${C.border}`,
-          background: '#0A0E1A',
-          display: 'flex', flexDirection: 'column',
-          overflow: 'hidden',
-        }}>
-          {/* Panel header */}
-          <div style={{ padding: '14px 18px', borderBottom: `1px solid rgba(255,255,255,0.08)`,
-            display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 10, color: '#AAAAAA', fontWeight: 700, textTransform: 'uppercase',
-                letterSpacing: '0.06em', marginBottom: 3 }}>Consignment</div>
-              <div style={{ fontSize: 16, fontWeight: 900, color: '#fff', fontFamily: 'monospace' }}>
-                {q.consignment_number}
-              </div>
-            </div>
-            <button onClick={() => setShowTracking(false)}
-              style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', padding: 4 }}>
-              <X size={16} />
+        {/* Header */}
+        <div style={{ flexShrink: 0, padding: '14px 18px 12px', borderBottom: `1px solid ${C.border}`, background: C.surface }}>
+          {/* Row 1: back · customer name · type badge · status badge */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <button onClick={() => navigate(-1)}
+              style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer',
+                padding: '2px 4px', fontSize: 18, lineHeight: 1, flexShrink: 0 }}>
+              ←
             </button>
+            <span style={{ fontSize: 17, fontWeight: 800, color: C.text, flex: 1, minWidth: 0,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {q.customer_name}
+            </span>
+            <TypeBadge type={q.query_type} />
+            <StatusBadge status={q.status} />
           </div>
-
-          {/* Scrollable content */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '18px 18px' }}>
-            {/* Delivery address box */}
-            {parcel && (parcel.recipient_name || parcel.recipient_address || parcel.recipient_postcode) && (
-              <div style={{ marginBottom: 20, padding: 14, background: 'rgba(0,188,212,0.05)',
-                borderRadius: 10, border: '1px solid rgba(0,188,212,0.18)' }}>
-                <div style={{ fontSize: 10, color: '#00BCD4', fontWeight: 700, textTransform: 'uppercase',
-                  letterSpacing: '0.06em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <MapPin size={10} /> Delivery Address
-                </div>
-                {parcel.recipient_name && (
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 4 }}>
-                    {parcel.recipient_name}
-                  </div>
-                )}
-                {parcel.recipient_address && (
-                  <div style={{ fontSize: 12, color: '#CCC', lineHeight: 1.6, whiteSpace: 'pre-line' }}>
-                    {parcel.recipient_address}
-                  </div>
-                )}
-                {parcel.recipient_postcode && (
-                  <div style={{ fontSize: 13, fontWeight: 700, color: '#CCC',
-                    marginTop: parcel.recipient_address ? 2 : 0 }}>
-                    {parcel.recipient_postcode}
-                  </div>
-                )}
-                {(parcel.estimated_delivery || parcel.delivered_at) && (
-                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                    {parcel.estimated_delivery && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <span style={{ fontSize: 11, color: '#AAAAAA' }}>Estimated delivery</span>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: '#FFC107' }}>
-                          {new Date(parcel.estimated_delivery).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                        </span>
-                      </div>
-                    )}
-                    {parcel.delivered_at && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: 11, color: '#AAAAAA' }}>Delivered</span>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: '#00C853' }}>
-                          {new Date(parcel.delivered_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )}
+          {/* Row 2: courier logo · consignment · parcel status · separator · ticket# */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {logoUrl && (
+              <div style={{ width: 26, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: '#fff', borderRadius: 3, padding: 2, flexShrink: 0 }}>
+                <img src={logoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
               </div>
             )}
-
-            {/* Event history label */}
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#AAAAAA', textTransform: 'uppercase',
-              letterSpacing: '0.06em', marginBottom: 16 }}>
-              Event History ({trackingEvents.length})
-            </div>
-
-            {/* Timeline */}
-            <TrackingTimeline events={trackingEvents} />
+            {q.consignment_number && (
+              <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: C.text,
+                background: C.card, border: `1px solid ${C.border}`, borderRadius: 4,
+                padding: '2px 8px', letterSpacing: '0.02em', flexShrink: 0 }}>
+                {q.consignment_number}
+              </span>
+            )}
+            {parcel?.status && (
+              <span style={{ fontSize: 12, fontWeight: 600, color: parcelColor, textTransform: 'capitalize', flexShrink: 0 }}>
+                {parcel.status.replace(/_/g, ' ')}
+              </span>
+            )}
+            {q.consignment_number && <div style={{ width: 1, height: 14, background: C.border, flexShrink: 0 }} />}
+            <span style={{ fontSize: 12, color: C.muted, flexShrink: 0 }}>#{q.ticket_number || q.id}</span>
+            {showPhoneCall && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700,
+                color: C.red, background: C.redDim, padding: '2px 8px', borderRadius: 4,
+                border: `1px solid ${C.red}33`, flexShrink: 0 }}>
+                <Phone size={10} /> Call needed
+              </span>
+            )}
+            <div style={{ flex: 1 }} />
+            {q.consignment_number && (
+              <button onClick={() => navigate(`/tracking?q=${encodeURIComponent(q.consignment_number)}`)}
+                title="Full tracking page"
+                style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', borderRadius: 4,
+                  border: `1px solid ${C.border}`, background: 'transparent', color: C.muted,
+                  cursor: 'pointer', fontSize: 10, fontWeight: 600, flexShrink: 0 }}>
+                <ExternalLink size={10} /> Track
+              </button>
+            )}
           </div>
         </div>
-      )}
+
+        {/* Thread view — scrolls internally */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <ThreadView
+            emails={emails}
+            onApprove={handleApprove}
+            onEdit={handleEdit}
+            approving={approving}
+            courierName={q.courier_name}
+            courierCode={q.courier_code}
+          />
+        </div>
+
+        {/* Compose bar — sticks to bottom */}
+        <ComposeBar q={q} draft={draft} setDraft={setDraft} generateDraft={generateDraft} />
+      </div>
+
+      {/* ── Right sidebar — always visible ── */}
+      <div style={{ width: 272, flexShrink: 0, borderLeft: `1px solid ${C.border}`,
+        background: C.surface, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
+
+          {/* ── Ticket ── */}
+          <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
+            letterSpacing: '0.08em', marginBottom: 10 }}>Ticket</div>
+
+          {/* Status */}
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>Status</div>
+            <select value={q.status} onChange={handleStatusChange} disabled={statusUpdating}
+              style={{ width: '100%', background: STATUS_CFG[q.status]?.bg || C.card,
+                border: `1px solid ${(STATUS_CFG[q.status]?.color || C.muted) + '44'}`,
+                borderRadius: 6, color: STATUS_CFG[q.status]?.color || C.text,
+                fontSize: 11, padding: '5px 8px', cursor: 'pointer', fontWeight: 700, outline: 'none' }}>
+              {Object.entries(STATUS_CFG).map(([k, v]) => (
+                <option key={k} value={k} style={{ background: '#1C2128', color: '#E6EDF3', fontWeight: 400 }}>{v.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Assignee */}
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>Assignee</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <div style={{ width: 22, height: 22, borderRadius: '50%', background: `${C.blue}33`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 10, fontWeight: 700, color: C.blue, flexShrink: 0 }}>
+                {(q.assignee_name || 'U').charAt(0).toUpperCase()}
+              </div>
+              <span style={{ fontSize: 12, color: q.assignee_name ? C.sub : C.muted }}>
+                {q.assignee_name || 'Unassigned'}
+              </span>
+            </div>
+          </div>
+
+          {/* Opened */}
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>Opened</div>
+            <div style={{ fontSize: 12, color: C.sub }}>{fmtDate(q.created_at)}</div>
+          </div>
+
+          {/* SLA */}
+          {q.sla_mins_remaining !== null && q.sla_mins_remaining !== undefined && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>SLA</div>
+              <SlaChip mins={parseFloat(q.sla_mins_remaining)} policyName={q.sla_policy_name} />
+            </div>
+          )}
+
+          {/* Attention banner */}
+          {showAttention && (
+            <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 6, background: C.amberDim,
+              border: `1px solid ${C.amber}33`, fontSize: 11, color: C.amber, lineHeight: 1.4 }}>
+              ⚠ {q.attention_reason}
+            </div>
+          )}
+
+          <div style={{ height: 1, background: C.border, margin: '12px 0' }} />
+
+          {/* ── Parcel ── */}
+          {(q.consignment_number || parcel) && (
+            <div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
+                letterSpacing: '0.08em', marginBottom: 10 }}>Parcel</div>
+
+              {logoUrl && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <div style={{ width: 32, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: '#fff', borderRadius: 4, padding: 3, flexShrink: 0 }}>
+                    <img src={logoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                  </div>
+                  <span style={{ fontSize: 12, color: C.sub }}>{q.courier_name}</span>
+                </div>
+              )}
+
+              {q.consignment_number && (
+                <div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: C.text,
+                  background: C.card, border: `1px solid ${C.border}`, borderRadius: 4,
+                  padding: '5px 8px', marginBottom: 8, wordBreak: 'break-all' }}>
+                  {q.consignment_number}
+                </div>
+              )}
+
+              {[
+                parcel?.status         && ['Status',       <span key="s" style={{ fontWeight: 700, color: parcelColor, textTransform: 'capitalize' }}>{parcel.status.replace(/_/g, ' ')}</span>],
+                parcel?.recipient_postcode && ['Postcode',  parcel.recipient_postcode],
+                parcel?.estimated_delivery && ['Est. delivery', new Date(parcel.estimated_delivery).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })],
+                parcel?.delivered_at   && ['Delivered',    new Date(parcel.delivered_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })],
+              ].filter(Boolean).map(([label, val], i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                  <span style={{ fontSize: 10, color: C.muted }}>{label}</span>
+                  <span style={{ fontSize: 12, color: C.sub }}>{val}</span>
+                </div>
+              ))}
+
+              <div style={{ height: 1, background: C.border, margin: '12px 0' }} />
+            </div>
+          )}
+
+          {/* ── Tracking mini-timeline ── */}
+          {trackingEvents.length > 0 && (
+            <div style={{ marginBottom: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  Tracking
+                </div>
+                {q.consignment_number && (
+                  <button onClick={() => navigate(`/tracking?q=${encodeURIComponent(q.consignment_number)}`)}
+                    style={{ background: 'none', border: 'none', color: C.blue, fontSize: 10,
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3, padding: 0 }}>
+                    <ExternalLink size={9} /> Full view
+                  </button>
+                )}
+              </div>
+              {[...trackingEvents]
+                .sort((a, b) => new Date(b.event_at || b.event_datetime || b.created_at) - new Date(a.event_at || a.event_datetime || a.created_at))
+                .slice(0, 5)
+                .map((ev, i) => {
+                  const cfg = TRACK_STATUS[ev.status] || TRACK_STATUS.unknown;
+                  return (
+                    <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'flex-start' }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, marginTop: 4,
+                        background: i === 0 ? cfg.color : C.muted }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 11, fontWeight: i === 0 ? 700 : 400,
+                          color: i === 0 ? C.text : C.sub, lineHeight: 1.3, marginBottom: 2 }}>
+                          {ev.description || cfg.label}
+                        </div>
+                        <div style={{ fontSize: 10, color: C.muted }}>
+                          {timeAgo(ev.event_at || ev.event_datetime || ev.created_at)}
+                          {ev.location && ` · ${ev.location}`}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              }
+              <div style={{ height: 1, background: C.border, margin: '12px 0' }} />
+            </div>
+          )}
+
+          {/* ── Evidence ── */}
+          {evidence.length > 0 && (
+            <div style={{ marginBottom: 4 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
+                letterSpacing: '0.08em', marginBottom: 10 }}>Evidence ({evidence.length})</div>
+              {evidence.slice(0, 3).map(ev => (
+                <div key={ev.id} style={{ marginBottom: 7, padding: '6px 8px', background: C.card,
+                  border: `1px solid ${C.border}`, borderRadius: 6 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: C.blue, marginBottom: 2 }}>
+                    {ev.evidence_type.replace(/_/g, ' ')}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.sub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {ev.value_text ? ev.value_text.slice(0, 50)
+                      : ev.value_numeric != null ? `£${Number(ev.value_numeric).toFixed(2)}`
+                      : ev.file_name || '—'}
+                  </div>
+                </div>
+              ))}
+              {evidence.length > 3 && <div style={{ fontSize: 10, color: C.muted, marginBottom: 8 }}>+{evidence.length - 3} more</div>}
+              <div style={{ height: 1, background: C.border, margin: '12px 0' }} />
+            </div>
+          )}
+
+          {/* ── Alerts ── */}
+          {notifications.filter(n => !n.read_at).length > 0 && (
+            <div style={{ marginBottom: 4 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
+                letterSpacing: '0.08em', marginBottom: 10 }}>
+                Alerts ({notifications.filter(n => !n.read_at).length})
+              </div>
+              {notifications.filter(n => !n.read_at).slice(0, 3).map(n => (
+                <div key={n.id} style={{ marginBottom: 7, padding: '6px 8px', background: C.amberDim,
+                  border: `1px solid ${C.amber}33`, borderRadius: 6 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: C.amber, marginBottom: 2, textTransform: 'capitalize' }}>
+                    {n.notification_type.replace(/_/g, ' ')}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.sub, lineHeight: 1.4 }}>
+                    {n.message?.slice(0, 80)}{n.message?.length > 80 ? '…' : ''}
+                  </div>
+                </div>
+              ))}
+              <div style={{ height: 1, background: C.border, margin: '12px 0' }} />
+            </div>
+          )}
+
+          {/* ── Flag attention ── */}
+          {showFlag ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <textarea placeholder="Why does this need attention?" value={attentionNote}
+                onChange={e => setAttentionNote(e.target.value)}
+                style={{ width: '100%', boxSizing: 'border-box', background: C.card,
+                  border: `1px solid ${C.red}44`, borderRadius: 6, color: C.text,
+                  fontSize: 11, padding: 9, resize: 'vertical', minHeight: 56,
+                  fontFamily: 'inherit', outline: 'none' }} />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={handleFlagAttention}
+                  style={{ flex: 1, padding: '5px 0', borderRadius: 5, border: 'none',
+                    background: C.red, color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                  Flag
+                </button>
+                <button onClick={() => setShowFlag(false)}
+                  style={{ flex: 1, padding: '5px 0', borderRadius: 5, border: `1px solid ${C.border}`,
+                    background: 'transparent', color: C.muted, fontSize: 11, cursor: 'pointer' }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setShowFlag(true)}
+              style={{ width: '100%', padding: '7px 0', borderRadius: 6, border: `1px solid ${C.border}`,
+                background: 'transparent', color: C.muted, fontSize: 11, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+              <Flag size={10} /> Flag for attention
+            </button>
+          )}
+
+        </div>
+      </div>
 
     </div>
   );
