@@ -801,7 +801,7 @@ export default function TicketDetailPage() {
   const parcel       = trackingData?.parcel || trackingData || null;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.bg, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, background: C.bg, overflow: 'hidden' }}>
 
       {/* ── Top bar ─────────────────────────────────────────────── */}
       <div style={{
