@@ -1962,7 +1962,7 @@ router.get('/runs/:id/export/preview-csv', async (req, res) => {
         ch.order_id                                               AS order_reference,
         ch.ship_to_name                                           AS recipient_name,
         ch.ship_to_postcode                                       AS postcode,
-        COALESCE(rl.carrier_billed_weight_kg, ch.declared_weight_kg) AS weight_kg,
+        COALESCE(rl.carrier_billed_weight_kg, sh.total_weight_kg) AS weight_kg,
         -- Surcharge info (for surcharge lines)
         s.name                                                    AS surcharge_name,
         COALESCE(rl.corrected_sell_price, rl.expected_amount)     AS surcharge_sell
@@ -1970,6 +1970,7 @@ router.get('/runs/:id/export/preview-csv', async (req, res) => {
       LEFT JOIN courier_services cs  ON cs.id  = rl.service_id
       LEFT JOIN customers        cu  ON cu.id  = rl.customer_id
       LEFT JOIN charges          ch  ON ch.id  = rl.charge_id AND ch.charge_type = 'courier' AND ch.cancelled = false
+      LEFT JOIN shipments        sh  ON sh.id  = ch.shipment_id
       -- Fuel line for same tracking number in this run
       LEFT JOIN reconciliation_lines fuel
              ON fuel.run_id         = rl.run_id
