@@ -3929,7 +3929,9 @@ router.get('/customer-volume', async (req, res) => {
         cu.account_number,
         cu.business_name,
         TRIM(UPPER(cu.postcode))                                           AS postcode,
-        REGEXP_REPLACE(TRIM(UPPER(cu.postcode)), '\\s.*$', '')             AS postcode_district,
+        -- UK postcode district = everything except the last 3 chars (inward code).
+        -- Works whether or not the postcode has a space (e.g. "M12 6JR" or "M126JR").
+        TRIM(SUBSTRING(TRIM(UPPER(cu.postcode)), 1, LENGTH(TRIM(UPPER(cu.postcode))) - 3)) AS postcode_district,
         COUNT(DISTINCT s.id)::int                                          AS shipment_count,
         SUM(COALESCE(s.parcel_count, 1))::int                              AS parcel_count,
         MIN(s.collection_date)                                             AS first_seen,
