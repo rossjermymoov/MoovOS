@@ -17,16 +17,16 @@ const api = axios.create({ baseURL: '/api' });
 
 const S = {
   page:        { padding: '32px 40px', maxWidth: 860, margin: '0 auto' },
-  card:        { background: '#12132a', border: '1px solid rgba(0,0,0,0.07)', borderRadius: 10, padding: '24px 28px', marginBottom: 20 },
+  card:        { background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10, padding: '24px 28px', marginBottom: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' },
   cardTitle:   { fontSize: 15, fontWeight: 700, color: '#0F172A', marginBottom: 4 },
   cardSub:     { fontSize: 13, color: '#64748B', marginBottom: 20 },
   row:         { display: 'flex', gap: 12, alignItems: 'flex-end', marginBottom: 14 },
   label:       { fontSize: 12, color: '#64748B', fontWeight: 600, marginBottom: 5, display: 'block', textTransform: 'uppercase', letterSpacing: '0.04em' },
-  input:       { background: '#0d0e21', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 6, padding: '8px 12px', color: '#0F172A', fontSize: 13, width: '100%', outline: 'none' },
+  input:       { background: '#F8FAFC', border: '1px solid rgba(0,0,0,0.10)', borderRadius: 6, padding: '8px 12px', color: '#0F172A', fontSize: 13, width: '100%', outline: 'none' },
   btn:         { padding: '8px 18px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
   btnPrimary:  { background: '#00C853', color: '#000' },
-  btnSecondary:{ background: 'rgba(0,0,0,0.07)', color: '#334155' },
-  btnDanger:   { background: 'rgba(255,60,60,0.15)', color: '#ff6b6b', border: '1px solid rgba(255,60,60,0.2)' },
+  btnSecondary:{ background: '#F1F5F9', color: '#334155', border: '1px solid rgba(0,0,0,0.08)' },
+  btnDanger:   { background: 'rgba(220,38,38,0.08)', color: '#991B1B', border: '1px solid rgba(220,38,38,0.2)' },
   toggle:      { width: 38, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 },
   pill:        { padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 },
   divider:     { borderTop: '1px solid rgba(0,0,0,0.06)', margin: '16px 0' },
@@ -417,7 +417,7 @@ function BackfillCard() {
             ].map(([label, val, col]) => (
               <div key={label}>
                 <div style={{ fontSize: 11, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: col || '#fff' }}>{val ?? 0}</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: col || '#0F172A' }}>{val ?? 0}</div>
               </div>
             ))}
           </div>

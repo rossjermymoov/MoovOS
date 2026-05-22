@@ -383,7 +383,21 @@ async function seedNowHandler(req, res, next) {
       });
     }
 
-    res.json({ seeded: inserted.filter(i => i.id).length, log, queries: inserted });
+    const seededCount = inserted.filter(i => i.id).length;
+
+    // Auto-triage seeded tickets if Anthropic key is available
+    let triageResult = null;
+    if (process.env.ANTHROPIC_API_KEY && seededCount > 0) {
+      try {
+        const triageRes = await fetch(
+          `http://localhost:${process.env.PORT || 3000}/api/queries/triage-all?force=true`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' } }
+        );
+        if (triageRes.ok) triageResult = await triageRes.json();
+      } catch { /* non-fatal — triage can be run manually */ }
+    }
+
+    res.json({ seeded: seededCount, log, queries: inserted, triage: triageResult });
   } catch (err) {
     res.status(500).json({ error: err.message, detail: err.detail || null });
   }
@@ -846,6 +860,168 @@ router.patch('/:id/emails/:emailId/approve', async (req, res, next) => {
     }
 
     res.json(result.rows[0]);
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/queries/triage-all
+// AI urgency triage — reads every open, un-triaged ticket and asks Claude Haiku
+// to assess priority (urgent/high/medium/low) and whether it needs attention.
+// Also auto-flags any ticket whose claim window expires within 2 days.
+// Safe to call repeatedly — skips tickets that already have a priority set
+// unless ?force=true is passed.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/triage-all', async (req, res, next) => {
+  try {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+    }
+
+    const force = req.query.force === 'true';
+    const RESOLVED = `('resolved','resolved_claim_approved','resolved_claim_rejected')`;
+
+    // Find open tickets — skip already-triaged ones unless ?force=true
+    const eligible = await query(`
+      SELECT id, consignment_number, customer_name, courier_name, courier_code,
+             query_type, status, subject, sender_email,
+             claim_deadline_at, requires_attention, priority
+      FROM queries_inbox_view
+      WHERE status NOT IN ${RESOLVED}
+        ${force ? '' : "AND (priority IS NULL OR priority = 'medium')"}
+      ORDER BY created_at ASC
+      LIMIT 30
+    `);
+
+    const results = [];
+    let triaged = 0;
+
+    for (const ticket of eligible.rows) {
+
+      // ── 1. Auto-flag expiring claim windows (no AI call needed) ──────────
+      if (ticket.claim_deadline_at) {
+        const daysLeft = Math.ceil(
+          (new Date(ticket.claim_deadline_at) - Date.now()) / 86400000
+        );
+        if (daysLeft <= 2 && daysLeft >= 0 && !ticket.requires_attention) {
+          const reason = daysLeft === 0
+            ? 'Claim window expires TODAY'
+            : `Claim window expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`;
+          await query(`
+            UPDATE queries
+            SET requires_attention    = true,
+                attention_reason      = $2,
+                attention_raised_at   = NOW(),
+                priority              = 'urgent',
+                updated_at            = NOW()
+            WHERE id = $1
+          `, [ticket.id, reason]);
+          results.push({ id: ticket.id, source: 'claim_deadline', priority: 'urgent', attention: true, reason });
+          triaged++;
+          continue;
+        }
+      }
+
+      // ── 2. AI triage — read email thread ─────────────────────────────────
+      try {
+        const emailsRes = await query(
+          `SELECT direction, body_text FROM query_emails
+           WHERE query_id = $1 ORDER BY created_at ASC LIMIT 5`,
+          [ticket.id]
+        );
+
+        const emailSummary = emailsRes.rows
+          .map(e => `[${e.direction.replace(/_/g, ' ')}]\n${(e.body_text || '').slice(0, 600)}`)
+          .join('\n\n---\n\n');
+
+        const prompt = `You are triaging a customer support ticket for Moov Parcel, a UK parcel reseller.
+
+Ticket details:
+- Customer: ${ticket.customer_name || 'Unknown'}
+- Courier: ${ticket.courier_name || 'Unknown'}
+- Issue type: ${(ticket.query_type || 'other').replace(/_/g, ' ')}
+- Current status: ${(ticket.status || '').replace(/_/g, ' ')}
+- Subject: ${ticket.subject || '(no subject)'}
+
+Email content:
+${emailSummary || '(no emails)'}
+
+Assess this ticket and respond with ONLY valid JSON in this exact format:
+{
+  "priority": "urgent|high|medium|low",
+  "requires_attention": true|false,
+  "attention_reason": "brief reason string, or null"
+}
+
+Priority rules:
+- urgent: explicit legal threats (solicitor, small claims, trading standards), safety issue, perishable goods lost/damaged, claim window expiring, extremely high value loss (>£500) with aggressive tone, repeat escalation after failed resolution
+- high: significant financial loss (£150-£500), aggressive/distressed tone, time-critical delivery failure, damaged goods with clear evidence, missing high-value items
+- medium: standard complaint, delayed parcel, WISMO with some frustration, missing low-value items, failed delivery
+- low: routine tracking query, mild frustration, no financial loss mentioned
+
+requires_attention should be true for urgent and high priority only.
+Keep attention_reason under 10 words. Return null if requires_attention is false.`;
+
+        const aiResp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': process.env.ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 150,
+            messages: [{ role: 'user', content: prompt }],
+          }),
+        });
+
+        if (!aiResp.ok) {
+          results.push({ id: ticket.id, source: 'ai', error: `API ${aiResp.status}` });
+          continue;
+        }
+
+        const aiJson  = await aiResp.json();
+        const rawText = (aiJson.content?.[0]?.text || '').trim();
+
+        let parsed;
+        try {
+          // Strip markdown code fences if present
+          const clean = rawText.replace(/^```json?\s*/i, '').replace(/```\s*$/, '').trim();
+          parsed = JSON.parse(clean);
+        } catch {
+          results.push({ id: ticket.id, source: 'ai', error: 'JSON parse failed', raw: rawText });
+          continue;
+        }
+
+        const validPriorities = new Set(['urgent', 'high', 'medium', 'low']);
+        const priority         = validPriorities.has(parsed.priority) ? parsed.priority : 'medium';
+        const needsAttention   = parsed.requires_attention === true;
+        const reason           = needsAttention ? (parsed.attention_reason || null) : null;
+
+        await query(`
+          UPDATE queries
+          SET priority            = $2::ticket_priority,
+              requires_attention  = $3,
+              attention_reason    = CASE WHEN $3 THEN $4 ELSE attention_reason END,
+              attention_raised_at = CASE WHEN $3 AND attention_raised_at IS NULL THEN NOW() ELSE attention_raised_at END,
+              updated_at          = NOW()
+          WHERE id = $1
+        `, [ticket.id, priority, needsAttention, reason]);
+
+        results.push({ id: ticket.id, source: 'ai', priority, attention: needsAttention, reason });
+        triaged++;
+
+      } catch (err) {
+        results.push({ id: ticket.id, source: 'ai', error: err.message });
+      }
+    }
+
+    res.json({
+      eligible: eligible.rows.length,
+      triaged,
+      results,
+    });
   } catch (err) { next(err); }
 });
 
