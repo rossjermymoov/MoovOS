@@ -165,140 +165,75 @@ router.get('/seed-now', async (req, res, next) => seedNowHandler(req, res, next)
 router.post('/seed-now', async (req, res, next) => seedNowHandler(req, res, next));
 async function seedNowHandler(req, res, next) {
   try {
-    // 12 hardcoded scenarios using real parcels and customers from the live DB
-    // Each has a distinct tone so the AI can practise reading customer sentiment
+    // 5 targeted claims-testing scenarios — one per major carrier + one DPD expired window
+    // daysAgo = how long ago the parcel entered the network (= ticket raised date)
+    // claimWindowDays = carrier's claims deadline from network entry
+    // → claim_deadline_at = createdAt + claimWindowDays
     const SEEDS = [
       {
+        // DPD — lost in network, 11 days old, 3 days left on 14-day window (AMBER)
         consignment_number: '1760776790',
         customer_id: '006249c4-a38f-4ad4-aa19-7447cf3cce4a',
         business_name: 'Westcare Ltd',
         primary_email: 'lee@westcare.co.uk',
         courier_code: 'dpd', courier_name: 'DPD',
-        service_code: 'dpd-nd', service_name: 'DPD Domestic Parcel Next Day',
-        type: 'not_delivered', status: 'awaiting_courier', attention: true, daysAgo: 5,
-        subject: `DPD tracking shows delivered — ref ${1760776790} — we have not received this`,
-        body: `Hi Moov team,\n\nI'm chasing consignment 1760776790 which DPD are claiming was delivered yesterday at 11:54. Nobody at our premises received it and we've checked with every member of staff.\n\nWe have CCTV covering the entrance and there is no footage of a DPD driver or van at any point yesterday morning. I've attached a still to this email.\n\nThis shipment contained care equipment worth over £800. I need this investigated as a matter of urgency — if DPD can't produce a GPS delivery confirmation or signature I'll be expecting a full replacement or refund.\n\nPlease come back to me by end of day.\n\nLee\nWestcare Ltd`,
+        service_code: 'dpd-nd', service_name: 'DPD Next Day',
+        type: 'not_delivered', status: 'awaiting_courier', attention: true,
+        daysAgo: 11, claimWindowDays: 14,
+        subject: 'DPD tracking shows delivered — 1760776790 — we have NOT received this',
+        body: `Hi Moov,\n\nDPD are claiming consignment 1760776790 was delivered on Tuesday at 11:54. Nobody here received it — we've checked with every member of staff and reviewed our reception log.\n\nWe have CCTV covering the main entrance and there is no footage of a DPD driver or vehicle at any point that morning.\n\nThe shipment contained care equipment valued at over £800. Please investigate as a matter of urgency. If DPD cannot provide GPS delivery confirmation or a signature image, I'll be expecting a full claim.\n\nPlease come back to me by end of day.\n\nLee\nWestcare Ltd`,
       },
       {
-        consignment_number: '2313715868',
-        customer_id: '0d1da410-7cb0-4fa2-92a7-98a512b0440f',
-        business_name: 'Capatex Limited',
-        primary_email: 'neil.pike@capatex.com',
-        courier_code: 'dpd', courier_name: 'DPD',
-        service_code: 'dpd-nd', service_name: 'DPD Domestic Parcel Next Day',
-        type: 'whereabouts', status: 'open', attention: false, daysAgo: 3,
-        subject: `Quick one — where has 2313715868 got to?`,
-        body: `Hi,\n\nHope you're well. Just a quick check-in on this one — tracking shows it was collected a few days ago but hasn't updated since. We're not in a massive rush but our customer is starting to ask questions so just wanted to check nothing has gone sideways.\n\nConsignment is 2313715868, DPD next day.\n\nCheers\nNeil\nCapatex Limited`,
-      },
-      {
-        consignment_number: '60120241549129',
-        customer_id: '0d9db960-ecee-4815-a687-c2d5105a4013',
-        business_name: 'Perex Group Ltd',
-        primary_email: 'info@perex.co.uk',
-        courier_code: 'dhlparcelukcloud', courier_name: 'DHL',
-        service_code: 'dhl-parcel', service_name: 'DHL Parcel UK Parcel',
-        type: 'delay', status: 'courier_investigating', attention: false, daysAgo: 7,
-        subject: `Still waiting — 60120241549129 — I emailed about this last week`,
-        body: `Hello,\n\nI contacted you last week about this shipment and received no response, so I'm following up again.\n\nConsignment 60120241549129 was booked with DHL over a week ago. The tracking has never moved past the initial booking confirmation. No collection, no depot scan, nothing.\n\nI need to know:\n1. Was this parcel actually collected?\n2. If so, where is it now?\n3. If not, why not and when will it be?\n\nThis is holding up a project for one of our clients. Please treat this as urgent.\n\nPerex Group`,
-      },
-      {
-        consignment_number: '2313434059',
-        customer_id: '12760b23-fddd-45be-ab14-9031b6241ed3',
-        business_name: 'E-Health Pharmacy Ltd',
-        primary_email: 'hello@thehealthpharmacy.co.uk',
-        courier_code: 'dpd', courier_name: 'DPD',
-        service_code: 'dpd-epak-nd', service_name: 'DPD Domestic Expresspak Next Day',
-        type: 'damaged', status: 'awaiting_customer_info', attention: false, daysAgo: 4,
-        subject: `Damaged pharmaceutical shipment — 2313434059 — urgent documentation required`,
-        body: `Dear Moov Parcel team,\n\nI am writing to formally report that consignment 2313434059, delivered today, arrived in an unacceptable condition. The outer packaging was significantly crushed on one corner and two of the internal blister packs were cracked, rendering the contents non-dispensable.\n\nAs a registered pharmacy we are required to dispose of any damaged pharmaceutical goods in accordance with MHRA guidelines, which represents both a cost and a regulatory obligation for us.\n\nI have photographed the damage to the outer box, the internal packaging and the affected products. Please advise on the claims process and what supporting documentation you require from us. We will need reimbursement for the destroyed stock.\n\nKind regards\nE-Health Pharmacy Ltd`,
-      },
-      {
-        consignment_number: '60120241551513',
-        customer_id: '1b42c791-27e5-4f7d-9d6a-8f524bcad6b3',
-        business_name: 'Boori (Europe) LTD',
-        primary_email: 'kevin@boori.co.uk',
-        courier_code: 'dhlparcelukcloud', courier_name: 'DHL',
-        service_code: 'dhl-parcel', service_name: 'DHL Parcel UK Parcel',
-        type: 'whereabouts', status: 'open', attention: false, daysAgo: 2,
-        subject: `60120241551513 — nursery furniture delivery, customer has a baby due Friday`,
-        body: `Hi Moov,\n\nI'm hoping you can help with this one — it's a bit time-sensitive. Consignment 60120241551513 is a nursery cot set being delivered to one of our retail customers. Their end customer is due to give birth on Friday and the family are understandably very anxious to have it there before then.\n\nTracking hasn't updated since it was booked with DHL. Can you check where it is in the network and give me an honest assessment of whether it'll make it by Thursday?\n\nIf it won't, I need to know now so I can arrange an alternative. Really appreciate your help on this.\n\nKevin\nBoori Europe`,
-      },
-      {
-        consignment_number: '2313706054',
-        customer_id: '1ef19209-0b4f-48cb-a254-bf5ea7b6b79f',
-        business_name: 'Techworknetwork LTD',
-        primary_email: 'exploregadgets.ebay@gmail.com',
-        courier_code: 'dpd', courier_name: 'DPD',
-        service_code: 'dpd-sat', service_name: 'DPD Domestic Parcel Saturday',
-        type: 'failed_delivery', status: 'open', attention: false, daysAgo: 3,
-        subject: `Saturday delivery 2313706054 — driver never showed, I paid a premium for this`,
-        body: `Right,\n\nI specifically booked and paid for Saturday delivery on consignment 2313706054 so that someone would be home to receive it. I cleared my entire Saturday and waited in all day.\n\nNo driver. No card. No notification. Nothing.\n\nI checked the DPD app and it says "delivery attempted" at 09:12 — that is categorically false. I was sitting in my kitchen with a clear view of the front door from 8am. There was no knock, no van outside, no nothing.\n\nI want a full explanation of what happened and I want this redelivered. If it can't be Saturday again then I want a refund of the Saturday premium I paid. This isn't good enough.\n\nTechworknetwork`,
-      },
-      {
-        consignment_number: '2313742633',
-        customer_id: '1f00d1e5-d315-4513-8dbe-5bb68a2af662',
-        business_name: 'TMK Trading Ltd t/a Nexus Modelling Supplies',
-        primary_email: 'sales@nexusmodels.co.uk',
-        courier_code: 'dpd', courier_name: 'DPD',
-        service_code: 'dpd-epak-nd', service_name: 'DPD Domestic Expresspak Next Day',
-        type: 'missing_items', status: 'awaiting_customer_info', attention: false, daysAgo: 6,
-        subject: `2313742633 — package arrived but 3 model kits missing`,
-        body: `Hello,\n\nWe received consignment 2313742633 yesterday and on opening found that three items from the order are missing. The box itself was sealed and showed no signs of tampering — the packing tape looked intact — so we're a little baffled as to how this has happened.\n\nThe missing items are:\n- 2x Tamiya 1:35 Tiger I (late production) kit\n- 1x Vallejo Model Air paint set (71 colours)\n\nTotal value of missing stock is approximately £94.\n\nWe're not trying to cause any trouble — these things happen — but we do need to get this resolved as they're customer orders. Can you advise on next steps?\n\nMany thanks\nNexus Modelling Supplies`,
-      },
-      {
-        consignment_number: '1760355119',
-        customer_id: '20bd42ff-a6ed-4108-bfe2-a730cd504a7e',
-        business_name: 'Empire Printing & Embroidery Ltd',
-        primary_email: 'andrew@empireclothing.uk',
-        courier_code: 'dpd', courier_name: 'DPD',
-        service_code: 'dpd-epak-nd', service_name: 'DPD Domestic Expresspak Next Day',
-        type: 'wrong_address', status: 'awaiting_courier', attention: true, daysAgo: 1,
-        subject: `URGENT — 1760355119 out for delivery to wrong address RIGHT NOW`,
-        body: `URGENT — please call me.\n\nConsignment 1760355119 is currently showing as out for delivery but the DPD app is showing it going to our old unit address (Unit 4) — we moved to Unit 12 eight months ago and updated our address with you at the time.\n\nThe driver is already out. If they deliver to Unit 4 the parcel will almost certainly be left outside an empty unit or taken by whoever is there now.\n\nThis is time-sensitive printed workwear for a corporate client event tomorrow morning. If it goes to the wrong address and we can't recover it in time I'll be in serious trouble with the client.\n\nPlease contact DPD depot NOW to redirect the driver.\n\nAndrew\nEmpire Printing & Embroidery\n07XXX XXXXXX`,
-      },
-      {
-        consignment_number: '60120241563530',
-        customer_id: '246eb53e-53f2-472c-b659-9bdd4c3bbc1e',
-        business_name: 'EZZTECH',
-        primary_email: 'info@ezztech.co.uk',
-        courier_code: 'dhlparcelukcloud', courier_name: 'DHL',
-        service_code: 'dhl-parcel', service_name: 'DHL Parcel UK Parcel',
-        type: 'returned', status: 'awaiting_courier', attention: true, daysAgo: 8,
-        subject: `60120241563530 — returned to sender WITHOUT a single delivery attempt`,
-        body: `I am absolutely furious.\n\nConsignment 60120241563530 has been returned to sender. DHL have not made a single delivery attempt — there is nothing in the tracking history showing a visit to our address, no card was left, and nobody at our office received any notification.\n\nThis was tech stock worth over £1,200 that we needed urgently for a client install. Because of this failure we have had to source emergency replacements at a much higher cost and tell a client their project is delayed.\n\nI want:\n1. A full explanation of why this was returned without any attempt\n2. The parcel redirected back to us immediately\n3. Compensation for the additional costs we've incurred\n\nIf this isn't resolved satisfactorily I will be moving our account and leaving reviews accordingly.\n\nEZZTECH`,
-      },
-      {
+        // DPD — delivered damaged, 16 days ago, claim window EXPIRED 2 days ago (RED)
         consignment_number: '2313194575',
         customer_id: '4211d418-561a-4b86-94ab-4825c9f3a80d',
         business_name: 'Crytec Limited',
         primary_email: 'sales@crytec-power.co.uk',
         courier_code: 'dpd', courier_name: 'DPD',
-        service_code: 'dpd-nd', service_name: 'DPD Domestic Parcel Next Day',
-        type: 'not_delivered', status: 'claim_raised', attention: true, daysAgo: 10,
-        subject: `2313194575 — 10 days, no parcel, raising formal claim`,
-        body: `This is my fourth email about consignment 2313194575.\n\nDPD's tracking has shown "delivered" for 10 days. The goods have not been delivered. I have told you this three times. Each time I've been told it's being investigated. Nothing has happened.\n\nI am done waiting. I am formally raising a compensation claim for the full value of the shipment (£340 + VAT). I will be attaching invoices.\n\nIf this is not acknowledged and a resolution offered within 48 hours I will be escalating to my bank for a chargeback, reporting to Trading Standards, and leaving detailed reviews on Google and Trustpilot.\n\nThis has been a disgraceful experience from start to finish.\n\nCrytec Limited`,
+        service_code: 'dpd-nd', service_name: 'DPD Next Day',
+        type: 'damaged', status: 'claim_raised', attention: true,
+        daysAgo: 16, claimWindowDays: 14,
+        subject: '2313194575 — arrived damaged, formal claim — please advise urgently',
+        body: `Hi,\n\nConsignment 2313194575 was delivered 16 days ago and arrived with significant crush damage to one corner. We reported it immediately but the investigation has stalled.\n\nI'm aware that DPD's 14-day claims window may now have passed — can you confirm whether we're still within the window and what the status of the claim is?\n\nThe goods were power supply units valued at £340 + VAT. We have photographic evidence of the damage and original packaging.\n\nPlease treat this as urgent.\n\nCrytec Limited`,
       },
       {
-        consignment_number: '2313743878',
-        customer_id: '450beb4c-7c4a-4a33-a3b4-675009b76579',
-        business_name: 'Raycom Ltd',
-        primary_email: 'andy@raycom.co.uk',
-        courier_code: 'dpd', courier_name: 'DPD',
-        service_code: 'dpd-epak-nd', service_name: 'DPD Domestic Expresspak Next Day',
-        type: 'other', status: 'claim_submitted', attention: false, daysAgo: 14,
-        subject: `Formal claim — consignment 2313743878 — 14 days unresolved`,
-        body: `Dear Moov Parcel,\n\nAs discussed in our previous correspondence, I am formally submitting a compensation claim in respect of consignment 2313743878, which has now been unresolved for 14 days.\n\nI attach:\n- Original invoice for goods (£567.00 + VAT)\n- Screenshots of all tracking activity\n- Correspondence log dating from first contact\n\nI expect a response within 5 working days. Should this not be forthcoming, I will instruct our solicitor to write to you formally.\n\nI have no interest in further explanations or apologies — I want the money back.\n\nAndy\nRaycom Ltd`,
+        // DHL — not delivered / lost, 9 days ago, 5 days left on 14-day window (GREEN → AMBER soon)
+        consignment_number: '60120241549129',
+        customer_id: '0d9db960-ecee-4815-a687-c2d5105a4013',
+        business_name: 'Perex Group Ltd',
+        primary_email: 'info@perex.co.uk',
+        courier_code: 'dhlparcelukcloud', courier_name: 'DHL',
+        service_code: 'dhl-parcel', service_name: 'DHL Parcel UK',
+        type: 'not_delivered', status: 'courier_investigating', attention: false,
+        daysAgo: 9, claimWindowDays: 14,
+        subject: '60120241549129 — DHL investigation ongoing — 9 days and still no parcel',
+        body: `Hello,\n\nConsignment 60120241549129 was booked with DHL nine days ago and has never moved past the initial booking scan. No collection event, no depot scan, nothing.\n\nWe contacted you last week and were told DHL were investigating. We've had no further update.\n\nI understand DHL's claims window runs from the expected delivery date. Can you let me know:\n1. What the expected delivery date was for this shipment\n2. How many days we have left to raise a formal claim if the investigation fails\n\nThis is holding up a client project. Please give us a realistic timeline.\n\nPerex Group Ltd`,
       },
       {
-        consignment_number: '2313279073',
-        customer_id: '4699da0a-1dd3-4255-aaa8-670261687f04',
-        business_name: 'Carnivore Cartel Ltd',
-        primary_email: 'info@carnivorecartel.co.uk',
-        courier_code: 'dpd', courier_name: 'DPD',
-        service_code: 'dpd-nd', service_name: 'DPD Domestic Parcel Next Day',
-        type: 'damaged', status: 'awaiting_courier', attention: false, daysAgo: 2,
-        subject: `2313279073 — arrived looking like it had been sat on. Meat ruined.`,
-        body: `Hi Moov team,\n\nNot gonna lie, this one made me laugh but also cry a little bit.\n\nConsignment 2313279073 arrived this morning and the box looked like someone had used it as a seat. Completely crushed on one side. Inside, three of the vacuum-sealed packs of dry-aged beef had burst — blood everywhere, meat exposed to air.\n\nAs you can imagine for a perishable food business that's a total write-off. We can't sell contaminated or air-exposed meat, so the whole lot had to go in the bin. Roughly £180 worth.\n\nWe've taken photos of the box and the contents if that helps your claim with DPD. Happy to send them over. Any idea how long the process usually takes? We're a small business so £180 hits us harder than it might sound.\n\nThanks in advance\nCarnivore Cartel`,
+        // Yodel — damaged parcel, 6 days ago, 1 day left on 7-day AGL window (RED / CRITICAL)
+        consignment_number: 'JJD00009123456',
+        customer_id: '246eb53e-53f2-472c-b659-9bdd4c3bbc1e',
+        business_name: 'EZZTECH',
+        primary_email: 'info@ezztech.co.uk',
+        courier_code: 'yodel', courier_name: 'Yodel',
+        service_code: 'yodel-c2c', service_name: 'Yodel C2C',
+        type: 'damaged', status: 'awaiting_customer_info', attention: true,
+        daysAgo: 6, claimWindowDays: 7,
+        subject: 'JJD00009123456 — delivered damaged — need to raise AGL claim TODAY',
+        body: `Hi Moov,\n\nConsignment JJD00009123456 (Yodel) was delivered six days ago and arrived with a cracked outer casing — the contents are a networking switch worth £280 and it appears the damage is to the unit itself, not just packaging.\n\nI've just been reminded that Yodel's claim window through AGL is only 7 days from label generation. That means we have TODAY to raise this.\n\nCan you help us get this submitted to AGL urgently? We have photographs of the damage.\n\nEZZTECH`,
+      },
+      {
+        // UPS — missing items, 6 days ago, 8 days left on 14-day window (GREEN)
+        consignment_number: '1Z12345E0291980793',
+        customer_id: '12760b23-fddd-45be-ab14-9031b6241ed3',
+        business_name: 'E-Health Pharmacy Ltd',
+        primary_email: 'hello@thehealthpharmacy.co.uk',
+        courier_code: 'ups', courier_name: 'UPS',
+        service_code: 'ups-express', service_name: 'UPS Express',
+        type: 'missing_items', status: 'open', attention: false,
+        daysAgo: 6, claimWindowDays: 14,
+        subject: '1Z12345E0291980793 — UPS delivered but 2 items missing from box',
+        body: `Dear Moov Parcel team,\n\nConsignment 1Z12345E0291980793 (UPS Express) was delivered on Monday. On opening we found two items missing from the shipment:\n\n- 1x Omron blood pressure monitor (HBP-1320)\n- 1x pulse oximeter (CMS-60D)\n\nTotal missing value: approximately £195 inc. VAT.\n\nThe box appeared intact and sealed with no visible signs of tampering, which makes this unusual. We have photographed the contents and the packaging.\n\nCan you advise on the UPS claims process and how long we have to submit? We want to make sure we don't miss any deadlines.\n\nKind regards\nE-Health Pharmacy Ltd`,
       },
     ];
 
@@ -328,10 +263,9 @@ async function seedNowHandler(req, res, next) {
       query(`SELECT unnest(enum_range(NULL::query_status))::text AS v`),
       query(`SELECT unnest(enum_range(NULL::email_direction))::text AS v`),
     ]);
-    const validTypes     = new Set(qtEnums.rows.map(r => r.v));
-    const validStatuses  = new Set(qsEnums.rows.map(r => r.v));
-    const validDirs      = new Set(edEnums.rows.map(r => r.v));
-    log.push({ step: 'enums', query_types: [...validTypes], query_statuses: [...validStatuses], email_directions: [...validDirs] });
+    const validTypes    = new Set(qtEnums.rows.map(r => r.v));
+    const validStatuses = new Set(qsEnums.rows.map(r => r.v));
+    log.push({ step: 'enums', query_types: [...validTypes], query_statuses: [...validStatuses] });
 
     // Step 3: look up customer IDs live (don't rely on hardcoded UUIDs)
     const emailToCustomer = {};
@@ -343,48 +277,86 @@ async function seedNowHandler(req, res, next) {
     for (const r of custRes.rows) emailToCustomer[r.primary_email] = r.id;
     log.push({ step: 'lookup_customers', found: custRes.rows.length, emails: Object.keys(emailToCustomer) });
 
+    // Check if claim_deadline_at column exists
+    const colCheck = await query(
+      `SELECT column_name FROM information_schema.columns
+       WHERE table_name = 'queries' AND column_name = 'claim_deadline_at'`
+    );
+    const hasClaimDeadline = colCheck.rows.length > 0;
+    log.push({ step: 'claim_deadline_col_exists', hasClaimDeadline });
+
     const inserted = [];
     for (const s of SEEDS) {
-      const createdAt = new Date(Date.now() - s.daysAgo * 86400000).toISOString();
-      const consNum = s.consignment_number;
-      // Use live customer ID, fall back to hardcoded if lookup missed it
-      const customerId = emailToCustomer[s.primary_email] || s.customer_id;
+      const createdAt     = new Date(Date.now() - s.daysAgo * 86400000).toISOString();
+      const claimDeadline = new Date(Date.now() - s.daysAgo * 86400000 + s.claimWindowDays * 86400000).toISOString();
+      const consNum       = s.consignment_number;
+      const customerId    = emailToCustomer[s.primary_email] || s.customer_id;
 
-      // Validate enum values before hitting the DB
       if (!validTypes.has(s.type)) {
-        inserted.push({ consignment: consNum, error: `query_type '${s.type}' not in enum: [${[...validTypes].join(', ')}]` });
+        inserted.push({ consignment: consNum, error: `query_type '${s.type}' not in enum` });
         continue;
       }
       if (!validStatuses.has(s.status)) {
-        inserted.push({ consignment: consNum, error: `query_status '${s.status}' not in enum: [${[...validStatuses].join(', ')}]` });
+        inserted.push({ consignment: consNum, error: `query_status '${s.status}' not in enum` });
         continue;
       }
 
       let qid;
       try {
-        const qRes = await query(`
-          INSERT INTO queries (
-            consignment_number, customer_id, customer_name,
-            courier_code, courier_name, service_code, service_name,
-            trigger, query_type, status,
-            subject, description,
-            sender_email, sender_matched, requires_attention,
-            created_at, updated_at
-          ) VALUES (
-            $1::varchar, $2::uuid, $3::varchar,
-            $4::varchar, $5::varchar, $6::varchar, $7::varchar,
-            'customer_email'::query_trigger, $8::query_type, $9::query_status,
-            $10::varchar, $11::text,
-            $12::varchar, true, $13::boolean,
-            $14::timestamptz, $14::timestamptz
-          )
-          RETURNING id
-        `, [consNum, customerId, s.business_name,
-            s.courier_code, s.courier_name, s.service_code, s.service_name,
-            s.type, s.status,
-            s.subject, s.body,
-            s.primary_email, s.attention, createdAt]);
-        qid = qRes.rows[0]?.id;
+        if (hasClaimDeadline) {
+          const qRes = await query(`
+            INSERT INTO queries (
+              consignment_number, customer_id, customer_name,
+              courier_code, courier_name, service_code, service_name,
+              trigger, query_type, status,
+              subject, description,
+              sender_email, sender_matched, requires_attention,
+              claim_deadline_at,
+              created_at, updated_at
+            ) VALUES (
+              $1::varchar, $2::uuid, $3::varchar,
+              $4::varchar, $5::varchar, $6::varchar, $7::varchar,
+              'customer_email'::query_trigger, $8::query_type, $9::query_status,
+              $10::varchar, $11::text,
+              $12::varchar, true, $13::boolean,
+              $14::timestamptz,
+              $15::timestamptz, $15::timestamptz
+            )
+            RETURNING id
+          `, [consNum, customerId, s.business_name,
+              s.courier_code, s.courier_name, s.service_code, s.service_name,
+              s.type, s.status,
+              s.subject, s.body,
+              s.primary_email, s.attention,
+              claimDeadline,
+              createdAt]);
+          qid = qRes.rows[0]?.id;
+        } else {
+          // Fallback if column doesn't exist yet
+          const qRes = await query(`
+            INSERT INTO queries (
+              consignment_number, customer_id, customer_name,
+              courier_code, courier_name, service_code, service_name,
+              trigger, query_type, status,
+              subject, description,
+              sender_email, sender_matched, requires_attention,
+              created_at, updated_at
+            ) VALUES (
+              $1::varchar, $2::uuid, $3::varchar,
+              $4::varchar, $5::varchar, $6::varchar, $7::varchar,
+              'customer_email'::query_trigger, $8::query_type, $9::query_status,
+              $10::varchar, $11::text,
+              $12::varchar, true, $13::boolean,
+              $14::timestamptz, $14::timestamptz
+            )
+            RETURNING id
+          `, [consNum, customerId, s.business_name,
+              s.courier_code, s.courier_name, s.service_code, s.service_name,
+              s.type, s.status,
+              s.subject, s.body,
+              s.primary_email, s.attention, createdAt]);
+          qid = qRes.rows[0]?.id;
+        }
       } catch (e) {
         inserted.push({ consignment: consNum, error: e.message });
         continue;
@@ -402,7 +374,13 @@ async function seedNowHandler(req, res, next) {
         )
       `, [qid, s.subject, s.body, s.primary_email, createdAt]);
 
-      inserted.push({ id: qid, consignment: consNum, customer: s.business_name, status: s.status });
+      const daysLeft = s.claimWindowDays - s.daysAgo;
+      inserted.push({
+        id: qid, consignment: consNum, customer: s.business_name,
+        courier: s.courier_name, status: s.status,
+        claimWindow: `${s.claimWindowDays} days`,
+        claimDeadline, daysLeft,
+      });
     }
 
     res.json({ seeded: inserted.filter(i => i.id).length, log, queries: inserted });
