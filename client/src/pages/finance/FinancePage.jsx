@@ -162,7 +162,7 @@ function ChargeCellCost({ charge }) {
         setHov(true);
       }}
       onMouseLeave={() => setHov(false)}>
-      <span style={{ color: hasCost ? '#B39DDB' : '#555', fontWeight: hasCost ? 700 : 400, fontSize: 13 }}>
+      <span style={{ color: hasCost ? '#7C3AED' : '#555', fontWeight: hasCost ? 700 : 400, fontSize: 13 }}>
         {totalCost != null ? gbp(totalCost) : '—'}
       </span>
       {hov && hasCost && <BreakdownTooltip charge={charge} mode="cost" above={above} />}
@@ -189,7 +189,7 @@ function MoreMenu({ charge, onBill, onReprice, onLog, onDebug, onCancel }) {
     charge.price != null && !charge.billed && { label: 'Bill', action: onBill, color: '#00C853' },
     { label: 'Reprice', action: onReprice, color: '#aaa' },
     { label: 'View payload', action: onLog, color: '#aaa' },
-    { label: 'Diagnose', action: onDebug, color: '#FFC107' },
+    { label: 'Diagnose', action: onDebug, color: '#D97706' },
     { label: 'Cancel', action: onCancel, color: '#F44336' },
   ].filter(Boolean);
 
@@ -272,7 +272,7 @@ function PriceCell({ charge, onSave, onDebug }) {
           onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') cancel(); }}
           style={{
             width: 72, background: 'rgba(0,0,0,0.08)', border: '1px solid #00C853',
-            borderRadius: 9999, color: '#fff', padding: '3px 10px', fontSize: 13, fontWeight: 700,
+            borderRadius: 9999, color: '#0F172A', padding: '3px 10px', fontSize: 13, fontWeight: 700,
           }}
         />
         <button onClick={commit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#00C853', padding: 2 }}>
@@ -289,8 +289,8 @@ function PriceCell({ charge, onSave, onDebug }) {
     return (
       <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
         <button onClick={startEdit} style={{
-          background: 'rgba(255,193,7,0.12)', border: '1px solid rgba(255,193,7,0.4)',
-          borderRadius: 5, color: '#FFC107', padding: '3px 10px', fontSize: 12, fontWeight: 700,
+          background: 'rgba(217,119,6,0.12)', border: '1px solid rgba(217,119,6,0.4)',
+          borderRadius: 5, color: '#D97706', padding: '3px 10px', fontSize: 12, fontWeight: 700,
           cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
         }}>
           <AlertCircle size={11} /> Set Price
@@ -400,9 +400,9 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
           borderBottom: '1px solid rgba(0,0,0,0.08)',
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
-          <Bug size={16} style={{ color: '#FFC107' }} />
+          <Bug size={16} style={{ color: '#D97706' }} />
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700, color: '#fff', fontSize: 15 }}>
+            <div style={{ fontWeight: 700, color: '#0F172A', fontSize: 15 }}>
               Pricing Diagnostic
             </div>
             <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
@@ -473,21 +473,21 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                     }}>
                       Step {step.step}
                     </span>
-                    <span style={{ color: '#ccc', fontWeight: 600, fontSize: 13 }}>{step.title}</span>
+                    <span style={{ color: '#334155', fontWeight: 600, fontSize: 13 }}>{step.title}</span>
                   </div>
 
                   {/* Render key fields */}
-                  <div style={{ fontFamily: 'monospace', fontSize: 12, color: '#aaa', lineHeight: 1.7 }}>
+                  <div style={{ fontFamily: 'monospace', fontSize: 12, color: '#475569', lineHeight: 1.7 }}>
 
                     {/* ── Step 1: Field extraction ── */}
                     {step.step === 1 && <>
-                      <div><span style={{ color: '#64748B' }}>account_number:</span> <span style={{ color: step.account_number ? '#fff' : '#F44336' }}>{step.account_number || 'null — not in webhook payload'}</span></div>
-                      <div><span style={{ color: '#64748B' }}>dc_service_id:</span> <span style={{ color: '#fff' }}>{step.dc_service_id || 'null'}</span></div>
-                      <div><span style={{ color: '#64748B' }}>service_name:</span> <span style={{ color: '#fff' }}>{step.service_name || 'null'}</span></div>
-                      <div><span style={{ color: '#64748B' }}>parcel_count:</span> <span style={{ color: '#fff' }}>{step.parcel_count}</span></div>
-                      <div><span style={{ color: '#64748B' }}>total_weight_kg:</span> <span style={{ color: step.total_weight_kg != null ? '#fff' : '#FFC107' }}>{step.total_weight_kg != null ? `${step.total_weight_kg} kg` : 'null — not in webhook'}</span></div>
-                      <div><span style={{ color: '#64748B' }}>weight_per_parcel:</span> <span style={{ color: step.weight_per_parcel != null ? '#fff' : '#FFC107' }}>{step.weight_per_parcel != null ? `${step.weight_per_parcel} kg` : 'null'}</span></div>
-                      <div><span style={{ color: '#64748B' }}>postcode:</span> <span style={{ color: '#fff' }}>{step.postcode || 'null'}{step.outward_code ? ` → outward: ${step.outward_code}` : ''}</span></div>
+                      <div><span style={{ color: '#64748B' }}>account_number:</span> <span style={{ color: step.account_number ? '#0F172A' : '#DC2626' }}>{step.account_number || 'null — not in webhook payload'}</span></div>
+                      <div><span style={{ color: '#64748B' }}>dc_service_id:</span> <span style={{ color: '#0F172A' }}>{step.dc_service_id || 'null'}</span></div>
+                      <div><span style={{ color: '#64748B' }}>service_name:</span> <span style={{ color: '#0F172A' }}>{step.service_name || 'null'}</span></div>
+                      <div><span style={{ color: '#64748B' }}>parcel_count:</span> <span style={{ color: '#0F172A' }}>{step.parcel_count}</span></div>
+                      <div><span style={{ color: '#64748B' }}>total_weight_kg:</span> <span style={{ color: step.total_weight_kg != null ? '#fff' : '#D97706' }}>{step.total_weight_kg != null ? `${step.total_weight_kg} kg` : 'null — not in webhook'}</span></div>
+                      <div><span style={{ color: '#64748B' }}>weight_per_parcel:</span> <span style={{ color: step.weight_per_parcel != null ? '#fff' : '#D97706' }}>{step.weight_per_parcel != null ? `${step.weight_per_parcel} kg` : 'null'}</span></div>
+                      <div><span style={{ color: '#64748B' }}>postcode:</span> <span style={{ color: '#0F172A' }}>{step.postcode || 'null'}{step.outward_code ? ` → outward: ${step.outward_code}` : ''}</span></div>
                     </>}
 
                     {/* ── Step 1.5: Volumetric weight ── */}
@@ -497,23 +497,23 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                         <div style={{ color: '#64748B' }}>No volumetric divisor configured for this service — physical weight used as-is.</div>
                       ) : (
                         <>
-                          <div><span style={{ color: '#64748B' }}>physical weight:</span> <span style={{ color: '#fff' }}>{step.physical_kg != null ? `${step.physical_kg} kg` : 'null'}</span></div>
+                          <div><span style={{ color: '#64748B' }}>physical weight:</span> <span style={{ color: '#0F172A' }}>{step.physical_kg != null ? `${step.physical_kg} kg` : 'null'}</span></div>
                           <div>
                             <span style={{ color: '#64748B' }}>dims (L × W × H):</span>{' '}
                             {step.dim_length_cm != null && step.dim_width_cm != null && step.dim_height_cm != null ? (
-                              <span style={{ color: '#fff' }}>
+                              <span style={{ color: '#0F172A' }}>
                                 {step.dim_length_cm} × {step.dim_width_cm} × {step.dim_height_cm} cm
                               </span>
                             ) : (
-                              <span style={{ color: '#FFC107' }}>null — dims not in webhook payload</span>
+                              <span style={{ color: '#D97706' }}>null — dims not in webhook payload</span>
                             )}
                           </div>
-                          <div><span style={{ color: '#64748B' }}>divisor:</span> <span style={{ color: '#fff' }}>{step.volumetric_divisor} cm³/kg</span></div>
+                          <div><span style={{ color: '#64748B' }}>divisor:</span> <span style={{ color: '#0F172A' }}>{step.volumetric_divisor} cm³/kg</span></div>
                           {step.volumetric_kg != null ? (
                             <>
                               <div>
                                 <span style={{ color: '#64748B' }}>volumetric weight:</span>{' '}
-                                <span style={{ color: '#fff' }}>
+                                <span style={{ color: '#0F172A' }}>
                                   ({step.dim_length_cm} × {step.dim_width_cm} × {step.dim_height_cm}) ÷ {step.volumetric_divisor} = {step.volumetric_kg} kg
                                 </span>
                               </div>
@@ -530,7 +530,7 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                               </div>
                             </>
                           ) : (
-                            <div style={{ color: '#FFC107' }}>Cannot calculate volumetric weight — dimensions missing in payload.</div>
+                            <div style={{ color: '#D97706' }}>Cannot calculate volumetric weight — dimensions missing in payload.</div>
                           )}
                         </>
                       )}
@@ -540,7 +540,7 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                     {step.step === 2 && <>
                       <div><span style={{ color: '#64748B' }}>customer_found:</span> <span style={{ color: step.customer_found ? '#00C853' : '#F44336', fontWeight: 700 }}>{step.customer_found ? 'YES' : 'NO'}</span></div>
                       {step.customer_found && (
-                        <div><span style={{ color: '#64748B' }}>customer_name:</span> <span style={{ color: '#fff' }}>{step.customer_name}</span></div>
+                        <div><span style={{ color: '#64748B' }}>customer_name:</span> <span style={{ color: '#0F172A' }}>{step.customer_name}</span></div>
                       )}
                     </>}
 
@@ -557,7 +557,7 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                             {step.zones.map((z, i) => (
                               <div key={i} style={checkRow(z.matched)}>
                                 <span style={{ color: z.matched ? '#00C853' : '#F44336', fontWeight: 700, minWidth: 14 }}>{z.matched ? '✓' : '✗'}</span>
-                                <span style={{ color: z.matched ? '#fff' : '#666' }}>{z.zone_name}</span>
+                                <span style={{ color: z.matched ? '#0F172A' : '#64748B' }}>{z.zone_name}</span>
                               </div>
                             ))}
                           </div>
@@ -569,7 +569,7 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                             {step.weight_bands.map((b, i) => (
                               <div key={i} style={checkRow(b.matched)}>
                                 <span style={{ color: b.matched ? '#00C853' : '#F44336', fontWeight: 700, minWidth: 14 }}>{b.matched ? '✓' : '✗'}</span>
-                                <span style={{ color: b.matched ? '#fff' : '#666' }}>{b.weight_class_name}</span>
+                                <span style={{ color: b.matched ? '#0F172A' : '#64748B' }}>{b.weight_class_name}</span>
                                 {b.min_weight_kg != null && b.max_weight_kg != null && (
                                   <span style={{ color: '#64748B', marginLeft: 6 }}>
                                     {b.max_weight_kg >= 9999
@@ -595,15 +595,15 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                       {!step.error && <>
                         <div><span style={{ color: '#64748B' }}>zone:</span> <span style={{ color: '#00C853' }}>{step.zone}</span></div>
                         <div><span style={{ color: '#64748B' }}>weight_band:</span> <span style={{ color: '#00C853' }}>{step.weight_band}</span></div>
-                        <div><span style={{ color: '#64748B' }}>price_per_parcel:</span> <span style={{ color: '#fff' }}>£{step.price_per_parcel?.toFixed(2)}</span></div>
+                        <div><span style={{ color: '#64748B' }}>price_per_parcel:</span> <span style={{ color: '#0F172A' }}>£{step.price_per_parcel?.toFixed(2)}</span></div>
                         {step.price_sub != null && (
-                          <div><span style={{ color: '#64748B' }}>price_sub (per additional parcel):</span> <span style={{ color: '#fff' }}>£{step.price_sub.toFixed(2)}</span></div>
+                          <div><span style={{ color: '#64748B' }}>price_sub (per additional parcel):</span> <span style={{ color: '#0F172A' }}>£{step.price_sub.toFixed(2)}</span></div>
                         )}
                         {step.parcel_count > 1 && (
-                          <div><span style={{ color: '#64748B' }}>parcel_count:</span> <span style={{ color: '#fff' }}>{step.parcel_count} × ({step.pricing_mode === 'sub' ? 'first + subsequent' : 'all at sub rate'})</span></div>
+                          <div><span style={{ color: '#64748B' }}>parcel_count:</span> <span style={{ color: '#0F172A' }}>{step.parcel_count} × ({step.pricing_mode === 'sub' ? 'first + subsequent' : 'all at sub rate'})</span></div>
                         )}
                         <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
-                          <span style={{ color: '#64748B' }}>total_base:</span> <span style={{ color: '#fff', fontWeight: 700 }}>£{step.total_base?.toFixed(2)}</span>
+                          <span style={{ color: '#64748B' }}>total_base:</span> <span style={{ color: '#0F172A', fontWeight: 700 }}>£{step.total_base?.toFixed(2)}</span>
                         </div>
                       </>}
                     </>}
@@ -617,7 +617,7 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                           {step.surcharges.map((s, i) => (
                             <div key={i} style={checkRow(s.matched)}>
                               <span style={{ color: s.matched ? '#00C853' : '#F44336', fontWeight: 700, minWidth: 14 }}>{s.matched ? '✓' : '✗'}</span>
-                              <span style={{ color: s.matched ? '#fff' : '#666', flex: 1 }}>{s.name}</span>
+                              <span style={{ color: s.matched ? '#0F172A' : '#64748B', flex: 1 }}>{s.name}</span>
                               {s.matched && <>
                                 <span style={{ color: '#64748B', fontSize: 11 }}>{s.calc}</span>
                                 <span style={{ color: '#00C853', fontWeight: 700, marginLeft: 8 }}>+£{s.price?.toFixed(2)}</span>
@@ -635,7 +635,7 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                           <div style={{ color: '#64748B', fontSize: 11, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>Fuel surcharge</div>
                           <div style={checkRow(true)}>
                             <span style={{ color: '#00C853', fontWeight: 700, minWidth: 14 }}>✓</span>
-                            <span style={{ color: '#fff', flex: 1 }}>{step.fuel.fuel_group}</span>
+                            <span style={{ color: '#0F172A', flex: 1 }}>{step.fuel.fuel_group}</span>
                             <span style={{ color: '#64748B', fontSize: 11 }}>
                               {step.fuel.pct}% of £{step.fuel.base?.toFixed(2)}
                               {step.fuel.rate_type === 'customer-specific' ? ' (customer rate)' : ' (standard rate)'}
@@ -649,7 +649,7 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                       )}
                       {step.total_surcharges > 0 && (
                         <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
-                          <span style={{ color: '#64748B' }}>total_surcharges:</span> <span style={{ color: '#fff', fontWeight: 700 }}>+£{step.total_surcharges?.toFixed(2)}</span>
+                          <span style={{ color: '#64748B' }}>total_surcharges:</span> <span style={{ color: '#0F172A', fontWeight: 700 }}>+£{step.total_surcharges?.toFixed(2)}</span>
                         </div>
                       )}
                     </>}
@@ -682,13 +682,13 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                     {/* Base price row */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: '#aaa', marginBottom: 4 }}>
                       <span>Base rate <span style={{ color: '#64748B' }}>({trace.conclusion.zone_name} · {trace.conclusion.weight_class_name})</span></span>
-                      <span style={{ color: '#fff' }}>£{trace.conclusion.base_price?.toFixed(2)}</span>
+                      <span style={{ color: '#0F172A' }}>£{trace.conclusion.base_price?.toFixed(2)}</span>
                     </div>
                     {/* Surcharge lines */}
                     {trace.conclusion.surcharge_lines?.map((s, i) => (
                       <div key={i} style={{ display: 'flex', justifyContent: 'space-between', color: '#aaa', marginBottom: 4 }}>
                         <span>{s.name}</span>
-                        <span style={{ color: '#fff' }}>+£{s.price?.toFixed(2)}</span>
+                        <span style={{ color: '#0F172A' }}>+£{s.price?.toFixed(2)}</span>
                       </div>
                     ))}
                     {/* Total */}
@@ -782,7 +782,7 @@ function WebhookPayloadModal({ charge, onClose }) {
         }}>
           <FileJson size={16} style={{ color: '#00BCD4' }} />
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700, color: '#fff', fontSize: 15 }}>Webhook Payload</div>
+            <div style={{ fontWeight: 700, color: '#0F172A', fontSize: 15 }}>Webhook Payload</div>
             <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
               {charge.order_id || charge.id.slice(0, 8)} · {charge.customer_name || 'Unknown'}
               {data?.received_at && ` · received ${format(parseISO(data.received_at), 'd MMM yyyy HH:mm')}`}
@@ -800,12 +800,12 @@ function WebhookPayloadModal({ charge, onClose }) {
           {error && <div style={{ color: '#F44336', fontSize: 13 }}>Error: {error.message}</div>}
           {data && (
             <pre style={{
-              background: 'rgba(0,0,0,0.3)',
-              border: '1px solid rgba(0,0,0,0.06)',
+              background: '#1E293B',
+              border: '1px solid rgba(0,0,0,0.12)',
               borderRadius: 8,
               padding: '14px 16px',
               fontSize: 11,
-              color: '#aaa',
+              color: '#94A3B8',
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-all',
               lineHeight: 1.6,
@@ -845,7 +845,7 @@ function PlaceholderTab({ title, description, color }) {
         <div style={{ width: 18, height: 18, borderRadius: 3, background: color, opacity: 0.7 }} />
       </div>
       <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: '#CCC', marginBottom: 6 }}>{title}</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', marginBottom: 6 }}>{title}</div>
         <div style={{ fontSize: 13, color: '#64748B', maxWidth: 380 }}>{description}</div>
       </div>
       <div style={{
@@ -894,7 +894,7 @@ function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
   const th = { fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase',
     letterSpacing: '0.06em', padding: '10px 12px', whiteSpace: 'nowrap',
     borderBottom: '1px solid rgba(0,0,0,0.06)' };
-  const td = { padding: '10px 12px', fontSize: 13, color: '#CCC', verticalAlign: 'middle',
+  const td = { padding: '10px 12px', fontSize: 13, color: '#334155', verticalAlign: 'middle',
     borderBottom: '1px solid rgba(0,0,0,0.03)' };
 
   const margin = totalSell > 0 ? ((totalSell - totalCost) / totalSell * 100).toFixed(1) : null;
@@ -904,11 +904,11 @@ function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
       {/* Summary strip */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
         <div style={{
-          background: 'rgba(255,193,7,0.05)', border: '1px solid rgba(255,193,7,0.2)',
+          background: 'rgba(217,119,6,0.05)', border: '1px solid rgba(217,119,6,0.2)',
           borderRadius: 10, padding: '14px 18px', minWidth: 140, flex: 1,
         }}>
           <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Awaiting</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#FFC107' }}>{total}</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#D97706' }}>{total}</div>
           <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>Charges pending reconciliation</div>
         </div>
         <div style={{
@@ -933,7 +933,7 @@ function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
             borderRadius: 10, padding: '14px 18px', minWidth: 140, flex: 1,
           }}>
             <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Margin</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: parseFloat(margin) >= 15 ? '#00C853' : parseFloat(margin) >= 5 ? '#FFC107' : '#F44336' }}>{margin}%</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: parseFloat(margin) >= 15 ? '#00C853' : parseFloat(margin) >= 5 ? '#D97706' : '#F44336' }}>{margin}%</div>
             <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>Base courier charges</div>
           </div>
         )}
@@ -950,7 +950,7 @@ function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
             style={{
               width: '100%', paddingLeft: 30, paddingRight: 10, height: 34,
               background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)',
-              borderRadius: 8, color: '#CCC', fontSize: 13,
+              borderRadius: 8, color: '#0F172A', fontSize: 13,
             }}
           />
         </div>
@@ -1007,10 +1007,10 @@ function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
                       </div>
                     </td>
                     <td style={td}>
-                      <span style={{ color: '#A5B4FC', fontWeight: 600, fontSize: 12 }}>{charge.order_id || '—'}</span>
+                      <span style={{ color: '#4338CA', fontWeight: 600, fontSize: 12 }}>{charge.order_id || '—'}</span>
                     </td>
                     <td style={td}>
-                      <div style={{ fontSize: 12, color: '#CCC' }}>{charge.customer_name || '—'}</div>
+                      <div style={{ fontSize: 12, color: '#334155' }}>{charge.customer_name || '—'}</div>
                       <div style={{ fontSize: 11, color: '#64748B' }}>{charge.customer_account || ''}</div>
                     </td>
                     <td style={td}>
@@ -1029,7 +1029,7 @@ function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
                     <td style={{ ...td, textAlign: 'right', color: '#B39DDB', fontWeight: 600 }}>{gbp(costTotal)}</td>
                     <td style={{ ...td, textAlign: 'right' }}>
                       {margin != null
-                        ? <span style={{ color: parseFloat(margin) >= 15 ? '#00C853' : parseFloat(margin) >= 5 ? '#FFC107' : '#F44336', fontWeight: 700 }}>{margin}%</span>
+                        ? <span style={{ color: parseFloat(margin) >= 15 ? '#00C853' : parseFloat(margin) >= 5 ? '#D97706' : '#F44336', fontWeight: 700 }}>{margin}%</span>
                         : <span style={{ color: '#64748B' }}>—</span>}
                     </td>
                   </tr>
@@ -1294,7 +1294,7 @@ export default function FinancePage() {
   const th = { fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase',
     letterSpacing: '0.06em', padding: '10px 12px', whiteSpace: 'nowrap', borderBottom: '1px solid rgba(0,0,0,0.06)' };
 
-  const td = { padding: '10px 12px', fontSize: 13, color: '#CCC', verticalAlign: 'middle',
+  const td = { padding: '10px 12px', fontSize: 13, color: '#334155', verticalAlign: 'middle',
     borderBottom: '1px solid rgba(0,0,0,0.03)' };
 
   return (
@@ -1339,9 +1339,9 @@ export default function FinancePage() {
               disabled={batchRunning}
               style={{
                 display: 'flex', alignItems: 'center', gap: 6,
-                background: batchRunning ? 'rgba(255,193,7,0.08)' : 'rgba(255,193,7,0.12)',
-                border: '1px solid rgba(255,193,7,0.4)',
-                borderRadius: 8, color: '#FFC107',
+                background: batchRunning ? 'rgba(217,119,6,0.08)' : 'rgba(217,119,6,0.12)',
+                border: '1px solid rgba(217,119,6,0.4)',
+                borderRadius: 8, color: '#D97706',
                 padding: '7px 14px', cursor: batchRunning ? 'not-allowed' : 'pointer',
                 fontSize: 13, fontWeight: 700,
               }}
@@ -1445,7 +1445,7 @@ export default function FinancePage() {
             <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
               <span style={{ color: '#00C853', fontWeight: 700 }}>✓ {batchResult.linked} shipments relinked</span>
               {batchResult.not_found > 0 && (
-                <span style={{ color: '#FFC107' }}>{batchResult.not_found} account IDs not matched</span>
+                <span style={{ color: '#D97706' }}>{batchResult.not_found} account IDs not matched</span>
               )}
               <span style={{ color: '#64748B' }}>of {batchResult.total_unlinked} unlinked total</span>
             </div>
@@ -1455,12 +1455,12 @@ export default function FinancePage() {
                 ✓ {batchResult.priced} charges priced
               </span>
               {batchResult.no_customer > 0 && (
-                <span style={{ color: '#FFC107' }}>
+                <span style={{ color: '#D97706' }}>
                   {batchResult.no_customer} customer not matched
                 </span>
               )}
               {batchResult.no_rate > 0 && (
-                <span style={{ color: '#FFC107' }}>
+                <span style={{ color: '#D97706' }}>
                   {batchResult.no_rate} no rate found
                 </span>
               )}
@@ -1499,7 +1499,7 @@ export default function FinancePage() {
               <span style={{ color: '#A5B4FC', fontWeight: 700 }}>✓ Full reprice complete</span>
               <span style={{ color: '#00C853' }}>{fullRepriceResult.repriced} courier charges updated</span>
               {fullRepriceResult.changed > 0 && (
-                <span style={{ color: '#FFC107' }}>{fullRepriceResult.changed} prices actually changed</span>
+                <span style={{ color: '#D97706' }}>{fullRepriceResult.changed} prices actually changed</span>
               )}
               {fullRepriceResult.fuel_updated > 0 && (
                 <span style={{ color: '#34D399' }}>{fullRepriceResult.fuel_updated} fuel charges recalculated</span>
@@ -1561,8 +1561,8 @@ export default function FinancePage() {
       {/* Aged unbilled alert banner */}
       {showAlerts && agedAlerts.length > 0 && (
         <div style={{
-          background: 'rgba(255,193,7,0.08)',
-          border: '1px solid rgba(255,193,7,0.35)',
+          background: 'rgba(217,119,6,0.08)',
+          border: '1px solid rgba(217,119,6,0.35)',
           borderRadius: 10,
           padding: '12px 16px',
           marginBottom: 16,
@@ -1570,12 +1570,12 @@ export default function FinancePage() {
           alignItems: 'flex-start',
           gap: 12,
         }}>
-          <Bell size={18} style={{ color: '#FFC107', flexShrink: 0, marginTop: 2 }} />
+          <Bell size={18} style={{ color: '#D97706', flexShrink: 0, marginTop: 2 }} />
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700, color: '#FFC107', fontSize: 14, marginBottom: 4 }}>
+            <div style={{ fontWeight: 700, color: '#D97706', fontSize: 14, marginBottom: 4 }}>
               {agedAlerts.length} verified charge{agedAlerts.length !== 1 ? 's' : ''} unbilled for over 14 days
             </div>
-            <div style={{ fontSize: 12, color: '#AA8800', lineHeight: 1.5 }}>
+            <div style={{ fontSize: 12, color: '#92400E', lineHeight: 1.5 }}>
               {/* Group by customer */}
               {Object.entries(
                 agedAlerts.reduce((acc, a) => {
@@ -1587,9 +1587,9 @@ export default function FinancePage() {
               ).map(([name, count]) => (
                 <span key={name} style={{
                   display: 'inline-flex', alignItems: 'center', gap: 4,
-                  background: 'rgba(255,193,7,0.12)', borderRadius: 20,
+                  background: 'rgba(217,119,6,0.12)', borderRadius: 20,
                   padding: '2px 10px', marginRight: 6, marginBottom: 4,
-                  border: '1px solid rgba(255,193,7,0.25)', color: '#FFC107',
+                  border: '1px solid rgba(217,119,6,0.25)', color: '#D97706',
                 }}>
                   {name} · {count}
                 </span>
@@ -1599,8 +1599,8 @@ export default function FinancePage() {
           <button
             onClick={() => { setFilter('verified', 'true'); setFilter('billed', 'false'); }}
             style={{
-              background: 'rgba(255,193,7,0.15)', border: '1px solid rgba(255,193,7,0.4)',
-              borderRadius: 6, color: '#FFC107', padding: '5px 12px',
+              background: 'rgba(217,119,6,0.15)', border: '1px solid rgba(217,119,6,0.4)',
+              borderRadius: 6, color: '#D97706', padding: '5px 12px',
               cursor: 'pointer', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap',
             }}
           >
@@ -1624,16 +1624,16 @@ export default function FinancePage() {
           label="Unpriced"
           value={stats?.unpriced ?? '—'}
           sub={showUnpriced ? 'Showing unpriced only' : 'Click to filter'}
-          color="#FFC107"
-          bg={showUnpriced ? 'rgba(255,193,7,0.12)' : 'rgba(255,193,7,0.05)'}
+          color="#D97706"
+          bg={showUnpriced ? 'rgba(217,119,6,0.12)' : 'rgba(217,119,6,0.05)'}
           onClick={() => { setShowUnpriced(v => !v); setOffset(0); }}
         />
         <StatCard
           label="Pending Billing"
           value={stats?.pending ?? '—'}
           sub="Priced, not yet billed"
-          color="#FFC107"
-          bg="rgba(255,193,7,0.05)"
+          color="#D97706"
+          bg="rgba(217,119,6,0.05)"
         />
         <StatCard
           label="Total Value"
@@ -1644,8 +1644,8 @@ export default function FinancePage() {
           label="Unbilled Value"
           value={gbp(stats?.unbilled_value)}
           sub="Not yet invoiced"
-          color="#FFC107"
-          bg="rgba(255,193,7,0.05)"
+          color="#D97706"
+          bg="rgba(217,119,6,0.05)"
         />
         <StatCard
           label="Profit"
@@ -1681,7 +1681,7 @@ export default function FinancePage() {
               onChange={e => setFilter('search', e.target.value)}
               placeholder="Search customer, order ID, service…"
               style={{ flex: 1, background: 'none', border: 'none', outline: 'none',
-                color: '#fff', fontSize: 13, padding: '8px 14px 8px 8px' }}
+                color: '#0F172A', fontSize: 13, padding: '8px 14px 8px 8px' }}
             />
             {filters.search && (
               <button onClick={() => setFilter('search', '')}
@@ -1749,9 +1749,9 @@ export default function FinancePage() {
             style={{
               padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600,
               border: '1px solid',
-              borderColor: showUnpriced ? '#FFC107' : 'rgba(0,0,0,0.10)',
-              background: showUnpriced ? 'rgba(255,193,7,0.12)' : 'transparent',
-              color: showUnpriced ? '#FFC107' : '#888',
+              borderColor: showUnpriced ? '#D97706' : 'rgba(0,0,0,0.10)',
+              background: showUnpriced ? 'rgba(217,119,6,0.12)' : 'transparent',
+              color: showUnpriced ? '#D97706' : '#888',
               cursor: 'pointer',
               display: 'inline-flex', alignItems: 'center', gap: 5,
             }}
@@ -1829,7 +1829,7 @@ export default function FinancePage() {
                 <tr key={charge.id}
                   style={{
                     opacity: charge.cancelled ? 0.45 : 1,
-                    background: charge.price == null ? 'rgba(255,193,7,0.03)' : 'transparent',
+                    background: charge.price == null ? 'rgba(217,119,6,0.03)' : 'transparent',
                     transition: 'background 0.15s',
                   }}
                 >
@@ -1841,7 +1841,7 @@ export default function FinancePage() {
 
                   {/* Customer */}
                   <td style={td}>
-                    <div style={{ fontWeight: 600, color: '#fff', fontSize: 13 }}>{charge.customer_name || '—'}</div>
+                    <div style={{ fontWeight: 600, color: '#0F172A', fontSize: 13 }}>{charge.customer_name || '—'}</div>
                     {charge.customer_account && (
                       <div style={{ fontSize: 11, color: '#64748B' }}>{charge.customer_account}</div>
                     )}
@@ -1849,7 +1849,7 @@ export default function FinancePage() {
 
                   {/* Order ID + Tracking */}
                   <td style={td}>
-                    <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#CCC' }}>
+                    <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#334155' }}>
                       {charge.order_id || '—'}
                     </span>
                     {charge.tracking_codes?.length > 0 && (
@@ -1866,7 +1866,7 @@ export default function FinancePage() {
                   <td style={{ ...td, textAlign: 'center' }}>
                     <span style={{
                       background: 'rgba(0,0,0,0.06)', borderRadius: 5,
-                      padding: '2px 8px', fontSize: 12, fontWeight: 700, color: '#CCC',
+                      padding: '2px 8px', fontSize: 12, fontWeight: 700, color: '#334155',
                     }}>
                       {charge.parcel_qty}
                     </span>
@@ -1883,7 +1883,7 @@ export default function FinancePage() {
                           </div>
                         ) : null;
                       })()}
-                      <div style={{ fontSize: 12, color: '#CCC' }}>{charge.service_name || '—'}</div>
+                      <div style={{ fontSize: 12, color: '#334155' }}>{charge.service_name || '—'}</div>
                     </div>
                     {charge.courier && (
                       <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{charge.courier}</div>
