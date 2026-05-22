@@ -29,7 +29,7 @@ const CARD       = { background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0
 const INPUT      = { background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.10)', borderRadius: 7, color: '#0F172A', fontSize: 13, padding: '8px 12px', outline: 'none', width: '100%', boxSizing: 'border-box' };
 const SELECT_ST  = { ...INPUT, cursor: 'pointer' };
 const BTN_GREEN  = { background: 'rgba(0,200,83,0.15)', border: '1px solid rgba(0,200,83,0.4)', borderRadius: 7, color: '#00C853', padding: '9px 18px', cursor: 'pointer', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' };
-const BTN_GHOST  = { background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 7, color: '#AAA', padding: '9px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 };
+const BTN_GHOST  = { background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 7, color: '#64748B', padding: '9px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 };
 const BTN_RED    = { background: 'rgba(213,0,0,0.08)', border: '1px solid rgba(213,0,0,0.25)', borderRadius: 7, color: '#FF5252', padding: '6px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 };
 const TH         = { padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid rgba(0,0,0,0.07)', textAlign: 'left', whiteSpace: 'nowrap' };
 const TD         = { padding: '12px 14px', fontSize: 13, color: '#0F172A', borderBottom: '1px solid rgba(0,0,0,0.03)', verticalAlign: 'middle' };
@@ -50,7 +50,7 @@ function CarrierTile({ courier, selected, onSelect }) {
         padding: '10px 18px', borderRadius: 8, cursor: ready ? 'pointer' : 'not-allowed',
         background: selected ? 'rgba(0,200,83,0.1)' : 'rgba(0,0,0,0.03)',
         border: `2px solid ${selected ? '#00C853' : 'rgba(0,0,0,0.08)'}`,
-        color: selected ? '#00C853' : ready ? '#0F172A' : '#555',
+        color: selected ? '#00C853' : ready ? '#0F172A' : '#475569',
         fontSize: 13, fontWeight: 700, transition: 'all 0.15s',
         opacity: ready ? 1 : 0.4,
       }}
@@ -241,7 +241,7 @@ export default function ServiceCodeMappingsPage() {
                     onMouseLeave={e => e.currentTarget.style.background = ''}
                   >
                     <td style={TD}>
-                      <span style={{ fontSize: 12, color: '#AAA' }}>{m.carrier_name || '—'}</span>
+                      <span style={{ fontSize: 12, color: '#64748B' }}>{m.carrier_name || '—'}</span>
                     </td>
                     <td style={TD}>
                       <span style={{

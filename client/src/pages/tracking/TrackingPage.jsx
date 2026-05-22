@@ -305,10 +305,10 @@ function ParcelDrawer({ consignment, onClose }) {
                   <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 4 }}>{data.recipient_name}</div>
                 )}
                 {data.recipient_address && (
-                  <div style={{ fontSize: 13, color: '#CCC', lineHeight: 1.6, whiteSpace: 'pre-line' }}>{data.recipient_address}</div>
+                  <div style={{ fontSize: 13, color: '#334155', lineHeight: 1.6, whiteSpace: 'pre-line' }}>{data.recipient_address}</div>
                 )}
                 {data.recipient_postcode && (
-                  <div style={{ fontSize: 13, fontWeight: 700, color: '#CCC', marginTop: data.recipient_address ? 2 : 0 }}>{data.recipient_postcode}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#334155', marginTop: data.recipient_address ? 2 : 0 }}>{data.recipient_postcode}</div>
                 )}
                 {data.estimated_delivery && (
                   <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(0,0,0,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -528,7 +528,7 @@ export default function TrackingPage() {
             border: '1px solid',
             borderColor: datePreset === p.label ? '#00C853' : 'rgba(0,0,0,0.08)',
             background: datePreset === p.label ? 'rgba(0,200,83,0.12)' : 'transparent',
-            color: datePreset === p.label ? '#00C853' : '#888',
+            color: datePreset === p.label ? '#00C853' : '#64748B',
             cursor: 'pointer',
           }}>
             {p.label}

@@ -35,7 +35,7 @@ const btnGreen = {
 };
 const btnGhost = {
   background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)',
-  borderRadius: 7, color: '#AAA', padding: '9px 16px', cursor: 'pointer',
+  borderRadius: 7, color: '#64748B', padding: '9px 16px', cursor: 'pointer',
   fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
 };
 const btnRed = {
@@ -159,7 +159,7 @@ function StatusBadge({ status }) {
     needs_review: { color: '#FFB300', bg: 'rgba(255,160,0,0.12)', border: 'rgba(255,160,0,0.3)', label: 'Needs Review' },
     processing:   { color: '#79AAFF', bg: 'rgba(30,100,200,0.15)',border: 'rgba(30,100,200,0.4)', label: 'Processing' },
     failed:       { color: '#FF5252', bg: 'rgba(213,0,0,0.12)',   border: 'rgba(213,0,0,0.3)',   label: 'Failed' },
-  }[status] || { color: '#AAA', bg: 'rgba(0,0,0,0.04)', border: 'rgba(0,0,0,0.08)', label: status };
+  }[status] || { color: '#64748B', bg: 'rgba(0,0,0,0.04)', border: 'rgba(0,0,0,0.08)', label: status };
 
   return (
     <span style={{
@@ -604,7 +604,7 @@ function ProfileManagerModal({ couriers, onClose }) {
                       border: '1px solid rgba(0,0,0,0.08)', borderRadius: 5, padding: '2px 7px',
                     }}>
                       <span style={{ color: '#64748B' }}>{FIELD_LABELS[field] || field}:</span>{' '}
-                      <span style={{ color: '#AAA' }}>{col}</span>
+                      <span style={{ color: '#64748B' }}>{col}</span>
                     </span>
                   ))}
                 </div>
@@ -1021,7 +1021,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {FIELDS.map(f => (
                 <div key={f.key} style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: 10, alignItems: 'center' }}>
-                  <label style={{ fontSize: 12, color: f.required ? '#0F172A' : '#888', fontWeight: f.required ? 600 : 400 }}>
+                  <label style={{ fontSize: 12, color: f.required ? '#0F172A' : '#64748B', fontWeight: f.required ? 600 : 400 }}>
                     {f.label}
                     {f.required && <span style={{ color: '#FF5252' }}> *</span>}
                     {f.hint && <span style={{ color: '#64748B', fontSize: 10, display: 'block' }}>{f.hint}</span>}
@@ -1197,7 +1197,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <BookOpen size={14} color={showSaveSection ? '#00C853' : '#666'} />
-                  <span style={{ fontSize: 13, fontWeight: 600, color: showSaveSection ? '#00C853' : '#AAA' }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: showSaveSection ? '#00C853' : '#64748B' }}>
                     {loadedProfileId ? 'Update saved profile' : 'Save as column profile'}
                   </span>
                   <span style={{ fontSize: 11, color: '#64748B' }}>
@@ -1297,7 +1297,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                           width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
                           background: d.matched ? '#00C853' : '#FF5252',
                         }} />
-                        <span style={{ color: d.matched ? '#CCC' : '#FF5252', fontFamily: 'monospace' }}>
+                        <span style={{ color: d.matched ? '#334155' : '#FF5252', fontFamily: 'monospace' }}>
                           {d.col || <em style={{ color: '#64748B' }}>no column</em>}
                         </span>
                         {d.matched && d.actualHeader && d.actualHeader !== d.col.toLowerCase().trim() && (
@@ -1405,7 +1405,7 @@ function StartRunButton({ carrierId, invoiceRef, invoiceDate, lines, onSuccess, 
         <div style={{ color: '#FF8F00', fontWeight: 700, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
           <AlertTriangle size={14} /> Duplicate invoice detected
         </div>
-        <div style={{ color: '#CCC', lineHeight: 1.6 }}>
+        <div style={{ color: '#334155', lineHeight: 1.6 }}>
           Invoice <span style={{ color: '#0F172A', fontWeight: 600 }}>{invoiceRef}</span> was
           already imported as{' '}
           <span style={{ color: '#0F172A', fontWeight: 600 }}>Run #{ex.id}</span>
@@ -1423,7 +1423,7 @@ function StartRunButton({ carrierId, invoiceRef, invoiceDate, lines, onSuccess, 
             {loading ? 'Starting…' : 'Import anyway'}
           </button>
           <button
-            style={{ ...btnGhost, color: '#AAA' }}
+            style={{ ...btnGhost, color: '#64748B' }}
             onClick={() => setDupWarn(null)}
             disabled={loading}
           >
@@ -1608,12 +1608,12 @@ export default function ReconciliationPage() {
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
                   <td style={{ padding: '10px 10px', color: '#0F172A', fontWeight: 600 }}>{run.carrier_name || '—'}</td>
-                  <td style={{ padding: '10px 10px', color: '#AAA' }}>{run.invoice_ref || '—'}</td>
+                  <td style={{ padding: '10px 10px', color: '#64748B' }}>{run.invoice_ref || '—'}</td>
                   <td style={{ padding: '10px 10px', color: '#64748B' }}>{run.invoice_date ? new Date(run.invoice_date).toLocaleDateString('en-GB') : '—'}</td>
                   <td style={{ padding: '10px 10px', color: '#0F172A' }}>{(run.total_lines || 0).toLocaleString()}</td>
                   <td style={{ padding: '10px 10px', color: '#00C853' }}>{run.matched_count || 0}</td>
                   <td style={{ padding: '10px 10px', color: '#79AAFF' }}>{run.corrected_count || 0}</td>
-                  <td style={{ padding: '10px 10px', color: (run.unmatched_count || 0) > 0 ? '#FFB300' : '#555' }}>
+                  <td style={{ padding: '10px 10px', color: (run.unmatched_count || 0) > 0 ? '#FFB300' : '#475569' }}>
                     {run.unmatched_count || 0}
                   </td>
                   <td style={{ padding: '10px 10px', minWidth: 100 }}>
@@ -1622,7 +1622,7 @@ export default function ReconciliationPage() {
                   <td style={{ padding: '10px 10px' }}><StatusBadge status={run.status} /></td>
                   <td style={{ padding: '10px 10px' }} onClick={e => e.stopPropagation()}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <ChevronRight size={14} color='#555' />
+                      <ChevronRight size={14} color='#475569' />
                       {deletingRunId === run.id ? (
                         <div style={{ display: 'flex', gap: 5 }}>
                           <button

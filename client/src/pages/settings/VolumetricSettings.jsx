@@ -133,7 +133,7 @@ function ServiceBadge({ service, onRemove }) {
       background: 'rgba(0,200,83,0.1)', border: '1px solid rgba(0,200,83,0.25)',
       borderRadius: 9999, padding: '3px 10px', fontSize: 11, color: '#0F172A',
     }}>
-      <span style={{ color: '#777', fontSize: 10 }}>{service.carrier_name} /</span>
+      <span style={{ color: '#475569', fontSize: 10 }}>{service.carrier_name} /</span>
       {service.name}
       <span style={{ color: '#64748B', fontSize: 10 }}>({service.service_code})</span>
       {onRemove && (

@@ -490,7 +490,7 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
             style={{
               background: applying ? 'transparent' : 'rgba(0,200,83,0.12)',
               border: '1px solid rgba(0,200,83,0.4)', borderRadius: 5,
-              color: applying ? '#555' : '#00C853',
+              color: applying ? '#475569' : '#00C853',
               fontSize: 12, fontWeight: 700, padding: '5px 14px',
               cursor: applying ? 'not-allowed' : 'pointer',
             }}
@@ -775,8 +775,8 @@ function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateD
         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
       >
         {open
-          ? <ChevronDown size={11} color="#555" style={{ flexShrink: 0 }} />
-          : <ChevronRight size={11} color="#555" style={{ flexShrink: 0 }} />}
+          ? <ChevronDown size={11} color="#475569" style={{ flexShrink: 0 }} />
+          : <ChevronRight size={11} color="#475569" style={{ flexShrink: 0 }} />}
         <span style={{ fontSize: 12, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', flex: 1 }}>
           {service.service_name}
         </span>
@@ -942,7 +942,7 @@ function ServiceSelector({ customerId, activeCourierIds }) {
               onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.03)'}
               onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'}
             >
-              {isOpen ? <ChevronDown size={12} color="#555" style={{ marginRight: 8 }} /> : <ChevronRight size={12} color="#555" style={{ marginRight: 8 }} />}
+              {isOpen ? <ChevronDown size={12} color="#475569" style={{ marginRight: 8 }} /> : <ChevronRight size={12} color="#475569" style={{ marginRight: 8 }} />}
               <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', flex: 1 }}>{courierName}</span>
               {countInGroup > 0 && (
                 <span style={{ fontSize: 11, color: '#00C853', fontWeight: 700, marginRight: 8 }}>{countInGroup}/{services.length}</span>
@@ -1015,7 +1015,7 @@ function CourierToggleStrip({ carriers, customerId }) {
             >
               {logo
                 ? <img src={logo} alt={carrier.courier_name} style={{ height: 15, objectFit: 'contain', opacity: isActive ? 1 : 0.3, transition: 'opacity 0.15s' }} />
-                : <span style={{ fontSize: 12, fontWeight: 700, color: isActive ? '#00C853' : '#555' }}>{carrier.courier_name}</span>
+                : <span style={{ fontSize: 12, fontWeight: 700, color: isActive ? '#00C853' : '#475569' }}>{carrier.courier_name}</span>
               }
               {isActive && <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#00C853', flexShrink: 0 }} />}
             </button>
@@ -1060,7 +1060,7 @@ function CustomerFuelRow({ fg, customerId }) {
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 16px 6px 26px', borderTop: '1px solid rgba(0,0,0,0.03)' }}>
-      <span style={{ fontSize: 12, color: '#999', flex: 1 }}>{fg.name}</span>
+      <span style={{ fontSize: 12, color: '#64748B', flex: 1 }}>{fg.name}</span>
       <span style={{ fontSize: 10, color: '#475569', fontFamily: 'monospace' }}>cost {parseFloat(fg.cost_pct || 0).toFixed(2)}%</span>
       <span style={{ fontSize: 10, color: '#64748B', fontFamily: 'monospace' }}>
         std {fg.standard_sell_pct != null ? `${parseFloat(fg.standard_sell_pct).toFixed(2)}%` : '—'}
@@ -1133,7 +1133,7 @@ function SurchargeOverrideRow({ surcharge, override, customerId, onChanged }) {
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 6px', borderRadius: 5, background: hasOverride ? 'rgba(255,193,7,0.03)' : 'transparent' }}>
-      <span style={{ fontSize: 12, color: hasOverride ? '#DDD' : '#888', flex: 1 }}>{surcharge.name}</span>
+      <span style={{ fontSize: 12, color: hasOverride ? '#DDD' : '#64748B', flex: 1 }}>{surcharge.name}</span>
       <span style={{ fontSize: 11, color: '#475569', fontFamily: 'monospace' }}>{fmt(surcharge.default_value || 0)}</span>
       <span style={{ fontSize: 10, color: '#333' }}>→</span>
       {editing ? (
@@ -1289,9 +1289,9 @@ function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesCh
             style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', cursor: 'pointer',
               borderBottom: fuelOpen ? '1px solid rgba(0,0,0,0.03)' : 'none',
               background: fuelOpen ? 'rgba(255,193,7,0.04)' : 'transparent' }}>
-            {fuelOpen ? <ChevronDown size={11} color="#FFC107" /> : <ChevronRight size={11} color="#555" />}
-            <Zap size={11} color={fuelOpen ? '#FFC107' : '#555'} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: fuelOpen ? '#FFC107' : '#777', flex: 1 }}>
+            {fuelOpen ? <ChevronDown size={11} color="#FFC107" /> : <ChevronRight size={11} color="#475569" />}
+            <Zap size={11} color={fuelOpen ? '#FFC107' : '#475569'} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: fuelOpen ? '#FFC107' : '#475569', flex: 1 }}>
               Fuel Groups ({carrier.fuel_groups.length})
             </span>
             {carrier.fuel_groups.some(fg => fg.customer_pct != null) && (
@@ -1312,9 +1312,9 @@ function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesCh
               borderTop: hasFuel ? '1px solid rgba(0,0,0,0.03)' : 'none',
               borderBottom: surchOpen ? '1px solid rgba(0,0,0,0.03)' : 'none',
               background: surchOpen ? 'rgba(123,47,190,0.04)' : 'transparent' }}>
-            {surchOpen ? <ChevronDown size={11} color="#7B2FBE" /> : <ChevronRight size={11} color="#555" />}
-            <AlertCircle size={11} color={surchOpen ? '#7B2FBE' : '#555'} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: surchOpen ? '#7B2FBE' : '#777', flex: 1 }}>
+            {surchOpen ? <ChevronDown size={11} color="#7B2FBE" /> : <ChevronRight size={11} color="#475569" />}
+            <AlertCircle size={11} color={surchOpen ? '#7B2FBE' : '#475569'} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: surchOpen ? '#7B2FBE' : '#475569', flex: 1 }}>
               Surcharge Overrides ({surcharges.length})
             </span>
             {carrierOverrides.length > 0 && (

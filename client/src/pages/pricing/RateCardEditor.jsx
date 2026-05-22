@@ -63,7 +63,7 @@ const inputStyle = {
 };
 
 const STATUS_COLOR = {
-  draft:            '#888',
+  draft:            '#64748B',
   pending_approval: '#FB923C',
   approved:         '#60A5FA',
   rejected:         '#EF4444',
@@ -353,10 +353,10 @@ export default function RateCardEditor() {
   }
 
   const isEditable = rc.status === 'draft' || rc.status === 'rejected';
-  const statusColor = STATUS_COLOR[rc.status] || '#888';
+  const statusColor = STATUS_COLOR[rc.status] || '#64748B';
 
   return (
-    <div style={{ padding: '20px 28px', minHeight: '100%', fontFamily: 'system-ui, sans-serif', color: '#CCC' }}>
+    <div style={{ padding: '20px 28px', minHeight: '100%', fontFamily: 'system-ui, sans-serif', color: '#334155' }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
@@ -399,7 +399,7 @@ export default function RateCardEditor() {
                   background: dirty ? 'rgba(99,102,241,0.15)' : 'rgba(0,0,0,0.03)',
                   border: `1px solid ${dirty ? '#6366F1' : 'rgba(0,0,0,0.08)'}`,
                   borderRadius: 7, padding: '8px 16px',
-                  color: dirty ? '#A5B4FC' : '#555',
+                  color: dirty ? '#A5B4FC' : '#475569',
                   fontSize: 13, cursor: dirty ? 'pointer' : 'default', fontWeight: 700 }}>
                 {updateMut.isPending ? <RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={13} />}
                 Save
@@ -420,7 +420,7 @@ export default function RateCardEditor() {
       {showSubmit && isEditable && (
         <div style={{ marginBottom: 16, background: 'rgba(0,200,83,0.06)', border: '1px solid rgba(0,200,83,0.2)',
           borderRadius: 9, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 13, color: '#AAA' }}>Submit as:</span>
+          <span style={{ fontSize: 13, color: '#64748B' }}>Submit as:</span>
           <select value={submitStaff} onChange={e => setSubmitStaff(e.target.value)}
             style={{ background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.10)',
               borderRadius: 6, padding: '6px 10px', color: '#fff', fontSize: 13, outline: 'none', minWidth: 180 }}>
@@ -478,7 +478,7 @@ export default function RateCardEditor() {
 
               {/* Fuel markup — always visible, with warning if blank */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ flex: '0 0 160px', fontSize: 12, color: '#AAA', fontWeight: 600 }}>Fuel surcharge markup</div>
+                <div style={{ flex: '0 0 160px', fontSize: 12, color: '#64748B', fontWeight: 600 }}>Fuel surcharge markup</div>
                 <div style={{ position: 'relative', flex: '0 0 90px' }}>
                   <input value={fuelMarkup} onChange={e => { setFuelMarkup(e.target.value); markDirty(); }}
                     disabled={!isEditable} type="number" step="0.1" placeholder="e.g. 5"
@@ -502,7 +502,7 @@ export default function RateCardEditor() {
                       onChange={e => { setSurchargeMarkups(p => p.map((x, j) => j === i ? { ...x, surcharge_name: e.target.value } : x)); markDirty(); }}
                       style={{ ...inputStyle, flex: '0 0 160px', padding: '5px 9px', fontSize: 12 }} />
                   ) : (
-                    <div style={{ flex: '0 0 160px', fontSize: 12, color: '#AAA', fontWeight: 600 }}>{s.surcharge_name || '—'}</div>
+                    <div style={{ flex: '0 0 160px', fontSize: 12, color: '#64748B', fontWeight: 600 }}>{s.surcharge_name || '—'}</div>
                   )}
                   <div style={{ position: 'relative', flex: '0 0 90px' }}>
                     <input value={s.markup_pct ?? ''} type="number" step="0.1" placeholder="0"
@@ -781,7 +781,7 @@ export default function RateCardEditor() {
                           borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer',
                           background: showDebug ? 'rgba(245,158,11,0.15)' : 'rgba(0,0,0,0.06)',
                           border: `1px solid ${showDebug ? 'rgba(245,158,11,0.4)' : 'rgba(0,0,0,0.08)'}`,
-                          color: showDebug ? '#F59E0B' : '#555', marginTop: 2 }}>
+                          color: showDebug ? '#F59E0B' : '#475569', marginTop: 2 }}>
                         {showDebug ? <ChevronDown size={10}/> : <ChevronRight size={10}/>}
                         Debug
                       </button>
@@ -811,7 +811,7 @@ export default function RateCardEditor() {
                         ].map(({ label, val, mono, color }) => (
                           <div key={label}>
                             <div style={{ fontSize: 10, color: '#64748B', marginBottom: 2 }}>{label}</div>
-                            <div style={{ color: color || '#CCC', fontFamily: mono ? 'monospace' : 'inherit', fontWeight: 600 }}>{val}</div>
+                            <div style={{ color: color || '#334155', fontFamily: mono ? 'monospace' : 'inherit', fontWeight: 600 }}>{val}</div>
                           </div>
                         ))}
                       </div>
@@ -857,7 +857,7 @@ export default function RateCardEditor() {
                         ].map(({ label, val, mono, color }) => (
                           <div key={label}>
                             <div style={{ fontSize: 10, color: '#64748B', marginBottom: 2 }}>{label}</div>
-                            <div style={{ color: color || '#CCC', fontFamily: mono ? 'monospace' : 'inherit', fontWeight: 600 }}>{val}</div>
+                            <div style={{ color: color || '#334155', fontFamily: mono ? 'monospace' : 'inherit', fontWeight: 600 }}>{val}</div>
                           </div>
                         ))}
                       </div>

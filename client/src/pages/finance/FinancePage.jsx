@@ -31,8 +31,9 @@ function StatCard({ label, value, sub, color = '#64748B', bg = 'rgba(0,0,0,0.03)
     <div
       onClick={onClick}
       style={{
-        background: bg,
-        border: `1px solid ${color}33`,
+        background: bg || '#FFFFFF',
+        border: `1px solid rgba(0,200,83,0.18)`,
+        boxShadow: '0 0 12px rgba(0,200,83,0.07)',
         borderRadius: 10,
         padding: '14px 18px',
         minWidth: 140,
@@ -115,7 +116,7 @@ function BreakdownTooltip({ charge, mode, above = false }) {
         marginTop: 6, paddingTop: 6, borderTop: `1px solid ${accentCol}33`,
         fontWeight: 700,
       }}>
-        <span style={{ color: '#aaa' }}>Total</span>
+        <span style={{ color: '#64748B' }}>Total</span>
         <span style={{ color: accentCol }}>£{total.toFixed(2)}</span>
       </div>
     </div>
@@ -162,7 +163,7 @@ function ChargeCellCost({ charge }) {
         setHov(true);
       }}
       onMouseLeave={() => setHov(false)}>
-      <span style={{ color: hasCost ? '#7C3AED' : '#555', fontWeight: hasCost ? 700 : 400, fontSize: 13 }}>
+      <span style={{ color: hasCost ? '#7C3AED' : '#475569', fontWeight: hasCost ? 700 : 400, fontSize: 13 }}>
         {totalCost != null ? gbp(totalCost) : '—'}
       </span>
       {hov && hasCost && <BreakdownTooltip charge={charge} mode="cost" above={above} />}
@@ -187,8 +188,8 @@ function MoreMenu({ charge, onBill, onReprice, onLog, onDebug, onCancel }) {
 
   const items = [
     charge.price != null && !charge.billed && { label: 'Bill', action: onBill, color: '#00C853' },
-    { label: 'Reprice', action: onReprice, color: '#aaa' },
-    { label: 'View payload', action: onLog, color: '#aaa' },
+    { label: 'Reprice', action: onReprice, color: '#64748B' },
+    { label: 'View payload', action: onLog, color: '#64748B' },
     { label: 'Diagnose', action: onDebug, color: '#D97706' },
     { label: 'Cancel', action: onCancel, color: '#F44336' },
   ].filter(Boolean);
@@ -341,16 +342,16 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
   });
 
   const stepColor = (step) => {
-    if (!trace) return '#555';
+    if (!trace) return '#475569';
     const t = step.title || '';
     // Rate card search — red if zone/band not resolved
     if (t === 'Rate card search' && (step.error || !step.resolved_zone || !step.resolved_band)) return '#F44336';
     // Base price — red if no price found
     if (t === 'Base price' && step.error) return '#F44336';
     // Surcharges — grey if none (not an error, just informational)
-    if (t === 'Surcharges' && !step.surcharges?.length && !step.fuel) return '#555';
+    if (t === 'Surcharges' && !step.surcharges?.length && !step.fuel) return '#475569';
     // Volumetric — amber if no dims available (can't calculate)
-    if (t === 'Volumetric weight' && step.volumetric_divisor == null) return '#888';
+    if (t === 'Volumetric weight' && step.volumetric_divisor == null) return '#64748B';
     return '#00C853';
   };
 
@@ -680,13 +681,13 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
 
                   {trace.conclusion.priced && <>
                     {/* Base price row */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#aaa', marginBottom: 4 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748B', marginBottom: 4 }}>
                       <span>Base rate <span style={{ color: '#64748B' }}>({trace.conclusion.zone_name} · {trace.conclusion.weight_class_name})</span></span>
                       <span style={{ color: '#0F172A' }}>£{trace.conclusion.base_price?.toFixed(2)}</span>
                     </div>
                     {/* Surcharge lines */}
                     {trace.conclusion.surcharge_lines?.map((s, i) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', color: '#aaa', marginBottom: 4 }}>
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', color: '#64748B', marginBottom: 4 }}>
                         <span>{s.name}</span>
                         <span style={{ color: '#0F172A' }}>+£{s.price?.toFixed(2)}</span>
                       </div>
@@ -697,7 +698,7 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                       marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(0,0,0,0.08)',
                       fontWeight: 700,
                     }}>
-                      <span style={{ color: '#ccc' }}>Total</span>
+                      <span style={{ color: '#334155' }}>Total</span>
                       <span style={{ color: '#00C853', fontSize: 15 }}>£{trace.conclusion.total?.toFixed(2)}</span>
                     </div>
                   </>}
@@ -1651,7 +1652,7 @@ export default function FinancePage() {
           label="Profit"
           value={gbp(stats?.profit)}
           sub={stats?.profit_pct != null ? `${stats.profit_pct}% margin` : undefined}
-          color={stats?.profit > 0 ? '#00C853' : stats?.profit < 0 ? '#F44336' : '#888'}
+          color={stats?.profit > 0 ? '#00C853' : stats?.profit < 0 ? '#F44336' : '#64748B'}
           bg={stats?.profit > 0 ? 'rgba(0,200,83,0.05)' : stats?.profit < 0 ? 'rgba(244,67,54,0.05)' : 'rgba(0,0,0,0.03)'}
         />
         <StatCard
@@ -1716,7 +1717,7 @@ export default function FinancePage() {
                   border: '1px solid',
                   borderColor: filters.verified === o.value ? '#00BCD4' : 'rgba(0,0,0,0.10)',
                   background: filters.verified === o.value ? 'rgba(0,188,212,0.12)' : 'transparent',
-                  color: filters.verified === o.value ? '#00BCD4' : '#888',
+                  color: filters.verified === o.value ? '#00BCD4' : '#64748B',
                   cursor: 'pointer',
                 }}
               >
@@ -1735,7 +1736,7 @@ export default function FinancePage() {
                 border: '1px solid',
                 borderColor: filters.billed === o.value ? '#00C853' : 'rgba(0,0,0,0.10)',
                 background: filters.billed === o.value ? 'rgba(0,200,83,0.12)' : 'transparent',
-                color: filters.billed === o.value ? '#00C853' : '#888',
+                color: filters.billed === o.value ? '#00C853' : '#64748B',
                 cursor: 'pointer',
               }}
             >
@@ -1751,7 +1752,7 @@ export default function FinancePage() {
               border: '1px solid',
               borderColor: showUnpriced ? '#D97706' : 'rgba(0,0,0,0.10)',
               background: showUnpriced ? 'rgba(217,119,6,0.12)' : 'transparent',
-              color: showUnpriced ? '#D97706' : '#888',
+              color: showUnpriced ? '#D97706' : '#64748B',
               cursor: 'pointer',
               display: 'inline-flex', alignItems: 'center', gap: 5,
             }}
@@ -1927,7 +1928,7 @@ export default function FinancePage() {
                       const sellTotal = parseFloat(charge.price) + lines.reduce((s, l) => s + parseFloat(l.price || 0), 0);
                       const costTotal = parseFloat(charge.cost_price) + lines.reduce((s, l) => s + parseFloat(l.cost_price ?? l.price ?? 0), 0);
                       const profit    = sellTotal - costTotal;
-                      const color     = profit > 0 ? '#00C853' : profit < 0 ? '#F44336' : '#888';
+                      const color     = profit > 0 ? '#00C853' : profit < 0 ? '#F44336' : '#64748B';
                       return <span style={{ color, fontWeight: 700, fontSize: 13 }}>{gbp(profit)}</span>;
                     })() : <span style={{ color: '#64748B' }}>—</span>}
                   </td>

@@ -37,7 +37,7 @@ const btnGreen = {
 };
 const btnGhost = {
   background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)',
-  borderRadius: 7, color: '#AAA', padding: '7px 14px', cursor: 'pointer',
+  borderRadius: 7, color: '#64748B', padding: '7px 14px', cursor: 'pointer',
   fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5,
 };
 const btnRed = {
@@ -53,7 +53,7 @@ function StatusBadge({ status }) {
     corrected:    { color: '#FF8F00', bg: 'rgba(255,143,0,0.12)',  border: 'rgba(255,143,0,0.3)',  label: 'Corrected' },
     unmatched:    { color: '#FFB300', bg: 'rgba(255,160,0,0.12)',  border: 'rgba(255,160,0,0.3)',  label: 'Unmatched' },
     processing:   { color: '#64748B',   bg: 'rgba(0,0,0,0.04)', border: 'rgba(0,0,0,0.08)', label: 'Processing' },
-  }[status] || { color: '#AAA', bg: 'rgba(0,0,0,0.04)', border: 'rgba(0,0,0,0.08)', label: status };
+  }[status] || { color: '#64748B', bg: 'rgba(0,0,0,0.04)', border: 'rgba(0,0,0,0.08)', label: status };
   return (
     <span style={{
       display: 'inline-block', padding: '1px 8px', borderRadius: 9999,
@@ -673,7 +673,7 @@ function ServiceCodeMappingBanner({ unmatchedLines, runId, courierId, onMapped }
             {/* Line count */}
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 10, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Lines</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#AAA' }}>{g.count}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#64748B' }}>{g.count}</div>
             </div>
             {/* Service dropdown */}
             <div>
@@ -816,7 +816,7 @@ function ShipmentLookupPanel() {
       {result && (
         <div>
           <div style={{ fontSize: 11, color: '#64748B', marginBottom: 10 }}>
-            Searched: <span style={{ fontFamily: 'monospace', color: '#AAA' }}>{result.tracking_searched}</span>
+            Searched: <span style={{ fontFamily: 'monospace', color: '#64748B' }}>{result.tracking_searched}</span>
             {' '}·{' '}
             Variants tried: <span style={{ fontFamily: 'monospace', color: '#64748B' }}>{result.variants_tried.join(', ')}</span>
           </div>
@@ -840,7 +840,7 @@ function ShipmentLookupPanel() {
                   Recover missed shipment
                 </div>
                 <div style={{ fontSize: 11, color: '#64748B', marginBottom: 10, lineHeight: 1.5 }}>
-                  Enter the <strong style={{ color: '#AAA' }}>sender reference</strong> (the customer ref used when booking — visible in DC) and the
+                  Enter the <strong style={{ color: '#64748B' }}>sender reference</strong> (the customer ref used when booking — visible in DC) and the
                   tracking number. We'll search DC for that booking and pull it in.
                 </div>
                 <form onSubmit={handleBackfill} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -981,7 +981,7 @@ function ShipmentLookupPanel() {
                         borderBottom: '1px solid rgba(0,0,0,0.03)',
                         opacity: c.cancelled ? 0.4 : 1,
                       }}>
-                        <td style={{ padding: '4px 6px', color: '#AAA' }}>{c.charge_type}</td>
+                        <td style={{ padding: '4px 6px', color: '#64748B' }}>{c.charge_type}</td>
                         <td style={{ padding: '4px 6px', color: '#64748B', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.service_name}>{c.service_code || c.service_name || '—'}</td>
                         <td style={{ padding: '4px 6px', color: statusColor(c.verified), fontWeight: 700, fontSize: 9 }}>{c.verified ? '✓' : '✗'}</td>
                         <td style={{ padding: '4px 6px', color: c.cancelled ? '#FF5252' : '#333', fontWeight: c.cancelled ? 700 : 400, fontSize: 9 }}>{c.cancelled ? '✗' : '—'}</td>
@@ -992,7 +992,7 @@ function ShipmentLookupPanel() {
                         <td style={{ padding: '4px 6px', color: '#00C853', fontWeight: 600 }}>{c.sell_price != null ? `£${parseFloat(c.sell_price).toFixed(2)}` : '—'}</td>
                         <td style={{ padding: '4px 6px', color: '#64748B' }}>{c.zone_name || '—'}</td>
                         <td style={{ padding: '4px 6px', color: '#64748B', fontSize: 9 }}>{c.source || '—'}</td>
-                        <td style={{ padding: '4px 6px', color: '#AAA' }}>{c.customer_name || '—'}</td>
+                        <td style={{ padding: '4px 6px', color: '#64748B' }}>{c.customer_name || '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1019,7 +1019,7 @@ function TraceModal({ runId, lineId, trackingNumber, onClose }) {
       .catch(e => { setErr(e.response?.data?.error || 'Failed to load trace'); setLoading(false); });
   }, [runId, lineId]);
 
-  const stepColor = s => s === 'ok' ? '#00C853' : s === 'warn' ? '#FF8F00' : s === 'error' ? '#FF5252' : '#AAA';
+  const stepColor = s => s === 'ok' ? '#00C853' : s === 'warn' ? '#FF8F00' : s === 'error' ? '#FF5252' : '#64748B';
 
   return (
     <div style={{
@@ -1132,7 +1132,7 @@ function DeltaCell({ line, onResolveAsSurcharge }) {
 
   const isPriceMismatch = line.unmatched_reason === 'price_mismatch';
   const isPositive = delta > 0.01;
-  const color = isPositive ? '#FF5252' : delta < -0.01 ? '#00C853' : '#555';
+  const color = isPositive ? '#FF5252' : delta < -0.01 ? '#00C853' : '#475569';
 
   function handleMouseEnter() {
     if (!isPriceMismatch || !ref.current) return;
@@ -1234,11 +1234,11 @@ function DeltaCell({ line, onResolveAsSurcharge }) {
                       background: isExact ? 'rgba(0,200,83,0.08)' : 'rgba(0,0,0,0.03)',
                       border: isExact ? '1px solid rgba(0,200,83,0.2)' : '1px solid rgba(0,0,0,0.06)',
                     }}>
-                      <span style={{ color: isExact ? '#0F172A' : '#AAA', fontWeight: isExact ? 700 : 400 }}>
+                      <span style={{ color: isExact ? '#0F172A' : '#64748B', fontWeight: isExact ? 700 : 400 }}>
                         {isExact && <span style={{ color: '#00C853', marginRight: 4 }}>✓</span>}
                         {col}
                       </span>
-                      <span style={{ color: isExact ? '#00C853' : '#888', fontWeight: 600, marginLeft: 8, flexShrink: 0 }}>
+                      <span style={{ color: isExact ? '#00C853' : '#64748B', fontWeight: 600, marginLeft: 8, flexShrink: 0 }}>
                         £{parseFloat(amt).toFixed(2)}
                       </span>
                     </div>
@@ -1336,7 +1336,7 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, onRai
     ...pillBase,
     background: active ? `${color}22` : 'transparent',
     borderColor: active ? `${color}66` : 'rgba(0,0,0,0.08)',
-    color:       active ? color        : '#555',
+    color:       active ? color        : '#475569',
   });
 
   return (
@@ -1382,12 +1382,12 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, onRai
         <tbody>
           {filteredLines.map(line => (
             <tr key={line.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
-              <td style={{ padding: '9px 10px', fontFamily: 'monospace', color: '#AAA', fontSize: 10 }}>
+              <td style={{ padding: '9px 10px', fontFamily: 'monospace', color: '#64748B', fontSize: 10 }}>
                 {line.aged && <span title='Aged' style={{ color: '#FF5252', marginRight: 4 }}>⚠</span>}
                 {line.tracking_number || '—'}
               </td>
               <td style={{ padding: '9px 10px', color: '#79AAFF', fontFamily: 'monospace', fontSize: 10 }}>{line.raw_service_code || '—'}</td>
-              <td style={{ padding: '9px 10px', color: '#AAA' }}>
+              <td style={{ padding: '9px 10px', color: '#64748B' }}>
                 {line.service_name || (
                   line.suggested_service_name
                     ? <span style={{ color: '#79AAFF', fontStyle: 'italic' }}>
@@ -1396,7 +1396,7 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, onRai
                     : '—'
                 )}
               </td>
-              <td style={{ padding: '9px 10px', color: '#AAA' }}>{line.customer_name || '—'}</td>
+              <td style={{ padding: '9px 10px', color: '#64748B' }}>{line.customer_name || '—'}</td>
               <td style={{ padding: '9px 10px', color: '#64748B' }}>{line.charge_type || 'base'}</td>
               <td style={{ padding: '9px 10px', color: '#0F172A', fontWeight: 600 }}>
                 {line.carrier_amount != null ? `£${parseFloat(line.carrier_amount).toFixed(2)}` : '—'}
@@ -1520,11 +1520,11 @@ function CustomerLinesDrilldown({ runId, customerId }) {
                     {' '}{l.tracking_number || '—'}
                   </td>
                   <td style={{ ...tdStyle, color: '#64748B' }}>{l.shipment_date ? new Date(l.shipment_date).toLocaleDateString('en-GB') : '—'}</td>
-                  <td style={{ ...tdStyle, color: isSurcharge ? '#00BCD4' : '#AAA' }}>
+                  <td style={{ ...tdStyle, color: isSurcharge ? '#00BCD4' : '#64748B' }}>
                     {isSurcharge ? (l.surcharge_name || l.raw_service_code || 'Surcharge') : (l.service_name || '—')}
                   </td>
                   <td style={{ ...tdStyle, color: '#64748B' }}>{isSurcharge ? '—' : (l.parcel_count || 1)}</td>
-                  <td style={{ ...tdStyle, color: '#AAA', textAlign: 'right' }}>£{cost.toFixed(2)}</td>
+                  <td style={{ ...tdStyle, color: '#64748B', textAlign: 'right' }}>£{cost.toFixed(2)}</td>
                   <td style={{ ...tdStyle, color: '#64748B', textAlign: 'right' }}>£{parseFloat(l.sell_base || 0).toFixed(2)}</td>
                   <td style={{ ...tdStyle, color: '#64748B', textAlign: 'right' }}>£{parseFloat(l.sell_fuel || 0).toFixed(2)}</td>
                   <td style={{ ...tdStyle, color: '#64748B', textAlign: 'right' }}>£{parseFloat(l.sell_surcharge || 0).toFixed(2)}</td>
@@ -1538,7 +1538,7 @@ function CustomerLinesDrilldown({ runId, customerId }) {
           <tfoot>
             <tr style={{ borderTop: '1px solid rgba(0,0,0,0.08)' }}>
               <td colSpan={4} style={{ ...tdStyle, color: '#64748B', fontWeight: 700, fontSize: 10 }}>SUBTOTAL ({lines.length} lines)</td>
-              <td style={{ ...tdStyle, color: '#AAA', fontWeight: 700, textAlign: 'right' }}>
+              <td style={{ ...tdStyle, color: '#64748B', fontWeight: 700, textAlign: 'right' }}>
                 £{lines.reduce((s, l) => s + parseFloat(l.cost_total || 0), 0).toFixed(2)}
               </td>
               <td style={{ ...tdStyle, textAlign: 'right' }} />
@@ -1629,12 +1629,12 @@ function CustomerPreviewPanel({ runId }) {
                     {expanded ? '▾' : '▸'}
                   </td>
                   <td style={{ padding: '9px 10px', color: '#0F172A', fontWeight: 600 }}>{c.customer_name || '—'}</td>
-                  <td style={{ padding: '9px 10px', color: '#AAA' }}>{c.line_count}</td>
+                  <td style={{ padding: '9px 10px', color: '#64748B' }}>{c.line_count}</td>
                   <td style={{ padding: '9px 10px', color: '#64748B' }}>£{parseFloat(c.total_base || 0).toFixed(2)}</td>
                   <td style={{ padding: '9px 10px', color: '#64748B' }}>£{parseFloat(c.total_fuel || 0).toFixed(2)}</td>
                   <td style={{ padding: '9px 10px', color: '#64748B' }}>£{(parseFloat(c.total_surcharge || 0) + parseFloat(c.total_recon_surcharge || 0)).toFixed(2)}</td>
                   <td style={{ padding: '9px 10px', color: '#00C853', fontWeight: 700 }}>£{sell.toFixed(2)}</td>
-                  <td style={{ padding: '9px 10px', color: '#AAA' }}>£{cost.toFixed(2)}</td>
+                  <td style={{ padding: '9px 10px', color: '#64748B' }}>£{cost.toFixed(2)}</td>
                   <td style={{ padding: '9px 10px', color: margin >= 0 ? '#00C853' : '#FF5252', fontWeight: 600 }}>
                     £{margin.toFixed(2)}
                   </td>
@@ -1670,10 +1670,10 @@ function CustomerPreviewPanel({ runId }) {
           <tr style={{ borderTop: '2px solid rgba(0,0,0,0.08)' }}>
             <td />
             <td style={{ padding: '9px 10px', color: '#64748B', fontSize: 12, fontWeight: 700 }}>TOTAL</td>
-            <td style={{ padding: '9px 10px', color: '#AAA' }}>{customers.reduce((s, c) => s + (c.line_count || 0), 0)}</td>
+            <td style={{ padding: '9px 10px', color: '#64748B' }}>{customers.reduce((s, c) => s + (c.line_count || 0), 0)}</td>
             <td colSpan={3} />
             <td style={{ padding: '9px 10px', color: '#00C853', fontWeight: 800, fontSize: 14 }}>£{totalSell.toFixed(2)}</td>
-            <td style={{ padding: '9px 10px', color: '#AAA', fontWeight: 700 }}>£{totalCost.toFixed(2)}</td>
+            <td style={{ padding: '9px 10px', color: '#64748B', fontWeight: 700 }}>£{totalCost.toFixed(2)}</td>
             <td style={{ padding: '9px 10px', color: totalMargin >= 0 ? '#00C853' : '#FF5252', fontWeight: 800 }}>£{totalMargin.toFixed(2)}</td>
             <td />
           </tr>
@@ -1777,7 +1777,7 @@ function CustomerSummaryPanel({ runId, run }) {
           {customers.map(c => (
             <tr key={c.customer_id} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
               <td style={{ padding: '9px 10px', color: '#0F172A', fontWeight: 600 }}>{c.customer_name || '—'}</td>
-              <td style={{ padding: '9px 10px', color: '#AAA' }}>{c.line_count}</td>
+              <td style={{ padding: '9px 10px', color: '#64748B' }}>{c.line_count}</td>
               <td style={{ padding: '9px 10px', color: '#64748B' }}>£{parseFloat(c.total_base || 0).toFixed(2)}</td>
               <td style={{ padding: '9px 10px', color: '#64748B' }}>£{parseFloat(c.total_fuel || 0).toFixed(2)}</td>
               <td style={{ padding: '9px 10px', color: '#64748B' }}>£{parseFloat(c.total_surcharge || 0).toFixed(2)}</td>
@@ -1922,7 +1922,7 @@ function RaiseQueryModal({ line, runId, carrierId, invoiceRef, onClose, onRaised
         }}>
           <div>
             <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Tracking</div>
-            <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#AAA' }}>{line.tracking_number || '—'}</div>
+            <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#64748B' }}>{line.tracking_number || '—'}</div>
           </div>
           <div>
             <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Carrier charged</div>
@@ -2016,7 +2016,7 @@ const QUERY_STATUS_CFG = {
 };
 
 function QueryStatusBadge({ status }) {
-  const cfg = QUERY_STATUS_CFG[status] || { color: '#AAA', bg: 'rgba(0,0,0,0.04)', border: 'rgba(0,0,0,0.08)', label: status };
+  const cfg = QUERY_STATUS_CFG[status] || { color: '#64748B', bg: 'rgba(0,0,0,0.04)', border: 'rgba(0,0,0,0.08)', label: status };
   return (
     <span style={{
       display: 'inline-block', padding: '1px 8px', borderRadius: 9999,
@@ -2097,7 +2097,7 @@ function CourierQueriesPanel({ runId, carrierId }) {
         <div style={{ display: 'flex', gap: 20 }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Active</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: activeCount > 0 ? '#FFB300' : '#555' }}>{activeCount}</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: activeCount > 0 ? '#FFB300' : '#475569' }}>{activeCount}</div>
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total disputed</div>
@@ -2105,7 +2105,7 @@ function CourierQueriesPanel({ runId, carrierId }) {
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Credited back</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: totalCredited > 0 ? '#00C853' : '#555' }}>£{totalCredited.toFixed(2)}</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: totalCredited > 0 ? '#00C853' : '#475569' }}>£{totalCredited.toFixed(2)}</div>
           </div>
         </div>
       </div>
@@ -2131,7 +2131,7 @@ function CourierQueriesPanel({ runId, carrierId }) {
                 const disputed = parseFloat(q.disputed_amount || 0);
                 return (
                   <tr key={q.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
-                    <td style={{ padding: '9px 10px', fontFamily: 'monospace', color: '#AAA', fontSize: 10 }}>{q.tracking_number || '—'}</td>
+                    <td style={{ padding: '9px 10px', fontFamily: 'monospace', color: '#64748B', fontSize: 10 }}>{q.tracking_number || '—'}</td>
                     <td style={{ padding: '9px 10px', color: '#64748B' }}>
                       {QUERY_TYPE_OPTS.find(o => o.value === q.query_type)?.label || q.query_type}
                     </td>
@@ -2395,7 +2395,7 @@ export default function RunDetailPage() {
         {/* Pool size — first tile, most diagnostic value */}
         {(() => {
           const ps = run.pool_size;
-          const psColor  = ps == null ? '#555' : ps === 0 ? '#FF5252' : '#00C853';
+          const psColor  = ps == null ? '#475569' : ps === 0 ? '#FF5252' : '#00C853';
           const psValue  = ps == null ? 'Pending…' : ps.toLocaleString();
           const psBorder = ps === 0 ? '1px solid rgba(213,0,0,0.4)' : card.border;
           return (
@@ -2410,7 +2410,7 @@ export default function RunDetailPage() {
           { label: 'Total Lines', value: total.toLocaleString(), color: '#0F172A' },
           { label: 'Matched', value: `${run.matched_count || 0} (${matchedPct}%)`, color: '#00C853' },
           { label: 'Corrected', value: `${run.corrected_count || 0} (${correctedPct}%)`, color: '#FF8F00' },
-          { label: 'Unmatched', value: `${run.unmatched_count || 0} (${unmatchedPct}%)`, color: (run.unmatched_count || 0) > 0 ? '#FFB300' : '#555' },
+          { label: 'Unmatched', value: `${run.unmatched_count || 0} (${unmatchedPct}%)`, color: (run.unmatched_count || 0) > 0 ? '#FFB300' : '#475569' },
           { label: 'Automation Rate', value: run.automation_rate != null ? `${run.automation_rate}%` : '—', color: parseFloat(run.automation_rate) >= 80 ? '#00C853' : '#FFB300' },
         ].map(({ label, value, color }) => (
           <div key={label} style={card}>
@@ -2454,7 +2454,7 @@ export default function RunDetailPage() {
             ].map(({ label, count, color }) => (
               <div key={label} style={{ marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5 }}>
-                  <span style={{ color: '#AAA' }}>{label}</span>
+                  <span style={{ color: '#64748B' }}>{label}</span>
                   <span style={{ color, fontWeight: 700 }}>{count.toLocaleString()} / {total.toLocaleString()}</span>
                 </div>
                 <div style={{ height: 5, background: 'rgba(0,0,0,0.06)', borderRadius: 99 }}>

@@ -365,14 +365,14 @@ function CarrierPicker({ onSelect }) {
                     onError={e => { e.target.style.display = 'none'; }}
                   />
                 ) : (
-                  <span style={{ fontSize: 11, color: '#999', fontWeight: 700 }}>
+                  <span style={{ fontSize: 11, color: '#64748B', fontWeight: 700 }}>
                     {carrier.label.slice(0, 3).toUpperCase()}
                   </span>
                 )}
               </div>
 
               {/* Label */}
-              <div style={{ fontSize: 12, fontWeight: 700, color: carrier.active ? '#CCC' : '#555' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: carrier.active ? '#334155' : '#475569' }}>
                 {carrier.label}
               </div>
 
@@ -481,7 +481,7 @@ function FileDropZone({ carrier, onParsed, onBack }) {
           )}
         </div>
         <div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: '#CCC' }}>{carrier.label}</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#334155' }}>{carrier.label}</div>
           <div style={{ fontSize: 12, color: '#64748B' }}>Upload your carrier invoice CSV to begin reconciliation</div>
         </div>
       </div>
@@ -528,7 +528,7 @@ function FileDropZone({ carrier, onParsed, onBack }) {
           </div>
         ) : (
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#CCC', marginBottom: 6 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
               Drop your CSV here, or click to browse
             </div>
             <div style={{ fontSize: 12, color: '#64748B' }}>
@@ -636,7 +636,7 @@ function ServiceMappingManager({ courier, carrierLabel, unmappedNames, onClose }
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
           <Settings size={16} style={{ color: '#00BCD4' }} />
-          <span style={{ fontWeight: 700, fontSize: 15, color: '#CCC' }}>Service Name Mappings</span>
+          <span style={{ fontWeight: 700, fontSize: 15, color: '#334155' }}>Service Name Mappings</span>
           <span style={{ fontSize: 12, color: '#64748B', marginLeft: 4 }}>— {carrierLabel}</span>
           <button onClick={onClose} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>✕</button>
         </div>
@@ -658,7 +658,7 @@ function ServiceMappingManager({ courier, carrierLabel, unmappedNames, onClose }
                     background: addInvoice === n ? 'rgba(0,188,212,0.15)' : 'rgba(0,0,0,0.03)',
                     border: `1px solid ${addInvoice === n ? 'rgba(0,188,212,0.5)' : 'rgba(0,0,0,0.10)'}`,
                     borderRadius: 20, padding: '4px 12px', cursor: 'pointer',
-                    fontSize: 12, color: addInvoice === n ? '#00BCD4' : '#888',
+                    fontSize: 12, color: addInvoice === n ? '#00BCD4' : '#64748B',
                     fontFamily: 'monospace',
                   }}>
                   {n}
@@ -685,7 +685,7 @@ function ServiceMappingManager({ courier, carrierLabel, unmappedNames, onClose }
                 <input
                   value={addInvoice} onChange={e => setAddInvoice(e.target.value)}
                   placeholder="e.g. HomeServe Sign Mand"
-                  style={{ background: 'none', border: 'none', color: '#CCC', fontSize: 12, width: '100%', height: 34, outline: 'none', fontFamily: 'monospace' }}
+                  style={{ background: 'none', border: 'none', color: '#334155', fontSize: 12, width: '100%', height: 34, outline: 'none', fontFamily: 'monospace' }}
                 />
               </div>
             </div>
@@ -702,7 +702,7 @@ function ServiceMappingManager({ courier, carrierLabel, unmappedNames, onClose }
                 style={{
                   width: '100%', height: 34,
                   background: '#0E0E1A', border: '1px solid rgba(0,0,0,0.10)',
-                  borderRadius: 8, color: addInternal ? '#CCC' : '#555',
+                  borderRadius: 8, color: addInternal ? '#334155' : '#475569',
                   fontSize: 12, padding: '0 10px', outline: 'none', cursor: 'pointer',
                 }}
               >
@@ -1411,7 +1411,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
     background: 'rgba(0,0,0,0.02)',
   };
   const td = {
-    padding: '10px 12px', fontSize: 13, color: '#CCC', verticalAlign: 'middle',
+    padding: '10px 12px', fontSize: 13, color: '#334155', verticalAlign: 'middle',
     borderBottom: '1px solid rgba(0,0,0,0.03)',
   };
 
@@ -1443,7 +1443,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           )}
         </div>
         <div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#CCC' }}>{carrier.label} — {fileName}</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#334155' }}>{carrier.label} — {fileName}</div>
           <div style={{ fontSize: 12, color: '#64748B' }}>
             {shipments.length} shipment{shipments.length !== 1 ? 's' : ''} in invoice
             {surcharges.length > 0 && ` · ${surcharges.length} surcharge row${surcharges.length !== 1 ? 's' : ''}`}
@@ -1537,8 +1537,8 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
             }}>
               <AlertTriangle size={14} style={{ color: '#FFC107', flexShrink: 0 }} />
               <span style={{ fontSize: 12, color: '#64748B', flex: 1 }}>
-                Costs shown are from <strong style={{ color: '#CCC' }}>stored charges</strong> at the time of dispatch.
-                If you have updated rate cards since these shipments were processed, run <strong style={{ color: '#CCC' }}>Full Reprice</strong> from the Finance tab before reconciling.
+                Costs shown are from <strong style={{ color: '#334155' }}>stored charges</strong> at the time of dispatch.
+                If you have updated rate cards since these shipments were processed, run <strong style={{ color: '#334155' }}>Full Reprice</strong> from the Finance tab before reconciling.
               </span>
             </div>
           )}
@@ -1792,10 +1792,10 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                       ? (row.carrier_rate_cost != null ? row.carrier_total - row.carrier_rate_cost : null)
                       : (row.effective_cost != null ? row.carrier_total - row.effective_cost
                           : bc?.total_cost_price != null ? row.carrier_total - bc.total_cost_price : null);
-                    const diffColor = diff == null ? '#555'
+                    const diffColor = diff == null ? '#475569'
                       : diff > 0.01 ? '#F44336'
                       : diff < -0.01 ? '#00C853'
-                      : '#888';
+                      : '#64748B';
                     const invoiceHasSurcharge = (row.carrier_surcharges || 0) > 0.005 || (row.carrier_csv_surcharges || 0) > 0.005;
                     const ourHasSurcharge = (bc?.total_cost_price != null && bc?.base_cost_price != null
                       && Math.abs(bc.total_cost_price - bc.base_cost_price) > 0.005)
@@ -1828,7 +1828,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                             const custAcct = g?.customer_account;
                             return (
                               <>
-                                <span style={{ fontSize: 12, color: custName ? '#CCC' : '#555' }}>{custName || '—'}</span>
+                                <span style={{ fontSize: 12, color: custName ? '#334155' : '#475569' }}>{custName || '—'}</span>
                                 {!g && row.accountCustomer && (
                                   <div style={{ fontSize: 9, color: '#B39DDB', marginTop: 1 }}>via account {row.account_number}</div>
                                 )}
@@ -1862,7 +1862,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                         </td>
                         <td style={{ ...td, textAlign: 'right' }}>
                           {row.billed_weight_kg != null ? (
-                            <span style={{ fontWeight: 600, color: '#CCC' }}>{row.billed_weight_kg.toFixed(2)} kg</span>
+                            <span style={{ fontWeight: 600, color: '#334155' }}>{row.billed_weight_kg.toFixed(2)} kg</span>
                           ) : <span style={{ color: '#64748B' }}>—</span>}
                         </td>
                         <td style={{ ...td, textAlign: 'right' }}>
@@ -1879,7 +1879,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                           {row.is_return && !bc ? (
                             row.carrier_rate_cost != null ? (
                               <>
-                                <span style={{ color: '#CCC' }}>{gbp(row.carrier_rate_cost)}</span>
+                                <span style={{ color: '#334155' }}>{gbp(row.carrier_rate_cost)}</span>
                                 <div style={{ fontSize: 10, color: '#64748B', marginTop: 1 }}>
                                   {gbp(row.carrier_rate_base)} base
                                   {row.carrier_rate_fuel > 0.005 && ` + ${gbp(row.carrier_rate_fuel)} fuel`}
@@ -1889,7 +1889,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                             ) : <span style={{ fontSize: 11, color: '#475569', fontStyle: 'italic' }}>no rate found</span>
                           ) : (
                             <>
-                              <span style={{ color: (row.effective_cost ?? bc?.total_cost_price) != null ? '#CCC' : '#555' }}>
+                              <span style={{ color: (row.effective_cost ?? bc?.total_cost_price) != null ? '#334155' : '#475569' }}>
                                 {row.effective_cost != null ? gbp(row.effective_cost)
                                   : bc?.total_cost_price != null ? gbp(bc.total_cost_price) : '—'}
                               </span>
@@ -1958,7 +1958,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                                   width: 80, fontSize: 12, fontFamily: 'monospace',
                                   background: overrideVal ? 'rgba(0,200,83,0.08)' : 'rgba(0,0,0,0.04)',
                                   border: `1px solid ${overrideVal ? 'rgba(0,200,83,0.4)' : 'rgba(0,0,0,0.08)'}`,
-                                  borderRadius: 5, padding: '3px 6px', color: '#CCC',
+                                  borderRadius: 5, padding: '3px 6px', color: '#334155',
                                   outline: 'none',
                                 }}
                                 title="Override cost for this line"
@@ -2027,10 +2027,10 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                       ? (row.carrier_rate_cost != null ? row.carrier_total - row.carrier_rate_cost : null)
                       : (row.effective_cost != null ? row.carrier_total - row.effective_cost
                           : bc?.total_cost_price != null ? row.carrier_total - bc.total_cost_price : null);
-                    const diffColor = diff == null ? '#555'
+                    const diffColor = diff == null ? '#475569'
                       : diff > 0.01 ? '#F44336'
                       : diff < -0.01 ? '#00C853'
-                      : '#888';
+                      : '#64748B';
                     // Show breakdown sub-line if there are fuel/HGV allocs OR W-AE informational surcharges
                     const invoiceHasSurcharge = (row.carrier_surcharges || 0) > 0.005 || (row.carrier_csv_surcharges || 0) > 0.005;
                     // Show Our Cost breakdown if: stored surcharges present, OR per-kg extra applies
@@ -2095,7 +2095,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                             const custAcct = g?.customer_account;
                             return (
                               <>
-                                <span style={{ fontSize: 12, color: custName ? '#CCC' : '#555' }}>
+                                <span style={{ fontSize: 12, color: custName ? '#334155' : '#475569' }}>
                                   {custName || '—'}
                                 </span>
                                 {!g && row.accountCustomer && (
@@ -2162,7 +2162,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                             return (
                               <div>
                                 {billed != null ? (
-                                  <span style={{ fontWeight: 600, color: over ? '#F44336' : '#CCC' }}>
+                                  <span style={{ fontWeight: 600, color: over ? '#F44336' : '#334155' }}>
                                     {billed.toFixed(2)} kg
                                   </span>
                                 ) : (
@@ -2201,7 +2201,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                             // Return with no DB charge — show carrier rate with base+fuel+HGV breakdown
                             row.carrier_rate_cost != null ? (
                               <>
-                                <span style={{ color: '#CCC' }}>{gbp(row.carrier_rate_cost)}</span>
+                                <span style={{ color: '#334155' }}>{gbp(row.carrier_rate_cost)}</span>
                                 <div style={{ fontSize: 10, color: '#64748B', marginTop: 1 }}>
                                   {gbp(row.carrier_rate_base)} base
                                   {row.carrier_rate_fuel > 0.005 && ` + ${gbp(row.carrier_rate_fuel)} fuel`}
@@ -2214,7 +2214,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                           ) : (
                             // Normal outbound OR return that matched a DB charge
                             <>
-                              <span style={{ color: (row.effective_cost ?? bc?.total_cost_price) != null ? '#CCC' : '#555' }}>
+                              <span style={{ color: (row.effective_cost ?? bc?.total_cost_price) != null ? '#334155' : '#475569' }}>
                                 {row.effective_cost != null
                                   ? gbp(row.effective_cost)
                                   : bc?.total_cost_price != null ? gbp(bc.total_cost_price) : '—'}
@@ -2345,8 +2345,8 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                           const isAccepted = acceptedSurcharges.has(scKey);
 
                           const diff = ourValue != null ? sc.value - ourValue : null;
-                          const diffColor = diff == null ? '#555'
-                            : Math.abs(diff) <= TOLERANCE_ABS ? '#888'
+                          const diffColor = diff == null ? '#475569'
+                            : Math.abs(diff) <= TOLERANCE_ABS ? '#64748B'
                             : diff > 0 ? '#F44336'
                             : '#00C853';
                           const surchargeStatus = isAccepted
@@ -2400,7 +2400,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                               <td style={{ ...td, textAlign: 'right' }}>
                                 {ourValue != null ? (
                                   <>
-                                    <span style={{ color: isAccepted ? '#FFC107' : '#CCC' }}>{gbp(ourValue)}</span>
+                                    <span style={{ color: isAccepted ? '#FFC107' : '#334155' }}>{gbp(ourValue)}</span>
                                     {ourNote && (
                                       <div style={{ fontSize: 10, color: '#64748B', marginTop: 1 }}>
                                         {ourNote}
@@ -2514,7 +2514,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                 borderBottom: '1px solid rgba(0,0,0,0.06)',
                 display: 'flex', alignItems: 'center', gap: 10,
               }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#CCC', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                   By Customer
                 </span>
                 <span style={{ fontSize: 11, color: '#64748B' }}>
@@ -2642,16 +2642,16 @@ export default function ReconciliationTab() {
       }}>
         <span
           onClick={step !== 'pick' ? backToCarrier : undefined}
-          style={{ cursor: step !== 'pick' ? 'pointer' : 'default', color: step === 'pick' ? '#CCC' : '#00C853' }}
+          style={{ cursor: step !== 'pick' ? 'pointer' : 'default', color: step === 'pick' ? '#334155' : '#00C853' }}
         >
           Select carrier
         </span>
         <ChevronRight size={13} />
-        <span style={{ color: step === 'upload' ? '#CCC' : step === 'results' ? '#00C853' : '#444' }}>
+        <span style={{ color: step === 'upload' ? '#334155' : step === 'results' ? '#00C853' : '#444' }}>
           Upload CSV
         </span>
         <ChevronRight size={13} />
-        <span style={{ color: step === 'results' ? '#CCC' : '#444' }}>
+        <span style={{ color: step === 'results' ? '#334155' : '#444' }}>
           Review results
         </span>
       </div>

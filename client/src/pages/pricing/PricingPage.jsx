@@ -135,11 +135,11 @@ function StepIndicator({ current }) {
               width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
               background: i < current ? '#00C853' : i === current ? '#6366F1' : 'rgba(0,0,0,0.08)',
               border: `2px solid ${i < current ? '#00C853' : i === current ? '#818CF8' : 'rgba(0,0,0,0.10)'}`,
-              fontSize: 12, fontWeight: 700, color: i <= current ? '#fff' : '#555',
+              fontSize: 12, fontWeight: 700, color: i <= current ? '#fff' : '#475569',
             }}>
               {i < current ? <Check size={13} /> : i + 1}
             </div>
-            <div style={{ fontSize: 10, color: i === current ? '#A5B4FC' : '#555', fontWeight: 600 }}>{s}</div>
+            <div style={{ fontSize: 10, color: i === current ? '#A5B4FC' : '#475569', fontWeight: 600 }}>{s}</div>
           </div>
           {i < steps.length - 1 && (
             <div style={{ flex: 1, height: 2, background: i < current ? '#00C853' : 'rgba(0,0,0,0.08)', margin: '0 8px', marginBottom: 18 }} />
@@ -295,7 +295,7 @@ function CreateWizard({ onClose, onCreated }) {
                         padding: '8px 18px', borderRadius: 8,
                         border: `1px solid ${selectedCourier === c ? '#6366F1' : 'rgba(0,0,0,0.10)'}`,
                         background: selectedCourier === c ? 'rgba(99,102,241,0.15)' : 'rgba(0,0,0,0.03)',
-                        color: selectedCourier === c ? '#A5B4FC' : '#888',
+                        color: selectedCourier === c ? '#A5B4FC' : '#64748B',
                         fontWeight: 700, fontSize: 13, cursor: 'pointer',
                       }}>
                       {COURIER_LABELS[c]}
@@ -606,7 +606,7 @@ function ProspectRow({ prospect, staffList, navigate }) {
 
           {/* Left: name + contact */}
           <div style={{ flex: '0 0 220px' }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#EEE', lineHeight: 1.2, marginBottom: 3 }}>{prospect.company_name}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#1E293B', lineHeight: 1.2, marginBottom: 3 }}>{prospect.company_name}</div>
             <div style={{ fontSize: 12, color: '#64748B' }}>{prospect.contact_name}</div>
           </div>
 
@@ -630,7 +630,7 @@ function ProspectRow({ prospect, staffList, navigate }) {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
             <button
               onClick={() => { setEditForm({ company_name: prospect.company_name, contact_name: prospect.contact_name, contact_email: prospect.contact_email || '', contact_phone: prospect.contact_phone || '' }); setEditing(true); setConfirmDel(false); }}
-              style={{ ...btnBase, padding: '8px 16px', fontSize: 12, background: 'rgba(0,0,0,0.06)', borderColor: 'rgba(0,0,0,0.10)', color: '#AAA' }}>
+              style={{ ...btnBase, padding: '8px 16px', fontSize: 12, background: 'rgba(0,0,0,0.06)', borderColor: 'rgba(0,0,0,0.10)', color: '#64748B' }}>
               <Edit2 size={13} /> Edit
             </button>
             <button
@@ -716,7 +716,7 @@ function ProspectRow({ prospect, staffList, navigate }) {
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
                       {(rc.status === 'draft' || rc.status === 'rejected') && (
                         <button onClick={() => navigate(`/pricing/rate-card/${rc.id}`)}
-                          style={{ ...btnBase, padding: '9px 18px', fontSize: 13, background: 'rgba(0,0,0,0.07)', borderColor: 'rgba(0,0,0,0.12)', color: '#CCC' }}>
+                          style={{ ...btnBase, padding: '9px 18px', fontSize: 13, background: 'rgba(0,0,0,0.07)', borderColor: 'rgba(0,0,0,0.12)', color: '#334155' }}>
                           <Edit2 size={13} /> Edit Rates
                         </button>
                       )}
@@ -787,7 +787,7 @@ export default function PricingPage() {
   ];
 
   return (
-    <div style={{ padding: '24px 28px', minHeight: '100%', fontFamily: 'system-ui, sans-serif', color: '#CCC' }}>
+    <div style={{ padding: '24px 28px', minHeight: '100%', fontFamily: 'system-ui, sans-serif', color: '#334155' }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       {/* Title */}
@@ -822,7 +822,7 @@ export default function PricingPage() {
       {/* Toolbar */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 200, maxWidth: 320 }}>
-          <Search size={14} color="#555" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
+          <Search size={14} color="#475569" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
           <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Search company…" style={{ ...inputStyle, paddingLeft: 30 }} />
         </div>

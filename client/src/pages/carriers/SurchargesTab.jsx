@@ -141,7 +141,7 @@ function ServicePicker({ courierId, selected = [], onChange }) {
         const on = selected.includes(svc.service_code);
         return (
           <button key={svc.id} onClick={() => onChange(on ? selected.filter(s => s !== svc.service_code) : [...selected, svc.service_code])}
-            style={{ padding: '3px 10px', borderRadius: 9999, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none', background: on ? 'rgba(0,200,83,0.2)' : 'rgba(0,0,0,0.06)', color: on ? '#00C853' : '#888', outline: on ? '1px solid rgba(0,200,83,0.35)' : '1px solid rgba(0,0,0,0.08)' }}>
+            style={{ padding: '3px 10px', borderRadius: 9999, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none', background: on ? 'rgba(0,200,83,0.2)' : 'rgba(0,0,0,0.06)', color: on ? '#00C853' : '#64748B', outline: on ? '1px solid rgba(0,200,83,0.35)' : '1px solid rgba(0,0,0,0.08)' }}>
             {on && <Check size={10} style={{ marginRight: 4 }} />}
             {svc.name}
           </button>
@@ -158,7 +158,7 @@ function ConditionRow({ filter, onChange, onRemove, isFirst, logic }) {
   const isMulti = filter.op === 'in' || filter.op === 'not_in';
   return (
     <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginBottom: 6 }}>
-      <div style={{ width: 34, flexShrink: 0, paddingTop: 8, textAlign: 'center', fontSize: 10, fontWeight: 700, color: isFirst ? '#888' : logic === 'OR' ? '#F59E0B' : '#7B2FBE' }}>
+      <div style={{ width: 34, flexShrink: 0, paddingTop: 8, textAlign: 'center', fontSize: 10, fontWeight: 700, color: isFirst ? '#64748B' : logic === 'OR' ? '#F59E0B' : '#7B2FBE' }}>
         {isFirst ? 'IF' : logic}
       </div>
       <select value={filter.field} onChange={e => { const f = e.target.value; onChange({ ...filter, field: f, op: opsFor(f)[0].value, value: '' }); }} style={{ ...sel(), width: 180, flexShrink: 0 }}>
@@ -214,7 +214,7 @@ function RuleEditor({ surchargeId, courierId, rule, onSave, onCancel }) {
           <label style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', margin: 0 }}>Conditions</label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {['AND', 'OR'].map(l => (
-              <button key={l} type="button" onClick={() => setLogic(l)} style={{ padding: '3px 10px', borderRadius: 9999, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none', background: logic === l ? (l === 'AND' ? 'rgba(123,47,190,0.35)' : 'rgba(245,158,11,0.25)') : 'rgba(0,0,0,0.06)', color: logic === l ? (l === 'AND' ? '#C4B5FD' : '#F59E0B') : '#888' }}>
+              <button key={l} type="button" onClick={() => setLogic(l)} style={{ padding: '3px 10px', borderRadius: 9999, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none', background: logic === l ? (l === 'AND' ? 'rgba(123,47,190,0.35)' : 'rgba(245,158,11,0.25)') : 'rgba(0,0,0,0.06)', color: logic === l ? (l === 'AND' ? '#C4B5FD' : '#F59E0B') : '#64748B' }}>
                 {l}
               </button>
             ))}
@@ -383,11 +383,11 @@ function AddSurchargeForm({ courierId, onDone }) {
         <div>
           <label style={{ fontSize: 11, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 6, textTransform: 'uppercase' }}>Applies when</label>
           <div style={{ display: 'inline-flex', background: 'rgba(0,0,0,0.04)', borderRadius: 7, padding: 3, gap: 2 }}>
-            {[['always', '● Always', '#00C853'], ['reconciliation', '◎ Code-only', '#888']].map(([val, label, clr]) => (
+            {[['always', '● Always', '#00C853'], ['reconciliation', '◎ Code-only', '#64748B']].map(([val, label, clr]) => (
               <button key={val} type="button" onClick={() => f('applies_when', val)}
                 style={{ padding: '4px 12px', borderRadius: 5, cursor: 'pointer', border: 'none', fontSize: 12, fontWeight: form.applies_when === val ? 700 : 400,
                   background: form.applies_when === val ? (val === 'always' ? 'rgba(0,200,83,0.25)' : 'rgba(0,0,0,0.08)') : 'transparent',
-                  color: form.applies_when === val ? clr : '#555' }}>
+                  color: form.applies_when === val ? clr : '#475569' }}>
                 {label}
               </button>
             ))}
@@ -572,11 +572,11 @@ export default function SurchargesTab({ courierId, courierCode }) {
                       ) : (
                         <>
                           {expanded.has(s.id)
-                            ? <ChevronDown size={14} color="#555" />
-                            : <ChevronRight size={14} color="#555" />
+                            ? <ChevronDown size={14} color="#475569" />
+                            : <ChevronRight size={14} color="#475569" />
                           }
                           <button onClick={e => { e.stopPropagation(); startEdit(s); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: '4px', fontSize: 13 }}>✏️</button>
-                          <button onClick={e => { e.stopPropagation(); toggleActive.mutate(s); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: s.active ? '#00C853' : '#555', padding: '4px', fontSize: 12 }} title={s.active ? 'Disable' : 'Enable'}>{s.active ? '●' : '○'}</button>
+                          <button onClick={e => { e.stopPropagation(); toggleActive.mutate(s); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: s.active ? '#00C853' : '#475569', padding: '4px', fontSize: 12 }} title={s.active ? 'Disable' : 'Enable'}>{s.active ? '●' : '○'}</button>
                           <button onClick={e => { e.stopPropagation(); del.mutate(s.id); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#E91E8C', padding: '4px', display: 'flex', alignItems: 'center' }}><Trash2 size={13} /></button>
                         </>
                       )}

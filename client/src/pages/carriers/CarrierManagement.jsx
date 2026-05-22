@@ -102,7 +102,7 @@ function ContactRow({ contact, onDelete, onUpdate, onMakePrimary }) {
         </button>
       )}
       <button onClick={() => setEditing(true)} style={{ background:'none', border:'none', color:'#64748B', cursor:'pointer' }}><Edit2 size={12}/></button>
-      <button onClick={() => del.mutate()} style={{ background:'none', border:'none', color:'#555', cursor:'pointer' }}><Trash2 size={12}/></button>
+      <button onClick={() => del.mutate()} style={{ background:'none', border:'none', color:'#475569', cursor:'pointer' }}><Trash2 size={12}/></button>
     </div>
   );
 }
@@ -211,7 +211,7 @@ function CarrierCard({ carrier, onDrill, onRefresh }) {
           <button onClick={() => setEditContact(e=>!e)} className="btn-ghost" style={{ height:32, padding:'0 12px', fontSize:12 }}>
             <Edit2 size={12}/> Edit
           </button>
-          <button onClick={() => setConfirmDel(true)} style={{ background:'none', border:'none', color:'#555', cursor:'pointer' }}><Trash2 size={14}/></button>
+          <button onClick={() => setConfirmDel(true)} style={{ background:'none', border:'none', color:'#475569', cursor:'pointer' }}><Trash2 size={14}/></button>
         </div>
       </div>
 
@@ -243,7 +243,7 @@ function CarrierCard({ carrier, onDrill, onRefresh }) {
               )}
             </>
           ) : (
-            <span style={{ fontSize:13, color:'#555', fontStyle:'italic' }}>No primary contact — click Edit to add one</span>
+            <span style={{ fontSize:13, color:'#475569', fontStyle:'italic' }}>No primary contact — click Edit to add one</span>
           )}
 
           {additional.length > 0 && (
@@ -253,7 +253,7 @@ function CarrierCard({ carrier, onDrill, onRefresh }) {
             </button>
           )}
           {additional.length === 0 && (
-            <button onClick={() => setAddingContact(true)} style={{ background:'none', border:'none', color:'#555', cursor:'pointer', fontSize:12, marginLeft:'auto', display:'flex', alignItems:'center', gap:4 }}>
+            <button onClick={() => setAddingContact(true)} style={{ background:'none', border:'none', color:'#475569', cursor:'pointer', fontSize:12, marginLeft:'auto', display:'flex', alignItems:'center', gap:4 }}>
               <Plus size={11}/> Add contact
             </button>
           )}
@@ -385,7 +385,7 @@ function FuelGroupCard({ group, onRefresh }) {
             {/* Cost % + standard sell % */}
             <div style={{ display:'flex', gap:10, alignItems:'flex-end' }}>
               <div style={{ flex:1 }}>
-                <div style={{ fontSize:10, color:'#888', marginBottom:3, textTransform:'uppercase', letterSpacing:'0.04em' }}>Our cost %</div>
+                <div style={{ fontSize:10, color:'#64748B', marginBottom:3, textTransform:'uppercase', letterSpacing:'0.04em' }}>Our cost %</div>
                 <div className="pill-input-wrap" style={{ height:28 }}>
                   <input type="number" step="0.01" value={form.fuel_surcharge_pct}
                     onChange={e => setForm(f=>({...f,fuel_surcharge_pct:e.target.value}))}
@@ -394,7 +394,7 @@ function FuelGroupCard({ group, onRefresh }) {
                 </div>
               </div>
               <div style={{ flex:1 }}>
-                <div style={{ fontSize:10, color:'#888', marginBottom:3, textTransform:'uppercase', letterSpacing:'0.04em' }}>Standard sell %</div>
+                <div style={{ fontSize:10, color:'#64748B', marginBottom:3, textTransform:'uppercase', letterSpacing:'0.04em' }}>Standard sell %</div>
                 <div className="pill-input-wrap" style={{ height:28 }}>
                   <input type="number" step="0.01" value={form.standard_sell_pct}
                     onChange={e => setForm(f=>({...f,standard_sell_pct:e.target.value}))}
@@ -414,7 +414,7 @@ function FuelGroupCard({ group, onRefresh }) {
               <div style={{ display:'flex', gap:10, alignItems:'flex-end', padding:'8px 10px',
                 background:'rgba(255,193,7,0.04)', border:'1px solid rgba(255,193,7,0.15)', borderRadius:6 }}>
                 <div style={{ flex:1 }}>
-                  <div style={{ fontSize:10, color:'#888', marginBottom:3, textTransform:'uppercase', letterSpacing:'0.04em' }}>Next sell %</div>
+                  <div style={{ fontSize:10, color:'#64748B', marginBottom:3, textTransform:'uppercase', letterSpacing:'0.04em' }}>Next sell %</div>
                   <div className="pill-input-wrap" style={{ height:28 }}>
                     <input type="number" step="0.01" value={form.next_sell_pct}
                       onChange={e => setForm(f=>({...f,next_sell_pct:e.target.value}))}
@@ -423,7 +423,7 @@ function FuelGroupCard({ group, onRefresh }) {
                   </div>
                 </div>
                 <div style={{ flex:1 }}>
-                  <div style={{ fontSize:10, color:'#888', marginBottom:3, textTransform:'uppercase', letterSpacing:'0.04em' }}>Effective from</div>
+                  <div style={{ fontSize:10, color:'#64748B', marginBottom:3, textTransform:'uppercase', letterSpacing:'0.04em' }}>Effective from</div>
                   <div className="pill-input-wrap" style={{ height:28 }}>
                     <input type="date" value={form.next_sell_effective_date}
                       onChange={e => setForm(f=>({...f,next_sell_effective_date:e.target.value}))}
@@ -448,7 +448,7 @@ function FuelGroupCard({ group, onRefresh }) {
             <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:4 }}>
               <div style={{ display:'flex', gap:6, alignItems:'center' }}>
                 <span style={{ fontSize:10, color:'#666' }}>cost</span>
-                <span style={{ fontSize:12, fontWeight:700, color:'#555',
+                <span style={{ fontSize:12, fontWeight:700, color:'#475569',
                   background:'rgba(0,0,0,0.04)', padding:'1px 8px',
                   borderRadius:9999, fontFamily:'monospace' }}>
                   {parseFloat(group.fuel_surcharge_pct || 0).toFixed(2)}%
@@ -470,7 +470,7 @@ function FuelGroupCard({ group, onRefresh }) {
               <Edit2 size={12}/>
             </button>
             <button onClick={() => setConfirmDel(true)}
-              style={{ background:'none', border:'none', color:'#555', cursor:'pointer' }}>
+              style={{ background:'none', border:'none', color:'#475569', cursor:'pointer' }}>
               <Trash2 size={12}/>
             </button>
           </>
@@ -572,7 +572,7 @@ function CarrierRateCardsTab({ courierId, courierCode }) {
     return { label: 'Pending', color: '#64748B', bg: 'rgba(0,0,0,0.07)' };
   };
 
-  if (isLoading) return <div style={{ padding:40, textAlign:'center', color:'#555' }}>Loading rate cards…</div>;
+  if (isLoading) return <div style={{ padding:40, textAlign:'center', color:'#475569' }}>Loading rate cards…</div>;
 
   const formRow = (label, node) => (
     <div key={label}>
@@ -615,7 +615,7 @@ function CarrierRateCardsTab({ courierId, courierCode }) {
       {showImport && (
         <div className="moov-card" style={{ padding:18, marginBottom:16, border:'1px solid rgba(0,188,212,0.3)' }}>
           <h3 style={{ fontSize:14, fontWeight:700, color:'#00BCD4', marginBottom:6 }}>Import Rate Card from CSV</h3>
-          <p style={{ fontSize:12, color:'#888', marginBottom:14 }}>
+          <p style={{ fontSize:12, color:'#64748B', marginBottom:14 }}>
             CSV columns: <code style={{ color:'#00BCD4' }}>service_code, zone_name, min_weight_kg, max_weight_kg, price_first[, price_sub]</code>
           </p>
           <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:12, marginBottom:12 }}>
@@ -669,7 +669,7 @@ function CarrierRateCardsTab({ courierId, courierCode }) {
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:9000, display:'flex', alignItems:'center', justifyContent:'center' }}>
           <div className="moov-card" style={{ padding:24, width:440, border:'1px solid rgba(255,193,7,0.35)' }}>
             <h3 style={{ fontSize:15, fontWeight:700, color:'#FFC107', marginBottom:6 }}>Apply Rate Increase</h3>
-            <p style={{ fontSize:12, color:'#888', marginBottom:16 }}>
+            <p style={{ fontSize:12, color:'#64748B', marginBottom:16 }}>
               Clones "{showIncrease.name}" and multiplies all prices by the uplift percentage.
             </p>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
@@ -697,7 +697,7 @@ function CarrierRateCardsTab({ courierId, courierCode }) {
 
       {/* ── Rate card list ── */}
       {cards.length === 0 && (
-        <div className="moov-card" style={{ padding:40, textAlign:'center', color:'#555', fontSize:13 }}>
+        <div className="moov-card" style={{ padding:40, textAlign:'center', color:'#475569', fontSize:13 }}>
           No rate cards yet — create one or import a CSV
         </div>
       )}
@@ -729,7 +729,7 @@ function CarrierRateCardsTab({ courierId, courierCode }) {
                       </span>
                     )}
                   </div>
-                  <div style={{ fontSize:12, color:'#555', marginTop:3 }}>
+                  <div style={{ fontSize:12, color:'#475569', marginTop:3 }}>
                     {card.band_count} bands
                     {card.effective_date && ` · Effective: ${new Date(card.effective_date).toLocaleDateString('en-GB')}`}
                     {card.notes && ` · ${card.notes}`}
@@ -760,7 +760,7 @@ function CarrierRateCardsTab({ courierId, courierCode }) {
                         <Check size={12}/>
                       </button>
                       <button onClick={() => setEditingAcct(null)}
-                        style={{ background:'none', border:'none', color:'#555', cursor:'pointer', padding:'2px 4px' }}>
+                        style={{ background:'none', border:'none', color:'#475569', cursor:'pointer', padding:'2px 4px' }}>
                         <X size={12}/>
                       </button>
                     </div>
@@ -770,7 +770,7 @@ function CarrierRateCardsTab({ courierId, courierCode }) {
                       title="Link to customer account number"
                       style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'4px 10px', borderRadius:9999, fontSize:11, fontWeight:700,
                         background: card.customer_account_number ? 'rgba(0,188,212,0.1)' : 'rgba(0,0,0,0.04)',
-                        color: card.customer_account_number ? '#00BCD4' : '#555',
+                        color: card.customer_account_number ? '#00BCD4' : '#475569',
                         border: `1px solid ${card.customer_account_number ? 'rgba(0,188,212,0.3)' : 'rgba(0,0,0,0.08)'}`,
                         cursor:'pointer', fontFamily: card.customer_account_number ? 'monospace' : 'inherit' }}>
                       {card.customer_account_number || '+ Account'}
@@ -801,7 +801,7 @@ function CarrierRateCardsTab({ courierId, courierCode }) {
                   {/* Delete (non-master only) */}
                   {!card.is_master && (
                     <button onClick={() => { if (window.confirm(`Delete "${card.name}"?`)) deleteCard.mutate(card.id); }}
-                      style={{ background:'none', border:'none', color:'#555', cursor:'pointer', padding:'4px 6px' }}>
+                      style={{ background:'none', border:'none', color:'#475569', cursor:'pointer', padding:'4px 6px' }}>
                       <Trash2 size={12}/>
                     </button>
                   )}
@@ -812,9 +812,9 @@ function CarrierRateCardsTab({ courierId, courierCode }) {
               {isOpen && (
                 <div style={{ borderTop:'1px solid rgba(0,0,0,0.06)', padding:'0 18px 18px' }}>
                   {bandsLoading ? (
-                    <div style={{ padding:24, textAlign:'center', color:'#555', fontSize:13 }}>Loading bands…</div>
+                    <div style={{ padding:24, textAlign:'center', color:'#475569', fontSize:13 }}>Loading bands…</div>
                   ) : !bandsData?.services?.length ? (
-                    <div style={{ padding:24, textAlign:'center', color:'#555', fontSize:13, fontStyle:'italic' }}>
+                    <div style={{ padding:24, textAlign:'center', color:'#475569', fontSize:13, fontStyle:'italic' }}>
                       No bands in this rate card yet. Clone an existing card or import a CSV to populate.
                     </div>
                   ) : (
@@ -884,7 +884,7 @@ function DomesticServiceBands({ svc, cardId, onUpdateBand }) {
         {open ? <ChevronDown size={13} color="#64748B"/> : <ChevronRight size={13} color="#64748B"/>}
         <span style={{ fontWeight:600, fontSize:13, color:'#fff', flex:1 }}>{svc.service_name}</span>
         <span style={{ fontFamily:'monospace', fontSize:11, color:'#00C853', background:'rgba(0,200,83,0.08)', padding:'1px 8px', borderRadius:9999 }}>{svc.service_code}</span>
-        <span style={{ fontSize:11, color:'#555' }}>{totalBands} band{totalBands!==1?'s':''}</span>
+        <span style={{ fontSize:11, color:'#475569' }}>{totalBands} band{totalBands!==1?'s':''}</span>
       </div>
 
       {open && (
@@ -899,8 +899,8 @@ function DomesticServiceBands({ svc, cardId, onUpdateBand }) {
               <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
                 <thead>
                   <tr style={{ borderBottom:'1px solid rgba(0,0,0,0.06)' }}>
-                    <th style={{ textAlign:'left', padding:'4px 8px', color:'#555', fontWeight:600, fontSize:11 }}>Min kg</th>
-                    <th style={{ textAlign:'left', padding:'4px 8px', color:'#555', fontWeight:600, fontSize:11 }}>Max kg</th>
+                    <th style={{ textAlign:'left', padding:'4px 8px', color:'#475569', fontWeight:600, fontSize:11 }}>Min kg</th>
+                    <th style={{ textAlign:'left', padding:'4px 8px', color:'#475569', fontWeight:600, fontSize:11 }}>Max kg</th>
                     <th style={{ textAlign:'right', padding:'4px 8px', color:'#00C853', fontWeight:600, fontSize:11 }}>1st Item</th>
                     <th style={{ textAlign:'right', padding:'4px 8px', color:'#FFC107', fontWeight:600, fontSize:11 }}>Sub Items</th>
                     <th style={{ textAlign:'right', padding:'4px 8px', color:'#00BCD4', fontWeight:600, fontSize:11 }}>Per kg</th>
@@ -1016,7 +1016,7 @@ function IntlServiceCard({ svc, onUpdateBand }) {
           <span style={{ fontWeight:600, fontSize:13, color:'#fff', flex:1 }}>{svc.service_name}</span>
           <span style={{ fontFamily:'monospace', fontSize:10, color:'#7B2FBE', background:'rgba(123,47,190,0.12)', padding:'1px 7px', borderRadius:9999 }}>{svc.service_code}</span>
         </div>
-        <div style={{ fontSize:12, color:'#555', marginBottom:10 }}>
+        <div style={{ fontSize:12, color:'#475569', marginBottom:10 }}>
           {svc.zones.length} zone{svc.zones.length!==1?'s':''} · {totalBands} band{totalBands!==1?'s':''}
         </div>
         <button onClick={() => setShowModal(true)}
@@ -1055,8 +1055,8 @@ function IntlRateCardModal({ svc, onClose, onUpdateBand }) {
             <table style={{ width:'100%', maxWidth:600, borderCollapse:'collapse', fontSize:12 }}>
               <thead>
                 <tr style={{ borderBottom:'1px solid rgba(0,0,0,0.08)' }}>
-                  <th style={{ textAlign:'left', padding:'4px 10px', color:'#555', fontWeight:600, fontSize:11 }}>Min kg</th>
-                  <th style={{ textAlign:'left', padding:'4px 10px', color:'#555', fontWeight:600, fontSize:11 }}>Max kg</th>
+                  <th style={{ textAlign:'left', padding:'4px 10px', color:'#475569', fontWeight:600, fontSize:11 }}>Min kg</th>
+                  <th style={{ textAlign:'left', padding:'4px 10px', color:'#475569', fontWeight:600, fontSize:11 }}>Max kg</th>
                   <th style={{ textAlign:'right', padding:'4px 10px', color:'#00C853', fontWeight:600, fontSize:11 }}>1st Item</th>
                   <th style={{ textAlign:'right', padding:'4px 10px', color:'#FFC107', fontWeight:600, fontSize:11 }}>Sub Items</th>
                   <th style={{ textAlign:'right', padding:'4px 10px', color:'#00BCD4', fontWeight:600, fontSize:11 }}>Per kg</th>
@@ -1077,7 +1077,7 @@ function IntlRateCardModal({ svc, onClose, onUpdateBand }) {
 
 // ─── AddConditionRow — reusable condition builder row ────────────────────────
 
-const SEL = { height:32, background:'#13131F', border:'1px solid rgba(0,0,0,0.08)', borderRadius:6, color:'#ccc', fontSize:12, padding:'0 8px', cursor:'pointer' };
+const SEL = { height:32, background:'#13131F', border:'1px solid rgba(0,0,0,0.08)', borderRadius:6, color:'#334155', fontSize:12, padding:'0 8px', cursor:'pointer' };
 
 function AddConditionRow({ onAdd }) {
   const [field, setField] = useState('total_weight_kg');
@@ -1122,7 +1122,7 @@ function AddConditionRow({ onAdd }) {
       />
       <button
         onClick={commit} disabled={!val.trim()}
-        style={{ height:32, padding:'0 12px', borderRadius:6, border:'1px solid rgba(0,0,0,0.10)', background:'rgba(0,0,0,0.06)', color: val.trim() ? '#fff' : '#555', fontSize:12, cursor: val.trim() ? 'pointer' : 'default', whiteSpace:'nowrap', flexShrink:0 }}
+        style={{ height:32, padding:'0 12px', borderRadius:6, border:'1px solid rgba(0,0,0,0.10)', background:'rgba(0,0,0,0.06)', color: val.trim() ? '#fff' : '#475569', fontSize:12, cursor: val.trim() ? 'pointer' : 'default', whiteSpace:'nowrap', flexShrink:0 }}
       >+ Add</button>
     </div>
   );
@@ -1510,7 +1510,7 @@ function CustomerRcTemplatesTab({ courierCode, courierName }) {
                           onChange={e => setIncludeBespoke(e.target.checked)}
                           style={{ accentColor: '#FB923C', width: 14, height: 14 }}
                         />
-                        <span style={{ fontSize: 12, color: includeBespoke ? '#FB923C' : '#555', fontWeight: includeBespoke ? 600 : 400 }}>
+                        <span style={{ fontSize: 12, color: includeBespoke ? '#FB923C' : '#475569', fontWeight: includeBespoke ? 600 : 400 }}>
                           Include bespoke services
                         </span>
                       </label>
@@ -1722,7 +1722,7 @@ function CustomerRcTemplatesTab({ courierCode, courierName }) {
                       {isDirty(tpl.id) && (
                         <button onClick={() => setRateEdits(p => { const n = { ...p }; delete n[tpl.id]; return n; })}
                           style={{ background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.08)',
-                            borderRadius: 7, padding: '7px 14px', color: '#777', fontSize: 12, cursor: 'pointer' }}>
+                            borderRadius: 7, padding: '7px 14px', color: '#475569', fontSize: 12, cursor: 'pointer' }}>
                           Discard
                         </button>
                       )}
@@ -1978,7 +1978,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
 
       <div className="moov-card" style={{ overflow:'hidden', marginBottom: 32 }}>
         {(!carrier.services || carrier.services.length === 0) ? (
-          <div style={{ padding:40, textAlign:'center', color:'#555', fontSize:13 }}>No services yet — add one above</div>
+          <div style={{ padding:40, textAlign:'center', color:'#475569', fontSize:13 }}>No services yet — add one above</div>
         ) : (
           <table className="moov-table">
             <thead>
@@ -2039,7 +2039,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                           display:'inline-block', padding:'2px 9px', borderRadius:9999,
                           fontSize:11, fontWeight:700, cursor:'pointer', userSelect:'none',
                           background: tc ? tc.bg : 'rgba(0,0,0,0.03)',
-                          color: tc ? tc.fg : '#555',
+                          color: tc ? tc.fg : '#475569',
                         }}>
                         {tc ? tc.label : '—'}
                       </span>
@@ -2073,7 +2073,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                           background: '#FFFFFF',
                           border: '1px solid rgba(255,193,7,0.25)',
                           borderRadius: 9999,
-                          color: svc.fuel_group_id ? '#FFC107' : '#555',
+                          color: svc.fuel_group_id ? '#FFC107' : '#475569',
                           fontSize: 12,
                           fontWeight: svc.fuel_group_id ? 700 : 400,
                           padding: '3px 12px',
@@ -2096,7 +2096,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                       <span style={{ fontSize:12, color:'#64748B' }}>View rate card</span>
                       <ChevronRight size={14} color="#64748B"/>
                       <button onClick={e => { e.stopPropagation(); delService.mutate(svc.id); }}
-                        style={{ background:'none', border:'none', color:'#555', cursor:'pointer', padding:0 }}>
+                        style={{ background:'none', border:'none', color:'#475569', cursor:'pointer', padding:0 }}>
                         <Trash2 size={13}/>
                       </button>
                     </td>
@@ -2176,7 +2176,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
         )}
 
         {fuelGroups.length === 0 && !addingGroup ? (
-          <div className="moov-card" style={{ padding:32, textAlign:'center', color:'#555', fontSize:13, fontStyle:'italic' }}>
+          <div className="moov-card" style={{ padding:32, textAlign:'center', color:'#475569', fontSize:13, fontStyle:'italic' }}>
             No fuel groups yet — click Add Fuel Group to create one
           </div>
         ) : (
@@ -2199,7 +2199,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
           <div>
             <h2 style={{ fontSize:17, fontWeight:700, color:'#E91E8C', margin:'0 0 4px' }}>Surcharges</h2>
-            <p style={{ fontSize:12, color:'#888', margin:0 }}>Additional charges on top of base rate. Rules use AND/OR conditions on shipment fields to control when each fires.</p>
+            <p style={{ fontSize:12, color:'#64748B', margin:0 }}>Additional charges on top of base rate. Rules use AND/OR conditions on shipment fields to control when each fires.</p>
           </div>
           <button onClick={() => setAddingSurcharge(a => !a)} style={{ display:'inline-flex', alignItems:'center', gap:6, height:34, padding:'0 16px', background:'rgba(233,30,140,0.12)', border:'1px solid rgba(233,30,140,0.35)', borderRadius:8, color:'#E91E8C', fontSize:13, fontWeight:700, cursor:'pointer' }}>
             <Plus size={13}/> Add Surcharge
@@ -2231,7 +2231,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
             <div style={{ marginBottom:10 }}>
               <label style={{ fontSize:11, color:'#64748B', display:'block', marginBottom:4 }}>
                 Invoice CSV Column
-                <span style={{ marginLeft:6, color:'#555', fontStyle:'italic', fontSize:10 }}>— exact column header in carrier invoice file (leave blank if surcharge arrives as a separate invoice row)</span>
+                <span style={{ marginLeft:6, color:'#475569', fontStyle:'italic', fontSize:10 }}>— exact column header in carrier invoice file (leave blank if surcharge arrives as a separate invoice row)</span>
               </label>
               <div className="pill-input-wrap"><input value={surchargeForm.csv_column} onChange={e => setSurchargeForm(f=>({...f,csv_column:e.target.value}))} placeholder="e.g. Global Energy Charge" style={{ fontSize:13 }}/></div>
             </div>
@@ -2254,7 +2254,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
 
         {/* Surcharge list */}
         {surcharges.length === 0 && !addingSurcharge ? (
-          <div className="moov-card" style={{ padding:32, textAlign:'center', color:'#555', fontSize:13, fontStyle:'italic' }}>No surcharges yet — click Add Surcharge to create one</div>
+          <div className="moov-card" style={{ padding:32, textAlign:'center', color:'#475569', fontSize:13, fontStyle:'italic' }}>No surcharges yet — click Add Surcharge to create one</div>
         ) : (
           <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
             {surcharges.map(s => {
@@ -2277,15 +2277,15 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                         <span style={{ ...pill('rgba(233,30,140,0.15)', '#E91E8C'), fontSize:10 }}>{s.code}</span>
                         {s.csv_column && <span style={{ ...pill('rgba(0,188,212,0.1)', '#00BCD4'), fontSize:10 }}>📋 {s.csv_column}</span>}
                         {s.reconciliation_excluded && <span style={{ ...pill('rgba(255,82,82,0.15)', '#FF5252'), fontSize:10 }}>🚫 hidden from invoices</span>}
-                        <span style={{ ...pill(s.active ? 'rgba(0,200,83,0.1)' : 'rgba(0,0,0,0.03)', s.active ? '#00C853' : '#555'), fontSize:10 }}>{s.active ? 'Active' : 'Inactive'}</span>
+                        <span style={{ ...pill(s.active ? 'rgba(0,200,83,0.1)' : 'rgba(0,0,0,0.03)', s.active ? '#00C853' : '#475569'), fontSize:10 }}>{s.active ? 'Active' : 'Inactive'}</span>
                       </div>
-                      {s.description && <div style={{ fontSize:11, color:'#777', marginTop:2 }}>{s.description}</div>}
+                      {s.description && <div style={{ fontSize:11, color:'#475569', marginTop:2 }}>{s.description}</div>}
                     </div>
 
                     {/* Value + firing mode — read-only display */}
                     <div style={{ textAlign:'right', padding:'4px 8px' }}>
                       <div style={{ fontSize:14, fontWeight:700, color:'#E91E8C', fontFamily:'monospace' }}>{valStr}</div>
-                      <div style={{ fontSize:10, color:'#888' }}>
+                      <div style={{ fontSize:10, color:'#64748B' }}>
                         per {s.charge_per} · {s.applies_when === 'always' ? '⚡ auto' : '📋 reconciliation'}
                         {parseFloat(s.cost_price||0) === 0 && parseFloat(s.default_value||0) > 0
                           ? <span style={{ marginLeft:5, color:'#00BCD4', fontWeight:700 }}>· cost £0 (our charge only)</span>
@@ -2300,10 +2300,10 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                       <button onClick={() => patchSurcharge.mutate({ id:s.id, active:!s.active })} style={{ fontSize:11, padding:'3px 9px', borderRadius:6, border:'none', cursor:'pointer', background: s.active ? 'rgba(255,200,0,0.1)' : 'rgba(0,200,83,0.1)', color: s.active ? '#FFC107' : '#00C853', fontWeight:700 }}>{s.active ? 'Deactivate' : 'Activate'}</button>
                       <button
                         onClick={() => { if (isEditing) { setEditingSurcharge(null); } else { setEditingSurcharge(s.id); setEditSForm({ code: s.code || '', name: s.name, description: s.description || '', csv_column: s.csv_column || '', default_value: String(s.default_value||0), cost_price: String(s.cost_price ?? s.default_value ?? 0), applies_when: s.applies_when, charge_per: s.charge_per, calc_type: s.calc_type, active: s.active, reconciliation_excluded: !!s.reconciliation_excluded }); } }}
-                        style={{ background: isEditing ? 'rgba(233,30,140,0.15)' : 'none', border: isEditing ? '1px solid rgba(233,30,140,0.3)' : 'none', cursor:'pointer', color: isEditing ? '#E91E8C' : '#888', padding:'4px 6px', borderRadius:6 }}
+                        style={{ background: isEditing ? 'rgba(233,30,140,0.15)' : 'none', border: isEditing ? '1px solid rgba(233,30,140,0.3)' : 'none', cursor:'pointer', color: isEditing ? '#E91E8C' : '#64748B', padding:'4px 6px', borderRadius:6 }}
                         title="Edit surcharge"
                       ><Edit2 size={13}/></button>
-                      <button onClick={() => setExpandedSurcharge(isExpanded ? null : s.id)} style={{ background:'none', border:'none', cursor:'pointer', color:'#888', padding:'4px 6px' }} title="Trigger rules">{isExpanded ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}</button>
+                      <button onClick={() => setExpandedSurcharge(isExpanded ? null : s.id)} style={{ background:'none', border:'none', cursor:'pointer', color:'#64748B', padding:'4px 6px' }} title="Trigger rules">{isExpanded ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}</button>
                       <button onClick={() => { if (window.confirm(`Delete "${s.name}"?`)) delSurcharge.mutate(s.id); }} style={{ background:'none', border:'none', cursor:'pointer', color:'#444', padding:'4px 6px' }}><Trash2 size={13}/></button>
                     </div>
                   </div>
@@ -2326,7 +2326,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                       <div style={{ marginBottom:10 }}>
                         <label style={{ fontSize:10, color:'#64748B', display:'block', marginBottom:3 }}>
                           Invoice CSV Column
-                          <span style={{ marginLeft:6, color:'#555', fontStyle:'italic' }}>— exact column header in carrier invoice file where this amount appears (leave blank if it arrives as a separate invoice row)</span>
+                          <span style={{ marginLeft:6, color:'#475569', fontStyle:'italic' }}>— exact column header in carrier invoice file where this amount appears (leave blank if it arrives as a separate invoice row)</span>
                         </label>
                         <div className="pill-input-wrap" style={{ height:30 }}><input value={editSForm.csv_column||''} onChange={e => setEditSForm(f=>({...f,csv_column:e.target.value}))} placeholder="e.g. Global Energy Charge" style={{ fontSize:12 }}/></div>
                       </div>
@@ -2354,9 +2354,9 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                       <div style={{ marginBottom:12 }}>
                         <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', userSelect:'none' }}>
                           <input type="checkbox" checked={!!editSForm.reconciliation_excluded} onChange={e => setEditSForm(f=>({...f,reconciliation_excluded:e.target.checked}))} style={{ width:14, height:14, accentColor:'#FF5252', cursor:'pointer' }}/>
-                          <span style={{ fontSize:12, color: editSForm.reconciliation_excluded ? '#FF5252' : '#888' }}>
+                          <span style={{ fontSize:12, color: editSForm.reconciliation_excluded ? '#FF5252' : '#64748B' }}>
                             Hide from customer invoices
-                            <span style={{ marginLeft:6, fontSize:11, color:'#555', fontStyle:'italic' }}>— carrier cost is tracked but nothing is billed to the customer</span>
+                            <span style={{ marginLeft:6, fontSize:11, color:'#475569', fontStyle:'italic' }}>— carrier cost is tracked but nothing is billed to the customer</span>
                           </span>
                         </label>
                       </div>
@@ -2372,7 +2372,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                     <div style={{ borderTop:'1px solid rgba(0,0,0,0.06)', padding:'14px', background:'rgba(0,0,0,0.22)' }}>
                       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
                         <div style={{ fontSize:12, fontWeight:700, color:'#64748B', textTransform:'uppercase', letterSpacing:'0.06em' }}>
-                          Trigger Rules <span style={{ fontSize:10, fontWeight:400, color:'#555', textTransform:'none' }}>— if ANY rule matches, this surcharge fires</span>
+                          Trigger Rules <span style={{ fontSize:10, fontWeight:400, color:'#475569', textTransform:'none' }}>— if ANY rule matches, this surcharge fires</span>
                         </div>
                         <button onClick={() => setAddingRuleTo(isAddingRule ? null : s.id)} style={{ fontSize:11, padding:'3px 10px', borderRadius:6, border:'1px solid rgba(233,30,140,0.3)', background:'rgba(233,30,140,0.1)', color:'#E91E8C', cursor:'pointer', fontWeight:700 }}>
                           {isAddingRule ? 'Cancel' : '+ Add Rule'}
@@ -2392,7 +2392,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                             <span style={{ fontSize:12, fontWeight:700, color:'#ddd' }}>{r.name}</span>
                             <span style={{ ...pill(r.logic==='AND' ? 'rgba(0,188,212,0.12)' : 'rgba(123,47,190,0.15)', r.logic==='AND' ? '#00BCD4' : '#7B2FBE'), fontSize:10 }}>{r.logic}</span>
                             {r.service_codes?.length > 0 && (
-                              <span style={{ fontSize:10, color:'#888' }}>· services: {r.service_codes.join(', ')}</span>
+                              <span style={{ fontSize:10, color:'#64748B' }}>· services: {r.service_codes.join(', ')}</span>
                             )}
                             <button onClick={() => delRule.mutate({ surchargeId:s.id, ruleId:r.id })} style={{ marginLeft:'auto', background:'none', border:'none', cursor:'pointer', color:'#444', padding:'2px 4px' }}><Trash2 size={11}/></button>
                           </div>
@@ -2402,7 +2402,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                               <div key={ci} style={{ display:'flex', alignItems:'center', gap:6 }}>
                                 {ci > 0 && <span style={{ fontSize:10, color: r.logic==='AND' ? '#00BCD4' : '#7B2FBE', fontWeight:700, minWidth:24 }}>{r.logic}</span>}
                                 {ci === 0 && <span style={{ minWidth:24 }}/>}
-                                <span style={{ fontSize:11, color:'#aaa' }}>{fieldLabel(cond.field)}</span>
+                                <span style={{ fontSize:11, color:'#64748B' }}>{fieldLabel(cond.field)}</span>
                                 <span style={{ fontSize:11, color:'#E91E8C', fontWeight:600 }}>{opLabel(cond.op)}</span>
                                 <span style={{ fontSize:11, color:'#fff', fontFamily:'monospace', background:'rgba(0,0,0,0.06)', padding:'1px 6px', borderRadius:4 }}>{formatCondValue(cond.op, cond.value)}</span>
                                 <button
@@ -2432,7 +2432,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                           {/* Row 1: name + logic toggle */}
                           <div style={{ display:'flex', gap:10, alignItems:'flex-end', marginBottom:14 }}>
                             <div style={{ flex:1 }}>
-                              <label style={{ fontSize:10, color:'#888', display:'block', marginBottom:4, textTransform:'uppercase', letterSpacing:'0.05em' }}>Rule name</label>
+                              <label style={{ fontSize:10, color:'#64748B', display:'block', marginBottom:4, textTransform:'uppercase', letterSpacing:'0.05em' }}>Rule name</label>
                               <input
                                 value={newRuleName} onChange={e => setNewRuleName(e.target.value)}
                                 placeholder="e.g. Large parcel — over 30kg"
@@ -2441,7 +2441,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                               />
                             </div>
                             <div>
-                              <label style={{ fontSize:10, color:'#888', display:'block', marginBottom:4, textTransform:'uppercase', letterSpacing:'0.05em' }}>Conditions match</label>
+                              <label style={{ fontSize:10, color:'#64748B', display:'block', marginBottom:4, textTransform:'uppercase', letterSpacing:'0.05em' }}>Conditions match</label>
                               <div style={{ display:'flex', borderRadius:6, overflow:'hidden', border:'1px solid rgba(0,0,0,0.10)', height:32 }}>
                                 {['AND','OR'].map((l, i) => (
                                   <button
@@ -2454,7 +2454,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                                         : '#13131F',
                                       color: newRuleLogic===l
                                         ? (l==='AND' ? '#00BCD4' : '#9C57E0')
-                                        : '#555',
+                                        : '#475569',
                                     }}
                                   >{l}</button>
                                 ))}
@@ -2469,11 +2469,11 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                                 <div key={ci} style={{ display:'flex', alignItems:'center', gap:8 }}>
                                   <span style={{ fontSize:10, fontWeight:700, minWidth:28, textAlign:'center', color: newRuleLogic==='AND'?'#00BCD4':'#9C57E0', opacity: ci===0?0:1 }}>{newRuleLogic}</span>
                                   <div style={{ flex:1, display:'flex', alignItems:'center', gap:6, padding:'5px 10px', background:'rgba(0,0,0,0.03)', borderRadius:6, border:'1px solid rgba(0,0,0,0.07)' }}>
-                                    <span style={{ fontSize:11, color:'#aaa' }}>{fieldLabel(cond.field)}</span>
+                                    <span style={{ fontSize:11, color:'#64748B' }}>{fieldLabel(cond.field)}</span>
                                     <span style={{ fontSize:11, color:'#E91E8C', fontWeight:600 }}>{opLabel(cond.op)}</span>
                                     <span style={{ fontSize:11, color:'#fff', fontFamily:'monospace', background:'rgba(0,0,0,0.08)', padding:'1px 7px', borderRadius:4 }}>{formatCondValue(cond.op, cond.value)}</span>
                                   </div>
-                                  <button onClick={() => setNewRuleConditions(cs => cs.filter((_,i)=>i!==ci))} style={{ background:'none', border:'none', cursor:'pointer', color:'#555', padding:'2px 4px', flexShrink:0 }}><X size={11}/></button>
+                                  <button onClick={() => setNewRuleConditions(cs => cs.filter((_,i)=>i!==ci))} style={{ background:'none', border:'none', cursor:'pointer', color:'#475569', padding:'2px 4px', flexShrink:0 }}><X size={11}/></button>
                                 </div>
                               ))}
                             </div>
@@ -2489,7 +2489,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                               disabled={addRule.isPending || !newRuleName.trim()}
                               style={{ height:32, padding:'0 16px', borderRadius:6, border:'1px solid rgba(0,200,83,0.35)', background:'rgba(0,200,83,0.12)', color:'#00C853', fontSize:12, cursor:'pointer', fontWeight:700 }}
                             ><Check size={11}/> Save Rule</button>
-                            <button onClick={() => { setAddingRuleTo(null); setNewRuleName(''); setNewRuleLogic('AND'); setNewRuleConditions([]); }} style={{ height:32, padding:'0 12px', borderRadius:6, border:'1px solid rgba(0,0,0,0.08)', background:'none', color:'#888', fontSize:12, cursor:'pointer' }}>Cancel</button>
+                            <button onClick={() => { setAddingRuleTo(null); setNewRuleName(''); setNewRuleLogic('AND'); setNewRuleConditions([]); }} style={{ height:32, padding:'0 12px', borderRadius:6, border:'1px solid rgba(0,0,0,0.08)', background:'none', color:'#64748B', fontSize:12, cursor:'pointer' }}>Cancel</button>
                           </div>
                         </div>
                       )}
@@ -2568,7 +2568,7 @@ function VolumetricTab({ courierId }) {
           <h2 style={{ fontSize:17, fontWeight:700, color:'#7B2FBE', margin:0, display:'flex', alignItems:'center', gap:8 }}>
             <Divide size={16}/> Volumetric Rules
           </h2>
-          <p style={{ fontSize:12, color:'#777', margin:'4px 0 0' }}>
+          <p style={{ fontSize:12, color:'#475569', margin:'4px 0 0' }}>
             Create named divisor rules and assign services to them (domestic or international).
             The pricing engine uses <span style={{ color:'#0F172A', fontFamily:'monospace' }}>(L×W×H) ÷ divisor</span> when
             it exceeds declared weight. Services with no rule use physical weight only.
@@ -2594,11 +2594,11 @@ function VolumetricTab({ courierId }) {
           <div style={{ fontSize:12, fontWeight:700, color:'#7B2FBE', marginBottom:12 }}>New Volumetric Rule</div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 160px', gap:10, marginBottom:10 }}>
             <div>
-              <label style={{ fontSize:11, color:'#888', display:'block', marginBottom:4 }}>Rule Name</label>
+              <label style={{ fontSize:11, color:'#64748B', display:'block', marginBottom:4 }}>Rule Name</label>
               <input style={volInput} placeholder='e.g. International Air 5000' value={newName} onChange={e => setNewName(e.target.value)} />
             </div>
             <div>
-              <label style={{ fontSize:11, color:'#888', display:'block', marginBottom:4 }}>Divisor</label>
+              <label style={{ fontSize:11, color:'#64748B', display:'block', marginBottom:4 }}>Divisor</label>
               <input style={volInput} type='number' min='1' placeholder='5000' value={newDivisor} onChange={e => setNewDivisor(e.target.value)} />
             </div>
           </div>
@@ -2612,7 +2612,7 @@ function VolumetricTab({ courierId }) {
             <button
               disabled={!canCreate}
               onClick={() => createRule.mutate({ name: newName.trim(), divisor: parseInt(newDivisor) })}
-              style={{ background: canCreate ? 'rgba(123,47,190,0.2)' : 'rgba(123,47,190,0.05)', border:'1px solid rgba(123,47,190,0.4)', borderRadius:6, color: canCreate ? '#7B2FBE' : '#555', padding:'6px 14px', cursor: canCreate ? 'pointer' : 'not-allowed', fontSize:12, fontWeight:700 }}
+              style={{ background: canCreate ? 'rgba(123,47,190,0.2)' : 'rgba(123,47,190,0.05)', border:'1px solid rgba(123,47,190,0.4)', borderRadius:6, color: canCreate ? '#7B2FBE' : '#475569', padding:'6px 14px', cursor: canCreate ? 'pointer' : 'not-allowed', fontSize:12, fontWeight:700 }}
             >
               <Check size={12} style={{ display:'inline', marginRight:4 }}/>Save Rule
             </button>
@@ -2711,7 +2711,7 @@ function VolumetricRuleCard({ rule, availableServices, onUpdate, onDelete, onAss
       </div>
       <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:10 }}>
         {rule.assigned_services.length === 0 ? (
-          <span style={{ fontSize:12, color:'#555', fontStyle:'italic' }}>No services assigned</span>
+          <span style={{ fontSize:12, color:'#475569', fontStyle:'italic' }}>No services assigned</span>
         ) : (
           rule.assigned_services.map(svc => (
             <span key={svc.id} style={{ display:'inline-flex', alignItems:'center', gap:5, background:'rgba(123,47,190,0.1)', border:'1px solid rgba(123,47,190,0.25)', borderRadius:9999, padding:'3px 10px', fontSize:11, color:'#0F172A' }}>
@@ -2737,7 +2737,7 @@ function VolumetricRuleCard({ rule, availableServices, onUpdate, onDelete, onAss
             ))}
           </select>
           <button onClick={() => { if (selSvc) { onAssign(rule.id, parseInt(selSvc)); setSelSvc(''); setShowAssign(false); } }} disabled={!selSvc} style={{ background:'rgba(123,47,190,0.15)', border:'1px solid rgba(123,47,190,0.4)', borderRadius:6, color:'#7B2FBE', padding:'7px 12px', cursor:'pointer', fontSize:12, fontWeight:700, display:'flex', alignItems:'center', gap:4 }}><Check size={12}/>Assign</button>
-          <button onClick={() => { setShowAssign(false); setSelSvc(''); }} style={{ background:'none', border:'1px solid rgba(0,0,0,0.08)', borderRadius:6, color:'#888', padding:'7px 10px', cursor:'pointer', fontSize:12 }}><X size={12}/></button>
+          <button onClick={() => { setShowAssign(false); setSelSvc(''); }} style={{ background:'none', border:'1px solid rgba(0,0,0,0.08)', borderRadius:6, color:'#64748B', padding:'7px 10px', cursor:'pointer', fontSize:12 }}><X size={12}/></button>
         </div>
       ) : (
         <button
@@ -2746,7 +2746,7 @@ function VolumetricRuleCard({ rule, availableServices, onUpdate, onDelete, onAss
           style={{ background:'none', border:'1px dashed rgba(123,47,190,0.3)', borderRadius:6, color: available.length ? '#7B2FBE' : '#444', padding:'5px 12px', cursor: available.length ? 'pointer' : 'default', fontSize:11, display:'flex', alignItems:'center', gap:4 }}
         >
           <Plus size={11}/> Assign service
-          {available.length === 0 && <span style={{ color:'#555', marginLeft:4 }}>(all assigned)</span>}
+          {available.length === 0 && <span style={{ color:'#475569', marginLeft:4 }}>(all assigned)</span>}
         </button>
       )}
     </div>
@@ -2915,7 +2915,7 @@ function CountryPickerModal({ zone, onClose, onRefresh }) {
           <h3 style={{ margin:0, color:'#fff', fontSize:16, fontWeight:700 }}>
             Select a Country — <span style={{ color:'#7B2FBE' }}>{zone.name}</span>
           </h3>
-          <button onClick={onClose} style={{ background:'none', border:'none', color:'#555', cursor:'pointer', fontSize:20, lineHeight:1 }}>✕</button>
+          <button onClick={onClose} style={{ background:'none', border:'none', color:'#475569', cursor:'pointer', fontSize:20, lineHeight:1 }}>✕</button>
         </div>
 
         {/* Already added */}
@@ -2969,7 +2969,7 @@ function CountryPickerModal({ zone, onClose, onRefresh }) {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={3} style={{ padding:'24px', textAlign:'center', color:'#555', fontSize:13 }}>
+                <tr><td colSpan={3} style={{ padding:'24px', textAlign:'center', color:'#475569', fontSize:13 }}>
                   No countries match "{search}"
                 </td></tr>
               )}
@@ -3023,7 +3023,7 @@ function RateMatrix({ zones }) {
 
   if (zones.length === 0) {
     return (
-      <div style={{ padding:'48px 0', textAlign:'center', color:'#555', fontSize:13 }}>
+      <div style={{ padding:'48px 0', textAlign:'center', color:'#475569', fontSize:13 }}>
         No zones configured — go to Zone Config to add zones and weight bands.
       </div>
     );
@@ -3031,7 +3031,7 @@ function RateMatrix({ zones }) {
 
   if (sortedBands.length === 0) {
     return (
-      <div style={{ padding:'48px 0', textAlign:'center', color:'#555', fontSize:13 }}>
+      <div style={{ padding:'48px 0', textAlign:'center', color:'#475569', fontSize:13 }}>
         No weight bands found. Go to Zone Config to add them.
       </div>
     );
@@ -3061,7 +3061,7 @@ function RateMatrix({ zones }) {
             Per-kg overage rate
           </div>
         )}
-        <span style={{ marginLeft:'auto', fontSize:12, color:'#555' }}>
+        <span style={{ marginLeft:'auto', fontSize:12, color:'#475569' }}>
           {sortedBands.length} weight {sortedBands.length === 1 ? 'band' : 'bands'} · {zones.length} {zones.length === 1 ? 'zone' : 'zones'}
         </span>
       </div>
@@ -3230,7 +3230,7 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
           {/* Step 1 — Type picker */}
           {!bandType && (
             <div>
-              <div style={{ fontSize:12, color:'#888', marginBottom:10 }}>How is this band priced?</div>
+              <div style={{ fontSize:12, color:'#64748B', marginBottom:10 }}>How is this band priced?</div>
               <div style={{ display:'flex', gap:8 }}>
                 <button
                   onClick={() => setBandType('flat')}
@@ -3247,7 +3247,7 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
                   <div style={{ fontSize:11, color:'#666' }}>Charge per kg above a minimum weight (e.g. DHL back-kilo)</div>
                 </button>
               </div>
-              <button onClick={cancelAdding} style={{ marginTop:10, background:'none', border:'none', color:'#555', cursor:'pointer', fontSize:12 }}>Cancel</button>
+              <button onClick={cancelAdding} style={{ marginTop:10, background:'none', border:'none', color:'#475569', cursor:'pointer', fontSize:12 }}>Cancel</button>
             </div>
           )}
 
@@ -3256,7 +3256,7 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
             <div>
               <div style={{ fontSize:11, color:'#00C853', fontWeight:700, marginBottom:10, display:'flex', alignItems:'center', gap:6 }}>
                 <span style={{ background:'rgba(0,200,83,0.1)', border:'1px solid rgba(0,200,83,0.3)', borderRadius:20, padding:'1px 8px' }}>Flat rate</span>
-                <button onClick={() => setBandType(null)} style={{ background:'none', border:'none', color:'#555', cursor:'pointer', fontSize:11, marginLeft:'auto' }}>← Change type</button>
+                <button onClick={() => setBandType(null)} style={{ background:'none', border:'none', color:'#475569', cursor:'pointer', fontSize:11, marginLeft:'auto' }}>← Change type</button>
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'1.6fr 1fr 1fr 1fr 1fr 1fr auto', gap:8 }}>
                 <div className="pill-input-wrap" style={{ height:32 }}>
@@ -3277,7 +3277,7 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
                   {addBand.isPending ? '…' : <Check size={12}/>}
                 </button>
               </div>
-              <div style={{ fontSize:11, color:'#555', marginTop:6, paddingLeft:2 }}>
+              <div style={{ fontSize:11, color:'#475569', marginTop:6, paddingLeft:2 }}>
                 Cost Sub is optional — for 2nd+ parcel pricing. £/kg overage is optional — per-kg charge above Max kg (e.g. £0.30/kg above 30kg).
                 {form.cost_per_kg && form.max_weight_kg
                   ? <span style={{ color:'#00BCD4', marginLeft:4 }}>
@@ -3294,7 +3294,7 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
             <div>
               <div style={{ fontSize:11, color:'#00BCD4', fontWeight:700, marginBottom:10, display:'flex', alignItems:'center', gap:6 }}>
                 <span style={{ background:'rgba(0,188,212,0.1)', border:'1px solid rgba(0,188,212,0.3)', borderRadius:20, padding:'1px 8px' }}>£ per kg</span>
-                <button onClick={() => setBandType(null)} style={{ background:'none', border:'none', color:'#555', cursor:'pointer', fontSize:11, marginLeft:'auto' }}>← Change type</button>
+                <button onClick={() => setBandType(null)} style={{ background:'none', border:'none', color:'#475569', cursor:'pointer', fontSize:11, marginLeft:'auto' }}>← Change type</button>
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'1.6fr 1fr 1fr 1fr auto', gap:8 }}>
                 <div className="pill-input-wrap" style={{ height:32 }}>
@@ -3316,7 +3316,7 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
                   {addBand.isPending ? '…' : <Check size={12}/>}
                 </button>
               </div>
-              <div style={{ fontSize:11, color:'#555', marginTop:6, paddingLeft:2 }}>
+              <div style={{ fontSize:11, color:'#475569', marginTop:6, paddingLeft:2 }}>
                 Charged per kg (or part thereof) above the minimum weight of this band.
                 {form.min_weight_kg && form.cost_per_kg
                   ? <span style={{ color:'#00BCD4', marginLeft:4 }}>
@@ -3340,7 +3340,7 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
           </tr>
         </thead>
         <tbody>
-          {bands.length === 0 && <tr><td colSpan={5} style={{ textAlign:'center', color:'#555' }}>No bands</td></tr>}
+          {bands.length === 0 && <tr><td colSpan={5} style={{ textAlign:'center', color:'#475569' }}>No bands</td></tr>}
           {bands.sort((a,b) => parseFloat(a.min_weight_kg) - parseFloat(b.min_weight_kg)).map(b => {
             const perKg = isPerKgBand(b);
             const threshold = b.cost_per_kg_threshold_kg != null ? parseFloat(b.cost_per_kg_threshold_kg) : parseFloat(b.min_weight_kg);
@@ -3357,7 +3357,7 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
                       <button onClick={() => renameBand.mutate({ id: b.id, name: editVal })}
                         style={{ background:'none', border:'none', color:'#00C853', cursor:'pointer', padding:0 }}><Check size={11}/></button>
                       <button onClick={() => { setEditId(null); setEditVal(''); }}
-                        style={{ background:'none', border:'none', color:'#555', cursor:'pointer', padding:0 }}>✕</button>
+                        style={{ background:'none', border:'none', color:'#475569', cursor:'pointer', padding:0 }}>✕</button>
                     </div>
                   ) : (
                     <div style={{ display:'flex', alignItems:'center', gap:6 }}>
@@ -3389,7 +3389,7 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
                   )}
                 </td>
                 <td style={{ textAlign:'right' }}>
-                  <button onClick={() => setConfirmId(b.id)} style={{ background:'none', border:'none', color:'#555', cursor:'pointer' }}><Trash2 size={11}/></button>
+                  <button onClick={() => setConfirmId(b.id)} style={{ background:'none', border:'none', color:'#475569', cursor:'pointer' }}><Trash2 size={11}/></button>
                 </td>
               </tr>
             );
@@ -3438,7 +3438,7 @@ function ZoneCard({ zone, onRefresh }) {
           {exclRules.length > 0 && (
             <span style={{ fontSize:11, color:'#E91E8C' }}>✗ {exclRules.length} excl</span>
           )}
-          <span style={{ fontSize:11, color:'#555' }}>
+          <span style={{ fontSize:11, color:'#475569' }}>
             {(zone.weight_bands||[]).length} bands
           </span>
         </div>
@@ -3472,7 +3472,7 @@ function ZoneCard({ zone, onRefresh }) {
             </div>
 
             {(zone.country_codes||[]).length === 0 ? (
-              <p style={{ color:'#555', fontSize:12, margin:0, fontStyle:'italic' }}>
+              <p style={{ color:'#475569', fontSize:12, margin:0, fontStyle:'italic' }}>
                 No countries — click Add Country to assign coverage.
               </p>
             ) : (
@@ -3636,7 +3636,7 @@ function ServiceDetail({ serviceId, carrierName, onBack }) {
               padding:'3px 11px', borderRadius:9999, cursor:'pointer',
               fontSize:12, fontWeight:700,
               background: svc.fuel_surcharge_pct ? 'rgba(255,193,7,0.12)' : 'rgba(0,0,0,0.04)',
-              color: svc.fuel_surcharge_pct ? '#FFC107' : '#555',
+              color: svc.fuel_surcharge_pct ? '#FFC107' : '#475569',
               border: '1px solid transparent',
             }}
           >
@@ -3710,7 +3710,7 @@ function ServiceDetail({ serviceId, carrierName, onBack }) {
               </div>
             )}
             {(svc.zones||[]).length === 0
-              ? <p style={{ color:'#555', fontSize:13, margin:0 }}>No zones yet — add one above.</p>
+              ? <p style={{ color:'#475569', fontSize:13, margin:0 }}>No zones yet — add one above.</p>
               : (svc.zones||[]).map(z => <ZoneCard key={z.id} zone={z} onRefresh={refetch}/>)
             }
           </div>
@@ -3801,16 +3801,16 @@ function RulesEngine({ services }) {
         </div>
       )}
       {rules.length === 0
-        ? <div className="moov-card" style={{ padding:32, textAlign:'center', color:'#555' }}>No rules configured yet</div>
+        ? <div className="moov-card" style={{ padding:32, textAlign:'center', color:'#475569' }}>No rules configured yet</div>
         : rules.map(rule => (
           <div key={rule.id} className="moov-card" style={{ marginBottom:10, border:`1px solid ${rule.is_active?'rgba(0,200,83,0.15)':'rgba(0,0,0,0.06)'}`, opacity:rule.is_active?1:0.6 }}>
             <div style={{ display:'flex', alignItems:'center', padding:'13px 16px', cursor:'pointer' }} onClick={() => setExpandedRule(expandedRule===rule.id?null:rule.id)}>
-              <Zap size={13} color={rule.is_active?'#00C853':'#555'} style={{ marginRight:10 }}/>
+              <Zap size={13} color={rule.is_active?'#00C853':'#475569'} style={{ marginRight:10 }}/>
               <span style={{ fontWeight:700, color:'#fff', flex:1 }}>{rule.name}</span>
               {rule.service_name && <span style={{ ...pill('rgba(123,47,190,0.15)','#7B2FBE'), marginRight:10 }}>{rule.service_name}</span>}
               <span style={{ ...pill('rgba(255,193,7,0.12)','#FFC107'), marginRight:10 }}>{CHARGE_METHOD_LABELS[rule.charge_method]} {parseFloat(rule.charge_value).toFixed(2)}</span>
               <button onClick={e => { e.stopPropagation(); toggleRule.mutate({id:rule.id,is_active:!rule.is_active}); }} className="btn-ghost" style={{ height:26, padding:'0 10px', fontSize:11, marginRight:8 }}>{rule.is_active?'Disable':'Enable'}</button>
-              <button onClick={e => { e.stopPropagation(); delRule.mutate(rule.id); }} style={{ background:'none', border:'none', color:'#555', cursor:'pointer' }}><Trash2 size={13}/></button>
+              <button onClick={e => { e.stopPropagation(); delRule.mutate(rule.id); }} style={{ background:'none', border:'none', color:'#475569', cursor:'pointer' }}><Trash2 size={13}/></button>
             </div>
             {expandedRule === rule.id && (
               <div style={{ padding:'0 16px 14px', borderTop:'1px solid rgba(0,0,0,0.04)' }}>
@@ -3821,7 +3821,7 @@ function RulesEngine({ services }) {
                     <span style={{ color:'#00BCD4', fontFamily:'monospace' }}>{c.json_field_path}</span>
                     <span style={pill('rgba(123,47,190,0.12)','#7B2FBE')}>{c.operator}</span>
                     <span style={{ color:'#FFC107', fontFamily:'monospace' }}>{c.value}</span>
-                    <button onClick={() => delCond.mutate(c.id)} style={{ background:'none', border:'none', color:'#555', cursor:'pointer', marginLeft:'auto' }}><X size={11}/></button>
+                    <button onClick={() => delCond.mutate(c.id)} style={{ background:'none', border:'none', color:'#475569', cursor:'pointer', marginLeft:'auto' }}><X size={11}/></button>
                   </div>
                 ))}
                 <div style={{ display:'grid', gridTemplateColumns:'80px 1fr 160px 1fr auto', gap:8, marginTop:12 }}>
@@ -3951,7 +3951,7 @@ export default function CarrierManagement() {
           {isLoading
             ? <div style={{ textAlign:'center', color:'#64748B', padding:60 }}>Loading carriers…</div>
             : couriers.length === 0
-              ? <div className="moov-card" style={{ padding:48, textAlign:'center', color:'#555' }}>No carriers yet. Add one above.</div>
+              ? <div className="moov-card" style={{ padding:48, textAlign:'center', color:'#475569' }}>No carriers yet. Add one above.</div>
               : <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:12 }}>
                   {couriers.map(carrier => (
                     <CarrierCard

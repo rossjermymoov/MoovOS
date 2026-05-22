@@ -133,9 +133,9 @@ function DocumentInput({ label, hint, onReady, loading, loadingMsg }) {
               </>
             ) : (
               <>
-                <Upload size={28} color="#555" />
+                <Upload size={28} color="#475569" />
                 <div style={{ textAlign: 'center' }}>
-                  <p style={{ fontSize: 13, color: '#AAA', fontWeight: 600, margin: 0 }}>Drop PDF here or click to browse</p>
+                  <p style={{ fontSize: 13, color: '#64748B', fontWeight: 600, margin: 0 }}>Drop PDF here or click to browse</p>
                   <p style={{ fontSize: 12, color: '#64748B', margin: '4px 0 0' }}>{hint}</p>
                 </div>
               </>

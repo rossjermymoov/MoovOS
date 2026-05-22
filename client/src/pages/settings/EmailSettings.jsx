@@ -25,7 +25,7 @@ const S = {
   input:       { background: '#0d0e21', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 6, padding: '8px 12px', color: '#fff', fontSize: 13, width: '100%', outline: 'none' },
   btn:         { padding: '8px 18px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
   btnPrimary:  { background: '#00C853', color: '#000' },
-  btnSecondary:{ background: 'rgba(0,0,0,0.07)', color: '#ccc' },
+  btnSecondary:{ background: 'rgba(0,0,0,0.07)', color: '#334155' },
   btnDanger:   { background: 'rgba(255,60,60,0.15)', color: '#ff6b6b', border: '1px solid rgba(255,60,60,0.2)' },
   toggle:      { width: 38, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 },
   pill:        { padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 },
@@ -200,7 +200,7 @@ function ConnectionCard({ config, onSaved }) {
 
 function AlertCard({ alert }) {
   const qc = useQueryClient();
-  const meta = ALERT_META[alert.code] || { icon: '🔔', colour: '#888' };
+  const meta = ALERT_META[alert.code] || { icon: '🔔', colour: '#64748B' };
   const [addEmail, setAddEmail] = useState('');
   const [addName,  setAddName]  = useState('');
   const [saving, setSaving]     = useState(false);
@@ -247,7 +247,7 @@ function AlertCard({ alert }) {
               {alert.enabled ? 'Active' : 'Off'}
             </span>
           </div>
-          <div style={{ fontSize: 13, color: '#777', maxWidth: 560 }}>{alert.description}</div>
+          <div style={{ fontSize: 13, color: '#475569', maxWidth: 560 }}>{alert.description}</div>
         </div>
         <button
           style={{ ...S.toggle, background: alert.enabled ? '#00C853' : 'rgba(0,0,0,0.08)', marginTop: 4 }}
@@ -424,7 +424,7 @@ function BackfillCard() {
           {result.errors?.length > 0 && (
             <details style={{ marginTop: 8 }}>
               <summary style={{ color: '#ff9800', cursor: 'pointer', fontSize: 12 }}>Show {result.errors.length} error(s)</summary>
-              <pre style={{ fontSize: 11, color: '#aaa', marginTop: 6, overflow: 'auto' }}>
+              <pre style={{ fontSize: 11, color: '#64748B', marginTop: 6, overflow: 'auto' }}>
                 {JSON.stringify(result.errors, null, 2)}
               </pre>
             </details>

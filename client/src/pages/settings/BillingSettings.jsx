@@ -126,7 +126,7 @@ export default function BillingSettings() {
               background: form.enabled ? 'rgba(0,200,83,0.15)' : 'rgba(0,0,0,0.06)',
               border: `1px solid ${form.enabled ? 'rgba(0,200,83,0.4)' : 'rgba(0,0,0,0.08)'}`,
               borderRadius: 20, padding: '6px 18px', fontSize: 13, fontWeight: 700,
-              color: form.enabled ? '#00C853' : '#888', cursor: 'pointer',
+              color: form.enabled ? '#00C853' : '#64748B', cursor: 'pointer',
             }}
           >
             {form.enabled ? 'Enabled' : 'Disabled'}
@@ -159,7 +159,7 @@ export default function BillingSettings() {
                 flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
                 background: form.fortnightly_parity === p ? 'rgba(0,200,83,0.15)' : 'rgba(0,0,0,0.03)',
                 border: `1px solid ${form.fortnightly_parity === p ? 'rgba(0,200,83,0.4)' : 'rgba(0,0,0,0.08)'}`,
-                color: form.fortnightly_parity === p ? '#00C853' : '#888',
+                color: form.fortnightly_parity === p ? '#00C853' : '#64748B',
               }}>
                 Week {p === 0 ? 'A' : 'B'}
               </button>
@@ -263,7 +263,7 @@ export default function BillingSettings() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#00C853', fontWeight: 700, marginBottom: 8 }}>
             <CheckCircle size={15} /> Billing run complete
           </div>
-          <div style={{ color: '#ccc', fontSize: 13 }}>
+          <div style={{ color: '#334155', fontSize: 13 }}>
             <div>{runResult.charges_queued} charges moved to Awaiting Reconciliation</div>
             <div style={{ color: '#64748B', fontSize: 12, marginTop: 4 }}>
               {runResult.customers_processed} customers processed · Cycles: {runResult.due_cycles?.join(', ') || 'none due'}

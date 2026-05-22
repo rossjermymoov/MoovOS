@@ -132,7 +132,7 @@ function CustomerRateCardAssignments({ customerId }) {
           />
         );
       })}
-      <p style={{ fontSize:11, color:'#555', marginTop:6, fontStyle:'italic' }}>
+      <p style={{ fontSize:11, color:'#475569', marginTop:6, fontStyle:'italic' }}>
         Master is the default rate card. Select an alternative to use custom pricing for this customer.
       </p>
     </InfoCard>
@@ -339,7 +339,7 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
                   <input type="checkbox" checked={!!form.manual_billing}
                     onChange={e => set('manual_billing', e.target.checked)}
                     style={{ width: 16, height: 16, accentColor: '#FFC107' }} />
-                  <span style={{ fontSize: 13, color: form.manual_billing ? '#FFC107' : '#888' }}>
+                  <span style={{ fontSize: 13, color: form.manual_billing ? '#FFC107' : '#64748B' }}>
                     {form.manual_billing ? 'Manual — suppress aged alerts' : 'Platform — expect webhooks'}
                   </span>
                 </label>
@@ -433,7 +433,7 @@ function ContactsTab({ customerId, contacts = [], onRefresh }) {
     fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
     background: active ? 'rgba(0,200,83,0.2)' : 'rgba(0,0,0,0.06)',
     border: active ? '1px solid rgba(0,200,83,0.4)' : '1px solid rgba(0,0,0,0.08)',
-    color: active ? '#00C853' : '#888',
+    color: active ? '#00C853' : '#64748B',
   });
 
   return (
@@ -579,7 +579,7 @@ function PerformanceTab({ customerId }) {
             borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer',
             background: showPerfDebug ? 'rgba(245,158,11,0.15)' : 'rgba(0,0,0,0.04)',
             border: `1px solid ${showPerfDebug ? 'rgba(245,158,11,0.45)' : 'rgba(0,0,0,0.08)'}`,
-            color: showPerfDebug ? '#F59E0B' : '#555' }}>
+            color: showPerfDebug ? '#F59E0B' : '#475569' }}>
           <Bug size={11} /> {showPerfDebug ? 'Hide debug' : 'Debug numbers'}
         </button>
       </div>
@@ -597,8 +597,8 @@ function PerformanceTab({ customerId }) {
           {/* Assumptions */}
           <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(0,0,0,0.04)', lineHeight: 1.8 }}>
             <div style={{ fontWeight: 700, color: '#64748B', marginBottom: 4, fontSize: 10, textTransform: 'uppercase' }}>Data source</div>
-            <div style={{ color: '#AAA' }}>Table: <code style={{ color: '#00C853' }}>charges</code> WHERE <code style={{ color: '#F59E0B' }}>charge_type = 'courier'</code> AND <code style={{ color: '#F59E0B' }}>cancelled = false</code></div>
-            <div style={{ color: '#AAA', marginTop: 4 }}>
+            <div style={{ color: '#64748B' }}>Table: <code style={{ color: '#00C853' }}>charges</code> WHERE <code style={{ color: '#F59E0B' }}>charge_type = 'courier'</code> AND <code style={{ color: '#F59E0B' }}>cancelled = false</code></div>
+            <div style={{ color: '#64748B', marginTop: 4 }}>
               <span style={{ color: '#A5B4FC' }}>Revenue</span> = SUM(price) &nbsp;·&nbsp;
               <span style={{ color: '#B39DDB' }}>Cost</span> = SUM(cost_price) &nbsp;·&nbsp;
               <span style={{ color: '#34D399' }}>Profit</span> = revenue − cost &nbsp;·&nbsp;
@@ -616,7 +616,7 @@ function PerformanceTab({ customerId }) {
               <div key={label} style={{ padding: '10px 14px', borderRight: '1px solid rgba(0,0,0,0.04)' }}>
                 <div style={{ fontWeight: 700, color: '#64748B', fontSize: 10, textTransform: 'uppercase', marginBottom: 6 }}>{label}</div>
                 {[
-                  { k: 'charges',  v: d?.charges,  c: '#AAA' },
+                  { k: 'charges',  v: d?.charges,  c: '#64748B' },
                   { k: 'parcels',  v: d?.parcels,  c: '#00BCD4' },
                   { k: 'revenue',  v: d?.revenue != null ? `£${parseFloat(d.revenue).toFixed(2)}` : '—',  c: '#A5B4FC' },
                   { k: 'cost',     v: d?.cost     != null ? `£${parseFloat(d.cost).toFixed(2)}`    : '—',  c: '#B39DDB' },
@@ -656,7 +656,7 @@ function PerformanceTab({ customerId }) {
                   const noCost = cst === 0 && rev > 0;
                   return (
                     <tr key={i} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
-                      <td style={{ padding: '3px 6px', color: '#CCC' }}>{row.service_name || '—'}</td>
+                      <td style={{ padding: '3px 6px', color: '#334155' }}>{row.service_name || '—'}</td>
                       <td style={{ padding: '3px 6px', textAlign: 'right', color: '#64748B', fontFamily: 'monospace' }}>{row.charges}</td>
                       <td style={{ padding: '3px 6px', textAlign: 'right', color: '#A5B4FC', fontFamily: 'monospace' }}>£{parseFloat(row.revenue).toFixed(2)}</td>
                       <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace',
@@ -667,7 +667,7 @@ function PerformanceTab({ customerId }) {
                       <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace',
                         color: pft >= 0 ? '#34D399' : '#EF4444' }}>£{pft.toFixed(2)}</td>
                       <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace',
-                        color: mgn === '—' ? '#555' : parseFloat(mgn) < 0 ? '#EF4444' : parseFloat(mgn) < 15 ? '#F59E0B' : '#34D399' }}>
+                        color: mgn === '—' ? '#475569' : parseFloat(mgn) < 0 ? '#EF4444' : parseFloat(mgn) < 15 ? '#F59E0B' : '#34D399' }}>
                         {mgn === '—' ? '—' : `${mgn}%`}
                       </td>
                     </tr>
@@ -841,7 +841,7 @@ function FinancialTab({ c }) {
             {/* Utilisation bar */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span style={{ fontSize: 12, color: '#AAA' }}>Credit utilisation</span>
+                <span style={{ fontSize: 12, color: '#64748B' }}>Credit utilisation</span>
                 <span style={{ fontSize: 13, fontWeight: 700, color: barCol }}>{pct.toFixed(1)}%</span>
               </div>
               {/* Segmented bar: Xero outstanding + MoovOS unbilled */}
@@ -874,12 +874,12 @@ function FinancialTab({ c }) {
             {/* Exposure breakdown */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
               {[
-                { label: 'Xero outstanding', val: gbp(credit?.xero_outstanding ?? 0), color: '#EEE' },
-                { label: `Unbilled (${credit?.moovos_unbilled_count ?? 0} charges)`, val: gbp(credit?.moovos_unbilled ?? 0), color: '#EEE' },
+                { label: 'Xero outstanding', val: gbp(credit?.xero_outstanding ?? 0), color: '#1E293B' },
+                { label: `Unbilled (${credit?.moovos_unbilled_count ?? 0} charges)`, val: gbp(credit?.moovos_unbilled ?? 0), color: '#1E293B' },
                 { label: 'Total exposure',   val: gbp(credit?.total_exposure ?? 0),   color: barCol, bold: true },
-                { label: 'Credit limit',     val: gbp(credit?.credit_limit ?? 0),     color: '#AAA' },
+                { label: 'Credit limit',     val: gbp(credit?.credit_limit ?? 0),     color: '#64748B' },
               ].map(({ label, val, color, bold }) => (
-                <div key={label} style={{ background: 'rgba(0,0,0,0.03)', borderRadius: 8, padding: '10px 12px' }}>
+                <div key={label} style={{ background: '#FFFFFF', borderRadius: 8, padding: '10px 12px', border: '1px solid rgba(0,200,83,0.18)', boxShadow: '0 0 10px rgba(0,200,83,0.06)' }}>
                   <div style={{ fontSize: 11, color: '#64748B', marginBottom: 4 }}>{label}</div>
                   <div style={{ fontSize: 15, fontWeight: bold ? 700 : 600, color }}>{val}</div>
                 </div>
@@ -937,13 +937,13 @@ function FinancialTab({ c }) {
             {/* On-stop reason form */}
             {showStopForm && (
               <div style={{ marginTop: 12, background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, padding: 14 }}>
-                <div style={{ fontSize: 12, color: '#AAA', marginBottom: 8 }}>Reason for placing on stop:</div>
+                <div style={{ fontSize: 12, color: '#64748B', marginBottom: 8 }}>Reason for placing on stop:</div>
                 <textarea
                   value={stopReason}
                   onChange={e => setStopReason(e.target.value)}
                   placeholder="e.g. Credit limit exceeded — awaiting payment of overdue invoices"
                   rows={2}
-                  style={{ width: '100%', background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 6, color: '#EEE', fontSize: 12, padding: '8px 10px', resize: 'vertical', boxSizing: 'border-box' }}
+                  style={{ width: '100%', background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 6, color: '#1E293B', fontSize: 12, padding: '8px 10px', resize: 'vertical', boxSizing: 'border-box' }}
                 />
                 <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
                   <button onClick={() => { setShowStopForm(false); setStopReason(''); }} style={{ background: 'none', border: '1px solid rgba(0,0,0,0.08)', color: '#64748B', borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: 'pointer' }}>Cancel</button>
@@ -999,10 +999,10 @@ function FinancialTab({ c }) {
                   <tr key={inv.id}>
                     <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{inv.number || '—'}</td>
                     <td style={{ fontSize: 12 }}>{inv.date || '—'}</td>
-                    <td style={{ fontSize: 12, color: inv.is_overdue ? '#EF4444' : '#AAA' }}>
+                    <td style={{ fontSize: 12, color: inv.is_overdue ? '#EF4444' : '#64748B' }}>
                       {inv.due_date || '—'}
                     </td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: inv.is_overdue ? '#EF4444' : '#EEE' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: inv.is_overdue ? '#EF4444' : '#1E293B' }}>
                       {gbp(inv.amount_due)}
                     </td>
                     <td>
@@ -1022,9 +1022,9 @@ function FinancialTab({ c }) {
       {/* ── Payment terms ── */}
       <div className="moov-card" style={{ padding: 16 }}>
         <div style={{ display: 'flex', gap: 24, fontSize: 12 }}>
-          <span><span style={{ color: '#64748B' }}>Payment terms: </span><span style={{ color: '#CCC', fontWeight: 600 }}>{c.payment_terms_days} days</span></span>
-          <span><span style={{ color: '#64748B' }}>Billing: </span><span style={{ color: '#CCC', fontWeight: 600 }}>{c.billing_cycle || '—'}</span></span>
-          {c.bond_amount_held > 0 && <span><span style={{ color: '#64748B' }}>Bond held: </span><span style={{ color: '#CCC', fontWeight: 600 }}>{gbp(c.bond_amount_held)}</span></span>}
+          <span><span style={{ color: '#64748B' }}>Payment terms: </span><span style={{ color: '#334155', fontWeight: 600 }}>{c.payment_terms_days} days</span></span>
+          <span><span style={{ color: '#64748B' }}>Billing: </span><span style={{ color: '#334155', fontWeight: 600 }}>{c.billing_cycle || '—'}</span></span>
+          {c.bond_amount_held > 0 && <span><span style={{ color: '#64748B' }}>Bond held: </span><span style={{ color: '#334155', fontWeight: 600 }}>{gbp(c.bond_amount_held)}</span></span>}
         </div>
       </div>
     </div>
@@ -1058,7 +1058,7 @@ function CustomerCommsTab({ customerId }) {
   }, [customerId]);
 
   if (loading) return (
-    <div className="moov-card" style={{ padding: 32, textAlign: 'center', color: '#777' }}>
+    <div className="moov-card" style={{ padding: 32, textAlign: 'center', color: '#475569' }}>
       <MessageSquare size={24} style={{ margin: '0 auto 10px', display: 'block', opacity: 0.4 }} />
       Loading correspondence…
     </div>
@@ -1071,7 +1071,7 @@ function CustomerCommsTab({ customerId }) {
   );
 
   if (!items.length) return (
-    <div className="moov-card" style={{ padding: 32, textAlign: 'center', color: '#777' }}>
+    <div className="moov-card" style={{ padding: 32, textAlign: 'center', color: '#475569' }}>
       <MessageSquare size={32} style={{ margin: '0 auto 12px', display: 'block', opacity: 0.3 }} />
       No correspondence yet.
     </div>
@@ -1113,7 +1113,7 @@ function CustomerCommsTab({ customerId }) {
                 </span>
               )}
               {item.source === 'query_email' && item.query_type && (
-                <span style={{ fontSize: 10, color: '#777', flexShrink: 0, textTransform: 'capitalize' }}>
+                <span style={{ fontSize: 10, color: '#475569', flexShrink: 0, textTransform: 'capitalize' }}>
                   {item.query_type.replace(/_/g,' ')}
                 </span>
               )}
@@ -1133,11 +1133,11 @@ function CustomerCommsTab({ customerId }) {
               <div style={{ padding: '0 14px 14px', borderTop: '1px solid rgba(0,0,0,0.06)' }}>
                 {item.from_address && (
                   <div style={{ fontSize: 11, color: '#64748B', padding: '8px 0 6px' }}>
-                    From: <span style={{ color: '#999' }}>{item.from_address}</span>
-                    {item.to_address && <> · To: <span style={{ color: '#999' }}>{item.to_address}</span></>}
+                    From: <span style={{ color: '#64748B' }}>{item.from_address}</span>
+                    {item.to_address && <> · To: <span style={{ color: '#64748B' }}>{item.to_address}</span></>}
                   </div>
                 )}
-                <pre style={{ margin: 0, fontSize: 12, color: '#CCC', lineHeight: 1.6,
+                <pre style={{ margin: 0, fontSize: 12, color: '#334155', lineHeight: 1.6,
                   whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit' }}>
                   {item.body_text || '(no body)'}
                 </pre>
@@ -1335,7 +1335,7 @@ export default function CustomerRecord() {
             borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer',
             background: showDebug ? 'rgba(245,158,11,0.15)' : 'rgba(0,0,0,0.04)',
             border: `1px solid ${showDebug ? 'rgba(245,158,11,0.45)' : 'rgba(0,0,0,0.08)'}`,
-            color: showDebug ? '#F59E0B' : '#555' }}>
+            color: showDebug ? '#F59E0B' : '#475569' }}>
           <Bug size={11} /> {showDebug ? 'Hide debug' : 'Debug data'}
         </button>
       </div>
@@ -1386,8 +1386,8 @@ export default function CustomerRecord() {
           if (v === null || v === undefined) return <span style={{ color: '#64748B' }}>null</span>;
           if (typeof v === 'boolean') return <span style={{ color: v ? '#00C853' : '#EF4444', fontWeight: 700 }}>{String(v)}</span>;
           if (typeof v === 'object') return <span style={{ color: '#64748B', fontFamily: 'monospace', fontSize: 10 }}>{JSON.stringify(v)}</span>;
-          if (String(v).length > 80) return <span style={{ color: '#CCC', wordBreak: 'break-all', fontFamily: 'monospace', fontSize: 11 }}>{String(v)}</span>;
-          return <span style={{ color: '#CCC', fontFamily: 'monospace', fontSize: 11 }}>{String(v)}</span>;
+          if (String(v).length > 80) return <span style={{ color: '#334155', wordBreak: 'break-all', fontFamily: 'monospace', fontSize: 11 }}>{String(v)}</span>;
+          return <span style={{ color: '#334155', fontFamily: 'monospace', fontSize: 11 }}>{String(v)}</span>;
         };
 
         return (
@@ -1405,8 +1405,8 @@ export default function CustomerRecord() {
                   style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px',
                     cursor: 'pointer', background: 'rgba(0,0,0,0.02)' }}>
                   {debugSection.has(sec.key)
-                    ? <ChevronDown size={12} color="#555" />
-                    : <ChevronRight size={12} color="#555" />}
+                    ? <ChevronDown size={12} color="#475569" />
+                    : <ChevronRight size={12} color="#475569" />}
                   <span style={{ fontSize: 12, fontWeight: 700, color: sec.color }}>{sec.label}</span>
                 </div>
                 {debugSection.has(sec.key) && (
