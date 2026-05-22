@@ -4,7 +4,6 @@ import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import KatanaWidget from '../katana/KatanaWidget';
 
-// Routes that render full-height (no padding, no scroll on main)
 const FULL_HEIGHT_ROUTES = ['/queries'];
 
 export default function AppShell() {
@@ -13,7 +12,6 @@ export default function AppShell() {
 
   const isFullHeight = FULL_HEIGHT_ROUTES.some(r => location.pathname.startsWith(r));
 
-  // Reset scroll position on every route change
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
   }, [location.pathname]);
@@ -25,27 +23,17 @@ export default function AppShell() {
         <TopBar />
 
         {/*
-          main is a fixed flex column that fills the remaining height.
-          It never changes style — the children handle their own layout.
-          This avoids the browser inconsistency where a flex child using
-          height:100% against a flex-1 parent resolves to 0.
+          position:relative so that full-height pages can use
+          position:absolute inset:0 to fill exactly this area.
+          No conditional styles — same node, same style, always.
         */}
-        <main style={{
-          flex: 1,
-          minHeight: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}>
+        <main style={{ position: 'relative', flex: 1, minHeight: 0, overflow: 'hidden' }}>
           {isFullHeight ? (
-            // Full-height pages (queries inbox + ticket detail):
-            // render directly so they can fill with flex:1 / minHeight:0
             <Outlet />
           ) : (
-            // Normal pages: scrollable padded wrapper
             <div
               ref={scrollRef}
-              style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 24 }}
+              style={{ position: 'absolute', inset: 0, overflowY: 'auto', padding: 24 }}
             >
               <Outlet />
             </div>
