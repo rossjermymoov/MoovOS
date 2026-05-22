@@ -416,7 +416,7 @@ export default function CustomerSimPage() {
                         display: 'inline-flex', alignItems: 'center', gap: 7,
                         padding: '9px 20px', borderRadius: 9,
                         background: sending || !replyText.trim() ? '#CBD5E1' : p.color,
-                        color: '#fff', border: 'none',
+                        color: '#0F172A', border: 'none',
                         fontSize: 13, fontWeight: 700,
                         cursor: sending || !replyText.trim() ? 'not-allowed' : 'pointer',
                         transition: 'background 0.15s',

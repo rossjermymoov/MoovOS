@@ -132,7 +132,7 @@ export default function CustomerList() {
                 style={{
                   padding: '7px 14px', borderRadius: 9999, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none',
                   background: filters.has_bond === 'true' ? 'rgba(255,193,7,0.2)' : 'rgba(0,0,0,0.06)',
-                  color:      filters.has_bond === 'true' ? '#FFC107' : '#64748B',
+                  color:      filters.has_bond === 'true' ? '#D97706' : '#64748B',
                   outline:    filters.has_bond === 'true' ? '1px solid #FFC107' : 'none',
                   display: 'flex', alignItems: 'center', gap: 5,
                 }}>
@@ -188,7 +188,7 @@ export default function CustomerList() {
                         {hasBond && (
                           <span title={`Bond held: ${gbp(c.bond_amount_held)}`}
                             style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18, borderRadius: '50%', background: 'rgba(255,193,7,0.2)', border: '1px solid #FFC107' }}>
-                            <ShieldCheck size={10} color="#FFC107" />
+                            <ShieldCheck size={10} color="#D97706" />
                           </span>
                         )}
                       </div>

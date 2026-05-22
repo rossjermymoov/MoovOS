@@ -168,7 +168,7 @@ const TRACK_STATUS = {
   collected:           { label: 'Collected',         color: '#2196F3', bg: 'rgba(33,150,243,0.12)',   icon: Package },
   at_depot:            { label: 'At Hub',             color: '#5C6BC0', bg: 'rgba(92,107,192,0.12)',   icon: Package },
   in_transit:          { label: 'In Transit',         color: '#7B2FBE', bg: 'rgba(123,47,190,0.12)',   icon: Truck },
-  out_for_delivery:    { label: 'Out for Delivery',   color: '#FFC107', bg: 'rgba(255,193,7,0.12)',    icon: Truck },
+  out_for_delivery:    { label: 'Out for Delivery',   color: '#D97706', bg: 'rgba(255,193,7,0.12)',    icon: Truck },
   failed_delivery:     { label: 'Failed Attempt',     color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
   delivered:           { label: 'Delivered',          color: '#00C853', bg: 'rgba(0,200,83,0.12)',     icon: PackageCheck },
   on_hold:             { label: 'On Hold',            color: '#FF9800', bg: 'rgba(255,152,0,0.12)',    icon: Clock },

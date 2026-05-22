@@ -28,9 +28,9 @@ import ServiceCodeMappingsPage from './pages/reconciliation/ServiceCodeMappingsP
 
 // Placeholder pages for other sections (to be built)
 const Placeholder = ({ name }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 300, color: '#AAAAAA' }}>
+  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 300, color: '#64748B' }}>
     <div style={{ fontSize: 40, marginBottom: 12 }}>🚧</div>
-    <div style={{ fontSize: 18, fontWeight: 700, color: '#fff', marginBottom: 6 }}>{name}</div>
+    <div style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', marginBottom: 6 }}>{name}</div>
     <div style={{ fontSize: 13 }}>This section is coming soon</div>
   </div>
 );

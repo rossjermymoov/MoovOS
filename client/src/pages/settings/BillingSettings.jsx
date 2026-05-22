@@ -96,7 +96,7 @@ export default function BillingSettings() {
 
   const inputStyle = {
     background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.08)',
-    borderRadius: 8, color: '#fff', fontSize: 13, padding: '8px 12px',
+    borderRadius: 8, color: '#0F172A', fontSize: 13, padding: '8px 12px',
     outline: 'none', width: '100%',
   };
   const labelStyle = { fontSize: 12, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6, display: 'block' };
@@ -107,7 +107,7 @@ export default function BillingSettings() {
       <SettingsNav />
 
       <div style={{ marginBottom: 24 }}>
-        <h2 style={{ color: '#fff', fontWeight: 700, fontSize: 18, margin: 0 }}>Billing Settings</h2>
+        <h2 style={{ color: '#0F172A', fontWeight: 700, fontSize: 18, margin: 0 }}>Billing Settings</h2>
         <p style={{ color: '#64748B', fontSize: 13, margin: '6px 0 0' }}>
           Configure when verified charges are automatically moved to <em>Awaiting Reconciliation</em>.
         </p>
@@ -117,7 +117,7 @@ export default function BillingSettings() {
       <div style={sectionStyle}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ color: '#fff', fontWeight: 600, fontSize: 14 }}>Automatic billing run</div>
+            <div style={{ color: '#0F172A', fontWeight: 600, fontSize: 14 }}>Automatic billing run</div>
             <div style={{ color: '#64748B', fontSize: 12, marginTop: 3 }}>When enabled, the server runs the billing cycle on the schedule below.</div>
           </div>
           <button
@@ -136,7 +136,7 @@ export default function BillingSettings() {
 
       {/* Weekly / fortnightly schedule */}
       <div style={sectionStyle}>
-        <div style={{ color: '#fff', fontWeight: 600, fontSize: 14, marginBottom: 16 }}>Weekly &amp; fortnightly billing</div>
+        <div style={{ color: '#0F172A', fontWeight: 600, fontSize: 14, marginBottom: 16 }}>Weekly &amp; fortnightly billing</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <div>
             <label style={labelStyle}>Billing day</label>
@@ -170,7 +170,7 @@ export default function BillingSettings() {
 
       {/* Monthly schedule */}
       <div style={sectionStyle}>
-        <div style={{ color: '#fff', fontWeight: 600, fontSize: 14, marginBottom: 16 }}>Monthly billing</div>
+        <div style={{ color: '#0F172A', fontWeight: 600, fontSize: 14, marginBottom: 16 }}>Monthly billing</div>
         <div style={{ maxWidth: 200 }}>
           <label style={labelStyle}>Day of month</label>
           <select value={form.monthly_billing_date} onChange={e => field('monthly_billing_date', parseInt(e.target.value))} style={inputStyle}>
@@ -185,7 +185,7 @@ export default function BillingSettings() {
       <div style={sectionStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
           <BarChart2 size={14} color="#A5B4FC" />
-          <div style={{ color: '#fff', fontWeight: 600, fontSize: 14 }}>Volume mix refresh</div>
+          <div style={{ color: '#0F172A', fontWeight: 600, fontSize: 14 }}>Volume mix refresh</div>
         </div>
         <div style={{ color: '#64748B', fontSize: 12, marginBottom: 16, lineHeight: 1.55 }}>
           Controls when rate card projection volume mixes are automatically updated from actual billing data.

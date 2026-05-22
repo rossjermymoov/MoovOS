@@ -83,7 +83,7 @@ export default function TopBar({ userName = 'Ross' }) {
           borderRadius: '50%',
           background: 'linear-gradient(135deg, #00C853, #7B2FBE)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: 700, fontSize: 13, color: '#fff', cursor: 'pointer',
+          fontWeight: 700, fontSize: 13, color: '#0F172A', cursor: 'pointer',
         }}
       >
         {userName.charAt(0).toUpperCase()}

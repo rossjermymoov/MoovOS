@@ -114,13 +114,13 @@ function Field({ label, error, required, children }) {
 const inputStyle = (error) => ({
   width: '100%', boxSizing: 'border-box',
   background: '#FFFFFF', border: `1px solid ${error ? '#E91E8C' : 'rgba(0,0,0,0.08)'}`,
-  borderRadius: 9999, padding: '10px 18px', color: '#fff', fontSize: 14, outline: 'none',
+  borderRadius: 9999, padding: '10px 18px', color: '#0F172A', fontSize: 14, outline: 'none',
 });
 
 const selectStyle = {
   width: '100%', boxSizing: 'border-box',
   background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.08)',
-  borderRadius: 9999, padding: '10px 18px', color: '#fff', fontSize: 14, outline: 'none',
+  borderRadius: 9999, padding: '10px 18px', color: '#0F172A', fontSize: 14, outline: 'none',
 };
 
 const grid2 = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 };
@@ -256,7 +256,7 @@ function StepAccount({ form, set, errors }) {
               padding: '12px 16px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
               background: form.tier === t.value ? 'rgba(123,47,190,0.2)' : 'rgba(0,0,0,0.03)',
               border: form.tier === t.value ? '1px solid #7B2FBE' : '1px solid rgba(0,0,0,0.08)',
-              color: '#fff',
+              color: '#0F172A',
             }}>
               <div style={{ fontSize: 13, fontWeight: 600 }}>{t.label}</div>
               <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{t.desc}</div>
@@ -393,7 +393,7 @@ function SuccessScreen({ customer, navigate }) {
       <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(0,200,83,0.15)', border: '2px solid #00C853', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
         <Check size={28} color="#00C853" />
       </div>
-      <h2 style={{ fontSize: 22, fontWeight: 700, color: '#fff', marginBottom: 8 }}>Customer Created</h2>
+      <h2 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>Customer Created</h2>
       <p style={{ color: '#64748B', marginBottom: 4 }}>{customer.business_name}</p>
       <p style={{ color: '#00C853', fontWeight: 600, marginBottom: 28 }}>{customer.account_number}</p>
       <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
@@ -486,7 +486,7 @@ export default function CustomerNew() {
           <ArrowLeft size={14} /> Customers
         </button>
         <span style={{ color: '#475569' }}>/</span>
-        <span style={{ fontSize: 13, color: '#fff' }}>Add Customer</span>
+        <span style={{ fontSize: 13, color: '#0F172A' }}>Add Customer</span>
       </div>
 
       <h1 style={{ fontSize: 24, fontWeight: 700, color: '#00C853', marginBottom: 24 }}>Add Customer</h1>

@@ -38,7 +38,7 @@ const gbp = (n) => `£${parseFloat(n || 0).toLocaleString('en-GB', { minimumFrac
 // ─── Shared field components ─────────────────────────────────
 const inp = (extra = {}) => ({
   background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
-  borderRadius: 9999, padding: '5px 14px', color: '#fff', fontSize: 12,
+  borderRadius: 9999, padding: '5px 14px', color: '#0F172A', fontSize: 12,
   outline: 'none', width: '100%', boxSizing: 'border-box', ...extra,
 });
 const sel = () => inp({ cursor: 'pointer' });
@@ -49,7 +49,7 @@ function Row({ label, value, edit, editNode }) {
       <span style={{ fontSize: 12, color: '#64748B', flexShrink: 0, whiteSpace: 'nowrap', minWidth: 110 }}>{label}</span>
       {edit
         ? <div style={{ width: 180, flexShrink: 0 }}>{editNode}</div>
-        : <span style={{ fontSize: 12, color: '#fff', textAlign: 'right', wordBreak: 'break-word' }}>{value || '—'}</span>}
+        : <span style={{ fontSize: 12, color: '#0F172A', textAlign: 'right', wordBreak: 'break-word' }}>{value || '—'}</span>}
     </div>
   );
 }
@@ -330,7 +330,7 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
                 </select>
               } />
             <Row label="Manual Billing" value={c.manual_billing ? (
-                <span style={{ color: '#FFC107', fontWeight: 600, fontSize: 12 }}>● Manual — no webhook expected</span>
+                <span style={{ color: '#D97706', fontWeight: 600, fontSize: 12 }}>● Manual — no webhook expected</span>
               ) : (
                 <span style={{ color: '#00C853', fontWeight: 600, fontSize: 12 }}>● Platform — webhooks active</span>
               )} edit={edit}
@@ -338,8 +338,8 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
                   <input type="checkbox" checked={!!form.manual_billing}
                     onChange={e => set('manual_billing', e.target.checked)}
-                    style={{ width: 16, height: 16, accentColor: '#FFC107' }} />
-                  <span style={{ fontSize: 13, color: form.manual_billing ? '#FFC107' : '#64748B' }}>
+                    style={{ width: 16, height: 16, accentColor: '#D97706' }} />
+                  <span style={{ fontSize: 13, color: form.manual_billing ? '#D97706' : '#64748B' }}>
                     {form.manual_billing ? 'Manual — suppress aged alerts' : 'Platform — expect webhooks'}
                   </span>
                 </label>
@@ -428,7 +428,7 @@ function ContactsTab({ customerId, contacts = [], onRefresh }) {
 
   const startEdit = (ct) => { setEditingId(ct.id); setEditForm({ full_name: ct.full_name, job_title: ct.job_title || '', phone_number: ct.phone_number || '', email_address: ct.email_address, is_main_contact: ct.is_main_contact, is_finance_contact: ct.is_finance_contact }); };
 
-  const inputStyle = { background: '#1A1A2E', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 6, color: '#fff', fontSize: 13, padding: '5px 10px', width: '100%' };
+  const inputStyle = { background: '#1A1A2E', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 6, color: '#0F172A', fontSize: 13, padding: '5px 10px', width: '100%' };
   const flagBtn = (active, label) => ({
     fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
     background: active ? 'rgba(0,200,83,0.2)' : 'rgba(0,0,0,0.06)',
@@ -1035,7 +1035,7 @@ function FinancialTab({ c }) {
 const DIR_CFG = {
   inbound_customer:  { label: 'From Customer',  color: '#2979FF', bg: 'rgba(41,121,255,0.10)' },
   outbound_customer: { label: 'To Customer',    color: '#00C853', bg: 'rgba(0,200,83,0.10)'   },
-  inbound_courier:   { label: 'From Courier',   color: '#FFC107', bg: 'rgba(255,193,7,0.10)'  },
+  inbound_courier:   { label: 'From Courier',   color: '#D97706', bg: 'rgba(255,193,7,0.10)'  },
   outbound_courier:  { label: 'To Courier',     color: '#FF9800', bg: 'rgba(255,152,0,0.10)'  },
   internal_note:     { label: 'Internal Note',  color: '#9E9E9E', bg: 'rgba(158,158,158,0.10)'},
   inbound:           { label: 'Inbound',        color: '#2979FF', bg: 'rgba(41,121,255,0.10)' },
@@ -1119,7 +1119,7 @@ function CustomerCommsTab({ customerId }) {
               )}
 
               {/* Subject */}
-              <span style={{ flex: 1, fontSize: 13, color: '#DDD', fontWeight: 600,
+              <span style={{ flex: 1, fontSize: 13, color: '#334155', fontWeight: 600,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {item.subject || '(no subject)'}
               </span>
@@ -1238,9 +1238,9 @@ export default function CustomerRecord() {
 
       {parseFloat(c.bond_amount_held) > 0 && (
         <div style={{ background: 'rgba(255,193,7,0.08)', border: '1.5px solid #FFC107', borderRadius: 12, padding: '14px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <ShieldCheck size={20} style={{ color: '#FFC107', flexShrink: 0 }} />
+          <ShieldCheck size={20} style={{ color: '#D97706', flexShrink: 0 }} />
           <div style={{ flex: 1 }}>
-            <span style={{ color: '#FFC107', fontWeight: 700, fontSize: 15 }}>Bond Held</span>
+            <span style={{ color: '#D97706', fontWeight: 700, fontSize: 15 }}>Bond Held</span>
             <span style={{ color: '#64748B', fontSize: 13, marginLeft: 12 }}>
               Amount: {gbp(c.bond_amount_held)}
             </span>
@@ -1250,8 +1250,8 @@ export default function CustomerRecord() {
 
       {active_volume_alert && (
         <div style={{ background: 'rgba(255,193,7,0.1)', border: '1px solid #FFC107', borderRadius: 12, padding: '12px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <AlertTriangle size={16} style={{ color: '#FFC107' }} />
-          <span style={{ color: '#FFC107', fontSize: 13 }}>
+          <AlertTriangle size={16} style={{ color: '#D97706' }} />
+          <span style={{ color: '#D97706', fontSize: 13 }}>
             Volume alert: {active_volume_alert.drop_percentage?.toFixed(0)}% below 13-week baseline
           </span>
         </div>
@@ -1481,23 +1481,23 @@ export default function CustomerRecord() {
             </div>
             <p style={{ color: '#64748B', fontSize: 13, marginBottom: 20, lineHeight: 1.6 }}>
               This will permanently delete this customer and all associated contacts, rates, and communications.
-              This action <strong style={{ color: '#fff' }}>cannot be undone</strong>.
+              This action <strong style={{ color: '#0F172A' }}>cannot be undone</strong>.
             </p>
             <label style={{ fontSize: 12, color: '#64748B', display: 'block', marginBottom: 6 }}>
-              Type <strong style={{ color: '#fff', fontFamily: 'monospace' }}>{c.account_number}</strong> to confirm
+              Type <strong style={{ color: '#0F172A', fontFamily: 'monospace' }}>{c.account_number}</strong> to confirm
             </label>
             <input
               value={deleteConfirm}
               onChange={e => setDeleteConfirm(e.target.value)}
               placeholder={c.account_number}
-              style={{ width: '100%', background: '#FFFFFF', border: '1px solid rgba(233,30,140,0.4)', borderRadius: 6, padding: '9px 12px', color: '#fff', fontSize: 13, fontFamily: 'monospace', boxSizing: 'border-box', outline: 'none' }}
+              style={{ width: '100%', background: '#FFFFFF', border: '1px solid rgba(233,30,140,0.4)', borderRadius: 6, padding: '9px 12px', color: '#0F172A', fontSize: 13, fontFamily: 'monospace', boxSizing: 'border-box', outline: 'none' }}
             />
             <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
               <button className="btn-ghost" onClick={() => { setDeleteModal(false); setDeleteConfirm(''); }}>Cancel</button>
               <button
                 disabled={deleteConfirm !== c.account_number || deleteCustomer.isPending}
                 onClick={() => deleteCustomer.mutate()}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 6, background: deleteConfirm === c.account_number ? '#E91E8C' : 'rgba(233,30,140,0.2)', border: 'none', color: '#fff', fontSize: 13, fontWeight: 700, cursor: deleteConfirm === c.account_number ? 'pointer' : 'not-allowed' }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 6, background: deleteConfirm === c.account_number ? '#E91E8C' : 'rgba(233,30,140,0.2)', border: 'none', color: '#0F172A', fontSize: 13, fontWeight: 700, cursor: deleteConfirm === c.account_number ? 'pointer' : 'not-allowed' }}
               >
                 <Trash2 size={13} /> {deleteCustomer.isPending ? 'Deleting…' : 'Delete Customer'}
               </button>
@@ -1523,7 +1523,7 @@ export default function CustomerRecord() {
             </p>
             <textarea value={onStopInput} onChange={e => setOnStopInput(e.target.value)}
               placeholder={onStopModal === 'apply' ? 'Reason for placing On Stop…' : 'Reason for removal…'}
-              style={{ width: '100%', minHeight: 100, background: '#F1F5F9', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 8, padding: 12, color: '#fff', fontSize: 14, resize: 'vertical', fontFamily: 'inherit' }}
+              style={{ width: '100%', minHeight: 100, background: '#F1F5F9', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 8, padding: 12, color: '#0F172A', fontSize: 14, resize: 'vertical', fontFamily: 'inherit' }}
             />
             <div style={{ display: 'flex', gap: 10, marginTop: 16, justifyContent: 'flex-end' }}>
               <button className="btn-ghost" onClick={() => { setOnStopModal(null); setOnStopInput(''); }}>Cancel</button>

@@ -84,12 +84,12 @@ const col = {
 
 const inp = (extra = {}) => ({
   background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.10)',
-  borderRadius: 6, color: '#fff', fontSize: 13, padding: '6px 10px', ...extra,
+  borderRadius: 6, color: '#0F172A', fontSize: 13, padding: '6px 10px', ...extra,
 });
 
 const sel = (extra = {}) => ({
   background: 'rgba(30,30,40,0.95)', border: '1px solid rgba(0,0,0,0.10)',
-  borderRadius: 6, color: '#fff', fontSize: 13, padding: '6px 10px', ...extra,
+  borderRadius: 6, color: '#0F172A', fontSize: 13, padding: '6px 10px', ...extra,
 });
 
 // ── Chip input ─────────────────────────────────────────────────────────────────
@@ -107,7 +107,7 @@ function ChipInput({ value, onChange, placeholder }) {
   return (
     <div style={{ border: '1px solid rgba(0,0,0,0.10)', borderRadius: 6, background: 'rgba(0,0,0,0.06)', padding: '4px 8px', minHeight: 36, display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
       {items.map((item, i) => (
-        <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(123,47,190,0.3)', border: '1px solid rgba(123,47,190,0.5)', borderRadius: 9999, padding: '2px 8px', fontSize: 12, color: '#fff', fontWeight: 600 }}>
+        <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(123,47,190,0.3)', border: '1px solid rgba(123,47,190,0.5)', borderRadius: 9999, padding: '2px 8px', fontSize: 12, color: '#0F172A', fontWeight: 600 }}>
           {item}
           <button onClick={() => onChange(items.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: 0, display: 'flex' }}><X size={10} /></button>
         </span>
@@ -118,7 +118,7 @@ function ChipInput({ value, onChange, placeholder }) {
         onKeyDown={e => { if ((e.key === 'Enter' || e.key === ',') && draft.trim()) { e.preventDefault(); add(draft); } if (e.key === 'Backspace' && !draft && items.length) onChange(items.slice(0, -1)); }}
         onBlur={() => { if (draft.trim()) add(draft); }}
         placeholder={items.length ? '' : (placeholder || 'Type and press Enter…')}
-        style={{ background: 'none', border: 'none', color: '#fff', fontSize: 12, outline: 'none', flex: 1, minWidth: 100, padding: '2px 0' }}
+        style={{ background: 'none', border: 'none', color: '#0F172A', fontSize: 12, outline: 'none', flex: 1, minWidth: 100, padding: '2px 0' }}
       />
     </div>
   );
@@ -281,7 +281,7 @@ function RulesPanel({ surcharge, courierId }) {
 
                   {/* Row 1 — name + logic + actions */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: svcCodes.length || filters.length ? 7 : 0 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', flex: 1 }}>{rule.name}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', flex: 1 }}>{rule.name}</span>
                     <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: rule.logic === 'OR' ? 'rgba(245,158,11,0.18)' : 'rgba(123,47,190,0.18)', color: rule.logic === 'OR' ? '#F59E0B' : '#C4B5FD', flexShrink: 0 }}>{rule.logic || 'AND'}</span>
                     <button type="button" onClick={() => setEditingRule(rule.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: '2px 4px', fontSize: 12, flexShrink: 0 }}>✏️</button>
                     <button type="button" onClick={() => deleteRule.mutate(rule.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#E91E8C', padding: '2px 4px', display: 'flex', flexShrink: 0 }}><Trash2 size={12} /></button>
@@ -495,7 +495,7 @@ export default function SurchargesTab({ courierId, courierCode }) {
                       <input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} onClick={e => e.stopPropagation()} style={{ ...inp(), width: 220 }} />
                     ) : (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{s.name}</span>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>{s.name}</span>
                         {(s.rules || []).length > 0 && (
                           <span title={`${s.rules.length} rule${s.rules.length > 1 ? 's' : ''} — click to view`} style={{
                             display: 'inline-flex', alignItems: 'center', gap: 3,

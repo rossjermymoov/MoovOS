@@ -85,7 +85,7 @@ function StatCard({ label, value, color = '#64748B', tooltip, bg = 'rgba(0,0,0,0
           borderRadius: 8, padding: '10px 14px', minWidth: 220, boxShadow: '0 8px 24px rgba(0,0,0,0.6)' }}>
           <div style={{ fontSize: 11, color: '#64748B', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>In Onboarding</div>
           {tooltip.map(t => (
-            <div key={t.id} style={{ fontSize: 12, color: '#DDD', padding: '3px 0', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+            <div key={t.id} style={{ fontSize: 12, color: '#334155', padding: '3px 0', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
               <span style={{ fontWeight: 700 }}>{t.company_name}</span>
               <span style={{ color: '#64748B', marginLeft: 6 }}>{t.contact_name}</span>
             </div>
@@ -106,7 +106,7 @@ const COURIER_LABELS = { DPD: 'DPD', DHL: 'DHL', EVRI: 'Evri', UPS: 'UPS', ROYAL
 const inputStyle = {
   width: '100%', boxSizing: 'border-box',
   background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.10)',
-  borderRadius: 7, padding: '8px 11px', color: '#fff', fontSize: 13, outline: 'none',
+  borderRadius: 7, padding: '8px 11px', color: '#0F172A', fontSize: 13, outline: 'none',
 };
 const selectStyle = { ...inputStyle };
 
@@ -228,7 +228,7 @@ function CreateWizard({ onClose, onCreated }) {
         {/* Header */}
         <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid rgba(0,0,0,0.07)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-            <div style={{ fontSize: 17, fontWeight: 700, color: '#fff' }}>New Rate Card</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: '#0F172A' }}>New Rate Card</div>
             <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: 4 }}>
               <X size={18} />
             </button>
@@ -342,7 +342,7 @@ function CreateWizard({ onClose, onCreated }) {
                                 background: sel ? 'rgba(99,102,241,0.1)' : 'rgba(0,0,0,0.03)',
                                 borderRadius: 9, padding: '11px 14px', cursor: 'pointer',
                               }}>
-                              <div style={{ fontSize: 13, fontWeight: 700, color: sel ? '#A5B4FC' : '#DDD', marginBottom: 3 }}>{t.name}</div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: sel ? '#A5B4FC' : '#334155', marginBottom: 3 }}>{t.name}</div>
                               <div style={{ fontSize: 11, color: '#64748B' }}>
                                 {(t.rates || []).filter(r => !r.is_international).length} domestic ·&nbsp;
                                 {(t.rates || []).filter(r => r.is_international).length} intl rates
@@ -419,7 +419,7 @@ function ApprovalBanner({ approvals, onReview }) {
             <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px',
               borderBottom: '1px solid rgba(0,0,0,0.04)', background: 'rgba(251,146,60,0.04)' }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, color: '#DDD', fontWeight: 700 }}>{a.company_name}</div>
+                <div style={{ fontSize: 13, color: '#334155', fontWeight: 700 }}>{a.company_name}</div>
                 <div style={{ fontSize: 11, color: '#64748B' }}>
                   {a.courier_code} · submitted by {a.requested_by_name} · {fmtD(a.requested_at)}
                 </div>
@@ -461,11 +461,11 @@ function ReviewModal({ approval, onClose, onDone, staffList }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div style={{ background: '#14152E', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 14, width: '100%', maxWidth: 460, padding: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>Review Rate Card</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#0F172A' }}>Review Rate Card</div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer' }}><X size={18} /></button>
         </div>
         <div style={{ marginBottom: 16, padding: '12px 14px', background: 'rgba(0,0,0,0.03)', borderRadius: 8 }}>
-          <div style={{ fontSize: 14, color: '#DDD', fontWeight: 700 }}>{approval.company_name}</div>
+          <div style={{ fontSize: 14, color: '#334155', fontWeight: 700 }}>{approval.company_name}</div>
           <div style={{ fontSize: 12, color: '#64748B', marginTop: 3 }}>
             {approval.courier_code} · submitted by {approval.requested_by_name}
             {approval.projected_weekly_revenue ? ` · ${gbp(approval.projected_weekly_revenue)}/wk` : ''}
@@ -571,7 +571,7 @@ function ProspectRow({ prospect, staffList, navigate }) {
               <div key={key}>
                 <label style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>{label}</label>
                 <input value={editForm[key] ?? ''} onChange={e => setEditForm(p => ({ ...p, [key]: e.target.value }))}
-                  style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(0,0,0,0.07)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 7, padding: '8px 11px', color: '#fff', fontSize: 13, outline: 'none' }} />
+                  style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(0,0,0,0.07)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 7, padding: '8px 11px', color: '#0F172A', fontSize: 13, outline: 'none' }} />
               </div>
             ))}
           </div>
@@ -684,7 +684,7 @@ function ProspectRow({ prospect, staffList, navigate }) {
                   }}>
                     {/* RC details */}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: '#DDD', marginBottom: 4 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#334155', marginBottom: 4 }}>
                         {rc.courier_name || rc.courier_code}
                         {rc.template_name && (
                           <span style={{ fontSize: 11, color: '#64748B', fontWeight: 400, marginLeft: 8 }}>({rc.template_name})</span>
@@ -793,7 +793,7 @@ export default function PricingPage() {
       {/* Title */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#fff' }}>Pricing &amp; Rate Cards</h1>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#0F172A' }}>Pricing &amp; Rate Cards</h1>
           <div style={{ fontSize: 13, color: '#64748B', marginTop: 3 }}>Manage prospects, build rate cards, and track conversions</div>
         </div>
         <button onClick={() => setShowWizard(true)}

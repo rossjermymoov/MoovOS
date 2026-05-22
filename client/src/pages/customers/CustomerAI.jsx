@@ -10,17 +10,17 @@ const api = axios.create({ baseURL: '/api' });
 const inputStyle = (error) => ({
   width: '100%', boxSizing: 'border-box',
   background: '#FFFFFF', border: `1px solid ${error ? '#E91E8C' : 'rgba(0,0,0,0.08)'}`,
-  borderRadius: 9999, padding: '10px 18px', color: '#fff', fontSize: 14, outline: 'none',
+  borderRadius: 9999, padding: '10px 18px', color: '#0F172A', fontSize: 14, outline: 'none',
 });
 const selectStyle = {
   width: '100%', boxSizing: 'border-box',
   background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.08)',
-  borderRadius: 9999, padding: '10px 18px', color: '#fff', fontSize: 14, outline: 'none',
+  borderRadius: 9999, padding: '10px 18px', color: '#0F172A', fontSize: 14, outline: 'none',
 };
 const textareaStyle = {
   width: '100%', boxSizing: 'border-box',
   background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
-  borderRadius: 12, padding: '14px 18px', color: '#fff', fontSize: 13, outline: 'none',
+  borderRadius: 12, padding: '14px 18px', color: '#0F172A', fontSize: 13, outline: 'none',
   resize: 'vertical', fontFamily: 'monospace', lineHeight: 1.6,
 };
 const grid2 = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 };
@@ -415,7 +415,7 @@ function StepRateCard({ rates, setRates, ratesExtracted, setRatesExtracted, extr
       style={{
         width: '100%', boxSizing: 'border-box', background: '#FFFFFF',
         border: '1px solid rgba(0,0,0,0.08)', borderRadius: 6,
-        padding: '6px 10px', color: '#fff', fontSize: 12, outline: 'none',
+        padding: '6px 10px', color: '#0F172A', fontSize: 12, outline: 'none',
       }}
     />
   );
@@ -591,7 +591,7 @@ function SuccessScreen({ customer, rateResults, navigate }) {
       <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(0,200,83,0.15)', border: '2px solid #00C853', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
         <Check size={28} color="#00C853" />
       </div>
-      <h2 style={{ fontSize: 22, fontWeight: 700, color: '#fff', marginBottom: 8 }}>Customer Created</h2>
+      <h2 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>Customer Created</h2>
       <p style={{ color: '#64748B', marginBottom: 4 }}>{customer.business_name}</p>
       <p style={{ color: '#00C853', fontWeight: 600, marginBottom: 8 }}>{customer.account_number}</p>
       {rateResults && (
@@ -703,7 +703,7 @@ export default function CustomerAI() {
           <ArrowLeft size={14} /> Customers
         </button>
         <span style={{ color: '#475569' }}>/</span>
-        <span style={{ fontSize: 13, color: '#fff' }}>AI-Assisted Onboarding</span>
+        <span style={{ fontSize: 13, color: '#0F172A' }}>AI-Assisted Onboarding</span>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>

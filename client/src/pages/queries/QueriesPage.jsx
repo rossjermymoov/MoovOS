@@ -121,7 +121,7 @@ const TRACK_STATUS = {
   collected:           { label: 'Collected',                    color: '#2196F3', bg: 'rgba(33,150,243,0.12)',   icon: Package },
   at_depot:            { label: 'At Hub',                       color: '#5C6BC0', bg: 'rgba(92,107,192,0.12)',   icon: Package },
   in_transit:          { label: 'In Transit',                   color: '#7B2FBE', bg: 'rgba(123,47,190,0.12)',   icon: Truck },
-  out_for_delivery:    { label: 'Out for Delivery',             color: '#FFC107', bg: 'rgba(255,193,7,0.12)',    icon: Truck },
+  out_for_delivery:    { label: 'Out for Delivery',             color: '#D97706', bg: 'rgba(255,193,7,0.12)',    icon: Truck },
   failed_delivery:     { label: 'Failed Attempt',               color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
   delivered:           { label: 'Delivered',                    color: '#00C853', bg: 'rgba(0,200,83,0.12)',     icon: PackageCheck },
   on_hold:             { label: 'On Hold',                      color: '#FF9800', bg: 'rgba(255,152,0,0.12)',    icon: Clock },
@@ -517,7 +517,7 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
             {unread > 0 && (
               <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                 minWidth: 18, height: 18, borderRadius: 9999,
-                background: C.blue, color: '#fff', fontSize: 10, fontWeight: 800, padding: '0 5px' }}>
+                background: C.blue, color: '#0F172A', fontSize: 10, fontWeight: 800, padding: '0 5px' }}>
                 {unread}
               </span>
             )}
@@ -1332,7 +1332,7 @@ function QueryDetail({ queryId, onUpdated }) {
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={handleFlagAttention}
                   style={{ flex: 1, padding: '5px 0', borderRadius: 5, border: 'none',
-                    background: C.red, color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                    background: C.red, color: '#0F172A', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
                   Flag
                 </button>
                 <button onClick={() => setShowFlag(false)}
@@ -1741,7 +1741,7 @@ export default function QueriesPage() {
           <SlidersHorizontal size={12} />
           Filters
           {panelFilterCount > 0 && (
-            <span style={{ background: C.blue, color: '#fff', borderRadius: 10, padding: '1px 5px', fontSize: 9, fontWeight: 800 }}>
+            <span style={{ background: C.blue, color: '#0F172A', borderRadius: 10, padding: '1px 5px', fontSize: 9, fontWeight: 800 }}>
               {panelFilterCount}
             </span>
           )}

@@ -21,7 +21,7 @@ const ROLE_COLORS = {
   sales:              { bg: 'rgba(0,200,83,0.12)',    text: '#00C853' },
   account_management: { bg: 'rgba(123,47,190,0.15)',  text: '#7B2FBE' },
   onboarding:         { bg: 'rgba(0,188,212,0.12)',   text: '#00BCD4' },
-  finance:            { bg: 'rgba(255,193,7,0.12)',   text: '#FFC107' },
+  finance:            { bg: 'rgba(255,193,7,0.12)',   text: '#D97706' },
   customer_service:   { bg: 'rgba(233,30,140,0.12)', text: '#E91E8C' },
   manager:            { bg: 'rgba(0,0,0,0.08)', text: '#64748B' },
   director:           { bg: 'rgba(0,0,0,0.08)', text: '#ffffff' },
@@ -130,7 +130,7 @@ function PermissionsPanel({ staffMember, onClose }) {
         <div style={{ flex: '1 1 320px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
             <Shield size={14} style={{ color: '#7B2FBE' }} />
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Page Access</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>Page Access</span>
           </div>
 
           {/* Admin toggle */}
@@ -211,7 +211,7 @@ function PermissionsPanel({ staffMember, onClose }) {
               disabled={savingPerms}
               style={{
                 background: 'linear-gradient(135deg, #7B2FBE 0%, #E91E8C 100%)',
-                color: '#fff', border: 'none', borderRadius: 8,
+                color: '#0F172A', border: 'none', borderRadius: 8,
                 padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
               }}
             >
@@ -224,8 +224,8 @@ function PermissionsPanel({ staffMember, onClose }) {
         {/* Right: Password */}
         <div style={{ flex: '1 1 240px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-            <Key size={14} style={{ color: '#FFC107' }} />
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Login Password</span>
+            <Key size={14} style={{ color: '#D97706' }} />
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>Login Password</span>
             <span style={{
               fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
               background: staffMember.has_password ? 'rgba(0,200,83,0.15)' : 'rgba(220,38,38,0.15)',
@@ -255,7 +255,7 @@ function PermissionsPanel({ staffMember, onClose }) {
               onClick={setPasswordFn}
               disabled={savingPw}
               style={{
-                background: '#FFC107', color: '#000', border: 'none', borderRadius: 8,
+                background: '#D97706', color: '#000', border: 'none', borderRadius: 8,
                 padding: '0 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
               }}
             >
@@ -426,7 +426,7 @@ export default function StaffSettings() {
           <h3 style={{ fontSize: 16, fontWeight: 600, color: '#7B2FBE', marginBottom: 20 }}>New Staff Member</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
             <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 6 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#0F172A', marginBottom: 6 }}>
                 Full Name <span style={{ color: '#E91E8C' }}>*</span>
               </label>
               <div className="pill-input-wrap" style={errors.full_name ? { borderColor: '#E91E8C' } : {}}>
@@ -436,7 +436,7 @@ export default function StaffSettings() {
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 6 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#0F172A', marginBottom: 6 }}>
                 Email <span style={{ color: '#E91E8C' }}>*</span>
               </label>
               <div className="pill-input-wrap" style={errors.email ? { borderColor: '#E91E8C' } : {}}>
@@ -446,7 +446,7 @@ export default function StaffSettings() {
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 6 }}>Role</label>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#0F172A', marginBottom: 6 }}>Role</label>
               <div className="pill-input-wrap">
                 <select value={form.role} onChange={e => set('role', e.target.value)} style={{ paddingLeft: 16 }}>
                   {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
@@ -476,7 +476,7 @@ export default function StaffSettings() {
       {/* Active staff */}
       <div className="moov-card" style={{ overflow: 'hidden', marginBottom: 16 }}>
         <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>Active Staff</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>Active Staff</span>
           <span style={{ marginLeft: 8, fontSize: 12, color: '#64748B' }}>{active.length} member{active.length !== 1 ? 's' : ''}</span>
         </div>
 

@@ -18,11 +18,11 @@ const api = axios.create({ baseURL: '/api' });
 const S = {
   page:        { padding: '32px 40px', maxWidth: 860, margin: '0 auto' },
   card:        { background: '#12132a', border: '1px solid rgba(0,0,0,0.07)', borderRadius: 10, padding: '24px 28px', marginBottom: 20 },
-  cardTitle:   { fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 4 },
+  cardTitle:   { fontSize: 15, fontWeight: 700, color: '#0F172A', marginBottom: 4 },
   cardSub:     { fontSize: 13, color: '#64748B', marginBottom: 20 },
   row:         { display: 'flex', gap: 12, alignItems: 'flex-end', marginBottom: 14 },
   label:       { fontSize: 12, color: '#64748B', fontWeight: 600, marginBottom: 5, display: 'block', textTransform: 'uppercase', letterSpacing: '0.04em' },
-  input:       { background: '#0d0e21', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 6, padding: '8px 12px', color: '#fff', fontSize: 13, width: '100%', outline: 'none' },
+  input:       { background: '#0d0e21', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 6, padding: '8px 12px', color: '#0F172A', fontSize: 13, width: '100%', outline: 'none' },
   btn:         { padding: '8px 18px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
   btnPrimary:  { background: '#00C853', color: '#000' },
   btnSecondary:{ background: 'rgba(0,0,0,0.07)', color: '#334155' },
@@ -321,7 +321,7 @@ function AlertCard({ alert }) {
           {alert.recipients.map(r => (
             <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,0,0,0.04)', borderRadius: 6, padding: '5px 10px 5px 12px', fontSize: 13 }}>
               <Mail size={12} style={{ color: '#64748B' }} />
-              <span style={{ color: '#ddd' }}>{r.name ? `${r.name} <${r.email}>` : r.email}</span>
+              <span style={{ color: '#334155' }}>{r.name ? `${r.name} <${r.email}>` : r.email}</span>
               <button
                 onClick={() => removeRecipient(r.id)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: 0, marginLeft: 4, display: 'flex' }}
@@ -454,7 +454,7 @@ export default function EmailSettings() {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
         <Mail size={22} style={{ color: '#00C853' }} />
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#fff' }}>Email Settings</h2>
+        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#0F172A' }}>Email Settings</h2>
       </div>
 
       {cfgLoading ? (

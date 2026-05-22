@@ -92,7 +92,7 @@ function BreakdownTooltip({ charge, mode, above = false }) {
       {/* Base */}
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 4 }}>
         <span style={{ color: '#64748B' }}>Base rate</span>
-        <span style={{ color: '#fff' }}>
+        <span style={{ color: '#0F172A' }}>
           {base > 0 ? `£${base.toFixed(2)}` : <span style={{ color: '#F44336' }}>not set</span>}
         </span>
       </div>
@@ -102,7 +102,7 @@ function BreakdownTooltip({ charge, mode, above = false }) {
         return (
           <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 4 }}>
             <span style={{ color: '#64748B' }}>{l.name || (l.type === 'fuel' ? 'Fuel' : 'Surcharge')}</span>
-            <span style={{ color: '#fff' }}>
+            <span style={{ color: '#0F172A' }}>
               {l.cost_price == null && mode === 'cost'
                 ? <span style={{ color: '#64748B' }}>—</span>
                 : `£${val.toFixed(2)}`}

@@ -57,7 +57,7 @@ export default function LoginPage() {
               justifyContent: 'center',
               fontWeight: 800,
               fontSize: 16,
-              color: '#fff',
+              color: '#0F172A',
             }}
           >
             M
@@ -143,7 +143,7 @@ export default function LoginPage() {
               background: loading
                 ? 'rgba(123, 47, 190, 0.5)'
                 : 'linear-gradient(135deg, #7B2FBE 0%, #E91E8C 100%)',
-              color: '#fff',
+              color: '#0F172A',
               border: 'none',
               borderRadius: 8,
               padding: '12px 0',

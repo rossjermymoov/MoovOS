@@ -23,7 +23,7 @@ function ConfidencePill({ score }) {
   // score is 0–100
   const high   = score >= 80;
   const medium = score >= 50;
-  const col    = high ? '#00C853' : medium ? '#FFC107' : '#EF4444';
+  const col    = high ? '#00C853' : medium ? '#D97706' : '#EF4444';
   const bg     = high ? 'rgba(0,200,83,0.1)' : medium ? 'rgba(255,193,7,0.1)' : 'rgba(239,68,68,0.1)';
   return (
     <span style={{
@@ -124,7 +124,7 @@ function CustomerRow({ customer, suggestion, onLink, onUnlink, linking, unlinkin
         {/* Our name */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
           <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#00C853', flexShrink: 0 }} />
-          <span style={{ fontSize: 13, color: '#DDD', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 13, color: '#334155', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {customer.business_name}
           </span>
         </div>
@@ -413,7 +413,7 @@ function CustomerMatchingPanel({ connected }) {
       {/* Legend */}
       <div style={{ fontSize: 11, color: '#64748B', marginBottom: 10, display: 'flex', gap: 16 }}>
         <span>Confidence: <span style={{ color: '#00C853' }}>≥80% auto-accepted</span></span>
-        <span><span style={{ color: '#FFC107' }}>50–79%</span> needs review</span>
+        <span><span style={{ color: '#D97706' }}>50–79%</span> needs review</span>
         <span><span style={{ color: '#475569' }}>&lt;50%</span> search manually</span>
       </div>
 

@@ -15,7 +15,7 @@ const gbp = (n) => `£${parseFloat(n || 0).toFixed(2)}`;
 
 const inp = {
   background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
-  borderRadius: 9999, padding: '4px 12px', color: '#fff', fontSize: 12,
+  borderRadius: 9999, padding: '4px 12px', color: '#0F172A', fontSize: 12,
   outline: 'none', boxSizing: 'border-box',
 };
 
@@ -119,7 +119,7 @@ function SubPriceCell({ rateId, initialSubPrice, onSaved }) {
           if (e.key === 'Enter') commit();
           if (e.key === 'Escape') { setVal(hasValue ? String(parseFloat(initialSubPrice).toFixed(2)) : ''); setEditing(false); }
         }}
-        style={{ ...inp, width: 72, textAlign: 'right', color: '#FFC107', fontWeight: 700, fontFamily: 'monospace', border: '1px solid rgba(255,193,7,0.6)', background: 'rgba(255,193,7,0.08)' }}
+        style={{ ...inp, width: 72, textAlign: 'right', color: '#D97706', fontWeight: 700, fontFamily: 'monospace', border: '1px solid rgba(255,193,7,0.6)', background: 'rgba(255,193,7,0.08)' }}
       />
     );
   }
@@ -130,7 +130,7 @@ function SubPriceCell({ rateId, initialSubPrice, onSaved }) {
         onClick={startEdit}
         title="Sub-parcel rate — click to edit, clear to remove"
         style={{
-          fontSize: 12, fontWeight: 700, color: '#FFC107',
+          fontSize: 12, fontWeight: 700, color: '#D97706',
           cursor: 'pointer', padding: '2px 8px', borderRadius: 5,
           border: '1px solid rgba(255,193,7,0.35)',
           background: 'rgba(255,193,7,0.08)',
@@ -157,7 +157,7 @@ function SubPriceCell({ rateId, initialSubPrice, onSaved }) {
         fontFamily: 'monospace',
         transition: 'color 0.12s, border-color 0.12s',
       }}
-      onMouseEnter={e => { e.currentTarget.style.color = '#FFC107'; e.currentTarget.style.borderColor = 'rgba(255,193,7,0.5)'; }}
+      onMouseEnter={e => { e.currentTarget.style.color = '#D97706'; e.currentTarget.style.borderColor = 'rgba(255,193,7,0.5)'; }}
       onMouseLeave={e => { e.currentTarget.style.color = '#444'; e.currentTarget.style.borderColor = 'rgba(255,193,7,0.2)'; }}
     >
       + sub
@@ -441,7 +441,7 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
       <div style={{ flexShrink: 0, padding: '20px 28px 16px', borderBottom: '1px solid rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', gap: 16, background: '#F8FAFC' }}>
         <Globe size={20} color="#00BCD4" style={{ flexShrink: 0 }} />
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 17, fontWeight: 700, color: '#fff' }}>{service.service_name}</div>
+          <div style={{ fontSize: 17, fontWeight: 700, color: '#0F172A' }}>{service.service_name}</div>
           <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
             <span style={{ color: '#00BCD4', fontFamily: 'monospace', fontWeight: 700, marginRight: 10 }}>{service.service_code}</span>
             {rates.length.toLocaleString()} rates · {totalZones} zones
@@ -457,7 +457,7 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
             value={searchText}
             onChange={e => setSearchText(e.target.value)}
             placeholder='e.g. "Jamaica"  or  "1kg to France"'
-            style={{ width: '100%', boxSizing: 'border-box', background: '#FFFFFF', border: '1px solid rgba(0,188,212,0.5)', borderRadius: 8, padding: '10px 36px 10px 36px', color: '#fff', fontSize: 13, outline: 'none' }}
+            style={{ width: '100%', boxSizing: 'border-box', background: '#FFFFFF', border: '1px solid rgba(0,188,212,0.5)', borderRadius: 8, padding: '10px 36px 10px 36px', color: '#0F172A', fontSize: 13, outline: 'none' }}
           />
           {searchText && (
             <button onClick={() => setSearchText('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: 0, display: 'flex' }}>
@@ -515,8 +515,8 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
           <span style={{ color: matchCount === 0 ? '#E91E8C' : '#00BCD4', fontWeight: 700 }}>
             {matchCount === 0 ? 'No matches found' : matchCount === 1 ? '1 match' : `${matchCount} matches`}
           </span>
-          {parsed.zoneTerm   && <span style={{ color: '#64748B' }}>Zone: <span style={{ color: '#fff' }}>{parsed.zoneTerm}</span></span>}
-          {parsed.weightKg != null && <span style={{ color: '#64748B' }}>Weight: <span style={{ color: '#fff' }}>{parsed.weightKg} kg</span></span>}
+          {parsed.zoneTerm   && <span style={{ color: '#64748B' }}>Zone: <span style={{ color: '#0F172A' }}>{parsed.zoneTerm}</span></span>}
+          {parsed.weightKg != null && <span style={{ color: '#64748B' }}>Weight: <span style={{ color: '#0F172A' }}>{parsed.weightKg} kg</span></span>}
           <button onClick={() => setSearchText('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: 12 }}>Clear ✕</button>
         </div>
       )}
@@ -565,7 +565,7 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
               <tbody>
                 {zones.map((zone, zi) => (
                   <tr key={zone} style={{ background: zi % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
-                    <td style={{ padding: '8px 20px 8px 28px', color: '#DDD', whiteSpace: 'nowrap', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>{zone}</td>
+                    <td style={{ padding: '8px 20px 8px 28px', color: '#334155', whiteSpace: 'nowrap', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>{zone}</td>
                     {weightClasses.map(wc => {
                       const rate = rateMap[zone]?.[wc];
                       return (
@@ -591,14 +591,14 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
                 <tr style={{ background: '#F8FAFC', position: 'sticky', top: 0, zIndex: 10 }}>
                   <th style={{ textAlign: 'left', padding: '12px 20px 12px 28px', color: '#64748B', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>Zone</th>
                   <th style={{ textAlign: 'right', padding: '12px 20px', color: '#00C853', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>1st parcel</th>
-                  <th style={{ textAlign: 'right', padding: '12px 20px', color: '#FFC107', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>2nd+</th>
+                  <th style={{ textAlign: 'right', padding: '12px 20px', color: '#D97706', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>2nd+</th>
                   <th style={{ textAlign: 'right', padding: '12px 28px 12px 20px', color: '#00BCD4', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>£/kg</th>
                 </tr>
               </thead>
               <tbody>
                 {displayRates.map((rate, ri) => (
                   <tr key={rate.id} style={{ background: ri % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
-                    <td style={{ padding: '8px 20px 8px 28px', color: '#DDD', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>{rate.zone_name}</td>
+                    <td style={{ padding: '8px 20px 8px 28px', color: '#334155', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>{rate.zone_name}</td>
                     <td style={{ textAlign: 'right', padding: '8px 20px', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
                       <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
                     </td>
@@ -739,9 +739,9 @@ function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateD
           onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,188,212,0.03)'}
         >
           <Globe size={12} color="#00BCD4" style={{ marginRight: 8, flexShrink: 0 }} />
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', flex: 1 }}>{service.service_name}</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', flex: 1 }}>{service.service_name}</span>
           {totalCount > 0 && (
-            <span style={{ fontSize: 11, color: allPriced ? '#00C853' : '#FFC107', fontWeight: 700, marginRight: 12 }}>
+            <span style={{ fontSize: 11, color: allPriced ? '#00C853' : '#D97706', fontWeight: 700, marginRight: 12 }}>
               {pricedCount}/{totalCount} priced
             </span>
           )}
@@ -781,7 +781,7 @@ function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateD
           {service.service_name}
         </span>
         {totalCount > 0 && (
-          <span style={{ fontSize: 10, color: allPriced ? '#00C853' : '#FFC107', fontWeight: 700 }}>
+          <span style={{ fontSize: 10, color: allPriced ? '#00C853' : '#D97706', fontWeight: 700 }}>
             {pricedCount}/{totalCount}
           </span>
         )}
@@ -850,7 +850,7 @@ function CourierGroup({ courierName, services, customerId, activeCardId, onRateU
     <div className="moov-card" style={{ marginBottom: 16, overflow: 'hidden' }}>
       <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', padding: '13px 18px', cursor: 'pointer', borderBottom: open ? '1px solid rgba(0,0,0,0.06)' : 'none' }}>
         {open ? <ChevronDown size={14} style={{ color: '#00C853', marginRight: 8 }} /> : <ChevronRight size={14} style={{ color: '#64748B', marginRight: 8 }} />}
-        <span style={{ fontSize: 14, fontWeight: 700, color: '#fff', flex: 1 }}>{courierName}</span>
+        <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', flex: 1 }}>{courierName}</span>
         {hasIntl && <span style={{ fontSize: 10, color: '#00BCD4', background: 'rgba(0,188,212,0.1)', border: '1px solid rgba(0,188,212,0.25)', borderRadius: 5, padding: '2px 7px', fontWeight: 700, marginRight: 10 }}>INTL</span>}
         <span style={{ fontSize: 11, color: '#64748B' }}>{services.length} service{services.length !== 1 ? 's' : ''} · {totalRates.toLocaleString()} rates</span>
       </div>
@@ -943,7 +943,7 @@ function ServiceSelector({ customerId, activeCourierIds }) {
               onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'}
             >
               {isOpen ? <ChevronDown size={12} color="#475569" style={{ marginRight: 8 }} /> : <ChevronRight size={12} color="#475569" style={{ marginRight: 8 }} />}
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', flex: 1 }}>{courierName}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', flex: 1 }}>{courierName}</span>
               {countInGroup > 0 && (
                 <span style={{ fontSize: 11, color: '#00C853', fontWeight: 700, marginRight: 8 }}>{countInGroup}/{services.length}</span>
               )}
@@ -1073,7 +1073,7 @@ function CustomerFuelRow({ fg, customerId }) {
           onBlur={commit}
           onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
           placeholder="% (clear = reset to std)"
-          style={{ ...inp, width: 110, textAlign: 'right', color: '#FFC107', fontFamily: 'monospace', border: '1px solid rgba(255,193,7,0.6)', background: 'rgba(255,193,7,0.08)', fontSize: 11 }}
+          style={{ ...inp, width: 110, textAlign: 'right', color: '#D97706', fontFamily: 'monospace', border: '1px solid rgba(255,193,7,0.6)', background: 'rgba(255,193,7,0.08)', fontSize: 11 }}
         />
       ) : (
         <span
@@ -1081,7 +1081,7 @@ function CustomerFuelRow({ fg, customerId }) {
           title={hasOverride ? 'Custom rate — click to edit, clear to revert to standard' : 'Click to set a customer-specific rate'}
           style={{
             fontSize: 12, fontWeight: hasOverride ? 700 : 400,
-            color: hasOverride ? '#FFC107' : '#444',
+            color: hasOverride ? '#D97706' : '#444',
             cursor: 'pointer', padding: '2px 8px', borderRadius: 4,
             border: `1px solid ${hasOverride ? 'rgba(255,193,7,0.35)' : 'rgba(0,0,0,0.06)'}`,
             background: hasOverride ? 'rgba(255,193,7,0.08)' : 'transparent',
@@ -1133,7 +1133,7 @@ function SurchargeOverrideRow({ surcharge, override, customerId, onChanged }) {
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 6px', borderRadius: 5, background: hasOverride ? 'rgba(255,193,7,0.03)' : 'transparent' }}>
-      <span style={{ fontSize: 12, color: hasOverride ? '#DDD' : '#64748B', flex: 1 }}>{surcharge.name}</span>
+      <span style={{ fontSize: 12, color: hasOverride ? '#334155' : '#64748B', flex: 1 }}>{surcharge.name}</span>
       <span style={{ fontSize: 11, color: '#475569', fontFamily: 'monospace' }}>{fmt(surcharge.default_value || 0)}</span>
       <span style={{ fontSize: 10, color: '#333' }}>→</span>
       {editing ? (
@@ -1143,14 +1143,14 @@ function SurchargeOverrideRow({ surcharge, override, customerId, onChanged }) {
           onChange={e => setVal(e.target.value)}
           onBlur={commit}
           onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
-          style={{ ...inp, width: 72, textAlign: 'right', color: '#FFC107', fontFamily: 'monospace', border: '1px solid rgba(255,193,7,0.6)', background: 'rgba(255,193,7,0.08)', fontSize: 11 }}
+          style={{ ...inp, width: 72, textAlign: 'right', color: '#D97706', fontFamily: 'monospace', border: '1px solid rgba(255,193,7,0.6)', background: 'rgba(255,193,7,0.08)', fontSize: 11 }}
         />
       ) : (
         <span
           onClick={startEdit}
           style={{
             fontSize: 12, fontWeight: hasOverride ? 700 : 400,
-            color: hasOverride ? '#FFC107' : '#444',
+            color: hasOverride ? '#D97706' : '#444',
             cursor: 'pointer', padding: '2px 8px', borderRadius: 4,
             border: `1px solid ${hasOverride ? 'rgba(255,193,7,0.35)' : 'rgba(0,0,0,0.06)'}`,
             background: hasOverride ? 'rgba(255,193,7,0.08)' : 'transparent',
@@ -1229,7 +1229,7 @@ function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesCh
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', background: 'rgba(0,200,83,0.03)', borderBottom: '1px solid rgba(0,0,0,0.04)', flexWrap: 'wrap' }}>
         {logo && <img src={logo} alt={carrier.courier_name} style={{ height: 15, objectFit: 'contain', flexShrink: 0 }} />}
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', flex: 1 }}>{carrier.courier_name}</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', flex: 1 }}>{carrier.courier_name}</span>
 
         {/* Rate card selector */}
         {carrier.available_cards?.length > 1 ? (
@@ -1289,13 +1289,13 @@ function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesCh
             style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', cursor: 'pointer',
               borderBottom: fuelOpen ? '1px solid rgba(0,0,0,0.03)' : 'none',
               background: fuelOpen ? 'rgba(255,193,7,0.04)' : 'transparent' }}>
-            {fuelOpen ? <ChevronDown size={11} color="#FFC107" /> : <ChevronRight size={11} color="#475569" />}
-            <Zap size={11} color={fuelOpen ? '#FFC107' : '#475569'} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: fuelOpen ? '#FFC107' : '#475569', flex: 1 }}>
+            {fuelOpen ? <ChevronDown size={11} color="#D97706" /> : <ChevronRight size={11} color="#475569" />}
+            <Zap size={11} color={fuelOpen ? '#D97706' : '#475569'} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: fuelOpen ? '#D97706' : '#475569', flex: 1 }}>
               Fuel Groups ({carrier.fuel_groups.length})
             </span>
             {carrier.fuel_groups.some(fg => fg.customer_pct != null) && (
-              <span style={{ fontSize: 10, color: '#FFC107', fontWeight: 700 }}>Custom rates</span>
+              <span style={{ fontSize: 10, color: '#D97706', fontWeight: 700 }}>Custom rates</span>
             )}
           </div>
           {fuelOpen && carrier.fuel_groups.map(fg => (
@@ -1318,7 +1318,7 @@ function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesCh
               Surcharge Overrides ({surcharges.length})
             </span>
             {carrierOverrides.length > 0 && (
-              <span style={{ fontSize: 10, color: '#FFC107', fontWeight: 700 }}>{carrierOverrides.length} custom</span>
+              <span style={{ fontSize: 10, color: '#D97706', fontWeight: 700 }}>{carrierOverrides.length} custom</span>
             )}
           </div>
           {surchOpen && (
@@ -1479,7 +1479,7 @@ export default function CustomerPricingTab({ customer }) {
       {/* 4 — Rate cards */}
       {visibleServices.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#fff', margin: 0, flex: 1 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', margin: 0, flex: 1 }}>
             Rate Cards
             <span style={{ fontSize: 13, color: '#64748B', fontWeight: 400, marginLeft: 10 }}>
               {visibleServices.length} service{visibleServices.length !== 1 ? 's' : ''}

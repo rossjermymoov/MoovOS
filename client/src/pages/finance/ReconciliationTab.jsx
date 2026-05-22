@@ -265,7 +265,7 @@ function getStatus(carrierTotal, charge, overrideCost = null) {
   }
   const compareCost = overrideCost ?? charge.total_cost_price;
   if (compareCost == null) {
-    return { code: 'amber', label: 'No Cost Recorded', color: '#FFC107', icon: 'warn' };
+    return { code: 'amber', label: 'No Cost Recorded', color: '#D97706', icon: 'warn' };
   }
   const diff = Math.abs(parseFloat(carrierTotal) - compareCost);
   if (diff <= TOLERANCE_ABS) {
@@ -1535,7 +1535,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
               borderRadius: 10, padding: '10px 16px', marginBottom: 12,
               display: 'flex', alignItems: 'center', gap: 10,
             }}>
-              <AlertTriangle size={14} style={{ color: '#FFC107', flexShrink: 0 }} />
+              <AlertTriangle size={14} style={{ color: '#D97706', flexShrink: 0 }} />
               <span style={{ fontSize: 12, color: '#64748B', flex: 1 }}>
                 Costs shown are from <strong style={{ color: '#334155' }}>stored charges</strong> at the time of dispatch.
                 If you have updated rate cards since these shipments were processed, run <strong style={{ color: '#334155' }}>Full Reprice</strong> from the Finance tab before reconciling.
@@ -1570,7 +1570,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
             {[
               { code: 'all',   label: 'Total',       count: results.length,  color: '#64748B',    bg: 'rgba(0,0,0,0.03)' },
               { code: 'green', label: 'Matched',      count: counts.green,    color: '#00C853', bg: 'rgba(0,200,83,0.04)'   },
-              { code: 'amber', label: 'No Cost',      count: counts.amber,    color: '#FFC107', bg: 'rgba(255,193,7,0.04)'  },
+              { code: 'amber', label: 'No Cost',      count: counts.amber,    color: '#D97706', bg: 'rgba(255,193,7,0.04)'  },
               { code: 'red',   label: 'Problem',      count: counts.red,      color: '#F44336', bg: 'rgba(244,67,54,0.04)'  },
             ].map(stat => (
               <button
@@ -1654,7 +1654,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
               <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
                 Total Sell Value
               </div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: '#FFC107' }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#D97706' }}>
                 {gbp(totalSellValue)}
               </div>
               <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>What we bill customers</div>
@@ -1915,7 +1915,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                           ) : <span style={{ color: '#475569' }}>—</span>}
                         </td>
                         <td style={{ ...td, textAlign: 'center' }}>
-                          <StatusBadge status={isDisputed ? { code: 'amber', label: 'Disputed', color: '#FFC107', icon: 'warn' } : row.status} />
+                          <StatusBadge status={isDisputed ? { code: 'amber', label: 'Disputed', color: '#D97706', icon: 'warn' } : row.status} />
                         </td>
                         {/* Actions */}
                         <td style={{ ...td }} onClick={e => e.stopPropagation()}>
@@ -1941,7 +1941,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                               )
                             )}
                             {!row.is_return && row.effective_sell != null && (
-                              <div style={{ fontSize: 10, color: '#FFC107' }}>
+                              <div style={{ fontSize: 10, color: '#D97706' }}>
                                 Sell: {gbp(row.effective_sell)}
                               </div>
                             )}
@@ -1976,7 +1976,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                                 textTransform: 'uppercase',
                                 background: isDisputed ? 'rgba(255,193,7,0.12)' : 'rgba(0,0,0,0.03)',
                                 border: `1px solid ${isDisputed ? 'rgba(255,193,7,0.4)' : 'rgba(0,0,0,0.08)'}`,
-                                color: isDisputed ? '#FFC107' : '#666',
+                                color: isDisputed ? '#D97706' : '#666',
                                 borderRadius: 5, padding: '3px 8px',
                                 cursor: 'pointer',
                               }}
@@ -2169,7 +2169,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                                   <span style={{ color: '#64748B' }}>—</span>
                                 )}
                                 {over && (
-                                  <div style={{ fontSize: 11, marginTop: 2, color: '#FFC107', fontWeight: 700 }}>
+                                  <div style={{ fontSize: 11, marginTop: 2, color: '#D97706', fontWeight: 700 }}>
                                     {bandMax.toFixed(2)} kg service max
                                     <span style={{ marginLeft: 5, color: '#F44336' }}>
                                       ▲{(billed - bandMax).toFixed(2)} over
@@ -2282,7 +2282,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                             const pct    = (margin != null && effectiveSell > 0) ? (margin / effectiveSell) * 100 : null;
                             return (
                               <div style={{ minWidth: 100 }}>
-                                <span style={{ fontSize: 13, fontWeight: 700, color: '#FFC107' }}>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: '#D97706' }}>
                                   {gbp(effectiveSell)}
                                 </span>
                                 {pct != null && (
@@ -2350,9 +2350,9 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                             : diff > 0 ? '#F44336'
                             : '#00C853';
                           const surchargeStatus = isAccepted
-                            ? { code: 'amber', label: 'Accepted',     color: '#FFC107', icon: 'warn' }
+                            ? { code: 'amber', label: 'Accepted',     color: '#D97706', icon: 'warn' }
                             : ourValue == null
-                              ? { code: 'amber', label: 'No Comparison', color: '#FFC107', icon: 'warn' }
+                              ? { code: 'amber', label: 'No Comparison', color: '#D97706', icon: 'warn' }
                               : Math.abs(diff) <= TOLERANCE_ABS
                                 ? { code: 'green', label: 'Match',       color: '#00C853', icon: 'check' }
                                 : { code: 'red',   label: 'Discrepancy', color: '#F44336', icon: 'x'     };
@@ -2371,7 +2371,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                                   textTransform: 'uppercase',
                                   background: isFuel ? 'rgba(255,152,0,0.12)' : isHgv ? 'rgba(156,39,176,0.12)' : 'rgba(255,193,7,0.12)',
                                   border: `1px solid ${isFuel ? 'rgba(255,152,0,0.3)' : isHgv ? 'rgba(156,39,176,0.3)' : 'rgba(255,193,7,0.3)'}`,
-                                  color: isFuel ? '#FF9800' : isHgv ? '#CE93D8' : '#FFC107',
+                                  color: isFuel ? '#FF9800' : isHgv ? '#CE93D8' : '#D97706',
                                   borderRadius: 20, padding: '2px 8px',
                                 }}>
                                   {isFuel ? 'FUEL' : isHgv ? 'HGV' : 'SURCHARGE'}
@@ -2400,14 +2400,14 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                               <td style={{ ...td, textAlign: 'right' }}>
                                 {ourValue != null ? (
                                   <>
-                                    <span style={{ color: isAccepted ? '#FFC107' : '#334155' }}>{gbp(ourValue)}</span>
+                                    <span style={{ color: isAccepted ? '#D97706' : '#334155' }}>{gbp(ourValue)}</span>
                                     {ourNote && (
                                       <div style={{ fontSize: 10, color: '#64748B', marginTop: 1 }}>
                                         {ourNote}
                                       </div>
                                     )}
                                     {isAccepted && isFuel && (
-                                      <div style={{ fontSize: 9, color: '#FFC107', marginTop: 2, fontStyle: 'italic' }}>
+                                      <div style={{ fontSize: 9, color: '#D97706', marginTop: 2, fontStyle: 'italic' }}>
                                         known variance
                                       </div>
                                     )}
@@ -2446,7 +2446,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                                         textTransform: 'uppercase',
                                         background: 'rgba(255,193,7,0.1)',
                                         border: '1px solid rgba(255,193,7,0.35)',
-                                        color: '#FFC107',
+                                        color: '#D97706',
                                         borderRadius: 20, padding: '2px 7px',
                                         cursor: 'pointer',
                                       }}
@@ -2543,7 +2543,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                         <td style={{ ...td, fontWeight: 600 }}>{c.name}</td>
                         <td style={{ ...td, textAlign: 'right', color: '#64748B' }}>{c.count}</td>
                         <td style={{ ...td, textAlign: 'right', color: '#00C853' }}>{gbp(c.cost)}</td>
-                        <td style={{ ...td, textAlign: 'right', color: '#FFC107', fontWeight: 700 }}>{gbp(c.sell)}</td>
+                        <td style={{ ...td, textAlign: 'right', color: '#D97706', fontWeight: 700 }}>{gbp(c.sell)}</td>
                         <td style={{ ...td, textAlign: 'right', color: isNeg ? '#F44336' : '#00BCD4', fontWeight: 700 }}>
                           {gbp(margin)}
                         </td>
@@ -2571,7 +2571,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                     <td style={{ ...td, textAlign: 'right', color: '#00C853', fontWeight: 700 }}>
                       {gbp(customerBreakdown.reduce((s, c) => s + c.cost, 0))}
                     </td>
-                    <td style={{ ...td, textAlign: 'right', color: '#FFC107', fontWeight: 700 }}>
+                    <td style={{ ...td, textAlign: 'right', color: '#D97706', fontWeight: 700 }}>
                       {gbp(totalSellValue)}
                     </td>
                     <td style={{ ...td, textAlign: 'right', color: totalMarginValue >= 0 ? '#00BCD4' : '#F44336', fontWeight: 700 }}>

@@ -45,7 +45,7 @@ const STATUS = {
   collected:           { label: 'Collected',                   color: '#2196F3', bg: 'rgba(33,150,243,0.12)',   icon: Package },
   at_depot:            { label: 'At Hub',                      color: '#5C6BC0', bg: 'rgba(92,107,192,0.12)',   icon: Package },
   in_transit:          { label: 'In Transit',                  color: '#7B2FBE', bg: 'rgba(123,47,190,0.12)',   icon: Truck },
-  out_for_delivery:    { label: 'Out for Delivery',            color: '#FFC107', bg: 'rgba(255,193,7,0.12)',    icon: Truck },
+  out_for_delivery:    { label: 'Out for Delivery',            color: '#D97706', bg: 'rgba(255,193,7,0.12)',    icon: Truck },
   failed_delivery:     { label: 'Failed Attempt',              color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
   delivered:           { label: 'Delivered',                   color: '#00C853', bg: 'rgba(0,200,83,0.12)',     icon: PackageCheck },
   on_hold:             { label: 'On Hold',                     color: '#FF9800', bg: 'rgba(255,152,0,0.12)',    icon: Clock },
@@ -205,7 +205,7 @@ function EventTimeline({ events }) {
                 <StatusBadge status={ev.status} />
                 <span style={{ fontSize: 11, color: '#64748B' }}>{timeAgo(ev.event_at)}</span>
               </div>
-              {ev.description && <p style={{ fontSize: 13, color: '#DDD', margin: '3px 0' }}>{ev.description}</p>}
+              {ev.description && <p style={{ fontSize: 13, color: '#334155', margin: '3px 0' }}>{ev.description}</p>}
               {ev.location && (
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#64748B' }}>
                   <MapPin size={11} /> {ev.location}
@@ -273,7 +273,7 @@ function ParcelDrawer({ consignment, onClose }) {
               const url = stored || fallback;
               return url ? (
                 <a href={url} target="_blank" rel="noopener noreferrer" title="Track on courier website" style={{
-                  fontSize: 18, fontWeight: 900, color: '#fff', fontFamily: 'monospace',
+                  fontSize: 18, fontWeight: 900, color: '#0F172A', fontFamily: 'monospace',
                   textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 7,
                   borderBottom: '2px solid rgba(26,115,232,0.5)',
                   paddingBottom: 1,
@@ -284,7 +284,7 @@ function ParcelDrawer({ consignment, onClose }) {
                   </svg>
                 </a>
               ) : (
-                <div style={{ fontSize: 18, fontWeight: 900, color: '#fff', fontFamily: 'monospace' }}>{consignment}</div>
+                <div style={{ fontSize: 18, fontWeight: 900, color: '#0F172A', fontFamily: 'monospace' }}>{consignment}</div>
               );
             })()}
           </div>
@@ -302,7 +302,7 @@ function ParcelDrawer({ consignment, onClose }) {
                   <MapPin size={11} /> Delivery Address
                 </div>
                 {data.recipient_name && (
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 4 }}>{data.recipient_name}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>{data.recipient_name}</div>
                 )}
                 {data.recipient_address && (
                   <div style={{ fontSize: 13, color: '#334155', lineHeight: 1.6, whiteSpace: 'pre-line' }}>{data.recipient_address}</div>
@@ -313,7 +313,7 @@ function ParcelDrawer({ consignment, onClose }) {
                 {data.estimated_delivery && (
                   <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(0,0,0,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 11, color: '#64748B' }}>Estimated delivery</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#FFC107' }}>{fmtDate(data.estimated_delivery)}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#D97706' }}>{fmtDate(data.estimated_delivery)}</span>
                   </div>
                 )}
                 {data.delivered_at && (
@@ -342,7 +342,7 @@ function ParcelDrawer({ consignment, onClose }) {
               ].filter(([, v]) => v).map(([label, value]) => (
                 <div key={label} style={{ display: 'flex', padding: '7px 0', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
                   <span style={{ fontSize: 12, color: '#64748B', width: 120, flexShrink: 0 }}>{label}</span>
-                  <span style={{ fontSize: 13, color: '#fff', fontWeight: 500 }}>{value}</span>
+                  <span style={{ fontSize: 13, color: '#0F172A', fontWeight: 500 }}>{value}</span>
                 </div>
               ))}
             </div>
@@ -372,7 +372,7 @@ const darkSelect = {
   background: '#FFFFFF',
   border: '1px solid rgba(0,0,0,0.10)',
   borderRadius: 8,
-  color: '#fff',
+  color: '#0F172A',
   fontSize: 13,
   padding: '8px 12px',
   outline: 'none',
@@ -494,7 +494,7 @@ export default function TrackingPage() {
       {/* Page header */}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 24, gap: 12 }}>
         <div style={{ flex: 1 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#fff', margin: 0 }}>Tracking</h1>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: 0 }}>Tracking</h1>
           <p style={{ fontSize: 13, color: '#64748B', margin: '4px 0 0' }}>
             {stats ? `${(stats.total_active || 0).toLocaleString()} active parcels` : 'Loading…'}
           </p>
@@ -508,7 +508,7 @@ export default function TrackingPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10, marginBottom: 24 }}>
         <KpiCard label="In Transit"                  value={bs.in_transit}           color="#FF9800" icon={Truck}         active={statusFilter==='in_transit'}          onClick={() => toggleStatus('in_transit')} />
         <KpiCard label="At Hub"                      value={bs.at_depot}             color="#1976D2" icon={Warehouse}     active={statusFilter==='at_depot'}            onClick={() => toggleStatus('at_depot')} />
-        <KpiCard label="Out for Delivery"            value={bs.out_for_delivery}     color="#FFC107" icon={Navigation}    active={statusFilter==='out_for_delivery'}    onClick={() => toggleStatus('out_for_delivery')} />
+        <KpiCard label="Out for Delivery"            value={bs.out_for_delivery}     color="#D97706" icon={Navigation}    active={statusFilter==='out_for_delivery'}    onClick={() => toggleStatus('out_for_delivery')} />
         <KpiCard label="On Hold"                     value={bs.on_hold}              color="#F44336" icon={OctagonX}      active={statusFilter==='on_hold'}             onClick={() => toggleStatus('on_hold')} />
         <KpiCard label="Awaiting Collection"         value={bs.awaiting_collection}  color="#FF9800" icon={Store}         active={statusFilter==='awaiting_collection'} onClick={() => toggleStatus('awaiting_collection')} />
         <KpiCard label="Delivered Today"             value={stats?.delivered_today}  color="#00C853" icon={PackageCheck}  active={statusFilter==='delivered'}           onClick={toggleDeliveredToday} />
@@ -561,7 +561,7 @@ export default function TrackingPage() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Consignment, postcode, recipient…"
-            style={{ width: '100%', boxSizing: 'border-box', background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.10)', borderRadius: 8, padding: '9px 36px', color: '#fff', fontSize: 13, outline: 'none' }}
+            style={{ width: '100%', boxSizing: 'border-box', background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.10)', borderRadius: 8, padding: '9px 36px', color: '#0F172A', fontSize: 13, outline: 'none' }}
           />
           {search && (
             <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: 0, display: 'flex' }}>
@@ -666,17 +666,17 @@ export default function TrackingPage() {
                     </span>
                   </td>
                   <td>
-                    <div style={{ fontSize: 13, color: '#fff', fontWeight: 500 }}>{p.customer_name || '—'}</div>
+                    <div style={{ fontSize: 13, color: '#0F172A', fontWeight: 500 }}>{p.customer_name || '—'}</div>
                     {p.customer_account && <div style={{ fontSize: 11, color: '#64748B' }}>{p.customer_account}</div>}
                   </td>
                   <td>
-                    <div style={{ fontSize: 13, color: '#DDD' }}>
+                    <div style={{ fontSize: 13, color: '#334155' }}>
                       <CourierBadge name={p.courier_name} code={p.courier_code} />
                     </div>
                     {p.service_name && <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{p.service_name}</div>}
                   </td>
                   <td>
-                    <div style={{ fontSize: 13, color: '#DDD' }}>{p.recipient_name || '—'}</div>
+                    <div style={{ fontSize: 13, color: '#334155' }}>{p.recipient_name || '—'}</div>
                     {p.recipient_postcode && (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, color: '#64748B' }}>
                         <MapPin size={10} /> {p.recipient_postcode}
@@ -685,7 +685,7 @@ export default function TrackingPage() {
                   </td>
                   <td><StatusBadge status={p.status} /></td>
                   <td>
-                    <div style={{ fontSize: 12, color: '#DDD' }}>{p.status_description?.slice(0, 40) || p.last_location || '—'}</div>
+                    <div style={{ fontSize: 12, color: '#334155' }}>{p.status_description?.slice(0, 40) || p.last_location || '—'}</div>
                     <div style={{ fontSize: 11, color: '#64748B' }}>{timeAgo(p.last_event_at)}</div>
                   </td>
                   <td style={{ textAlign: 'center', fontSize: 12, color: '#64748B' }}>
