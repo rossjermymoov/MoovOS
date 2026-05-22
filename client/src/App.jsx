@@ -44,10 +44,9 @@ function RequireAuth({ children }) {
   const location = useLocation();
 
   if (loading) {
-    // Blank screen while checking token — brief flicker is acceptable
     return (
-      <div style={{ background: '#0A0B1E', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ color: '#AAAAAA', fontSize: 14 }}>Loading…</span>
+      <div style={{ background: '#F8FAFC', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ color: '#64748B', fontSize: 14 }}>Loading…</span>
       </div>
     );
   }
