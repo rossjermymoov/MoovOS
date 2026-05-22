@@ -481,7 +481,7 @@ function MessageBubble({ email, queryId, courierName, courierCode, approving, on
 // ─── Thread area (tabs + messages) ───────────────────────────────────────────
 function ThreadArea({ emails, queryId, courierName, courierCode, approving, onApproved }) {
   const [tab, setTab] = useState('customer');
-  const bottomRef = useRef(null);
+  const messagesRef = useRef(null);
 
   const customerEmails = emails.filter(e => e.direction === 'inbound_customer' || e.direction === 'outbound_customer');
   const courierEmails  = emails.filter(e => e.direction === 'inbound_courier'  || e.direction === 'outbound_courier');
@@ -498,8 +498,13 @@ function ThreadArea({ emails, queryId, courierName, courierCode, approving, onAp
                 : tab === 'courier'  ? courierEmails
                 : noteEmails;
 
+  // Scroll to bottom of messages when tab changes or new message arrives.
+  // Using scrollTop directly — scrollIntoView bubbles up the DOM and can
+  // scroll the window if the messages div has no overflow, breaking the layout.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesRef.current) {
+      messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
+    }
   }, [tab, emails.length]);
 
   return (
@@ -533,7 +538,7 @@ function ThreadArea({ emails, queryId, courierName, courierCode, approving, onAp
       </div>
 
       {/* Messages */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px 6px' }}>
+      <div ref={messagesRef} style={{ flex: 1, overflowY: 'auto', padding: '14px 18px 6px' }}>
         {visible.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '48px 20px', color: C.muted }}>
             <Mail size={28} style={{ marginBottom: 10, opacity: 0.25 }} />
@@ -554,7 +559,6 @@ function ThreadArea({ emails, queryId, courierName, courierCode, approving, onAp
               />
             ))
         )}
-        <div ref={bottomRef} />
       </div>
     </div>
   );
