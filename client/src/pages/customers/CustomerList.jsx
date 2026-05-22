@@ -43,7 +43,7 @@ export default function CustomerList() {
   }
 
   function SortIcon({ col: c }) {
-    if (sort.col !== c) return <span style={{ color: '#555', marginLeft: 4 }}>⇅</span>;
+    if (sort.col !== c) return <span style={{ color: '#64748B', marginLeft: 4 }}>⇅</span>;
     return <span style={{ color: '#00C853', marginLeft: 4 }}>{sort.order === 'asc' ? '↑' : '↓'}</span>;
   }
 
@@ -78,7 +78,7 @@ export default function CustomerList() {
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           {/* Search */}
           <div className="pill-input-wrap" style={{ minWidth: 280, flex: 1 }}>
-            <Search size={14} style={{ marginLeft: 14, color: '#AAAAAA', flexShrink: 0 }} />
+            <Search size={14} style={{ marginLeft: 14, color: '#64748B', flexShrink: 0 }} />
             <input
               value={filters.search}
               onChange={e => setFilter('search', e.target.value)}
@@ -120,8 +120,8 @@ export default function CustomerList() {
                 onClick={() => setFilter('is_on_stop', filters.is_on_stop === 'true' ? '' : 'true')}
                 style={{
                   padding: '7px 14px', borderRadius: 9999, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none',
-                  background: filters.is_on_stop === 'true' ? 'rgba(233,30,140,0.2)' : 'rgba(255,255,255,0.06)',
-                  color:      filters.is_on_stop === 'true' ? '#E91E8C' : '#AAAAAA',
+                  background: filters.is_on_stop === 'true' ? 'rgba(233,30,140,0.2)' : 'rgba(0,0,0,0.06)',
+                  color:      filters.is_on_stop === 'true' ? '#E91E8C' : '#64748B',
                   outline:    filters.is_on_stop === 'true' ? '1px solid #E91E8C' : 'none',
                 }}>
                 On Stop
@@ -131,8 +131,8 @@ export default function CustomerList() {
                 onClick={() => setFilter('has_bond', filters.has_bond === 'true' ? '' : 'true')}
                 style={{
                   padding: '7px 14px', borderRadius: 9999, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none',
-                  background: filters.has_bond === 'true' ? 'rgba(255,193,7,0.2)' : 'rgba(255,255,255,0.06)',
-                  color:      filters.has_bond === 'true' ? '#FFC107' : '#AAAAAA',
+                  background: filters.has_bond === 'true' ? 'rgba(255,193,7,0.2)' : 'rgba(0,0,0,0.06)',
+                  color:      filters.has_bond === 'true' ? '#FFC107' : '#64748B',
                   outline:    filters.has_bond === 'true' ? '1px solid #FFC107' : 'none',
                   display: 'flex', alignItems: 'center', gap: 5,
                 }}>
@@ -151,7 +151,7 @@ export default function CustomerList() {
       </div>
 
       {/* Count */}
-      <div style={{ fontSize: 12, color: '#AAAAAA', marginBottom: 10 }}>
+      <div style={{ fontSize: 12, color: '#64748B', marginBottom: 10 }}>
         {isLoading ? 'Loading…' : `${total.toLocaleString()} customer${total !== 1 ? 's' : ''}`}
       </div>
 
@@ -173,10 +173,10 @@ export default function CustomerList() {
             </thead>
             <tbody>
               {isLoading && (
-                <tr><td colSpan={8} style={{ textAlign: 'center', color: '#AAAAAA', padding: 32 }}>Loading…</td></tr>
+                <tr><td colSpan={8} style={{ textAlign: 'center', color: '#64748B', padding: 32 }}>Loading…</td></tr>
               )}
               {!isLoading && customers.length === 0 && (
-                <tr><td colSpan={8} style={{ textAlign: 'center', color: '#AAAAAA', padding: 32 }}>No customers found</td></tr>
+                <tr><td colSpan={8} style={{ textAlign: 'center', color: '#64748B', padding: 32 }}>No customers found</td></tr>
               )}
               {customers.map(c => {
                 const hasBond = parseFloat(c.bond_amount_held) > 0;
@@ -195,7 +195,7 @@ export default function CustomerList() {
                     </td>
                     <td>
                       <div style={{ fontWeight: 600 }}>{c.business_name}</div>
-                      <div style={{ fontSize: 11, color: '#AAAAAA', marginTop: 1 }}>
+                      <div style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
                         {c.main_contact_name ? `${c.main_contact_name} · ` : ''}{c.primary_email}
                       </div>
                     </td>
@@ -205,8 +205,8 @@ export default function CustomerList() {
                     <td style={{ minWidth: 120 }}>
                       <CreditUtilisationBar pct={parseFloat(c.credit_utilisation_pct) || 0} />
                     </td>
-                    <td style={{ color: '#AAAAAA', fontSize: 12 }}>{c.account_manager_name || '—'}</td>
-                    <td style={{ color: '#AAAAAA', fontSize: 12, whiteSpace: 'nowrap' }}>
+                    <td style={{ color: '#64748B', fontSize: 12 }}>{c.account_manager_name || '—'}</td>
+                    <td style={{ color: '#64748B', fontSize: 12, whiteSpace: 'nowrap' }}>
                       {c.date_onboarded ? format(new Date(c.date_onboarded), 'dd MMM yyyy') : '—'}
                     </td>
                   </tr>
@@ -217,18 +217,18 @@ export default function CustomerList() {
         </div>
 
         {/* Pagination */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderTop: '1px solid rgba(0,0,0,0.06)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 12, color: '#AAAAAA' }}>Per page</span>
+            <span style={{ fontSize: 12, color: '#64748B' }}>Per page</span>
             {PAGE_SIZES.map(size => (
               <button key={size} onClick={() => setPage({ limit: size, offset: 0 })} style={{
                 padding: '4px 10px', borderRadius: 9999, fontSize: 12, border: 'none', cursor: 'pointer',
-                background: page.limit === size ? '#00C853' : 'rgba(255,255,255,0.08)',
+                background: page.limit === size ? '#00C853' : 'rgba(0,0,0,0.08)',
                 color: page.limit === size ? '#000' : '#fff', fontWeight: 700,
               }}>{size}</button>
             ))}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#AAAAAA' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#64748B' }}>
             <button className="btn-ghost" style={{ padding: '4px 12px', fontSize: 12 }}
               disabled={page.offset === 0}
               onClick={() => setPage(p => ({ ...p, offset: Math.max(0, p.offset - p.limit) }))}>← Prev</button>

@@ -92,15 +92,15 @@ export default function BillingSettings() {
     setForm(f => ({ ...f, [key]: value }));
   }
 
-  if (isLoading) return <div style={{ color: '#888', padding: 24 }}>Loading…</div>;
+  if (isLoading) return <div style={{ color: '#64748B', padding: 24 }}>Loading…</div>;
 
   const inputStyle = {
-    background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+    background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.08)',
     borderRadius: 8, color: '#fff', fontSize: 13, padding: '8px 12px',
     outline: 'none', width: '100%',
   };
-  const labelStyle = { fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6, display: 'block' };
-  const sectionStyle = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '20px 24px', marginBottom: 16 };
+  const labelStyle = { fontSize: 12, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6, display: 'block' };
+  const sectionStyle = { background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.07)', borderRadius: 12, padding: '20px 24px', marginBottom: 16 };
 
   return (
     <div style={{ maxWidth: 700 }}>
@@ -108,7 +108,7 @@ export default function BillingSettings() {
 
       <div style={{ marginBottom: 24 }}>
         <h2 style={{ color: '#fff', fontWeight: 700, fontSize: 18, margin: 0 }}>Billing Settings</h2>
-        <p style={{ color: '#888', fontSize: 13, margin: '6px 0 0' }}>
+        <p style={{ color: '#64748B', fontSize: 13, margin: '6px 0 0' }}>
           Configure when verified charges are automatically moved to <em>Awaiting Reconciliation</em>.
         </p>
       </div>
@@ -118,13 +118,13 @@ export default function BillingSettings() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <div style={{ color: '#fff', fontWeight: 600, fontSize: 14 }}>Automatic billing run</div>
-            <div style={{ color: '#888', fontSize: 12, marginTop: 3 }}>When enabled, the server runs the billing cycle on the schedule below.</div>
+            <div style={{ color: '#64748B', fontSize: 12, marginTop: 3 }}>When enabled, the server runs the billing cycle on the schedule below.</div>
           </div>
           <button
             onClick={() => field('enabled', !form.enabled)}
             style={{
-              background: form.enabled ? 'rgba(0,200,83,0.15)' : 'rgba(255,255,255,0.06)',
-              border: `1px solid ${form.enabled ? 'rgba(0,200,83,0.4)' : 'rgba(255,255,255,0.1)'}`,
+              background: form.enabled ? 'rgba(0,200,83,0.15)' : 'rgba(0,0,0,0.06)',
+              border: `1px solid ${form.enabled ? 'rgba(0,200,83,0.4)' : 'rgba(0,0,0,0.08)'}`,
               borderRadius: 20, padding: '6px 18px', fontSize: 13, fontWeight: 700,
               color: form.enabled ? '#00C853' : '#888', cursor: 'pointer',
             }}
@@ -157,8 +157,8 @@ export default function BillingSettings() {
             {[0, 1].map(p => (
               <button key={p} onClick={() => field('fortnightly_parity', p)} style={{
                 flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                background: form.fortnightly_parity === p ? 'rgba(0,200,83,0.15)' : 'rgba(255,255,255,0.04)',
-                border: `1px solid ${form.fortnightly_parity === p ? 'rgba(0,200,83,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                background: form.fortnightly_parity === p ? 'rgba(0,200,83,0.15)' : 'rgba(0,0,0,0.03)',
+                border: `1px solid ${form.fortnightly_parity === p ? 'rgba(0,200,83,0.4)' : 'rgba(0,0,0,0.08)'}`,
                 color: form.fortnightly_parity === p ? '#00C853' : '#888',
               }}>
                 Week {p === 0 ? 'A' : 'B'}
@@ -187,7 +187,7 @@ export default function BillingSettings() {
           <BarChart2 size={14} color="#A5B4FC" />
           <div style={{ color: '#fff', fontWeight: 600, fontSize: 14 }}>Volume mix refresh</div>
         </div>
-        <div style={{ color: '#888', fontSize: 12, marginBottom: 16, lineHeight: 1.55 }}>
+        <div style={{ color: '#64748B', fontSize: 12, marginBottom: 16, lineHeight: 1.55 }}>
           Controls when rate card projection volume mixes are automatically updated from actual billing data.
           The DPD-ND2KG service is always counted as DPD-32 in the mix.
         </div>
@@ -205,7 +205,7 @@ export default function BillingSettings() {
             </select>
           </div>
         </div>
-        <div style={{ marginTop: 10, fontSize: 12, color: '#555' }}>
+        <div style={{ marginTop: 10, fontSize: 12, color: '#64748B' }}>
           Next refresh: {nextRunDate(form.volume_mix_refresh_day, form.volume_mix_refresh_hour, 0)}
         </div>
       </div>
@@ -219,7 +219,7 @@ export default function BillingSettings() {
           </span>
         </div>
         {settings?.last_run_at && (
-          <div style={{ color: '#666', fontSize: 12, marginTop: 6 }}>
+          <div style={{ color: '#64748B', fontSize: 12, marginTop: 6 }}>
             Last run: {new Date(settings.last_run_at).toLocaleString('en-GB')}
           </div>
         )}
@@ -265,14 +265,14 @@ export default function BillingSettings() {
           </div>
           <div style={{ color: '#ccc', fontSize: 13 }}>
             <div>{runResult.charges_queued} charges moved to Awaiting Reconciliation</div>
-            <div style={{ color: '#888', fontSize: 12, marginTop: 4 }}>
+            <div style={{ color: '#64748B', fontSize: 12, marginTop: 4 }}>
               {runResult.customers_processed} customers processed · Cycles: {runResult.due_cycles?.join(', ') || 'none due'}
             </div>
           </div>
           {runResult.details?.length > 0 && (
-            <div style={{ marginTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 10 }}>
+            <div style={{ marginTop: 10, borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 10 }}>
               {runResult.details.map((d, i) => (
-                <div key={i} style={{ fontSize: 12, color: '#888', display: 'flex', justifyContent: 'space-between' }}>
+                <div key={i} style={{ fontSize: 12, color: '#64748B', display: 'flex', justifyContent: 'space-between' }}>
                   <span>{d.name} ({d.account})</span>
                   <span style={{ color: '#00C853' }}>{d.charges_queued} charges</span>
                 </div>

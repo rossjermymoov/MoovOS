@@ -36,7 +36,7 @@ export function CreditUtilisationBar({ pct = 0 }) {
   const barPct = Math.min((pct / 110) * 100, 100);
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
+      <div style={{ flex: 1, height: 6, background: 'rgba(0,0,0,0.08)', borderRadius: 3, overflow: 'hidden' }}>
         <div style={{ width: `${barPct}%`, height: '100%', background: color, borderRadius: 3, transition: 'width 0.3s' }} />
       </div>
       <span style={{ fontSize: 12, color, fontWeight: 700, minWidth: 40, textAlign: 'right' }}>

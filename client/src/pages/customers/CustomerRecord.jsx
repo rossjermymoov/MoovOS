@@ -37,7 +37,7 @@ const gbp = (n) => `£${parseFloat(n || 0).toLocaleString('en-GB', { minimumFrac
 
 // ─── Shared field components ─────────────────────────────────
 const inp = (extra = {}) => ({
-  background: '#0D0E2A', border: '1px solid rgba(255,255,255,0.15)',
+  background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
   borderRadius: 9999, padding: '5px 14px', color: '#fff', fontSize: 12,
   outline: 'none', width: '100%', boxSizing: 'border-box', ...extra,
 });
@@ -46,7 +46,7 @@ const sel = () => inp({ cursor: 'pointer' });
 function Row({ label, value, edit, editNode }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, minHeight: 26 }}>
-      <span style={{ fontSize: 12, color: '#AAAAAA', flexShrink: 0, whiteSpace: 'nowrap', minWidth: 110 }}>{label}</span>
+      <span style={{ fontSize: 12, color: '#64748B', flexShrink: 0, whiteSpace: 'nowrap', minWidth: 110 }}>{label}</span>
       {edit
         ? <div style={{ width: 180, flexShrink: 0 }}>{editNode}</div>
         : <span style={{ fontSize: 12, color: '#fff', textAlign: 'right', wordBreak: 'break-word' }}>{value || '—'}</span>}
@@ -102,7 +102,7 @@ function CustomerRateCardAssignments({ customerId }) {
 
   if (!activeCarriers.length) return (
     <InfoCard title="Rate Cards">
-      <span style={{ fontSize: 12, color: '#555', fontStyle: 'italic' }}>No active carrier links — link carriers to assign rate cards.</span>
+      <span style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic' }}>No active carrier links — link carriers to assign rate cards.</span>
     </InfoCard>
   );
 
@@ -285,7 +285,7 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
                 }
               />
               {edit && (
-                <div style={{ fontSize: 11, color: '#AAAAAA', marginTop: 4, paddingLeft: 2 }}>
+                <div style={{ fontSize: 11, color: '#64748B', marginTop: 4, paddingLeft: 2 }}>
                   Set this to the identifier the customer sends as their account ID in API webhooks.
                   Billing will fall back to this if no standard account number is matched.
                 </div>
@@ -361,7 +361,7 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
             <InfoCard title="Health Score Detail">
               <p style={{ fontSize: 12, color: '#DDDDDD', lineHeight: 1.6 }}>{c.health_score_summary}</p>
               {c.health_score_updated && (
-                <p style={{ fontSize: 11, color: '#AAAAAA', marginTop: 4 }}>
+                <p style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
                   Last calculated: {format(new Date(c.health_score_updated), 'dd MMM yyyy, HH:mm')}
                 </p>
               )}
@@ -377,7 +377,7 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#E91E8C' }}>Delete Customer</div>
-              <div style={{ fontSize: 12, color: '#AAAAAA', marginTop: 2 }}>
+              <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
                 Permanently removes this customer and all associated data. This cannot be undone.
               </div>
             </div>
@@ -428,27 +428,27 @@ function ContactsTab({ customerId, contacts = [], onRefresh }) {
 
   const startEdit = (ct) => { setEditingId(ct.id); setEditForm({ full_name: ct.full_name, job_title: ct.job_title || '', phone_number: ct.phone_number || '', email_address: ct.email_address, is_main_contact: ct.is_main_contact, is_finance_contact: ct.is_finance_contact }); };
 
-  const inputStyle = { background: '#1A1A2E', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, color: '#fff', fontSize: 13, padding: '5px 10px', width: '100%' };
+  const inputStyle = { background: '#1A1A2E', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 6, color: '#fff', fontSize: 13, padding: '5px 10px', width: '100%' };
   const flagBtn = (active, label) => ({
     fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
-    background: active ? 'rgba(0,200,83,0.2)' : 'rgba(255,255,255,0.06)',
-    border: active ? '1px solid rgba(0,200,83,0.4)' : '1px solid rgba(255,255,255,0.1)',
+    background: active ? 'rgba(0,200,83,0.2)' : 'rgba(0,0,0,0.06)',
+    border: active ? '1px solid rgba(0,200,83,0.4)' : '1px solid rgba(0,0,0,0.08)',
     color: active ? '#00C853' : '#888',
   });
 
   return (
     <div className="moov-card" style={{ overflow: 'hidden' }}>
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(0,0,0,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ fontSize: 15, fontWeight: 600, color: '#7B2FBE' }}>Contacts</h3>
         {!adding && <button className="btn-ghost" style={{ fontSize: 13 }} onClick={() => setAdding(true)}>+ Add Contact</button>}
       </div>
 
       {/* Add form */}
       {adding && (
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(123,47,190,0.06)' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(0,0,0,0.06)', background: 'rgba(123,47,190,0.06)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
             {[['full_name','Full Name *'],['job_title','Job Title'],['phone_number','Phone'],['email_address','Email *']].map(([k,lbl]) => (
-              <div key={k}><label style={{ fontSize: 11, color: '#AAAAAA', display: 'block', marginBottom: 3 }}>{lbl}</label>
+              <div key={k}><label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 3 }}>{lbl}</label>
                 <input style={inputStyle} value={addForm[k]} onChange={e => setAddForm(f => ({ ...f, [k]: e.target.value }))} placeholder={lbl.replace(' *','')} />
               </div>
             ))}
@@ -464,7 +464,7 @@ function ContactsTab({ customerId, contacts = [], onRefresh }) {
       )}
 
       {contacts.length === 0 && !adding ? (
-        <div style={{ padding: 32, textAlign: 'center', color: '#AAAAAA', fontSize: 13 }}>No contacts added yet</div>
+        <div style={{ padding: 32, textAlign: 'center', color: '#64748B', fontSize: 13 }}>No contacts added yet</div>
       ) : (
         <table className="moov-table">
           <thead>
@@ -491,7 +491,7 @@ function ContactsTab({ customerId, contacts = [], onRefresh }) {
                       <td>
                         <div style={{ display: 'flex', gap: 4 }}>
                           <button onClick={() => patchContact.mutate({ id: ct.id, data: editForm })} disabled={patchContact.isPending} title="Save" style={{ background: 'rgba(0,200,83,0.15)', border: '1px solid rgba(0,200,83,0.3)', borderRadius: 5, padding: '4px 6px', cursor: 'pointer', color: '#00C853' }}><Check size={13} /></button>
-                          <button onClick={() => setEditingId(null)} title="Cancel" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 5, padding: '4px 6px', cursor: 'pointer', color: '#AAAAAA' }}><X size={13} /></button>
+                          <button onClick={() => setEditingId(null)} title="Cancel" style={{ background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 5, padding: '4px 6px', cursor: 'pointer', color: '#64748B' }}><X size={13} /></button>
                         </div>
                       </td>
                     </>
@@ -501,15 +501,15 @@ function ContactsTab({ customerId, contacts = [], onRefresh }) {
                       <td>
                         <div style={{ display: 'flex', gap: 4 }}>
                           <button onClick={() => deleteContact.mutate(ct.id)} disabled={deleteContact.isPending} style={{ background: 'rgba(233,30,140,0.2)', border: '1px solid rgba(233,30,140,0.4)', borderRadius: 5, padding: '4px 8px', cursor: 'pointer', color: '#E91E8C', fontSize: 12, fontWeight: 700 }}>Delete</button>
-                          <button onClick={() => setDelConfirm(null)} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 5, padding: '4px 6px', cursor: 'pointer', color: '#AAAAAA' }}><X size={13} /></button>
+                          <button onClick={() => setDelConfirm(null)} style={{ background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 5, padding: '4px 6px', cursor: 'pointer', color: '#64748B' }}><X size={13} /></button>
                         </div>
                       </td>
                     </>
                   ) : (
                     <>
                       <td style={{ fontWeight: 600 }}>{ct.full_name}</td>
-                      <td style={{ color: '#AAAAAA' }}>{ct.job_title || '—'}</td>
-                      <td style={{ color: '#AAAAAA' }}>{ct.phone_number || '—'}</td>
+                      <td style={{ color: '#64748B' }}>{ct.job_title || '—'}</td>
+                      <td style={{ color: '#64748B' }}>{ct.phone_number || '—'}</td>
                       <td style={{ color: '#00BCD4' }}>{ct.email_address}</td>
                       <td>
                         <div style={{ display: 'flex', gap: 6 }}>
@@ -519,7 +519,7 @@ function ContactsTab({ customerId, contacts = [], onRefresh }) {
                       </td>
                       <td>
                         <div style={{ display: 'flex', gap: 4 }}>
-                          <button onClick={() => startEdit(ct)} title="Edit" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#AAAAAA', padding: '4px 5px' }}><Pencil size={13} /></button>
+                          <button onClick={() => startEdit(ct)} title="Edit" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: '4px 5px' }}><Pencil size={13} /></button>
                           <button onClick={() => setDelConfirm(ct.id)} title="Delete" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#E91E8C', padding: '4px 5px' }}><Trash2 size={13} /></button>
                         </div>
                       </td>
@@ -551,7 +551,7 @@ function PerformanceTab({ customerId }) {
 
   if (isLoading) {
     return (
-      <div style={{ textAlign: 'center', color: '#AAAAAA', padding: 32 }}>
+      <div style={{ textAlign: 'center', color: '#64748B', padding: 32 }}>
         Loading performance data…
       </div>
     );
@@ -577,8 +577,8 @@ function PerformanceTab({ customerId }) {
           onClick={() => setShowPerfDebug(d => !d)}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px',
             borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer',
-            background: showPerfDebug ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.05)',
-            border: `1px solid ${showPerfDebug ? 'rgba(245,158,11,0.45)' : 'rgba(255,255,255,0.1)'}`,
+            background: showPerfDebug ? 'rgba(245,158,11,0.15)' : 'rgba(0,0,0,0.04)',
+            border: `1px solid ${showPerfDebug ? 'rgba(245,158,11,0.45)' : 'rgba(0,0,0,0.08)'}`,
             color: showPerfDebug ? '#F59E0B' : '#555' }}>
           <Bug size={11} /> {showPerfDebug ? 'Hide debug' : 'Debug numbers'}
         </button>
@@ -595,8 +595,8 @@ function PerformanceTab({ customerId }) {
           </div>
 
           {/* Assumptions */}
-          <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,0.05)', lineHeight: 1.8 }}>
-            <div style={{ fontWeight: 700, color: '#888', marginBottom: 4, fontSize: 10, textTransform: 'uppercase' }}>Data source</div>
+          <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(0,0,0,0.04)', lineHeight: 1.8 }}>
+            <div style={{ fontWeight: 700, color: '#64748B', marginBottom: 4, fontSize: 10, textTransform: 'uppercase' }}>Data source</div>
             <div style={{ color: '#AAA' }}>Table: <code style={{ color: '#00C853' }}>charges</code> WHERE <code style={{ color: '#F59E0B' }}>charge_type = 'courier'</code> AND <code style={{ color: '#F59E0B' }}>cancelled = false</code></div>
             <div style={{ color: '#AAA', marginTop: 4 }}>
               <span style={{ color: '#A5B4FC' }}>Revenue</span> = SUM(price) &nbsp;·&nbsp;
@@ -607,14 +607,14 @@ function PerformanceTab({ customerId }) {
           </div>
 
           {/* Period summary */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
             {[
               { label: 'Last 7 days', d: perfData.last7 },
               { label: 'Last 30 days', d: perfData.last30 },
               { label: 'All time', d: perfData.all },
             ].map(({ label, d }) => (
-              <div key={label} style={{ padding: '10px 14px', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
-                <div style={{ fontWeight: 700, color: '#888', fontSize: 10, textTransform: 'uppercase', marginBottom: 6 }}>{label}</div>
+              <div key={label} style={{ padding: '10px 14px', borderRight: '1px solid rgba(0,0,0,0.04)' }}>
+                <div style={{ fontWeight: 700, color: '#64748B', fontSize: 10, textTransform: 'uppercase', marginBottom: 6 }}>{label}</div>
                 {[
                   { k: 'charges',  v: d?.charges,  c: '#AAA' },
                   { k: 'parcels',  v: d?.parcels,  c: '#00BCD4' },
@@ -625,7 +625,7 @@ function PerformanceTab({ customerId }) {
                   ...(d?.missing_cost_count > 0 ? [{ k: '⚠ missing cost', v: `${d.missing_cost_count} charges`, c: '#EF4444' }] : []),
                 ].map(({ k, v, c }) => (
                   <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                    <span style={{ color: '#555' }}>{k}</span>
+                    <span style={{ color: '#64748B' }}>{k}</span>
                     <span style={{ color: c, fontFamily: 'monospace', fontWeight: 600 }}>{v}</span>
                   </div>
                 ))}
@@ -635,15 +635,15 @@ function PerformanceTab({ customerId }) {
 
           {/* Full by-service breakdown including null cost rows */}
           <div style={{ padding: '10px 14px' }}>
-            <div style={{ fontWeight: 700, color: '#888', fontSize: 10, textTransform: 'uppercase', marginBottom: 8 }}>
+            <div style={{ fontWeight: 700, color: '#64748B', fontSize: 10, textTransform: 'uppercase', marginBottom: 8 }}>
               All-time by service — {perfData.by_courier?.length ?? 0} services
             </div>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
                   {['Service name', 'Charges', 'Revenue', 'Cost', 'Profit', 'Margin'].map(h => (
                     <th key={h} style={{ padding: '3px 6px', textAlign: h === 'Service name' ? 'left' : 'right',
-                      color: '#555', fontWeight: 600, fontSize: 10 }}>{h}</th>
+                      color: '#64748B', fontWeight: 600, fontSize: 10 }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -655,9 +655,9 @@ function PerformanceTab({ customerId }) {
                   const mgn = rev > 0 ? (pft / rev * 100).toFixed(1) : '—';
                   const noCost = cst === 0 && rev > 0;
                   return (
-                    <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                    <tr key={i} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
                       <td style={{ padding: '3px 6px', color: '#CCC' }}>{row.service_name || '—'}</td>
-                      <td style={{ padding: '3px 6px', textAlign: 'right', color: '#888', fontFamily: 'monospace' }}>{row.charges}</td>
+                      <td style={{ padding: '3px 6px', textAlign: 'right', color: '#64748B', fontFamily: 'monospace' }}>{row.charges}</td>
                       <td style={{ padding: '3px 6px', textAlign: 'right', color: '#A5B4FC', fontFamily: 'monospace' }}>£{parseFloat(row.revenue).toFixed(2)}</td>
                       <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace',
                         color: noCost ? '#EF4444' : '#B39DDB' }}>
@@ -675,7 +675,7 @@ function PerformanceTab({ customerId }) {
                 })}
               </tbody>
             </table>
-            <div style={{ marginTop: 8, fontSize: 10, color: '#555' }}>
+            <div style={{ marginTop: 8, fontSize: 10, color: '#64748B' }}>
               ⚠ Red cost = £0.00 cost_price on those charges — profit will be inflated. Check carrier rate card linkage.
             </div>
           </div>
@@ -691,7 +691,7 @@ function PerformanceTab({ customerId }) {
           { label: 'Total Charges', value: (perfData.all?.charges || 0).toLocaleString(), unit: '', color: '#00BCD4' },
         ].map(({ label, value, color }) => (
           <div key={label} className="moov-card" style={{ padding: 16, textAlign: 'center' }}>
-            <div style={{ fontSize: 11, color: '#AAAAAA', marginBottom: 4 }}>{label}</div>
+            <div style={{ fontSize: 11, color: '#64748B', marginBottom: 4 }}>{label}</div>
             <div style={{ fontSize: 24, fontWeight: 700, color }}>{value}</div>
           </div>
         ))}
@@ -705,7 +705,7 @@ function PerformanceTab({ customerId }) {
           { label: 'Profit Margin (30d)', value: profitMargin + '%' },
         ].map(({ label, value }) => (
           <div key={label} className="moov-card" style={{ padding: 16, textAlign: 'center' }}>
-            <div style={{ fontSize: 11, color: '#AAAAAA', marginBottom: 4 }}>{label}</div>
+            <div style={{ fontSize: 11, color: '#64748B', marginBottom: 4 }}>{label}</div>
             <div style={{ fontSize: 20, fontWeight: 700, color: '#DDDDDD' }}>{value}</div>
           </div>
         ))}
@@ -735,9 +735,9 @@ function PerformanceTab({ customerId }) {
               {perfData.by_courier.map(row => (
                 <tr key={row.service_name}>
                   <td style={{ color: '#DDDDDD', fontWeight: 500 }}>{row.service_name}</td>
-                  <td style={{ textAlign: 'right', color: '#AAAAAA' }}>{row.charges}</td>
+                  <td style={{ textAlign: 'right', color: '#64748B' }}>{row.charges}</td>
                   <td style={{ textAlign: 'right', color: '#00C853', fontWeight: 600 }}>{gbp(row.revenue)}</td>
-                  <td style={{ textAlign: 'right', color: '#AAAAAA' }}>{gbp(row.cost)}</td>
+                  <td style={{ textAlign: 'right', color: '#64748B' }}>{gbp(row.cost)}</td>
                   <td style={{ textAlign: 'right', fontWeight: 600, color: parseFloat(row.profit) >= 0 ? '#00C853' : '#E91E8C' }}>{gbp(row.profit)}</td>
                 </tr>
               ))}
@@ -751,7 +751,7 @@ function PerformanceTab({ customerId }) {
 
 function MiniBarChart({ dailyData }) {
   if (!dailyData || !dailyData.length) {
-    return <p style={{ color: '#AAAAAA', fontSize: 13 }}>No data yet</p>;
+    return <p style={{ color: '#64748B', fontSize: 13 }}>No data yet</p>;
   }
   const max = Math.max(...dailyData.map(d => parseFloat(d.revenue || 0)), 1);
   const sortedData = [...dailyData].sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -828,14 +828,14 @@ function FinancialTab({ c }) {
                 Not linked to Xero
               </span>
             )}
-            <button onClick={() => refetchCredit()} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', padding: 4 }} title="Refresh">
+            <button onClick={() => refetchCredit()} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: 4 }} title="Refresh">
               <RefreshCw size={13} />
             </button>
           </div>
         </div>
 
         {creditLoading ? (
-          <div style={{ color: '#555', fontSize: 13 }}>Loading…</div>
+          <div style={{ color: '#64748B', fontSize: 13 }}>Loading…</div>
         ) : (
           <>
             {/* Utilisation bar */}
@@ -845,7 +845,7 @@ function FinancialTab({ c }) {
                 <span style={{ fontSize: 13, fontWeight: 700, color: barCol }}>{pct.toFixed(1)}%</span>
               </div>
               {/* Segmented bar: Xero outstanding + MoovOS unbilled */}
-              <div style={{ height: 10, borderRadius: 5, background: 'rgba(255,255,255,0.08)', overflow: 'hidden', position: 'relative' }}>
+              <div style={{ height: 10, borderRadius: 5, background: 'rgba(0,0,0,0.08)', overflow: 'hidden', position: 'relative' }}>
                 {credit?.credit_limit > 0 && (
                   <>
                     {/* Xero outstanding segment */}
@@ -865,7 +865,7 @@ function FinancialTab({ c }) {
                 )}
               </div>
               {/* Bar legend */}
-              <div style={{ display: 'flex', gap: 16, marginTop: 6, fontSize: 11, color: '#666' }}>
+              <div style={{ display: 'flex', gap: 16, marginTop: 6, fontSize: 11, color: '#64748B' }}>
                 <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: barCol, marginRight: 4 }} />Xero outstanding</span>
                 <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: barCol, opacity: 0.45, marginRight: 4 }} />MoovOS unbilled</span>
               </div>
@@ -879,8 +879,8 @@ function FinancialTab({ c }) {
                 { label: 'Total exposure',   val: gbp(credit?.total_exposure ?? 0),   color: barCol, bold: true },
                 { label: 'Credit limit',     val: gbp(credit?.credit_limit ?? 0),     color: '#AAA' },
               ].map(({ label, val, color, bold }) => (
-                <div key={label} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '10px 12px' }}>
-                  <div style={{ fontSize: 11, color: '#666', marginBottom: 4 }}>{label}</div>
+                <div key={label} style={{ background: 'rgba(0,0,0,0.03)', borderRadius: 8, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 11, color: '#64748B', marginBottom: 4 }}>{label}</div>
                   <div style={{ fontSize: 15, fontWeight: bold ? 700 : 600, color }}>{val}</div>
                 </div>
               ))}
@@ -903,13 +903,13 @@ function FinancialTab({ c }) {
             {/* Account status + on-stop controls */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
               <div style={{ display: 'flex', gap: 16, alignItems: 'center', fontSize: 12 }}>
-                <span style={{ color: '#666' }}>Status:</span>
+                <span style={{ color: '#64748B' }}>Status:</span>
                 <AccountStatusBadge status={c.account_status} />
                 {c.is_on_stop && c.on_stop_applied_at && (
-                  <span style={{ color: '#666' }}>since {format(new Date(c.on_stop_applied_at), 'dd MMM yyyy')}</span>
+                  <span style={{ color: '#64748B' }}>since {format(new Date(c.on_stop_applied_at), 'dd MMM yyyy')}</span>
                 )}
                 {c.is_on_stop && c.on_stop_reason && (
-                  <span style={{ color: '#888', fontStyle: 'italic' }}>"{c.on_stop_reason}"</span>
+                  <span style={{ color: '#64748B', fontStyle: 'italic' }}>"{c.on_stop_reason}"</span>
                 )}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
@@ -943,10 +943,10 @@ function FinancialTab({ c }) {
                   onChange={e => setStopReason(e.target.value)}
                   placeholder="e.g. Credit limit exceeded — awaiting payment of overdue invoices"
                   rows={2}
-                  style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#EEE', fontSize: 12, padding: '8px 10px', resize: 'vertical', boxSizing: 'border-box' }}
+                  style={{ width: '100%', background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 6, color: '#EEE', fontSize: 12, padding: '8px 10px', resize: 'vertical', boxSizing: 'border-box' }}
                 />
                 <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
-                  <button onClick={() => { setShowStopForm(false); setStopReason(''); }} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: '#888', borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: 'pointer' }}>Cancel</button>
+                  <button onClick={() => { setShowStopForm(false); setStopReason(''); }} style={{ background: 'none', border: '1px solid rgba(0,0,0,0.08)', color: '#64748B', borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: 'pointer' }}>Cancel</button>
                   <button
                     onClick={() => onStopMutation.mutate({ reason: stopReason })}
                     disabled={!stopReason.trim() || onStopMutation.isPending}
@@ -974,11 +974,11 @@ function FinancialTab({ c }) {
           </h3>
 
           {!credit.xero_connected && (
-            <div style={{ fontSize: 13, color: '#666', fontStyle: 'italic' }}>Xero not connected — go to Settings → Xero to connect.</div>
+            <div style={{ fontSize: 13, color: '#64748B', fontStyle: 'italic' }}>Xero not connected — go to Settings → Xero to connect.</div>
           )}
 
           {credit.xero_connected && credit.invoices?.length === 0 && (
-            <div style={{ fontSize: 13, color: '#555', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ fontSize: 13, color: '#64748B', display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ color: '#00C853' }}>✓</span> No outstanding invoices in Xero.
             </div>
           )}
@@ -1022,9 +1022,9 @@ function FinancialTab({ c }) {
       {/* ── Payment terms ── */}
       <div className="moov-card" style={{ padding: 16 }}>
         <div style={{ display: 'flex', gap: 24, fontSize: 12 }}>
-          <span><span style={{ color: '#666' }}>Payment terms: </span><span style={{ color: '#CCC', fontWeight: 600 }}>{c.payment_terms_days} days</span></span>
-          <span><span style={{ color: '#666' }}>Billing: </span><span style={{ color: '#CCC', fontWeight: 600 }}>{c.billing_cycle || '—'}</span></span>
-          {c.bond_amount_held > 0 && <span><span style={{ color: '#666' }}>Bond held: </span><span style={{ color: '#CCC', fontWeight: 600 }}>{gbp(c.bond_amount_held)}</span></span>}
+          <span><span style={{ color: '#64748B' }}>Payment terms: </span><span style={{ color: '#CCC', fontWeight: 600 }}>{c.payment_terms_days} days</span></span>
+          <span><span style={{ color: '#64748B' }}>Billing: </span><span style={{ color: '#CCC', fontWeight: 600 }}>{c.billing_cycle || '—'}</span></span>
+          {c.bond_amount_held > 0 && <span><span style={{ color: '#64748B' }}>Bond held: </span><span style={{ color: '#CCC', fontWeight: 600 }}>{gbp(c.bond_amount_held)}</span></span>}
         </div>
       </div>
     </div>
@@ -1091,13 +1091,13 @@ function CustomerCommsTab({ customerId }) {
           <div key={item.id}
             className="moov-card"
             style={{ padding: 0, overflow: 'hidden', cursor: 'pointer',
-              border: `1px solid rgba(255,255,255,0.06)`,
+              border: `1px solid rgba(0,0,0,0.06)`,
               borderLeft: `3px solid ${dir.color}` }}
             onClick={() => setExpanded(isOpen ? null : item.id)}
           >
             {/* Header row */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
-              background: isOpen ? 'rgba(255,255,255,0.03)' : 'transparent' }}>
+              background: isOpen ? 'rgba(0,0,0,0.03)' : 'transparent' }}>
 
               {/* Direction badge */}
               <span style={{ fontSize: 10, fontWeight: 700, color: dir.color,
@@ -1107,7 +1107,7 @@ function CustomerCommsTab({ customerId }) {
 
               {/* Source / query context */}
               {item.source === 'query_email' && item.consignment_number && (
-                <span style={{ fontSize: 10, color: '#888', background: 'rgba(255,255,255,0.05)',
+                <span style={{ fontSize: 10, color: '#64748B', background: 'rgba(0,0,0,0.04)',
                   padding: '2px 7px', borderRadius: 3, fontFamily: 'monospace', flexShrink: 0 }}>
                   {item.consignment_number}
                 </span>
@@ -1125,14 +1125,14 @@ function CustomerCommsTab({ customerId }) {
               </span>
 
               {/* Date */}
-              <span style={{ fontSize: 11, color: '#666', flexShrink: 0 }}>{date}</span>
+              <span style={{ fontSize: 11, color: '#64748B', flexShrink: 0 }}>{date}</span>
             </div>
 
             {/* Expanded body */}
             {isOpen && (
-              <div style={{ padding: '0 14px 14px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ padding: '0 14px 14px', borderTop: '1px solid rgba(0,0,0,0.06)' }}>
                 {item.from_address && (
-                  <div style={{ fontSize: 11, color: '#666', padding: '8px 0 6px' }}>
+                  <div style={{ fontSize: 11, color: '#64748B', padding: '8px 0 6px' }}>
                     From: <span style={{ color: '#999' }}>{item.from_address}</span>
                     {item.to_address && <> · To: <span style={{ color: '#999' }}>{item.to_address}</span></>}
                   </div>
@@ -1155,7 +1155,7 @@ function CustomerCommsTab({ customerId }) {
 
             {/* Collapsed preview */}
             {!isOpen && item.body_text && (
-              <div style={{ padding: '0 14px 10px', fontSize: 11, color: '#555',
+              <div style={{ padding: '0 14px 10px', fontSize: 11, color: '#64748B',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {preview}
               </div>
@@ -1205,7 +1205,7 @@ export default function CustomerRecord() {
   });
 
   if (isLoading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: '#AAAAAA' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: '#64748B' }}>
       Loading customer record…
     </div>
   );
@@ -1221,7 +1221,7 @@ export default function CustomerRecord() {
   return (
     <div>
       <button onClick={() => navigate('/customers')}
-        style={{ background: 'none', border: 'none', color: '#AAAAAA', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, marginBottom: 16 }}>
+        style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, marginBottom: 16 }}>
         <ArrowLeft size={14} /> All Customers
       </button>
 
@@ -1230,7 +1230,7 @@ export default function CustomerRecord() {
           <AlertTriangle size={20} style={{ color: '#E91E8C', flexShrink: 0 }} />
           <div style={{ flex: 1 }}>
             <span style={{ color: '#E91E8C', fontWeight: 700, fontSize: 15 }}>Account On Stop</span>
-            <span style={{ color: '#AAAAAA', fontSize: 13, marginLeft: 12 }}>Shipment access blocked · Reason: {c.on_stop_reason}</span>
+            <span style={{ color: '#64748B', fontSize: 13, marginLeft: 12 }}>Shipment access blocked · Reason: {c.on_stop_reason}</span>
           </div>
           <button className="btn-ghost" style={{ fontSize: 13 }} onClick={() => setOnStopModal('remove')}>Remove On Stop</button>
         </div>
@@ -1241,7 +1241,7 @@ export default function CustomerRecord() {
           <ShieldCheck size={20} style={{ color: '#FFC107', flexShrink: 0 }} />
           <div style={{ flex: 1 }}>
             <span style={{ color: '#FFC107', fontWeight: 700, fontSize: 15 }}>Bond Held</span>
-            <span style={{ color: '#AAAAAA', fontSize: 13, marginLeft: 12 }}>
+            <span style={{ color: '#64748B', fontSize: 13, marginLeft: 12 }}>
               Amount: {gbp(c.bond_amount_held)}
             </span>
           </div>
@@ -1270,13 +1270,13 @@ export default function CustomerRecord() {
               <TierBadge tier={c.tier} />
             </div>
             <div style={{ display: 'flex', gap: 16, marginTop: 8, flexWrap: 'wrap' }}>
-              <span style={{ color: '#AAAAAA', fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ color: '#64748B', fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>
                 <Mail size={12} /> {c.primary_email}
               </span>
-              <span style={{ color: '#AAAAAA', fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ color: '#64748B', fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>
                 <Phone size={12} /> {c.phone_number}
               </span>
-              <span style={{ color: '#AAAAAA', fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ color: '#64748B', fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>
                 <MapPin size={12} /> {addressDisplay}
               </span>
             </div>
@@ -1309,7 +1309,7 @@ export default function CustomerRecord() {
         </div>
 
         {/* Metrics strip */}
-        <div style={{ display: 'flex', gap: 0, marginTop: 20, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16 }}>
+        <div style={{ display: 'flex', gap: 0, marginTop: 20, borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 16 }}>
           {[
             { label: 'Outstanding',     value: gbp(c.outstanding_balance), warn: parseFloat(c.outstanding_balance) > 0 },
             { label: 'Credit Limit',    value: gbp(c.credit_limit) },
@@ -1318,8 +1318,8 @@ export default function CustomerRecord() {
             { label: 'Account Manager', value: c.account_manager_name || 'Unmanaged' },
             { label: 'Salesperson',     value: c.salesperson_name || '—' },
           ].map(({ label, value, warn }) => (
-            <div key={label} style={{ flex: 1, padding: '0 16px', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
-              <div style={{ fontSize: 11, color: '#AAAAAA', marginBottom: 4 }}>{label}</div>
+            <div key={label} style={{ flex: 1, padding: '0 16px', borderRight: '1px solid rgba(0,0,0,0.06)' }}>
+              <div style={{ fontSize: 11, color: '#64748B', marginBottom: 4 }}>{label}</div>
               <div style={{ fontSize: 14, fontWeight: 600, color: warn ? '#E91E8C' : '#fff' }}>{value}</div>
             </div>
           ))}
@@ -1333,8 +1333,8 @@ export default function CustomerRecord() {
           onClick={() => setShowDebug(d => !d)}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px',
             borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer',
-            background: showDebug ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.05)',
-            border: `1px solid ${showDebug ? 'rgba(245,158,11,0.45)' : 'rgba(255,255,255,0.1)'}`,
+            background: showDebug ? 'rgba(245,158,11,0.15)' : 'rgba(0,0,0,0.04)',
+            border: `1px solid ${showDebug ? 'rgba(245,158,11,0.45)' : 'rgba(0,0,0,0.08)'}`,
             color: showDebug ? '#F59E0B' : '#555' }}>
           <Bug size={11} /> {showDebug ? 'Hide debug' : 'Debug data'}
         </button>
@@ -1383,9 +1383,9 @@ export default function CustomerRecord() {
         });
 
         const renderVal = (v) => {
-          if (v === null || v === undefined) return <span style={{ color: '#555' }}>null</span>;
+          if (v === null || v === undefined) return <span style={{ color: '#64748B' }}>null</span>;
           if (typeof v === 'boolean') return <span style={{ color: v ? '#00C853' : '#EF4444', fontWeight: 700 }}>{String(v)}</span>;
-          if (typeof v === 'object') return <span style={{ color: '#888', fontFamily: 'monospace', fontSize: 10 }}>{JSON.stringify(v)}</span>;
+          if (typeof v === 'object') return <span style={{ color: '#64748B', fontFamily: 'monospace', fontSize: 10 }}>{JSON.stringify(v)}</span>;
           if (String(v).length > 80) return <span style={{ color: '#CCC', wordBreak: 'break-all', fontFamily: 'monospace', fontSize: 11 }}>{String(v)}</span>;
           return <span style={{ color: '#CCC', fontFamily: 'monospace', fontSize: 11 }}>{String(v)}</span>;
         };
@@ -1399,11 +1399,11 @@ export default function CustomerRecord() {
               </span>
             </div>
             {sections.map(sec => (
-              <div key={sec.key} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+              <div key={sec.key} style={{ borderTop: '1px solid rgba(0,0,0,0.04)' }}>
                 <div
                   onClick={() => toggleSection(sec.key)}
                   style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px',
-                    cursor: 'pointer', background: 'rgba(255,255,255,0.02)' }}>
+                    cursor: 'pointer', background: 'rgba(0,0,0,0.02)' }}>
                   {debugSection.has(sec.key)
                     ? <ChevronDown size={12} color="#555" />
                     : <ChevronRight size={12} color="#555" />}
@@ -1414,14 +1414,14 @@ export default function CustomerRecord() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                       <tbody>
                         {sec.rows.map(({ k, v }, i) => (
-                          <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                            <td style={{ padding: '3px 14px 3px 22px', color: '#666', fontFamily: 'monospace',
+                          <tr key={i} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
+                            <td style={{ padding: '3px 14px 3px 22px', color: '#64748B', fontFamily: 'monospace',
                               width: 200, flexShrink: 0, verticalAlign: 'top', whiteSpace: 'nowrap' }}>{k}</td>
                             <td style={{ padding: '3px 14px', verticalAlign: 'top' }}>{renderVal(v)}</td>
                           </tr>
                         ))}
                         {sec.note && (
-                          <tr><td colSpan={2} style={{ padding: '4px 22px', color: '#555', fontStyle: 'italic', fontSize: 10 }}>{sec.note}</td></tr>
+                          <tr><td colSpan={2} style={{ padding: '4px 22px', color: '#64748B', fontStyle: 'italic', fontSize: 10 }}>{sec.note}</td></tr>
                         )}
                       </tbody>
                     </table>
@@ -1438,19 +1438,19 @@ export default function CustomerRecord() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <Zap size={14} style={{ color: '#00C853' }} />
             <span style={{ fontSize: 12, fontWeight: 700, color: '#00C853' }}>AI SUMMARY</span>
-            <span style={{ fontSize: 11, color: '#AAAAAA' }}>Updated {format(new Date(comm_summary.generated_at), 'dd MMM, HH:mm')}</span>
+            <span style={{ fontSize: 11, color: '#64748B' }}>Updated {format(new Date(comm_summary.generated_at), 'dd MMM, HH:mm')}</span>
           </div>
           <p style={{ fontSize: 13, color: '#DDDDDD', lineHeight: 1.6, fontStyle: 'italic' }}>{comm_summary.summary_text}</p>
         </div>
       )}
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: '#14162A', borderRadius: 12, padding: 4 }}>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: '#FFFFFF', borderRadius: 12, padding: 4 }}>
         {TABS.map(({ key, label, icon: Icon }) => (
           <button key={key} onClick={() => setActiveTab(key)} style={{
             flex: 1, padding: '9px 12px',
             background: activeTab === key ? '#00C853' : 'transparent',
-            color: activeTab === key ? '#000' : '#AAAAAA',
+            color: activeTab === key ? '#000' : '#64748B',
             border: 'none', borderRadius: 9, cursor: 'pointer',
             fontSize: 13, fontWeight: 700,
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
@@ -1479,18 +1479,18 @@ export default function CustomerRecord() {
               <Trash2 size={18} style={{ color: '#E91E8C' }} />
               <h3 style={{ fontSize: 17, fontWeight: 700, color: '#E91E8C', margin: 0 }}>Delete {c.business_name}?</h3>
             </div>
-            <p style={{ color: '#AAAAAA', fontSize: 13, marginBottom: 20, lineHeight: 1.6 }}>
+            <p style={{ color: '#64748B', fontSize: 13, marginBottom: 20, lineHeight: 1.6 }}>
               This will permanently delete this customer and all associated contacts, rates, and communications.
               This action <strong style={{ color: '#fff' }}>cannot be undone</strong>.
             </p>
-            <label style={{ fontSize: 12, color: '#AAAAAA', display: 'block', marginBottom: 6 }}>
+            <label style={{ fontSize: 12, color: '#64748B', display: 'block', marginBottom: 6 }}>
               Type <strong style={{ color: '#fff', fontFamily: 'monospace' }}>{c.account_number}</strong> to confirm
             </label>
             <input
               value={deleteConfirm}
               onChange={e => setDeleteConfirm(e.target.value)}
               placeholder={c.account_number}
-              style={{ width: '100%', background: '#0D0E2A', border: '1px solid rgba(233,30,140,0.4)', borderRadius: 6, padding: '9px 12px', color: '#fff', fontSize: 13, fontFamily: 'monospace', boxSizing: 'border-box', outline: 'none' }}
+              style={{ width: '100%', background: '#FFFFFF', border: '1px solid rgba(233,30,140,0.4)', borderRadius: 6, padding: '9px 12px', color: '#fff', fontSize: 13, fontFamily: 'monospace', boxSizing: 'border-box', outline: 'none' }}
             />
             <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
               <button className="btn-ghost" onClick={() => { setDeleteModal(false); setDeleteConfirm(''); }}>Cancel</button>
@@ -1516,14 +1516,14 @@ export default function CustomerRecord() {
             <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8, color: onStopModal === 'apply' ? '#E91E8C' : '#00C853' }}>
               {onStopModal === 'apply' ? 'Place Account On Stop' : 'Remove On Stop'}
             </h3>
-            <p style={{ color: '#AAAAAA', fontSize: 13, marginBottom: 20 }}>
+            <p style={{ color: '#64748B', fontSize: 13, marginBottom: 20 }}>
               {onStopModal === 'apply'
                 ? 'This will block all shipment access for this customer. A reason is required and will be logged.'
                 : 'A note is required confirming the reason for removal. This will be logged in the audit trail.'}
             </p>
             <textarea value={onStopInput} onChange={e => setOnStopInput(e.target.value)}
               placeholder={onStopModal === 'apply' ? 'Reason for placing On Stop…' : 'Reason for removal…'}
-              style={{ width: '100%', minHeight: 100, background: '#1A1D35', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: 12, color: '#fff', fontSize: 14, resize: 'vertical', fontFamily: 'inherit' }}
+              style={{ width: '100%', minHeight: 100, background: '#F1F5F9', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 8, padding: 12, color: '#fff', fontSize: 14, resize: 'vertical', fontFamily: 'inherit' }}
             />
             <div style={{ display: 'flex', gap: 10, marginTop: 16, justifyContent: 'flex-end' }}>
               <button className="btn-ghost" onClick={() => { setOnStopModal(null); setOnStopInput(''); }}>Cancel</button>

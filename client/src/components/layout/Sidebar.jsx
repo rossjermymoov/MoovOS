@@ -34,13 +34,13 @@ export default function Sidebar() {
 
   return (
     <aside
-      style={{ width: 140, minHeight: '100vh', background: '#0A0B1E', borderRight: '1px solid rgba(255,255,255,0.06)' }}
+      style={{ width: 140, minHeight: '100vh', background: '#FFFFFF', borderRight: '1px solid rgba(0,0,0,0.08)' }}
       className="flex flex-col py-6 shrink-0"
     >
       {/* Logo */}
       <div className="px-4 mb-6">
         <span style={{ color: '#00C853', fontSize: 20, fontWeight: 700, letterSpacing: '-0.5px' }}>
-          MOOV<span style={{ color: '#fff' }}> OS</span>
+          MOOV<span style={{ color: '#0F172A' }}> OS</span>
         </span>
       </div>
 
@@ -54,8 +54,8 @@ export default function Sidebar() {
             className={({ isActive }) =>
               `flex flex-col items-center gap-1 py-3 px-2 mx-2 rounded-xl text-center transition-all ${
                 isActive
-                  ? 'text-[#00C853] bg-[rgba(0,200,83,0.12)]'
-                  : 'text-[#AAAAAA] hover:text-white hover:bg-white/5'
+                  ? 'bg-[rgba(0,200,83,0.10)]'
+                  : 'hover:bg-[rgba(0,0,0,0.04)]'
               }`
             }
             style={{ textDecoration: 'none' }}
@@ -64,9 +64,9 @@ export default function Sidebar() {
               <>
                 <Icon
                   size={20}
-                  style={{ color: isActive ? '#00C853' : undefined, filter: isActive ? 'drop-shadow(0 0 6px rgba(0,200,83,0.6))' : undefined }}
+                  style={{ color: isActive ? '#00C853' : '#64748B' }}
                 />
-                <span style={{ fontSize: 11, fontWeight: 600 }}>{label}</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: isActive ? '#00A843' : '#64748B' }}>{label}</span>
               </>
             )}
           </NavLink>
@@ -78,17 +78,17 @@ export default function Sidebar() {
         <div className="mx-2 mt-2">
           <div
             style={{
-              borderTop: '1px solid rgba(255,255,255,0.06)',
+              borderTop: '1px solid rgba(0,0,0,0.08)',
               paddingTop: 12,
             }}
           >
-            <div style={{ color: '#AAAAAA', fontSize: 10, fontWeight: 600, textAlign: 'center', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 4px' }}>
+            <div style={{ color: '#64748B', fontSize: 10, fontWeight: 600, textAlign: 'center', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 4px' }}>
               {user.full_name?.split(' ')[0]}
             </div>
             <button
               onClick={handleLogout}
-              className="flex flex-col items-center gap-1 py-2 px-2 w-full rounded-xl text-center transition-all text-[#AAAAAA] hover:text-white hover:bg-white/5"
-              style={{ border: 'none', background: 'transparent', cursor: 'pointer', width: '100%' }}
+              className="flex flex-col items-center gap-1 py-2 px-2 w-full rounded-xl text-center transition-all hover:bg-[rgba(0,0,0,0.04)]"
+              style={{ border: 'none', background: 'transparent', cursor: 'pointer', width: '100%', color: '#64748B' }}
               title="Sign out"
             >
               <LogOut size={18} />

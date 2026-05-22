@@ -26,7 +26,7 @@ export function SettingsNav() {
     { to: '/settings/email',       label: 'Email' },
   ];
   return (
-    <div style={{ display: 'flex', gap: 0, marginBottom: 28, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+    <div style={{ display: 'flex', gap: 0, marginBottom: 28, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
       {tabs.map(t => {
         const active = pathname.startsWith(t.to);
         return (
@@ -34,7 +34,7 @@ export function SettingsNav() {
             key={t.to} to={t.to}
             style={{
               padding: '8px 22px', fontSize: 13, fontWeight: 600,
-              color: active ? '#00C853' : '#AAAAAA',
+              color: active ? '#00C853' : '#64748B',
               borderBottom: active ? '2px solid #00C853' : '2px solid transparent',
               textDecoration: 'none', transition: 'color 0.12s',
               marginBottom: -1,
@@ -72,9 +72,9 @@ const CONDITION_TYPES = [
 // ─── Shared styles ────────────────────────────────────────────
 const inputSt = {
   width: '100%', boxSizing: 'border-box',
-  background: 'rgba(255,255,255,0.06)',
-  border: '1px solid rgba(255,255,255,0.12)',
-  borderRadius: 7, color: '#E6EDF3', fontSize: 12,
+  background: 'rgba(0,0,0,0.06)',
+  border: '1px solid rgba(0,0,0,0.10)',
+  borderRadius: 7, color: '#0F172A', fontSize: 12,
   padding: '7px 10px', outline: 'none',
 };
 const btnGreen = {
@@ -83,19 +83,19 @@ const btnGreen = {
   display: 'flex', alignItems: 'center',
 };
 const btnGhost = {
-  background: 'transparent', border: '1px solid rgba(255,255,255,0.12)',
-  borderRadius: 6, color: '#AAAAAA', padding: '6px 12px', cursor: 'pointer',
+  background: 'transparent', border: '1px solid rgba(0,0,0,0.10)',
+  borderRadius: 6, color: '#64748B', padding: '6px 12px', cursor: 'pointer',
   display: 'flex', alignItems: 'center', fontSize: 11,
 };
 
 const thSt = {
   padding: '8px 14px', fontSize: 10, fontWeight: 700,
-  color: '#7D8590', textTransform: 'uppercase', letterSpacing: '0.06em',
-  borderBottom: '1px solid rgba(255,255,255,0.08)', textAlign: 'left',
+  color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em',
+  borderBottom: '1px solid rgba(0,0,0,0.08)', textAlign: 'left',
 };
 const tdSt = {
   padding: '10px 14px', fontSize: 12, color: '#C9D1D9',
-  borderBottom: '1px solid rgba(255,255,255,0.05)',
+  borderBottom: '1px solid rgba(0,0,0,0.04)',
 };
 
 // ─── Policy inline form ───────────────────────────────────────
@@ -112,25 +112,25 @@ function PolicyForm({ initial = {}, onSave, onCancel, saving }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 160px 90px 80px auto', gap: 10, alignItems: 'end', padding: '14px 0 4px' }}>
       <div>
-        <label style={{ fontSize: 10, color: '#7D8590', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Policy Name *</label>
+        <label style={{ fontSize: 10, color: '#64748B', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Policy Name *</label>
         <input value={f.name} onChange={e => set('name', e.target.value)} placeholder="e.g. DPD Claim SLA" style={inputSt} />
       </div>
       <div>
-        <label style={{ fontSize: 10, color: '#7D8590', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Courier Code</label>
+        <label style={{ fontSize: 10, color: '#64748B', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Courier Code</label>
         <input value={f.courier_code} onChange={e => set('courier_code', e.target.value.toLowerCase())} placeholder="dpd" style={inputSt} />
       </div>
       <div>
-        <label style={{ fontSize: 10, color: '#7D8590', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Query Type</label>
+        <label style={{ fontSize: 10, color: '#64748B', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Query Type</label>
         <select value={f.query_type} onChange={e => set('query_type', e.target.value)} style={inputSt}>
           {QUERY_TYPES.map(q => <option key={q.value} value={q.value}>{q.label}</option>)}
         </select>
       </div>
       <div>
-        <label style={{ fontSize: 10, color: '#7D8590', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Hours *</label>
+        <label style={{ fontSize: 10, color: '#64748B', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Hours *</label>
         <input type="number" value={f.duration_hours} onChange={e => set('duration_hours', e.target.value)} placeholder="4" style={inputSt} min="1" />
       </div>
       <div>
-        <label style={{ fontSize: 10, color: '#7D8590', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Priority</label>
+        <label style={{ fontSize: 10, color: '#64748B', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Priority</label>
         <input type="number" value={f.priority} onChange={e => set('priority', e.target.value)} placeholder="0" style={inputSt} min="0" />
       </div>
       <div style={{ display: 'flex', gap: 6, paddingTop: 18 }}>
@@ -155,27 +155,27 @@ function RuleForm({ initial = {}, policies = [], onSave, onCancel, saving }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 180px 140px 1fr 80px auto', gap: 10, alignItems: 'end', padding: '14px 0 4px' }}>
       <div>
-        <label style={{ fontSize: 10, color: '#7D8590', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Rule Name *</label>
+        <label style={{ fontSize: 10, color: '#64748B', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Rule Name *</label>
         <input value={f.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Urgent keyword override" style={inputSt} />
       </div>
       <div>
-        <label style={{ fontSize: 10, color: '#7D8590', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Condition Type</label>
+        <label style={{ fontSize: 10, color: '#64748B', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Condition Type</label>
         <select value={f.condition_type} onChange={e => set('condition_type', e.target.value)} style={inputSt}>
           {CONDITION_TYPES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
         </select>
       </div>
       <div>
-        <label style={{ fontSize: 10, color: '#7D8590', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Match Value *</label>
+        <label style={{ fontSize: 10, color: '#64748B', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Match Value *</label>
         <input value={f.condition_value} onChange={e => set('condition_value', e.target.value)} placeholder="urgent" style={inputSt} />
       </div>
       <div>
-        <label style={{ fontSize: 10, color: '#7D8590', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Apply Policy</label>
+        <label style={{ fontSize: 10, color: '#64748B', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Apply Policy</label>
         <select value={f.policy_id} onChange={e => set('policy_id', e.target.value)} style={inputSt}>
           {policies.map(p => <option key={p.id} value={p.id}>{p.name} ({p.duration_hours}h)</option>)}
         </select>
       </div>
       <div>
-        <label style={{ fontSize: 10, color: '#7D8590', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Priority</label>
+        <label style={{ fontSize: 10, color: '#64748B', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Priority</label>
         <input type="number" value={f.priority} onChange={e => set('priority', e.target.value)} style={inputSt} min="0" />
       </div>
       <div style={{ display: 'flex', gap: 6, paddingTop: 18 }}>
@@ -190,9 +190,9 @@ function RuleForm({ initial = {}, policies = [], onSave, onCancel, saving }) {
 function ActivePill({ active, onToggle }) {
   return (
     <button onClick={onToggle} style={{
-      background: active ? 'rgba(0,200,83,0.12)' : 'rgba(255,255,255,0.04)',
-      border: `1px solid ${active ? 'rgba(0,200,83,0.4)' : 'rgba(255,255,255,0.12)'}`,
-      borderRadius: 5, color: active ? '#00C853' : '#7D8590',
+      background: active ? 'rgba(0,200,83,0.12)' : 'rgba(0,0,0,0.03)',
+      border: `1px solid ${active ? 'rgba(0,200,83,0.4)' : 'rgba(0,0,0,0.10)'}`,
+      borderRadius: 5, color: active ? '#00C853' : '#64748B',
       fontSize: 11, fontWeight: 700, padding: '2px 9px', cursor: 'pointer',
     }}>
       {active ? '● Active' : '○ Off'}
@@ -257,7 +257,7 @@ export default function RulesSettings() {
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
           <h2 style={{ fontSize: 20, fontWeight: 700, color: '#00C853', margin: 0 }}>SLA Policies</h2>
-          <p style={{ fontSize: 12, color: '#7D8590', marginTop: 5 }}>
+          <p style={{ fontSize: 12, color: '#64748B', marginTop: 5 }}>
             Define SLA targets per courier and/or query type. The highest-priority matching policy is applied when a ticket is created.
           </p>
         </div>
@@ -291,27 +291,27 @@ export default function RulesSettings() {
           </thead>
           <tbody>
             {polLoad && (
-              <tr><td colSpan={7} style={{ ...tdSt, textAlign: 'center', color: '#7D8590', padding: 32 }}>Loading…</td></tr>
+              <tr><td colSpan={7} style={{ ...tdSt, textAlign: 'center', color: '#64748B', padding: 32 }}>Loading…</td></tr>
             )}
             {!polLoad && policies.length === 0 && (
-              <tr><td colSpan={7} style={{ ...tdSt, textAlign: 'center', color: '#7D8590', padding: 32 }}>No policies yet. Click New Policy to add one.</td></tr>
+              <tr><td colSpan={7} style={{ ...tdSt, textAlign: 'center', color: '#64748B', padding: 32 }}>No policies yet. Click New Policy to add one.</td></tr>
             )}
             {policies.map(p => (
               <Fragment key={p.id}>
                 <tr>
-                  <td style={{ ...tdSt, fontWeight: 600, color: '#E6EDF3' }}>{p.name}</td>
+                  <td style={{ ...tdSt, fontWeight: 600, color: '#0F172A' }}>{p.name}</td>
                   <td style={tdSt}>
                     {p.courier_code
                       ? <code style={{ fontSize: 11, color: '#00BCD4', background: 'rgba(0,188,212,0.1)', padding: '2px 6px', borderRadius: 4 }}>{p.courier_code.toUpperCase()}</code>
-                      : <span style={{ color: '#7D8590' }}>Any</span>}
+                      : <span style={{ color: '#64748B' }}>Any</span>}
                   </td>
                   <td style={tdSt}>
                     {p.query_type
                       ? <span style={{ textTransform: 'capitalize' }}>{p.query_type.replace(/_/g, ' ')}</span>
-                      : <span style={{ color: '#7D8590' }}>Any</span>}
+                      : <span style={{ color: '#64748B' }}>Any</span>}
                   </td>
                   <td style={{ ...tdSt, fontWeight: 700, color: '#D29922' }}>{p.duration_hours}h</td>
-                  <td style={{ ...tdSt, color: '#7D8590' }}>{p.priority}</td>
+                  <td style={{ ...tdSt, color: '#64748B' }}>{p.priority}</td>
                   <td style={tdSt}>
                     <ActivePill active={p.is_active} onToggle={() => updatePol.mutate({ id: p.id, is_active: !p.is_active })} />
                   </td>
@@ -331,7 +331,7 @@ export default function RulesSettings() {
                 </tr>
                 {editPolId === p.id && (
                   <tr>
-                    <td colSpan={7} style={{ background: 'rgba(0,200,83,0.03)', padding: '4px 14px 14px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                    <td colSpan={7} style={{ background: 'rgba(0,200,83,0.03)', padding: '4px 14px 14px', borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
                       <PolicyForm
                         initial={p}
                         onSave={form => savePolicy(form, p.id)}
@@ -351,7 +351,7 @@ export default function RulesSettings() {
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
           <h2 style={{ fontSize: 20, fontWeight: 700, color: '#00C853', margin: 0 }}>SLA Rules</h2>
-          <p style={{ fontSize: 12, color: '#7D8590', marginTop: 5 }}>
+          <p style={{ fontSize: 12, color: '#64748B', marginTop: 5 }}>
             Rules override default policy matching. When a ticket is created, the highest-priority matching rule sets the SLA clock.
           </p>
         </div>
@@ -392,16 +392,16 @@ export default function RulesSettings() {
           </thead>
           <tbody>
             {ruleLoad && (
-              <tr><td colSpan={7} style={{ ...tdSt, textAlign: 'center', color: '#7D8590', padding: 32 }}>Loading…</td></tr>
+              <tr><td colSpan={7} style={{ ...tdSt, textAlign: 'center', color: '#64748B', padding: 32 }}>Loading…</td></tr>
             )}
             {!ruleLoad && rules.length === 0 && (
-              <tr><td colSpan={7} style={{ ...tdSt, textAlign: 'center', color: '#7D8590', padding: 32 }}>No rules yet. Rules let you override default SLA matching based on keyword, courier, or query type.</td></tr>
+              <tr><td colSpan={7} style={{ ...tdSt, textAlign: 'center', color: '#64748B', padding: 32 }}>No rules yet. Rules let you override default SLA matching based on keyword, courier, or query type.</td></tr>
             )}
             {rules.map(r => (
               <Fragment key={r.id}>
                 <tr>
-                  <td style={{ ...tdSt, fontWeight: 600, color: '#E6EDF3' }}>{r.name}</td>
-                  <td style={{ ...tdSt, color: '#7D8590' }}>
+                  <td style={{ ...tdSt, fontWeight: 600, color: '#0F172A' }}>{r.name}</td>
+                  <td style={{ ...tdSt, color: '#64748B' }}>
                     {CONDITION_TYPES.find(c => c.value === r.condition_type)?.label || r.condition_type}
                   </td>
                   <td style={tdSt}>
@@ -411,9 +411,9 @@ export default function RulesSettings() {
                   </td>
                   <td style={tdSt}>
                     <span style={{ color: '#D29922', fontWeight: 600 }}>{r.policy_name}</span>
-                    <span style={{ color: '#7D8590', fontSize: 11 }}> ({r.policy_hours}h)</span>
+                    <span style={{ color: '#64748B', fontSize: 11 }}> ({r.policy_hours}h)</span>
                   </td>
-                  <td style={{ ...tdSt, color: '#7D8590' }}>{r.priority}</td>
+                  <td style={{ ...tdSt, color: '#64748B' }}>{r.priority}</td>
                   <td style={tdSt}>
                     <ActivePill active={r.is_active} onToggle={() => updateRule.mutate({ id: r.id, is_active: !r.is_active })} />
                   </td>
@@ -433,7 +433,7 @@ export default function RulesSettings() {
                 </tr>
                 {editRuleId === r.id && (
                   <tr>
-                    <td colSpan={7} style={{ background: 'rgba(0,200,83,0.03)', padding: '4px 14px 14px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                    <td colSpan={7} style={{ background: 'rgba(0,200,83,0.03)', padding: '4px 14px 14px', borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
                       <RuleForm
                         initial={r}
                         policies={policies}

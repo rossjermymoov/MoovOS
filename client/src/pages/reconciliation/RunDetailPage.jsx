@@ -19,15 +19,15 @@ const api = axios.create({ baseURL: '/api' });
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const card = {
-  background: 'rgba(255,255,255,0.04)',
-  border: '1px solid rgba(255,255,255,0.08)',
+  background: 'rgba(0,0,0,0.03)',
+  border: '1px solid rgba(0,0,0,0.08)',
   borderRadius: 10, padding: '16px 20px',
 };
 const inputSt = {
   width: '100%', boxSizing: 'border-box',
-  background: 'rgba(255,255,255,0.06)',
-  border: '1px solid rgba(255,255,255,0.12)',
-  borderRadius: 7, color: '#E6EDF3', fontSize: 12,
+  background: 'rgba(0,0,0,0.06)',
+  border: '1px solid rgba(0,0,0,0.10)',
+  borderRadius: 7, color: '#0F172A', fontSize: 12,
   padding: '7px 10px', outline: 'none',
 };
 const btnGreen = {
@@ -36,7 +36,7 @@ const btnGreen = {
   fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5,
 };
 const btnGhost = {
-  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+  background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)',
   borderRadius: 7, color: '#AAA', padding: '7px 14px', cursor: 'pointer',
   fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5,
 };
@@ -52,8 +52,8 @@ function StatusBadge({ status }) {
     matched:      { color: '#00C853', bg: 'rgba(0,200,83,0.12)',   border: 'rgba(0,200,83,0.3)',   label: 'Matched' },
     corrected:    { color: '#FF8F00', bg: 'rgba(255,143,0,0.12)',  border: 'rgba(255,143,0,0.3)',  label: 'Corrected' },
     unmatched:    { color: '#FFB300', bg: 'rgba(255,160,0,0.12)',  border: 'rgba(255,160,0,0.3)',  label: 'Unmatched' },
-    processing:   { color: '#888',   bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.1)', label: 'Processing' },
-  }[status] || { color: '#AAA', bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.1)', label: status };
+    processing:   { color: '#64748B',   bg: 'rgba(0,0,0,0.04)', border: 'rgba(0,0,0,0.08)', label: 'Processing' },
+  }[status] || { color: '#AAA', bg: 'rgba(0,0,0,0.04)', border: 'rgba(0,0,0,0.08)', label: status };
   return (
     <span style={{
       display: 'inline-block', padding: '1px 8px', borderRadius: 9999,
@@ -84,7 +84,7 @@ function ReasonLabel({ reason, correctedBy }) {
     aggregate_mismatch:      { text: 'Aggregate mismatch',    color: '#FFB300' },
     parcel_count_mismatch:   { text: '⚠ Parcel count overbill', color: '#FF5252' },
   };
-  const cfg = labels[reason] || { text: reason || '—', color: '#888' };
+  const cfg = labels[reason] || { text: reason || '—', color: '#64748B' };
   return <span style={{ fontSize: 10, color: cfg.color, fontWeight: 600 }}>{cfg.text}</span>;
 }
 
@@ -139,7 +139,7 @@ function CorrectionDetail({ line, surchargeLookup }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
         <span style={{ fontSize: 10, color: '#79AAFF', fontWeight: 600 }}>{mappingLabel}</span>
         {line.mapping_match_field && line.mapping_match_value && (
-          <span style={{ fontSize: 10, color: '#555' }}>
+          <span style={{ fontSize: 10, color: '#64748B' }}>
             {line.mapping_match_field}: {line.mapping_match_value}
           </span>
         )}
@@ -171,7 +171,7 @@ function CorrectionDetail({ line, surchargeLookup }) {
           </span>
         ))}
         {!hasBreakdown && (
-          <span style={{ fontSize: 10, color: '#555' }}>No surcharge breakdown available</span>
+          <span style={{ fontSize: 10, color: '#64748B' }}>No surcharge breakdown available</span>
         )}
       </div>
     );
@@ -191,9 +191,9 @@ function CorrectionDetail({ line, surchargeLookup }) {
   if (cb === 'human') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-        <span style={{ fontSize: 10, color: '#888', fontWeight: 600 }}>Manually approved</span>
+        <span style={{ fontSize: 10, color: '#64748B', fontWeight: 600 }}>Manually approved</span>
         {line.resolved_by_name && (
-          <span style={{ fontSize: 10, color: '#555' }}>by {line.resolved_by_name}</span>
+          <span style={{ fontSize: 10, color: '#64748B' }}>by {line.resolved_by_name}</span>
         )}
       </div>
     );
@@ -201,7 +201,7 @@ function CorrectionDetail({ line, surchargeLookup }) {
 
   // fallback for any future corrected_by values
   if (cb) {
-    return <span style={{ fontSize: 10, color: '#666' }}>via {cb}</span>;
+    return <span style={{ fontSize: 10, color: '#64748B' }}>via {cb}</span>;
   }
 
   return null;
@@ -293,7 +293,7 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
     }}>
       <div style={{
         width: 460, height: '100vh', background: '#0D0F2B',
-        border: '1px solid rgba(255,255,255,0.1)',
+        border: '1px solid rgba(0,0,0,0.08)',
         boxShadow: '-8px 0 40px rgba(0,0,0,0.5)',
         padding: 24, overflowY: 'auto',
         display: 'flex', flexDirection: 'column', gap: 16,
@@ -301,8 +301,8 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
 
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ fontSize: 16, fontWeight: 700, color: '#E6EDF3', margin: 0 }}>Resolve Line</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer' }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: 0 }}>Resolve Line</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer' }}>
             <X size={18} />
           </button>
         </div>
@@ -311,21 +311,21 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
         <div style={{ ...card, fontSize: 12 }}>
           <div style={{ display: 'grid', gap: 6 }}>
             {line.tracking_number && (
-              <div><span style={{ color: '#888' }}>Tracking:</span> <span style={{ color: '#E6EDF3', fontFamily: 'monospace' }}>{line.tracking_number}</span></div>
+              <div><span style={{ color: '#64748B' }}>Tracking:</span> <span style={{ color: '#0F172A', fontFamily: 'monospace' }}>{line.tracking_number}</span></div>
             )}
-            <div><span style={{ color: '#888' }}>Raw service code:</span> <span style={{ color: '#79AAFF', fontFamily: 'monospace', fontWeight: 700 }}>{line.raw_service_code || '—'}</span></div>
-            <div><span style={{ color: '#888' }}>Carrier amount:</span> <span style={{ color: '#E6EDF3', fontWeight: 700 }}>£{parseFloat(line.carrier_amount || 0).toFixed(2)}</span></div>
+            <div><span style={{ color: '#64748B' }}>Raw service code:</span> <span style={{ color: '#79AAFF', fontFamily: 'monospace', fontWeight: 700 }}>{line.raw_service_code || '—'}</span></div>
+            <div><span style={{ color: '#64748B' }}>Carrier amount:</span> <span style={{ color: '#0F172A', fontWeight: 700 }}>£{parseFloat(line.carrier_amount || 0).toFixed(2)}</span></div>
             {line.expected_amount != null && (
-              <div><span style={{ color: '#888' }}>Expected:</span> <span style={{ color: '#E6EDF3' }}>£{parseFloat(line.expected_amount).toFixed(2)}</span></div>
+              <div><span style={{ color: '#64748B' }}>Expected:</span> <span style={{ color: '#0F172A' }}>£{parseFloat(line.expected_amount).toFixed(2)}</span></div>
             )}
             {line.delta != null && (
-              <div><span style={{ color: '#888' }}>Delta:</span>
+              <div><span style={{ color: '#64748B' }}>Delta:</span>
                 <span style={{ color: parseFloat(line.delta) > 0 ? '#FF5252' : '#00C853', fontWeight: 700, marginLeft: 4 }}>
                   {parseFloat(line.delta) > 0 ? '+' : ''}£{parseFloat(line.delta).toFixed(2)}
                 </span>
               </div>
             )}
-            <div><span style={{ color: '#888' }}>Reason:</span> <span style={{ marginLeft: 4 }}><ReasonLabel reason={line.unmatched_reason} /></span></div>
+            <div><span style={{ color: '#64748B' }}>Reason:</span> <span style={{ marginLeft: 4 }}><ReasonLabel reason={line.unmatched_reason} /></span></div>
             {line.unmatched_reason === 'parcel_count_mismatch' && line.correction_metadata && (
               <div style={{
                 marginTop: 6, padding: '8px 12px',
@@ -333,7 +333,7 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
                 borderRadius: 6, fontSize: 11,
               }}>
                 <span style={{ color: '#FF5252', fontWeight: 700 }}>DPD invoiced {line.correction_metadata.invoice_parcel_count} parcel{line.correction_metadata.invoice_parcel_count !== 1 ? 's' : ''} — booking was for {line.correction_metadata.booked_parcel_count} parcel{line.correction_metadata.booked_parcel_count !== 1 ? 's' : ''}</span>
-                <span style={{ color: '#888', marginLeft: 8 }}>Dispute this charge with DPD before finalising.</span>
+                <span style={{ color: '#64748B', marginLeft: 8 }}>Dispute this charge with DPD before finalising.</span>
               </div>
             )}
             {line.aged && (
@@ -358,10 +358,10 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
             <div style={{ fontSize: 12, color: '#C8D8EF' }}>
               The tracking number was found in the Verified Pool. The shipment was booked as:
             </div>
-            <div style={{ marginTop: 6, fontSize: 13, fontWeight: 700, color: '#E6EDF3' }}>
+            <div style={{ marginTop: 6, fontSize: 13, fontWeight: 700, color: '#0F172A' }}>
               {suggestionLabel}
             </div>
-            <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
+            <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
               The dropdown below is pre-selected with this match.
             </div>
           </div>
@@ -376,7 +376,7 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
         {/* Resolution type — for unknown_service_code show both service and surcharge mapping options */}
         {isUnknownCode ? (
           <div>
-            <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 6, fontWeight: 600 }}>RESOLUTION TYPE</label>
+            <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>RESOLUTION TYPE</label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {[
                 { val: 'map_to_service',   label: 'Delivery Service', desc: 'Base freight service (e.g. DHL Next Day)' },
@@ -387,19 +387,19 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
                   onClick={() => { setResolutionType(opt.val); setResolutionValue(''); }}
                   style={{
                     padding: '9px 11px', borderRadius: 7, cursor: 'pointer', textAlign: 'left',
-                    background: resolutionType === opt.val ? 'rgba(0,200,83,0.1)' : 'rgba(255,255,255,0.04)',
-                    border: `1px solid ${resolutionType === opt.val ? 'rgba(0,200,83,0.35)' : 'rgba(255,255,255,0.08)'}`,
+                    background: resolutionType === opt.val ? 'rgba(0,200,83,0.1)' : 'rgba(0,0,0,0.03)',
+                    border: `1px solid ${resolutionType === opt.val ? 'rgba(0,200,83,0.35)' : 'rgba(0,0,0,0.08)'}`,
                   }}
                 >
-                  <div style={{ fontSize: 12, fontWeight: 700, color: resolutionType === opt.val ? '#00C853' : '#E6EDF3' }}>{opt.label}</div>
-                  <div style={{ fontSize: 10, color: '#666', marginTop: 2 }}>{opt.desc}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: resolutionType === opt.val ? '#00C853' : '#0F172A' }}>{opt.label}</div>
+                  <div style={{ fontSize: 10, color: '#64748B', marginTop: 2 }}>{opt.desc}</div>
                 </button>
               ))}
             </div>
           </div>
         ) : (
           <div>
-            <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 6, fontWeight: 600 }}>RESOLUTION TYPE</label>
+            <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>RESOLUTION TYPE</label>
             <select style={inputSt} value={resolutionType} onChange={e => setResolutionType(e.target.value)}>
               <option value=''>— Select type —</option>
               <option value='accept'>Accept charge as-is</option>
@@ -415,7 +415,7 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
         {/* Service mapping dropdown */}
         {(resolutionType === 'map_to_service') && (
           <div>
-            <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 6, fontWeight: 600 }}>
+            <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>
               MAP "{line.raw_service_code}" TO INTERNAL SERVICE *
             </label>
             <select
@@ -437,7 +437,7 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
         {/* Surcharge mapping dropdown */}
         {(resolutionType === 'map_to_surcharge') && (
           <div>
-            <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 6, fontWeight: 600 }}>
+            <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>
               MAP "{line.raw_service_code}" TO SURCHARGE *
             </label>
             <select
@@ -463,7 +463,7 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
         {/* Delta tolerance input */}
         {resolutionType === 'accept_delta' && (
           <div>
-            <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 6, fontWeight: 600 }}>TOLERANCE % *</label>
+            <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>TOLERANCE % *</label>
             <input
               style={inputSt}
               type='number' step='0.1' min='0' max='100'
@@ -471,14 +471,14 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
               value={resolutionValue}
               onChange={e => setResolutionValue(e.target.value)}
             />
-            <div style={{ fontSize: 10, color: '#666', marginTop: 4 }}>±% delta that will auto-correct in future runs</div>
+            <div style={{ fontSize: 10, color: '#64748B', marginTop: 4 }}>±% delta that will auto-correct in future runs</div>
           </div>
         )}
 
         {/* Generic value input for other types */}
         {!isUnknownCode && resolutionType !== 'map_to_service' && resolutionType !== 'accept_delta' && resolutionType && (
           <div>
-            <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 6, fontWeight: 600 }}>RESOLUTION VALUE *</label>
+            <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>RESOLUTION VALUE *</label>
             <input
               style={inputSt}
               placeholder={
@@ -494,8 +494,8 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
 
         {/* Save as Permanent Rule */}
         <div style={{
-          background: saveRule ? 'rgba(0,200,83,0.06)' : 'rgba(255,255,255,0.03)',
-          border: `1px solid ${saveRule ? 'rgba(0,200,83,0.3)' : 'rgba(255,255,255,0.08)'}`,
+          background: saveRule ? 'rgba(0,200,83,0.06)' : 'rgba(0,0,0,0.03)',
+          border: `1px solid ${saveRule ? 'rgba(0,200,83,0.3)' : 'rgba(0,0,0,0.08)'}`,
           borderRadius: 8, padding: '12px 14px',
         }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
@@ -506,10 +506,10 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
               style={{ width: 15, height: 15, accentColor: '#00C853', cursor: 'pointer' }}
             />
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: saveRule ? '#00C853' : '#E6EDF3' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: saveRule ? '#00C853' : '#0F172A' }}>
                 Save as Permanent Rule
               </div>
-              <div style={{ fontSize: 11, color: '#888', marginTop: 1 }}>
+              <div style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
                 Auto-resolve this code on all future runs for this carrier
               </div>
             </div>
@@ -517,8 +517,8 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
 
           {/* Rule scope — visible when saving a service code OR surcharge mapping */}
           {saveRule && (isUnknownCode || resolutionType === 'map_to_surcharge') && (
-            <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-              <div style={{ fontSize: 11, color: '#888', fontWeight: 600, marginBottom: 8 }}>APPLIES TO</div>
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+              <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, marginBottom: 8 }}>APPLIES TO</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 {[
                   { val: 'global',   label: 'All Customers',    desc: 'Standard code used by all' },
@@ -529,12 +529,12 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
                     onClick={() => setRuleScope(opt.val)}
                     style={{
                       padding: '9px 11px', borderRadius: 7, cursor: 'pointer', textAlign: 'left',
-                      background: ruleScope === opt.val ? 'rgba(0,200,83,0.1)' : 'rgba(255,255,255,0.04)',
-                      border: `1px solid ${ruleScope === opt.val ? 'rgba(0,200,83,0.35)' : 'rgba(255,255,255,0.08)'}`,
+                      background: ruleScope === opt.val ? 'rgba(0,200,83,0.1)' : 'rgba(0,0,0,0.03)',
+                      border: `1px solid ${ruleScope === opt.val ? 'rgba(0,200,83,0.35)' : 'rgba(0,0,0,0.08)'}`,
                     }}
                   >
-                    <div style={{ fontSize: 12, fontWeight: 700, color: ruleScope === opt.val ? '#00C853' : '#E6EDF3' }}>{opt.label}</div>
-                    <div style={{ fontSize: 10, color: '#666', marginTop: 2 }}>{opt.desc}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: ruleScope === opt.val ? '#00C853' : '#0F172A' }}>{opt.label}</div>
+                    <div style={{ fontSize: 10, color: '#64748B', marginTop: 2 }}>{opt.desc}</div>
                   </button>
                 ))}
               </div>
@@ -549,7 +549,7 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
 
         {/* Notes */}
         <div>
-          <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 6, fontWeight: 600 }}>NOTES (OPTIONAL)</label>
+          <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>NOTES (OPTIONAL)</label>
           <textarea
             style={{ ...inputSt, minHeight: 56, resize: 'vertical' }}
             placeholder='Any context for this resolution…'
@@ -651,7 +651,7 @@ function ServiceCodeMappingBanner({ unmatchedLines, runId, courierId, onMapped }
             <AlertTriangle size={15} />
             {groups.size} unknown service code{groups.size !== 1 ? 's' : ''} — map before finalizing
           </div>
-          <div style={{ fontSize: 12, color: '#888', marginTop: 3 }}>
+          <div style={{ fontSize: 12, color: '#64748B', marginTop: 3 }}>
             Map each raw carrier code to an internal service. Saves as a permanent rule so future runs auto-resolve.
           </div>
         </div>
@@ -662,22 +662,22 @@ function ServiceCodeMappingBanner({ unmatchedLines, runId, courierId, onMapped }
           <div key={g.code} style={{
             display: 'grid', gridTemplateColumns: '140px 50px 1fr 120px', gap: 12,
             alignItems: 'center', padding: '10px 14px',
-            background: 'rgba(255,255,255,0.03)', borderRadius: 8,
-            border: selections[g.code] ? '1px solid rgba(0,200,83,0.2)' : '1px solid rgba(255,255,255,0.06)',
+            background: 'rgba(0,0,0,0.03)', borderRadius: 8,
+            border: selections[g.code] ? '1px solid rgba(0,200,83,0.2)' : '1px solid rgba(0,0,0,0.06)',
           }}>
             {/* Raw code */}
             <div>
-              <div style={{ fontSize: 10, color: '#666', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Raw Code</div>
+              <div style={{ fontSize: 10, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Raw Code</div>
               <div style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, color: '#79AAFF' }}>{g.code}</div>
             </div>
             {/* Line count */}
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 10, color: '#666', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Lines</div>
+              <div style={{ fontSize: 10, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Lines</div>
               <div style={{ fontSize: 14, fontWeight: 700, color: '#AAA' }}>{g.count}</div>
             </div>
             {/* Service dropdown */}
             <div>
-              <div style={{ fontSize: 10, color: '#666', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>
+              <div style={{ fontSize: 10, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>
                 Maps To{g.suggested_label && <span style={{ color: '#79AAFF', marginLeft: 5 }}>✦ Suggestion available</span>}
               </div>
               <select
@@ -790,10 +790,10 @@ function ShipmentLookupPanel() {
 
   return (
     <div style={card}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: '#E6EDF3', marginBottom: 12 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', marginBottom: 12 }}>
         Shipment Lookup
       </div>
-      <div style={{ fontSize: 11, color: '#555', marginBottom: 12 }}>
+      <div style={{ fontSize: 11, color: '#64748B', marginBottom: 12 }}>
         Search for any tracking / consignment number across all shipments — no reconciliation gates applied.
         Shows verified status, courier match, pool eligibility, and what's blocking the pool if anything.
       </div>
@@ -815,10 +815,10 @@ function ShipmentLookupPanel() {
 
       {result && (
         <div>
-          <div style={{ fontSize: 11, color: '#555', marginBottom: 10 }}>
+          <div style={{ fontSize: 11, color: '#64748B', marginBottom: 10 }}>
             Searched: <span style={{ fontFamily: 'monospace', color: '#AAA' }}>{result.tracking_searched}</span>
             {' '}·{' '}
-            Variants tried: <span style={{ fontFamily: 'monospace', color: '#666' }}>{result.variants_tried.join(', ')}</span>
+            Variants tried: <span style={{ fontFamily: 'monospace', color: '#64748B' }}>{result.variants_tried.join(', ')}</span>
           </div>
 
           {result.shipments_found === 0 && (
@@ -839,7 +839,7 @@ function ShipmentLookupPanel() {
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#FFB300', marginBottom: 4 }}>
                   Recover missed shipment
                 </div>
-                <div style={{ fontSize: 11, color: '#888', marginBottom: 10, lineHeight: 1.5 }}>
+                <div style={{ fontSize: 11, color: '#64748B', marginBottom: 10, lineHeight: 1.5 }}>
                   Enter the <strong style={{ color: '#AAA' }}>sender reference</strong> (the customer ref used when booking — visible in DC) and the
                   tracking number. We'll search DC for that booking and pull it in.
                 </div>
@@ -881,7 +881,7 @@ function ShipmentLookupPanel() {
                         Warnings: {backfillResult.warnings.join(', ')}
                       </div>
                     )}
-                    <div style={{ marginTop: 4, color: '#888' }}>
+                    <div style={{ marginTop: 4, color: '#64748B' }}>
                       Search the tracking number above again to confirm it is now in the pool.
                     </div>
                   </div>
@@ -900,7 +900,7 @@ function ShipmentLookupPanel() {
               <div style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10,
               }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#E6EDF3', fontFamily: 'monospace' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#0F172A', fontFamily: 'monospace' }}>
                   Shipment {r.shipment.id}
                 </span>
                 <span style={{
@@ -928,8 +928,8 @@ function ShipmentLookupPanel() {
                   ['Postcode',         r.shipment.ship_to_postcode || '—'],
                 ].map(([k, v]) => (
                   <div key={k} style={{ fontSize: 10 }}>
-                    <span style={{ color: '#444' }}>{k}: </span>
-                    <span style={{ color: '#888', fontFamily: 'monospace' }}>{v}</span>
+                    <span style={{ color: '#475569' }}>{k}: </span>
+                    <span style={{ color: '#64748B', fontFamily: 'monospace' }}>{v}</span>
                   </div>
                 ))}
               </div>
@@ -942,7 +942,7 @@ function ShipmentLookupPanel() {
                   fontSize: 11,
                 }}>
                   <span style={{ color: '#58A6FF', fontWeight: 700 }}>Reconciliation expected_amount: £{r.total_cost_price.toFixed(2)}</span>
-                  <span style={{ color: '#555', marginLeft: 8 }}>(base cost + fuel + surcharges — this is what the engine compares against the carrier invoice)</span>
+                  <span style={{ color: '#64748B', marginLeft: 8 }}>(base cost + fuel + surcharges — this is what the engine compares against the carrier invoice)</span>
                 </div>
               )}
 
@@ -969,29 +969,29 @@ function ShipmentLookupPanel() {
               ) : (
                 <table style={{ width: '100%', fontSize: 10, borderCollapse: 'collapse' }}>
                   <thead>
-                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                    <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
                       {['Type', 'Service', 'V', 'X', 'Cost (our cost)', 'Sell (customer)', 'Zone', 'Source', 'Customer'].map(h => (
-                        <th key={h} style={{ padding: '4px 6px', textAlign: 'left', color: '#444', fontWeight: 700, textTransform: 'uppercase', fontSize: 9 }}>{h}</th>
+                        <th key={h} style={{ padding: '4px 6px', textAlign: 'left', color: '#475569', fontWeight: 700, textTransform: 'uppercase', fontSize: 9 }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {r.charges.map((c, j) => (
                       <tr key={j} style={{
-                        borderBottom: '1px solid rgba(255,255,255,0.03)',
+                        borderBottom: '1px solid rgba(0,0,0,0.03)',
                         opacity: c.cancelled ? 0.4 : 1,
                       }}>
                         <td style={{ padding: '4px 6px', color: '#AAA' }}>{c.charge_type}</td>
-                        <td style={{ padding: '4px 6px', color: '#666', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.service_name}>{c.service_code || c.service_name || '—'}</td>
+                        <td style={{ padding: '4px 6px', color: '#64748B', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.service_name}>{c.service_code || c.service_name || '—'}</td>
                         <td style={{ padding: '4px 6px', color: statusColor(c.verified), fontWeight: 700, fontSize: 9 }}>{c.verified ? '✓' : '✗'}</td>
                         <td style={{ padding: '4px 6px', color: c.cancelled ? '#FF5252' : '#333', fontWeight: c.cancelled ? 700 : 400, fontSize: 9 }}>{c.cancelled ? '✗' : '—'}</td>
-                        <td style={{ padding: '4px 6px', color: '#E6EDF3', fontWeight: 600 }}>
+                        <td style={{ padding: '4px 6px', color: '#0F172A', fontWeight: 600 }}>
                           {c.cost_price != null ? `£${parseFloat(c.cost_price).toFixed(2)}` : '—'}
                           {c.recon_corrected && <span title="Updated by reconciliation" style={{ marginLeft: 4, color: '#FFB300', fontSize: 8 }}>●R</span>}
                         </td>
                         <td style={{ padding: '4px 6px', color: '#00C853', fontWeight: 600 }}>{c.sell_price != null ? `£${parseFloat(c.sell_price).toFixed(2)}` : '—'}</td>
-                        <td style={{ padding: '4px 6px', color: '#666' }}>{c.zone_name || '—'}</td>
-                        <td style={{ padding: '4px 6px', color: '#555', fontSize: 9 }}>{c.source || '—'}</td>
+                        <td style={{ padding: '4px 6px', color: '#64748B' }}>{c.zone_name || '—'}</td>
+                        <td style={{ padding: '4px 6px', color: '#64748B', fontSize: 9 }}>{c.source || '—'}</td>
                         <td style={{ padding: '4px 6px', color: '#AAA' }}>{c.customer_name || '—'}</td>
                       </tr>
                     ))}
@@ -1027,7 +1027,7 @@ function TraceModal({ runId, lineId, trackingNumber, onClose }) {
       background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
     }} onClick={onClose}>
       <div style={{
-        background: '#0d1117', border: '1px solid rgba(255,255,255,0.12)',
+        background: '#0d1117', border: '1px solid rgba(0,0,0,0.10)',
         borderRadius: 12, padding: 24, width: 640, maxHeight: '80vh',
         overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
       }} onClick={e => e.stopPropagation()}>
@@ -1035,10 +1035,10 @@ function TraceModal({ runId, lineId, trackingNumber, onClose }) {
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#E6EDF3', marginBottom: 4 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>
               Reconciliation Trace
             </div>
-            <div style={{ fontSize: 11, color: '#555', fontFamily: 'monospace' }}>
+            <div style={{ fontSize: 11, color: '#64748B', fontFamily: 'monospace' }}>
               {trackingNumber || `line #${lineId}`}
             </div>
           </div>
@@ -1048,7 +1048,7 @@ function TraceModal({ runId, lineId, trackingNumber, onClose }) {
         </div>
 
         {loading && (
-          <div style={{ textAlign: 'center', color: '#555', fontSize: 12, padding: '30px 0' }}>
+          <div style={{ textAlign: 'center', color: '#64748B', fontSize: 12, padding: '30px 0' }}>
             <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite', marginBottom: 8 }} />
             <div>Loading trace…</div>
           </div>
@@ -1064,13 +1064,13 @@ function TraceModal({ runId, lineId, trackingNumber, onClose }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {data.steps.map((step, i) => (
               <div key={i} style={{
-                background: 'rgba(255,255,255,0.03)',
+                background: 'rgba(0,0,0,0.03)',
                 border: `1px solid rgba(255,255,255,${step.status === 'error' ? '0.15' : '0.06'})`,
                 borderRadius: 8, padding: '10px 14px',
                 borderLeft: `3px solid ${stepColor(step.status)}`,
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#E6EDF3' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#0F172A' }}>
                     {i + 1}. {step.label}
                   </span>
                   <span style={{
@@ -1080,13 +1080,13 @@ function TraceModal({ runId, lineId, trackingNumber, onClose }) {
                     {step.status}
                   </span>
                 </div>
-                <div style={{ fontSize: 11, color: '#888', lineHeight: 1.5 }}>
+                <div style={{ fontSize: 11, color: '#64748B', lineHeight: 1.5 }}>
                   {step.detail}
                 </div>
                 {step.value != null && (
                   <div style={{
                     marginTop: 6, fontSize: 12, fontWeight: 700,
-                    color: step.status === 'error' ? '#FF5252' : step.status === 'warn' ? '#FF8F00' : '#E6EDF3',
+                    color: step.status === 'error' ? '#FF5252' : step.status === 'warn' ? '#FF8F00' : '#0F172A',
                   }}>
                     {step.value}
                   </div>
@@ -1094,13 +1094,13 @@ function TraceModal({ runId, lineId, trackingNumber, onClose }) {
                 {step.meta && Object.keys(step.meta).length > 0 && (
                   <div style={{
                     marginTop: 8, padding: '6px 10px',
-                    background: 'rgba(255,255,255,0.03)', borderRadius: 6,
+                    background: 'rgba(0,0,0,0.03)', borderRadius: 6,
                     display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 16px',
                   }}>
                     {Object.entries(step.meta).map(([k, v]) => (
-                      <div key={k} style={{ fontSize: 10, color: '#555' }}>
-                        <span style={{ color: '#444' }}>{k}: </span>
-                        <span style={{ color: '#888', fontFamily: 'monospace' }}>{String(v)}</span>
+                      <div key={k} style={{ fontSize: 10, color: '#64748B' }}>
+                        <span style={{ color: '#475569' }}>{k}: </span>
+                        <span style={{ color: '#64748B', fontFamily: 'monospace' }}>{String(v)}</span>
                       </div>
                     ))}
                   </div>
@@ -1128,7 +1128,7 @@ function DeltaCell({ line, onResolveAsSurcharge }) {
   const carrier  = parseFloat(line.carrier_amount  || 0);
   const expected = parseFloat(line.expected_amount || 0);
 
-  if (line.delta == null) return <span style={{ color: '#555' }}>—</span>;
+  if (line.delta == null) return <span style={{ color: '#64748B' }}>—</span>;
 
   const isPriceMismatch = line.unmatched_reason === 'price_mismatch';
   const isPositive = delta > 0.01;
@@ -1160,7 +1160,7 @@ function DeltaCell({ line, onResolveAsSurcharge }) {
             transform: 'translate(-50%, calc(-100% - 10px))',
             zIndex: 9999,
             background: '#0D1117',
-            border: '1px solid rgba(255,255,255,0.15)',
+            border: '1px solid rgba(0,0,0,0.12)',
             borderRadius: 8, padding: '12px 14px', width: 230,
             boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
             pointerEvents: 'all',
@@ -1172,30 +1172,30 @@ function DeltaCell({ line, onResolveAsSurcharge }) {
           <div style={{
             position: 'absolute', bottom: -6, left: '50%', transform: 'translateX(-50%)',
             width: 10, height: 10, background: '#0D1117',
-            borderRight: '1px solid rgba(255,255,255,0.15)',
-            borderBottom: '1px solid rgba(255,255,255,0.15)',
+            borderRight: '1px solid rgba(0,0,0,0.12)',
+            borderBottom: '1px solid rgba(0,0,0,0.12)',
             transform: 'translateX(-50%) rotate(45deg)',
           }} />
 
-          <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+          <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
             Price Mismatch
           </div>
 
           {/* Breakdown */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 10 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-              <span style={{ color: '#888' }}>Carrier charged</span>
-              <span style={{ color: '#E6EDF3', fontWeight: 600 }}>£{carrier.toFixed(2)}</span>
+              <span style={{ color: '#64748B' }}>Carrier charged</span>
+              <span style={{ color: '#0F172A', fontWeight: 600 }}>£{carrier.toFixed(2)}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-              <span style={{ color: '#888' }}>Expected</span>
-              <span style={{ color: '#888' }}>£{expected.toFixed(2)}</span>
+              <span style={{ color: '#64748B' }}>Expected</span>
+              <span style={{ color: '#64748B' }}>£{expected.toFixed(2)}</span>
             </div>
             <div style={{
-              borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 5,
+              borderTop: '1px solid rgba(0,0,0,0.07)', paddingTop: 5,
               display: 'flex', justifyContent: 'space-between', fontSize: 11,
             }}>
-              <span style={{ color: '#888' }}>{isPositive ? 'Carrier surplus' : 'Carrier deficit'}</span>
+              <span style={{ color: '#64748B' }}>{isPositive ? 'Carrier surplus' : 'Carrier deficit'}</span>
               <span style={{ color, fontWeight: 700 }}>{delta > 0 ? '+' : ''}£{delta.toFixed(2)}</span>
             </div>
           </div>
@@ -1216,13 +1216,13 @@ function DeltaCell({ line, onResolveAsSurcharge }) {
               .sort((a, b) => a.diff - b.diff);
 
             if (!relevant.length) return (
-              <div style={{ fontSize: 10, color: '#555', marginBottom: 10, lineHeight: 1.5 }}>
+              <div style={{ fontSize: 10, color: '#64748B', marginBottom: 10, lineHeight: 1.5 }}>
                 No CSV column closely matches this delta — may be a relabel, credit, zone correction, or a column not yet in the profile.
               </div>
             );
             return (
               <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>
+                <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>
                   Likely source column{relevant.length > 1 ? 's' : ''}
                 </div>
                 {relevant.map(({ col, amt, diff }) => {
@@ -1231,10 +1231,10 @@ function DeltaCell({ line, onResolveAsSurcharge }) {
                     <div key={col} style={{
                       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                       fontSize: 11, padding: '3px 6px', borderRadius: 4, marginBottom: 2,
-                      background: isExact ? 'rgba(0,200,83,0.08)' : 'rgba(255,255,255,0.03)',
-                      border: isExact ? '1px solid rgba(0,200,83,0.2)' : '1px solid rgba(255,255,255,0.06)',
+                      background: isExact ? 'rgba(0,200,83,0.08)' : 'rgba(0,0,0,0.03)',
+                      border: isExact ? '1px solid rgba(0,200,83,0.2)' : '1px solid rgba(0,0,0,0.06)',
                     }}>
-                      <span style={{ color: isExact ? '#E6EDF3' : '#AAA', fontWeight: isExact ? 700 : 400 }}>
+                      <span style={{ color: isExact ? '#0F172A' : '#AAA', fontWeight: isExact ? 700 : 400 }}>
                         {isExact && <span style={{ color: '#00C853', marginRight: 4 }}>✓</span>}
                         {col}
                       </span>
@@ -1335,17 +1335,17 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, onRai
   const pill = (active, color = '#79AAFF') => ({
     ...pillBase,
     background: active ? `${color}22` : 'transparent',
-    borderColor: active ? `${color}66` : 'rgba(255,255,255,0.1)',
+    borderColor: active ? `${color}66` : 'rgba(0,0,0,0.08)',
     color:       active ? color        : '#555',
   });
 
   return (
     <div>
       {/* Toolbar: surcharge filter (when present) + CSV export */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 4px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 4px 12px', borderBottom: '1px solid rgba(0,0,0,0.06)', marginBottom: 4 }}>
         {surchargeTypes.length > 0 ? (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ fontSize: 10, color: '#444', textTransform: 'uppercase', letterSpacing: '0.06em', marginRight: 4 }}>Show</span>
+            <span style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginRight: 4 }}>Show</span>
             <span style={pill(surchargeFilter === 'all')} onClick={() => setSurchargeFilter('all')}>All lines</span>
             <span style={pill(surchargeFilter === 'freight', '#00C853')} onClick={() => setSurchargeFilter('freight')}>Freight only</span>
             {surchargeTypes.map(s => (
@@ -1354,13 +1354,13 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, onRai
               </span>
             ))}
             {surchargeFilter !== 'all' && (
-              <span style={{ fontSize: 10, color: '#555', marginLeft: 6 }}>
+              <span style={{ fontSize: 10, color: '#64748B', marginLeft: 6 }}>
                 {filteredLines.length} line{filteredLines.length !== 1 ? 's' : ''}
               </span>
             )}
           </div>
         ) : (
-          <span style={{ fontSize: 10, color: '#555' }}>{filteredLines.length} line{filteredLines.length !== 1 ? 's' : ''}</span>
+          <span style={{ fontSize: 10, color: '#64748B' }}>{filteredLines.length} line{filteredLines.length !== 1 ? 's' : ''}</span>
         )}
         <button
           style={{ ...btnGhost, padding: '4px 10px', fontSize: 11 }}
@@ -1373,15 +1373,15 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, onRai
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
         <thead>
-          <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+          <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
             {['Tracking', 'Service (raw)', 'Service', 'Customer', 'Type', 'Carrier £', 'Expected £', 'Delta £', 'Status', 'Reason', ''].map(h => (
-              <th key={h} style={{ padding: '8px 10px', textAlign: 'left', color: '#555', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
+              <th key={h} style={{ padding: '8px 10px', textAlign: 'left', color: '#64748B', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {filteredLines.map(line => (
-            <tr key={line.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+            <tr key={line.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
               <td style={{ padding: '9px 10px', fontFamily: 'monospace', color: '#AAA', fontSize: 10 }}>
                 {line.aged && <span title='Aged' style={{ color: '#FF5252', marginRight: 4 }}>⚠</span>}
                 {line.tracking_number || '—'}
@@ -1397,11 +1397,11 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, onRai
                 )}
               </td>
               <td style={{ padding: '9px 10px', color: '#AAA' }}>{line.customer_name || '—'}</td>
-              <td style={{ padding: '9px 10px', color: '#666' }}>{line.charge_type || 'base'}</td>
-              <td style={{ padding: '9px 10px', color: '#E6EDF3', fontWeight: 600 }}>
+              <td style={{ padding: '9px 10px', color: '#64748B' }}>{line.charge_type || 'base'}</td>
+              <td style={{ padding: '9px 10px', color: '#0F172A', fontWeight: 600 }}>
                 {line.carrier_amount != null ? `£${parseFloat(line.carrier_amount).toFixed(2)}` : '—'}
               </td>
-              <td style={{ padding: '9px 10px', color: '#888' }}>
+              <td style={{ padding: '9px 10px', color: '#64748B' }}>
                 {line.expected_amount != null ? `£${parseFloat(line.expected_amount).toFixed(2)}` : '—'}
               </td>
               <td style={{ padding: '9px 10px', fontWeight: 600 }}>
@@ -1449,7 +1449,7 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, onRai
         </tbody>
       </table>
       {filteredLines.length === 0 && (
-        <div style={{ textAlign: 'center', color: '#555', fontSize: 12, padding: '30px 0' }}>
+        <div style={{ textAlign: 'center', color: '#64748B', fontSize: 12, padding: '30px 0' }}>
           {surchargeFilter === 'all' ? 'No lines in this category' : 'No lines match this filter'}
         </div>
       )}
@@ -1478,21 +1478,21 @@ function CustomerLinesDrilldown({ runId, customerId }) {
   });
 
   if (isLoading) return (
-    <tr><td colSpan={9} style={{ padding: '12px 16px', color: '#555', fontSize: 11 }}>Loading lines…</td></tr>
+    <tr><td colSpan={9} style={{ padding: '12px 16px', color: '#64748B', fontSize: 11 }}>Loading lines…</td></tr>
   );
   if (!lines.length) return (
-    <tr><td colSpan={9} style={{ padding: '12px 16px', color: '#555', fontSize: 11 }}>No lines found</td></tr>
+    <tr><td colSpan={9} style={{ padding: '12px 16px', color: '#64748B', fontSize: 11 }}>No lines found</td></tr>
   );
 
-  const thStyle = { padding: '6px 10px', textAlign: 'left', color: '#444', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', background: 'rgba(255,255,255,0.02)' };
-  const tdStyle = { padding: '7px 10px', fontSize: 11, borderBottom: '1px solid rgba(255,255,255,0.03)' };
+  const thStyle = { padding: '6px 10px', textAlign: 'left', color: '#475569', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', background: 'rgba(0,0,0,0.02)' };
+  const tdStyle = { padding: '7px 10px', fontSize: 11, borderBottom: '1px solid rgba(0,0,0,0.03)' };
 
   return (
     <tr>
       <td colSpan={9} style={{ padding: 0, background: 'rgba(0,0,0,0.25)' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
               <th style={thStyle}>Tracking</th>
               <th style={thStyle}>Date</th>
               <th style={thStyle}>Service</th>
@@ -1514,20 +1514,20 @@ function CustomerLinesDrilldown({ runId, customerId }) {
               const isSurcharge = !!l.surcharge_id;
               const rowBg     = isSurcharge ? 'rgba(0,188,212,0.04)' : 'transparent';
               return (
-                <tr key={l.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)', background: rowBg }}>
+                <tr key={l.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.02)', background: rowBg }}>
                   <td style={{ ...tdStyle, color: isSurcharge ? '#00BCD4' : '#79AAFF', fontFamily: 'monospace', fontSize: 10 }}>
-                    {isSurcharge ? <span style={{ color: '#888', fontFamily: 'sans-serif' }}>↳</span> : null}
+                    {isSurcharge ? <span style={{ color: '#64748B', fontFamily: 'sans-serif' }}>↳</span> : null}
                     {' '}{l.tracking_number || '—'}
                   </td>
-                  <td style={{ ...tdStyle, color: '#888' }}>{l.shipment_date ? new Date(l.shipment_date).toLocaleDateString('en-GB') : '—'}</td>
+                  <td style={{ ...tdStyle, color: '#64748B' }}>{l.shipment_date ? new Date(l.shipment_date).toLocaleDateString('en-GB') : '—'}</td>
                   <td style={{ ...tdStyle, color: isSurcharge ? '#00BCD4' : '#AAA' }}>
                     {isSurcharge ? (l.surcharge_name || l.raw_service_code || 'Surcharge') : (l.service_name || '—')}
                   </td>
-                  <td style={{ ...tdStyle, color: '#888' }}>{isSurcharge ? '—' : (l.parcel_count || 1)}</td>
+                  <td style={{ ...tdStyle, color: '#64748B' }}>{isSurcharge ? '—' : (l.parcel_count || 1)}</td>
                   <td style={{ ...tdStyle, color: '#AAA', textAlign: 'right' }}>£{cost.toFixed(2)}</td>
-                  <td style={{ ...tdStyle, color: '#888', textAlign: 'right' }}>£{parseFloat(l.sell_base || 0).toFixed(2)}</td>
-                  <td style={{ ...tdStyle, color: '#888', textAlign: 'right' }}>£{parseFloat(l.sell_fuel || 0).toFixed(2)}</td>
-                  <td style={{ ...tdStyle, color: '#888', textAlign: 'right' }}>£{parseFloat(l.sell_surcharge || 0).toFixed(2)}</td>
+                  <td style={{ ...tdStyle, color: '#64748B', textAlign: 'right' }}>£{parseFloat(l.sell_base || 0).toFixed(2)}</td>
+                  <td style={{ ...tdStyle, color: '#64748B', textAlign: 'right' }}>£{parseFloat(l.sell_fuel || 0).toFixed(2)}</td>
+                  <td style={{ ...tdStyle, color: '#64748B', textAlign: 'right' }}>£{parseFloat(l.sell_surcharge || 0).toFixed(2)}</td>
                   <td style={{ ...tdStyle, color: isSurcharge ? '#00BCD4' : '#00C853', fontWeight: 700, textAlign: 'right' }}>£{sell.toFixed(2)}</td>
                   <td style={{ ...tdStyle, color: margin >= 0 ? '#00C853' : '#FF5252', fontWeight: 600, textAlign: 'right' }}>£{margin.toFixed(2)}</td>
                   <td style={{ ...tdStyle }}><StatusBadge status={l.status} /></td>
@@ -1536,8 +1536,8 @@ function CustomerLinesDrilldown({ runId, customerId }) {
             })}
           </tbody>
           <tfoot>
-            <tr style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-              <td colSpan={4} style={{ ...tdStyle, color: '#555', fontWeight: 700, fontSize: 10 }}>SUBTOTAL ({lines.length} lines)</td>
+            <tr style={{ borderTop: '1px solid rgba(0,0,0,0.08)' }}>
+              <td colSpan={4} style={{ ...tdStyle, color: '#64748B', fontWeight: 700, fontSize: 10 }}>SUBTOTAL ({lines.length} lines)</td>
               <td style={{ ...tdStyle, color: '#AAA', fontWeight: 700, textAlign: 'right' }}>
                 £{lines.reduce((s, l) => s + parseFloat(l.cost_total || 0), 0).toFixed(2)}
               </td>
@@ -1569,9 +1569,9 @@ function CustomerPreviewPanel({ runId }) {
     staleTime: 30_000,
   });
 
-  if (isLoading) return <div style={{ color: '#666', fontSize: 12, padding: 20 }}>Loading preview…</div>;
+  if (isLoading) return <div style={{ color: '#64748B', fontSize: 12, padding: 20 }}>Loading preview…</div>;
   if (!customers.length) return (
-    <div style={{ ...card, color: '#555', fontSize: 12, textAlign: 'center', padding: 30 }}>
+    <div style={{ ...card, color: '#64748B', fontSize: 12, textAlign: 'center', padding: 30 }}>
       No matched or corrected lines yet — process lines first to see a billing preview
     </div>
   );
@@ -1588,8 +1588,8 @@ function CustomerPreviewPanel({ runId }) {
     <div style={card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#E6EDF3' }}>Customer Billing Preview</div>
-          <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Customer Billing Preview</div>
+          <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
             {customers.length} customer{customers.length !== 1 ? 's' : ''} · {customers.reduce((s, c) => s + (c.line_count || 0), 0)} shipments · Click a row to see line detail · Finalise to push to Xero
           </div>
         </div>
@@ -1600,10 +1600,10 @@ function CustomerPreviewPanel({ runId }) {
 
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
-          <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+          <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
             <th style={{ width: 24, padding: '7px 6px' }} />
             {['Customer', 'Shipments', 'Sell Base', 'Fuel', 'Surcharges', 'Total Sell', 'Our Cost', 'Margin', 'CSV'].map(h => (
-              <th key={h} style={{ padding: '7px 10px', textAlign: 'left', color: '#555', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
+              <th key={h} style={{ padding: '7px 10px', textAlign: 'left', color: '#64748B', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
             ))}
           </tr>
         </thead>
@@ -1620,19 +1620,19 @@ function CustomerPreviewPanel({ runId }) {
                   key={rowKey}
                   onClick={() => toggleExpand(rowKey)}
                   style={{
-                    borderBottom: expanded ? 'none' : '1px solid rgba(255,255,255,0.04)',
+                    borderBottom: expanded ? 'none' : '1px solid rgba(0,0,0,0.03)',
                     cursor: 'pointer',
-                    background: expanded ? 'rgba(255,255,255,0.03)' : 'transparent',
+                    background: expanded ? 'rgba(0,0,0,0.03)' : 'transparent',
                   }}
                 >
-                  <td style={{ padding: '9px 6px', color: '#555', textAlign: 'center', fontSize: 10 }}>
+                  <td style={{ padding: '9px 6px', color: '#64748B', textAlign: 'center', fontSize: 10 }}>
                     {expanded ? '▾' : '▸'}
                   </td>
-                  <td style={{ padding: '9px 10px', color: '#E6EDF3', fontWeight: 600 }}>{c.customer_name || '—'}</td>
+                  <td style={{ padding: '9px 10px', color: '#0F172A', fontWeight: 600 }}>{c.customer_name || '—'}</td>
                   <td style={{ padding: '9px 10px', color: '#AAA' }}>{c.line_count}</td>
-                  <td style={{ padding: '9px 10px', color: '#888' }}>£{parseFloat(c.total_base || 0).toFixed(2)}</td>
-                  <td style={{ padding: '9px 10px', color: '#888' }}>£{parseFloat(c.total_fuel || 0).toFixed(2)}</td>
-                  <td style={{ padding: '9px 10px', color: '#888' }}>£{(parseFloat(c.total_surcharge || 0) + parseFloat(c.total_recon_surcharge || 0)).toFixed(2)}</td>
+                  <td style={{ padding: '9px 10px', color: '#64748B' }}>£{parseFloat(c.total_base || 0).toFixed(2)}</td>
+                  <td style={{ padding: '9px 10px', color: '#64748B' }}>£{parseFloat(c.total_fuel || 0).toFixed(2)}</td>
+                  <td style={{ padding: '9px 10px', color: '#64748B' }}>£{(parseFloat(c.total_surcharge || 0) + parseFloat(c.total_recon_surcharge || 0)).toFixed(2)}</td>
                   <td style={{ padding: '9px 10px', color: '#00C853', fontWeight: 700 }}>£{sell.toFixed(2)}</td>
                   <td style={{ padding: '9px 10px', color: '#AAA' }}>£{cost.toFixed(2)}</td>
                   <td style={{ padding: '9px 10px', color: margin >= 0 ? '#00C853' : '#FF5252', fontWeight: 600 }}>
@@ -1667,9 +1667,9 @@ function CustomerPreviewPanel({ runId }) {
           })}
         </tbody>
         <tfoot>
-          <tr style={{ borderTop: '2px solid rgba(255,255,255,0.1)' }}>
+          <tr style={{ borderTop: '2px solid rgba(0,0,0,0.08)' }}>
             <td />
-            <td style={{ padding: '9px 10px', color: '#888', fontSize: 12, fontWeight: 700 }}>TOTAL</td>
+            <td style={{ padding: '9px 10px', color: '#64748B', fontSize: 12, fontWeight: 700 }}>TOTAL</td>
             <td style={{ padding: '9px 10px', color: '#AAA' }}>{customers.reduce((s, c) => s + (c.line_count || 0), 0)}</td>
             <td colSpan={3} />
             <td style={{ padding: '9px 10px', color: '#00C853', fontWeight: 800, fontSize: 14 }}>£{totalSell.toFixed(2)}</td>
@@ -1729,7 +1729,7 @@ function CustomerSummaryPanel({ runId, run }) {
   }
 
   if (!customers.length) return (
-    <div style={{ ...card, color: '#555', fontSize: 12, textAlign: 'center', padding: 30 }}>
+    <div style={{ ...card, color: '#64748B', fontSize: 12, textAlign: 'center', padding: 30 }}>
       No finalized billing lines found
     </div>
   );
@@ -1741,8 +1741,8 @@ function CustomerSummaryPanel({ runId, run }) {
     <div style={card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#E6EDF3' }}>Customer Billing Summary</div>
-          <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Customer Billing Summary</div>
+          <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
             {customers.length} customers · {customers.reduce((s, c) => s + c.line_count, 0)} shipments
           </div>
         </div>
@@ -1767,20 +1767,20 @@ function CustomerSummaryPanel({ runId, run }) {
 
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
-          <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+          <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
             {['Customer', 'Shipments', 'Base', 'Fuel', 'Surcharges', 'Total Sell', 'Margin', 'Xero', 'CSV', ''].map(h => (
-              <th key={h} style={{ padding: '7px 10px', textAlign: 'left', color: '#555', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
+              <th key={h} style={{ padding: '7px 10px', textAlign: 'left', color: '#64748B', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {customers.map(c => (
-            <tr key={c.customer_id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-              <td style={{ padding: '9px 10px', color: '#E6EDF3', fontWeight: 600 }}>{c.customer_name || '—'}</td>
+            <tr key={c.customer_id} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
+              <td style={{ padding: '9px 10px', color: '#0F172A', fontWeight: 600 }}>{c.customer_name || '—'}</td>
               <td style={{ padding: '9px 10px', color: '#AAA' }}>{c.line_count}</td>
-              <td style={{ padding: '9px 10px', color: '#888' }}>£{parseFloat(c.total_base || 0).toFixed(2)}</td>
-              <td style={{ padding: '9px 10px', color: '#888' }}>£{parseFloat(c.total_fuel || 0).toFixed(2)}</td>
-              <td style={{ padding: '9px 10px', color: '#888' }}>£{parseFloat(c.total_surcharge || 0).toFixed(2)}</td>
+              <td style={{ padding: '9px 10px', color: '#64748B' }}>£{parseFloat(c.total_base || 0).toFixed(2)}</td>
+              <td style={{ padding: '9px 10px', color: '#64748B' }}>£{parseFloat(c.total_fuel || 0).toFixed(2)}</td>
+              <td style={{ padding: '9px 10px', color: '#64748B' }}>£{parseFloat(c.total_surcharge || 0).toFixed(2)}</td>
               <td style={{ padding: '9px 10px', color: '#00C853', fontWeight: 700 }}>£{parseFloat(c.total_sell || 0).toFixed(2)}</td>
               <td style={{ padding: '9px 10px', color: parseFloat(c.total_margin || 0) > 0 ? '#00C853' : '#FF5252' }}>
                 £{parseFloat(c.total_margin || 0).toFixed(2)}
@@ -1798,7 +1798,7 @@ function CustomerSummaryPanel({ runId, run }) {
                     Push
                   </button>
                 ) : (
-                  <span style={{ color: '#555', fontSize: 10 }}>Not linked</span>
+                  <span style={{ color: '#64748B', fontSize: 10 }}>Not linked</span>
                 )}
               </td>
               <td style={{ padding: '9px 10px' }}>
@@ -1810,15 +1810,15 @@ function CustomerSummaryPanel({ runId, run }) {
                   <Download size={11} />CSV
                 </button>
               </td>
-              <td style={{ padding: '9px 10px', color: '#555' }}>
+              <td style={{ padding: '9px 10px', color: '#64748B' }}>
                 {c.xero_push_error && <span style={{ color: '#FF5252', fontSize: 10 }} title={c.xero_push_error}>⚠ Error</span>}
               </td>
             </tr>
           ))}
         </tbody>
         <tfoot>
-          <tr style={{ borderTop: '2px solid rgba(255,255,255,0.1)' }}>
-            <td colSpan={5} style={{ padding: '9px 10px', color: '#888', fontSize: 12, fontWeight: 700 }}>TOTAL</td>
+          <tr style={{ borderTop: '2px solid rgba(0,0,0,0.08)' }}>
+            <td colSpan={5} style={{ padding: '9px 10px', color: '#64748B', fontSize: 12, fontWeight: 700 }}>TOTAL</td>
             <td style={{ padding: '9px 10px', color: '#00C853', fontWeight: 800, fontSize: 14 }}>
               £{customers.reduce((s, c) => s + parseFloat(c.total_sell || 0), 0).toFixed(2)}
             </td>
@@ -1897,7 +1897,7 @@ function RaiseQueryModal({ line, runId, carrierId, invoiceRef, onClose, onRaised
     background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
   };
   const modal = {
-    background: '#0d1117', border: '1px solid rgba(255,255,255,0.12)',
+    background: '#0d1117', border: '1px solid rgba(0,0,0,0.10)',
     borderRadius: 12, padding: 24, width: 500, maxHeight: '90vh',
     overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
   };
@@ -1908,8 +1908,8 @@ function RaiseQueryModal({ line, runId, carrierId, invoiceRef, onClose, onRaised
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#E6EDF3' }}>Raise Carrier Query</div>
-            <div style={{ fontSize: 11, color: '#555', marginTop: 2 }}>Log a dispute to follow up with the carrier</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>Raise Carrier Query</div>
+            <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>Log a dispute to follow up with the carrier</div>
           </div>
           <button style={{ ...btnGhost, padding: '4px 8px' }} onClick={onClose}><X size={14} /></button>
         </div>
@@ -1921,15 +1921,15 @@ function RaiseQueryModal({ line, runId, carrierId, invoiceRef, onClose, onRaised
           display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10,
         }}>
           <div>
-            <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Tracking</div>
+            <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Tracking</div>
             <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#AAA' }}>{line.tracking_number || '—'}</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Carrier charged</div>
+            <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Carrier charged</div>
             <div style={{ fontSize: 13, fontWeight: 700, color: '#FF5252' }}>£{parseFloat(line.carrier_amount || 0).toFixed(2)}</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Disputed</div>
+            <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Disputed</div>
             <div style={{ fontSize: 13, fontWeight: 700, color: '#FFB300' }}>{parseFloat(disputed) > 0 ? '+' : ''}£{disputed}</div>
           </div>
         </div>
@@ -1937,7 +1937,7 @@ function RaiseQueryModal({ line, runId, carrierId, invoiceRef, onClose, onRaised
         <form onSubmit={handleSubmit}>
           {/* Query type */}
           <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 11, color: '#888', fontWeight: 700, display: 'block', marginBottom: 6 }}>
+            <label style={{ fontSize: 11, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 6 }}>
               QUERY TYPE
             </label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
@@ -1949,8 +1949,8 @@ function RaiseQueryModal({ line, runId, carrierId, invoiceRef, onClose, onRaised
                   style={{
                     padding: '7px 10px', borderRadius: 6, cursor: 'pointer',
                     textAlign: 'left', fontSize: 11, fontWeight: 600,
-                    background: queryType === opt.value ? 'rgba(255,179,0,0.12)' : 'rgba(255,255,255,0.03)',
-                    border: queryType === opt.value ? '1px solid rgba(255,179,0,0.5)' : '1px solid rgba(255,255,255,0.08)',
+                    background: queryType === opt.value ? 'rgba(255,179,0,0.12)' : 'rgba(0,0,0,0.03)',
+                    border: queryType === opt.value ? '1px solid rgba(255,179,0,0.5)' : '1px solid rgba(0,0,0,0.08)',
                     color: queryType === opt.value ? '#FFB300' : '#666',
                   }}
                 >
@@ -1962,7 +1962,7 @@ function RaiseQueryModal({ line, runId, carrierId, invoiceRef, onClose, onRaised
 
           {/* Details */}
           <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 11, color: '#888', fontWeight: 700, display: 'block', marginBottom: 6 }}>
+            <label style={{ fontSize: 11, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 6 }}>
               DETAILS
             </label>
             <textarea
@@ -1975,8 +1975,8 @@ function RaiseQueryModal({ line, runId, carrierId, invoiceRef, onClose, onRaised
 
           {/* Carrier ref (optional) */}
           <div style={{ marginBottom: 20 }}>
-            <label style={{ fontSize: 11, color: '#888', fontWeight: 700, display: 'block', marginBottom: 6 }}>
-              CARRIER CASE REFERENCE <span style={{ color: '#555', fontWeight: 400 }}>(optional — add after raising with carrier)</span>
+            <label style={{ fontSize: 11, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 6 }}>
+              CARRIER CASE REFERENCE <span style={{ color: '#64748B', fontWeight: 400 }}>(optional — add after raising with carrier)</span>
             </label>
             <input
               style={inputSt}
@@ -2012,11 +2012,11 @@ const QUERY_STATUS_CFG = {
   acknowledged: { color: '#FF8F00', bg: 'rgba(255,143,0,0.12)',  border: 'rgba(255,143,0,0.3)',  label: 'Acknowledged' },
   credited:     { color: '#00C853', bg: 'rgba(0,200,83,0.12)',   border: 'rgba(0,200,83,0.3)',   label: 'Credited' },
   rejected:     { color: '#FF5252', bg: 'rgba(213,0,0,0.12)',    border: 'rgba(213,0,0,0.3)',    label: 'Rejected' },
-  written_off:  { color: '#555',    bg: 'rgba(255,255,255,0.04)', border: 'rgba(255,255,255,0.1)', label: 'Written off' },
+  written_off:  { color: '#64748B',    bg: 'rgba(0,0,0,0.03)', border: 'rgba(0,0,0,0.08)', label: 'Written off' },
 };
 
 function QueryStatusBadge({ status }) {
-  const cfg = QUERY_STATUS_CFG[status] || { color: '#AAA', bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.1)', label: status };
+  const cfg = QUERY_STATUS_CFG[status] || { color: '#AAA', bg: 'rgba(0,0,0,0.04)', border: 'rgba(0,0,0,0.08)', label: status };
   return (
     <span style={{
       display: 'inline-block', padding: '1px 8px', borderRadius: 9999,
@@ -2077,7 +2077,7 @@ function CourierQueriesPanel({ runId, carrierId }) {
     }
   }
 
-  if (isLoading) return <div style={{ color: '#555', fontSize: 12, padding: 20 }}>Loading queries…</div>;
+  if (isLoading) return <div style={{ color: '#64748B', fontSize: 12, padding: 20 }}>Loading queries…</div>;
   if (error) return <div style={{ color: '#FF5252', fontSize: 12, padding: 20 }}>Failed to load queries</div>;
 
   const totalDisputed = queries.reduce((s, q) => s + parseFloat(q.disputed_amount || 0), 0);
@@ -2089,38 +2089,38 @@ function CourierQueriesPanel({ runId, carrierId }) {
       {/* Summary header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#E6EDF3' }}>Carrier Queries</div>
-          <div style={{ fontSize: 11, color: '#555', marginTop: 2 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Carrier Queries</div>
+          <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
             Disputes and queries raised with the carrier for this run
           </div>
         </div>
         <div style={{ display: 'flex', gap: 20 }}>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Active</div>
+            <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Active</div>
             <div style={{ fontSize: 18, fontWeight: 800, color: activeCount > 0 ? '#FFB300' : '#555' }}>{activeCount}</div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total disputed</div>
+            <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total disputed</div>
             <div style={{ fontSize: 18, fontWeight: 800, color: '#FF5252' }}>£{totalDisputed.toFixed(2)}</div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Credited back</div>
+            <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Credited back</div>
             <div style={{ fontSize: 18, fontWeight: 800, color: totalCredited > 0 ? '#00C853' : '#555' }}>£{totalCredited.toFixed(2)}</div>
           </div>
         </div>
       </div>
 
       {queries.length === 0 ? (
-        <div style={{ textAlign: 'center', color: '#555', fontSize: 12, padding: '30px 0' }}>
+        <div style={{ textAlign: 'center', color: '#64748B', fontSize: 12, padding: '30px 0' }}>
           No queries raised for this run yet. Use the Needs Review tab to raise a query against a specific line.
         </div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+              <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
                 {['Tracking', 'Type', 'Carrier £', 'Expected £', 'Disputed', 'Carrier Ref', 'Status', 'Raised', ''].map(h => (
-                  <th key={h} style={{ padding: '8px 10px', textAlign: 'left', color: '#555', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 10px', textAlign: 'left', color: '#64748B', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -2130,15 +2130,15 @@ function CourierQueriesPanel({ runId, carrierId }) {
                 const isUpdating = updatingId === q.id;
                 const disputed = parseFloat(q.disputed_amount || 0);
                 return (
-                  <tr key={q.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                  <tr key={q.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
                     <td style={{ padding: '9px 10px', fontFamily: 'monospace', color: '#AAA', fontSize: 10 }}>{q.tracking_number || '—'}</td>
-                    <td style={{ padding: '9px 10px', color: '#888' }}>
+                    <td style={{ padding: '9px 10px', color: '#64748B' }}>
                       {QUERY_TYPE_OPTS.find(o => o.value === q.query_type)?.label || q.query_type}
                     </td>
-                    <td style={{ padding: '9px 10px', color: '#E6EDF3', fontWeight: 600 }}>
+                    <td style={{ padding: '9px 10px', color: '#0F172A', fontWeight: 600 }}>
                       {q.carrier_charged != null ? `£${parseFloat(q.carrier_charged).toFixed(2)}` : '—'}
                     </td>
-                    <td style={{ padding: '9px 10px', color: '#888' }}>
+                    <td style={{ padding: '9px 10px', color: '#64748B' }}>
                       {q.expected_charged != null ? `£${parseFloat(q.expected_charged).toFixed(2)}` : '—'}
                     </td>
                     <td style={{ padding: '9px 10px', fontWeight: 700, color: disputed > 0 ? '#FF5252' : '#00C853' }}>
@@ -2153,13 +2153,13 @@ function CourierQueriesPanel({ runId, carrierId }) {
                           placeholder="Carrier case #"
                         />
                       ) : (
-                        <span style={{ color: q.carrier_reference ? '#E6EDF3' : '#333', fontFamily: q.carrier_reference ? 'monospace' : 'inherit', fontSize: 10 }}>
+                        <span style={{ color: q.carrier_reference ? '#0F172A' : '#333', fontFamily: q.carrier_reference ? 'monospace' : 'inherit', fontSize: 10 }}>
                           {q.carrier_reference || 'Not yet raised'}
                         </span>
                       )}
                     </td>
                     <td style={{ padding: '9px 10px' }}><QueryStatusBadge status={q.status} /></td>
-                    <td style={{ padding: '9px 10px', color: '#555', fontSize: 10 }}>
+                    <td style={{ padding: '9px 10px', color: '#64748B', fontSize: 10 }}>
                       {q.raised_at ? new Date(q.raised_at).toLocaleDateString('en-GB') : '—'}
                     </td>
                     <td style={{ padding: '9px 6px' }}>
@@ -2338,7 +2338,7 @@ export default function RunDetailPage() {
   }[activeTab] || [];
 
   if (runLoading) {
-    return <div style={{ color: '#666', fontSize: 13, padding: 40 }}>Loading…</div>;
+    return <div style={{ color: '#64748B', fontSize: 13, padding: 40 }}>Loading…</div>;
   }
   if (!run) {
     return <div style={{ color: '#FF5252', fontSize: 13, padding: 40 }}>Run not found</div>;
@@ -2357,10 +2357,10 @@ export default function RunDetailPage() {
           <ArrowLeft size={15} />
         </button>
         <div style={{ flex: 1 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#E6EDF3', margin: 0 }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#0F172A', margin: 0 }}>
             {run.carrier_name} — {run.invoice_ref || `Run #${run.id}`}
           </h1>
-          <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
+          <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
             {run.invoice_date ? new Date(run.invoice_date).toLocaleDateString('en-GB') : '—'} · Started {new Date(run.created_at).toLocaleDateString('en-GB')}
             {run.status === 'processing' && <span style={{ color: '#79AAFF', marginLeft: 10 }}><RefreshCw size={11} style={{ display: 'inline' }} /> Processing…</span>}
           </div>
@@ -2400,28 +2400,28 @@ export default function RunDetailPage() {
           const psBorder = ps === 0 ? '1px solid rgba(213,0,0,0.4)' : card.border;
           return (
             <div key="pool" style={{ ...card, border: psBorder }}>
-              <div style={{ fontSize: 10, color: '#666', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Verified Pool</div>
+              <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Verified Pool</div>
               <div style={{ fontSize: 20, fontWeight: 800, color: psColor }}>{psValue}</div>
               {ps === 0 && <div style={{ fontSize: 10, color: '#FF5252', marginTop: 4 }}>Carrier name mismatch?</div>}
             </div>
           );
         })()}
         {[
-          { label: 'Total Lines', value: total.toLocaleString(), color: '#E6EDF3' },
+          { label: 'Total Lines', value: total.toLocaleString(), color: '#0F172A' },
           { label: 'Matched', value: `${run.matched_count || 0} (${matchedPct}%)`, color: '#00C853' },
           { label: 'Corrected', value: `${run.corrected_count || 0} (${correctedPct}%)`, color: '#FF8F00' },
           { label: 'Unmatched', value: `${run.unmatched_count || 0} (${unmatchedPct}%)`, color: (run.unmatched_count || 0) > 0 ? '#FFB300' : '#555' },
           { label: 'Automation Rate', value: run.automation_rate != null ? `${run.automation_rate}%` : '—', color: parseFloat(run.automation_rate) >= 80 ? '#00C853' : '#FFB300' },
         ].map(({ label, value, color }) => (
           <div key={label} style={card}>
-            <div style={{ fontSize: 10, color: '#666', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>{label}</div>
+            <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>{label}</div>
             <div style={{ fontSize: 20, fontWeight: 800, color }}>{value}</div>
           </div>
         ))}
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: 0 }}>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid rgba(0,0,0,0.06)', paddingBottom: 0 }}>
         {tabs.map(tab => (
           <button
             key={tab.key}
@@ -2429,7 +2429,7 @@ export default function RunDetailPage() {
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
               padding: '8px 16px', fontSize: 13, fontWeight: 600,
-              color: activeTab === tab.key ? '#E6EDF3' : '#666',
+              color: activeTab === tab.key ? '#0F172A' : '#666',
               borderBottom: `2px solid ${activeTab === tab.key ? '#00C853' : 'transparent'}`,
               display: 'flex', alignItems: 'center', gap: 6,
             }}
@@ -2446,7 +2446,7 @@ export default function RunDetailPage() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           {/* Breakdown chart */}
           <div style={card}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#E6EDF3', marginBottom: 16 }}>Result breakdown</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', marginBottom: 16 }}>Result breakdown</div>
             {[
               { label: 'Matched',   count: run.matched_count   || 0, color: '#00C853' },
               { label: 'Corrected', count: run.corrected_count || 0, color: '#FF8F00' },
@@ -2457,7 +2457,7 @@ export default function RunDetailPage() {
                   <span style={{ color: '#AAA' }}>{label}</span>
                   <span style={{ color, fontWeight: 700 }}>{count.toLocaleString()} / {total.toLocaleString()}</span>
                 </div>
-                <div style={{ height: 5, background: 'rgba(255,255,255,0.06)', borderRadius: 99 }}>
+                <div style={{ height: 5, background: 'rgba(0,0,0,0.06)', borderRadius: 99 }}>
                   <div style={{ width: `${total > 0 ? (count / total) * 100 : 0}%`, height: '100%', background: color, borderRadius: 99 }} />
                 </div>
               </div>
@@ -2466,7 +2466,7 @@ export default function RunDetailPage() {
 
           {/* Run details */}
           <div style={card}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#E6EDF3', marginBottom: 16 }}>Run details</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', marginBottom: 16 }}>Run details</div>
             {[
               ['Carrier',       run.carrier_name],
               ['Invoice ref',   run.invoice_ref || '—'],
@@ -2475,9 +2475,9 @@ export default function RunDetailPage() {
               ['Completed',     run.completed_at ? new Date(run.completed_at).toLocaleString('en-GB') : '—'],
               ['Created by',    run.created_by_name || 'System'],
             ].map(([label, value]) => (
-              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid rgba(255,255,255,0.04)', fontSize: 12 }}>
-                <span style={{ color: '#888' }}>{label}</span>
-                <span style={{ color: '#E6EDF3' }}>{value}</span>
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid rgba(0,0,0,0.03)', fontSize: 12 }}>
+                <span style={{ color: '#64748B' }}>{label}</span>
+                <span style={{ color: '#0F172A' }}>{value}</span>
               </div>
             ))}
           </div>
@@ -2496,7 +2496,7 @@ export default function RunDetailPage() {
                 <div style={{ fontSize: 14, fontWeight: 700, color: '#FFB300' }}>
                   {run.unmatched_count} line{run.unmatched_count !== 1 ? 's' : ''} need manual review
                 </div>
-                <div style={{ fontSize: 12, color: '#888', marginTop: 3 }}>
+                <div style={{ fontSize: 12, color: '#64748B', marginTop: 3 }}>
                   Resolve all Unmatched lines before finalizing
                 </div>
               </div>
@@ -2510,7 +2510,7 @@ export default function RunDetailPage() {
           {run.status === 'failed' && (
             <div style={{ ...card, border: '1px solid rgba(213,0,0,0.4)', background: 'rgba(213,0,0,0.06)', gridColumn: 'span 2' }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: '#FF5252', marginBottom: 4 }}>✗ Run Failed</div>
-              <div style={{ fontSize: 12, color: '#888' }}>
+              <div style={{ fontSize: 12, color: '#64748B' }}>
                 The reconciliation engine encountered an error during processing. Check Railway logs for details, then delete this run and re-upload the CSV.
               </div>
             </div>
@@ -2521,7 +2521,7 @@ export default function RunDetailPage() {
             <div style={{ ...card, border: '1px solid rgba(0,200,83,0.25)', background: 'rgba(0,200,83,0.06)', gridColumn: 'span 2', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: '#00C853' }}>Ready to finalize</div>
-                <div style={{ fontSize: 12, color: '#888', marginTop: 3 }}>
+                <div style={{ fontSize: 12, color: '#64748B', marginTop: 3 }}>
                   All lines resolved. Finalize to create the immutable billing snapshot and enable Xero push.
                 </div>
               </div>

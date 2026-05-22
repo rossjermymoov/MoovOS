@@ -14,7 +14,7 @@ const api = axios.create({ baseURL: '/api' });
 const gbp = (n) => `£${parseFloat(n || 0).toFixed(2)}`;
 
 const inp = {
-  background: '#0D0E2A', border: '1px solid rgba(255,255,255,0.15)',
+  background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
   borderRadius: 9999, padding: '4px 12px', color: '#fff', fontSize: 12,
   outline: 'none', boxSizing: 'border-box',
 };
@@ -69,7 +69,7 @@ function PriceCell({ rateId, initialPrice, onSaved, onDelete }) {
       {confirm
         ? <>
             <button onClick={() => onDelete(rateId)} style={{ background: '#E91E8C', border: 'none', borderRadius: 4, color: '#fff', fontSize: 10, padding: '2px 6px', cursor: 'pointer' }}>Delete</button>
-            <button onClick={() => setConfirm(false)} style={{ background: 'none', border: 'none', color: '#AAAAAA', fontSize: 10, cursor: 'pointer' }}>✕</button>
+            <button onClick={() => setConfirm(false)} style={{ background: 'none', border: 'none', color: '#64748B', fontSize: 10, cursor: 'pointer' }}>✕</button>
           </>
         : <button onClick={() => setConfirm(true)} style={{ background: 'none', border: 'none', color: 'transparent', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
             <Trash2 size={11} color="#333" />
@@ -151,7 +151,7 @@ function SubPriceCell({ rateId, initialSubPrice, onSaved }) {
       onClick={startEdit}
       title="Add sub-parcel rate (2nd+ boxes)"
       style={{
-        fontSize: 11, color: '#444', cursor: 'pointer',
+        fontSize: 11, color: '#475569', cursor: 'pointer',
         padding: '2px 7px', borderRadius: 5,
         border: '1px dashed rgba(255,193,7,0.2)',
         fontFamily: 'monospace',
@@ -438,11 +438,11 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
     <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(8,9,26,0.97)', display: 'flex', flexDirection: 'column' }}>
 
       {/* Header */}
-      <div style={{ flexShrink: 0, padding: '20px 28px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: 16, background: '#0A0B1E' }}>
+      <div style={{ flexShrink: 0, padding: '20px 28px 16px', borderBottom: '1px solid rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', gap: 16, background: '#F8FAFC' }}>
         <Globe size={20} color="#00BCD4" style={{ flexShrink: 0 }} />
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 17, fontWeight: 700, color: '#fff' }}>{service.service_name}</div>
-          <div style={{ fontSize: 12, color: '#AAAAAA', marginTop: 2 }}>
+          <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
             <span style={{ color: '#00BCD4', fontFamily: 'monospace', fontWeight: 700, marginRight: 10 }}>{service.service_code}</span>
             {rates.length.toLocaleString()} rates · {totalZones} zones
             {multiWeight && ` · ${[...new Set(rates.map(r => r.weight_class_name))].length} weight classes`}
@@ -451,22 +451,22 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
 
         {/* Search */}
         <div style={{ position: 'relative', flex: '0 0 440px' }}>
-          <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#AAAAAA', pointerEvents: 'none' }} />
+          <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#64748B', pointerEvents: 'none' }} />
           <input
             ref={searchRef}
             value={searchText}
             onChange={e => setSearchText(e.target.value)}
             placeholder='e.g. "Jamaica"  or  "1kg to France"'
-            style={{ width: '100%', boxSizing: 'border-box', background: '#0D0E2A', border: '1px solid rgba(0,188,212,0.5)', borderRadius: 8, padding: '10px 36px 10px 36px', color: '#fff', fontSize: 13, outline: 'none' }}
+            style={{ width: '100%', boxSizing: 'border-box', background: '#FFFFFF', border: '1px solid rgba(0,188,212,0.5)', borderRadius: 8, padding: '10px 36px 10px 36px', color: '#fff', fontSize: 13, outline: 'none' }}
           />
           {searchText && (
-            <button onClick={() => setSearchText('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#AAAAAA', cursor: 'pointer', padding: 0, display: 'flex' }}>
+            <button onClick={() => setSearchText('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: 0, display: 'flex' }}>
               <X size={14} />
             </button>
           )}
         </div>
 
-        <button onClick={onClose} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, color: '#AAAAAA', fontSize: 12, padding: '7px 14px', cursor: 'pointer', flexShrink: 0 }}>
+        <button onClick={onClose} style={{ background: 'none', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 6, color: '#64748B', fontSize: 12, padding: '7px 14px', cursor: 'pointer', flexShrink: 0 }}>
           Close  <span style={{ opacity: 0.5, fontSize: 11 }}>esc</span>
         </button>
       </div>
@@ -475,7 +475,7 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
       {cardService && (
         <div style={{ flexShrink: 0, padding: '8px 28px', background: 'rgba(0,200,83,0.04)', borderBottom: '1px solid rgba(0,200,83,0.08)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <Percent size={12} color="#00C853" />
-          <span style={{ fontSize: 12, color: '#AAAAAA' }}>Markup from carrier cost</span>
+          <span style={{ fontSize: 12, color: '#64748B' }}>Markup from carrier cost</span>
           <input
             value={markup}
             onChange={e => { setMarkup(e.target.value); setApplyResult(null); }}
@@ -483,7 +483,7 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
             placeholder="e.g. 20"
             style={{ ...inp, width: 70, textAlign: 'right', fontSize: 12, color: '#00C853', border: '1px solid rgba(0,200,83,0.4)', background: 'rgba(0,200,83,0.06)' }}
           />
-          <span style={{ fontSize: 12, color: '#AAAAAA' }}>%</span>
+          <span style={{ fontSize: 12, color: '#64748B' }}>%</span>
           <button
             onClick={applyMarkup}
             disabled={applying || !markup}
@@ -502,7 +502,7 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
               ✓ {applyResult.created} rates set
             </span>
           )}
-          <span style={{ fontSize: 11, color: '#444', marginLeft: 'auto' }}>
+          <span style={{ fontSize: 11, color: '#475569', marginLeft: 'auto' }}>
             {cardService.zones.length} zones · {[...new Set(cardService.zones.flatMap(z => z.bands.map(bandLabel)))].length} weight bands in carrier card
           </span>
         </div>
@@ -515,16 +515,16 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
           <span style={{ color: matchCount === 0 ? '#E91E8C' : '#00BCD4', fontWeight: 700 }}>
             {matchCount === 0 ? 'No matches found' : matchCount === 1 ? '1 match' : `${matchCount} matches`}
           </span>
-          {parsed.zoneTerm   && <span style={{ color: '#AAAAAA' }}>Zone: <span style={{ color: '#fff' }}>{parsed.zoneTerm}</span></span>}
-          {parsed.weightKg != null && <span style={{ color: '#AAAAAA' }}>Weight: <span style={{ color: '#fff' }}>{parsed.weightKg} kg</span></span>}
-          <button onClick={() => setSearchText('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 12 }}>Clear ✕</button>
+          {parsed.zoneTerm   && <span style={{ color: '#64748B' }}>Zone: <span style={{ color: '#fff' }}>{parsed.zoneTerm}</span></span>}
+          {parsed.weightKg != null && <span style={{ color: '#64748B' }}>Weight: <span style={{ color: '#fff' }}>{parsed.weightKg} kg</span></span>}
+          <button onClick={() => setSearchText('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: 12 }}>Clear ✕</button>
         </div>
       )}
 
       {/* ── Exact match: big price display ───────────────────── */}
       {exactMatch && (
         <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 28px', gap: 16 }}>
-          <div style={{ fontSize: 13, color: '#AAAAAA', fontWeight: 600, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          <div style={{ fontSize: 13, color: '#64748B', fontWeight: 600, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
             {service.service_name} · {exactMatch.zone_name}
             {multiWeight && <> · {exactMatch.weight_class_name}</>}
           </div>
@@ -536,7 +536,7 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
             <SubPriceCell rateId={exactMatch.id} initialSubPrice={exactMatch.price_sub} onSaved={onRateUpdate} />
             <PerKgCell rateId={exactMatch.id} initialPerKgRate={exactMatch.per_kg_rate} onSaved={onPerKgUpdate} />
           </div>
-          <div style={{ fontSize: 12, color: '#444', marginTop: 4 }}>Click a price to edit · amber = 2nd+ parcels · cyan = per-kg above threshold</div>
+          <div style={{ fontSize: 12, color: '#475569', marginTop: 4 }}>Click a price to edit · amber = 2nd+ parcels · cyan = per-kg above threshold</div>
         </div>
       )}
 
@@ -544,32 +544,32 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
       {!exactMatch && (
         <div style={{ flex: 1, overflow: 'auto', padding: '0 0 40px' }}>
           {rates.length === 0 ? (
-            <div style={{ padding: 40, textAlign: 'center', color: '#555', fontSize: 14, fontStyle: 'italic' }}>No pricing found for this service</div>
+            <div style={{ padding: 40, textAlign: 'center', color: '#64748B', fontSize: 14, fontStyle: 'italic' }}>No pricing found for this service</div>
           ) : hasSearch && matchCount === 0 ? (
             <div style={{ padding: 60, textAlign: 'center' }}>
               <div style={{ fontSize: 40, marginBottom: 16 }}>🔍</div>
-              <div style={{ fontSize: 16, color: '#555', fontWeight: 600 }}>No rates match your search</div>
-              <div style={{ fontSize: 13, color: '#444', marginTop: 8 }}>Try a different zone name or weight</div>
+              <div style={{ fontSize: 16, color: '#64748B', fontWeight: 600 }}>No rates match your search</div>
+              <div style={{ fontSize: 13, color: '#475569', marginTop: 8 }}>Try a different zone name or weight</div>
             </div>
           ) : multiWeight ? (
             /* Matrix: zones × weight classes */
             <table style={{ borderCollapse: 'collapse', minWidth: '100%', fontSize: 13 }}>
               <thead>
-                <tr style={{ background: '#0A0B1E', position: 'sticky', top: 0, zIndex: 10 }}>
-                  <th style={{ textAlign: 'left', padding: '12px 20px 12px 28px', color: '#AAAAAA', fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.08)', minWidth: 220 }}>Zone</th>
+                <tr style={{ background: '#F8FAFC', position: 'sticky', top: 0, zIndex: 10 }}>
+                  <th style={{ textAlign: 'left', padding: '12px 20px 12px 28px', color: '#64748B', fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap', borderBottom: '1px solid rgba(0,0,0,0.08)', minWidth: 220 }}>Zone</th>
                   {weightClasses.map(wc => (
-                    <th key={wc} style={{ textAlign: 'right', padding: '12px 20px', color: '#AAAAAA', fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.08)', minWidth: 120 }}>{wc}</th>
+                    <th key={wc} style={{ textAlign: 'right', padding: '12px 20px', color: '#64748B', fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap', borderBottom: '1px solid rgba(0,0,0,0.08)', minWidth: 120 }}>{wc}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {zones.map((zone, zi) => (
                   <tr key={zone} style={{ background: zi % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
-                    <td style={{ padding: '8px 20px 8px 28px', color: '#DDD', whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>{zone}</td>
+                    <td style={{ padding: '8px 20px 8px 28px', color: '#DDD', whiteSpace: 'nowrap', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>{zone}</td>
                     {weightClasses.map(wc => {
                       const rate = rateMap[zone]?.[wc];
                       return (
-                        <td key={wc} style={{ textAlign: 'right', padding: '8px 20px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                        <td key={wc} style={{ textAlign: 'right', padding: '8px 20px', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
                           {rate
                             ? <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
                                 <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
@@ -588,24 +588,24 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
             /* Simple list */
             <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
               <thead>
-                <tr style={{ background: '#0A0B1E', position: 'sticky', top: 0, zIndex: 10 }}>
-                  <th style={{ textAlign: 'left', padding: '12px 20px 12px 28px', color: '#AAAAAA', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>Zone</th>
-                  <th style={{ textAlign: 'right', padding: '12px 20px', color: '#00C853', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>1st parcel</th>
-                  <th style={{ textAlign: 'right', padding: '12px 20px', color: '#FFC107', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>2nd+</th>
-                  <th style={{ textAlign: 'right', padding: '12px 28px 12px 20px', color: '#00BCD4', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>£/kg</th>
+                <tr style={{ background: '#F8FAFC', position: 'sticky', top: 0, zIndex: 10 }}>
+                  <th style={{ textAlign: 'left', padding: '12px 20px 12px 28px', color: '#64748B', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>Zone</th>
+                  <th style={{ textAlign: 'right', padding: '12px 20px', color: '#00C853', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>1st parcel</th>
+                  <th style={{ textAlign: 'right', padding: '12px 20px', color: '#FFC107', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>2nd+</th>
+                  <th style={{ textAlign: 'right', padding: '12px 28px 12px 20px', color: '#00BCD4', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>£/kg</th>
                 </tr>
               </thead>
               <tbody>
                 {displayRates.map((rate, ri) => (
                   <tr key={rate.id} style={{ background: ri % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
-                    <td style={{ padding: '8px 20px 8px 28px', color: '#DDD', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>{rate.zone_name}</td>
-                    <td style={{ textAlign: 'right', padding: '8px 20px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                    <td style={{ padding: '8px 20px 8px 28px', color: '#DDD', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>{rate.zone_name}</td>
+                    <td style={{ textAlign: 'right', padding: '8px 20px', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
                       <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
                     </td>
-                    <td style={{ textAlign: 'right', padding: '8px 20px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                    <td style={{ textAlign: 'right', padding: '8px 20px', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
                       <SubPriceCell rateId={rate.id} initialSubPrice={rate.price_sub} onSaved={onRateUpdate} />
                     </td>
-                    <td style={{ textAlign: 'right', padding: '8px 28px 8px 20px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                    <td style={{ textAlign: 'right', padding: '8px 28px 8px 20px', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
                       <PerKgCell rateId={rate.id} initialPerKgRate={rate.per_kg_rate} onSaved={onPerKgUpdate} />
                     </td>
                   </tr>
@@ -656,7 +656,7 @@ function NewPriceCell({ service, customerId, zoneName, weightClassName, onCreate
   }
 
   if (saving) {
-    return <span style={{ fontSize: 12, color: '#555', fontFamily: 'monospace', padding: '3px 10px' }}>…</span>;
+    return <span style={{ fontSize: 12, color: '#64748B', fontFamily: 'monospace', padding: '3px 10px' }}>…</span>;
   }
 
   if (editing) {
@@ -679,12 +679,12 @@ function NewPriceCell({ service, customerId, zoneName, weightClassName, onCreate
       style={{
         fontSize: 12, color: '#2A2A2A', cursor: 'pointer',
         padding: '3px 10px', borderRadius: 5, fontFamily: 'monospace',
-        border: '1px dashed rgba(255,255,255,0.1)',
+        border: '1px dashed rgba(0,0,0,0.08)',
         display: 'inline-block', minWidth: 52, textAlign: 'center',
         transition: 'border-color 0.12s, color 0.12s',
       }}
       onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(0,200,83,0.5)'; e.currentTarget.style.color = '#00C853'; }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = '#2A2A2A'; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.08)'; e.currentTarget.style.color = '#2A2A2A'; }}
     >
       —
     </span>
@@ -734,7 +734,7 @@ function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateD
       <>
         <div
           onClick={() => setOverlay(true)}
-          style={{ display: 'flex', alignItems: 'center', padding: '10px 18px', borderTop: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: 'rgba(0,188,212,0.03)' }}
+          style={{ display: 'flex', alignItems: 'center', padding: '10px 18px', borderTop: '1px solid rgba(0,0,0,0.03)', cursor: 'pointer', background: 'rgba(0,188,212,0.03)' }}
           onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,188,212,0.07)'}
           onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,188,212,0.03)'}
         >
@@ -766,18 +766,18 @@ function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateD
 
   // ── Domestic: collapsible zone chips ─────────────────────────
   return (
-    <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+    <div style={{ borderTop: '1px solid rgba(0,0,0,0.04)' }}>
       {/* Collapsible header */}
       <div
         onClick={() => setOpen(o => !o)}
         style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 18px', cursor: 'pointer' }}
-        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
+        onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'}
         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
       >
         {open
           ? <ChevronDown size={11} color="#555" style={{ flexShrink: 0 }} />
           : <ChevronRight size={11} color="#555" style={{ flexShrink: 0 }} />}
-        <span style={{ fontSize: 12, fontWeight: 700, color: '#AAAAAA', textTransform: 'uppercase', letterSpacing: '0.06em', flex: 1 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', flex: 1 }}>
           {service.service_name}
         </span>
         {totalCount > 0 && (
@@ -785,7 +785,7 @@ function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateD
             {pricedCount}/{totalCount}
           </span>
         )}
-        <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#555', background: 'rgba(255,255,255,0.04)', padding: '1px 6px', borderRadius: 3, border: '1px solid rgba(255,255,255,0.07)' }}>
+        <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#64748B', background: 'rgba(0,0,0,0.03)', padding: '1px 6px', borderRadius: 3, border: '1px solid rgba(0,0,0,0.07)' }}>
           {service.service_code}
         </span>
       </div>
@@ -794,9 +794,9 @@ function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateD
       {open && (
         <div style={{ padding: '4px 18px 14px' }}>
           {templateLoading ? (
-            <div style={{ fontSize: 11, color: '#444' }}>Loading zones…</div>
+            <div style={{ fontSize: 11, color: '#475569' }}>Loading zones…</div>
           ) : zonesToShow.length === 0 ? (
-            <div style={{ fontSize: 11, color: '#555', fontStyle: 'italic' }}>No zone template found for this service</div>
+            <div style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic' }}>No zone template found for this service</div>
           ) : (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {zonesToShow.map(({ zone_name, weight_class_name }) => {
@@ -806,8 +806,8 @@ function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateD
                   <div key={key} style={{
                     display: 'inline-flex', alignItems: 'center', gap: 8,
                     padding: '5px 8px 5px 10px',
-                    background: rate ? 'rgba(255,255,255,0.02)' : 'transparent',
-                    border: `1px solid ${rate ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.04)'}`,
+                    background: rate ? 'rgba(0,0,0,0.02)' : 'transparent',
+                    border: `1px solid ${rate ? 'rgba(0,0,0,0.07)' : 'rgba(0,0,0,0.03)'}`,
                     borderRadius: 7,
                   }}>
                     <span style={{ fontSize: 11, color: rate ? '#666' : '#444', fontWeight: 500, whiteSpace: 'nowrap' }}>
@@ -848,11 +848,11 @@ function CourierGroup({ courierName, services, customerId, activeCardId, onRateU
 
   return (
     <div className="moov-card" style={{ marginBottom: 16, overflow: 'hidden' }}>
-      <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', padding: '13px 18px', cursor: 'pointer', borderBottom: open ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
-        {open ? <ChevronDown size={14} style={{ color: '#00C853', marginRight: 8 }} /> : <ChevronRight size={14} style={{ color: '#555', marginRight: 8 }} />}
+      <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', padding: '13px 18px', cursor: 'pointer', borderBottom: open ? '1px solid rgba(0,0,0,0.06)' : 'none' }}>
+        {open ? <ChevronDown size={14} style={{ color: '#00C853', marginRight: 8 }} /> : <ChevronRight size={14} style={{ color: '#64748B', marginRight: 8 }} />}
         <span style={{ fontSize: 14, fontWeight: 700, color: '#fff', flex: 1 }}>{courierName}</span>
         {hasIntl && <span style={{ fontSize: 10, color: '#00BCD4', background: 'rgba(0,188,212,0.1)', border: '1px solid rgba(0,188,212,0.25)', borderRadius: 5, padding: '2px 7px', fontWeight: 700, marginRight: 10 }}>INTL</span>}
-        <span style={{ fontSize: 11, color: '#AAAAAA' }}>{services.length} service{services.length !== 1 ? 's' : ''} · {totalRates.toLocaleString()} rates</span>
+        <span style={{ fontSize: 11, color: '#64748B' }}>{services.length} service{services.length !== 1 ? 's' : ''} · {totalRates.toLocaleString()} rates</span>
       </div>
       {open && services.map(svc => (
         <ServiceBlock
@@ -922,12 +922,12 @@ function ServiceSelector({ customerId, activeCourierIds }) {
 
   return (
     <div className="moov-card" style={{ marginBottom: 16, overflow: 'hidden' }}>
-      <div style={{ padding: '12px 18px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div style={{ padding: '12px 18px', borderBottom: '1px solid rgba(0,0,0,0.06)', display: 'flex', alignItems: 'center', gap: 10 }}>
         <Package size={14} color="#7B2FBE" />
         <h3 style={{ fontSize: 14, fontWeight: 700, color: '#7B2FBE', margin: 0, flex: 1 }}>Service Selection</h3>
         {totalSelected > 0
           ? <span style={{ fontSize: 12, color: '#00C853', fontWeight: 700 }}>{totalSelected} active</span>
-          : <span style={{ fontSize: 12, color: '#AAAAAA', fontStyle: 'italic' }}>None selected — all rates shown</span>
+          : <span style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic' }}>None selected — all rates shown</span>
         }
       </div>
 
@@ -935,12 +935,12 @@ function ServiceSelector({ customerId, activeCourierIds }) {
         const isOpen       = openCouriers[courierName] === true;
         const countInGroup = services.filter(s => selectedIds.has(s.id)).length;
         return (
-          <div key={courierName} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+          <div key={courierName} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
             <div
               onClick={() => toggleCourier(courierName)}
-              style={{ display: 'flex', alignItems: 'center', padding: '9px 18px', cursor: 'pointer', background: 'rgba(255,255,255,0.01)' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.01)'}
+              style={{ display: 'flex', alignItems: 'center', padding: '9px 18px', cursor: 'pointer', background: 'rgba(0,0,0,0.02)' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.03)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'}
             >
               {isOpen ? <ChevronDown size={12} color="#555" style={{ marginRight: 8 }} /> : <ChevronRight size={12} color="#555" style={{ marginRight: 8 }} />}
               <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', flex: 1 }}>{courierName}</span>
@@ -950,20 +950,20 @@ function ServiceSelector({ customerId, activeCourierIds }) {
               <button onClick={e => { e.stopPropagation(); services.forEach(s => { if (!selectedIds.has(s.id)) addSvc.mutate(s.id); }); }}
                 style={{ background: 'none', border: '1px solid rgba(0,200,83,0.3)', borderRadius: 5, color: '#00C853', fontSize: 11, fontWeight: 700, padding: '2px 8px', cursor: 'pointer', marginRight: 6 }}>All</button>
               <button onClick={e => { e.stopPropagation(); services.forEach(s => { if (selectedIds.has(s.id)) delSvc.mutate(s.id); }); }}
-                style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 5, color: '#AAAAAA', fontSize: 11, fontWeight: 700, padding: '2px 8px', cursor: 'pointer' }}>None</button>
+                style={{ background: 'none', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 5, color: '#64748B', fontSize: 11, fontWeight: 700, padding: '2px 8px', cursor: 'pointer' }}>None</button>
             </div>
             {isOpen && services.map(svc => {
               const active = selectedIds.has(svc.id);
               return (
                 <div key={svc.id} onClick={() => toggle(svc.id)}
-                  style={{ display: 'flex', alignItems: 'center', padding: '7px 18px 7px 40px', cursor: 'pointer', borderTop: '1px solid rgba(255,255,255,0.03)', background: active ? 'rgba(0,200,83,0.04)' : 'transparent' }}
-                  onMouseEnter={e => e.currentTarget.style.background = active ? 'rgba(0,200,83,0.07)' : 'rgba(255,255,255,0.02)'}
+                  style={{ display: 'flex', alignItems: 'center', padding: '7px 18px 7px 40px', cursor: 'pointer', borderTop: '1px solid rgba(0,0,0,0.03)', background: active ? 'rgba(0,200,83,0.04)' : 'transparent' }}
+                  onMouseEnter={e => e.currentTarget.style.background = active ? 'rgba(0,200,83,0.07)' : 'rgba(0,0,0,0.02)'}
                   onMouseLeave={e => e.currentTarget.style.background = active ? 'rgba(0,200,83,0.04)' : 'transparent'}
                 >
-                  <div style={{ width: 15, height: 15, borderRadius: 4, border: `2px solid ${active ? '#00C853' : 'rgba(255,255,255,0.2)'}`, background: active ? '#00C853' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 12, flexShrink: 0, transition: 'all 0.15s' }}>
+                  <div style={{ width: 15, height: 15, borderRadius: 4, border: `2px solid ${active ? '#00C853' : 'rgba(0,0,0,0.14)'}`, background: active ? '#00C853' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 12, flexShrink: 0, transition: 'all 0.15s' }}>
                     {active && <Check size={9} color="#000" strokeWidth={3} />}
                   </div>
-                  <span style={{ fontSize: 13, color: active ? '#fff' : '#AAAAAA', fontWeight: active ? 600 : 400, flex: 1 }}>{svc.name}</span>
+                  <span style={{ fontSize: 13, color: active ? '#fff' : '#64748B', fontWeight: active ? 600 : 400, flex: 1 }}>{svc.name}</span>
                   <span style={{ fontSize: 11, fontFamily: 'monospace', color: active ? '#00C853' : '#444', background: active ? 'rgba(0,200,83,0.08)' : 'transparent', padding: '1px 6px', borderRadius: 3 }}>{svc.service_code}</span>
                   {svc.service_type === 'international' && (
                     <span style={{ fontSize: 10, color: '#00BCD4', fontWeight: 700, marginLeft: 8 }}>INTL</span>
@@ -994,7 +994,7 @@ function CourierToggleStrip({ carriers, customerId }) {
   return (
     <div className="moov-card" style={{ marginBottom: 14, padding: '9px 16px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>Carriers</span>
+        <span style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>Carriers</span>
         {carriers.map(carrier => {
           const logo = getCourierLogo(carrier.courier_code);
           const isActive = carrier.active;
@@ -1006,12 +1006,12 @@ function CourierToggleStrip({ carriers, customerId }) {
               style={{
                 display: 'flex', alignItems: 'center', gap: 6,
                 padding: '5px 12px', borderRadius: 9999, cursor: 'pointer',
-                border: `1.5px solid ${isActive ? 'rgba(0,200,83,0.5)' : 'rgba(255,255,255,0.07)'}`,
+                border: `1.5px solid ${isActive ? 'rgba(0,200,83,0.5)' : 'rgba(0,0,0,0.07)'}`,
                 background: isActive ? 'rgba(0,200,83,0.07)' : 'transparent',
                 transition: 'all 0.15s', outline: 'none',
               }}
               onMouseEnter={e => { if (!isActive) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)'; }}
-              onMouseLeave={e => { if (!isActive) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)'; }}
+              onMouseLeave={e => { if (!isActive) e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; }}
             >
               {logo
                 ? <img src={logo} alt={carrier.courier_name} style={{ height: 15, objectFit: 'contain', opacity: isActive ? 1 : 0.3, transition: 'opacity 0.15s' }} />
@@ -1059,10 +1059,10 @@ function CustomerFuelRow({ fg, customerId }) {
   const hasOverride = fg.customer_pct != null;
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 16px 6px 26px', borderTop: '1px solid rgba(255,255,255,0.03)' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 16px 6px 26px', borderTop: '1px solid rgba(0,0,0,0.03)' }}>
       <span style={{ fontSize: 12, color: '#999', flex: 1 }}>{fg.name}</span>
-      <span style={{ fontSize: 10, color: '#444', fontFamily: 'monospace' }}>cost {parseFloat(fg.cost_pct || 0).toFixed(2)}%</span>
-      <span style={{ fontSize: 10, color: '#555', fontFamily: 'monospace' }}>
+      <span style={{ fontSize: 10, color: '#475569', fontFamily: 'monospace' }}>cost {parseFloat(fg.cost_pct || 0).toFixed(2)}%</span>
+      <span style={{ fontSize: 10, color: '#64748B', fontFamily: 'monospace' }}>
         std {fg.standard_sell_pct != null ? `${parseFloat(fg.standard_sell_pct).toFixed(2)}%` : '—'}
       </span>
       {editing ? (
@@ -1083,12 +1083,12 @@ function CustomerFuelRow({ fg, customerId }) {
             fontSize: 12, fontWeight: hasOverride ? 700 : 400,
             color: hasOverride ? '#FFC107' : '#444',
             cursor: 'pointer', padding: '2px 8px', borderRadius: 4,
-            border: `1px solid ${hasOverride ? 'rgba(255,193,7,0.35)' : 'rgba(255,255,255,0.06)'}`,
+            border: `1px solid ${hasOverride ? 'rgba(255,193,7,0.35)' : 'rgba(0,0,0,0.06)'}`,
             background: hasOverride ? 'rgba(255,193,7,0.08)' : 'transparent',
             fontFamily: 'monospace',
           }}
           onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(255,193,7,0.5)'}
-          onMouseLeave={e => e.currentTarget.style.borderColor = hasOverride ? 'rgba(255,193,7,0.35)' : 'rgba(255,255,255,0.06)'}
+          onMouseLeave={e => e.currentTarget.style.borderColor = hasOverride ? 'rgba(255,193,7,0.35)' : 'rgba(0,0,0,0.06)'}
         >
           {hasOverride ? `${parseFloat(fg.customer_pct).toFixed(2)}%` : '+ Override'}
         </span>
@@ -1134,7 +1134,7 @@ function SurchargeOverrideRow({ surcharge, override, customerId, onChanged }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 6px', borderRadius: 5, background: hasOverride ? 'rgba(255,193,7,0.03)' : 'transparent' }}>
       <span style={{ fontSize: 12, color: hasOverride ? '#DDD' : '#888', flex: 1 }}>{surcharge.name}</span>
-      <span style={{ fontSize: 11, color: '#444', fontFamily: 'monospace' }}>{fmt(surcharge.default_value || 0)}</span>
+      <span style={{ fontSize: 11, color: '#475569', fontFamily: 'monospace' }}>{fmt(surcharge.default_value || 0)}</span>
       <span style={{ fontSize: 10, color: '#333' }}>→</span>
       {editing ? (
         <input
@@ -1152,12 +1152,12 @@ function SurchargeOverrideRow({ surcharge, override, customerId, onChanged }) {
             fontSize: 12, fontWeight: hasOverride ? 700 : 400,
             color: hasOverride ? '#FFC107' : '#444',
             cursor: 'pointer', padding: '2px 8px', borderRadius: 4,
-            border: `1px solid ${hasOverride ? 'rgba(255,193,7,0.35)' : 'rgba(255,255,255,0.06)'}`,
+            border: `1px solid ${hasOverride ? 'rgba(255,193,7,0.35)' : 'rgba(0,0,0,0.06)'}`,
             background: hasOverride ? 'rgba(255,193,7,0.08)' : 'transparent',
             fontFamily: 'monospace',
           }}
           onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(255,193,7,0.5)'}
-          onMouseLeave={e => e.currentTarget.style.borderColor = hasOverride ? 'rgba(255,193,7,0.35)' : 'rgba(255,255,255,0.06)'}
+          onMouseLeave={e => e.currentTarget.style.borderColor = hasOverride ? 'rgba(255,193,7,0.35)' : 'rgba(0,0,0,0.06)'}
         >
           {hasOverride ? fmt(override.override_value) : '+ Override'}
         </span>
@@ -1227,7 +1227,7 @@ function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesCh
   return (
     <div className="moov-card" style={{ marginBottom: 10, overflow: 'hidden' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', background: 'rgba(0,200,83,0.03)', borderBottom: '1px solid rgba(255,255,255,0.05)', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', background: 'rgba(0,200,83,0.03)', borderBottom: '1px solid rgba(0,0,0,0.04)', flexWrap: 'wrap' }}>
         {logo && <img src={logo} alt={carrier.courier_name} style={{ height: 15, objectFit: 'contain', flexShrink: 0 }} />}
         <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', flex: 1 }}>{carrier.courier_name}</span>
 
@@ -1243,12 +1243,12 @@ function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesCh
             ))}
           </select>
         ) : (
-          <span style={{ fontSize: 11, color: '#555' }}>{carrier.available_cards?.[0]?.name || 'Master'}</span>
+          <span style={{ fontSize: 11, color: '#64748B' }}>{carrier.available_cards?.[0]?.name || 'Master'}</span>
         )}
 
         {/* Account number — inline editable, optional */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 10, color: '#555', textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0 }}>Acct No.</span>
+          <span style={{ fontSize: 10, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0 }}>Acct No.</span>
           {acctEditing ? (
             <input
               ref={acctRef}
@@ -1268,13 +1268,13 @@ function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesCh
                 fontSize: 11, fontFamily: 'monospace', fontWeight: 600,
                 color: carrier.account_number ? '#00BCD4' : '#333',
                 cursor: 'pointer', padding: '3px 10px', borderRadius: 5,
-                border: `1px solid ${carrier.account_number ? 'rgba(0,188,212,0.35)' : 'rgba(255,255,255,0.08)'}`,
-                background: carrier.account_number ? 'rgba(0,188,212,0.08)' : 'rgba(255,255,255,0.02)',
+                border: `1px solid ${carrier.account_number ? 'rgba(0,188,212,0.35)' : 'rgba(0,0,0,0.08)'}`,
+                background: carrier.account_number ? 'rgba(0,188,212,0.08)' : 'rgba(0,0,0,0.02)',
                 transition: 'border-color 0.12s, background 0.12s',
                 minWidth: 80, display: 'inline-block', textAlign: 'center',
               }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(0,188,212,0.6)'; e.currentTarget.style.background = 'rgba(0,188,212,0.12)'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = carrier.account_number ? 'rgba(0,188,212,0.35)' : 'rgba(255,255,255,0.08)'; e.currentTarget.style.background = carrier.account_number ? 'rgba(0,188,212,0.08)' : 'rgba(255,255,255,0.02)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = carrier.account_number ? 'rgba(0,188,212,0.35)' : 'rgba(0,0,0,0.08)'; e.currentTarget.style.background = carrier.account_number ? 'rgba(0,188,212,0.08)' : 'rgba(0,0,0,0.02)'; }}
             >
               {carrier.account_number || '+ Add'}
             </span>
@@ -1287,7 +1287,7 @@ function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesCh
         <>
           <div onClick={() => setFuelOpen(o => !o)}
             style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', cursor: 'pointer',
-              borderBottom: fuelOpen ? '1px solid rgba(255,255,255,0.04)' : 'none',
+              borderBottom: fuelOpen ? '1px solid rgba(0,0,0,0.03)' : 'none',
               background: fuelOpen ? 'rgba(255,193,7,0.04)' : 'transparent' }}>
             {fuelOpen ? <ChevronDown size={11} color="#FFC107" /> : <ChevronRight size={11} color="#555" />}
             <Zap size={11} color={fuelOpen ? '#FFC107' : '#555'} />
@@ -1309,8 +1309,8 @@ function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesCh
         <>
           <div onClick={() => setSurchOpen(o => !o)}
             style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', cursor: 'pointer',
-              borderTop: hasFuel ? '1px solid rgba(255,255,255,0.04)' : 'none',
-              borderBottom: surchOpen ? '1px solid rgba(255,255,255,0.04)' : 'none',
+              borderTop: hasFuel ? '1px solid rgba(0,0,0,0.03)' : 'none',
+              borderBottom: surchOpen ? '1px solid rgba(0,0,0,0.03)' : 'none',
               background: surchOpen ? 'rgba(123,47,190,0.04)' : 'transparent' }}>
             {surchOpen ? <ChevronDown size={11} color="#7B2FBE" /> : <ChevronRight size={11} color="#555" />}
             <AlertCircle size={11} color={surchOpen ? '#7B2FBE' : '#555'} />
@@ -1481,7 +1481,7 @@ export default function CustomerPricingTab({ customer }) {
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
           <h3 style={{ fontSize: 15, fontWeight: 700, color: '#fff', margin: 0, flex: 1 }}>
             Rate Cards
-            <span style={{ fontSize: 13, color: '#AAAAAA', fontWeight: 400, marginLeft: 10 }}>
+            <span style={{ fontSize: 13, color: '#64748B', fontWeight: 400, marginLeft: 10 }}>
               {visibleServices.length} service{visibleServices.length !== 1 ? 's' : ''}
               {visibleRates > 0 && ` · ${visibleRates.toLocaleString()} rates`}
             </span>
@@ -1490,11 +1490,11 @@ export default function CustomerPricingTab({ customer }) {
       )}
 
       {ratesLoading && (
-        <div className="moov-card" style={{ padding: 32, textAlign: 'center', color: '#AAAAAA' }}>Loading rates…</div>
+        <div className="moov-card" style={{ padding: 32, textAlign: 'center', color: '#64748B' }}>Loading rates…</div>
       )}
 
       {!ratesLoading && visibleServices.length === 0 && activeCourierIds.size > 0 && (
-        <div className="moov-card" style={{ padding: 24, textAlign: 'center', color: '#555', fontSize: 13 }}>
+        <div className="moov-card" style={{ padding: 24, textAlign: 'center', color: '#64748B', fontSize: 13 }}>
           No rate data for the selected carriers yet.
         </div>
       )}

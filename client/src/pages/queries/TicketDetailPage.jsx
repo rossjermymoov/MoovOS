@@ -24,26 +24,26 @@ import { getCourierLogo } from '../../utils/courierLogos';
 
 const api = axios.create({ baseURL: '/api' });
 
-// ─── Design tokens ────────────────────────────────────────────────────────────
+// ─── Design tokens — light mode ───────────────────────────────────────────────
 const C = {
-  bg:       '#080F1C',
-  header:   '#09122A',
-  surface:  '#0D1827',
-  card:     '#111F32',
-  hover:    '#152035',
-  border:   'rgba(255,255,255,0.07)',
-  green:    '#22C55E',
-  amber:    '#F97316',
-  red:      '#EF4444',
-  blue:     '#3B82F6',
-  purple:   '#A855F7',
-  text:     '#F0F4FC',
-  sub:      '#8AABFF',
-  muted:    '#3D5270',
-  greenDim: 'rgba(34,197,94,0.12)',
-  amberDim: 'rgba(249,115,22,0.12)',
-  redDim:   'rgba(239,68,68,0.12)',
-  blueDim:  'rgba(59,130,246,0.13)',
+  bg:       '#F8FAFC',
+  header:   '#FFFFFF',
+  surface:  '#F8FAFC',
+  card:     '#FFFFFF',
+  hover:    '#F1F5F9',
+  border:   'rgba(0,0,0,0.08)',
+  green:    '#166534',
+  amber:    '#92400E',
+  red:      '#991B1B',
+  blue:     '#1E40AF',
+  purple:   '#6D28D9',
+  text:     '#0F172A',
+  sub:      '#334155',
+  muted:    '#94A3B8',
+  greenDim: '#DCFCE7',
+  amberDim: '#FEF3C7',
+  redDim:   '#FEE2E2',
+  blueDim:  '#EFF6FF',
 };
 
 // ─── Config maps ──────────────────────────────────────────────────────────────
@@ -179,7 +179,7 @@ const TRACK_STATUS = {
   awaiting_collection: { label: 'Awaiting Collection',color: '#FF6F00', bg: 'rgba(255,111,0,0.12)',    icon: Store },
   damaged:             { label: 'Damaged',            color: '#E91E8C', bg: 'rgba(233,30,140,0.12)',   icon: PackageX },
   customs_hold:        { label: 'Customs Hold',       color: '#9C27B0', bg: 'rgba(156,39,176,0.12)',   icon: ShieldAlert },
-  unknown:             { label: 'Unknown',            color: '#555555', bg: 'rgba(255,255,255,0.05)',  icon: Package },
+  unknown:             { label: 'Unknown',            color: '#64748B', bg: 'rgba(0,0,0,0.05)',       icon: Package },
 };
 
 function TrackingMiniTimeline({ events }) {
@@ -201,7 +201,7 @@ function TrackingMiniTimeline({ events }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: cfg.color }}>{cfg.label}</div>
               {ev.description && <div style={{ fontSize: 10, color: C.muted, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ev.description}</div>}
-              <div style={{ fontSize: 10, color: '#444', marginTop: 1 }}>{timeAgo(ev.event_at)}</div>
+              <div style={{ fontSize: 10, color: '#64748B', marginTop: 1 }}>{timeAgo(ev.event_at)}</div>
             </div>
           </div>
         );
@@ -247,22 +247,22 @@ function MessageBubble({ email, queryId, courierName, courierCode, approving, on
     align = 'center';
     maxW = '100%';
   } else if (dir === 'inbound_customer') {
-    bubbleBg = '#111F32';
-    bubbleBorderStyle = `1px solid rgba(255,255,255,0.07)`;
+    bubbleBg = '#F1F5F9';
+    bubbleBorderStyle = `1px solid rgba(0,0,0,0.07)`;
     accentColor = C.blue;
     bubbleRadius = '2px 10px 10px 10px';
     align = 'left';
     maxW = '76%';
   } else if (dir === 'outbound_customer') {
-    bubbleBg = isDraft ? 'rgba(34,197,94,0.08)' : 'rgba(59,130,246,0.13)';
-    bubbleBorderStyle = isDraft ? `1px solid rgba(34,197,94,0.25)` : `1px solid rgba(59,130,246,0.2)`;
+    bubbleBg = isDraft ? '#F0FDF4' : '#EFF6FF';
+    bubbleBorderStyle = isDraft ? `1px solid rgba(22,101,52,0.2)` : `1px solid rgba(30,64,175,0.18)`;
     accentColor = isDraft ? C.green : C.blue;
     bubbleRadius = '10px 2px 10px 10px';
     align = 'right';
     maxW = '76%';
   } else if (dir === 'inbound_courier') {
-    bubbleBg = '#111F32';
-    bubbleBorderStyle = `1px solid rgba(249,115,22,0.2)`;
+    bubbleBg = '#FFFBEB';
+    bubbleBorderStyle = `1px solid rgba(146,64,14,0.15)`;
     accentColor = C.amber;
     bubbleRadius = '2px 10px 10px 10px';
     align = 'left';
@@ -641,7 +641,7 @@ function UnifiedComposeBar({ queryId, courierName, onSent }) {
   }
 
   return (
-    <div style={{ flexShrink: 0, borderTop: `1px solid ${C.border}`, background: '#080F1E' }}>
+    <div style={{ flexShrink: 0, borderTop: `1px solid ${C.border}`, background: '#FFFFFF' }}>
       {/* Tab bar */}
       <div style={{ display: 'flex', borderBottom: active ? `1px solid ${C.border}` : 'none' }}>
         {tabs.map(t => (
@@ -706,7 +706,7 @@ function UnifiedComposeBar({ queryId, courierName, onSent }) {
                   display: 'flex', alignItems: 'center', gap: 5,
                   background: generating ? 'rgba(168,85,247,0.08)' : 'rgba(168,85,247,0.15)',
                   border: '1px solid rgba(168,85,247,0.3)', borderRadius: 5,
-                  color: generating ? C.muted : '#C4B5FD',
+                  color: generating ? C.muted : C.purple,
                   fontSize: 11, fontWeight: 600, padding: '5px 12px',
                   cursor: generating ? 'not-allowed' : 'pointer',
                 }}>
@@ -723,7 +723,7 @@ function UnifiedComposeBar({ queryId, courierName, onSent }) {
                 display: 'flex', alignItems: 'center', gap: 6,
                 background: sending || !text.trim() ? `${accent}10` : `${accent}1A`,
                 border: `1px solid ${accent}55`, borderRadius: 6,
-                color: text.trim() ? '#3B82F6' : C.muted,
+                color: text.trim() ? C.blue : C.muted,
                 fontSize: 12, fontWeight: 700, padding: '6px 18px',
                 cursor: sending || !text.trim() ? 'not-allowed' : 'pointer',
                 transition: 'all 0.1s',
@@ -832,12 +832,12 @@ export default function TicketDetailPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px 8px' }}>
           <button onClick={() => navigate('/queries')} style={{
             width: 26, height: 26, borderRadius: 6, border: 'none',
-            background: 'rgba(255,255,255,0.06)', color: C.sub,
+            background: 'rgba(0,0,0,0.04)', color: C.sub,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer', flexShrink: 0,
           }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.12)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.08)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0.04)'}
           >
             <ArrowLeft size={13} />
           </button>
@@ -868,8 +868,8 @@ export default function TicketDetailPage() {
           )}
           {consignment && (
             <span style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: 700,
-              background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)',
-              borderRadius: 6, padding: '2px 8px', color: '#6A8BAA', letterSpacing: '0.03em' }}>
+              background: '#F1F5F9', border: '1px solid rgba(0,0,0,0.08)',
+              borderRadius: 6, padding: '2px 8px', color: '#475569', letterSpacing: '0.03em' }}>
               {consignment}
             </span>
           )}
@@ -930,7 +930,7 @@ export default function TicketDetailPage() {
           {ticket.sla_due_at && <div style={{ marginBottom: 12 }} />}
 
           {/* Ticket section */}
-          <div style={{ fontSize: 9, fontWeight: 700, color: '#1E3A5A', textTransform: 'uppercase',
+          <div style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase',
             letterSpacing: '0.08em', marginBottom: 8 }}>Ticket</div>
 
           <PropRow icon={AlertTriangle} label="Priority">
@@ -995,7 +995,7 @@ export default function TicketDetailPage() {
           {/* Customer section */}
           {(ticket.customer_name || ticket.sender_email) && (
             <>
-              <div style={{ fontSize: 9, fontWeight: 700, color: '#1E3A5A', textTransform: 'uppercase',
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase',
                 letterSpacing: '0.08em', margin: '14px 0 8px' }}>Customer</div>
 
               {ticket.customer_name && (
@@ -1020,7 +1020,7 @@ export default function TicketDetailPage() {
           {/* Parcel + tracking section */}
           {consignment && (
             <>
-              <div style={{ fontSize: 9, fontWeight: 700, color: '#1E3A5A', textTransform: 'uppercase',
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase',
                 letterSpacing: '0.08em', margin: '14px 0 8px' }}>
                 Parcel
                 <a
@@ -1081,7 +1081,7 @@ export default function TicketDetailPage() {
               {/* Mini tracking timeline */}
               {trackEvents.length > 0 && (
                 <>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: '#1E3A5A', textTransform: 'uppercase',
+                  <div style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase',
                     letterSpacing: '0.08em', margin: '12px 0 8px' }}>
                     Tracking ({trackEvents.length} events)
                   </div>

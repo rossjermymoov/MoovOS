@@ -27,7 +27,7 @@ function CourierBadge({ name, code }) {
         <span style={{
           width: 22, height: 22, borderRadius: 4, background: '#fff',
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.15)',
+          flexShrink: 0, overflow: 'hidden', border: '1px solid rgba(0,0,0,0.12)',
         }}>
           <img src={logo} alt={name || code} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 2 }}
             onError={e => { e.currentTarget.style.display = 'none'; }} />
@@ -56,7 +56,7 @@ const STATUS = {
   awaiting_collection: { label: 'Awaiting Customer Collection',color: '#FF6F00', bg: 'rgba(255,111,0,0.12)',    icon: Store },
   damaged:             { label: 'Damaged',                     color: '#E91E8C', bg: 'rgba(233,30,140,0.12)',   icon: PackageX },
   customs_hold:        { label: 'Customs Hold',                color: '#9C27B0', bg: 'rgba(156,39,176,0.12)',   icon: ShieldAlert },
-  unknown:             { label: 'Unknown',                     color: '#555555', bg: 'rgba(255,255,255,0.05)',  icon: Package },
+  unknown:             { label: 'Unknown',                     color: '#555555', bg: 'rgba(0,0,0,0.04)',  icon: Package },
 };
 
 function StatusBadge({ status, label, size = 'sm' }) {
@@ -114,7 +114,7 @@ function KpiCard({ label, value, color, icon: Icon, active, onClick }) {
           ? `linear-gradient(135deg, ${color}30 0%, ${color}14 100%)`
           : hasValue
             ? `linear-gradient(135deg, ${color}18 0%, ${color}08 100%)`
-            : 'rgba(255,255,255,0.02)',
+            : 'rgba(0,0,0,0.02)',
         border: `2px solid ${active ? color + 'AA' : hasValue ? color + '44' : color + '1A'}`,
         borderRadius: 12,
         cursor: 'pointer',
@@ -178,7 +178,7 @@ const BoldStatCard = KpiCard;
 // Events arrive newest-first from the API (ORDER BY event_at DESC).
 // The vertical line runs downward from each dot to the next older event.
 function EventTimeline({ events }) {
-  if (!events?.length) return <p style={{ color: '#555', fontSize: 13, fontStyle: 'italic' }}>No events yet</p>;
+  if (!events?.length) return <p style={{ color: '#64748B', fontSize: 13, fontStyle: 'italic' }}>No events yet</p>;
   return (
     <div style={{ position: 'relative' }}>
       {events.map((ev, i) => {
@@ -197,21 +197,21 @@ function EventTimeline({ events }) {
               {/* Line going down to next (older) event */}
               {!isLast && (
                 <div style={{ width: 2, flex: 1, minHeight: 16,
-                  background: 'linear-gradient(to bottom, rgba(255,255,255,0.12), rgba(255,255,255,0.03))' }} />
+                  background: 'linear-gradient(to bottom, rgba(0,0,0,0.10), rgba(0,0,0,0.03))' }} />
               )}
             </div>
             <div style={{ flex: 1, paddingTop: 2, paddingBottom: isLast ? 0 : 4 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 3 }}>
                 <StatusBadge status={ev.status} />
-                <span style={{ fontSize: 11, color: '#555' }}>{timeAgo(ev.event_at)}</span>
+                <span style={{ fontSize: 11, color: '#64748B' }}>{timeAgo(ev.event_at)}</span>
               </div>
               {ev.description && <p style={{ fontSize: 13, color: '#DDD', margin: '3px 0' }}>{ev.description}</p>}
               {ev.location && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#AAAAAA' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#64748B' }}>
                   <MapPin size={11} /> {ev.location}
                 </span>
               )}
-              <div style={{ fontSize: 11, color: '#444', marginTop: 3 }}>
+              <div style={{ fontSize: 11, color: '#475569', marginTop: 3 }}>
                 {new Date(ev.event_at).toLocaleString('en-GB')}
               </div>
             </div>
@@ -245,14 +245,14 @@ function ParcelDrawer({ consignment, onClose }) {
       <div style={{
         position: 'fixed', top: 0, right: 0, bottom: 0,
         width: 480, background: '#0F1128',
-        borderLeft: '1px solid rgba(255,255,255,0.08)',
+        borderLeft: '1px solid rgba(0,0,0,0.08)',
         zIndex: 401, display: 'flex', flexDirection: 'column',
         boxShadow: '-32px 0 80px rgba(0,0,0,0.5)',
       }}>
         {/* Drawer header */}
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 11, color: '#AAAAAA', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Consignment</div>
+            <div style={{ fontSize: 11, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Consignment</div>
             {(() => {
               // Build tracking URL: use stored URL first, then fall back to known courier patterns
               const stored = data?.tracking_url;
@@ -288,11 +288,11 @@ function ParcelDrawer({ consignment, onClose }) {
               );
             })()}
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer' }}><X size={18} /></button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer' }}><X size={18} /></button>
         </div>
 
         {isLoading ? (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#AAAAAA' }}>Loading…</div>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}>Loading…</div>
         ) : data ? (
           <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
             {/* Delivery address */}
@@ -311,14 +311,14 @@ function ParcelDrawer({ consignment, onClose }) {
                   <div style={{ fontSize: 13, fontWeight: 700, color: '#CCC', marginTop: data.recipient_address ? 2 : 0 }}>{data.recipient_postcode}</div>
                 )}
                 {data.estimated_delivery && (
-                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 11, color: '#AAAAAA' }}>Estimated delivery</span>
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(0,0,0,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 11, color: '#64748B' }}>Estimated delivery</span>
                     <span style={{ fontSize: 13, fontWeight: 700, color: '#FFC107' }}>{fmtDate(data.estimated_delivery)}</span>
                   </div>
                 )}
                 {data.delivered_at && (
                   <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 11, color: '#AAAAAA' }}>Delivered</span>
+                    <span style={{ fontSize: 11, color: '#64748B' }}>Delivered</span>
                     <span style={{ fontSize: 13, fontWeight: 700, color: '#00C853' }}>{new Date(data.delivered_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                   </div>
                 )}
@@ -326,13 +326,13 @@ function ParcelDrawer({ consignment, onClose }) {
             )}
 
             {/* Event timeline — newest first */}
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#AAAAAA', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
               Event History ({data.events?.length || 0})
             </div>
             <EventTimeline events={data.events} />
 
             {/* Parcel details */}
-            <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
               {[
                 ['Courier',    data.courier_name ? <CourierBadge name={data.courier_name} code={data.courier_code} /> : null],
                 ['Service',    data.service_name || null],
@@ -340,15 +340,15 @@ function ParcelDrawer({ consignment, onClose }) {
                 ['Account',    data.customer_account || null],
                 ['Weight',     data.weight_kg ? `${parseFloat(data.weight_kg).toFixed(2)} kg` : null],
               ].filter(([, v]) => v).map(([label, value]) => (
-                <div key={label} style={{ display: 'flex', padding: '7px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                  <span style={{ fontSize: 12, color: '#AAAAAA', width: 120, flexShrink: 0 }}>{label}</span>
+                <div key={label} style={{ display: 'flex', padding: '7px 0', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
+                  <span style={{ fontSize: 12, color: '#64748B', width: 120, flexShrink: 0 }}>{label}</span>
                   <span style={{ fontSize: 13, color: '#fff', fontWeight: 500 }}>{value}</span>
                 </div>
               ))}
             </div>
           </div>
         ) : (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555' }}>Not found</div>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}>Not found</div>
         )}
       </div>
     </>
@@ -369,8 +369,8 @@ const DATE_PRESETS = [
 
 // ─── Shared dark select style ─────────────────────────────────
 const darkSelect = {
-  background: '#0D0E2A',
-  border: '1px solid rgba(255,255,255,0.12)',
+  background: '#FFFFFF',
+  border: '1px solid rgba(0,0,0,0.10)',
   borderRadius: 8,
   color: '#fff',
   fontSize: 13,
@@ -495,11 +495,11 @@ export default function TrackingPage() {
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 24, gap: 12 }}>
         <div style={{ flex: 1 }}>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: '#fff', margin: 0 }}>Tracking</h1>
-          <p style={{ fontSize: 13, color: '#AAAAAA', margin: '4px 0 0' }}>
+          <p style={{ fontSize: 13, color: '#64748B', margin: '4px 0 0' }}>
             {stats ? `${(stats.total_active || 0).toLocaleString()} active parcels` : 'Loading…'}
           </p>
         </div>
-        <button onClick={refresh} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 7, color: '#AAAAAA', fontSize: 12, padding: '7px 14px', cursor: 'pointer' }}>
+        <button onClick={refresh} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: '1px solid rgba(0,0,0,0.10)', borderRadius: 7, color: '#64748B', fontSize: 12, padding: '7px 14px', cursor: 'pointer' }}>
           <RefreshCw size={13} /> Refresh
         </button>
       </div>
@@ -521,12 +521,12 @@ export default function TrackingPage() {
 
       {/* ── Date range ──────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-        <Calendar size={14} color="#AAAAAA" />
+        <Calendar size={14} color="#64748B" />
         {DATE_PRESETS.map(p => (
           <button key={p.label} onClick={() => applyPreset(p)} style={{
             padding: '6px 13px', borderRadius: 20, fontSize: 12, fontWeight: 600,
             border: '1px solid',
-            borderColor: datePreset === p.label ? '#00C853' : 'rgba(255,255,255,0.1)',
+            borderColor: datePreset === p.label ? '#00C853' : 'rgba(0,0,0,0.08)',
             background: datePreset === p.label ? 'rgba(0,200,83,0.12)' : 'transparent',
             color: datePreset === p.label ? '#00C853' : '#888',
             cursor: 'pointer',
@@ -535,7 +535,7 @@ export default function TrackingPage() {
           </button>
         ))}
         {datePreset && (
-          <button onClick={clearDateRange} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 12, padding: '0 4px' }}>
+          <button onClick={clearDateRange} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: 12, padding: '0 4px' }}>
             <X size={12} />
           </button>
         )}
@@ -544,7 +544,7 @@ export default function TrackingPage() {
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
               style={{ ...darkSelect, width: 140 }} />
-            <span style={{ color: '#444', fontSize: 12 }}>–</span>
+            <span style={{ color: '#475569', fontSize: 12 }}>–</span>
             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
               style={{ ...darkSelect, width: 140 }} />
           </div>
@@ -555,16 +555,16 @@ export default function TrackingPage() {
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
         {/* Search */}
         <div style={{ position: 'relative', flex: 1, minWidth: 240, maxWidth: 380 }}>
-          <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#AAAAAA', pointerEvents: 'none' }} />
+          <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#64748B', pointerEvents: 'none' }} />
           <input
             ref={searchRef}
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Consignment, postcode, recipient…"
-            style={{ width: '100%', boxSizing: 'border-box', background: '#0D0E2A', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '9px 36px', color: '#fff', fontSize: 13, outline: 'none' }}
+            style={{ width: '100%', boxSizing: 'border-box', background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.10)', borderRadius: 8, padding: '9px 36px', color: '#fff', fontSize: 13, outline: 'none' }}
           />
           {search && (
-            <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#AAAAAA', cursor: 'pointer', padding: 0, display: 'flex' }}>
+            <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: 0, display: 'flex' }}>
               <X size={14} />
             </button>
           )}
@@ -579,7 +579,7 @@ export default function TrackingPage() {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
-            <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#AAAAAA', pointerEvents: 'none', fontSize: 10 }}>▾</span>
+            <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748B', pointerEvents: 'none', fontSize: 10 }}>▾</span>
           </div>
         )}
 
@@ -591,7 +591,7 @@ export default function TrackingPage() {
               <option key={s} value={s}>{STATUS[s]?.label || s}</option>
             ))}
           </select>
-          <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#AAAAAA', pointerEvents: 'none', fontSize: 10 }}>▾</span>
+          <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748B', pointerEvents: 'none', fontSize: 10 }}>▾</span>
         </div>
 
         {/* Courier — only shows couriers that exist in the table */}
@@ -605,7 +605,7 @@ export default function TrackingPage() {
                 </option>
               ))}
             </select>
-            <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#AAAAAA', pointerEvents: 'none', fontSize: 10 }}>▾</span>
+            <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748B', pointerEvents: 'none', fontSize: 10 }}>▾</span>
           </div>
         )}
 
@@ -616,7 +616,7 @@ export default function TrackingPage() {
           </button>
         )}
 
-        <span style={{ fontSize: 12, color: '#555', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 12, color: '#64748B', marginLeft: 'auto' }}>
           {total.toLocaleString()} parcel{total !== 1 ? 's' : ''}
         </span>
       </div>
@@ -624,15 +624,15 @@ export default function TrackingPage() {
       {/* ── Parcel table ─────────────────────────────────────────── */}
       <div className="moov-card" style={{ overflow: 'hidden' }}>
         {isLoading ? (
-          <div style={{ padding: 48, textAlign: 'center', color: '#AAAAAA' }}>Loading…</div>
+          <div style={{ padding: 48, textAlign: 'center', color: '#64748B' }}>Loading…</div>
         ) : parcels.length === 0 ? (
           <div style={{ padding: 64, textAlign: 'center' }}>
             <div style={{ fontSize: 36, marginBottom: 12 }}>📦</div>
-            <div style={{ fontSize: 16, color: '#555', fontWeight: 600 }}>
+            <div style={{ fontSize: 16, color: '#64748B', fontWeight: 600 }}>
               {debouncedSearch || statusFilter || courierFilter ? 'No parcels match your filters' : 'No tracking data yet'}
             </div>
             {!debouncedSearch && !statusFilter && (
-              <div style={{ fontSize: 13, color: '#444', marginTop: 8 }}>
+              <div style={{ fontSize: 13, color: '#475569', marginTop: 8 }}>
                 Tracking events will appear here as webhooks arrive
               </div>
             )}
@@ -657,7 +657,7 @@ export default function TrackingPage() {
                   key={p.id}
                   onClick={() => setSelected(p.consignment_number)}
                   style={{ cursor: 'pointer' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.03)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'none'}
                 >
                   <td>
@@ -667,18 +667,18 @@ export default function TrackingPage() {
                   </td>
                   <td>
                     <div style={{ fontSize: 13, color: '#fff', fontWeight: 500 }}>{p.customer_name || '—'}</div>
-                    {p.customer_account && <div style={{ fontSize: 11, color: '#555' }}>{p.customer_account}</div>}
+                    {p.customer_account && <div style={{ fontSize: 11, color: '#64748B' }}>{p.customer_account}</div>}
                   </td>
                   <td>
                     <div style={{ fontSize: 13, color: '#DDD' }}>
                       <CourierBadge name={p.courier_name} code={p.courier_code} />
                     </div>
-                    {p.service_name && <div style={{ fontSize: 11, color: '#555', marginTop: 2 }}>{p.service_name}</div>}
+                    {p.service_name && <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{p.service_name}</div>}
                   </td>
                   <td>
                     <div style={{ fontSize: 13, color: '#DDD' }}>{p.recipient_name || '—'}</div>
                     {p.recipient_postcode && (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, color: '#AAAAAA' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, color: '#64748B' }}>
                         <MapPin size={10} /> {p.recipient_postcode}
                       </span>
                     )}
@@ -686,9 +686,9 @@ export default function TrackingPage() {
                   <td><StatusBadge status={p.status} /></td>
                   <td>
                     <div style={{ fontSize: 12, color: '#DDD' }}>{p.status_description?.slice(0, 40) || p.last_location || '—'}</div>
-                    <div style={{ fontSize: 11, color: '#555' }}>{timeAgo(p.last_event_at)}</div>
+                    <div style={{ fontSize: 11, color: '#64748B' }}>{timeAgo(p.last_event_at)}</div>
                   </td>
-                  <td style={{ textAlign: 'center', fontSize: 12, color: '#AAAAAA' }}>
+                  <td style={{ textAlign: 'center', fontSize: 12, color: '#64748B' }}>
                     {p.status === 'delivered'
                       ? <span style={{ color: '#00C853', fontWeight: 700 }}>✓ Done</span>
                       : fmtDate(p.estimated_delivery)}
@@ -706,7 +706,7 @@ export default function TrackingPage() {
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 16 }}>
           <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
             className="btn-ghost" style={{ height: 32, padding: '0 14px', fontSize: 12 }}>← Prev</button>
-          <span style={{ fontSize: 13, color: '#AAAAAA' }}>Page {page + 1} of {pages}</span>
+          <span style={{ fontSize: 13, color: '#64748B' }}>Page {page + 1} of {pages}</span>
           <button onClick={() => setPage(p => Math.min(pages - 1, p + 1))} disabled={page >= pages - 1}
             className="btn-ghost" style={{ height: 32, padding: '0 14px', fontSize: 12 }}>Next →</button>
         </div>

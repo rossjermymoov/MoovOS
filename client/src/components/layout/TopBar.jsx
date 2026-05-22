@@ -16,8 +16,8 @@ export default function TopBar({ userName = 'Ross' }) {
   return (
     <header
       style={{
-        background: '#0A0B1E',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        background: '#FFFFFF',
+        borderBottom: '1px solid rgba(0,0,0,0.08)',
         height: 64,
         display: 'flex',
         alignItems: 'center',
@@ -30,17 +30,17 @@ export default function TopBar({ userName = 'Ross' }) {
     >
       {/* Welcome */}
       <div style={{ flex: 1 }}>
-        <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>
+        <span style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>
           Good {getGreeting()}, {userName}
         </span>
-        <span style={{ fontSize: 13, color: '#AAAAAA', marginLeft: 12 }}>
+        <span style={{ fontSize: 13, color: '#64748B', marginLeft: 12 }}>
           {dateStr} · {timeStr}
         </span>
       </div>
 
       {/* Global search — pill style */}
       <div className="pill-input-wrap" style={{ width: 280 }}>
-        <Search size={14} style={{ marginLeft: 14, color: '#AAAAAA', flexShrink: 0 }} />
+        <Search size={14} style={{ marginLeft: 14, color: '#64748B', flexShrink: 0 }} />
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
@@ -56,7 +56,7 @@ export default function TopBar({ userName = 'Ross' }) {
           <button
             key={i}
             style={{
-              background: 'rgba(255,255,255,0.06)',
+              background: 'rgba(0,0,0,0.04)',
               border: 'none',
               borderRadius: '50%',
               width: 36,
@@ -65,11 +65,11 @@ export default function TopBar({ userName = 'Ross' }) {
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
-              color: '#AAAAAA',
+              color: '#64748B',
               transition: 'background 0.15s',
             }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.12)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.08)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0.04)'}
           >
             <Icon size={16} />
           </button>

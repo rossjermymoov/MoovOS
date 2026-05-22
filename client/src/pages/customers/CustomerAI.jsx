@@ -9,17 +9,17 @@ const api = axios.create({ baseURL: '/api' });
 // ─── Shared styles ─────────────────────────────────────────────
 const inputStyle = (error) => ({
   width: '100%', boxSizing: 'border-box',
-  background: '#0D0E2A', border: `1px solid ${error ? '#E91E8C' : 'rgba(255,255,255,0.1)'}`,
+  background: '#FFFFFF', border: `1px solid ${error ? '#E91E8C' : 'rgba(0,0,0,0.08)'}`,
   borderRadius: 9999, padding: '10px 18px', color: '#fff', fontSize: 14, outline: 'none',
 });
 const selectStyle = {
   width: '100%', boxSizing: 'border-box',
-  background: '#0D0E2A', border: '1px solid rgba(255,255,255,0.1)',
+  background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.08)',
   borderRadius: 9999, padding: '10px 18px', color: '#fff', fontSize: 14, outline: 'none',
 };
 const textareaStyle = {
   width: '100%', boxSizing: 'border-box',
-  background: '#0D0E2A', border: '1px solid rgba(255,255,255,0.15)',
+  background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
   borderRadius: 12, padding: '14px 18px', color: '#fff', fontSize: 13, outline: 'none',
   resize: 'vertical', fontFamily: 'monospace', lineHeight: 1.6,
 };
@@ -30,7 +30,7 @@ const sectionH = { fontSize: 11, color: '#7B2FBE', fontWeight: 600, marginBottom
 function Field({ label, error, required, children }) {
   return (
     <div>
-      <label style={{ display: 'block', fontSize: 12, color: '#AAAAAA', marginBottom: 6 }}>
+      <label style={{ display: 'block', fontSize: 12, color: '#64748B', marginBottom: 6 }}>
         {label}{required && <span style={{ color: '#E91E8C', marginLeft: 3 }}>*</span>}
       </label>
       {children}
@@ -83,16 +83,16 @@ function DocumentInput({ label, hint, onReady, loading, loadingMsg }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* Mode toggle */}
-      <div style={{ display: 'flex', gap: 0, border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, overflow: 'hidden', alignSelf: 'flex-start' }}>
+      <div style={{ display: 'flex', gap: 0, border: '1px solid rgba(0,0,0,0.08)', borderRadius: 8, overflow: 'hidden', alignSelf: 'flex-start' }}>
         {[['upload', 'Upload PDF'], ['paste', 'Paste Text']].map(([m, lbl]) => (
           <button
             key={m}
             onClick={() => setMode(m)}
             style={{
               padding: '7px 16px', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer',
-              background: mode === m ? 'rgba(123,47,190,0.25)' : 'rgba(255,255,255,0.03)',
+              background: mode === m ? 'rgba(123,47,190,0.25)' : 'rgba(0,0,0,0.03)',
               color: mode === m ? '#A78BFA' : '#666',
-              borderRight: m === 'upload' ? '1px solid rgba(255,255,255,0.08)' : 'none',
+              borderRight: m === 'upload' ? '1px solid rgba(0,0,0,0.08)' : 'none',
             }}
           >
             {m === 'upload' ? <><Upload size={11} style={{ marginRight: 5 }} />{lbl}</> : lbl}
@@ -109,11 +109,11 @@ function DocumentInput({ label, hint, onReady, loading, loadingMsg }) {
             onDrop={handleDrop}
             onClick={() => fileRef.current?.click()}
             style={{
-              border: `2px dashed ${dragOver ? '#7B2FBE' : fileName ? 'rgba(0,200,83,0.4)' : 'rgba(255,255,255,0.12)'}`,
+              border: `2px dashed ${dragOver ? '#7B2FBE' : fileName ? 'rgba(0,200,83,0.4)' : 'rgba(0,0,0,0.10)'}`,
               borderRadius: 12, padding: '36px 24px',
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
               gap: 10, cursor: 'pointer',
-              background: dragOver ? 'rgba(123,47,190,0.06)' : fileName ? 'rgba(0,200,83,0.04)' : 'rgba(255,255,255,0.02)',
+              background: dragOver ? 'rgba(123,47,190,0.06)' : fileName ? 'rgba(0,200,83,0.04)' : 'rgba(0,0,0,0.02)',
               transition: 'all 0.15s',
             }}
           >
@@ -122,11 +122,11 @@ function DocumentInput({ label, hint, onReady, loading, loadingMsg }) {
                 <FileText size={28} color="#00C853" />
                 <div style={{ textAlign: 'center' }}>
                   <p style={{ fontSize: 13, color: '#00C853', fontWeight: 600, margin: 0 }}>{fileName}</p>
-                  <p style={{ fontSize: 12, color: '#666', margin: '4px 0 0' }}>PDF uploaded — AI will extract the data</p>
+                  <p style={{ fontSize: 12, color: '#64748B', margin: '4px 0 0' }}>PDF uploaded — AI will extract the data</p>
                 </div>
                 <button
                   onClick={e => { e.stopPropagation(); setFileName(''); fileRef.current.value = ''; }}
-                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#888', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                  style={{ background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)', color: '#64748B', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
                 >
                   <X size={11} /> Remove
                 </button>
@@ -136,7 +136,7 @@ function DocumentInput({ label, hint, onReady, loading, loadingMsg }) {
                 <Upload size={28} color="#555" />
                 <div style={{ textAlign: 'center' }}>
                   <p style={{ fontSize: 13, color: '#AAA', fontWeight: 600, margin: 0 }}>Drop PDF here or click to browse</p>
-                  <p style={{ fontSize: 12, color: '#555', margin: '4px 0 0' }}>{hint}</p>
+                  <p style={{ fontSize: 12, color: '#64748B', margin: '4px 0 0' }}>{hint}</p>
                 </div>
               </>
             )}
@@ -183,7 +183,7 @@ function StepDcId({ dcId, setDcId, error }) {
           <Sparkles size={16} color="#7B2FBE" />
           <span style={{ fontSize: 13, fontWeight: 600, color: '#7B2FBE' }}>AI-Assisted Onboarding</span>
         </div>
-        <p style={{ fontSize: 13, color: '#AAAAAA', lineHeight: 1.6, margin: 0 }}>
+        <p style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6, margin: 0 }}>
           Provide the DC account number, upload (or paste) the customer's application form PDF, then upload their rate card PDF.
           AI will extract all the details and pre-fill the forms — you just review and confirm.
         </p>
@@ -196,7 +196,7 @@ function StepDcId({ dcId, setDcId, error }) {
           placeholder="e.g. 12345 — the account number already configured in the DC webhook"
         />
       </Field>
-      <p style={{ fontSize: 12, color: '#666', marginTop: -8 }}>
+      <p style={{ fontSize: 12, color: '#64748B', marginTop: -8 }}>
         This is the external account number used in the delivery carrier webhook system. It links incoming shipment data to this customer.
       </p>
     </div>
@@ -413,8 +413,8 @@ function StepRateCard({ rates, setRates, ratesExtracted, setRatesExtracted, extr
       onChange={e => onChange(e.target.value)}
       placeholder={placeholder}
       style={{
-        width: '100%', boxSizing: 'border-box', background: '#0D0E2A',
-        border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6,
+        width: '100%', boxSizing: 'border-box', background: '#FFFFFF',
+        border: '1px solid rgba(0,0,0,0.08)', borderRadius: 6,
         padding: '6px 10px', color: '#fff', fontSize: 12, outline: 'none',
       }}
     />
@@ -450,15 +450,15 @@ function StepRateCard({ rates, setRates, ratesExtracted, setRatesExtracted, extr
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
-            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+            <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
               {['Service Code', 'Service Name', 'Carrier', 'Zone', 'Weight Class', 'Min kg', 'Max kg', 'Price £', 'Sub £', ''].map(h => (
-                <th key={h} style={{ padding: '6px 8px', textAlign: 'left', color: '#AAAAAA', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                <th key={h} style={{ padding: '6px 8px', textAlign: 'left', color: '#64748B', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {rates.map((r, i) => (
-              <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+              <tr key={i} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
                 <td style={{ padding: '5px 4px', minWidth: 90 }}>{cellInput(r.service_code, v => updateRate(i, 'service_code', v), 'DPD-NX')}</td>
                 <td style={{ padding: '5px 4px', minWidth: 130 }}>{cellInput(r.service_name, v => updateRate(i, 'service_name', v), 'DPD Next Day')}</td>
                 <td style={{ padding: '5px 4px', minWidth: 70 }}>{cellInput(r.courier_name, v => updateRate(i, 'courier_name', v), 'DPD')}</td>
@@ -484,7 +484,7 @@ function StepRateCard({ rates, setRates, ratesExtracted, setRatesExtracted, extr
       </button>
 
       {rates.length === 0 && (
-        <p style={{ fontSize: 13, color: '#666' }}>No rates — customer will be created without pricing. You can add rates later from the customer record.</p>
+        <p style={{ fontSize: 13, color: '#64748B' }}>No rates — customer will be created without pricing. You can add rates later from the customer record.</p>
       )}
     </div>
   );
@@ -496,7 +496,7 @@ function StepConfirm({ dcId, customer, contact, rates }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 16 }}>
+        <div style={{ background: 'rgba(0,0,0,0.03)', borderRadius: 10, padding: 16 }}>
           <p style={sectionH}>Customer</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <ReviewRow label="Business" value={customer.business_name} />
@@ -510,7 +510,7 @@ function StepConfirm({ dcId, customer, contact, rates }) {
             <ReviewRow label="Billing" value={`${customer.billing_cycle} / ${customer.payment_terms_days} days`} />
           </div>
         </div>
-        <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 16 }}>
+        <div style={{ background: 'rgba(0,0,0,0.03)', borderRadius: 10, padding: 16 }}>
           <p style={sectionH}>Primary Contact</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <ReviewRow label="Name" value={contact.full_name} />
@@ -520,10 +520,10 @@ function StepConfirm({ dcId, customer, contact, rates }) {
           </div>
         </div>
       </div>
-      <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 16 }}>
+      <div style={{ background: 'rgba(0,0,0,0.03)', borderRadius: 10, padding: 16 }}>
         <p style={sectionH}>Rates — {validRates.length} rows to import</p>
         {validRates.length === 0 ? (
-          <p style={{ fontSize: 13, color: '#666' }}>No rates — will be added later.</p>
+          <p style={{ fontSize: 13, color: '#64748B' }}>No rates — will be added later.</p>
         ) : (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {validRates.map((r, i) => (
@@ -541,7 +541,7 @@ function StepConfirm({ dcId, customer, contact, rates }) {
 function ReviewRow({ label, value }) {
   return (
     <div style={{ display: 'flex', gap: 8 }}>
-      <span style={{ fontSize: 12, color: '#666', minWidth: 90 }}>{label}</span>
+      <span style={{ fontSize: 12, color: '#64748B', minWidth: 90 }}>{label}</span>
       <span style={{ fontSize: 12, color: value ? '#fff' : '#444' }}>{value || '—'}</span>
     </div>
   );
@@ -566,8 +566,8 @@ function StepIndicator({ current }) {
               <div style={{
                 width: 32, height: 32, borderRadius: '50%',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: done ? '#00C853' : active ? '#7B2FBE' : 'rgba(255,255,255,0.05)',
-                border: `2px solid ${done ? '#00C853' : active ? '#7B2FBE' : 'rgba(255,255,255,0.1)'}`,
+                background: done ? '#00C853' : active ? '#7B2FBE' : 'rgba(0,0,0,0.04)',
+                border: `2px solid ${done ? '#00C853' : active ? '#7B2FBE' : 'rgba(0,0,0,0.08)'}`,
                 color: done || active ? '#fff' : '#666', fontSize: 13, fontWeight: 700,
               }}>
                 {done ? <Check size={14} /> : i + 1}
@@ -575,7 +575,7 @@ function StepIndicator({ current }) {
               <span style={{ fontSize: 11, color: active ? '#fff' : '#666', whiteSpace: 'nowrap' }}>{s.label}</span>
             </div>
             {i < STEPS.length - 1 && (
-              <div style={{ flex: 1, height: 2, background: done ? '#00C853' : 'rgba(255,255,255,0.08)', margin: '0 8px', marginBottom: 20 }} />
+              <div style={{ flex: 1, height: 2, background: done ? '#00C853' : 'rgba(0,0,0,0.08)', margin: '0 8px', marginBottom: 20 }} />
             )}
           </div>
         );
@@ -592,10 +592,10 @@ function SuccessScreen({ customer, rateResults, navigate }) {
         <Check size={28} color="#00C853" />
       </div>
       <h2 style={{ fontSize: 22, fontWeight: 700, color: '#fff', marginBottom: 8 }}>Customer Created</h2>
-      <p style={{ color: '#AAAAAA', marginBottom: 4 }}>{customer.business_name}</p>
+      <p style={{ color: '#64748B', marginBottom: 4 }}>{customer.business_name}</p>
       <p style={{ color: '#00C853', fontWeight: 600, marginBottom: 8 }}>{customer.account_number}</p>
       {rateResults && (
-        <p style={{ fontSize: 13, color: '#AAAAAA', marginBottom: 20 }}>
+        <p style={{ fontSize: 13, color: '#64748B', marginBottom: 20 }}>
           {rateResults.inserted} rate{rateResults.inserted !== 1 ? 's' : ''} imported
           {rateResults.skipped?.length > 0 && `, ${rateResults.skipped.length} skipped (service codes not found)`}
         </p>
@@ -604,7 +604,7 @@ function SuccessScreen({ customer, rateResults, navigate }) {
         <div style={{ padding: 12, background: 'rgba(255,160,0,0.1)', border: '1px solid rgba(255,160,0,0.3)', borderRadius: 8, marginBottom: 20, textAlign: 'left' }}>
           <p style={{ fontSize: 12, color: '#FFA000', marginBottom: 6, fontWeight: 600 }}>Skipped rates — service codes not in DB:</p>
           {rateResults.skipped.map((s, i) => (
-            <p key={i} style={{ fontSize: 11, color: '#AAAAAA', margin: '2px 0' }}>
+            <p key={i} style={{ fontSize: 11, color: '#64748B', margin: '2px 0' }}>
               {s.rate?.service_code} · {s.rate?.zone_name} — {s.reason}
             </p>
           ))}
@@ -699,10 +699,10 @@ export default function CustomerAI() {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
         <button onClick={() => navigate('/customers')}
-          style={{ background: 'none', border: 'none', color: '#AAAAAA', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+          style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
           <ArrowLeft size={14} /> Customers
         </button>
-        <span style={{ color: '#444' }}>/</span>
+        <span style={{ color: '#475569' }}>/</span>
         <span style={{ fontSize: 13, color: '#fff' }}>AI-Assisted Onboarding</span>
       </div>
 
@@ -715,7 +715,7 @@ export default function CustomerAI() {
 
       <div className="moov-card" style={{ padding: 32 }}>
         <h2 style={{ fontSize: 18, fontWeight: 600, color: '#7B2FBE', marginBottom: 4 }}>{stepTitles[step]}</h2>
-        <p style={{ fontSize: 13, color: '#AAAAAA', marginBottom: 28 }}>{stepSubtitles[step]}</p>
+        <p style={{ fontSize: 13, color: '#64748B', marginBottom: 28 }}>{stepSubtitles[step]}</p>
 
         {step === 0 && <StepDcId dcId={dcId} setDcId={setDcId} error={dcIdError} />}
 
@@ -747,7 +747,7 @@ export default function CustomerAI() {
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 32, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 32, paddingTop: 24, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
           <button className="btn-ghost" onClick={step === 0 ? () => navigate('/customers') : back}>
             <ArrowLeft size={14} /> {step === 0 ? 'Cancel' : 'Back'}
           </button>

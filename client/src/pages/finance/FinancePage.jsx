@@ -26,7 +26,7 @@ function fmtTime(dt) {
 
 // ─── Stats card ───────────────────────────────────────────────────────────────
 
-function StatCard({ label, value, sub, color = '#AAAAAA', bg = 'rgba(255,255,255,0.04)', onClick }) {
+function StatCard({ label, value, sub, color = '#64748B', bg = 'rgba(0,0,0,0.03)', onClick }) {
   return (
     <div
       onClick={onClick}
@@ -41,9 +41,9 @@ function StatCard({ label, value, sub, color = '#AAAAAA', bg = 'rgba(255,255,255
         transition: 'background 0.15s, border-color 0.15s',
       }}
     >
-      <div style={{ fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{label}</div>
       <div style={{ fontSize: 22, fontWeight: 800, color }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>{sub}</div>}
+      {sub && <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>{sub}</div>}
     </div>
   );
 }
@@ -62,8 +62,8 @@ function FlagBadge({ value, trueLabel = 'Yes', falseLabel = 'No' }) {
   }
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4,
-      background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
-      color: '#666', borderRadius: 20, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>
+      background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.08)',
+      color: '#64748B', borderRadius: 20, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>
       {falseLabel}
     </span>
   );
@@ -90,7 +90,7 @@ function BreakdownTooltip({ charge, mode, above = false }) {
     }}>
       {/* Base */}
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 4 }}>
-        <span style={{ color: '#888' }}>Base rate</span>
+        <span style={{ color: '#64748B' }}>Base rate</span>
         <span style={{ color: '#fff' }}>
           {base > 0 ? `£${base.toFixed(2)}` : <span style={{ color: '#F44336' }}>not set</span>}
         </span>
@@ -100,10 +100,10 @@ function BreakdownTooltip({ charge, mode, above = false }) {
         const val = mode === 'sell' ? parseFloat(l.price || 0) : parseFloat(l.cost_price ?? l.price ?? 0);
         return (
           <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 4 }}>
-            <span style={{ color: '#888' }}>{l.name || (l.type === 'fuel' ? 'Fuel' : 'Surcharge')}</span>
+            <span style={{ color: '#64748B' }}>{l.name || (l.type === 'fuel' ? 'Fuel' : 'Surcharge')}</span>
             <span style={{ color: '#fff' }}>
               {l.cost_price == null && mode === 'cost'
-                ? <span style={{ color: '#555' }}>—</span>
+                ? <span style={{ color: '#64748B' }}>—</span>
                 : `£${val.toFixed(2)}`}
             </span>
           </div>
@@ -198,9 +198,9 @@ function MoreMenu({ charge, onBill, onReprice, onLog, onDebug, onCancel }) {
       <button
         onClick={() => setOpen(v => !v)}
         style={{
-          background: open ? 'rgba(255,255,255,0.08)' : 'none',
-          border: '1px solid rgba(255,255,255,0.1)',
-          borderRadius: 6, color: '#888', cursor: 'pointer',
+          background: open ? 'rgba(0,0,0,0.08)' : 'none',
+          border: '1px solid rgba(0,0,0,0.08)',
+          borderRadius: 6, color: '#64748B', cursor: 'pointer',
           padding: '4px 7px', display: 'flex', alignItems: 'center',
         }}
       >
@@ -209,7 +209,7 @@ function MoreMenu({ charge, onBill, onReprice, onLog, onDebug, onCancel }) {
       {open && (
         <div style={{
           position: 'absolute', right: 0, top: 'calc(100% + 4px)',
-          background: '#1A1B3A', border: '1px solid rgba(255,255,255,0.12)',
+          background: '#1A1B3A', border: '1px solid rgba(0,0,0,0.10)',
           borderRadius: 8, minWidth: 140, zIndex: 100,
           boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
           overflow: 'hidden',
@@ -223,9 +223,9 @@ function MoreMenu({ charge, onBill, onReprice, onLog, onDebug, onCancel }) {
                 background: 'none', border: 'none',
                 padding: '9px 14px', fontSize: 13,
                 color: item.color, cursor: 'pointer',
-                borderBottom: i < items.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                borderBottom: i < items.length - 1 ? '1px solid rgba(0,0,0,0.04)' : 'none',
               }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.04)'}
               onMouseLeave={e => e.currentTarget.style.background = 'none'}
             >
               {item.label}
@@ -264,21 +264,21 @@ function PriceCell({ charge, onSave, onDebug }) {
   if (editing) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <span style={{ color: '#AAAAAA', fontSize: 13 }}>£</span>
+        <span style={{ color: '#64748B', fontSize: 13 }}>£</span>
         <input
           ref={inputRef}
           value={val}
           onChange={e => setVal(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') cancel(); }}
           style={{
-            width: 72, background: 'rgba(255,255,255,0.08)', border: '1px solid #00C853',
+            width: 72, background: 'rgba(0,0,0,0.08)', border: '1px solid #00C853',
             borderRadius: 9999, color: '#fff', padding: '3px 10px', fontSize: 13, fontWeight: 700,
           }}
         />
         <button onClick={commit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#00C853', padding: 2 }}>
           <Check size={13} />
         </button>
-        <button onClick={cancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#888', padding: 2 }}>
+        <button onClick={cancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: 2 }}>
           <X size={13} />
         </button>
       </div>
@@ -374,8 +374,8 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
   const checkRow = (matched) => ({
     display: 'flex', alignItems: 'center', gap: 8,
     padding: '4px 8px', marginTop: 3, borderRadius: 5,
-    background: matched ? 'rgba(0,200,83,0.07)' : 'rgba(255,255,255,0.02)',
-    borderLeft: `2px solid ${matched ? '#00C853' : 'rgba(255,255,255,0.1)'}`,
+    background: matched ? 'rgba(0,200,83,0.07)' : 'rgba(0,0,0,0.02)',
+    borderLeft: `2px solid ${matched ? '#00C853' : 'rgba(0,0,0,0.08)'}`,
   });
 
   const overlay = {
@@ -385,7 +385,7 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
   };
 
   const box = {
-    background: '#0D0E2A', border: '1px solid rgba(255,255,255,0.1)',
+    background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.08)',
     borderRadius: 14, width: '100%', maxWidth: 780,
     maxHeight: '85vh', display: 'flex', flexDirection: 'column',
     overflow: 'hidden',
@@ -397,7 +397,7 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
         {/* Header */}
         <div style={{
           padding: '16px 20px',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          borderBottom: '1px solid rgba(0,0,0,0.08)',
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
           <Bug size={16} style={{ color: '#FFC107' }} />
@@ -405,12 +405,12 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
             <div style={{ fontWeight: 700, color: '#fff', fontSize: 15 }}>
               Pricing Diagnostic
             </div>
-            <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
               {charge.order_id || charge.id.slice(0, 8)} · {charge.customer_name || 'Unknown customer'}
             </div>
           </div>
           <button onClick={onClose}
-            style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', padding: 4 }}>
+            style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: 4 }}>
             <X size={16} />
           </button>
         </div>
@@ -418,7 +418,7 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
         {/* Body */}
         <div style={{ overflowY: 'auto', flex: 1, padding: '16px 20px' }}>
           {isLoading && (
-            <div style={{ color: '#888', fontSize: 13, padding: 20, textAlign: 'center' }}>
+            <div style={{ color: '#64748B', fontSize: 13, padding: 20, textAlign: 'center' }}>
               Running diagnostics…
             </div>
           )}
@@ -443,7 +443,7 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                     <div style={{ color: '#00C853', fontWeight: 700, fontSize: 13 }}>
                       Already priced — £{currentTotal != null ? currentTotal.toFixed(2) : parseFloat(charge.price).toFixed(2)}
                     </div>
-                    <div style={{ color: '#888', fontSize: 11, marginTop: 1 }}>
+                    <div style={{ color: '#64748B', fontSize: 11, marginTop: 1 }}>
                       The trace below shows what the engine would set if re-priced now.
                     </div>
                   </div>
@@ -453,7 +453,7 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
               {/* Steps */}
               {trace.steps.map(step => (
                 <div key={step.step} style={{
-                  background: 'rgba(255,255,255,0.03)',
+                  background: 'rgba(0,0,0,0.03)',
                   border: `1px solid ${stepColor(step)}22`,
                   borderLeft: `3px solid ${stepColor(step)}`,
                   borderRadius: 8,
@@ -481,25 +481,25 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
 
                     {/* ── Step 1: Field extraction ── */}
                     {step.step === 1 && <>
-                      <div><span style={{ color: '#888' }}>account_number:</span> <span style={{ color: step.account_number ? '#fff' : '#F44336' }}>{step.account_number || 'null — not in webhook payload'}</span></div>
-                      <div><span style={{ color: '#888' }}>dc_service_id:</span> <span style={{ color: '#fff' }}>{step.dc_service_id || 'null'}</span></div>
-                      <div><span style={{ color: '#888' }}>service_name:</span> <span style={{ color: '#fff' }}>{step.service_name || 'null'}</span></div>
-                      <div><span style={{ color: '#888' }}>parcel_count:</span> <span style={{ color: '#fff' }}>{step.parcel_count}</span></div>
-                      <div><span style={{ color: '#888' }}>total_weight_kg:</span> <span style={{ color: step.total_weight_kg != null ? '#fff' : '#FFC107' }}>{step.total_weight_kg != null ? `${step.total_weight_kg} kg` : 'null — not in webhook'}</span></div>
-                      <div><span style={{ color: '#888' }}>weight_per_parcel:</span> <span style={{ color: step.weight_per_parcel != null ? '#fff' : '#FFC107' }}>{step.weight_per_parcel != null ? `${step.weight_per_parcel} kg` : 'null'}</span></div>
-                      <div><span style={{ color: '#888' }}>postcode:</span> <span style={{ color: '#fff' }}>{step.postcode || 'null'}{step.outward_code ? ` → outward: ${step.outward_code}` : ''}</span></div>
+                      <div><span style={{ color: '#64748B' }}>account_number:</span> <span style={{ color: step.account_number ? '#fff' : '#F44336' }}>{step.account_number || 'null — not in webhook payload'}</span></div>
+                      <div><span style={{ color: '#64748B' }}>dc_service_id:</span> <span style={{ color: '#fff' }}>{step.dc_service_id || 'null'}</span></div>
+                      <div><span style={{ color: '#64748B' }}>service_name:</span> <span style={{ color: '#fff' }}>{step.service_name || 'null'}</span></div>
+                      <div><span style={{ color: '#64748B' }}>parcel_count:</span> <span style={{ color: '#fff' }}>{step.parcel_count}</span></div>
+                      <div><span style={{ color: '#64748B' }}>total_weight_kg:</span> <span style={{ color: step.total_weight_kg != null ? '#fff' : '#FFC107' }}>{step.total_weight_kg != null ? `${step.total_weight_kg} kg` : 'null — not in webhook'}</span></div>
+                      <div><span style={{ color: '#64748B' }}>weight_per_parcel:</span> <span style={{ color: step.weight_per_parcel != null ? '#fff' : '#FFC107' }}>{step.weight_per_parcel != null ? `${step.weight_per_parcel} kg` : 'null'}</span></div>
+                      <div><span style={{ color: '#64748B' }}>postcode:</span> <span style={{ color: '#fff' }}>{step.postcode || 'null'}{step.outward_code ? ` → outward: ${step.outward_code}` : ''}</span></div>
                     </>}
 
                     {/* ── Step 1.5: Volumetric weight ── */}
                     {step.step === 1.5 && <>
                       {/* Divisor */}
                       {step.volumetric_divisor == null ? (
-                        <div style={{ color: '#888' }}>No volumetric divisor configured for this service — physical weight used as-is.</div>
+                        <div style={{ color: '#64748B' }}>No volumetric divisor configured for this service — physical weight used as-is.</div>
                       ) : (
                         <>
-                          <div><span style={{ color: '#888' }}>physical weight:</span> <span style={{ color: '#fff' }}>{step.physical_kg != null ? `${step.physical_kg} kg` : 'null'}</span></div>
+                          <div><span style={{ color: '#64748B' }}>physical weight:</span> <span style={{ color: '#fff' }}>{step.physical_kg != null ? `${step.physical_kg} kg` : 'null'}</span></div>
                           <div>
-                            <span style={{ color: '#888' }}>dims (L × W × H):</span>{' '}
+                            <span style={{ color: '#64748B' }}>dims (L × W × H):</span>{' '}
                             {step.dim_length_cm != null && step.dim_width_cm != null && step.dim_height_cm != null ? (
                               <span style={{ color: '#fff' }}>
                                 {step.dim_length_cm} × {step.dim_width_cm} × {step.dim_height_cm} cm
@@ -508,21 +508,21 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                               <span style={{ color: '#FFC107' }}>null — dims not in webhook payload</span>
                             )}
                           </div>
-                          <div><span style={{ color: '#888' }}>divisor:</span> <span style={{ color: '#fff' }}>{step.volumetric_divisor} cm³/kg</span></div>
+                          <div><span style={{ color: '#64748B' }}>divisor:</span> <span style={{ color: '#fff' }}>{step.volumetric_divisor} cm³/kg</span></div>
                           {step.volumetric_kg != null ? (
                             <>
                               <div>
-                                <span style={{ color: '#888' }}>volumetric weight:</span>{' '}
+                                <span style={{ color: '#64748B' }}>volumetric weight:</span>{' '}
                                 <span style={{ color: '#fff' }}>
                                   ({step.dim_length_cm} × {step.dim_width_cm} × {step.dim_height_cm}) ÷ {step.volumetric_divisor} = {step.volumetric_kg} kg
                                 </span>
                               </div>
-                              <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                                <span style={{ color: '#888' }}>charged weight:</span>{' '}
+                              <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+                                <span style={{ color: '#64748B' }}>charged weight:</span>{' '}
                                 <span style={{ color: '#00C853', fontWeight: 700 }}>
                                   {step.charged_kg} kg
                                 </span>{' '}
-                                <span style={{ color: '#555', fontSize: 11 }}>
+                                <span style={{ color: '#64748B', fontSize: 11 }}>
                                   ({step.weight_basis === 'volumetric'
                                     ? `volumetric ${step.volumetric_kg} kg > physical ${step.physical_kg} kg`
                                     : `physical ${step.physical_kg} kg ≥ volumetric ${step.volumetric_kg} kg`})
@@ -538,9 +538,9 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
 
                     {/* ── Step 2: Customer resolution ── */}
                     {step.step === 2 && <>
-                      <div><span style={{ color: '#888' }}>customer_found:</span> <span style={{ color: step.customer_found ? '#00C853' : '#F44336', fontWeight: 700 }}>{step.customer_found ? 'YES' : 'NO'}</span></div>
+                      <div><span style={{ color: '#64748B' }}>customer_found:</span> <span style={{ color: step.customer_found ? '#00C853' : '#F44336', fontWeight: 700 }}>{step.customer_found ? 'YES' : 'NO'}</span></div>
                       {step.customer_found && (
-                        <div><span style={{ color: '#888' }}>customer_name:</span> <span style={{ color: '#fff' }}>{step.customer_name}</span></div>
+                        <div><span style={{ color: '#64748B' }}>customer_name:</span> <span style={{ color: '#fff' }}>{step.customer_name}</span></div>
                       )}
                     </>}
 
@@ -553,7 +553,7 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                         {/* Zones */}
                         {step.zones?.length > 0 && (
                           <div style={{ marginBottom: 10 }}>
-                            <div style={{ color: '#555', fontSize: 11, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>Zones</div>
+                            <div style={{ color: '#64748B', fontSize: 11, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>Zones</div>
                             {step.zones.map((z, i) => (
                               <div key={i} style={checkRow(z.matched)}>
                                 <span style={{ color: z.matched ? '#00C853' : '#F44336', fontWeight: 700, minWidth: 14 }}>{z.matched ? '✓' : '✗'}</span>
@@ -565,13 +565,13 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                         {/* Weight bands */}
                         {step.weight_bands?.length > 0 && (
                           <div>
-                            <div style={{ color: '#555', fontSize: 11, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>Weight bands</div>
+                            <div style={{ color: '#64748B', fontSize: 11, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>Weight bands</div>
                             {step.weight_bands.map((b, i) => (
                               <div key={i} style={checkRow(b.matched)}>
                                 <span style={{ color: b.matched ? '#00C853' : '#F44336', fontWeight: 700, minWidth: 14 }}>{b.matched ? '✓' : '✗'}</span>
                                 <span style={{ color: b.matched ? '#fff' : '#666' }}>{b.weight_class_name}</span>
                                 {b.min_weight_kg != null && b.max_weight_kg != null && (
-                                  <span style={{ color: '#555', marginLeft: 6 }}>
+                                  <span style={{ color: '#64748B', marginLeft: 6 }}>
                                     {b.max_weight_kg >= 9999
                                       ? '(flat rate)'
                                       : `(${b.min_weight_kg}–${b.max_weight_kg} kg)`}
@@ -593,17 +593,17 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                         <div style={{ color: '#F44336' }}>✗ {step.error}</div>
                       )}
                       {!step.error && <>
-                        <div><span style={{ color: '#888' }}>zone:</span> <span style={{ color: '#00C853' }}>{step.zone}</span></div>
-                        <div><span style={{ color: '#888' }}>weight_band:</span> <span style={{ color: '#00C853' }}>{step.weight_band}</span></div>
-                        <div><span style={{ color: '#888' }}>price_per_parcel:</span> <span style={{ color: '#fff' }}>£{step.price_per_parcel?.toFixed(2)}</span></div>
+                        <div><span style={{ color: '#64748B' }}>zone:</span> <span style={{ color: '#00C853' }}>{step.zone}</span></div>
+                        <div><span style={{ color: '#64748B' }}>weight_band:</span> <span style={{ color: '#00C853' }}>{step.weight_band}</span></div>
+                        <div><span style={{ color: '#64748B' }}>price_per_parcel:</span> <span style={{ color: '#fff' }}>£{step.price_per_parcel?.toFixed(2)}</span></div>
                         {step.price_sub != null && (
-                          <div><span style={{ color: '#888' }}>price_sub (per additional parcel):</span> <span style={{ color: '#fff' }}>£{step.price_sub.toFixed(2)}</span></div>
+                          <div><span style={{ color: '#64748B' }}>price_sub (per additional parcel):</span> <span style={{ color: '#fff' }}>£{step.price_sub.toFixed(2)}</span></div>
                         )}
                         {step.parcel_count > 1 && (
-                          <div><span style={{ color: '#888' }}>parcel_count:</span> <span style={{ color: '#fff' }}>{step.parcel_count} × ({step.pricing_mode === 'sub' ? 'first + subsequent' : 'all at sub rate'})</span></div>
+                          <div><span style={{ color: '#64748B' }}>parcel_count:</span> <span style={{ color: '#fff' }}>{step.parcel_count} × ({step.pricing_mode === 'sub' ? 'first + subsequent' : 'all at sub rate'})</span></div>
                         )}
-                        <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                          <span style={{ color: '#888' }}>total_base:</span> <span style={{ color: '#fff', fontWeight: 700 }}>£{step.total_base?.toFixed(2)}</span>
+                        <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+                          <span style={{ color: '#64748B' }}>total_base:</span> <span style={{ color: '#fff', fontWeight: 700 }}>£{step.total_base?.toFixed(2)}</span>
                         </div>
                       </>}
                     </>}
@@ -613,17 +613,17 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                       {/* Regular surcharges */}
                       {step.surcharges?.length > 0 && (
                         <div style={{ marginBottom: step.fuel ? 12 : 0 }}>
-                          <div style={{ color: '#555', fontSize: 11, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>Rules</div>
+                          <div style={{ color: '#64748B', fontSize: 11, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>Rules</div>
                           {step.surcharges.map((s, i) => (
                             <div key={i} style={checkRow(s.matched)}>
                               <span style={{ color: s.matched ? '#00C853' : '#F44336', fontWeight: 700, minWidth: 14 }}>{s.matched ? '✓' : '✗'}</span>
                               <span style={{ color: s.matched ? '#fff' : '#666', flex: 1 }}>{s.name}</span>
                               {s.matched && <>
-                                <span style={{ color: '#888', fontSize: 11 }}>{s.calc}</span>
+                                <span style={{ color: '#64748B', fontSize: 11 }}>{s.calc}</span>
                                 <span style={{ color: '#00C853', fontWeight: 700, marginLeft: 8 }}>+£{s.price?.toFixed(2)}</span>
                               </>}
                               {!s.matched && (
-                                <span style={{ color: '#444', fontSize: 11 }}>{s.reason}</span>
+                                <span style={{ color: '#475569', fontSize: 11 }}>{s.reason}</span>
                               )}
                             </div>
                           ))}
@@ -632,11 +632,11 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                       {/* Fuel surcharge */}
                       {step.fuel && (
                         <div>
-                          <div style={{ color: '#555', fontSize: 11, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>Fuel surcharge</div>
+                          <div style={{ color: '#64748B', fontSize: 11, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>Fuel surcharge</div>
                           <div style={checkRow(true)}>
                             <span style={{ color: '#00C853', fontWeight: 700, minWidth: 14 }}>✓</span>
                             <span style={{ color: '#fff', flex: 1 }}>{step.fuel.fuel_group}</span>
-                            <span style={{ color: '#888', fontSize: 11 }}>
+                            <span style={{ color: '#64748B', fontSize: 11 }}>
                               {step.fuel.pct}% of £{step.fuel.base?.toFixed(2)}
                               {step.fuel.rate_type === 'customer-specific' ? ' (customer rate)' : ' (standard rate)'}
                             </span>
@@ -645,11 +645,11 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                         </div>
                       )}
                       {!step.surcharges?.length && !step.fuel && (
-                        <div style={{ color: '#555' }}>No surcharges apply to this shipment</div>
+                        <div style={{ color: '#64748B' }}>No surcharges apply to this shipment</div>
                       )}
                       {step.total_surcharges > 0 && (
-                        <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                          <span style={{ color: '#888' }}>total_surcharges:</span> <span style={{ color: '#fff', fontWeight: 700 }}>+£{step.total_surcharges?.toFixed(2)}</span>
+                        <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+                          <span style={{ color: '#64748B' }}>total_surcharges:</span> <span style={{ color: '#fff', fontWeight: 700 }}>+£{step.total_surcharges?.toFixed(2)}</span>
                         </div>
                       )}
                     </>}
@@ -681,7 +681,7 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                   {trace.conclusion.priced && <>
                     {/* Base price row */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: '#aaa', marginBottom: 4 }}>
-                      <span>Base rate <span style={{ color: '#555' }}>({trace.conclusion.zone_name} · {trace.conclusion.weight_class_name})</span></span>
+                      <span>Base rate <span style={{ color: '#64748B' }}>({trace.conclusion.zone_name} · {trace.conclusion.weight_class_name})</span></span>
                       <span style={{ color: '#fff' }}>£{trace.conclusion.base_price?.toFixed(2)}</span>
                     </div>
                     {/* Surcharge lines */}
@@ -694,7 +694,7 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                     {/* Total */}
                     <div style={{
                       display: 'flex', justifyContent: 'space-between',
-                      marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.1)',
+                      marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(0,0,0,0.08)',
                       fontWeight: 700,
                     }}>
                       <span style={{ color: '#ccc' }}>Total</span>
@@ -714,12 +714,12 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
         {/* Footer */}
         <div style={{
           padding: '12px 20px',
-          borderTop: '1px solid rgba(255,255,255,0.08)',
+          borderTop: '1px solid rgba(0,0,0,0.08)',
           display: 'flex', justifyContent: 'flex-end', gap: 10,
         }}>
           <button onClick={onClose}
-            style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)',
-              borderRadius: 8, color: '#888', padding: '8px 16px', cursor: 'pointer', fontSize: 13 }}>
+            style={{ background: 'none', border: '1px solid rgba(0,0,0,0.12)',
+              borderRadius: 8, color: '#64748B', padding: '8px 16px', cursor: 'pointer', fontSize: 13 }}>
             Close
           </button>
           {trace?.conclusion?.priced && !pricesMatch && (
@@ -765,7 +765,7 @@ function WebhookPayloadModal({ charge, onClose }) {
   };
 
   const box = {
-    background: '#0D0E2A', border: '1px solid rgba(255,255,255,0.1)',
+    background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.08)',
     borderRadius: 14, width: '100%', maxWidth: 860,
     maxHeight: '85vh', display: 'flex', flexDirection: 'column',
     overflow: 'hidden',
@@ -777,31 +777,31 @@ function WebhookPayloadModal({ charge, onClose }) {
         {/* Header */}
         <div style={{
           padding: '16px 20px',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          borderBottom: '1px solid rgba(0,0,0,0.08)',
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
           <FileJson size={16} style={{ color: '#00BCD4' }} />
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 700, color: '#fff', fontSize: 15 }}>Webhook Payload</div>
-            <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
               {charge.order_id || charge.id.slice(0, 8)} · {charge.customer_name || 'Unknown'}
               {data?.received_at && ` · received ${format(parseISO(data.received_at), 'd MMM yyyy HH:mm')}`}
             </div>
           </div>
           <button onClick={onClose}
-            style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', padding: 4 }}>
+            style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: 4 }}>
             <X size={16} />
           </button>
         </div>
 
         {/* Body */}
         <div style={{ overflowY: 'auto', flex: 1, padding: '16px 20px' }}>
-          {isLoading && <div style={{ color: '#888', fontSize: 13, textAlign: 'center', padding: 20 }}>Loading payload…</div>}
+          {isLoading && <div style={{ color: '#64748B', fontSize: 13, textAlign: 'center', padding: 20 }}>Loading payload…</div>}
           {error && <div style={{ color: '#F44336', fontSize: 13 }}>Error: {error.message}</div>}
           {data && (
             <pre style={{
               background: 'rgba(0,0,0,0.3)',
-              border: '1px solid rgba(255,255,255,0.06)',
+              border: '1px solid rgba(0,0,0,0.06)',
               borderRadius: 8,
               padding: '14px 16px',
               fontSize: 11,
@@ -817,10 +817,10 @@ function WebhookPayloadModal({ charge, onClose }) {
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '12px 20px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'flex-end' }}>
+        <div style={{ padding: '12px 20px', borderTop: '1px solid rgba(0,0,0,0.08)', display: 'flex', justifyContent: 'flex-end' }}>
           <button onClick={onClose}
-            style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)',
-              borderRadius: 8, color: '#888', padding: '8px 16px', cursor: 'pointer', fontSize: 13 }}>
+            style={{ background: 'none', border: '1px solid rgba(0,0,0,0.12)',
+              borderRadius: 8, color: '#64748B', padding: '8px 16px', cursor: 'pointer', fontSize: 13 }}>
             Close
           </button>
         </div>
@@ -846,7 +846,7 @@ function PlaceholderTab({ title, description, color }) {
       </div>
       <div style={{ textAlign: 'center' }}>
         <div style={{ fontSize: 16, fontWeight: 700, color: '#CCC', marginBottom: 6 }}>{title}</div>
-        <div style={{ fontSize: 13, color: '#666', maxWidth: 380 }}>{description}</div>
+        <div style={{ fontSize: 13, color: '#64748B', maxWidth: 380 }}>{description}</div>
       </div>
       <div style={{
         fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
@@ -891,11 +891,11 @@ function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
   const totalPages  = Math.ceil(total / limit);
   const currentPage = Math.floor(offset / limit) + 1;
 
-  const th = { fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase',
+  const th = { fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase',
     letterSpacing: '0.06em', padding: '10px 12px', whiteSpace: 'nowrap',
-    borderBottom: '1px solid rgba(255,255,255,0.06)' };
+    borderBottom: '1px solid rgba(0,0,0,0.06)' };
   const td = { padding: '10px 12px', fontSize: 13, color: '#CCC', verticalAlign: 'middle',
-    borderBottom: '1px solid rgba(255,255,255,0.04)' };
+    borderBottom: '1px solid rgba(0,0,0,0.03)' };
 
   const margin = totalSell > 0 ? ((totalSell - totalCost) / totalSell * 100).toFixed(1) : null;
 
@@ -907,34 +907,34 @@ function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
           background: 'rgba(255,193,7,0.05)', border: '1px solid rgba(255,193,7,0.2)',
           borderRadius: 10, padding: '14px 18px', minWidth: 140, flex: 1,
         }}>
-          <div style={{ fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Awaiting</div>
+          <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Awaiting</div>
           <div style={{ fontSize: 22, fontWeight: 800, color: '#FFC107' }}>{total}</div>
-          <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>Charges pending reconciliation</div>
+          <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>Charges pending reconciliation</div>
         </div>
         <div style={{
           background: 'rgba(0,200,83,0.04)', border: '1px solid rgba(0,200,83,0.15)',
           borderRadius: 10, padding: '14px 18px', minWidth: 140, flex: 1,
         }}>
-          <div style={{ fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Total Sell</div>
+          <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Total Sell</div>
           <div style={{ fontSize: 22, fontWeight: 800, color: '#00C853' }}>{totalSell != null ? gbp(totalSell) : '—'}</div>
-          <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>All charges (excl. surcharges)</div>
+          <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>All charges (excl. surcharges)</div>
         </div>
         <div style={{
           background: 'rgba(179,157,219,0.04)', border: '1px solid rgba(179,157,219,0.15)',
           borderRadius: 10, padding: '14px 18px', minWidth: 140, flex: 1,
         }}>
-          <div style={{ fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Total Cost</div>
+          <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Total Cost</div>
           <div style={{ fontSize: 22, fontWeight: 800, color: '#B39DDB' }}>{totalCost != null ? gbp(totalCost) : '—'}</div>
-          <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>All charges (excl. surcharges)</div>
+          <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>All charges (excl. surcharges)</div>
         </div>
         {margin != null && (
           <div style={{
-            background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+            background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.08)',
             borderRadius: 10, padding: '14px 18px', minWidth: 140, flex: 1,
           }}>
-            <div style={{ fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Margin</div>
+            <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Margin</div>
             <div style={{ fontSize: 22, fontWeight: 800, color: parseFloat(margin) >= 15 ? '#00C853' : parseFloat(margin) >= 5 ? '#FFC107' : '#F44336' }}>{margin}%</div>
-            <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>Base courier charges</div>
+            <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>Base courier charges</div>
           </div>
         )}
       </div>
@@ -942,14 +942,14 @@ function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
       {/* Filters */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 180 }}>
-          <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#555' }} />
+          <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748B' }} />
           <input
             value={search}
             onChange={e => { setSearch(e.target.value); setOffset(0); }}
             placeholder="Search order, customer…"
             style={{
               width: '100%', paddingLeft: 30, paddingRight: 10, height: 34,
-              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+              background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)',
               borderRadius: 8, color: '#CCC', fontSize: 13,
             }}
           />
@@ -968,7 +968,7 @@ function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
       </div>
 
       {/* Table */}
-      <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, overflow: 'hidden' }}>
+      <div style={{ background: 'rgba(0,0,0,0.02)', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 12, overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 800 }}>
             <thead>
@@ -986,9 +986,9 @@ function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={9} style={{ ...td, textAlign: 'center', color: '#555', padding: 40 }}>Loading…</td></tr>
+                <tr><td colSpan={9} style={{ ...td, textAlign: 'center', color: '#64748B', padding: 40 }}>Loading…</td></tr>
               ) : charges.length === 0 ? (
-                <tr><td colSpan={9} style={{ ...td, textAlign: 'center', color: '#555', padding: 40 }}>No charges awaiting reconciliation</td></tr>
+                <tr><td colSpan={9} style={{ ...td, textAlign: 'center', color: '#64748B', padding: 40 }}>No charges awaiting reconciliation</td></tr>
               ) : charges.map(charge => {
                 const lines     = Array.isArray(charge.charge_lines) ? charge.charge_lines : [];
                 const sellTotal = parseFloat(charge.price || 0) + lines.reduce((s, l) => s + parseFloat(l.price || 0), 0);
@@ -997,13 +997,13 @@ function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
                 const logo      = getCourierLogo(charge.courier);
                 return (
                   <tr key={charge.id} style={{ background: 'transparent' }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                     <td style={td}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         {logo
                           ? <img src={logo} alt="" style={{ height: 18, width: 'auto', maxWidth: 40, objectFit: 'contain', opacity: 0.9 }} />
-                          : <span style={{ fontSize: 11, color: '#555' }}>{charge.courier || '—'}</span>}
+                          : <span style={{ fontSize: 11, color: '#64748B' }}>{charge.courier || '—'}</span>}
                       </div>
                     </td>
                     <td style={td}>
@@ -1011,26 +1011,26 @@ function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
                     </td>
                     <td style={td}>
                       <div style={{ fontSize: 12, color: '#CCC' }}>{charge.customer_name || '—'}</div>
-                      <div style={{ fontSize: 11, color: '#555' }}>{charge.customer_account || ''}</div>
+                      <div style={{ fontSize: 11, color: '#64748B' }}>{charge.customer_account || ''}</div>
                     </td>
                     <td style={td}>
                       <div style={{ fontSize: 12 }}>{charge.ship_to_name || '—'}</div>
-                      <div style={{ fontSize: 11, color: '#555' }}>{charge.ship_to_postcode || ''}</div>
+                      <div style={{ fontSize: 11, color: '#64748B' }}>{charge.ship_to_postcode || ''}</div>
                     </td>
-                    <td style={{ ...td, fontSize: 12, color: '#888' }}>
+                    <td style={{ ...td, fontSize: 12, color: '#64748B' }}>
                       <div>{fmt(charge.created_at)}</div>
-                      <div style={{ fontSize: 11, color: '#555' }}>{fmtTime(charge.created_at)}</div>
+                      <div style={{ fontSize: 11, color: '#64748B' }}>{fmtTime(charge.created_at)}</div>
                     </td>
-                    <td style={{ ...td, fontSize: 12, color: '#888' }}>
+                    <td style={{ ...td, fontSize: 12, color: '#64748B' }}>
                       {charge.zone_name || '—'}
-                      {charge.weight_class_name && <div style={{ fontSize: 11, color: '#555' }}>{charge.weight_class_name}</div>}
+                      {charge.weight_class_name && <div style={{ fontSize: 11, color: '#64748B' }}>{charge.weight_class_name}</div>}
                     </td>
                     <td style={{ ...td, textAlign: 'right', color: '#00C853', fontWeight: 700 }}>{gbp(sellTotal)}</td>
                     <td style={{ ...td, textAlign: 'right', color: '#B39DDB', fontWeight: 600 }}>{gbp(costTotal)}</td>
                     <td style={{ ...td, textAlign: 'right' }}>
                       {margin != null
                         ? <span style={{ color: parseFloat(margin) >= 15 ? '#00C853' : parseFloat(margin) >= 5 ? '#FFC107' : '#F44336', fontWeight: 700 }}>{margin}%</span>
-                        : <span style={{ color: '#555' }}>—</span>}
+                        : <span style={{ color: '#64748B' }}>—</span>}
                     </td>
                   </tr>
                 );
@@ -1042,23 +1042,23 @@ function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
         {/* Pagination */}
         {total > limit && (
           <div style={{
-            padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)',
+            padding: '12px 16px', borderTop: '1px solid rgba(0,0,0,0.06)',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
           }}>
-            <span style={{ fontSize: 12, color: '#666' }}>{offset + 1}–{Math.min(offset + limit, total)} of {total}</span>
+            <span style={{ fontSize: 12, color: '#64748B' }}>{offset + 1}–{Math.min(offset + limit, total)} of {total}</span>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <select value={limit} onChange={e => { setLimit(parseInt(e.target.value)); setOffset(0); }} className="pill-select" style={{ width: 80 }}>
                 {[25, 50, 100].map(s => <option key={s} value={s}>{s} / page</option>)}
               </select>
               <button className="btn-ghost" onClick={() => setOffset(Math.max(0, offset - limit))} disabled={offset === 0} style={{ padding: '6px 10px' }}><ChevronLeft size={14} /></button>
-              <span style={{ fontSize: 12, color: '#888' }}>{currentPage} / {totalPages}</span>
+              <span style={{ fontSize: 12, color: '#64748B' }}>{currentPage} / {totalPages}</span>
               <button className="btn-ghost" onClick={() => setOffset(offset + limit)} disabled={offset + limit >= total} style={{ padding: '6px 10px' }}><ChevronRight size={14} /></button>
             </div>
           </div>
         )}
         {total <= limit && total > 0 && (
-          <div style={{ padding: '10px 16px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-            <span style={{ fontSize: 12, color: '#555' }}>{total} charge{total !== 1 ? 's' : ''}</span>
+          <div style={{ padding: '10px 16px', borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+            <span style={{ fontSize: 12, color: '#64748B' }}>{total} charge{total !== 1 ? 's' : ''}</span>
           </div>
         )}
       </div>
@@ -1291,11 +1291,11 @@ export default function FinancePage() {
     }
   }
 
-  const th = { fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase',
-    letterSpacing: '0.06em', padding: '10px 12px', whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.06)' };
+  const th = { fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase',
+    letterSpacing: '0.06em', padding: '10px 12px', whiteSpace: 'nowrap', borderBottom: '1px solid rgba(0,0,0,0.06)' };
 
   const td = { padding: '10px 12px', fontSize: 13, color: '#CCC', verticalAlign: 'middle',
-    borderBottom: '1px solid rgba(255,255,255,0.04)' };
+    borderBottom: '1px solid rgba(0,0,0,0.03)' };
 
   return (
     <div style={{ position: 'relative' }}>
@@ -1394,7 +1394,7 @@ export default function FinancePage() {
       {/* ── Tab bar ────────────────────────────────────────────────────── */}
       <div style={{
         display: 'flex', gap: 2, marginBottom: 24,
-        borderBottom: '1px solid rgba(255,255,255,0.08)',
+        borderBottom: '1px solid rgba(0,0,0,0.08)',
       }}>
         {[
           { key: 'created',          label: 'Created' },
@@ -1439,7 +1439,7 @@ export default function FinancePage() {
             <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
               <span style={{ color: '#00C853', fontWeight: 700 }}>✓ Purge complete</span>
               <span style={{ color: '#F44336' }}>{batchResult.charges_deleted} charges removed</span>
-              <span style={{ color: '#888' }}>{batchResult.shipments_deleted} shipment records removed</span>
+              <span style={{ color: '#64748B' }}>{batchResult.shipments_deleted} shipment records removed</span>
             </div>
           ) : batchResult.relink ? (
             <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
@@ -1447,7 +1447,7 @@ export default function FinancePage() {
               {batchResult.not_found > 0 && (
                 <span style={{ color: '#FFC107' }}>{batchResult.not_found} account IDs not matched</span>
               )}
-              <span style={{ color: '#555' }}>of {batchResult.total_unlinked} unlinked total</span>
+              <span style={{ color: '#64748B' }}>of {batchResult.total_unlinked} unlinked total</span>
             </div>
           ) : (
             <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
@@ -1469,11 +1469,11 @@ export default function FinancePage() {
                   {batchResult.errors} errors
                 </span>
               )}
-              <span style={{ color: '#555' }}>of {batchResult.total} total</span>
+              <span style={{ color: '#64748B' }}>of {batchResult.total} total</span>
             </div>
           )}
           <button onClick={() => setBatchResult(null)}
-            style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', padding: 2 }}>
+            style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: 2 }}>
             <X size={14} />
           </button>
         </div>
@@ -1510,11 +1510,11 @@ export default function FinancePage() {
               {fullRepriceResult.errors > 0 && (
                 <span style={{ color: '#EF4444' }}>{fullRepriceResult.errors} errors</span>
               )}
-              <span style={{ color: '#555' }}>of {fullRepriceResult.total} total</span>
+              <span style={{ color: '#64748B' }}>of {fullRepriceResult.total} total</span>
             </div>
           )}
           <button onClick={() => setFullRepriceResult(null)}
-            style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', padding: 2 }}>
+            style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: 2 }}>
             <X size={14} />
           </button>
         </div>
@@ -1548,11 +1548,11 @@ export default function FinancePage() {
               {fixCostsResult.errors > 0 && (
                 <span style={{ color: '#EF4444' }}>{fixCostsResult.errors} errors</span>
               )}
-              <span style={{ color: '#555' }}>of {fixCostsResult.total} total</span>
+              <span style={{ color: '#64748B' }}>of {fixCostsResult.total} total</span>
             </div>
           )}
           <button onClick={() => setFixCostsResult(null)}
-            style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', padding: 2 }}>
+            style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: 2 }}>
             <X size={14} />
           </button>
         </div>
@@ -1607,7 +1607,7 @@ export default function FinancePage() {
             View all
           </button>
           <button onClick={() => setShowAlerts(false)}
-            style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', padding: 2 }}>
+            style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: 2 }}>
             <X size={14} />
           </button>
         </div>
@@ -1618,7 +1618,7 @@ export default function FinancePage() {
         <StatCard
           label="Total Charges"
           value={stats?.total_charges ?? '—'}
-          color="#AAAAAA"
+          color="#64748B"
         />
         <StatCard
           label="Unpriced"
@@ -1638,7 +1638,7 @@ export default function FinancePage() {
         <StatCard
           label="Total Value"
           value={gbp(stats?.total_value)}
-          color="#AAAAAA"
+          color="#64748B"
         />
         <StatCard
           label="Unbilled Value"
@@ -1652,7 +1652,7 @@ export default function FinancePage() {
           value={gbp(stats?.profit)}
           sub={stats?.profit_pct != null ? `${stats.profit_pct}% margin` : undefined}
           color={stats?.profit > 0 ? '#00C853' : stats?.profit < 0 ? '#F44336' : '#888'}
-          bg={stats?.profit > 0 ? 'rgba(0,200,83,0.05)' : stats?.profit < 0 ? 'rgba(244,67,54,0.05)' : 'rgba(255,255,255,0.04)'}
+          bg={stats?.profit > 0 ? 'rgba(0,200,83,0.05)' : stats?.profit < 0 ? 'rgba(244,67,54,0.05)' : 'rgba(0,0,0,0.03)'}
         />
         <StatCard
           label="Awaiting Reconciliation"
@@ -1675,7 +1675,7 @@ export default function FinancePage() {
 
           {/* Search */}
           <div className="pill-input-wrap" style={{ minWidth: 240, flex: 1 }}>
-            <Search size={14} style={{ marginLeft: 14, color: '#AAAAAA', flexShrink: 0 }} />
+            <Search size={14} style={{ marginLeft: 14, color: '#64748B', flexShrink: 0 }} />
             <input
               value={filters.search}
               onChange={e => setFilter('search', e.target.value)}
@@ -1685,7 +1685,7 @@ export default function FinancePage() {
             />
             {filters.search && (
               <button onClick={() => setFilter('search', '')}
-                style={{ marginRight: 8, background: 'none', border: 'none', color: '#888', cursor: 'pointer', padding: 2 }}>
+                style={{ marginRight: 8, background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: 2 }}>
                 <X size={12} />
               </button>
             )}
@@ -1706,7 +1706,7 @@ export default function FinancePage() {
 
           {/* Verified filter */}
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Verified</span>
+            <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Verified</span>
             {VERIFIED_OPTS.map(o => (
               <button
                 key={o.value}
@@ -1714,7 +1714,7 @@ export default function FinancePage() {
                 style={{
                   padding: '5px 11px', borderRadius: 20, fontSize: 12, fontWeight: 600,
                   border: '1px solid',
-                  borderColor: filters.verified === o.value ? '#00BCD4' : 'rgba(255,255,255,0.12)',
+                  borderColor: filters.verified === o.value ? '#00BCD4' : 'rgba(0,0,0,0.10)',
                   background: filters.verified === o.value ? 'rgba(0,188,212,0.12)' : 'transparent',
                   color: filters.verified === o.value ? '#00BCD4' : '#888',
                   cursor: 'pointer',
@@ -1733,7 +1733,7 @@ export default function FinancePage() {
               style={{
                 padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600,
                 border: '1px solid',
-                borderColor: filters.billed === o.value ? '#00C853' : 'rgba(255,255,255,0.12)',
+                borderColor: filters.billed === o.value ? '#00C853' : 'rgba(0,0,0,0.10)',
                 background: filters.billed === o.value ? 'rgba(0,200,83,0.12)' : 'transparent',
                 color: filters.billed === o.value ? '#00C853' : '#888',
                 cursor: 'pointer',
@@ -1749,7 +1749,7 @@ export default function FinancePage() {
             style={{
               padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600,
               border: '1px solid',
-              borderColor: showUnpriced ? '#FFC107' : 'rgba(255,255,255,0.12)',
+              borderColor: showUnpriced ? '#FFC107' : 'rgba(0,0,0,0.10)',
               background: showUnpriced ? 'rgba(255,193,7,0.12)' : 'transparent',
               color: showUnpriced ? '#FFC107' : '#888',
               cursor: 'pointer',
@@ -1768,7 +1768,7 @@ export default function FinancePage() {
             style={{ width: 140 }}
             title="From date"
           />
-          <span style={{ color: '#555', fontSize: 12 }}>–</span>
+          <span style={{ color: '#64748B', fontSize: 12 }}>–</span>
           <input
             type="date"
             value={filters.date_to}
@@ -1782,7 +1782,7 @@ export default function FinancePage() {
           {(filters.search || filters.customer_id || filters.billed || filters.verified || filters.date_from || filters.date_to || showUnpriced) && (
             <button
               onClick={clearAll}
-              style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: 12 }}
+              style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: 12 }}
             >
               Clear
             </button>
@@ -1796,7 +1796,7 @@ export default function FinancePage() {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 980 }}>
             <thead>
-              <tr style={{ background: 'rgba(255,255,255,0.02)' }}>
+              <tr style={{ background: 'rgba(0,0,0,0.02)' }}>
                 <th style={th}>Date</th>
                 <th style={th}>Customer</th>
                 <th style={th}>Order ID</th>
@@ -1813,14 +1813,14 @@ export default function FinancePage() {
             <tbody>
               {isLoading && (
                 <tr>
-                  <td colSpan={11} style={{ ...td, textAlign: 'center', padding: 40, color: '#555' }}>
+                  <td colSpan={11} style={{ ...td, textAlign: 'center', padding: 40, color: '#64748B' }}>
                     Loading charges…
                   </td>
                 </tr>
               )}
               {!isLoading && displayCharges.length === 0 && (
                 <tr>
-                  <td colSpan={11} style={{ ...td, textAlign: 'center', padding: 40, color: '#555' }}>
+                  <td colSpan={11} style={{ ...td, textAlign: 'center', padding: 40, color: '#64748B' }}>
                     No charges found
                   </td>
                 </tr>
@@ -1834,16 +1834,16 @@ export default function FinancePage() {
                   }}
                 >
                   {/* Date */}
-                  <td style={{ ...td, color: '#888', fontSize: 12, whiteSpace: 'nowrap' }}>
+                  <td style={{ ...td, color: '#64748B', fontSize: 12, whiteSpace: 'nowrap' }}>
                     <div>{fmt(charge.created_at)}</div>
-                    <div style={{ fontSize: 11, color: '#555' }}>{fmtTime(charge.created_at)}</div>
+                    <div style={{ fontSize: 11, color: '#64748B' }}>{fmtTime(charge.created_at)}</div>
                   </td>
 
                   {/* Customer */}
                   <td style={td}>
                     <div style={{ fontWeight: 600, color: '#fff', fontSize: 13 }}>{charge.customer_name || '—'}</div>
                     {charge.customer_account && (
-                      <div style={{ fontSize: 11, color: '#666' }}>{charge.customer_account}</div>
+                      <div style={{ fontSize: 11, color: '#64748B' }}>{charge.customer_account}</div>
                     )}
                   </td>
 
@@ -1856,7 +1856,7 @@ export default function FinancePage() {
                       <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#00BCD4', marginTop: 2 }}>
                         {charge.tracking_codes[0]}
                         {charge.tracking_codes.length > 1 && (
-                          <span style={{ color: '#555', marginLeft: 4 }}>+{charge.tracking_codes.length - 1}</span>
+                          <span style={{ color: '#64748B', marginLeft: 4 }}>+{charge.tracking_codes.length - 1}</span>
                         )}
                       </div>
                     )}
@@ -1865,7 +1865,7 @@ export default function FinancePage() {
                   {/* Qty */}
                   <td style={{ ...td, textAlign: 'center' }}>
                     <span style={{
-                      background: 'rgba(255,255,255,0.06)', borderRadius: 5,
+                      background: 'rgba(0,0,0,0.06)', borderRadius: 5,
                       padding: '2px 8px', fontSize: 12, fontWeight: 700, color: '#CCC',
                     }}>
                       {charge.parcel_qty}
@@ -1878,7 +1878,7 @@ export default function FinancePage() {
                       {charge.courier && (() => {
                         const logo = getCourierLogo(charge.courier);
                         return logo ? (
-                          <div style={{ width: 20, height: 20, borderRadius: 4, background: '#fff', flexShrink: 0, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <div style={{ width: 20, height: 20, borderRadius: 4, background: '#fff', flexShrink: 0, overflow: 'hidden', border: '1px solid rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <img src={logo} alt={charge.courier} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 2 }} onError={e => { e.currentTarget.style.display='none'; }} />
                           </div>
                         ) : null;
@@ -1886,10 +1886,10 @@ export default function FinancePage() {
                       <div style={{ fontSize: 12, color: '#CCC' }}>{charge.service_name || '—'}</div>
                     </div>
                     {charge.courier && (
-                      <div style={{ fontSize: 11, color: '#666', marginTop: 2 }}>{charge.courier}</div>
+                      <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{charge.courier}</div>
                     )}
                     {charge.zone_name && (
-                      <div style={{ fontSize: 10, color: '#555', marginTop: 2 }}>
+                      <div style={{ fontSize: 10, color: '#64748B', marginTop: 2 }}>
                         {charge.zone_name}{charge.weight_class_name ? ` · ${charge.weight_class_name}` : ''}
                         {charge.price_auto && <span style={{ color: '#00C853', marginLeft: 4 }}>●</span>}
                       </div>
@@ -1899,7 +1899,7 @@ export default function FinancePage() {
                   {/* Charge (ex. VAT) — hover shows breakdown */}
                   <td style={{ ...td, textAlign: 'right' }}>
                     {charge.cancelled ? (
-                      <span style={{ color: '#555', textDecoration: 'line-through', fontSize: 12 }}>
+                      <span style={{ color: '#64748B', textDecoration: 'line-through', fontSize: 12 }}>
                         {(() => {
                           const cls = Array.isArray(charge.charge_lines) ? charge.charge_lines : [];
                           const tot = parseFloat(charge.price || 0) + cls.reduce((s, l) => s + parseFloat(l.price || 0), 0);
@@ -1929,7 +1929,7 @@ export default function FinancePage() {
                       const profit    = sellTotal - costTotal;
                       const color     = profit > 0 ? '#00C853' : profit < 0 ? '#F44336' : '#888';
                       return <span style={{ color, fontWeight: 700, fontSize: 13 }}>{gbp(profit)}</span>;
-                    })() : <span style={{ color: '#555' }}>—</span>}
+                    })() : <span style={{ color: '#64748B' }}>—</span>}
                   </td>
 
                   {/* Billed */}
@@ -1981,11 +1981,11 @@ export default function FinancePage() {
         {total > limit && (
           <div style={{
             padding: '12px 16px',
-            borderTop: '1px solid rgba(255,255,255,0.06)',
+            borderTop: '1px solid rgba(0,0,0,0.06)',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             flexWrap: 'wrap', gap: 10,
           }}>
-            <span style={{ fontSize: 12, color: '#666' }}>
+            <span style={{ fontSize: 12, color: '#64748B' }}>
               {offset + 1}–{Math.min(offset + limit, total)} of {total} charges
             </span>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -2005,7 +2005,7 @@ export default function FinancePage() {
               >
                 <ChevronLeft size={14} />
               </button>
-              <span style={{ fontSize: 12, color: '#888' }}>{currentPage} / {totalPages}</span>
+              <span style={{ fontSize: 12, color: '#64748B' }}>{currentPage} / {totalPages}</span>
               <button
                 className="btn-ghost"
                 onClick={() => setOffset(offset + limit)}
@@ -2020,8 +2020,8 @@ export default function FinancePage() {
 
         {/* Footer: record count when no pagination */}
         {total <= limit && total > 0 && (
-          <div style={{ padding: '10px 16px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-            <span style={{ fontSize: 12, color: '#555' }}>{total} charge{total !== 1 ? 's' : ''}</span>
+          <div style={{ padding: '10px 16px', borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+            <span style={{ fontSize: 12, color: '#64748B' }}>{total} charge{total !== 1 ? 's' : ''}</span>
           </div>
         )}
       </div>

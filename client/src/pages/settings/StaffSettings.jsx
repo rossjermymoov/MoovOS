@@ -23,8 +23,8 @@ const ROLE_COLORS = {
   onboarding:         { bg: 'rgba(0,188,212,0.12)',   text: '#00BCD4' },
   finance:            { bg: 'rgba(255,193,7,0.12)',   text: '#FFC107' },
   customer_service:   { bg: 'rgba(233,30,140,0.12)', text: '#E91E8C' },
-  manager:            { bg: 'rgba(255,255,255,0.08)', text: '#AAAAAA' },
-  director:           { bg: 'rgba(255,255,255,0.08)', text: '#ffffff' },
+  manager:            { bg: 'rgba(0,0,0,0.08)', text: '#64748B' },
+  director:           { bg: 'rgba(0,0,0,0.08)', text: '#ffffff' },
 };
 
 const EMPTY = { full_name: '', email: '', role: 'sales' };
@@ -117,7 +117,7 @@ function PermissionsPanel({ staffMember, onClose }) {
   return (
     <div
       style={{
-        background: '#1A1D35',
+        background: '#F1F5F9',
         border: '1px solid rgba(123,47,190,0.3)',
         borderRadius: 10,
         padding: 20,
@@ -139,7 +139,7 @@ function PermissionsPanel({ staffMember, onClose }) {
               onClick={() => { setIsAdmin(v => !v); setPermsSaved(false); }}
               style={{
                 width: 40, height: 22, borderRadius: 11, position: 'relative', cursor: 'pointer',
-                background: isAdmin ? '#7B2FBE' : 'rgba(255,255,255,0.1)',
+                background: isAdmin ? '#7B2FBE' : 'rgba(0,0,0,0.08)',
                 transition: 'background 0.2s',
                 flexShrink: 0,
               }}
@@ -150,7 +150,7 @@ function PermissionsPanel({ staffMember, onClose }) {
                 left: isAdmin ? 21 : 3,
               }} />
             </div>
-            <span style={{ fontSize: 12, fontWeight: 600, color: isAdmin ? '#7B2FBE' : '#AAAAAA' }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: isAdmin ? '#7B2FBE' : '#64748B' }}>
               Administrator — access to all pages
             </span>
           </label>
@@ -184,7 +184,7 @@ function PermissionsPanel({ staffMember, onClose }) {
                         onClick={() => togglePerm(key)}
                         style={{
                           width: 34, height: 18, borderRadius: 9, position: 'relative', cursor: 'pointer',
-                          background: enabled ? '#00C853' : 'rgba(255,255,255,0.1)',
+                          background: enabled ? '#00C853' : 'rgba(0,0,0,0.08)',
                           transition: 'background 0.15s',
                           flexShrink: 0,
                         }}
@@ -195,7 +195,7 @@ function PermissionsPanel({ staffMember, onClose }) {
                           left: enabled ? 18 : 4,
                         }} />
                       </div>
-                      <span style={{ fontSize: 12, color: enabled ? '#fff' : '#AAAAAA', fontWeight: enabled ? 600 : 400 }}>
+                      <span style={{ fontSize: 12, color: enabled ? '#fff' : '#64748B', fontWeight: enabled ? 600 : 400 }}>
                         {label}
                       </span>
                     </label>
@@ -235,7 +235,7 @@ function PermissionsPanel({ staffMember, onClose }) {
             </span>
           </div>
 
-          <p style={{ fontSize: 12, color: '#AAAAAA', marginBottom: 12, lineHeight: 1.5 }}>
+          <p style={{ fontSize: 12, color: '#64748B', marginBottom: 12, lineHeight: 1.5 }}>
             {staffMember.has_password
               ? 'Change or remove this person\'s password. Removing it will prevent them from logging in.'
               : 'Set a password so this person can log in to Moov OS.'}
@@ -285,7 +285,7 @@ function PermissionsPanel({ staffMember, onClose }) {
       <div style={{ marginTop: 14, textAlign: 'right' }}>
         <button
           onClick={onClose}
-          style={{ background: 'none', border: 'none', color: '#AAAAAA', cursor: 'pointer', fontSize: 12 }}
+          style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: 12 }}
         >
           Close
         </button>
@@ -308,7 +308,7 @@ function StaffRow({ s, onToggleActive }) {
           <span style={{
             display: 'inline-block', padding: '3px 10px', borderRadius: 6,
             fontSize: 11, fontWeight: 700,
-            background: ROLE_COLORS[s.role]?.bg || 'rgba(255,255,255,0.08)',
+            background: ROLE_COLORS[s.role]?.bg || 'rgba(0,0,0,0.08)',
             color: ROLE_COLORS[s.role]?.text || '#fff',
           }}>
             {ROLES.find(r => r.value === s.role)?.label || s.role}
@@ -339,7 +339,7 @@ function StaffRow({ s, onToggleActive }) {
             </button>
             <button
               onClick={() => onToggleActive(s.id, false)}
-              style={{ background: 'none', border: 'none', color: '#AAAAAA', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
+              style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
             >
               <X size={12} /> Deactivate
             </button>
@@ -411,7 +411,7 @@ export default function StaffSettings() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 700, color: '#00C853' }}>Staff</h1>
-          <p style={{ fontSize: 13, color: '#AAAAAA', marginTop: 4 }}>
+          <p style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>
             Manage team members, set login passwords, and control which pages each person can access.
           </p>
         </div>
@@ -475,15 +475,15 @@ export default function StaffSettings() {
 
       {/* Active staff */}
       <div className="moov-card" style={{ overflow: 'hidden', marginBottom: 16 }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
           <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>Active Staff</span>
-          <span style={{ marginLeft: 8, fontSize: 12, color: '#AAAAAA' }}>{active.length} member{active.length !== 1 ? 's' : ''}</span>
+          <span style={{ marginLeft: 8, fontSize: 12, color: '#64748B' }}>{active.length} member{active.length !== 1 ? 's' : ''}</span>
         </div>
 
         {isLoading ? (
-          <div style={{ padding: 32, textAlign: 'center', color: '#AAAAAA', fontSize: 13 }}>Loading…</div>
+          <div style={{ padding: 32, textAlign: 'center', color: '#64748B', fontSize: 13 }}>Loading…</div>
         ) : active.length === 0 ? (
-          <div style={{ padding: 32, textAlign: 'center', color: '#AAAAAA', fontSize: 13 }}>
+          <div style={{ padding: 32, textAlign: 'center', color: '#64748B', fontSize: 13 }}>
             No staff added yet. Use the button above to add your first team member.
           </div>
         ) : (
@@ -513,8 +513,8 @@ export default function StaffSettings() {
       {/* Inactive staff */}
       {inactive.length > 0 && (
         <div className="moov-card" style={{ overflow: 'hidden' }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: '#AAAAAA' }}>Inactive Staff</span>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: '#64748B' }}>Inactive Staff</span>
           </div>
           <table className="moov-table">
             <thead>
@@ -524,8 +524,8 @@ export default function StaffSettings() {
               {inactive.map(s => (
                 <tr key={s.id} style={{ opacity: 0.5 }}>
                   <td>{s.full_name}</td>
-                  <td style={{ color: '#AAAAAA' }}>{s.email}</td>
-                  <td style={{ color: '#AAAAAA' }}>{ROLES.find(r => r.value === s.role)?.label || s.role}</td>
+                  <td style={{ color: '#64748B' }}>{s.email}</td>
+                  <td style={{ color: '#64748B' }}>{ROLES.find(r => r.value === s.role)?.label || s.role}</td>
                   <td></td>
                   <td style={{ textAlign: 'right' }}>
                     <button

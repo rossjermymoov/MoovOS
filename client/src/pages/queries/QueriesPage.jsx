@@ -20,26 +20,26 @@ const api = axios.create({ baseURL: '/api' });
 
 // ─── Design tokens — professional dark, not neon ──────────────────────────────
 
-const _BUILD = '2026-05-21-v2'; // cache bust — queries detail redesign
+const _BUILD = '2026-05-22-lightmode'; // cache bust — light mode
 
 const C = {
-  bg:       '#070E1C',
-  surface:  '#09122A',
-  card:     '#0B1628',
-  hover:    '#0F1E35',
-  selected: '#122040',
-  border:   'rgba(255,255,255,0.07)',
-  green:    '#22C55E',
-  amber:    '#F97316',
-  red:      '#EF4444',
-  blue:     '#3B82F6',
-  text:     '#F0F4FC',
-  sub:      '#8AABFF',
-  muted:    '#3D5270',
-  greenDim: 'rgba(34,197,94,0.12)',
-  amberDim: 'rgba(249,115,22,0.12)',
-  redDim:   'rgba(239,68,68,0.12)',
-  blueDim:  'rgba(59,130,246,0.13)',
+  bg:       '#F8FAFC',
+  surface:  '#F8FAFC',
+  card:     '#FFFFFF',
+  hover:    '#F1F5F9',
+  selected: '#EFF6FF',
+  border:   'rgba(0,0,0,0.08)',
+  green:    '#166534',
+  amber:    '#92400E',
+  red:      '#991B1B',
+  blue:     '#1E40AF',
+  text:     '#0F172A',
+  sub:      '#334155',
+  muted:    '#94A3B8',
+  greenDim: '#DCFCE7',
+  amberDim: '#FEF3C7',
+  redDim:   '#FEE2E2',
+  blueDim:  '#EFF6FF',
 };
 
 const STATUS_CFG = {
@@ -132,7 +132,7 @@ const TRACK_STATUS = {
   awaiting_collection: { label: 'Awaiting Customer Collection', color: '#FF6F00', bg: 'rgba(255,111,0,0.12)',    icon: Store },
   damaged:             { label: 'Damaged',                      color: '#E91E8C', bg: 'rgba(233,30,140,0.12)',   icon: PackageX },
   customs_hold:        { label: 'Customs Hold',                 color: '#9C27B0', bg: 'rgba(156,39,176,0.12)',   icon: ShieldAlert },
-  unknown:             { label: 'Unknown',                      color: '#555555', bg: 'rgba(255,255,255,0.05)',  icon: Package },
+  unknown:             { label: 'Unknown',                      color: '#64748B', bg: 'rgba(0,0,0,0.05)',       icon: Package },
 };
 
 function TrackingStatusBadge({ status }) {
@@ -177,7 +177,7 @@ function TrackingTimeline({ events }) {
               </div>
               {!isLast && (
                 <div style={{ width: 2, flex: 1, minHeight: 16,
-                  background: 'linear-gradient(to bottom, rgba(255,255,255,0.12), rgba(255,255,255,0.03))' }} />
+                  background: 'linear-gradient(to bottom, rgba(0,0,0,0.12), rgba(0,0,0,0.03))' }} />
               )}
             </div>
             <div style={{ flex: 1, paddingTop: 2, paddingBottom: isLast ? 0 : 4 }}>
@@ -193,7 +193,7 @@ function TrackingTimeline({ events }) {
                   <MapPin size={11} /> {ev.location}
                 </span>
               )}
-              <div style={{ fontSize: 11, color: '#444', marginTop: 3 }}>
+              <div style={{ fontSize: 11, color: '#64748B', marginTop: 3 }}>
                 {new Date(ev.event_at).toLocaleString('en-GB')}
               </div>
             </div>
@@ -294,10 +294,10 @@ function TicketPopup({ q, pos, logoUrl, assigneeName }) {
     <div style={{
       position: 'fixed', left, top,
       width: 355,
-      background: '#1E252D',
-      border: '1px solid rgba(255,255,255,0.16)',
+      background: '#FFFFFF',
+      border: '1px solid rgba(0,0,0,0.12)',
       borderRadius: 10,
-      boxShadow: '0 24px 64px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.04)',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06)',
       padding: '14px 16px',
       zIndex: 9999,
       pointerEvents: 'none',
@@ -323,7 +323,7 @@ function TicketPopup({ q, pos, logoUrl, assigneeName }) {
       {/* Consignment strip */}
       {q.consignment_number && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10,
-          padding: '7px 10px', background: 'rgba(255,255,255,0.04)',
+          padding: '7px 10px', background: '#F1F5F9',
           borderRadius: 6, border: `1px solid ${C.border}` }}>
           {logoUrl && (
             <div style={{ width: 22, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -347,7 +347,7 @@ function TicketPopup({ q, pos, logoUrl, assigneeName }) {
 
       {/* Preview — up to 4 lines */}
       {q.latest_email_preview && (
-        <div style={{ fontSize: 12, color: '#6B7784', lineHeight: 1.6, marginBottom: 10,
+        <div style={{ fontSize: 12, color: '#64748B', lineHeight: 1.6, marginBottom: 10,
           display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
           {q.latest_email_preview}
         </div>
@@ -355,7 +355,7 @@ function TicketPopup({ q, pos, logoUrl, assigneeName }) {
 
       {/* Footer */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 10,
-        borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+        borderTop: '1px solid rgba(0,0,0,0.08)' }}>
         <User size={11} color={C.muted} />
         <span style={{ fontSize: 11, color: C.muted, flex: 1 }}>{assigneeName || 'Unassigned'}</span>
         <Clock size={10} color={C.muted} />
@@ -438,7 +438,7 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, overflow: 'hidden' }}>
             <span style={{
               fontSize: 15, fontWeight: 800, letterSpacing: '-0.02em',
-              color: hasNewReply ? C.text : '#EEF2FA',
+              color: '#0F172A',
               flexShrink: 0, maxWidth: '36%',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
@@ -458,8 +458,8 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
                 <span style={{
                   fontSize: 12, fontFamily: 'monospace', fontWeight: 700,
                   color: '#6A8BAA',
-                  background: 'rgba(255,255,255,0.07)',
-                  border: '1px solid rgba(255,255,255,0.10)',
+                  background: '#F1F5F9',
+                  border: '1px solid rgba(0,0,0,0.08)',
                   borderRadius: 6,
                   padding: '1px 6px',
                   flexShrink: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -484,7 +484,7 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
           {/* Row 2: subject */}
           <div style={{
             fontSize: 13, fontWeight: hasNewReply ? 600 : 400,
-            color: hasNewReply ? C.sub : '#5E6978',
+            color: hasNewReply ? C.sub : '#64748B',
             marginBottom: 5,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
@@ -494,7 +494,7 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
           {/* Row 3–4: preview (2 lines) */}
           {q.latest_email_preview && (
             <div style={{
-              fontSize: 12, color: '#4A5260', lineHeight: 1.55,
+              fontSize: 12, color: '#64748B', lineHeight: 1.55,
               display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
             }}>
               {q.latest_email_preview}
@@ -532,7 +532,7 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
                 padding: '4px 22px 4px 8px', cursor: 'pointer', outline: 'none',
                 opacity: statusSaving ? 0.6 : 1 }}>
               {Object.entries(STATUS_CFG).map(([k, v]) => (
-                <option key={k} value={k} style={{ background: '#1C2128', color: '#E6EDF3', fontWeight: 400 }}>{v.label}</option>
+                <option key={k} value={k} style={{ background: '#FFFFFF', color: '#0F172A', fontWeight: 400 }}>{v.label}</option>
               ))}
             </select>
             <ChevronDown size={11} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', color: statusCfg.color, pointerEvents: 'none' }} />
@@ -542,14 +542,14 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
           <div style={{ position: 'relative', width: '100%' }}>
             <select value={q.assigned_to || ''} onChange={handleAssigneeChange} disabled={assigneeSaving}
               style={{ width: '100%', appearance: 'none',
-                background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.border}`,
+                background: '#F1F5F9', border: `1px solid ${C.border}`,
                 borderRadius: 5, color: assigneeName ? C.sub : C.muted,
                 fontSize: 11, fontWeight: assigneeName ? 600 : 400,
                 padding: '4px 22px 4px 8px', cursor: 'pointer', outline: 'none',
                 opacity: assigneeSaving ? 0.6 : 1 }}>
-              <option value="" style={{ background: '#1C2128', color: '#7D8590' }}>Unassigned</option>
+              <option value="" style={{ background: '#FFFFFF', color: '#94A3B8' }}>Unassigned</option>
               {staffList.map(s => (
-                <option key={s.id} value={s.id} style={{ background: '#1C2128', color: '#E6EDF3' }}>{s.full_name}</option>
+                <option key={s.id} value={s.id} style={{ background: '#FFFFFF', color: '#0F172A' }}>{s.full_name}</option>
               ))}
             </select>
             <ChevronDown size={11} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', color: C.muted, pointerEvents: 'none' }} />
@@ -563,7 +563,7 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
             )}
             {hasNewReply && !hasAttention && (
               <span style={{ fontSize: 9, fontWeight: 700, color: C.blue,
-                background: 'rgba(88,166,255,0.12)', padding: '1px 6px',
+                background: 'rgba(30,64,175,0.08)', padding: '1px 6px',
                 borderRadius: 3, border: `1px solid ${C.blue}44` }}>↩ REPLY</span>
             )}
             {isClaim && (
@@ -609,7 +609,7 @@ function MessageBubble({ email, onApprove, onEdit, approving, courierName, couri
     accentColor = C.blue;
     bubbleRadius = '2px 10px 10px 10px';
   } else if (dir === 'outbound_customer') {
-    bubbleBg = isDraft ? `${C.green}08` : 'rgba(88,166,255,0.08)';
+    bubbleBg = isDraft ? '#F0FDF4' : '#EFF6FF';
     bubbleBorderStyle = isDraft ? `1px solid ${C.green}33` : `1px solid ${C.blue}33`;
     accentColor = isDraft ? C.green : C.blue;
     bubbleRadius = '10px 2px 10px 10px';
@@ -1149,7 +1149,7 @@ function QueryDetail({ queryId, onUpdated }) {
                 borderRadius: 6, color: STATUS_CFG[q.status]?.color || C.text,
                 fontSize: 11, padding: '5px 8px', cursor: 'pointer', fontWeight: 700, outline: 'none' }}>
               {Object.entries(STATUS_CFG).map(([k, v]) => (
-                <option key={k} value={k} style={{ background: '#1C2128', color: '#E6EDF3', fontWeight: 400 }}>{v.label}</option>
+                <option key={k} value={k} style={{ background: '#FFFFFF', color: '#0F172A', fontWeight: 400 }}>{v.label}</option>
               ))}
             </select>
           </div>
@@ -1535,9 +1535,9 @@ const GROUPS_OPTS = [
 ];
 
 const filterSelectStyle = {
-  width: '100%', background: 'rgba(255,255,255,0.06)',
-  border: `1px solid rgba(255,255,255,0.12)`,
-  borderRadius: 6, color: '#E6EDF3', fontSize: 12,
+  width: '100%', background: '#FFFFFF',
+  border: `1px solid rgba(0,0,0,0.12)`,
+  borderRadius: 6, color: '#0F172A', fontSize: 12,
   padding: '6px 10px', outline: 'none', cursor: 'pointer',
 };
 
@@ -1699,6 +1699,12 @@ export default function QueriesPage() {
 
   const panelFilterCount = [filters.assigned_to, filters.query_type, filters.priority, filters.group_name, filters.courier].filter(Boolean).length;
 
+  // When "All Open" (no explicit status filter), always hide resolved tickets.
+  const RESOLVED_STATUSES = new Set(['resolved', 'resolved_claim_approved', 'resolved_claim_rejected']);
+  const displayQueries = filters.status
+    ? queries
+    : queries.filter(q => !RESOLVED_STATUSES.has(q.status));
+
   return (
     <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: C.bg, color: C.text, overflow: 'hidden' }}>
 
@@ -1841,7 +1847,7 @@ export default function QueriesPage() {
         {/* Ticket list */}
         <div style={{ flex: 1, overflow: 'auto' }}>
           {loading && <div style={{ padding: 40, textAlign: 'center', color: C.muted, fontSize: 12 }}>Loading…</div>}
-          {!loading && queries.length === 0 && (
+          {!loading && displayQueries.length === 0 && (
             <div style={{ padding: 60, textAlign: 'center' }}>
               <div style={{ fontSize: 36, marginBottom: 12 }}>📭</div>
               <div style={{ fontSize: 15, fontWeight: 700, color: C.sub, marginBottom: 6 }}>No queries match</div>
@@ -1849,16 +1855,16 @@ export default function QueriesPage() {
             </div>
           )}
           {(() => {
-  const attention = queries.filter(q => q.requires_attention || q.has_new_reply);
-  const normal    = queries.filter(q => !q.requires_attention && !q.has_new_reply);
+  const attention = displayQueries.filter(q => q.requires_attention || q.has_new_reply);
+  const normal    = displayQueries.filter(q => !q.requires_attention && !q.has_new_reply);
   return (
     <>
       {attention.length > 0 && (
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8,
-            padding: '7px 16px 5px', background: '#08111F' }}>
+            padding: '7px 16px 5px', background: '#F8FAFC', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
             <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#EF4444', flexShrink: 0 }} />
-            <span style={{ fontSize: 10, fontWeight: 700, color: '#2E4A6A', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               Needs attention · {attention.length}
             </span>
           </div>
@@ -1870,9 +1876,9 @@ export default function QueriesPage() {
       {normal.length > 0 && (
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8,
-            padding: '7px 16px 5px', background: '#08111F' }}>
+            padding: '7px 16px 5px', background: '#F8FAFC', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
             <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#3B82F6', flexShrink: 0 }} />
-            <span style={{ fontSize: 10, fontWeight: 700, color: '#2E4A6A', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               Open · {normal.length}
             </span>
           </div>

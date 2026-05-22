@@ -22,9 +22,9 @@ const api = axios.create({ baseURL: '/api' });
 // ─── Shared styles ────────────────────────────────────────────────────────────
 const inputSt = {
   width: '100%', boxSizing: 'border-box',
-  background: 'rgba(255,255,255,0.06)',
-  border: '1px solid rgba(255,255,255,0.12)',
-  borderRadius: 7, color: '#E6EDF3', fontSize: 12,
+  background: 'rgba(0,0,0,0.06)',
+  border: '1px solid rgba(0,0,0,0.10)',
+  borderRadius: 7, color: '#0F172A', fontSize: 12,
   padding: '7px 10px', outline: 'none',
 };
 const btnGreen = {
@@ -38,13 +38,13 @@ const btnRed = {
   fontSize: 12,
 };
 const btnGhost = {
-  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)',
-  borderRadius: 6, color: '#AAAAAA', padding: '5px 8px', cursor: 'pointer',
+  background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.10)',
+  borderRadius: 6, color: '#64748B', padding: '5px 8px', cursor: 'pointer',
   fontSize: 12,
 };
 const card = {
-  background: 'rgba(255,255,255,0.04)',
-  border: '1px solid rgba(255,255,255,0.08)',
+  background: 'rgba(0,0,0,0.03)',
+  border: '1px solid rgba(0,0,0,0.08)',
   borderRadius: 10, padding: '18px 20px', marginBottom: 16,
 };
 
@@ -56,12 +56,12 @@ function FormulaBox({ divisor }) {
   return (
     <div style={{
       background: 'rgba(0,200,83,0.06)', border: '1px solid rgba(0,200,83,0.2)',
-      borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#AAAAAA',
+      borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#64748B',
     }}>
       <span style={{ color: '#00C853', fontWeight: 700 }}>Formula: </span>
       (L × W × H) ÷ {divisor > 0 ? divisor : '?'} = volumetric kg
       {divisor > 0 && (
-        <span style={{ marginLeft: 16, color: '#E6EDF3' }}>
+        <span style={{ marginLeft: 16, color: '#0F172A' }}>
           Example: {eg_l} × {eg_w} × {eg_h} = {vol.toLocaleString()} cm³ ÷ {divisor} = <strong style={{ color: '#00C853' }}>{dimKg} kg</strong>
         </span>
       )}
@@ -80,7 +80,7 @@ function RuleForm({ initial, onSave, onCancel }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 10 }}>
         <div>
-          <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>
+          <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 4 }}>
             Rule Name
           </label>
           <input
@@ -91,7 +91,7 @@ function RuleForm({ initial, onSave, onCancel }) {
           />
         </div>
         <div>
-          <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>
+          <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 4 }}>
             Divisor
           </label>
           <input
@@ -131,11 +131,11 @@ function ServiceBadge({ service, onRemove }) {
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 5,
       background: 'rgba(0,200,83,0.1)', border: '1px solid rgba(0,200,83,0.25)',
-      borderRadius: 9999, padding: '3px 10px', fontSize: 11, color: '#E6EDF3',
+      borderRadius: 9999, padding: '3px 10px', fontSize: 11, color: '#0F172A',
     }}>
       <span style={{ color: '#777', fontSize: 10 }}>{service.carrier_name} /</span>
       {service.name}
-      <span style={{ color: '#555', fontSize: 10 }}>({service.service_code})</span>
+      <span style={{ color: '#64748B', fontSize: 10 }}>({service.service_code})</span>
       {onRemove && (
         <button
           onClick={() => onRemove(service.id)}
@@ -175,7 +175,7 @@ function RuleCard({ rule, allServices, onUpdate, onDelete, onAssign, onUnassign 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <Divide size={16} color='#00C853' />
-          <span style={{ fontSize: 15, fontWeight: 700, color: '#E6EDF3' }}>{rule.name}</span>
+          <span style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>{rule.name}</span>
           <span style={{
             background: 'rgba(0,200,83,0.12)', border: '1px solid rgba(0,200,83,0.3)',
             borderRadius: 6, padding: '2px 9px', fontSize: 12, color: '#00C853', fontWeight: 700,
@@ -217,12 +217,12 @@ function RuleCard({ rule, allServices, onUpdate, onDelete, onAssign, onUnassign 
 
       {/* Assigned services */}
       <div>
-        <div style={{ fontSize: 11, color: '#888', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <div style={{ fontSize: 11, color: '#64748B', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           Assigned Services ({rule.assigned_services.length})
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
           {rule.assigned_services.length === 0 ? (
-            <span style={{ fontSize: 12, color: '#666', fontStyle: 'italic' }}>No services assigned</span>
+            <span style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic' }}>No services assigned</span>
           ) : (
             rule.assigned_services.map(svc => (
               <ServiceBadge
@@ -318,10 +318,10 @@ export default function VolumetricSettings() {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#E6EDF3', margin: 0 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', margin: 0 }}>
             Volumetric Weight Rules
           </h1>
-          <p style={{ fontSize: 13, color: '#888', marginTop: 4 }}>
+          <p style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>
             Define named rules (divisor) and assign them to carrier services.
             The pricing engine uses volumetric weight when it exceeds actual weight.
           </p>
@@ -333,13 +333,13 @@ export default function VolumetricSettings() {
 
       {/* How it works box */}
       <div style={{
-        background: 'rgba(255,255,255,0.03)',
-        border: '1px solid rgba(255,255,255,0.08)',
+        background: 'rgba(0,0,0,0.03)',
+        border: '1px solid rgba(0,0,0,0.08)',
         borderRadius: 8, padding: '12px 16px', marginBottom: 24,
-        fontSize: 12, color: '#888', lineHeight: 1.7,
+        fontSize: 12, color: '#64748B', lineHeight: 1.7,
       }}>
         <Package size={13} style={{ display: 'inline', marginRight: 6, color: '#00C853' }} />
-        <strong style={{ color: '#E6EDF3' }}>How it works: </strong>
+        <strong style={{ color: '#0F172A' }}>How it works: </strong>
         When a shipment arrives, the engine calculates volumetric weight as
         <span style={{ color: '#00C853', fontFamily: 'monospace', margin: '0 4px' }}>(L × W × H) ÷ divisor</span>
         for each parcel. If the volumetric weight is greater than the declared weight, the volumetric
@@ -372,9 +372,9 @@ export default function VolumetricSettings() {
 
       {/* Rule list */}
       {isLoading ? (
-        <div style={{ color: '#666', fontSize: 13 }}>Loading...</div>
+        <div style={{ color: '#64748B', fontSize: 13 }}>Loading...</div>
       ) : data?.rules?.length === 0 ? (
-        <div style={{ ...card, textAlign: 'center', color: '#666', fontSize: 13, padding: 40 }}>
+        <div style={{ ...card, textAlign: 'center', color: '#64748B', fontSize: 13, padding: 40 }}>
           No volumetric rules defined yet. Create one above.
         </div>
       ) : (

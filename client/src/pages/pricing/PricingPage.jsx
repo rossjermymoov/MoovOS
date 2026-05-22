@@ -59,7 +59,7 @@ const STATUS = {
 };
 
 function StatusBadge({ status }) {
-  const c = STATUS[status] || { label: status, color: '#888', bg: 'rgba(255,255,255,0.06)', border: 'rgba(255,255,255,0.1)' };
+  const c = STATUS[status] || { label: status, color: '#64748B', bg: 'rgba(0,0,0,0.06)', border: 'rgba(0,0,0,0.08)' };
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', background: c.bg,
       border: `1px solid ${c.border}`, color: c.color, borderRadius: 20,
@@ -71,23 +71,23 @@ function StatusBadge({ status }) {
 
 // ─── Stat card ────────────────────────────────────────────────────────────────
 
-function StatCard({ label, value, color = '#AAAAAA', tooltip, bg = 'rgba(255,255,255,0.04)' }) {
+function StatCard({ label, value, color = '#64748B', tooltip, bg = 'rgba(0,0,0,0.03)' }) {
   const [open, setOpen] = useState(false);
   return (
     <div onMouseEnter={() => tooltip && setOpen(true)} onMouseLeave={() => setOpen(false)}
       style={{ position: 'relative', background: bg, border: `1px solid ${color}33`,
         borderRadius: 10, padding: '14px 18px', minWidth: 130, flex: 1 }}>
-      <div style={{ fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{label}</div>
       <div style={{ fontSize: 26, fontWeight: 800, color }}>{value}</div>
       {tooltip && open && tooltip.length > 0 && (
         <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200,
-          background: '#1A1B3A', border: '1px solid rgba(255,255,255,0.12)',
+          background: '#1A1B3A', border: '1px solid rgba(0,0,0,0.10)',
           borderRadius: 8, padding: '10px 14px', minWidth: 220, boxShadow: '0 8px 24px rgba(0,0,0,0.6)' }}>
-          <div style={{ fontSize: 11, color: '#888', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>In Onboarding</div>
+          <div style={{ fontSize: 11, color: '#64748B', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>In Onboarding</div>
           {tooltip.map(t => (
-            <div key={t.id} style={{ fontSize: 12, color: '#DDD', padding: '3px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            <div key={t.id} style={{ fontSize: 12, color: '#DDD', padding: '3px 0', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
               <span style={{ fontWeight: 700 }}>{t.company_name}</span>
-              <span style={{ color: '#666', marginLeft: 6 }}>{t.contact_name}</span>
+              <span style={{ color: '#64748B', marginLeft: 6 }}>{t.contact_name}</span>
             </div>
           ))}
         </div>
@@ -105,7 +105,7 @@ const COURIER_LABELS = { DPD: 'DPD', DHL: 'DHL', EVRI: 'Evri', UPS: 'UPS', ROYAL
 
 const inputStyle = {
   width: '100%', boxSizing: 'border-box',
-  background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
+  background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.10)',
   borderRadius: 7, padding: '8px 11px', color: '#fff', fontSize: 13, outline: 'none',
 };
 const selectStyle = { ...inputStyle };
@@ -113,7 +113,7 @@ const selectStyle = { ...inputStyle };
 function Field({ label, error, children, required }) {
   return (
     <div style={{ marginBottom: 14 }}>
-      <label style={{ display: 'block', fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>
+      <label style={{ display: 'block', fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>
         {label}{required && <span style={{ color: '#EF4444', marginLeft: 3 }}>*</span>}
       </label>
       {children}
@@ -133,8 +133,8 @@ function StepIndicator({ current }) {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
             <div style={{
               width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: i < current ? '#00C853' : i === current ? '#6366F1' : 'rgba(255,255,255,0.08)',
-              border: `2px solid ${i < current ? '#00C853' : i === current ? '#818CF8' : 'rgba(255,255,255,0.12)'}`,
+              background: i < current ? '#00C853' : i === current ? '#6366F1' : 'rgba(0,0,0,0.08)',
+              border: `2px solid ${i < current ? '#00C853' : i === current ? '#818CF8' : 'rgba(0,0,0,0.10)'}`,
               fontSize: 12, fontWeight: 700, color: i <= current ? '#fff' : '#555',
             }}>
               {i < current ? <Check size={13} /> : i + 1}
@@ -142,7 +142,7 @@ function StepIndicator({ current }) {
             <div style={{ fontSize: 10, color: i === current ? '#A5B4FC' : '#555', fontWeight: 600 }}>{s}</div>
           </div>
           {i < steps.length - 1 && (
-            <div style={{ flex: 1, height: 2, background: i < current ? '#00C853' : 'rgba(255,255,255,0.08)', margin: '0 8px', marginBottom: 18 }} />
+            <div style={{ flex: 1, height: 2, background: i < current ? '#00C853' : 'rgba(0,0,0,0.08)', margin: '0 8px', marginBottom: 18 }} />
           )}
         </div>
       ))}
@@ -221,15 +221,15 @@ function CreateWizard({ onClose, onCreated }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ background: '#14152E', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14,
+      <div style={{ background: '#14152E', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 14,
         width: '100%', maxWidth: step === 1 ? 680 : 520, maxHeight: '88vh',
         display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
         {/* Header */}
-        <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+        <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid rgba(0,0,0,0.07)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
             <div style={{ fontSize: 17, fontWeight: 700, color: '#fff' }}>New Rate Card</div>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', padding: 4 }}>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: 4 }}>
               <X size={18} />
             </button>
           </div>
@@ -242,7 +242,7 @@ function CreateWizard({ onClose, onCreated }) {
           {/* ── Step 0: Prospect ─────────────────────────────────────────────── */}
           {step === 0 && (
             <div>
-              <div style={{ fontSize: 13, color: '#888', marginBottom: 18 }}>
+              <div style={{ fontSize: 13, color: '#64748B', marginBottom: 18 }}>
                 Who is this rate card for?
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
@@ -282,7 +282,7 @@ function CreateWizard({ onClose, onCreated }) {
           {/* ── Step 1: Carrier + Template ────────────────────────────────────── */}
           {step === 1 && (
             <div>
-              <div style={{ fontSize: 13, color: '#888', marginBottom: 18 }}>
+              <div style={{ fontSize: 13, color: '#64748B', marginBottom: 18 }}>
                 Select a carrier, then optionally pick a template to start from.
                 You can edit all rates on the next screen.
               </div>
@@ -293,8 +293,8 @@ function CreateWizard({ onClose, onCreated }) {
                     <button key={c} onClick={() => { setSelectedCourier(c); setSelectedTemplate(null); setErrors({}); }}
                       style={{
                         padding: '8px 18px', borderRadius: 8,
-                        border: `1px solid ${selectedCourier === c ? '#6366F1' : 'rgba(255,255,255,0.12)'}`,
-                        background: selectedCourier === c ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.04)',
+                        border: `1px solid ${selectedCourier === c ? '#6366F1' : 'rgba(0,0,0,0.10)'}`,
+                        background: selectedCourier === c ? 'rgba(99,102,241,0.15)' : 'rgba(0,0,0,0.03)',
                         color: selectedCourier === c ? '#A5B4FC' : '#888',
                         fontWeight: 700, fontSize: 13, cursor: 'pointer',
                       }}>
@@ -306,31 +306,31 @@ function CreateWizard({ onClose, onCreated }) {
 
               {selectedCourier && (
                 <div style={{ marginTop: 20 }}>
-                  <div style={{ fontSize: 11, color: '#888', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
-                    Template <span style={{ color: '#444', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional — start from scratch or pick one)</span>
+                  <div style={{ fontSize: 11, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+                    Template <span style={{ color: '#475569', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional — start from scratch or pick one)</span>
                   </div>
 
                   {tplLoading ? (
-                    <div style={{ color: '#555', fontSize: 13, padding: '16px 0' }}>Loading templates…</div>
+                    <div style={{ color: '#64748B', fontSize: 13, padding: '16px 0' }}>Loading templates…</div>
                   ) : templates.length === 0 ? (
-                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
+                    <div style={{ background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.07)',
                       borderRadius: 9, padding: '20px', textAlign: 'center' }}>
-                      <div style={{ fontSize: 13, color: '#555', marginBottom: 6 }}>No templates yet for {COURIER_LABELS[selectedCourier]}</div>
-                      <div style={{ fontSize: 11, color: '#444' }}>You can build them in Carriers → Customer Rate Card Templates. For now, continue and set rates manually.</div>
+                      <div style={{ fontSize: 13, color: '#64748B', marginBottom: 6 }}>No templates yet for {COURIER_LABELS[selectedCourier]}</div>
+                      <div style={{ fontSize: 11, color: '#475569' }}>You can build them in Carriers → Customer Rate Card Templates. For now, continue and set rates manually.</div>
                     </div>
                   ) : (
                     <>
                       {/* "Start from scratch" option */}
                       <div onClick={() => setSelectedTemplate(null)}
                         style={{
-                          border: `1px solid ${selectedTemplate === null ? '#6366F1' : 'rgba(255,255,255,0.08)'}`,
-                          background: selectedTemplate === null ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.02)',
+                          border: `1px solid ${selectedTemplate === null ? '#6366F1' : 'rgba(0,0,0,0.08)'}`,
+                          background: selectedTemplate === null ? 'rgba(99,102,241,0.08)' : 'rgba(0,0,0,0.02)',
                           borderRadius: 9, padding: '11px 14px', cursor: 'pointer', marginBottom: 8,
                         }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: selectedTemplate === null ? '#A5B4FC' : '#666' }}>
                           Start from scratch
                         </div>
-                        <div style={{ fontSize: 11, color: '#444', marginTop: 2 }}>Empty rate table — fill in all prices manually</div>
+                        <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>Empty rate table — fill in all prices manually</div>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                         {templates.map(t => {
@@ -338,12 +338,12 @@ function CreateWizard({ onClose, onCreated }) {
                           return (
                             <div key={t.id} onClick={() => setSelectedTemplate(t)}
                               style={{
-                                border: `1px solid ${sel ? '#6366F1' : 'rgba(255,255,255,0.08)'}`,
-                                background: sel ? 'rgba(99,102,241,0.1)' : 'rgba(255,255,255,0.03)',
+                                border: `1px solid ${sel ? '#6366F1' : 'rgba(0,0,0,0.08)'}`,
+                                background: sel ? 'rgba(99,102,241,0.1)' : 'rgba(0,0,0,0.03)',
                                 borderRadius: 9, padding: '11px 14px', cursor: 'pointer',
                               }}>
                               <div style={{ fontSize: 13, fontWeight: 700, color: sel ? '#A5B4FC' : '#DDD', marginBottom: 3 }}>{t.name}</div>
-                              <div style={{ fontSize: 11, color: '#555' }}>
+                              <div style={{ fontSize: 11, color: '#64748B' }}>
                                 {(t.rates || []).filter(r => !r.is_international).length} domestic ·&nbsp;
                                 {(t.rates || []).filter(r => r.is_international).length} intl rates
                               </div>
@@ -373,11 +373,11 @@ function CreateWizard({ onClose, onCreated }) {
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '14px 24px', borderTop: '1px solid rgba(255,255,255,0.07)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ padding: '14px 24px', borderTop: '1px solid rgba(0,0,0,0.07)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <button onClick={step === 0 ? onClose : () => setStep(0)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.06)',
-              border: '1px solid rgba(255,255,255,0.1)', borderRadius: 7, padding: '8px 16px',
-              color: '#888', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,0,0,0.06)',
+              border: '1px solid rgba(0,0,0,0.08)', borderRadius: 7, padding: '8px 16px',
+              color: '#64748B', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
             <ArrowLeft size={14} />{step === 0 ? 'Cancel' : 'Back'}
           </button>
           <button onClick={handleNext} disabled={busy}
@@ -417,10 +417,10 @@ function ApprovalBanner({ approvals, onReview }) {
         <div style={{ border: '1px solid rgba(251,146,60,0.2)', borderTop: 'none', borderRadius: '0 0 9px 9px', overflow: 'hidden' }}>
           {approvals.map(a => (
             <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px',
-              borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(251,146,60,0.04)' }}>
+              borderBottom: '1px solid rgba(0,0,0,0.04)', background: 'rgba(251,146,60,0.04)' }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, color: '#DDD', fontWeight: 700 }}>{a.company_name}</div>
-                <div style={{ fontSize: 11, color: '#888' }}>
+                <div style={{ fontSize: 11, color: '#64748B' }}>
                   {a.courier_code} · submitted by {a.requested_by_name} · {fmtD(a.requested_at)}
                 </div>
               </div>
@@ -459,14 +459,14 @@ function ReviewModal({ approval, onClose, onDone, staffList }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1100,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ background: '#14152E', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, width: '100%', maxWidth: 460, padding: 24 }}>
+      <div style={{ background: '#14152E', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 14, width: '100%', maxWidth: 460, padding: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
           <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>Review Rate Card</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer' }}><X size={18} /></button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer' }}><X size={18} /></button>
         </div>
-        <div style={{ marginBottom: 16, padding: '12px 14px', background: 'rgba(255,255,255,0.04)', borderRadius: 8 }}>
+        <div style={{ marginBottom: 16, padding: '12px 14px', background: 'rgba(0,0,0,0.03)', borderRadius: 8 }}>
           <div style={{ fontSize: 14, color: '#DDD', fontWeight: 700 }}>{approval.company_name}</div>
-          <div style={{ fontSize: 12, color: '#888', marginTop: 3 }}>
+          <div style={{ fontSize: 12, color: '#64748B', marginTop: 3 }}>
             {approval.courier_code} · submitted by {approval.requested_by_name}
             {approval.projected_weekly_revenue ? ` · ${gbp(approval.projected_weekly_revenue)}/wk` : ''}
           </div>
@@ -544,7 +544,7 @@ function ProspectRow({ prospect, staffList, navigate }) {
 
   const cardBase = {
     background: expanded ? 'rgba(99,102,241,0.04)' : 'rgba(255,255,255,0.015)',
-    border: `1px solid ${expanded ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.07)'}`,
+    border: `1px solid ${expanded ? 'rgba(99,102,241,0.2)' : 'rgba(0,0,0,0.07)'}`,
     borderRadius: 12, marginBottom: 8, overflow: 'hidden',
     transition: 'border-color 0.15s',
   };
@@ -569,14 +569,14 @@ function ProspectRow({ prospect, staffList, navigate }) {
               { key: 'contact_phone', label: 'Phone' },
             ].map(({ key, label }) => (
               <div key={key}>
-                <label style={{ fontSize: 10, color: '#888', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>{label}</label>
+                <label style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>{label}</label>
                 <input value={editForm[key] ?? ''} onChange={e => setEditForm(p => ({ ...p, [key]: e.target.value }))}
-                  style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 7, padding: '8px 11px', color: '#fff', fontSize: 13, outline: 'none' }} />
+                  style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(0,0,0,0.07)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 7, padding: '8px 11px', color: '#fff', fontSize: 13, outline: 'none' }} />
               </div>
             ))}
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button onClick={() => setEditing(false)} style={{ ...btnBase, padding: '8px 18px', fontSize: 13, background: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.12)', color: '#888' }}>Cancel</button>
+            <button onClick={() => setEditing(false)} style={{ ...btnBase, padding: '8px 18px', fontSize: 13, background: 'rgba(0,0,0,0.06)', borderColor: 'rgba(0,0,0,0.10)', color: '#64748B' }}>Cancel</button>
             <button onClick={() => patchMut.mutate(editForm)} disabled={patchMut.isPending}
               style={{ ...btnBase, padding: '8px 20px', fontSize: 13, background: 'rgba(99,102,241,0.18)', borderColor: '#6366F1', color: '#A5B4FC' }}>
               Save Changes
@@ -591,7 +591,7 @@ function ProspectRow({ prospect, staffList, navigate }) {
           <AlertCircle size={15} />
           <span>Delete <strong>{prospect.company_name}</strong>? This removes the prospect and all their rate cards.</span>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-            <button onClick={() => setConfirmDel(false)} style={{ ...btnBase, padding: '7px 16px', fontSize: 12, background: 'none', borderColor: 'rgba(255,255,255,0.1)', color: '#666' }}>Cancel</button>
+            <button onClick={() => setConfirmDel(false)} style={{ ...btnBase, padding: '7px 16px', fontSize: 12, background: 'none', borderColor: 'rgba(0,0,0,0.08)', color: '#64748B' }}>Cancel</button>
             <button onClick={() => deleteMut.mutate()} disabled={deleteMut.isPending}
               style={{ ...btnBase, padding: '7px 18px', fontSize: 12, background: 'rgba(239,68,68,0.18)', borderColor: 'rgba(239,68,68,0.5)', color: '#EF4444' }}>
               Yes, Delete
@@ -607,14 +607,14 @@ function ProspectRow({ prospect, staffList, navigate }) {
           {/* Left: name + contact */}
           <div style={{ flex: '0 0 220px' }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: '#EEE', lineHeight: 1.2, marginBottom: 3 }}>{prospect.company_name}</div>
-            <div style={{ fontSize: 12, color: '#666' }}>{prospect.contact_name}</div>
+            <div style={{ fontSize: 12, color: '#64748B' }}>{prospect.contact_name}</div>
           </div>
 
           {/* Centre: meta chips */}
           <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
             <StatusBadge status={prospect.status} />
             {couriers && couriers.split(', ').map(c => (
-              <span key={c} style={{ fontSize: 12, fontWeight: 700, color: '#888', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '3px 10px' }}>{c}</span>
+              <span key={c} style={{ fontSize: 12, fontWeight: 700, color: '#64748B', background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 6, padding: '3px 10px' }}>{c}</span>
             ))}
             {topRC?.projected_weekly_revenue && (
               <span style={{ fontSize: 13, fontWeight: 800, color: '#A5B4FC', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: 6, padding: '3px 10px' }}>
@@ -622,7 +622,7 @@ function ProspectRow({ prospect, staffList, navigate }) {
               </span>
             )}
             {prospect.assigned_to_name && (
-              <span style={{ fontSize: 12, color: '#666' }}>→ {prospect.assigned_to_name}</span>
+              <span style={{ fontSize: 12, color: '#64748B' }}>→ {prospect.assigned_to_name}</span>
             )}
           </div>
 
@@ -630,7 +630,7 @@ function ProspectRow({ prospect, staffList, navigate }) {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
             <button
               onClick={() => { setEditForm({ company_name: prospect.company_name, contact_name: prospect.contact_name, contact_email: prospect.contact_email || '', contact_phone: prospect.contact_phone || '' }); setEditing(true); setConfirmDel(false); }}
-              style={{ ...btnBase, padding: '8px 16px', fontSize: 12, background: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.12)', color: '#AAA' }}>
+              style={{ ...btnBase, padding: '8px 16px', fontSize: 12, background: 'rgba(0,0,0,0.06)', borderColor: 'rgba(0,0,0,0.10)', color: '#AAA' }}>
               <Edit2 size={13} /> Edit
             </button>
             <button
@@ -640,7 +640,7 @@ function ProspectRow({ prospect, staffList, navigate }) {
             </button>
             <button
               onClick={() => setExpanded(p => !p)}
-              style={{ ...btnBase, padding: '8px 12px', fontSize: 12, background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.08)', color: '#666' }}>
+              style={{ ...btnBase, padding: '8px 12px', fontSize: 12, background: 'rgba(0,0,0,0.03)', borderColor: 'rgba(0,0,0,0.08)', color: '#64748B' }}>
               {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
             </button>
           </div>
@@ -648,29 +648,29 @@ function ProspectRow({ prospect, staffList, navigate }) {
 
         {/* Contact details strip */}
         {(prospect.contact_email || prospect.contact_phone) && (
-          <div style={{ display: 'flex', gap: 20, marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+          <div style={{ display: 'flex', gap: 20, marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(0,0,0,0.04)' }}>
             {prospect.contact_email && (
-              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#555' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#64748B' }}>
                 <Mail size={12} /> {prospect.contact_email}
               </span>
             )}
             {prospect.contact_phone && (
-              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#555' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#64748B' }}>
                 <Phone size={12} /> {prospect.contact_phone}
               </span>
             )}
-            <span style={{ fontSize: 12, color: '#444', marginLeft: 'auto' }}>Added {fmtD(prospect.created_at)}</span>
+            <span style={{ fontSize: 12, color: '#475569', marginLeft: 'auto' }}>Added {fmtD(prospect.created_at)}</span>
           </div>
         )}
       </div>
 
       {/* ── Rate cards (expanded) ── */}
       {expanded && (
-        <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', background: 'rgba(0,0,0,0.15)', padding: '14px 20px 16px' }}>
+        <div style={{ borderTop: '1px solid rgba(0,0,0,0.07)', background: 'rgba(0,0,0,0.15)', padding: '14px 20px 16px' }}>
           {rcLoading ? (
-            <div style={{ color: '#555', fontSize: 13 }}>Loading rate cards…</div>
+            <div style={{ color: '#64748B', fontSize: 13 }}>Loading rate cards…</div>
           ) : rateCards.length === 0 ? (
-            <div style={{ color: '#555', fontSize: 13 }}>No rate cards yet.</div>
+            <div style={{ color: '#64748B', fontSize: 13 }}>No rate cards yet.</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {rateCards.map(rc => {
@@ -678,7 +678,7 @@ function ProspectRow({ prospect, staffList, navigate }) {
                 const rateCount = (rc.rates || []).length;
                 return (
                   <div key={rc.id} style={{
-                    background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+                    background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.08)',
                     borderRadius: 10, padding: '14px 16px',
                     display: 'flex', alignItems: 'center', gap: 16,
                   }}>
@@ -687,10 +687,10 @@ function ProspectRow({ prospect, staffList, navigate }) {
                       <div style={{ fontSize: 14, fontWeight: 700, color: '#DDD', marginBottom: 4 }}>
                         {rc.courier_name || rc.courier_code}
                         {rc.template_name && (
-                          <span style={{ fontSize: 11, color: '#555', fontWeight: 400, marginLeft: 8 }}>({rc.template_name})</span>
+                          <span style={{ fontSize: 11, color: '#64748B', fontWeight: 400, marginLeft: 8 }}>({rc.template_name})</span>
                         )}
                       </div>
-                      <div style={{ display: 'flex', gap: 14, fontSize: 12, color: '#666' }}>
+                      <div style={{ display: 'flex', gap: 14, fontSize: 12, color: '#64748B' }}>
                         <span>{rateCount} rates</span>
                         {rc.weekly_parcels    && <span>{rc.weekly_parcels.toLocaleString('en-GB')} pcls/wk</span>}
                         {rc.projected_weekly_profit && <span style={{ color: '#34D399', fontWeight: 700 }}>{gbp(rc.projected_weekly_profit)}/wk profit</span>}
@@ -716,13 +716,13 @@ function ProspectRow({ prospect, staffList, navigate }) {
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
                       {(rc.status === 'draft' || rc.status === 'rejected') && (
                         <button onClick={() => navigate(`/pricing/rate-card/${rc.id}`)}
-                          style={{ ...btnBase, padding: '9px 18px', fontSize: 13, background: 'rgba(255,255,255,0.07)', borderColor: 'rgba(255,255,255,0.15)', color: '#CCC' }}>
+                          style={{ ...btnBase, padding: '9px 18px', fontSize: 13, background: 'rgba(0,0,0,0.07)', borderColor: 'rgba(0,0,0,0.12)', color: '#CCC' }}>
                           <Edit2 size={13} /> Edit Rates
                         </button>
                       )}
                       {rc.status !== 'draft' && (
                         <button onClick={() => navigate(`/pricing/rate-card/${rc.id}`)}
-                          style={{ ...btnBase, padding: '9px 18px', fontSize: 13, background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.08)', color: '#666' }}>
+                          style={{ ...btnBase, padding: '9px 18px', fontSize: 13, background: 'rgba(0,0,0,0.03)', borderColor: 'rgba(0,0,0,0.08)', color: '#64748B' }}>
                           View
                         </button>
                       )}
@@ -794,7 +794,7 @@ export default function PricingPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#fff' }}>Pricing &amp; Rate Cards</h1>
-          <div style={{ fontSize: 13, color: '#555', marginTop: 3 }}>Manage prospects, build rate cards, and track conversions</div>
+          <div style={{ fontSize: 13, color: '#64748B', marginTop: 3 }}>Manage prospects, build rate cards, and track conversions</div>
         </div>
         <button onClick={() => setShowWizard(true)}
           style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'rgba(99,102,241,0.15)',
@@ -810,7 +810,7 @@ export default function PricingPage() {
         <StatCard label="Forms Sent"     value={stats?.forms_sent    ?? '—'} color="#A78BFA" />
         <StatCard label="Forms Returned" value={stats?.forms_returned ?? '—'} color="#60A5FA" />
         <StatCard label="In Onboarding"  value={stats?.in_onboarding ?? '—'} color="#34D399"
-          bg={stats?.in_onboarding > 0 ? 'rgba(52,211,153,0.06)' : 'rgba(255,255,255,0.04)'}
+          bg={stats?.in_onboarding > 0 ? 'rgba(52,211,153,0.06)' : 'rgba(0,0,0,0.03)'}
           tooltip={stats?.onboarding_list} />
         <StatCard label="Converted" value={stats?.converted ?? '—'} color="#00C853" bg="rgba(0,200,83,0.05)" />
         <StatCard label="Lost"      value={stats?.lost      ?? '—'} color="#EF4444" />
@@ -830,8 +830,8 @@ export default function PricingPage() {
           {STATUS_FILTERS.map(f => (
             <button key={f.value} onClick={() => setStatusFilter(f.value)}
               style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
-                background: statusFilter === f.value ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.05)',
-                border: statusFilter === f.value ? '1px solid #6366F1' : '1px solid rgba(255,255,255,0.08)',
+                background: statusFilter === f.value ? 'rgba(99,102,241,0.2)' : 'rgba(0,0,0,0.04)',
+                border: statusFilter === f.value ? '1px solid #6366F1' : '1px solid rgba(0,0,0,0.08)',
                 color: statusFilter === f.value ? '#A5B4FC' : '#666' }}>
               {f.label}
             </button>
@@ -840,14 +840,14 @@ export default function PricingPage() {
       </div>
 
       {/* Prospect list */}
-      <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, overflow: 'hidden', padding: 8 }}>
+      <div style={{ background: 'rgba(0,0,0,0.02)', border: '1px solid rgba(0,0,0,0.07)', borderRadius: 10, overflow: 'hidden', padding: 8 }}>
         {isLoading ? (
-          <div style={{ padding: '40px 0', textAlign: 'center', color: '#555', fontSize: 13 }}>
+          <div style={{ padding: '40px 0', textAlign: 'center', color: '#64748B', fontSize: 13 }}>
             <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite', marginRight: 8, verticalAlign: 'middle' }} />
             Loading…
           </div>
         ) : prospects.length === 0 ? (
-          <div style={{ padding: '48px 0', textAlign: 'center', color: '#444', fontSize: 14 }}>
+          <div style={{ padding: '48px 0', textAlign: 'center', color: '#475569', fontSize: 14 }}>
             <Package size={28} color="#333" style={{ display: 'block', margin: '0 auto 10px' }} />
             No prospects yet. Click <strong style={{ color: '#A5B4FC' }}>New Rate Card</strong> to get started.
           </div>
@@ -857,7 +857,7 @@ export default function PricingPage() {
       </div>
 
       {prospectsData?.total > prospects.length && (
-        <div style={{ textAlign: 'center', fontSize: 12, color: '#555', marginTop: 10 }}>
+        <div style={{ textAlign: 'center', fontSize: 12, color: '#64748B', marginTop: 10 }}>
           Showing {prospects.length} of {prospectsData.total} prospects
         </div>
       )}

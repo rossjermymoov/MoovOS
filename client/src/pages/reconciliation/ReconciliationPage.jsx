@@ -24,8 +24,8 @@ const api = axios.create({ baseURL: '/api' });
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const card = {
-  background: 'rgba(255,255,255,0.04)',
-  border: '1px solid rgba(255,255,255,0.08)',
+  background: 'rgba(0,0,0,0.03)',
+  border: '1px solid rgba(0,0,0,0.08)',
   borderRadius: 10, padding: '18px 20px',
 };
 const btnGreen = {
@@ -34,7 +34,7 @@ const btnGreen = {
   fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
 };
 const btnGhost = {
-  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+  background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)',
   borderRadius: 7, color: '#AAA', padding: '9px 16px', cursor: 'pointer',
   fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
 };
@@ -45,9 +45,9 @@ const btnRed = {
 };
 const inputSt = {
   width: '100%', boxSizing: 'border-box',
-  background: 'rgba(255,255,255,0.06)',
-  border: '1px solid rgba(255,255,255,0.12)',
-  borderRadius: 7, color: '#E6EDF3', fontSize: 13,
+  background: 'rgba(0,0,0,0.06)',
+  border: '1px solid rgba(0,0,0,0.10)',
+  borderRadius: 7, color: '#0F172A', fontSize: 13,
   padding: '8px 12px', outline: 'none',
 };
 
@@ -84,8 +84,8 @@ function CarrierTile({ courier, selected, onSelect }) {
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
         padding: '12px 8px', borderRadius: 10,
         cursor: ready ? 'pointer' : 'not-allowed',
-        background: selected ? 'rgba(0,200,83,0.08)' : 'rgba(255,255,255,0.03)',
-        border: `2px solid ${selected ? '#00C853' : 'rgba(255,255,255,0.08)'}`,
+        background: selected ? 'rgba(0,200,83,0.08)' : 'rgba(0,0,0,0.03)',
+        border: `2px solid ${selected ? '#00C853' : 'rgba(0,0,0,0.08)'}`,
         transition: 'border-color 0.15s, background 0.15s',
         minWidth: 0, position: 'relative',
         opacity: ready ? 1 : 0.35,
@@ -95,7 +95,7 @@ function CarrierTile({ courier, selected, onSelect }) {
       {/* Logo or fallback initials badge */}
       <div style={{
         width: 56, height: 40, borderRadius: 8, flexShrink: 0, overflow: 'hidden',
-        background: logoUrl ? '#FFFFFF' : 'rgba(255,255,255,0.08)',
+        background: logoUrl ? '#FFFFFF' : 'rgba(0,0,0,0.08)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         boxShadow: selected ? '0 0 0 2px #00C853' : 'none',
         transition: 'box-shadow 0.15s',
@@ -112,7 +112,7 @@ function CarrierTile({ courier, selected, onSelect }) {
           display: logoUrl ? 'none' : 'flex',
           alignItems: 'center', justifyContent: 'center',
           width: '100%', height: '100%',
-          fontWeight: 800, fontSize: 13, color: '#AAAAAA', letterSpacing: 0.5,
+          fontWeight: 800, fontSize: 13, color: '#64748B', letterSpacing: 0.5,
         }}>
           {initials}
         </span>
@@ -130,7 +130,7 @@ function CarrierTile({ courier, selected, onSelect }) {
         <span style={{
           position: 'absolute', bottom: 6, left: '50%', transform: 'translateX(-50%)',
           fontSize: 9, fontWeight: 700, letterSpacing: '0.05em',
-          background: 'rgba(255,255,255,0.08)', color: '#666',
+          background: 'rgba(0,0,0,0.08)', color: '#64748B',
           borderRadius: 4, padding: '2px 5px', whiteSpace: 'nowrap',
         }}>
           SOON
@@ -159,7 +159,7 @@ function StatusBadge({ status }) {
     needs_review: { color: '#FFB300', bg: 'rgba(255,160,0,0.12)', border: 'rgba(255,160,0,0.3)', label: 'Needs Review' },
     processing:   { color: '#79AAFF', bg: 'rgba(30,100,200,0.15)',border: 'rgba(30,100,200,0.4)', label: 'Processing' },
     failed:       { color: '#FF5252', bg: 'rgba(213,0,0,0.12)',   border: 'rgba(213,0,0,0.3)',   label: 'Failed' },
-  }[status] || { color: '#AAA', bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.1)', label: status };
+  }[status] || { color: '#AAA', bg: 'rgba(0,0,0,0.04)', border: 'rgba(0,0,0,0.08)', label: status };
 
   return (
     <span style={{
@@ -178,7 +178,7 @@ function AutoBar({ rate }) {
   const color = pct >= 80 ? '#00C853' : pct >= 50 ? '#FFB300' : '#FF5252';
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div style={{ flex: 1, height: 4, background: 'rgba(255,255,255,0.08)', borderRadius: 99 }}>
+      <div style={{ flex: 1, height: 4, background: 'rgba(0,0,0,0.08)', borderRadius: 99 }}>
         <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 99 }} />
       </div>
       <span style={{ fontSize: 11, color, fontWeight: 700, minWidth: 36 }}>{pct}%</span>
@@ -492,15 +492,15 @@ function ProfileManagerModal({ couriers, onClose }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       <div style={{
-        background: '#0D0F2B', border: '1px solid rgba(255,255,255,0.1)',
+        background: '#0D0F2B', border: '1px solid rgba(0,0,0,0.08)',
         borderRadius: 12, width: 660, maxHeight: '80vh', overflow: 'auto', padding: 28,
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#E6EDF3', margin: 0 }}>Column Profiles</h2>
-            <p style={{ fontSize: 12, color: '#888', marginTop: 4, margin: 0 }}>Saved CSV column mappings per carrier</p>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', margin: 0 }}>Column Profiles</h2>
+            <p style={{ fontSize: 12, color: '#64748B', marginTop: 4, margin: 0 }}>Saved CSV column mappings per carrier</p>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer' }}>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer' }}>
             <X size={20} />
           </button>
         </div>
@@ -515,7 +515,7 @@ function ProfileManagerModal({ couriers, onClose }) {
 
         {/* Profile list */}
         {profiles.length === 0 ? (
-          <div style={{ textAlign: 'center', color: '#555', fontSize: 13, padding: '30px 0' }}>
+          <div style={{ textAlign: 'center', color: '#64748B', fontSize: 13, padding: '30px 0' }}>
             No saved profiles for this carrier yet. Upload a CSV and save the column mapping to create one.
           </div>
         ) : (
@@ -523,7 +523,7 @@ function ProfileManagerModal({ couriers, onClose }) {
             {profiles.map(p => (
               <div key={p.id} style={{
                 ...card,
-                border: p.is_default ? '1px solid rgba(0,200,83,0.3)' : '1px solid rgba(255,255,255,0.08)',
+                border: p.is_default ? '1px solid rgba(0,200,83,0.3)' : '1px solid rgba(0,0,0,0.08)',
                 padding: '14px 16px',
               }}>
                 {/* Header row */}
@@ -537,7 +537,7 @@ function ProfileManagerModal({ couriers, onClose }) {
                       autoFocus
                     />
                   ) : (
-                    <div style={{ flex: 1, fontSize: 14, fontWeight: 700, color: '#E6EDF3' }}>
+                    <div style={{ flex: 1, fontSize: 14, fontWeight: 700, color: '#0F172A' }}>
                       {p.profile_name}
                       {p.is_default && (
                         <span style={{ marginLeft: 8, fontSize: 10, color: '#00C853', background: 'rgba(0,200,83,0.12)', border: '1px solid rgba(0,200,83,0.3)', borderRadius: 9999, padding: '1px 7px', fontWeight: 700 }}>
@@ -600,15 +600,15 @@ function ProfileManagerModal({ couriers, onClose }) {
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {Object.entries(p.column_map || {}).filter(([, v]) => v).map(([field, col]) => (
                     <span key={field} style={{
-                      fontSize: 10, color: '#888', background: 'rgba(255,255,255,0.05)',
-                      border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5, padding: '2px 7px',
+                      fontSize: 10, color: '#64748B', background: 'rgba(0,0,0,0.04)',
+                      border: '1px solid rgba(0,0,0,0.08)', borderRadius: 5, padding: '2px 7px',
                     }}>
-                      <span style={{ color: '#555' }}>{FIELD_LABELS[field] || field}:</span>{' '}
+                      <span style={{ color: '#64748B' }}>{FIELD_LABELS[field] || field}:</span>{' '}
                       <span style={{ color: '#AAA' }}>{col}</span>
                     </span>
                   ))}
                 </div>
-                <div style={{ fontSize: 10, color: '#444', marginTop: 8 }}>
+                <div style={{ fontSize: 10, color: '#475569', marginTop: 8 }}>
                   Updated {new Date(p.updated_at).toLocaleDateString('en-GB')}
                 </div>
               </div>
@@ -900,16 +900,16 @@ function UploadModal({ couriers, onClose, onSuccess }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       <div style={{
-        background: '#0D0F2B', border: '1px solid rgba(255,255,255,0.1)',
+        background: '#0D0F2B', border: '1px solid rgba(0,0,0,0.08)',
         borderRadius: 12, width: 640, maxHeight: '88vh', overflow: 'auto', padding: 28,
       }}>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
           <div>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#E6EDF3', margin: 0 }}>New Reconciliation Run</h2>
-            <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>Step {step} of 3</div>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', margin: 0 }}>New Reconciliation Run</h2>
+            <div style={{ fontSize: 12, color: '#64748B', marginTop: 4 }}>Step {step} of 3</div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer' }}>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer' }}>
             <X size={20} />
           </button>
         </div>
@@ -924,11 +924,11 @@ function UploadModal({ couriers, onClose, onSuccess }) {
         {step === 1 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
-              <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 10 }}>
+              <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 10 }}>
                 Select Carrier <span style={{ color: '#FF5252' }}>*</span>
               </label>
               {couriers.length === 0 ? (
-                <p style={{ fontSize: 12, color: '#555' }}>No carriers configured — contact your administrator.</p>
+                <p style={{ fontSize: 12, color: '#64748B' }}>No carriers configured — contact your administrator.</p>
               ) : (
                 <div style={{
                   display: 'grid',
@@ -950,7 +950,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
             {/* Saved profiles for this carrier */}
             {carrierId && profiles.length > 0 && (
               <div>
-                <div style={{ fontSize: 11, color: '#888', fontWeight: 600, marginBottom: 8 }}>SAVED COLUMN PROFILES</div>
+                <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, marginBottom: 8 }}>SAVED COLUMN PROFILES</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {profiles.map(p => (
                     <button
@@ -958,28 +958,28 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                       onClick={() => applyProfile(p)}
                       style={{
                         padding: '10px 14px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
-                        background: loadedProfileId === p.id ? 'rgba(0,200,83,0.1)' : 'rgba(255,255,255,0.03)',
-                        border: `1px solid ${loadedProfileId === p.id ? 'rgba(0,200,83,0.35)' : 'rgba(255,255,255,0.08)'}`,
+                        background: loadedProfileId === p.id ? 'rgba(0,200,83,0.1)' : 'rgba(0,0,0,0.03)',
+                        border: `1px solid ${loadedProfileId === p.id ? 'rgba(0,200,83,0.35)' : 'rgba(0,0,0,0.08)'}`,
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       }}
                     >
                       <div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: loadedProfileId === p.id ? '#00C853' : '#E6EDF3' }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: loadedProfileId === p.id ? '#00C853' : '#0F172A' }}>
                           {p.profile_name}
                           {p.is_default && (
-                            <span style={{ marginLeft: 8, fontSize: 10, color: '#888' }}>Default</span>
+                            <span style={{ marginLeft: 8, fontSize: 10, color: '#64748B' }}>Default</span>
                           )}
                         </div>
-                        <div style={{ fontSize: 11, color: '#555', marginTop: 2 }}>
+                        <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
                           {Object.entries(p.column_map || {}).filter(([k, v]) => !['surcharge_columns','header_row_skip','parcel_pricing','preamble_fields'].includes(k) && v).length} columns mapped
                           {(p.column_map?.surcharge_columns?.length > 0) && (
-                            <span style={{ marginLeft: 6, color: '#666' }}>· {p.column_map.surcharge_columns.length} surcharge col{p.column_map.surcharge_columns.length > 1 ? 's' : ''}</span>
+                            <span style={{ marginLeft: 6, color: '#64748B' }}>· {p.column_map.surcharge_columns.length} surcharge col{p.column_map.surcharge_columns.length > 1 ? 's' : ''}</span>
                           )}
                           {p.column_map?.header_row_skip > 0 && (
-                            <span style={{ marginLeft: 6, color: '#666' }}>· {p.column_map.header_row_skip} preamble rows</span>
+                            <span style={{ marginLeft: 6, color: '#64748B' }}>· {p.column_map.header_row_skip} preamble rows</span>
                           )}
                           {p.column_map?.parcel_pricing === 'all_sub' && (
-                            <span style={{ marginLeft: 6, color: '#666' }}>· all-sub pricing</span>
+                            <span style={{ marginLeft: 6, color: '#64748B' }}>· all-sub pricing</span>
                           )}
                         </div>
                       </div>
@@ -991,7 +991,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
             )}
 
             <div>
-              <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 5 }}>
+              <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 5 }}>
                 Upload Carrier Invoice CSV <span style={{ color: '#FF5252' }}>*</span>
                 {loadedProfileId && <span style={{ color: '#00C853', marginLeft: 8 }}>· Profile loaded — columns will be auto-applied</span>}
               </label>
@@ -1003,7 +1003,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                 <Upload size={16} />
                 {csvRows.length > 0 ? `✓ ${csvRows.length} rows loaded — click to replace` : 'Click to upload carrier invoice CSV'}
               </button>
-              <p style={{ fontSize: 11, color: '#555', marginTop: 6 }}>
+              <p style={{ fontSize: 11, color: '#64748B', marginTop: 6 }}>
                 Invoice reference and date will be read from the CSV in the next step.
               </p>
             </div>
@@ -1013,18 +1013,18 @@ function UploadModal({ couriers, onClose, onSuccess }) {
         {/* ── Step 2 — Map columns ──────────────────────────────────────────── */}
         {step === 2 && (
           <div>
-            <p style={{ fontSize: 12, color: '#888', marginBottom: 16 }}>
-              We found <strong style={{ color: '#E6EDF3' }}>{csvRows.length} rows</strong> and <strong style={{ color: '#E6EDF3' }}>{headers.length} columns</strong>. Map the columns below.
+            <p style={{ fontSize: 12, color: '#64748B', marginBottom: 16 }}>
+              We found <strong style={{ color: '#0F172A' }}>{csvRows.length} rows</strong> and <strong style={{ color: '#0F172A' }}>{headers.length} columns</strong>. Map the columns below.
               {loadedProfileId && <span style={{ color: '#00C853', marginLeft: 8 }}>Profile applied — check mappings are correct for this file.</span>}
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {FIELDS.map(f => (
                 <div key={f.key} style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: 10, alignItems: 'center' }}>
-                  <label style={{ fontSize: 12, color: f.required ? '#E6EDF3' : '#888', fontWeight: f.required ? 600 : 400 }}>
+                  <label style={{ fontSize: 12, color: f.required ? '#0F172A' : '#888', fontWeight: f.required ? 600 : 400 }}>
                     {f.label}
                     {f.required && <span style={{ color: '#FF5252' }}> *</span>}
-                    {f.hint && <span style={{ color: '#555', fontSize: 10, display: 'block' }}>{f.hint}</span>}
+                    {f.hint && <span style={{ color: '#64748B', fontSize: 10, display: 'block' }}>{f.hint}</span>}
                   </label>
                   <select
                     style={inputSt}
@@ -1041,21 +1041,21 @@ function UploadModal({ couriers, onClose, onSuccess }) {
             {/* ── Carrier-format options ─────────────────────────────────────────── */}
             <div style={{
               marginTop: 20, padding: '12px 16px', borderRadius: 8,
-              background: 'rgba(255,255,255,0.02)',
-              border: '1px solid rgba(255,255,255,0.06)',
+              background: 'rgba(0,0,0,0.02)',
+              border: '1px solid rgba(0,0,0,0.06)',
             }}>
               <div style={{
-                fontSize: 11, color: '#888', fontWeight: 600, marginBottom: 10,
-                paddingBottom: 8, borderBottom: '1px solid rgba(255,255,255,0.06)',
+                fontSize: 11, color: '#64748B', fontWeight: 600, marginBottom: 10,
+                paddingBottom: 8, borderBottom: '1px solid rgba(0,0,0,0.06)',
               }}>
                 CARRIER FORMAT OPTIONS
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {/* header_row_skip */}
                 <div style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: 10, alignItems: 'center' }}>
-                  <label style={{ fontSize: 12, color: '#888' }}>
+                  <label style={{ fontSize: 12, color: '#64748B' }}>
                     Preamble rows to skip
-                    <span style={{ color: '#555', fontSize: 10, display: 'block' }}>DPD = 4, DHL = 0</span>
+                    <span style={{ color: '#64748B', fontSize: 10, display: 'block' }}>DPD = 4, DHL = 0</span>
                   </label>
                   <input
                     type='number' min='0' max='20'
@@ -1066,9 +1066,9 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                 </div>
                 {/* parcel_pricing */}
                 <div style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: 10, alignItems: 'center' }}>
-                  <label style={{ fontSize: 12, color: '#888' }}>
+                  <label style={{ fontSize: 12, color: '#64748B' }}>
                     Multi-parcel pricing
-                    <span style={{ color: '#555', fontSize: 10, display: 'block' }}>How carrier bills multi-parcel</span>
+                    <span style={{ color: '#64748B', fontSize: 10, display: 'block' }}>How carrier bills multi-parcel</span>
                   </label>
                   <select
                     style={inputSt}
@@ -1085,12 +1085,12 @@ function UploadModal({ couriers, onClose, onSuccess }) {
             {/* Surcharge column mappings */}
             <div style={{ marginTop: 20 }}>
               <div style={{
-                fontSize: 11, color: '#888', fontWeight: 600, marginBottom: 10,
+                fontSize: 11, color: '#64748B', fontWeight: 600, marginBottom: 10,
                 display: 'flex', alignItems: 'center', gap: 8,
-                paddingBottom: 8, borderBottom: '1px solid rgba(255,255,255,0.06)',
+                paddingBottom: 8, borderBottom: '1px solid rgba(0,0,0,0.06)',
               }}>
                 SURCHARGE COLUMN MAPPINGS
-                <span style={{ fontWeight: 400, fontSize: 10, color: '#555' }}>
+                <span style={{ fontWeight: 400, fontSize: 10, color: '#64748B' }}>
                   — columns in this carrier&#x2019;s CSV that carry named surcharge amounts
                 </span>
               </div>
@@ -1103,13 +1103,13 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                     return (
                       <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{
-                          fontSize: 11, color: '#E6EDF3',
-                          background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+                          fontSize: 11, color: '#0F172A',
+                          background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.08)',
                           borderRadius: 5, padding: '4px 10px', minWidth: 120, textAlign: 'center',
                         }}>
                           {sc.col}
                         </span>
-                        <span style={{ fontSize: 11, color: '#555' }}>→</span>
+                        <span style={{ fontSize: 11, color: '#64748B' }}>→</span>
                         <span style={{ fontSize: 12, color: '#00C853', flex: 1, fontWeight: 500 }}>
                           {sur?.name || sc.surcharge_id}
                         </span>
@@ -1133,7 +1133,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                     <option value=''>— CSV column —</option>
                     {headers.map(h => <option key={h} value={h}>{h}</option>)}
                   </select>
-                  <span style={{ fontSize: 11, color: '#555', flexShrink: 0 }}>→</span>
+                  <span style={{ fontSize: 11, color: '#64748B', flexShrink: 0 }}>→</span>
                   <select
                     style={{ ...inputSt, flex: 1 }}
                     value={newSurchargeId}
@@ -1154,18 +1154,18 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                   </button>
                 </div>
               ) : carrierId ? (
-                <p style={{ fontSize: 11, color: '#555', margin: 0 }}>No surcharges configured for this carrier.</p>
+                <p style={{ fontSize: 11, color: '#64748B', margin: 0 }}>No surcharges configured for this carrier.</p>
               ) : (
-                <p style={{ fontSize: 11, color: '#555', margin: 0 }}>Select a carrier first.</p>
+                <p style={{ fontSize: 11, color: '#64748B', margin: 0 }}>Select a carrier first.</p>
               )}
             </div>
 
             {/* Invoice ref manual override */}
             {!colMap.invoice_ref && (
               <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '170px 1fr', gap: 10, alignItems: 'center' }}>
-                <label style={{ fontSize: 12, color: '#888' }}>
+                <label style={{ fontSize: 12, color: '#64748B' }}>
                   Invoice Ref (manual)
-                  <span style={{ color: '#555', fontSize: 10, display: 'block' }}>If not in CSV</span>
+                  <span style={{ color: '#64748B', fontSize: 10, display: 'block' }}>If not in CSV</span>
                 </label>
                 <input
                   style={inputSt}
@@ -1178,21 +1178,21 @@ function UploadModal({ couriers, onClose, onSuccess }) {
 
             {/* Preview */}
             {csvRows[0] && colMap.tracking_number && (
-              <div style={{ marginTop: 14, ...card, fontSize: 11, color: '#888' }}>
+              <div style={{ marginTop: 14, ...card, fontSize: 11, color: '#64748B' }}>
                 <div style={{ color: '#00C853', fontWeight: 700, marginBottom: 8 }}>Preview — first row</div>
-                <div>Tracking: <span style={{ color: '#E6EDF3' }}>{csvRows[0][colMap.tracking_number]}</span></div>
-                {colMap.service_code   && <div>Service code: <span style={{ color: '#E6EDF3' }}>{csvRows[0][colMap.service_code]}</span></div>}
-                {colMap.carrier_amount && <div>Amount: <span style={{ color: '#E6EDF3' }}>£{parseFloat(csvRows[0][colMap.carrier_amount] || 0).toFixed(2)}</span></div>}
-                {inferredRef           && <div>Invoice ref: <span style={{ color: '#E6EDF3' }}>{inferredRef}</span></div>}
-                {inferredDate          && <div>Invoice date: <span style={{ color: '#E6EDF3' }}>{inferredDate}</span></div>}
+                <div>Tracking: <span style={{ color: '#0F172A' }}>{csvRows[0][colMap.tracking_number]}</span></div>
+                {colMap.service_code   && <div>Service code: <span style={{ color: '#0F172A' }}>{csvRows[0][colMap.service_code]}</span></div>}
+                {colMap.carrier_amount && <div>Amount: <span style={{ color: '#0F172A' }}>£{parseFloat(csvRows[0][colMap.carrier_amount] || 0).toFixed(2)}</span></div>}
+                {inferredRef           && <div>Invoice ref: <span style={{ color: '#0F172A' }}>{inferredRef}</span></div>}
+                {inferredDate          && <div>Invoice date: <span style={{ color: '#0F172A' }}>{inferredDate}</span></div>}
               </div>
             )}
 
             {/* Save profile section */}
             <div style={{
               marginTop: 20, padding: '14px 16px', borderRadius: 8,
-              background: showSaveSection ? 'rgba(0,200,83,0.06)' : 'rgba(255,255,255,0.02)',
-              border: `1px solid ${showSaveSection ? 'rgba(0,200,83,0.25)' : 'rgba(255,255,255,0.06)'}`,
+              background: showSaveSection ? 'rgba(0,200,83,0.06)' : 'rgba(0,0,0,0.02)',
+              border: `1px solid ${showSaveSection ? 'rgba(0,200,83,0.25)' : 'rgba(0,0,0,0.06)'}`,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1200,7 +1200,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                   <span style={{ fontSize: 13, fontWeight: 600, color: showSaveSection ? '#00C853' : '#AAA' }}>
                     {loadedProfileId ? 'Update saved profile' : 'Save as column profile'}
                   </span>
-                  <span style={{ fontSize: 11, color: '#555' }}>
+                  <span style={{ fontSize: 11, color: '#64748B' }}>
                     — reuse this mapping on future runs
                   </span>
                 </div>
@@ -1230,7 +1230,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                       {loadedProfileId ? 'Update' : 'Save'}
                     </button>
                   </div>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: '#888' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: '#64748B' }}>
                     <input
                       type='checkbox'
                       checked={saveAsDefault}
@@ -1238,7 +1238,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                       style={{ accentColor: '#00C853' }}
                     />
                     Set as default profile for {couriers.find(c => String(c.id) === String(carrierId))?.name || 'this carrier'}
-                    <span style={{ fontSize: 11, color: '#555' }}>(auto-applies on future uploads)</span>
+                    <span style={{ fontSize: 11, color: '#64748B' }}>(auto-applies on future uploads)</span>
                   </label>
                 </div>
               )}
@@ -1272,10 +1272,10 @@ function UploadModal({ couriers, onClose, onSuccess }) {
             <div>
               <div style={{ ...card, marginBottom: 16 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 12 }}>
-                  <div><span style={{ color: '#888' }}>Carrier:</span> <span style={{ color: '#E6EDF3' }}>{couriers.find(c => String(c.id) === String(carrierId))?.name}</span></div>
-                  <div><span style={{ color: '#888' }}>Invoice Ref:</span> <span style={{ color: '#E6EDF3' }}>{effectiveRef || <em style={{ color: '#555' }}>None</em>}</span></div>
-                  <div><span style={{ color: '#888' }}>Invoice Date:</span> <span style={{ color: '#E6EDF3' }}>{effectiveDate || '—'}</span></div>
-                  <div><span style={{ color: '#888' }}>Total lines:</span> <span style={{ color: '#00C853', fontWeight: 700 }}>{lines.length}</span></div>
+                  <div><span style={{ color: '#64748B' }}>Carrier:</span> <span style={{ color: '#0F172A' }}>{couriers.find(c => String(c.id) === String(carrierId))?.name}</span></div>
+                  <div><span style={{ color: '#64748B' }}>Invoice Ref:</span> <span style={{ color: '#0F172A' }}>{effectiveRef || <em style={{ color: '#64748B' }}>None</em>}</span></div>
+                  <div><span style={{ color: '#64748B' }}>Invoice Date:</span> <span style={{ color: '#0F172A' }}>{effectiveDate || '—'}</span></div>
+                  <div><span style={{ color: '#64748B' }}>Total lines:</span> <span style={{ color: '#00C853', fontWeight: 700 }}>{lines.length}</span></div>
                 </div>
               </div>
 
@@ -1287,7 +1287,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                   borderColor: unmatchedSurchargeCols.length > 0
                     ? 'rgba(255,170,0,0.4)' : 'rgba(0,200,83,0.25)',
                 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#888', marginBottom: 8, letterSpacing: '0.05em' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', marginBottom: 8, letterSpacing: '0.05em' }}>
                     SURCHARGE COLUMN CHECK
                   </div>
                   {surchargeColDiag.map(d => (
@@ -1298,10 +1298,10 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                           background: d.matched ? '#00C853' : '#FF5252',
                         }} />
                         <span style={{ color: d.matched ? '#CCC' : '#FF5252', fontFamily: 'monospace' }}>
-                          {d.col || <em style={{ color: '#555' }}>no column</em>}
+                          {d.col || <em style={{ color: '#64748B' }}>no column</em>}
                         </span>
                         {d.matched && d.actualHeader && d.actualHeader !== d.col.toLowerCase().trim() && (
-                          <span style={{ color: '#888', fontSize: 11 }}>
+                          <span style={{ color: '#64748B', fontSize: 11 }}>
                             → matched as <span style={{ fontFamily: 'monospace', color: '#00C853' }}>{d.actualHeader}</span>
                           </span>
                         )}
@@ -1309,7 +1309,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                           <span style={{ color: '#00C853', fontSize: 11 }}>✓</span>
                         )}
                         {!d.matched && d.col && (
-                          <span style={{ color: '#888', fontSize: 11 }}>— not found in this CSV</span>
+                          <span style={{ color: '#64748B', fontSize: 11 }}>— not found in this CSV</span>
                         )}
                       </div>
                     </div>
@@ -1333,7 +1333,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                 </div>
               )}
 
-              <p style={{ fontSize: 12, color: '#888' }}>
+              <p style={{ fontSize: 12, color: '#64748B' }}>
                 The engine will process all {lines.length} lines automatically. Lines that can't be resolved will be flagged for your review.
               </p>
             </div>
@@ -1406,9 +1406,9 @@ function StartRunButton({ carrierId, invoiceRef, invoiceDate, lines, onSuccess, 
           <AlertTriangle size={14} /> Duplicate invoice detected
         </div>
         <div style={{ color: '#CCC', lineHeight: 1.6 }}>
-          Invoice <span style={{ color: '#E6EDF3', fontWeight: 600 }}>{invoiceRef}</span> was
+          Invoice <span style={{ color: '#0F172A', fontWeight: 600 }}>{invoiceRef}</span> was
           already imported as{' '}
-          <span style={{ color: '#E6EDF3', fontWeight: 600 }}>Run #{ex.id}</span>
+          <span style={{ color: '#0F172A', fontWeight: 600 }}>Run #{ex.id}</span>
           {exDate && <> ({exDate})</>}
           {' '}— {ex.total_lines?.toLocaleString()} lines, status:{' '}
           <span style={{ color: ex.status === 'completed' ? '#00C853' : '#FF8F00', fontWeight: 600 }}>{ex.status}</span>.
@@ -1528,20 +1528,20 @@ export default function ReconciliationPage() {
           `}</style>
           <div style={{
             width: 56, height: 56, borderRadius: '50%',
-            border: '4px solid rgba(255,255,255,0.1)',
+            border: '4px solid rgba(0,0,0,0.08)',
             borderTopColor: '#3FB950',
             animation: 'recon-spin 0.9s linear infinite',
           }} />
-          <div style={{ color: '#E6EDF3', fontSize: 16, fontWeight: 600 }}>Processing invoice…</div>
-          <div style={{ color: '#888', fontSize: 13 }}>Matching {' '}lines against your verified shipments</div>
+          <div style={{ color: '#0F172A', fontSize: 16, fontWeight: 600 }}>Processing invoice…</div>
+          <div style={{ color: '#64748B', fontSize: 13 }}>Matching {' '}lines against your verified shipments</div>
         </div>
       )}
 
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: '#E6EDF3', margin: 0 }}>Invoice Reconciliation</h1>
-          <p style={{ fontSize: 13, color: '#888', marginTop: 4 }}>Automated courier invoice matching engine</p>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: '#0F172A', margin: 0 }}>Invoice Reconciliation</h1>
+          <p style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>Automated courier invoice matching engine</p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button style={btnGhost} onClick={() => navigate('/reconciliation/margin-report')}>
@@ -1570,7 +1570,7 @@ export default function ReconciliationPage() {
           <div key={label} style={{ ...card }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
-                <div style={{ fontSize: 11, color: '#666', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>{label}</div>
+                <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>{label}</div>
                 <div style={{ fontSize: 26, fontWeight: 800, color }}>{value}</div>
               </div>
               <Icon size={18} color='#333' />
@@ -1581,20 +1581,20 @@ export default function ReconciliationPage() {
 
       {/* Runs table */}
       <div style={card}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#E6EDF3', marginBottom: 16 }}>All Runs</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', marginBottom: 16 }}>All Runs</div>
 
         {runsLoading ? (
-          <div style={{ color: '#666', fontSize: 13, padding: '20px 0' }}>Loading…</div>
+          <div style={{ color: '#64748B', fontSize: 13, padding: '20px 0' }}>Loading…</div>
         ) : runs.length === 0 ? (
-          <div style={{ textAlign: 'center', color: '#555', fontSize: 13, padding: '40px 0' }}>
+          <div style={{ textAlign: 'center', color: '#64748B', fontSize: 13, padding: '40px 0' }}>
             No reconciliation runs yet. Upload a carrier invoice CSV to get started.
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+              <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
                 {['Carrier', 'Invoice Ref', 'Date', 'Lines', 'Matched', 'Corrected', 'Unmatched', 'Automation', 'Status', ''].map(h => (
-                  <th key={h} style={{ padding: '8px 10px', textAlign: 'left', color: '#555', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 10px', textAlign: 'left', color: '#64748B', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -1603,21 +1603,21 @@ export default function ReconciliationPage() {
                 <tr
                   key={run.id}
                   onClick={() => navigate(`/reconciliation/${run.id}`)}
-                  style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
+                  style={{ borderBottom: '1px solid rgba(0,0,0,0.03)', cursor: 'pointer' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
-                  <td style={{ padding: '10px 10px', color: '#E6EDF3', fontWeight: 600 }}>{run.carrier_name || '—'}</td>
+                  <td style={{ padding: '10px 10px', color: '#0F172A', fontWeight: 600 }}>{run.carrier_name || '—'}</td>
                   <td style={{ padding: '10px 10px', color: '#AAA' }}>{run.invoice_ref || '—'}</td>
-                  <td style={{ padding: '10px 10px', color: '#888' }}>{run.invoice_date ? new Date(run.invoice_date).toLocaleDateString('en-GB') : '—'}</td>
-                  <td style={{ padding: '10px 10px', color: '#E6EDF3' }}>{(run.total_lines || 0).toLocaleString()}</td>
+                  <td style={{ padding: '10px 10px', color: '#64748B' }}>{run.invoice_date ? new Date(run.invoice_date).toLocaleDateString('en-GB') : '—'}</td>
+                  <td style={{ padding: '10px 10px', color: '#0F172A' }}>{(run.total_lines || 0).toLocaleString()}</td>
                   <td style={{ padding: '10px 10px', color: '#00C853' }}>{run.matched_count || 0}</td>
                   <td style={{ padding: '10px 10px', color: '#79AAFF' }}>{run.corrected_count || 0}</td>
                   <td style={{ padding: '10px 10px', color: (run.unmatched_count || 0) > 0 ? '#FFB300' : '#555' }}>
                     {run.unmatched_count || 0}
                   </td>
                   <td style={{ padding: '10px 10px', minWidth: 100 }}>
-                    {run.automation_rate != null ? <AutoBar rate={run.automation_rate} /> : <span style={{ color: '#555' }}>—</span>}
+                    {run.automation_rate != null ? <AutoBar rate={run.automation_rate} /> : <span style={{ color: '#64748B' }}>—</span>}
                   </td>
                   <td style={{ padding: '10px 10px' }}><StatusBadge status={run.status} /></td>
                   <td style={{ padding: '10px 10px' }} onClick={e => e.stopPropagation()}>
@@ -1640,7 +1640,7 @@ export default function ReconciliationPage() {
                         </div>
                       ) : (
                         <button
-                          style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', padding: '2px 4px', borderRadius: 4 }}
+                          style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', padding: '2px 4px', borderRadius: 4 }}
                           title='Delete this run'
                           onClick={e => handleDeleteRun(e, run.id)}
                           onMouseEnter={e => e.currentTarget.style.color = '#FF5252'}

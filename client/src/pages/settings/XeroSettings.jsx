@@ -61,7 +61,7 @@ function ContactSearch({ customerId, onLink, onClose }) {
     <div style={{ position: 'relative' }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 6,
-        background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)',
+        background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.12)',
         borderRadius: 7, padding: '5px 10px',
       }}>
         <Search size={12} color="#888" />
@@ -74,7 +74,7 @@ function ContactSearch({ customerId, onLink, onClose }) {
         />
         {searching
           ? <RefreshCw size={11} color="#666" style={{ animation: 'spin 1s linear infinite', flexShrink: 0 }} />
-          : <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#555', padding: 0, flexShrink: 0 }}>
+          : <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: 0, flexShrink: 0 }}>
               <X size={13} />
             </button>
         }
@@ -82,7 +82,7 @@ function ContactSearch({ customerId, onLink, onClose }) {
       {results.length > 0 && (
         <div style={{
           position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 200,
-          background: '#1A1B3A', border: '1px solid rgba(255,255,255,0.12)',
+          background: '#1A1B3A', border: '1px solid rgba(0,0,0,0.10)',
           borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
           maxHeight: 220, overflowY: 'auto',
         }}>
@@ -93,13 +93,13 @@ function ContactSearch({ customerId, onLink, onClose }) {
               style={{
                 width: '100%', textAlign: 'left', background: 'none', border: 'none',
                 padding: '8px 12px', cursor: 'pointer', color: '#CCC', fontSize: 12,
-                borderBottom: '1px solid rgba(255,255,255,0.05)',
+                borderBottom: '1px solid rgba(0,0,0,0.04)',
               }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.04)'}
               onMouseLeave={e => e.currentTarget.style.background = 'none'}
             >
               <div style={{ fontWeight: 600 }}>{c.name}</div>
-              {c.email && <div style={{ color: '#666', fontSize: 11 }}>{c.email}</div>}
+              {c.email && <div style={{ color: '#64748B', fontSize: 11 }}>{c.email}</div>}
             </button>
           ))}
         </div>
@@ -132,8 +132,8 @@ function CustomerRow({ customer, suggestion, onLink, onUnlink, linking, unlinkin
         {/* Arrow + Xero name */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <ChevronRight size={13} color="#444" />
-          <span style={{ fontSize: 12, color: '#888', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {customer.xero_contact_name || <span style={{ color: '#555', fontFamily: 'monospace' }}>{customer.xero_contact_id?.slice(0, 8)}…</span>}
+          <span style={{ fontSize: 12, color: '#64748B', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {customer.xero_contact_name || <span style={{ color: '#64748B', fontFamily: 'monospace' }}>{customer.xero_contact_id?.slice(0, 8)}…</span>}
           </span>
           <button
             onClick={onUnlink}
@@ -158,7 +158,7 @@ function CustomerRow({ customer, suggestion, onLink, onUnlink, linking, unlinkin
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       padding: '9px 14px', borderRadius: 8,
-      background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.05)',
+      background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(0,0,0,0.04)',
       gap: 12,
     }}>
       {/* Our name */}
@@ -201,7 +201,7 @@ function CustomerRow({ customer, suggestion, onLink, onUnlink, linking, unlinkin
               onClick={() => setShowSearch(true)}
               title="Search manually"
               style={{
-                background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+                background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)',
                 color: '#777', borderRadius: 6, padding: '3px 8px', fontSize: 11,
                 cursor: 'pointer',
               }}
@@ -214,8 +214,8 @@ function CustomerRow({ customer, suggestion, onLink, onUnlink, linking, unlinkin
             onClick={() => setShowSearch(true)}
             style={{
               display: 'flex', alignItems: 'center', gap: 5,
-              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-              color: '#888', borderRadius: 6, padding: '4px 10px', fontSize: 11,
+              background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)',
+              color: '#64748B', borderRadius: 6, padding: '4px 10px', fontSize: 11,
               cursor: 'pointer', fontWeight: 600,
             }}
           >
@@ -232,7 +232,7 @@ function ConnectionPanel({ status, onDisconnect, disconnecting }) {
   const connected = status?.connected;
   return (
     <div style={{
-      background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
+      background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.07)',
       borderRadius: 12, padding: '20px 24px', marginBottom: 20,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -278,23 +278,23 @@ function ConnectionPanel({ status, onDisconnect, disconnecting }) {
           border: '1px solid rgba(19,181,234,0.15)',
           display: 'flex', gap: 24, fontSize: 12,
         }}>
-          <span><span style={{ color: '#888' }}>Organisation: </span><span style={{ color: '#CCC', fontWeight: 600 }}>{status.tenant_name}</span></span>
-          <span><span style={{ color: '#888' }}>Tenant ID: </span><span style={{ color: '#777', fontFamily: 'monospace' }}>{status.tenant_id?.slice(0, 8)}…</span></span>
+          <span><span style={{ color: '#64748B' }}>Organisation: </span><span style={{ color: '#CCC', fontWeight: 600 }}>{status.tenant_name}</span></span>
+          <span><span style={{ color: '#64748B' }}>Tenant ID: </span><span style={{ color: '#777', fontFamily: 'monospace' }}>{status.tenant_id?.slice(0, 8)}…</span></span>
         </div>
       )}
 
       {!connected && (
-        <div style={{ marginTop: 14, fontSize: 12, color: '#666', lineHeight: 1.6 }}>
+        <div style={{ marginTop: 14, fontSize: 12, color: '#64748B', lineHeight: 1.6 }}>
           Create a Xero app at{' '}
           <a href="https://developer.xero.com/app/manage" target="_blank" rel="noopener noreferrer" style={{ color: '#13B5EA' }}>
             developer.xero.com/app/manage
           </a>
           {' '}with redirect URI{' '}
-          <code style={{ color: '#AAA', background: 'rgba(255,255,255,0.06)', padding: '1px 5px', borderRadius: 4 }}>
+          <code style={{ color: '#AAA', background: 'rgba(0,0,0,0.06)', padding: '1px 5px', borderRadius: 4 }}>
             {window.location.origin}/api/xero/callback
           </code>.
-          Then add <code style={{ color: '#AAA', background: 'rgba(255,255,255,0.06)', padding: '1px 5px', borderRadius: 4 }}>XERO_CLIENT_ID</code>{' '}
-          and <code style={{ color: '#AAA', background: 'rgba(255,255,255,0.06)', padding: '1px 5px', borderRadius: 4 }}>XERO_CLIENT_SECRET</code>{' '}
+          Then add <code style={{ color: '#AAA', background: 'rgba(0,0,0,0.06)', padding: '1px 5px', borderRadius: 4 }}>XERO_CLIENT_ID</code>{' '}
+          and <code style={{ color: '#AAA', background: 'rgba(0,0,0,0.06)', padding: '1px 5px', borderRadius: 4 }}>XERO_CLIENT_SECRET</code>{' '}
           to your Railway environment variables.
         </div>
       )}
@@ -354,19 +354,19 @@ function CustomerMatchingPanel({ connected }) {
 
   return (
     <div style={{
-      background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
+      background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.07)',
       borderRadius: 12, padding: '20px 24px',
     }}>
       {/* Header row */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
           <div style={{ fontWeight: 700, fontSize: 14, color: '#EEE' }}>Customer matching</div>
-          <div style={{ fontSize: 12, color: '#666', marginTop: 3 }}>
+          <div style={{ fontSize: 12, color: '#64748B', marginTop: 3 }}>
             <span style={{ color: '#00C853', fontWeight: 600 }}>{linked.length} linked</span>
             {' / '}
             <span style={{ color: unlinked.length > 0 ? '#EF4444' : '#666', fontWeight: 600 }}>{unlinked.length} unlinked</span>
             {' of '}{customers.length}
-            {isFetching && <span style={{ color: '#555', marginLeft: 8 }}>refreshing…</span>}
+            {isFetching && <span style={{ color: '#64748B', marginLeft: 8 }}>refreshing…</span>}
           </div>
         </div>
         <button
@@ -411,14 +411,14 @@ function CustomerMatchingPanel({ connected }) {
       )}
 
       {/* Legend */}
-      <div style={{ fontSize: 11, color: '#555', marginBottom: 10, display: 'flex', gap: 16 }}>
+      <div style={{ fontSize: 11, color: '#64748B', marginBottom: 10, display: 'flex', gap: 16 }}>
         <span>Confidence: <span style={{ color: '#00C853' }}>≥80% auto-accepted</span></span>
         <span><span style={{ color: '#FFC107' }}>50–79%</span> needs review</span>
         <span><span style={{ color: '#777' }}>&lt;50%</span> search manually</span>
       </div>
 
       {/* Filter tabs */}
-      <div style={{ display: 'flex', gap: 0, marginBottom: 12, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <div style={{ display: 'flex', gap: 0, marginBottom: 12, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
         {[['all', 'All'], ['linked', 'Linked'], ['unlinked', 'Unlinked']].map(([val, label]) => (
           <button
             key={val}
@@ -445,7 +445,7 @@ function CustomerMatchingPanel({ connected }) {
 
       {/* Customer list */}
       {isLoading ? (
-        <div style={{ color: '#666', fontSize: 13, padding: 16 }}>Loading customers…</div>
+        <div style={{ color: '#64748B', fontSize: 13, padding: 16 }}>Loading customers…</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {visible.map(c => (
@@ -460,7 +460,7 @@ function CustomerMatchingPanel({ connected }) {
             />
           ))}
           {visible.length === 0 && (
-            <div style={{ color: '#555', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>
+            <div style={{ color: '#64748B', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>
               {filter === 'unlinked' ? 'All customers are linked to Xero.' : 'No customers found.'}
             </div>
           )}
