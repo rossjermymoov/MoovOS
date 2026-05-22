@@ -26,23 +26,24 @@ const api = axios.create({ baseURL: '/api' });
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const C = {
-  bg:       '#0D1117',
-  surface:  '#161B22',
-  card:     '#1C2128',
-  hover:    '#21262D',
-  border:   'rgba(255,255,255,0.08)',
-  green:    '#3FB950',
-  amber:    '#D29922',
-  red:      '#F85149',
-  blue:     '#58A6FF',
-  purple:   '#BC8CFF',
-  text:     '#E6EDF3',
-  sub:      '#C9D1D9',
-  muted:    '#7D8590',
-  greenDim: 'rgba(63,185,80,0.12)',
-  amberDim: 'rgba(210,153,34,0.12)',
-  redDim:   'rgba(248,81,73,0.12)',
-  blueDim:  'rgba(88,166,255,0.12)',
+  bg:       '#080F1C',
+  header:   '#09122A',
+  surface:  '#0D1827',
+  card:     '#111F32',
+  hover:    '#152035',
+  border:   'rgba(255,255,255,0.07)',
+  green:    '#22C55E',
+  amber:    '#F97316',
+  red:      '#EF4444',
+  blue:     '#3B82F6',
+  purple:   '#A855F7',
+  text:     '#F0F4FC',
+  sub:      '#8AABFF',
+  muted:    '#3D5270',
+  greenDim: 'rgba(34,197,94,0.12)',
+  amberDim: 'rgba(249,115,22,0.12)',
+  redDim:   'rgba(239,68,68,0.12)',
+  blueDim:  'rgba(59,130,246,0.13)',
 };
 
 // ─── Config maps ──────────────────────────────────────────────────────────────
@@ -237,24 +238,42 @@ function MessageBubble({ email, queryId, courierName, courierCode, approving, on
   const isNote    = dir === 'note';
 
   // Bubble styling
-  let bubbleBg, bubbleBorder, accentColor, bubbleRadius, maxW, align;
+  let bubbleBg, bubbleBorderStyle, accentColor, bubbleRadius, maxW, align;
   if (isNote) {
-    bubbleBg = 'rgba(210,153,34,0.07)'; bubbleBorder = `1px dashed ${C.amber}44`;
-    accentColor = C.amber; bubbleRadius = 8; maxW = '100%'; align = 'center';
+    bubbleBg = 'rgba(234,179,8,0.07)';
+    bubbleBorderStyle = `1px solid rgba(234,179,8,0.18)`;
+    accentColor = '#EAB308';
+    bubbleRadius = 8;
+    align = 'center';
+    maxW = '100%';
   } else if (dir === 'inbound_customer') {
-    bubbleBg = C.card; bubbleBorder = `1px solid ${C.border}`;
-    accentColor = C.blue; bubbleRadius = '2px 12px 12px 12px'; maxW = '76%'; align = 'flex-start';
+    bubbleBg = '#111F32';
+    bubbleBorderStyle = `1px solid rgba(255,255,255,0.07)`;
+    accentColor = C.blue;
+    bubbleRadius = '2px 10px 10px 10px';
+    align = 'left';
+    maxW = '76%';
   } else if (dir === 'outbound_customer') {
-    bubbleBg = isDraft ? `${C.green}08` : 'rgba(88,166,255,0.08)';
-    bubbleBorder = isDraft ? `1px solid ${C.green}33` : `1px solid ${C.blue}33`;
-    accentColor = isDraft ? C.green : C.blue; bubbleRadius = '12px 2px 12px 12px'; maxW = '76%'; align = 'flex-end';
+    bubbleBg = isDraft ? 'rgba(34,197,94,0.08)' : 'rgba(59,130,246,0.13)';
+    bubbleBorderStyle = isDraft ? `1px solid rgba(34,197,94,0.25)` : `1px solid rgba(59,130,246,0.2)`;
+    accentColor = isDraft ? C.green : C.blue;
+    bubbleRadius = '10px 2px 10px 10px';
+    align = 'right';
+    maxW = '76%';
   } else if (dir === 'inbound_courier') {
-    bubbleBg = C.card; bubbleBorder = `1px solid ${C.amber}33`;
-    accentColor = C.amber; bubbleRadius = '2px 12px 12px 12px'; maxW = '76%'; align = 'flex-start';
-  } else { // outbound_courier
-    bubbleBg = isDraft ? `${C.green}08` : 'rgba(210,153,34,0.08)';
-    bubbleBorder = isDraft ? `1px solid ${C.green}33` : `1px solid ${C.amber}33`;
-    accentColor = isDraft ? C.green : C.amber; bubbleRadius = '12px 2px 12px 12px'; maxW = '76%'; align = 'flex-end';
+    bubbleBg = '#111F32';
+    bubbleBorderStyle = `1px solid rgba(249,115,22,0.2)`;
+    accentColor = C.amber;
+    bubbleRadius = '2px 10px 10px 10px';
+    align = 'left';
+    maxW = '76%';
+  } else {
+    bubbleBg = 'rgba(249,115,22,0.10)';
+    bubbleBorderStyle = `1px solid rgba(249,115,22,0.18)`;
+    accentColor = C.amber;
+    bubbleRadius = '10px 2px 10px 10px';
+    align = 'right';
+    maxW = '76%';
   }
 
   const logoUrl = isCourier && courierCode ? getCourierLogo(courierCode) : null;
@@ -308,7 +327,7 @@ function MessageBubble({ email, queryId, courierName, courierCode, approving, on
   const busy = localApproving || approving;
 
   return (
-    <div style={{ display: 'flex', justifyContent: align, marginBottom: 10 }}>
+    <div style={{ display: 'flex', justifyContent: align === 'right' ? 'flex-end' : align === 'center' ? 'center' : 'flex-start', marginBottom: 10 }}>
       <div style={{ maxWidth: maxW, minWidth: isNote ? 0 : 200, width: isNote ? '100%' : undefined }}>
 
         {/* Sender + time */}
@@ -332,8 +351,8 @@ function MessageBubble({ email, queryId, courierName, courierCode, approving, on
         {/* Bubble */}
         <div style={{
           background: bubbleBg,
-          border: isNote ? `1px dashed ${C.amber}44` : bubbleBorder,
-          borderLeft: isNote ? `3px solid ${C.amber}` : undefined,
+          border: bubbleBorderStyle,
+          borderLeft: isNote ? `3px solid rgba(234,179,8,0.5)` : undefined,
           borderRadius: bubbleRadius,
           overflow: 'hidden',
           cursor: 'pointer',
@@ -622,7 +641,7 @@ function UnifiedComposeBar({ queryId, courierName, onSent }) {
   }
 
   return (
-    <div style={{ flexShrink: 0, borderTop: `1px solid ${C.border}`, background: C.surface }}>
+    <div style={{ flexShrink: 0, borderTop: `1px solid ${C.border}`, background: '#080F1E' }}>
       {/* Tab bar */}
       <div style={{ display: 'flex', borderBottom: active ? `1px solid ${C.border}` : 'none' }}>
         {tabs.map(t => (
@@ -685,9 +704,9 @@ function UnifiedComposeBar({ queryId, courierName, onSent }) {
               <button onClick={generateDraft} disabled={generating}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 5,
-                  background: generating ? `${C.blue}08` : `${C.blue}12`,
-                  border: `1px solid ${C.blue}33`, borderRadius: 5,
-                  color: generating ? C.muted : C.blue,
+                  background: generating ? 'rgba(168,85,247,0.08)' : 'rgba(168,85,247,0.15)',
+                  border: '1px solid rgba(168,85,247,0.3)', borderRadius: 5,
+                  color: generating ? C.muted : '#C4B5FD',
                   fontSize: 11, fontWeight: 600, padding: '5px 12px',
                   cursor: generating ? 'not-allowed' : 'pointer',
                 }}>
@@ -704,7 +723,7 @@ function UnifiedComposeBar({ queryId, courierName, onSent }) {
                 display: 'flex', alignItems: 'center', gap: 6,
                 background: sending || !text.trim() ? `${accent}10` : `${accent}1A`,
                 border: `1px solid ${accent}55`, borderRadius: 6,
-                color: text.trim() ? accent : C.muted,
+                color: text.trim() ? '#3B82F6' : C.muted,
                 fontSize: 12, fontWeight: 700, padding: '6px 18px',
                 cursor: sending || !text.trim() ? 'not-allowed' : 'pointer',
                 transition: 'all 0.1s',
@@ -807,54 +826,73 @@ export default function TicketDetailPage() {
   return (
     <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden' }}>
 
-      {/* ── Top bar ─────────────────────────────────────────────── */}
-      <div style={{
-        flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12,
-        padding: '10px 18px', background: C.surface, borderBottom: `1px solid ${C.border}`,
-      }}>
-        <button onClick={() => navigate('/queries')} style={{
-          display: 'flex', alignItems: 'center', gap: 5,
-          background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 12, padding: 0,
-        }}
-          onMouseEnter={e => e.currentTarget.style.color = C.text}
-          onMouseLeave={e => e.currentTarget.style.color = C.muted}
-        >
-          <ArrowLeft size={13} /> All Tickets
-        </button>
-        <div style={{ width: 1, height: 14, background: C.border }} />
-        {ticket.ticket_number && (
-          <span style={{ fontSize: 12, fontWeight: 700, color: C.muted, fontFamily: 'monospace' }}>
-            #{ticket.ticket_number}
+      {/* ── Header ── */}
+      <div style={{ flexShrink: 0, background: C.header, borderBottom: `1px solid ${C.border}` }}>
+        {/* Row 1: back · customer name · type badge · status */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px 8px' }}>
+          <button onClick={() => navigate('/queries')} style={{
+            width: 26, height: 26, borderRadius: 6, border: 'none',
+            background: 'rgba(255,255,255,0.06)', color: C.sub,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', flexShrink: 0,
+          }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.12)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
+          >
+            <ArrowLeft size={13} />
+          </button>
+          <span style={{ fontSize: 17, fontWeight: 800, color: C.text, letterSpacing: '-0.02em',
+            flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {ticket.customer_name || ticket.subject}
           </span>
-        )}
-        <span style={{ flex: 1, fontSize: 14, fontWeight: 700, color: C.text,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {ticket.customer_name || ticket.subject}
-        </span>
-        <span style={{ fontSize: 11, fontWeight: 700, color: priority.color,
-          background: `${priority.color}18`, border: `1px solid ${priority.color}30`,
-          padding: '2px 8px', borderRadius: 4, flexShrink: 0 }}>
-          {priority.label}
-        </span>
-        <span style={{ fontSize: 11, fontWeight: 700, color: status.color,
-          background: `${status.color}18`, border: `1px solid ${status.color}30`,
-          padding: '2px 8px', borderRadius: 4, flexShrink: 0 }}>
-          {status.label}
-        </span>
-        {consignment && (
-          <a
-            href={`/tracking?q=${encodeURIComponent(consignment)}`}
-            onClick={e => { e.preventDefault(); navigate(`/tracking?q=${encodeURIComponent(consignment)}`); }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 5,
-              padding: '4px 10px', borderRadius: 5,
-              border: `1px solid ${C.border}`, background: 'transparent',
-              color: C.muted, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-              textDecoration: 'none', flexShrink: 0,
-            }}>
-            <Truck size={11} /> Track
-          </a>
-        )}
+          {ticket.query_type && (
+            <span style={{ fontSize: 11, fontWeight: 700, color: C.amber,
+              background: C.amberDim, border: `1px solid ${C.amber}33`,
+              padding: '3px 10px', borderRadius: 5, flexShrink: 0,
+              textTransform: 'capitalize', letterSpacing: '0.01em' }}>
+              {ticket.query_type.replace(/_/g, ' ')}
+            </span>
+          )}
+          <span style={{ fontSize: 11, fontWeight: 700, color: status.color,
+            background: `${status.color}18`, border: `1px solid ${status.color}33`,
+            padding: '3px 10px', borderRadius: 5, flexShrink: 0, marginLeft: 'auto' }}>
+            {status.label}
+          </span>
+        </div>
+        {/* Row 2: courier logo · consignment · parcel status · divider · ticket# */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px 10px', paddingLeft: 52 }}>
+          {courierLogo && (
+            <div style={{ background: '#fff', borderRadius: 3, padding: '2px 5px', display: 'flex', alignItems: 'center', height: 18 }}>
+              <img src={courierLogo} alt="" style={{ height: 12, objectFit: 'contain' }} />
+            </div>
+          )}
+          {consignment && (
+            <span style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: 700,
+              background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 6, padding: '2px 8px', color: '#6A8BAA', letterSpacing: '0.03em' }}>
+              {consignment}
+            </span>
+          )}
+          {parcel?.status && (() => {
+            const ps = TRACK_STATUS[parcel.status] || TRACK_STATUS.unknown;
+            return (
+              <span style={{ fontSize: 12, fontWeight: 700, color: ps.color }}>{ps.label}</span>
+            );
+          })()}
+          {(consignment || courierLogo) && ticket.ticket_number && (
+            <div style={{ width: 1, height: 12, background: C.border, marginLeft: 2 }} />
+          )}
+          {ticket.ticket_number && (
+            <span style={{ fontSize: 11, color: C.muted, fontFamily: 'monospace', fontWeight: 700 }}>
+              #{ticket.ticket_number}
+            </span>
+          )}
+          {ticket.requires_attention && (
+            <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, color: C.red,
+              background: C.redDim, border: `1px solid ${C.red}33`,
+              padding: '2px 7px', borderRadius: 4 }}>⚠ NEEDS ATTENTION</span>
+          )}
+        </div>
       </div>
 
       {/* ── Body ─────────────────────────────────────────────────── */}
@@ -879,8 +917,8 @@ export default function TicketDetailPage() {
 
         {/* ── Right sidebar ─────────────────────────────────────── */}
         <div style={{
-          width: 280, flexShrink: 0,
-          background: C.surface, borderLeft: `1px solid ${C.border}`,
+          width: 196, flexShrink: 0,
+          background: C.bg, borderLeft: `1px solid ${C.border}`,
           overflowY: 'auto', padding: '14px 14px 32px',
         }}>
           {/* SLA */}
@@ -892,7 +930,7 @@ export default function TicketDetailPage() {
           {ticket.sla_due_at && <div style={{ marginBottom: 12 }} />}
 
           {/* Ticket section */}
-          <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
+          <div style={{ fontSize: 9, fontWeight: 700, color: '#1E3A5A', textTransform: 'uppercase',
             letterSpacing: '0.08em', marginBottom: 8 }}>Ticket</div>
 
           <PropRow icon={AlertTriangle} label="Priority">
@@ -957,7 +995,7 @@ export default function TicketDetailPage() {
           {/* Customer section */}
           {(ticket.customer_name || ticket.sender_email) && (
             <>
-              <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#1E3A5A', textTransform: 'uppercase',
                 letterSpacing: '0.08em', margin: '14px 0 8px' }}>Customer</div>
 
               {ticket.customer_name && (
@@ -982,7 +1020,7 @@ export default function TicketDetailPage() {
           {/* Parcel + tracking section */}
           {consignment && (
             <>
-              <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#1E3A5A', textTransform: 'uppercase',
                 letterSpacing: '0.08em', margin: '14px 0 8px' }}>
                 Parcel
                 <a
@@ -1043,7 +1081,7 @@ export default function TicketDetailPage() {
               {/* Mini tracking timeline */}
               {trackEvents.length > 0 && (
                 <>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
+                  <div style={{ fontSize: 9, fontWeight: 700, color: '#1E3A5A', textTransform: 'uppercase',
                     letterSpacing: '0.08em', margin: '12px 0 8px' }}>
                     Tracking ({trackEvents.length} events)
                   </div>

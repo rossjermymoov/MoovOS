@@ -23,23 +23,23 @@ const api = axios.create({ baseURL: '/api' });
 const _BUILD = '2026-05-21-v2'; // cache bust — queries detail redesign
 
 const C = {
-  bg:       '#0D1117',
-  surface:  '#161B22',
-  card:     '#1C2128',
-  hover:    '#21262D',
-  selected: '#1F2937',
-  border:   'rgba(255,255,255,0.08)',
-  green:    '#3FB950',
-  amber:    '#D29922',
-  red:      '#F85149',
-  blue:     '#58A6FF',
-  text:     '#E6EDF3',
-  sub:      '#C9D1D9',
-  muted:    '#7D8590',
-  greenDim: 'rgba(63,185,80,0.12)',
-  amberDim: 'rgba(210,153,34,0.12)',
-  redDim:   'rgba(248,81,73,0.12)',
-  blueDim:  'rgba(88,166,255,0.12)',
+  bg:       '#070E1C',
+  surface:  '#09122A',
+  card:     '#0B1628',
+  hover:    '#0F1E35',
+  selected: '#122040',
+  border:   'rgba(255,255,255,0.07)',
+  green:    '#22C55E',
+  amber:    '#F97316',
+  red:      '#EF4444',
+  blue:     '#3B82F6',
+  text:     '#F0F4FC',
+  sub:      '#8AABFF',
+  muted:    '#3D5270',
+  greenDim: 'rgba(34,197,94,0.12)',
+  amberDim: 'rgba(249,115,22,0.12)',
+  redDim:   'rgba(239,68,68,0.12)',
+  blueDim:  'rgba(59,130,246,0.13)',
 };
 
 const STATUS_CFG = {
@@ -377,10 +377,10 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   const unread         = parseInt(q.unread_emails) || 0;
   const hasNewReply    = q.has_new_reply;
 
-  const barColor = hasAttention   ? C.red
-                 : hasNewReply    ? C.blue
-                 : hasSlaBreached ? C.amber
-                 : PRIORITY_BAR[q.priority] || PRIORITY_BAR.medium;
+  const barColor = hasAttention   ? '#EF4444'
+                 : hasNewReply    ? '#3B82F6'
+                 : hasSlaBreached ? '#F97316'
+                 : PRIORITY_BAR[q.priority] || '#3B82F6';
 
   const logoUrl      = q.courier_code ? getCourierLogo(q.courier_code) : null;
   const statusCfg    = STATUS_CFG[q.status] || { label: q.status, color: C.muted };
@@ -422,14 +422,14 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
           display: 'flex', alignItems: 'stretch',
           cursor: 'pointer',
           borderBottom: `1px solid ${C.border}`,
-          background: hasNewReply ? 'rgba(88,166,255,0.04)' : 'transparent',
+          background: hasAttention ? `linear-gradient(90deg, rgba(239,68,68,0.07) 0%, transparent 340px)` : hasNewReply ? `rgba(59,130,246,0.04)` : 'transparent',
           transition: 'background 0.1s',
         }}
         onMouseOver={e => { e.currentTarget.style.background = C.hover; }}
-        onMouseOut={e => { e.currentTarget.style.background = hasNewReply ? 'rgba(88,166,255,0.04)' : 'transparent'; }}
+        onMouseOut={e => { e.currentTarget.style.background = hasAttention ? `linear-gradient(90deg, rgba(239,68,68,0.07) 0%, transparent 340px)` : hasNewReply ? `rgba(59,130,246,0.04)` : 'transparent'; }}
       >
         {/* Left accent bar */}
-        <div style={{ width: 4, flexShrink: 0, background: barColor, borderRadius: '2px 0 0 2px' }} />
+        <div style={{ width: 5, flexShrink: 0, background: barColor, borderRadius: '2px 0 0 2px' }} />
 
         {/* ── Main content ── */}
         <div style={{ flex: 1, minWidth: 0, padding: '12px 14px 11px 14px' }}>
@@ -437,8 +437,8 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
           {/* Row 1: customer name · topic · consignment · ticket# */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, overflow: 'hidden' }}>
             <span style={{
-              fontSize: 15, fontWeight: 800,
-              color: hasNewReply ? C.text : C.sub,
+              fontSize: 15, fontWeight: 800, letterSpacing: '-0.02em',
+              color: hasNewReply ? C.text : '#EEF2FA',
               flexShrink: 0, maxWidth: '36%',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
@@ -457,7 +457,11 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
                 <span style={{ color: C.muted, fontSize: 12, flexShrink: 0 }}>·</span>
                 <span style={{
                   fontSize: 12, fontFamily: 'monospace', fontWeight: 700,
-                  color: hasNewReply ? C.blue : '#8B96A3',
+                  color: '#6A8BAA',
+                  background: 'rgba(255,255,255,0.07)',
+                  border: '1px solid rgba(255,255,255,0.10)',
+                  borderRadius: 6,
+                  padding: '1px 6px',
                   flexShrink: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   letterSpacing: '0.01em',
                 }}>
@@ -1844,15 +1848,42 @@ export default function QueriesPage() {
               <div style={{ fontSize: 12, color: C.muted }}>Try a different filter or check back later</div>
             </div>
           )}
-          {queries.map(q => (
-            <InboxRow
-              key={q.id}
-              q={q}
-              onClick={() => navigate(`/queries/${q.id}`)}
-              staffList={staffList}
-              onUpdate={refresh}
-            />
+          {(() => {
+  const attention = queries.filter(q => q.requires_attention || q.has_new_reply);
+  const normal    = queries.filter(q => !q.requires_attention && !q.has_new_reply);
+  return (
+    <>
+      {attention.length > 0 && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8,
+            padding: '7px 16px 5px', background: '#08111F' }}>
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#EF4444', flexShrink: 0 }} />
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#2E4A6A', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              Needs attention · {attention.length}
+            </span>
+          </div>
+          {attention.map(q => (
+            <InboxRow key={q.id} q={q} onClick={() => navigate(`/queries/${q.id}`)} staffList={staffList} onUpdate={refresh} />
           ))}
+        </>
+      )}
+      {normal.length > 0 && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8,
+            padding: '7px 16px 5px', background: '#08111F' }}>
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#3B82F6', flexShrink: 0 }} />
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#2E4A6A', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              Open · {normal.length}
+            </span>
+          </div>
+          {normal.map(q => (
+            <InboxRow key={q.id} q={q} onClick={() => navigate(`/queries/${q.id}`)} staffList={staffList} onUpdate={refresh} />
+          ))}
+        </>
+      )}
+    </>
+  );
+})()}
         </div>
 
         {/* Right filter panel */}
