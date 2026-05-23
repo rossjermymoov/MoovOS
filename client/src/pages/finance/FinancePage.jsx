@@ -84,9 +84,9 @@ function BreakdownTooltip({ charge, mode, above = false }) {
       position: 'absolute',
       ...(above ? { bottom: 'calc(100% + 6px)' } : { top: 'calc(100% + 6px)' }),
       right: 0,
-      background: '#1A1B3A', border: `1px solid ${accentCol}44`,
+      background: '#FFFFFF', border: `1px solid rgba(0,0,0,0.12)`,
       borderRadius: 8, padding: '10px 14px', minWidth: 220, zIndex: 200,
-      boxShadow: '0 8px 24px rgba(0,0,0,0.6)', pointerEvents: 'none',
+      boxShadow: '0 4px 16px rgba(0,0,0,0.12)', pointerEvents: 'none',
       fontFamily: 'monospace', fontSize: 12,
     }}>
       {/* Base */}
@@ -104,7 +104,7 @@ function BreakdownTooltip({ charge, mode, above = false }) {
             <span style={{ color: '#64748B' }}>{l.name || (l.type === 'fuel' ? 'Fuel' : 'Surcharge')}</span>
             <span style={{ color: '#0F172A' }}>
               {l.cost_price == null && mode === 'cost'
-                ? <span style={{ color: '#64748B' }}>—</span>
+                ? <span style={{ color: '#94A3B8' }}>—</span>
                 : `£${val.toFixed(2)}`}
             </span>
           </div>
@@ -113,10 +113,10 @@ function BreakdownTooltip({ charge, mode, above = false }) {
       {/* Divider + total */}
       <div style={{
         display: 'flex', justifyContent: 'space-between', gap: 16,
-        marginTop: 6, paddingTop: 6, borderTop: `1px solid ${accentCol}33`,
+        marginTop: 6, paddingTop: 6, borderTop: `1px solid rgba(0,0,0,0.08)`,
         fontWeight: 700,
       }}>
-        <span style={{ color: '#64748B' }}>Total</span>
+        <span style={{ color: '#334155' }}>Total</span>
         <span style={{ color: accentCol }}>£{total.toFixed(2)}</span>
       </div>
     </div>
