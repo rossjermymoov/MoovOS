@@ -1549,12 +1549,12 @@ function CustomerLinesDrilldown({ runId, customerId }) {
     <tr><td colSpan={9} style={{ padding: '12px 16px', color: '#64748B', fontSize: 11 }}>No lines found</td></tr>
   );
 
-  const thStyle = { padding: '6px 10px', textAlign: 'left', color: '#475569', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', background: 'rgba(0,0,0,0.02)' };
-  const tdStyle = { padding: '7px 10px', fontSize: 11, borderBottom: '1px solid rgba(0,0,0,0.03)' };
+  const thStyle = { padding: '6px 10px', textAlign: 'left', color: '#475569', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', background: '#F1F5F9' };
+  const tdStyle = { padding: '7px 10px', fontSize: 11, borderBottom: '1px solid rgba(0,0,0,0.05)', color: '#0F172A' };
 
   return (
     <tr>
-      <td colSpan={9} style={{ padding: 0, background: 'rgba(0,0,0,0.25)' }}>
+      <td colSpan={9} style={{ padding: 0, background: '#F8FAFC', borderTop: '1px solid rgba(0,0,0,0.06)', borderBottom: '2px solid rgba(0,0,0,0.08)' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
