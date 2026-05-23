@@ -42,7 +42,7 @@ function Confirm({ message, onConfirm, onCancel }) {
   return (
     <div style={{ background:'rgba(233,30,140,0.08)', border:'1px solid rgba(233,30,140,0.3)', borderRadius:8, padding:'10px 14px', display:'flex', alignItems:'center', gap:12 }}>
       <AlertTriangle size={14} color="#E91E8C" />
-      <span style={{ fontSize:13, color:'#fff', flex:1 }}>{message}</span>
+      <span style={{ fontSize:13, color:'#0F172A', flex:1 }}>{message}</span>
       <button onClick={onCancel} style={{ background:'none', border:'none', color:'#64748B', cursor:'pointer', fontSize:12 }}>Cancel</button>
       <button onClick={onConfirm} style={{ background:'#E91E8C', border:'none', borderRadius:6, color:'#fff', padding:'4px 12px', fontSize:12, cursor:'pointer', fontWeight:700 }}>Delete</button>
     </div>
@@ -85,7 +85,7 @@ function ContactRow({ contact, onDelete, onUpdate, onMakePrimary }) {
   return (
     <div style={{ display:'flex', alignItems:'center', gap:12, padding:'8px 0', borderBottom:'1px solid rgba(0,0,0,0.03)' }}>
       <div style={{ flex:1 }}>
-        <div style={{ fontSize:13, fontWeight:600, color:'#fff' }}>{contact.name}</div>
+        <div style={{ fontSize:13, fontWeight:600, color:'#0F172A' }}>{contact.name}</div>
         <div style={{ fontSize:12, color:'#64748B', marginTop:2 }}>
           {[contact.department, contact.role].filter(Boolean).join(' · ')}
         </div>
@@ -117,7 +117,7 @@ function CourierLogo({ code, color, size = 46, radius = 10 }) {
     return (
       <div style={{
         width: size, height: size, borderRadius: radius,
-        background: '#fff', border: `2px solid rgba(255,255,255,0.25)`,
+        background: '#fff', border: `2px solid rgba(0,0,0,0.10)`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         flexShrink: 0, overflow: 'hidden',
       }}>
@@ -197,7 +197,7 @@ function CarrierCard({ carrier, onDrill, onRefresh }) {
         {/* Carrier logo / badge */}
         <CourierLogo code={carrier.code} color={color} size={46} radius={10} />
         <div style={{ flex:1 }}>
-          <div style={{ fontSize:16, fontWeight:700, color:'#fff' }}>{carrier.name}</div>
+          <div style={{ fontSize:16, fontWeight:700, color:'#0F172A' }}>{carrier.name}</div>
           <div style={{ display:'flex', gap:8, marginTop:4 }}>
             <span style={pill(`${color}18`, color)}>{carrier.code}</span>
             <span style={pill('rgba(0,0,0,0.06)','#64748B')}>{carrier.service_count} service{carrier.service_count!==1?'s':''}</span>
@@ -229,7 +229,7 @@ function CarrierCard({ carrier, onDrill, onRefresh }) {
             <>
               <div style={{ display:'flex', alignItems:'center', gap:7 }}>
                 <User size={13} color="#64748B"/>
-                <span style={{ fontSize:13, color:'#fff', fontWeight:600 }}>{carrier.primary_contact_name}</span>
+                <span style={{ fontSize:13, color:'#0F172A', fontWeight:600 }}>{carrier.primary_contact_name}</span>
               </div>
               {carrier.primary_contact_phone && (
                 <a href={`tel:${carrier.primary_contact_phone}`} style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, color:'#00BCD4', textDecoration:'none' }}>
@@ -436,7 +436,7 @@ function FuelGroupCard({ group, onRefresh }) {
         ) : (
           <>
             <div style={{ flex:1 }}>
-              <div style={{ fontWeight:700, color:'#fff', fontSize:14 }}>{group.name}</div>
+              <div style={{ fontWeight:700, color:'#0F172A', fontSize:14 }}>{group.name}</div>
               {hasScheduled && (
                 <div style={{ fontSize:11, color:'rgba(255,193,7,0.6)', marginTop:2 }}>
                   ↗ {parseFloat(group.next_sell_pct).toFixed(2)}% from{' '}
@@ -625,7 +625,7 @@ function CarrierRateCardsTab({ courierId, courierCode }) {
           <div style={{ marginBottom:12 }}>
             <label style={{ fontSize:11, color:'#64748B', display:'block', marginBottom:4 }}>Upload CSV file</label>
             <input ref={fileInputRef} type="file" accept=".csv,text/csv" onChange={handleFileUpload}
-              style={{ fontSize:12, color:'#fff', padding:'6px 0' }}/>
+              style={{ fontSize:12, color:'#0F172A', padding:'6px 0' }}/>
           </div>
           {importForm.csv && (
             <div style={{ marginBottom:12, padding:10, background:'rgba(0,200,83,0.06)', border:'1px solid rgba(0,200,83,0.2)', borderRadius:8, fontSize:12, color:'#00C853' }}>
@@ -720,7 +720,7 @@ function CarrierRateCardsTab({ courierId, courierCode }) {
 
                 <div style={{ flex:1 }}>
                   <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
-                    <span style={{ fontSize:15, fontWeight:700, color:'#fff' }}>{card.name}</span>
+                    <span style={{ fontSize:15, fontWeight:700, color:'#0F172A' }}>{card.name}</span>
                     <span style={{ ...pill(badge.bg, badge.color), fontSize:11 }}>{badge.label}</span>
                     {card.is_master && <span style={{ ...pill('rgba(123,47,190,0.15)', '#7B2FBE'), fontSize:10 }}>MASTER</span>}
                     {card.customer_account_number && (
@@ -882,7 +882,7 @@ function DomesticServiceBands({ svc, cardId, onUpdateBand }) {
         style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', cursor:'pointer', background: open ? 'rgba(0,0,0,0.03)' : 'transparent' }}
       >
         {open ? <ChevronDown size={13} color="#64748B"/> : <ChevronRight size={13} color="#64748B"/>}
-        <span style={{ fontWeight:600, fontSize:13, color:'#fff', flex:1 }}>{svc.service_name}</span>
+        <span style={{ fontWeight:600, fontSize:13, color:'#0F172A', flex:1 }}>{svc.service_name}</span>
         <span style={{ fontFamily:'monospace', fontSize:11, color:'#00C853', background:'rgba(0,200,83,0.08)', padding:'1px 8px', borderRadius:9999 }}>{svc.service_code}</span>
         <span style={{ fontSize:11, color:'#475569' }}>{totalBands} band{totalBands!==1?'s':''}</span>
       </div>
@@ -1013,7 +1013,7 @@ function IntlServiceCard({ svc, onUpdateBand }) {
     <>
       <div style={{ border:'1px solid rgba(123,47,190,0.2)', borderRadius:10, padding:'12px 14px', background:'rgba(123,47,190,0.04)' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
-          <span style={{ fontWeight:600, fontSize:13, color:'#fff', flex:1 }}>{svc.service_name}</span>
+          <span style={{ fontWeight:600, fontSize:13, color:'#0F172A', flex:1 }}>{svc.service_name}</span>
           <span style={{ fontFamily:'monospace', fontSize:10, color:'#7B2FBE', background:'rgba(123,47,190,0.12)', padding:'1px 7px', borderRadius:9999 }}>{svc.service_code}</span>
         </div>
         <div style={{ fontSize:12, color:'#475569', marginBottom:10 }}>
@@ -1036,10 +1036,10 @@ function IntlRateCardModal({ svc, onClose, onUpdateBand }) {
   const totalBands = svc.zones.reduce((a, z) => a + z.bands.length, 0);
 
   return (
-    <div style={{ position:'fixed', inset:0, zIndex:9100, background:'rgba(8,9,26,0.97)', display:'flex', flexDirection:'column' }}>
+    <div style={{ position:'fixed', inset:0, zIndex:9100, background:'rgba(0,0,0,0.5)', display:'flex', flexDirection:'column' }}>
       <div style={{ padding:'18px 24px', borderBottom:'1px solid rgba(0,0,0,0.08)', display:'flex', alignItems:'center', gap:16, background:'#F8FAFC', flexShrink:0 }}>
         <div style={{ flex:1 }}>
-          <div style={{ fontSize:17, fontWeight:700, color:'#fff' }}>{svc.service_name}</div>
+          <div style={{ fontSize:17, fontWeight:700, color:'#0F172A' }}>{svc.service_name}</div>
           <div style={{ fontSize:12, color:'#64748B', marginTop:2 }}>
             <span style={{ color:'#7B2FBE', fontFamily:'monospace', fontWeight:700, marginRight:10 }}>{svc.service_code}</span>
             {svc.zones.length} zones · {totalBands} bands
@@ -1077,7 +1077,7 @@ function IntlRateCardModal({ svc, onClose, onUpdateBand }) {
 
 // ─── AddConditionRow — reusable condition builder row ────────────────────────
 
-const SEL = { height:32, background:'#13131F', border:'1px solid rgba(0,0,0,0.08)', borderRadius:6, color:'#334155', fontSize:12, padding:'0 8px', cursor:'pointer' };
+const SEL = { height:32, background:'#F8FAFC', border:'1px solid rgba(0,0,0,0.08)', borderRadius:6, color:'#334155', fontSize:12, padding:'0 8px', cursor:'pointer' };
 
 function AddConditionRow({ onAdd }) {
   const [field, setField] = useState('total_weight_kg');
@@ -1118,11 +1118,11 @@ function AddConditionRow({ onAdd }) {
         value={val} onChange={e => setVal(e.target.value)}
         onKeyDown={e => e.key === 'Enter' && commit()}
         placeholder={placeholder}
-        style={{ ...SEL, color:'#fff', flex:'1 1 90px', minWidth:80, maxWidth:160 }}
+        style={{ ...SEL, color:'#0F172A', flex:'1 1 90px', minWidth:80, maxWidth:160 }}
       />
       <button
         onClick={commit} disabled={!val.trim()}
-        style={{ height:32, padding:'0 12px', borderRadius:6, border:'1px solid rgba(0,0,0,0.10)', background:'rgba(0,0,0,0.06)', color: val.trim() ? '#fff' : '#475569', fontSize:12, cursor: val.trim() ? 'pointer' : 'default', whiteSpace:'nowrap', flexShrink:0 }}
+        style={{ height:32, padding:'0 12px', borderRadius:6, border:'1px solid rgba(0,0,0,0.10)', background:'rgba(0,0,0,0.06)', color: val.trim() ? '#0F172A' : '#475569', fontSize:12, cursor: val.trim() ? 'pointer' : 'default', whiteSpace:'nowrap', flexShrink:0 }}
       >+ Add</button>
     </div>
   );
@@ -1910,7 +1910,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
         </button>
         <CourierLogo code={carrier.code} color={color} size={40} radius={10} />
         <div>
-          <h1 style={{ fontSize:22, fontWeight:700, color:'#fff', margin:0 }}>{carrier.name}</h1>
+          <h1 style={{ fontSize:22, fontWeight:700, color:'#0F172A', margin:0 }}>{carrier.name}</h1>
           <div style={{ display:'flex', gap:10, marginTop:4, fontSize:12, color:'#64748B' }}>
             {carrier.account_number && <span>Acct: {carrier.account_number}</span>}
             {carrier.primary_contact_name && <><span>·</span><span>{carrier.primary_contact_name}</span></>}
@@ -2222,10 +2222,10 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:10, marginBottom:10 }}>
               {[
-                ['Type', <select value={surchargeForm.calc_type} onChange={e => setSurchargeForm(f=>({...f,calc_type:e.target.value}))} style={{ width:'100%', height:34, background:'#1A1A2E', border:'1px solid rgba(0,0,0,0.08)', borderRadius:8, color:'#fff', fontSize:13, padding:'0 10px' }}><option value="flat">Flat £</option><option value="percentage">Percentage %</option></select>],
+                ['Type', <select value={surchargeForm.calc_type} onChange={e => setSurchargeForm(f=>({...f,calc_type:e.target.value}))} style={{ width:'100%', height:34, background:'#F8FAFC', border:'1px solid rgba(0,0,0,0.08)', borderRadius:8, color:'#0F172A', fontSize:13, padding:'0 10px' }}><option value="flat">Flat £</option><option value="percentage">Percentage %</option></select>],
                 ['Sell Price (customer)', <div className="pill-input-wrap"><input type="number" step="0.01" value={surchargeForm.default_value} onChange={e => setSurchargeForm(f=>({...f,default_value:e.target.value}))} placeholder="0.00" style={{ fontSize:13 }}/><div className="green-cap" style={{ fontSize:11, color:'#E91E8C', background:'rgba(233,30,140,0.15)' }}>{surchargeForm.calc_type==='percentage'?'%':'£'}</div></div>],
                 ['Cost Price (carrier)', <div className="pill-input-wrap"><input type="number" step="0.01" value={surchargeForm.cost_price ?? surchargeForm.default_value} onChange={e => setSurchargeForm(f=>({...f,cost_price:e.target.value}))} placeholder="0.00" style={{ fontSize:13 }}/><div className="green-cap" style={{ fontSize:11, color:'#00BCD4', background:'rgba(0,188,212,0.15)' }}>{surchargeForm.calc_type==='percentage'?'%':'£'}</div></div>],
-                ['Fires when', <select value={surchargeForm.applies_when} onChange={e => setSurchargeForm(f=>({...f,applies_when:e.target.value}))} style={{ width:'100%', height:34, background:'#1A1A2E', border:'1px solid rgba(0,0,0,0.08)', borderRadius:8, color:'#fff', fontSize:13, padding:'0 10px' }}><option value="always">Auto (always)</option><option value="reconciliation">Reconciliation only</option></select>],
+                ['Fires when', <select value={surchargeForm.applies_when} onChange={e => setSurchargeForm(f=>({...f,applies_when:e.target.value}))} style={{ width:'100%', height:34, background:'#F8FAFC', border:'1px solid rgba(0,0,0,0.08)', borderRadius:8, color:'#0F172A', fontSize:13, padding:'0 10px' }}><option value="always">Auto (always)</option><option value="reconciliation">Reconciliation only</option></select>],
               ].map(([l, el]) => <div key={l}><label style={{ fontSize:11, color:'#64748B', display:'block', marginBottom:4 }}>{l}</label>{el}</div>)}
             </div>
             <div style={{ marginBottom:10 }}>
@@ -2238,7 +2238,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
             <div style={{ display:'grid', gridTemplateColumns:'140px 1fr', gap:10, marginBottom:12 }}>
               <div>
                 <label style={{ fontSize:11, color:'#64748B', display:'block', marginBottom:4 }}>Charge Per</label>
-                <select value={surchargeForm.charge_per} onChange={e => setSurchargeForm(f=>({...f,charge_per:e.target.value}))} style={{ width:'100%', height:34, background:'#1A1A2E', border:'1px solid rgba(0,0,0,0.08)', borderRadius:8, color:'#fff', fontSize:13, padding:'0 10px' }}><option value="shipment">Per Shipment</option><option value="parcel">Per Parcel</option></select>
+                <select value={surchargeForm.charge_per} onChange={e => setSurchargeForm(f=>({...f,charge_per:e.target.value}))} style={{ width:'100%', height:34, background:'#F8FAFC', border:'1px solid rgba(0,0,0,0.08)', borderRadius:8, color:'#0F172A', fontSize:13, padding:'0 10px' }}><option value="shipment">Per Shipment</option><option value="parcel">Per Parcel</option></select>
               </div>
               <div>
                 <label style={{ fontSize:11, color:'#64748B', display:'block', marginBottom:4 }}>Description (optional)</label>
@@ -2273,7 +2273,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                   <div style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 14px' }}>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ display:'flex', alignItems:'center', gap:7, flexWrap:'wrap' }}>
-                        <span style={{ fontSize:13, fontWeight:700, color:'#fff' }}>{s.name}</span>
+                        <span style={{ fontSize:13, fontWeight:700, color:'#0F172A' }}>{s.name}</span>
                         <span style={{ ...pill('rgba(233,30,140,0.15)', '#E91E8C'), fontSize:10 }}>{s.code}</span>
                         {s.csv_column && <span style={{ ...pill('rgba(0,188,212,0.1)', '#00BCD4'), fontSize:10 }}>📋 {s.csv_column}</span>}
                         {s.reconciliation_excluded && <span style={{ ...pill('rgba(255,82,82,0.15)', '#FF5252'), fontSize:10 }}>🚫 hidden from invoices</span>}
@@ -2333,17 +2333,17 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                       {/* Row 3: Type, Sell, Cost, Fires when */}
                       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:10, marginBottom:10 }}>
                         {[
-                          ['Type', <select value={editSForm.calc_type} onChange={e => setEditSForm(f=>({...f,calc_type:e.target.value}))} style={{ width:'100%', height:30, background:'#1A1A2E', border:'1px solid rgba(0,0,0,0.08)', borderRadius:6, color:'#fff', fontSize:12, padding:'0 8px' }}><option value="flat">Flat £</option><option value="percentage">Percentage %</option></select>],
+                          ['Type', <select value={editSForm.calc_type} onChange={e => setEditSForm(f=>({...f,calc_type:e.target.value}))} style={{ width:'100%', height:30, background:'#F8FAFC', border:'1px solid rgba(0,0,0,0.08)', borderRadius:6, color:'#0F172A', fontSize:12, padding:'0 8px' }}><option value="flat">Flat £</option><option value="percentage">Percentage %</option></select>],
                           ['Sell Price (customer)', <div className="pill-input-wrap" style={{ height:30 }}><input type="number" step="0.01" value={editSForm.default_value} onChange={e => setEditSForm(f=>({...f,default_value:e.target.value}))} style={{ fontSize:12 }}/><div className="green-cap" style={{ fontSize:10, color:'#E91E8C', background:'rgba(233,30,140,0.15)' }}>{editSForm.calc_type==='percentage'?'%':'£'}</div></div>],
                           ['Cost Price (carrier)', <div className="pill-input-wrap" style={{ height:30 }}><input type="number" step="0.01" value={editSForm.cost_price} onChange={e => setEditSForm(f=>({...f,cost_price:e.target.value}))} style={{ fontSize:12 }}/><div className="green-cap" style={{ fontSize:10, color:'#00BCD4', background:'rgba(0,188,212,0.15)' }}>{editSForm.calc_type==='percentage'?'%':'£'}</div></div>],
-                          ['Fires when', <select value={editSForm.applies_when} onChange={e => setEditSForm(f=>({...f,applies_when:e.target.value}))} style={{ width:'100%', height:30, background:'#1A1A2E', border:'1px solid rgba(0,0,0,0.08)', borderRadius:6, color:'#fff', fontSize:12, padding:'0 8px' }}><option value="always">Auto (always)</option><option value="reconciliation">Reconciliation only</option></select>],
+                          ['Fires when', <select value={editSForm.applies_when} onChange={e => setEditSForm(f=>({...f,applies_when:e.target.value}))} style={{ width:'100%', height:30, background:'#F8FAFC', border:'1px solid rgba(0,0,0,0.08)', borderRadius:6, color:'#0F172A', fontSize:12, padding:'0 8px' }}><option value="always">Auto (always)</option><option value="reconciliation">Reconciliation only</option></select>],
                         ].map(([l, el]) => <div key={l}><label style={{ fontSize:10, color:'#64748B', display:'block', marginBottom:3 }}>{l}</label>{el}</div>)}
                       </div>
                       {/* Row 4: Charge Per + Description */}
                       <div style={{ display:'grid', gridTemplateColumns:'140px 1fr', gap:10, marginBottom:10 }}>
                         <div>
                           <label style={{ fontSize:10, color:'#64748B', display:'block', marginBottom:3 }}>Charge Per</label>
-                          <select value={editSForm.charge_per} onChange={e => setEditSForm(f=>({...f,charge_per:e.target.value}))} style={{ width:'100%', height:30, background:'#1A1A2E', border:'1px solid rgba(0,0,0,0.08)', borderRadius:6, color:'#fff', fontSize:12, padding:'0 8px' }}><option value="shipment">Per Shipment</option><option value="parcel">Per Parcel</option></select>
+                          <select value={editSForm.charge_per} onChange={e => setEditSForm(f=>({...f,charge_per:e.target.value}))} style={{ width:'100%', height:30, background:'#F8FAFC', border:'1px solid rgba(0,0,0,0.08)', borderRadius:6, color:'#0F172A', fontSize:12, padding:'0 8px' }}><option value="shipment">Per Shipment</option><option value="parcel">Per Parcel</option></select>
                         </div>
                         <div>
                           <label style={{ fontSize:10, color:'#64748B', display:'block', marginBottom:3 }}>Description</label>
@@ -2369,7 +2369,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
 
                   {/* ── Rules panel (expanded) ── */}
                   {isExpanded && (
-                    <div style={{ borderTop:'1px solid rgba(0,0,0,0.06)', padding:'14px', background:'rgba(0,0,0,0.22)' }}>
+                    <div style={{ borderTop:'1px solid rgba(0,0,0,0.06)', padding:'14px', background:'rgba(0,0,0,0.04)' }}>
                       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
                         <div style={{ fontSize:12, fontWeight:700, color:'#64748B', textTransform:'uppercase', letterSpacing:'0.06em' }}>
                           Trigger Rules <span style={{ fontSize:10, fontWeight:400, color:'#475569', textTransform:'none' }}>— if ANY rule matches, this surcharge fires</span>
@@ -2404,7 +2404,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                                 {ci === 0 && <span style={{ minWidth:24 }}/>}
                                 <span style={{ fontSize:11, color:'#64748B' }}>{fieldLabel(cond.field)}</span>
                                 <span style={{ fontSize:11, color:'#E91E8C', fontWeight:600 }}>{opLabel(cond.op)}</span>
-                                <span style={{ fontSize:11, color:'#fff', fontFamily:'monospace', background:'rgba(0,0,0,0.06)', padding:'1px 6px', borderRadius:4 }}>{formatCondValue(cond.op, cond.value)}</span>
+                                <span style={{ fontSize:11, color:'#0F172A', fontFamily:'monospace', background:'rgba(0,0,0,0.06)', padding:'1px 6px', borderRadius:4 }}>{formatCondValue(cond.op, cond.value)}</span>
                                 <button
                                   onClick={() => {
                                     const newFilters = (r.filters||[]).filter((_,i) => i !== ci);
@@ -2427,7 +2427,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
 
                       {/* New rule builder */}
                       {isAddingRule && (
-                        <div style={{ marginTop:10, padding:'14px', background:'rgba(0,0,0,0.2)', borderRadius:8, border:'1px solid rgba(0,0,0,0.08)' }}>
+                        <div style={{ marginTop:10, padding:'14px', background:'rgba(0,0,0,0.04)', borderRadius:8, border:'1px solid rgba(0,0,0,0.08)' }}>
 
                           {/* Row 1: name + logic toggle */}
                           <div style={{ display:'flex', gap:10, alignItems:'flex-end', marginBottom:14 }}>
@@ -2437,7 +2437,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                                 value={newRuleName} onChange={e => setNewRuleName(e.target.value)}
                                 placeholder="e.g. Large parcel — over 30kg"
                                 autoFocus
-                                style={{ width:'100%', height:32, background:'#13131F', border:'1px solid rgba(0,0,0,0.10)', borderRadius:6, color:'#fff', fontSize:12, padding:'0 10px', boxSizing:'border-box' }}
+                                style={{ width:'100%', height:32, background:'#F8FAFC', border:'1px solid rgba(0,0,0,0.10)', borderRadius:6, color:'#0F172A', fontSize:12, padding:'0 10px', boxSizing:'border-box' }}
                               />
                             </div>
                             <div>
@@ -2451,7 +2451,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                                       borderRight: i===0 ? '1px solid rgba(0,0,0,0.08)' : 'none',
                                       background: newRuleLogic===l
                                         ? (l==='AND' ? 'rgba(0,188,212,0.2)' : 'rgba(123,47,190,0.25)')
-                                        : '#13131F',
+                                        : '#F8FAFC',
                                       color: newRuleLogic===l
                                         ? (l==='AND' ? '#00BCD4' : '#9C57E0')
                                         : '#475569',
@@ -2471,7 +2471,7 @@ function CarrierDetail({ carrierId, onBack, onDrillService }) {
                                   <div style={{ flex:1, display:'flex', alignItems:'center', gap:6, padding:'5px 10px', background:'rgba(0,0,0,0.03)', borderRadius:6, border:'1px solid rgba(0,0,0,0.07)' }}>
                                     <span style={{ fontSize:11, color:'#64748B' }}>{fieldLabel(cond.field)}</span>
                                     <span style={{ fontSize:11, color:'#E91E8C', fontWeight:600 }}>{opLabel(cond.op)}</span>
-                                    <span style={{ fontSize:11, color:'#fff', fontFamily:'monospace', background:'rgba(0,0,0,0.08)', padding:'1px 7px', borderRadius:4 }}>{formatCondValue(cond.op, cond.value)}</span>
+                                    <span style={{ fontSize:11, color:'#0F172A', fontFamily:'monospace', background:'rgba(0,0,0,0.08)', padding:'1px 7px', borderRadius:4 }}>{formatCondValue(cond.op, cond.value)}</span>
                                   </div>
                                   <button onClick={() => setNewRuleConditions(cs => cs.filter((_,i)=>i!==ci))} style={{ background:'none', border:'none', cursor:'pointer', color:'#475569', padding:'2px 4px', flexShrink:0 }}><X size={11}/></button>
                                 </div>
@@ -2904,7 +2904,7 @@ function CountryPickerModal({ zone, onClose, onRefresh }) {
       display:'flex', alignItems:'center', justifyContent:'center',
     }} onClick={onClose}>
       <div style={{
-        background:'#0F1128', borderRadius:14, padding:24,
+        background:'#FFFFFF', borderRadius:14, padding:24,
         width:580, maxHeight:'82vh', display:'flex', flexDirection:'column',
         border:'1px solid rgba(0,0,0,0.08)',
         boxShadow:'0 32px 80px rgba(0,0,0,0.7)',
@@ -2912,7 +2912,7 @@ function CountryPickerModal({ zone, onClose, onRefresh }) {
 
         {/* Header */}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
-          <h3 style={{ margin:0, color:'#fff', fontSize:16, fontWeight:700 }}>
+          <h3 style={{ margin:0, color:'#0F172A', fontSize:16, fontWeight:700 }}>
             Select a Country — <span style={{ color:'#7B2FBE' }}>{zone.name}</span>
           </h3>
           <button onClick={onClose} style={{ background:'none', border:'none', color:'#475569', cursor:'pointer', fontSize:20, lineHeight:1 }}>✕</button>
@@ -2926,7 +2926,7 @@ function CountryPickerModal({ zone, onClose, onRefresh }) {
               const cc = (zone.country_codes||[]).find(x => x.country_iso === c.iso);
               return (
                 <div key={c.iso} style={{ display:'flex', alignItems:'center', padding:'6px 10px', borderRadius:7, background:'rgba(0,200,83,0.07)', marginBottom:4, border:'1px solid rgba(0,200,83,0.15)' }}>
-                  <span style={{ fontSize:13, color:'#fff', fontWeight:500 }}>{c.name}</span>
+                  <span style={{ fontSize:13, color:'#0F172A', fontWeight:500 }}>{c.name}</span>
                   <span style={{ fontSize:12, color:'#00C853', fontFamily:'monospace', fontWeight:700, marginLeft:10, marginRight:'auto' }}>{c.iso}</span>
                   <button
                     onClick={() => cc && delCountry.mutate(cc.id)}
@@ -2948,7 +2948,7 @@ function CountryPickerModal({ zone, onClose, onRefresh }) {
         {/* Country list */}
         <div style={{ overflowY:'auto', flex:1, borderRadius:8, border:'1px solid rgba(0,0,0,0.06)' }}>
           <table style={{ width:'100%', borderCollapse:'collapse' }}>
-            <thead style={{ position:'sticky', top:0, background:'#0F1128', zIndex:1 }}>
+            <thead style={{ position:'sticky', top:0, background:'#FFFFFF', zIndex:1 }}>
               <tr>
                 <th style={{ padding:'8px 12px', textAlign:'left', fontSize:11, color:'#64748B', fontWeight:700, textTransform:'uppercase', borderBottom:'1px solid rgba(0,0,0,0.07)' }}>Country</th>
                 <th style={{ padding:'8px 12px', textAlign:'left', fontSize:11, color:'#64748B', fontWeight:700, textTransform:'uppercase', borderBottom:'1px solid rgba(0,0,0,0.07)', width:55 }}>ISO</th>
@@ -2958,7 +2958,7 @@ function CountryPickerModal({ zone, onClose, onRefresh }) {
             <tbody>
               {filtered.map((c, i) => (
                 <tr key={c.iso} style={{ background: i%2===0?'transparent':'rgba(255,255,255,0.012)' }}>
-                  <td style={{ padding:'7px 12px', fontSize:13, color:'#fff' }}>{c.name}</td>
+                  <td style={{ padding:'7px 12px', fontSize:13, color:'#0F172A' }}>{c.name}</td>
                   <td style={{ padding:'7px 12px', fontSize:12, color:'#00C853', fontFamily:'monospace', fontWeight:700 }}>{c.iso}</td>
                   <td style={{ padding:'7px 12px', textAlign:'right' }}>
                     <button onClick={() => addCountry.mutate(c.iso)}
@@ -3074,7 +3074,7 @@ function RateMatrix({ zones }) {
               {/* Sticky weight column header */}
               <th style={{
                 position:'sticky', left:0, zIndex:3,
-                background:'#0D0F28',
+                background:'#F1F5F9',
                 padding:'10px 16px',
                 textAlign:'left', fontSize:11, fontWeight:700,
                 color:'#64748B', textTransform:'uppercase', letterSpacing:'0.06em',
@@ -3100,7 +3100,7 @@ function RateMatrix({ zones }) {
               const label = formatBandLabel(band.min_weight_kg, band.max_weight_kg);
               const isEven = i % 2 === 0;
               const rowBg = isEven ? 'transparent' : 'rgba(255,255,255,0.012)';
-              const stickyBg = isEven ? '#F8FAFC' : '#0C0D20';
+              const stickyBg = isEven ? '#F8FAFC' : '#F1F5F9';
 
               return (
                 <tr key={key}>
@@ -3109,7 +3109,7 @@ function RateMatrix({ zones }) {
                     position:'sticky', left:0, zIndex:1,
                     background: stickyBg,
                     padding:'9px 16px',
-                    fontSize:12, fontWeight:600, color:'#CCCCCC',
+                    fontSize:12, fontWeight:600, color:'#475569',
                     borderRight:'1px solid rgba(0,0,0,0.06)',
                     whiteSpace:'nowrap',
                   }}>{label}</td>
@@ -3150,7 +3150,7 @@ function RateMatrix({ zones }) {
                             )}
                           </div>
                         ) : (
-                          <span style={{ color:'#2A2A3A', fontSize:14 }}>—</span>
+                          <span style={{ color:'#CBD5E1', fontSize:14 }}>—</span>
                         )}
                       </td>
                     );
@@ -3362,7 +3362,7 @@ function WeightBandsTable({ zoneId, bands, onRefresh }) {
                   ) : (
                     <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                       <span onClick={() => { setEditId(b.id); setEditVal(b.name || ''); }}
-                        style={{ cursor:'pointer', color: b.name ? '#fff' : '#444', fontStyle: b.name ? 'normal' : 'italic' }}
+                        style={{ cursor:'pointer', color: b.name ? '#0F172A' : '#444', fontStyle: b.name ? 'normal' : 'italic' }}
                         title="Click to name this band">
                         {b.name || 'unnamed'}
                       </span>
@@ -3427,7 +3427,7 @@ function ZoneCard({ zone, onRefresh }) {
           background: open ? 'rgba(0,0,0,0.02)' : 'transparent' }}>
         <ChevronRight size={13} style={{ marginRight:8, color:'#00C853', transition:'0.15s',
           transform: open ? 'rotate(90deg)' : 'none' }}/>
-        <span style={{ fontWeight:600, color:'#fff', flex:1, fontSize:13 }}>{zone.name}</span>
+        <span style={{ fontWeight:600, color:'#0F172A', flex:1, fontSize:13 }}>{zone.name}</span>
         <div style={{ display:'flex', gap:10, alignItems:'center', marginRight:10 }}>
           <span style={{ fontSize:11, color:'#64748B' }}>
             {(zone.country_codes||[]).length} {(zone.country_codes||[]).length === 1 ? 'country' : 'countries'}
@@ -3694,7 +3694,7 @@ function ServiceDetail({ serviceId, carrierName, onBack }) {
           {/* Zones */}
           <div className="moov-card" style={{ padding:18, marginBottom:14 }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
-              <h3 style={{ fontSize:15, fontWeight:700, color:'#fff', margin:0 }}>Zones & Coverage</h3>
+              <h3 style={{ fontSize:15, fontWeight:700, color:'#0F172A', margin:0 }}>Zones & Coverage</h3>
               <button onClick={() => setAddingZone(a=>!a)} className="btn-primary" style={{ height:30, padding:'0 12px', fontSize:12 }}>
                 <Plus size={12}/> Add Zone
               </button>
@@ -3718,7 +3718,7 @@ function ServiceDetail({ serviceId, carrierName, onBack }) {
           {/* Congestion surcharges */}
           {(svc.congestion_surcharges||[]).length > 0 && (
             <div className="moov-card" style={{ padding:18 }}>
-              <h3 style={{ fontSize:15, fontWeight:700, color:'#fff', margin:'0 0 12px' }}>Congestion Surcharges</h3>
+              <h3 style={{ fontSize:15, fontWeight:700, color:'#0F172A', margin:'0 0 12px' }}>Congestion Surcharges</h3>
               <table className="moov-table" style={{ fontSize:12 }}>
                 <thead><tr><th>Postcode Prefix</th><th>Fee</th></tr></thead>
                 <tbody>
@@ -3806,7 +3806,7 @@ function RulesEngine({ services }) {
           <div key={rule.id} className="moov-card" style={{ marginBottom:10, border:`1px solid ${rule.is_active?'rgba(0,200,83,0.15)':'rgba(0,0,0,0.06)'}`, opacity:rule.is_active?1:0.6 }}>
             <div style={{ display:'flex', alignItems:'center', padding:'13px 16px', cursor:'pointer' }} onClick={() => setExpandedRule(expandedRule===rule.id?null:rule.id)}>
               <Zap size={13} color={rule.is_active?'#00C853':'#475569'} style={{ marginRight:10 }}/>
-              <span style={{ fontWeight:700, color:'#fff', flex:1 }}>{rule.name}</span>
+              <span style={{ fontWeight:700, color:'#0F172A', flex:1 }}>{rule.name}</span>
               {rule.service_name && <span style={{ ...pill('rgba(123,47,190,0.15)','#7B2FBE'), marginRight:10 }}>{rule.service_name}</span>}
               <span style={{ ...pill('rgba(255,193,7,0.12)','#D97706'), marginRight:10 }}>{CHARGE_METHOD_LABELS[rule.charge_method]} {parseFloat(rule.charge_value).toFixed(2)}</span>
               <button onClick={e => { e.stopPropagation(); toggleRule.mutate({id:rule.id,is_active:!rule.is_active}); }} className="btn-ghost" style={{ height:26, padding:'0 10px', fontSize:11, marginRight:8 }}>{rule.is_active?'Disable':'Enable'}</button>

@@ -88,7 +88,7 @@ const inp = (extra = {}) => ({
 });
 
 const sel = (extra = {}) => ({
-  background: 'rgba(30,30,40,0.95)', border: '1px solid rgba(0,0,0,0.10)',
+  background: '#F8FAFC', border: '1px solid rgba(0,0,0,0.12)',
   borderRadius: 6, color: '#0F172A', fontSize: 13, padding: '6px 10px', ...extra,
 });
 
@@ -252,7 +252,7 @@ function RulesPanel({ surcharge, courierId }) {
   });
 
   return (
-    <div style={{ padding: '12px 16px 16px', borderTop: '1px solid rgba(0,0,0,0.04)', background: 'rgba(0,0,0,0.15)' }}>
+    <div style={{ padding: '12px 16px 16px', borderTop: '1px solid rgba(0,0,0,0.04)', background: 'rgba(0,0,0,0.03)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
           Trigger Rules {surcharge.applies_when === 'always' ? '— controls when this auto-fires' : '— conditions for matching on invoice reconciliation'}
