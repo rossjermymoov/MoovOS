@@ -1374,7 +1374,7 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, onRai
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
         <thead>
           <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
-            {['Tracking', 'Service (raw)', 'Service', 'Customer', 'Type', 'Carrier £', 'Expected £', 'Delta £', 'Status', 'Reason', ''].map(h => (
+            {['Tracking', 'Service (raw)', 'Service', 'Customer', 'Type', 'Carrier £', 'Expected £', 'Billed kg', 'Delta £', 'Status', 'Reason', ''].map(h => (
               <th key={h} style={{ padding: '8px 10px', textAlign: 'left', color: '#64748B', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
             ))}
           </tr>
@@ -1403,6 +1403,29 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, onRai
               </td>
               <td style={{ padding: '9px 10px', color: '#64748B' }}>
                 {line.expected_amount != null ? `£${parseFloat(line.expected_amount).toFixed(2)}` : '—'}
+              </td>
+              <td style={{ padding: '9px 10px' }}>
+                {line.carrier_billed_weight_kg != null ? (() => {
+                  const billed   = parseFloat(line.carrier_billed_weight_kg);
+                  const declared = parseFloat(line.declared_weight_kg ?? line.weight_charged_kg ?? 0);
+                  const diff     = declared > 0 ? billed - declared : 0;
+                  const flagged  = diff > 0.01; // carrier billed heavier than declared
+                  return (
+                    <span title={flagged ? `Declared ${declared.toFixed(2)}kg · billed ${billed.toFixed(2)}kg` : `${billed.toFixed(2)}kg`} style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 3,
+                      fontWeight: flagged ? 700 : 400,
+                      color: flagged ? '#92400E' : '#475569',
+                      background: flagged ? '#FEF3C7' : 'transparent',
+                      padding: flagged ? '1px 5px' : 0,
+                      borderRadius: 4,
+                      fontSize: 11,
+                    }}>
+                      {flagged && <span style={{ fontSize: 9 }}>⚠</span>}
+                      {billed.toFixed(2)}kg
+                      {flagged && <span style={{ fontSize: 9, color: '#92400E' }}>+{diff.toFixed(2)}</span>}
+                    </span>
+                  );
+                })() : '—'}
               </td>
               <td style={{ padding: '9px 10px', fontWeight: 600 }}>
                 <DeltaCell

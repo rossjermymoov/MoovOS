@@ -9,12 +9,15 @@
  *   5. Trace         — pricing_logic_trace JSONB stored on every base-rate charge
  *
  * Band boundary convention (consistent with reconciliation engine and billing.js):
- *   lower bound  EXCLUSIVE  →  weight  >  COALESCE(min_weight_kg, 0)
- *   upper bound  INCLUSIVE  →  weight  <= max_weight_kg
+ *   lower bound  INCLUSIVE  →  weight  >= COALESCE(min_weight_kg, 0)
+ *   upper bound  EXCLUSIVE  →  weight  <  max_weight_kg
+ *
+ * If weight is EXACTLY on a band boundary it falls into the NEXT (higher) band.
+ * This matches DPD's billing rule (and most carrier contracts).
  *
  * Two-pass cost lookup:
- *   Pass 1 — weight fits inside a finite band  (max IS NOT NULL, weight <= max)
- *   Pass 2 — weight exceeds every ceiling band  →  price_first + overageKg × cost_per_kg
+ *   Pass 1 — weight fits strictly inside a finite band  (weight >= min, weight < max)
+ *   Pass 2 — weight equals or exceeds every ceiling band  →  price_first + overageKg × cost_per_kg
  */
 
 import { query } from '../db/index.js';
@@ -192,9 +195,9 @@ async function calcWeight(serviceId, parcel) {
 // Mirrors reconciliationEngine.lookupCarrierBandCost exactly.
 //
 // Pass 1 — weight sits within a band's finite ceiling:
-//   weight > COALESCE(min_weight_kg, 0)  (exclusive lower)
-//   weight <= max_weight_kg              (inclusive upper)
-//   max_weight_kg IS NOT NULL            (finite bands only — open-ended bands block Pass 2 if included)
+//   weight >= COALESCE(min_weight_kg, 0)  (inclusive lower — on boundary → next band)
+//   weight <  max_weight_kg               (exclusive upper — on boundary → next band)
+//   max_weight_kg IS NOT NULL             (finite bands only — open-ended bands block Pass 2 if included)
 //
 // Pass 2 — weight exceeds every ceiling:
 //   Finds the band with the highest finite max, then:
@@ -215,8 +218,8 @@ export async function lookupCarrierBandCost(serviceId, weightKg, zoneId) {
         WHERE  z.courier_service_id = $1
           AND  z.id = $3
           AND  wb.max_weight_kg IS NOT NULL
-          AND  $2 >  COALESCE(wb.min_weight_kg, 0)
-          AND  $2 <= wb.max_weight_kg
+          AND  $2 >= COALESCE(wb.min_weight_kg, 0)
+          AND  $2 <  wb.max_weight_kg
         ORDER  BY wb.min_weight_kg DESC
         LIMIT  1
       `, [serviceId, weightKg, zoneId])
@@ -227,8 +230,8 @@ export async function lookupCarrierBandCost(serviceId, weightKg, zoneId) {
         JOIN   zones z ON z.id = wb.zone_id
         WHERE  z.courier_service_id = $1
           AND  wb.max_weight_kg IS NOT NULL
-          AND  $2 >  COALESCE(wb.min_weight_kg, 0)
-          AND  $2 <= wb.max_weight_kg
+          AND  $2 >= COALESCE(wb.min_weight_kg, 0)
+          AND  $2 <  wb.max_weight_kg
         ORDER  BY wb.price_first ASC
         LIMIT  1
       `, [serviceId, weightKg]);
@@ -253,7 +256,7 @@ export async function lookupCarrierBandCost(serviceId, weightKg, zoneId) {
         WHERE  z.courier_service_id = $1
           AND  z.id = $3
           AND  wb.max_weight_kg IS NOT NULL
-          AND  $2 > wb.max_weight_kg
+          AND  $2 >= wb.max_weight_kg
         ORDER  BY wb.max_weight_kg DESC
         LIMIT  1
       `, [serviceId, weightKg, zoneId])
@@ -263,7 +266,7 @@ export async function lookupCarrierBandCost(serviceId, weightKg, zoneId) {
         JOIN   zones z ON z.id = wb.zone_id
         WHERE  z.courier_service_id = $1
           AND  wb.max_weight_kg IS NOT NULL
-          AND  $2 > wb.max_weight_kg
+          AND  $2 >= wb.max_weight_kg
         ORDER  BY wb.max_weight_kg DESC
         LIMIT  1
       `, [serviceId, weightKg]);
@@ -296,8 +299,8 @@ export async function lookupCarrierBandCost(serviceId, weightKg, zoneId) {
 //
 // Reads customer_rates (the same table billing.js uses for reprice).
 // Identical boundary convention to lookupCarrierBandCost:
-//   weight > COALESCE(min_weight_kg, 0)  (exclusive lower)
-//   weight <= max_weight_kg              (inclusive upper, Pass 1 — finite bands only)
+//   weight >= COALESCE(min_weight_kg, 0)  (inclusive lower — on boundary → next band)
+//   weight <  max_weight_kg               (exclusive upper — on boundary → next band)
 //
 // If no finite band matches, tries open-ended bands (max IS NULL) as a catch-all.
 // Per-kg overage (per_kg_rate / per_kg_threshold_kg) is applied on top when present.
@@ -318,8 +321,8 @@ export async function lookupCustomerSellPrice(customerId, serviceCode, weightKg,
         AND  service_code ILIKE $2
         AND  zone_name    ILIKE $3
         AND  max_weight_kg IS NOT NULL
-        AND  $4 >  COALESCE(min_weight_kg, 0)
-        AND  $4 <= max_weight_kg
+        AND  $4 >= COALESCE(min_weight_kg, 0)
+        AND  $4 <  max_weight_kg
       ORDER  BY min_weight_kg DESC
       LIMIT  1
     `, [customerId, code, zoneName, weightKg]);

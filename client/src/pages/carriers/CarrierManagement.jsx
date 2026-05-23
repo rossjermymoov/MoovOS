@@ -1033,43 +1033,76 @@ function IntlServiceCard({ svc, onUpdateBand }) {
 }
 
 function IntlRateCardModal({ svc, onClose, onUpdateBand }) {
+  const [search, setSearch] = useState('');
   const totalBands = svc.zones.reduce((a, z) => a + z.bands.length, 0);
 
-  return (
-    <div style={{ position:'fixed', inset:0, zIndex:9100, background:'rgba(0,0,0,0.5)', display:'flex', flexDirection:'column' }}>
-      <div style={{ padding:'18px 24px', borderBottom:'1px solid rgba(0,0,0,0.08)', display:'flex', alignItems:'center', gap:16, background:'#F8FAFC', flexShrink:0 }}>
-        <div style={{ flex:1 }}>
-          <div style={{ fontSize:17, fontWeight:700, color:'#0F172A' }}>{svc.service_name}</div>
-          <div style={{ fontSize:12, color:'#64748B', marginTop:2 }}>
-            <span style={{ color:'#7B2FBE', fontFamily:'monospace', fontWeight:700, marginRight:10 }}>{svc.service_code}</span>
-            {svc.zones.length} zones · {totalBands} bands
-          </div>
-        </div>
-        <button onClick={onClose} style={{ background:'none', border:'none', color:'#64748B', cursor:'pointer', fontSize:20 }}>×</button>
-      </div>
+  const filteredZones = search.trim()
+    ? svc.zones.filter(z => z.zone_name?.toLowerCase().includes(search.toLowerCase()))
+    : svc.zones;
 
-      <div style={{ flex:1, overflowY:'auto', padding:24 }}>
-        {svc.zones.map(zone => (
-          <div key={zone.zone_id} style={{ marginBottom:24 }}>
-            <h3 style={{ fontSize:13, fontWeight:700, color:'#7B2FBE', marginBottom:10 }}>{zone.zone_name}</h3>
-            <table style={{ width:'100%', maxWidth:600, borderCollapse:'collapse', fontSize:12 }}>
-              <thead>
-                <tr style={{ borderBottom:'1px solid rgba(0,0,0,0.08)' }}>
-                  <th style={{ textAlign:'left', padding:'4px 10px', color:'#475569', fontWeight:600, fontSize:11 }}>Min kg</th>
-                  <th style={{ textAlign:'left', padding:'4px 10px', color:'#475569', fontWeight:600, fontSize:11 }}>Max kg</th>
-                  <th style={{ textAlign:'right', padding:'4px 10px', color:'#00C853', fontWeight:600, fontSize:11 }}>1st Item</th>
-                  <th style={{ textAlign:'right', padding:'4px 10px', color:'#D97706', fontWeight:600, fontSize:11 }}>Sub Items</th>
-                  <th style={{ textAlign:'right', padding:'4px 10px', color:'#00BCD4', fontWeight:600, fontSize:11 }}>Per kg</th>
-                </tr>
-              </thead>
-              <tbody>
-                {zone.bands.sort((a,b) => a.min_weight_kg - b.min_weight_kg).map(band => (
-                  <BandRow key={band.band_id} band={band} onUpdate={(data) => onUpdateBand.mutate({ bandId: band.band_id, ...data })} />
-                ))}
-              </tbody>
-            </table>
+  return (
+    /* Backdrop */
+    <div
+      style={{ position:'fixed', inset:0, zIndex:9100, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      {/* Modal card */}
+      <div style={{ background:'#FFFFFF', borderRadius:12, boxShadow:'0 20px 60px rgba(0,0,0,0.20)', width:'min(860px, 100%)', maxHeight:'85vh', display:'flex', flexDirection:'column', overflow:'hidden' }}>
+
+        {/* Header */}
+        <div style={{ padding:'16px 20px', borderBottom:'1px solid rgba(0,0,0,0.08)', display:'flex', alignItems:'center', gap:14, flexShrink:0 }}>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:16, fontWeight:700, color:'#0F172A' }}>{svc.service_name}</div>
+            <div style={{ fontSize:12, color:'#64748B', marginTop:2 }}>
+              <span style={{ color:'#7B2FBE', fontFamily:'monospace', fontWeight:700, marginRight:10 }}>{svc.service_code}</span>
+              {svc.zones.length} zones · {totalBands} bands
+            </div>
           </div>
-        ))}
+          {/* Search */}
+          <div style={{ position:'relative' }}>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search zone / country…"
+              style={{ height:32, padding:'0 10px 0 28px', border:'1px solid rgba(0,0,0,0.12)', borderRadius:6, fontSize:12, color:'#0F172A', background:'#F8FAFC', width:180, outline:'none' }}
+            />
+            <Search size={12} style={{ position:'absolute', left:9, top:'50%', transform:'translateY(-50%)', color:'#94A3B8', pointerEvents:'none' }} />
+            {search && (
+              <button onClick={() => setSearch('')} style={{ position:'absolute', right:6, top:'50%', transform:'translateY(-50%)', background:'none', border:'none', cursor:'pointer', color:'#94A3B8', padding:0, display:'flex' }}>
+                <X size={12} />
+              </button>
+            )}
+          </div>
+          <button onClick={onClose} style={{ background:'none', border:'none', color:'#64748B', cursor:'pointer', fontSize:22, lineHeight:1, padding:'0 4px' }}>×</button>
+        </div>
+
+        {/* Body — scrollable */}
+        <div style={{ flex:1, overflowY:'auto', padding:'16px 20px' }}>
+          {filteredZones.length === 0 && (
+            <div style={{ padding:'32px 0', textAlign:'center', color:'#94A3B8', fontSize:13 }}>No zones matching "{search}"</div>
+          )}
+          {filteredZones.map(zone => (
+            <div key={zone.zone_id} style={{ marginBottom:20 }}>
+              <div style={{ fontSize:12, fontWeight:700, color:'#7B2FBE', marginBottom:8, textTransform:'uppercase', letterSpacing:'0.04em' }}>{zone.zone_name}</div>
+              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12, background:'#FFFFFF', border:'1px solid rgba(0,0,0,0.07)', borderRadius:6, overflow:'hidden' }}>
+                <thead>
+                  <tr style={{ background:'#F8FAFC', borderBottom:'1px solid rgba(0,0,0,0.08)' }}>
+                    <th style={{ textAlign:'left',  padding:'6px 10px', color:'#475569', fontWeight:600, fontSize:11 }}>Min kg</th>
+                    <th style={{ textAlign:'left',  padding:'6px 10px', color:'#475569', fontWeight:600, fontSize:11 }}>Max kg</th>
+                    <th style={{ textAlign:'right', padding:'6px 10px', color:'#166534', fontWeight:600, fontSize:11 }}>1st Item</th>
+                    <th style={{ textAlign:'right', padding:'6px 10px', color:'#92400E', fontWeight:600, fontSize:11 }}>Sub Items</th>
+                    <th style={{ textAlign:'right', padding:'6px 10px', color:'#1E40AF', fontWeight:600, fontSize:11 }}>Per kg</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {zone.bands.sort((a,b) => a.min_weight_kg - b.min_weight_kg).map(band => (
+                    <BandRow key={band.band_id} band={band} onUpdate={(data) => onUpdateBand.mutate({ bandId: band.band_id, ...data })} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
