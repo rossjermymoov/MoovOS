@@ -88,7 +88,8 @@ function ReasonLabel({ reason, correctedBy }) {
     hgv_aggregate_mismatch:  { text: 'HGV mismatch',         color: '#FFB300' },
     no_hgv_rate:             { text: 'No HGV rate on file',   color: '#FF5252' },
     aggregate_mismatch:      { text: 'Aggregate mismatch',    color: '#FFB300' },
-    parcel_count_mismatch:   { text: '⚠ Parcel count overbill', color: '#FF5252' },
+    parcel_count_mismatch:        { text: '⚠ Parcel count overbill',      color: '#FF5252' },
+    weight_sell_lookup_failed:    { text: '⚖ Weight corrected — sell rate missing', color: '#FF5252' },
   };
   const cfg = labels[reason] || { text: reason || '—', color: '#64748B' };
   return <span style={{ fontSize: 10, color: cfg.color, fontWeight: 600 }}>{cfg.text}</span>;

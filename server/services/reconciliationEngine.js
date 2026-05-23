@@ -1725,22 +1725,87 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     if (billedKg > 0 && declaredKg > 0 && billedKg > declaredKg + 0.09) {
       console.log(`[recon engine] WEIGHT CORRECTION: tracking=${trackingNumber} declared=${declaredKg}kg billed=${billedKg}kg — repricing`);
 
-      const newCostResult = await lookupCarrierBandCost(serviceId, billedKg, charge.zone_id || null);
-      const newSell       = await computeCorrectedSell(charge, serviceId, billedKg, invoiceParcels, ctx.serviceIdToCodeMap);
+      // ── Zone resolution ────────────────────────────────────────────────────
+      // For international shipments the charge may have no zone_id if the
+      // booking didn't save one. Try to resolve from the invoice delivery
+      // country / postcode exactly as the all_sub recompute does.
+      let resolvedZoneId = charge.zone_id || null;
+      if (!resolvedZoneId && serviceId) {
+        const country  = line.ship_to_country   || null;
+        const postcode = line.delivery_postcode  || '';
+        if (country || postcode) {
+          const z = await matchZone(serviceId, country || 'GB', postcode);
+          if (z) {
+            resolvedZoneId = z.id;
+            console.log(
+              `[recon engine] WEIGHT CORRECTION: resolved zone from country="${country}" ` +
+              `postcode="${postcode}" → zone_id=${resolvedZoneId} for tracking=${trackingNumber}`
+            );
+          }
+        }
+      }
+
+      // Use a charge object with the resolved zone so computeCorrectedSell
+      // doesn't bail out on a missing zone_id.
+      const chargeForSell = resolvedZoneId !== charge.zone_id
+        ? { ...charge, zone_id: resolvedZoneId }
+        : charge;
+
+      const newCostResult = await lookupCarrierBandCost(serviceId, billedKg, resolvedZoneId);
+      const newSell       = await computeCorrectedSell(chargeForSell, serviceId, billedKg, invoiceParcels, ctx.serviceIdToCodeMap);
       const newCost       = newCostResult ? newCostResult.cost : null;
 
       if (newCost !== null) {
-        // Update the charge: actual weight + repriced cost and sell
+        if (newSell === null) {
+          // Cost band found but no customer sell rate — do NOT silently mark as
+          // corrected with the wrong price. Surface as unmatched so the operator
+          // can see the sell lookup failed and fix the rate card.
+          console.warn(
+            `[recon engine] WEIGHT CORRECTION PARTIAL: tracking=${trackingNumber} ` +
+            `cost repriced to £${newCost} at ${billedKg}kg but customer sell lookup failed ` +
+            `(customer=${charge.customer_id} zone_id=${resolvedZoneId}) — flagging unmatched`
+          );
+          await insertLine(runId, {
+            tracking_number:          trackingNumber,
+            carrier_account_no:       line.account_number    || null,
+            raw_service_code:         rawServiceCode,
+            charge_type:              line.charge_type       || 'base',
+            carrier_amount:           totalCarrier,
+            carrier_billed_weight_kg: billedKg,
+            service_id:               serviceId,
+            customer_id:              charge.customer_id,
+            charge_id:                charge.charge_id,
+            expected_amount:          totalExpected,
+            delta,
+            status:                   'unmatched',
+            corrected_by:             null,
+            unmatched_reason:         'weight_sell_lookup_failed',
+            source:                   'internal',
+            shipment_date:            line.shipment_date     || null,
+            ship_to_postcode:         line.delivery_postcode || null,
+            ship_to_country:          line.ship_to_country   || null,
+            correction_metadata:      {
+              declared_weight_kg: declaredKg,
+              billed_weight_kg:   billedKg,
+              weight_diff_kg:     round2(billedKg - declaredKg),
+              new_cost_price:     newCost,
+              sell_lookup_failed: true,
+            },
+          });
+          return { status: 'unmatched' };
+        }
+
+        // Both cost and sell resolved — update the charge and mark corrected
         await query(`
           UPDATE charges
           SET weight_charged_kg = $1,
               cost_price        = $2,
-              price             = CASE WHEN $3::numeric IS NOT NULL THEN $3::numeric ELSE price END
+              price             = $3
           WHERE id = $4
         `, [billedKg, newCost, newSell, charge.charge_id]);
 
         const addSell   = await resolveSurchargeSells(rollup.items, newSell, invoiceParcels, ctx.surchargeOverrideCache, charge.customer_id, serviceId);
-        const totalSell = newSell != null ? round2(newSell + addSell) : null;
+        const totalSell = round2(newSell + addSell);
 
         console.log(
           `[recon engine] WEIGHT CORRECTION applied: tracking=${trackingNumber} ` +
@@ -1778,15 +1843,15 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
             old_cost_price:     round2(parseFloat(charge.expected_cost) || 0),
             new_cost_price:     newCost,
             band_label:         newCostResult.bandLabel || null,
+            resolved_zone_id:   resolvedZoneId,
             ...surchargeMeta(rollup.items) || {},
           },
         });
         return { status: 'corrected' };
       }
 
-      // No rate band found for the actual weight — fall through to unmatched
-      // so the operator can investigate rather than silently accepting.
-      console.log(`[recon engine] WEIGHT CORRECTION: no rate band for ${billedKg}kg on service ${serviceId} — falling through to unmatched`);
+      // No carrier cost band found for the actual weight — fall through to unmatched.
+      console.log(`[recon engine] WEIGHT CORRECTION: no carrier rate band for ${billedKg}kg on service ${serviceId} zone ${resolvedZoneId} — falling through to unmatched`);
     }
   }
 
