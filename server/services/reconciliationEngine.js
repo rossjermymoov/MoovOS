@@ -159,6 +159,40 @@ async function buildServiceCodeMap(carrierId) {
   return { serviceMap, surchargeMap, serviceIdToCodeMap };
 }
 
+// ─── Sell-surcharge presence check ───────────────────────────────────────────
+//
+// When the carrier bills a surcharge (e.g. NI Clearance Charge), we auto-accept
+// the cost side. But if the sell-side surcharge charge was never created on the
+// shipment (e.g. because the rule was broken at booking time), the customer will
+// be under-billed. This function checks whether the sell-side charge exists and
+// returns the pool hit (charge row) so the caller can store customer_id / charge_id.
+//
+// Returns { sellMissing: bool, customerId: string|null, chargeId: string|null }
+async function checkSellSurcharge(trackKey, surchargeId, pool) {
+  const poolHits = poolLookup(pool, trackKey);
+  if (poolHits.length === 0) return { sellMissing: false, customerId: null, chargeId: null };
+
+  const charge      = poolHits[0];
+  const shipmentId  = charge.shipment_id;
+  const customerId  = charge.customer_id;
+  const chargeId    = charge.charge_id;
+
+  const res = await query(
+    `SELECT 1 FROM charges
+     WHERE  shipment_id = $1
+       AND  surcharge_id = $2
+       AND  cancelled    = false
+     LIMIT 1`,
+    [shipmentId, surchargeId]
+  );
+
+  const sellMissing = res.rows.length === 0;
+  if (sellMissing) {
+    console.log(`[recon engine] WARN sell_surcharge_missing: tracking=${trackKey} surcharge=${surchargeId} shipment=${shipmentId}`);
+  }
+  return { sellMissing, customerId, chargeId };
+}
+
 // ─── Corrected sell price helper ──────────────────────────────────────────────
 //
 // For pool-matched lines where the carrier billed at a different amount than
@@ -883,7 +917,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   }
 
   // Counters
-  let matched = 0, corrected = 0, unmatched = 0, ignored = 0;
+  let matched = 0, corrected = 0, unmatched = 0, ignored = 0, warnings = 0;
 
   // ── Process tracking groups — parallel batches ────────────────────────────
   const BATCH_SIZE  = 40;
@@ -904,6 +938,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
             case 'matched':   matched++;   break;
             case 'corrected': corrected++; break;
             case 'unmatched': unmatched++; break;
+            case 'warning':   warnings++;  break;
             case 'ignored':   ignored++;   break;
           }
         }
@@ -923,32 +958,34 @@ export async function processReconciliationRun(runId, carrierId, lines) {
     SET matched_count   = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'matched'),
         corrected_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'corrected'),
         unmatched_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'unmatched'),
+        warning_count   = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'warning'),
         ignored_count   = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'ignored'),
         automation_rate = CASE WHEN rr.total_lines > 0 THEN
           ROUND(
-            (SELECT COUNT(*)::numeric FROM reconciliation_lines WHERE run_id = $1 AND status IN ('matched','corrected'))
+            (SELECT COUNT(*)::numeric FROM reconciliation_lines WHERE run_id = $1 AND status IN ('matched','corrected','warning'))
             / rr.total_lines * 100, 2
           )
         ELSE 0 END,
         status          = CASE
-          WHEN (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'unmatched') > 0
+          WHEN (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status IN ('unmatched','warning')) > 0
           THEN 'needs_review' ELSE 'complete' END,
         completed_at    = NOW()
     WHERE  rr.id = $1
-    RETURNING matched_count, corrected_count, unmatched_count, ignored_count, automation_rate, status
+    RETURNING matched_count, corrected_count, unmatched_count, warning_count, ignored_count, automation_rate, status
   `, [runId]);
 
   const fin = finalRes.rows[0] || {};
   const dbMatched    = parseInt(fin.matched_count)   || 0;
   const dbCorrected  = parseInt(fin.corrected_count) || 0;
   const dbUnmatched  = parseInt(fin.unmatched_count) || 0;
+  const dbWarnings   = parseInt(fin.warning_count)   || 0;
   const dbIgnored    = parseInt(fin.ignored_count)   || 0;
-  const overallStatus = fin.status || (dbUnmatched > 0 ? 'needs_review' : 'complete');
+  const overallStatus = fin.status || ((dbUnmatched + dbWarnings) > 0 ? 'needs_review' : 'complete');
   const automationRate = parseFloat(fin.automation_rate) || 0;
 
   console.log(`[recon engine] Run ${runId} complete in ${Date.now() - startTime}ms — ` +
-    `${dbMatched} matched, ${dbCorrected} corrected, ${dbUnmatched} unmatched, ${dbIgnored} ignored, ` +
-    `${skippedCount} aggregate skipped, automation: ${automationRate}% (in-memory: ${matched}m/${corrected}c/${unmatched}u)`);
+    `${dbMatched} matched, ${dbCorrected} corrected, ${dbUnmatched} unmatched, ${dbWarnings} warnings, ${dbIgnored} ignored, ` +
+    `${skippedCount} aggregate skipped, automation: ${automationRate}% (in-memory: ${matched}m/${corrected}c/${unmatched}u/${warnings}w)`);
 
   return {
     run_id:          runId,
@@ -957,6 +994,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
     matched:         dbMatched,
     corrected:       dbCorrected,
     unmatched:       dbUnmatched,
+    warnings:        dbWarnings,
     ignored:         dbIgnored,
     automation_rate: automationRate,
     pool_size:       poolSize,
@@ -1157,27 +1195,33 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
   const results        = [];
 
   for (const line of surchargeLines) {
-    const rawCode = String(line.service_code || '').trim();
-    console.log(`[recon engine] Raw code "${rawCode}" (mixed group, tracking=${String(line.tracking_number || '').trim()}) — matched surcharge, auto-correcting`);
+    const rawCode    = String(line.service_code || '').trim();
+    const lineTrack  = String(line.tracking_number || '').trim();
+    const surchargeId = surchargeMap[rawCode.toUpperCase()];
+    console.log(`[recon engine] Raw code "${rawCode}" (mixed group, tracking=${lineTrack}) — matched surcharge, auto-correcting`);
+
+    const { sellMissing, customerId, chargeId } = await checkSellSurcharge(lineTrack.toUpperCase(), surchargeId, pool);
+
     await insertLine(runId, {
-      tracking_number:          String(line.tracking_number || '').trim(),
+      tracking_number:          lineTrack,
       carrier_account_no:       line.account_number || null,
       raw_service_code:         rawCode,
       charge_type:              line.charge_type || 'surcharge',
       carrier_amount:           round2(parseFloat(line.carrier_amount) || 0),
       carrier_billed_weight_kg: line.billed_weight_kg || null,
       service_id:               null,
-      customer_id:              null,
-      charge_id:                null,
+      customer_id:              customerId || null,
+      charge_id:                chargeId   || null,
       expected_amount:          null,
       delta:                    null,
-      status:                   'corrected',
+      status:                   sellMissing ? 'warning' : 'corrected',
       corrected_by:             'surcharge_mapping',
-      unmatched_reason:         null,
+      unmatched_reason:         sellMissing ? 'sell_surcharge_missing' : null,
+      surcharge_id:             surchargeId || null,
       source:                   'internal',
       suggested_service_id:     null,
     });
-    results.push({ status: 'corrected' });
+    results.push({ status: sellMissing ? 'warning' : 'corrected' });
   }
 
   if (baseLines.length === 0) return results;
@@ -1354,10 +1398,15 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   const serviceId = serviceCodeMap[mappedKey] || null;
 
   // ── Surcharge mapping check ───────────────────────────────────────────────
-  // If the raw carrier code maps to a known surcharge, auto-correct immediately.
+  // If the raw carrier code maps to a known surcharge, auto-correct the cost
+  // side. Also check whether the sell-side surcharge charge was ever created —
+  // if not, flag as 'warning' so operators know the customer wasn't billed.
   if (!serviceId && surchargeMap[mappedKey]) {
     const surchargeId = surchargeMap[mappedKey];
     console.log(`[recon engine] Raw code "${rawServiceCode}" — matched surcharge ${surchargeId}`);
+
+    const { sellMissing, customerId, chargeId } = await checkSellSurcharge(trackKey, surchargeId, pool);
+
     await insertLine(runId, {
       tracking_number:          trackingNumber,
       carrier_account_no:       line.account_number || null,
@@ -1366,17 +1415,18 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       carrier_amount:           carrierAmount,
       carrier_billed_weight_kg: line.billed_weight_kg || null,
       service_id:               null,
-      customer_id:              null,
-      charge_id:                null,
+      customer_id:              customerId || null,
+      charge_id:                chargeId   || null,
       expected_amount:          null,
       delta:                    null,
-      status:                   'corrected',
+      status:                   sellMissing ? 'warning' : 'corrected',
       corrected_by:             'surcharge_mapping',
-      unmatched_reason:         null,
+      unmatched_reason:         sellMissing ? 'sell_surcharge_missing' : null,
+      surcharge_id:             surchargeId || null,
       source:                   'internal',
       suggested_service_id:     null,
     });
-    return { status: 'corrected' };
+    return { status: sellMissing ? 'warning' : 'corrected' };
   }
 
   if (!serviceId) {

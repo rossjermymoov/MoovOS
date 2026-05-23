@@ -67,6 +67,10 @@ function StatusBadge({ status }) {
 
 // ─── Unmatched reason label ───────────────────────────────────────────────────
 function ReasonLabel({ reason, correctedBy }) {
+  // Warning: carrier billed a surcharge but customer was not charged
+  if (reason === 'sell_surcharge_missing') {
+    return <span style={{ fontSize: 10, color: '#92400E', background: 'rgba(255,179,0,0.2)', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>⚠ Customer not billed</span>;
+  }
   // corrected_by values from the engine
   if (correctedBy === 'surcharge_mapping') {
     return <span style={{ fontSize: 10, color: '#00C853', fontWeight: 600 }}>Surcharge mapping</span>;
@@ -2374,6 +2378,7 @@ export default function RunDetailPage() {
 
   const allLines       = linesQuery('').data?.lines       || [];
   const unmatchedLines = linesQuery('unmatched').data?.lines || [];
+  const warningLines   = linesQuery('warning').data?.lines   || [];
   const matchedLines   = linesQuery('matched').data?.lines   || [];
   const correctedLines = linesQuery('corrected').data?.lines || [];
 
@@ -2389,6 +2394,7 @@ export default function RunDetailPage() {
   const tabs = [
     { key: 'overview',   label: 'Overview' },
     { key: 'unmatched',  label: `Needs Review (${run?.unmatched_count || 0})`, alert: (run?.unmatched_count || 0) > 0 },
+    { key: 'warning',    label: `Warnings (${run?.warning_count || 0})`, warn: (run?.warning_count || 0) > 0 },
     { key: 'matched',    label: `Matched (${run?.matched_count || 0})` },
     { key: 'corrected',  label: `Corrected (${run?.corrected_count || 0})` },
     { key: 'all',        label: 'All Lines' },
@@ -2398,6 +2404,7 @@ export default function RunDetailPage() {
 
   const currentLines = {
     unmatched: unmatchedLines,
+    warning:   warningLines,
     matched:   matchedLines,
     corrected: correctedLines,
     all:       allLines,
@@ -2440,8 +2447,11 @@ export default function RunDetailPage() {
           {run.status === 'failed' && (
             <span style={{ color: '#FF5252', fontSize: 12, fontWeight: 700 }}>✗ Run Failed</span>
           )}
-          {!run.finalized && run.status === 'needs_review' && (
-            <span style={{ color: '#FFB300', fontSize: 12, fontWeight: 700 }}>⚠ Needs Review</span>
+          {!run.finalized && (run.unmatched_count || 0) > 0 && (
+            <span style={{ color: '#FF5252', fontSize: 12, fontWeight: 700 }}>✗ Needs Review</span>
+          )}
+          {!run.finalized && (run.unmatched_count || 0) === 0 && (run.warning_count || 0) > 0 && (
+            <span style={{ color: '#FFB300', fontSize: 12, fontWeight: 700 }}>⚠ {run.warning_count} Unbilled Surcharge{(run.warning_count || 0) > 1 ? 's' : ''}</span>
           )}
           {!run.finalized && run.unmatched_count === 0 && (run.status === 'complete' || run.status === 'needs_review') && (
             <button
@@ -2476,7 +2486,8 @@ export default function RunDetailPage() {
           { label: 'Total Lines', value: total.toLocaleString(), color: '#0F172A' },
           { label: 'Matched', value: `${run.matched_count || 0} (${matchedPct}%)`, color: '#00C853' },
           { label: 'Corrected', value: `${run.corrected_count || 0} (${correctedPct}%)`, color: '#FF8F00' },
-          { label: 'Unmatched', value: `${run.unmatched_count || 0} (${unmatchedPct}%)`, color: (run.unmatched_count || 0) > 0 ? '#FFB300' : '#475569' },
+          { label: 'Unmatched', value: `${run.unmatched_count || 0} (${unmatchedPct}%)`, color: (run.unmatched_count || 0) > 0 ? '#FF5252' : '#475569' },
+          { label: 'Warnings', value: `${run.warning_count || 0}`, color: (run.warning_count || 0) > 0 ? '#FFB300' : '#475569' },
           { label: 'Automation Rate', value: run.automation_rate != null ? `${run.automation_rate}%` : '—', color: parseFloat(run.automation_rate) >= 80 ? '#00C853' : '#FFB300' },
         ].map(({ label, value, color }) => (
           <div key={label} style={card}>
@@ -2496,11 +2507,12 @@ export default function RunDetailPage() {
               background: 'none', border: 'none', cursor: 'pointer',
               padding: '8px 16px', fontSize: 13, fontWeight: 600,
               color: activeTab === tab.key ? '#0F172A' : '#666',
-              borderBottom: `2px solid ${activeTab === tab.key ? '#00C853' : 'transparent'}`,
+              borderBottom: `2px solid ${activeTab === tab.key ? (tab.warn ? '#FFB300' : '#00C853') : 'transparent'}`,
               display: 'flex', alignItems: 'center', gap: 6,
             }}
           >
-            {tab.alert && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#FFB300', display: 'inline-block' }} />}
+            {tab.alert && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#FF5252', display: 'inline-block' }} />}
+            {tab.warn  && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#FFB300', display: 'inline-block' }} />}
             {tab.label}
           </button>
         ))}
@@ -2648,13 +2660,49 @@ export default function RunDetailPage() {
           : <CustomerPreviewPanel runId={parseInt(id)} />
       )}
 
+      {/* Warning tab — carrier surcharges with no sell-side customer charge */}
+      {activeTab === 'warning' && (
+        <>
+          <div style={{
+            background: 'rgba(255,179,0,0.10)', border: '1px solid rgba(255,179,0,0.4)',
+            borderRadius: 8, padding: '12px 16px', marginBottom: 16,
+            display: 'flex', alignItems: 'flex-start', gap: 10,
+          }}>
+            <span style={{ fontSize: 16, lineHeight: 1 }}>⚠</span>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 13, color: '#92400E', marginBottom: 2 }}>
+                Unbilled surcharges — customer not charged
+              </div>
+              <div style={{ fontSize: 12, color: '#78350F', lineHeight: 1.5 }}>
+                The carrier has billed a surcharge for the shipments below, but no corresponding sell-side
+                surcharge charge was found on the shipment record. The cost has been reconciled correctly,
+                but the customer has not been invoiced for this charge. Review each line and apply the
+                surcharge manually if appropriate.
+              </div>
+            </div>
+          </div>
+          <div style={card}>
+            <LinesTable
+              lines={warningLines}
+              showResolve={false}
+              onResolve={(line) => { setDefaultResolveType(null); setResolvingLine(line); }}
+              onResolveAsSurcharge={(line) => { setDefaultResolveType('map_to_surcharge'); setResolvingLine(line); }}
+              runId={id}
+              courierId={run.carrier_id}
+              exportFilename={`${run.carrier_name || 'recon'}_${run.invoice_ref || id}_warnings.csv`}
+              rowStyle={() => ({ background: 'rgba(255,179,0,0.06)' })}
+            />
+          </div>
+        </>
+      )}
+
       {/* Carrier Queries tab */}
       {activeTab === 'queries' && (
         <CourierQueriesPanel runId={parseInt(id)} carrierId={run.carrier_id} />
       )}
 
       {/* Line tables for other tabs */}
-      {activeTab !== 'overview' && activeTab !== 'unmatched' && activeTab !== 'customers' && activeTab !== 'queries' && (
+      {activeTab !== 'overview' && activeTab !== 'unmatched' && activeTab !== 'warning' && activeTab !== 'customers' && activeTab !== 'queries' && (
         <div style={card}>
           <LinesTable
             lines={currentLines}
