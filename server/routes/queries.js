@@ -24,6 +24,8 @@ router.get('/', async (req, res, next) => {
       sender_matched,
       assigned_to, priority, group_name,  // new panel filters
       pending_draft,                      // filter to tickets with AI drafts awaiting approval
+      claim_deadline_days,                // filter to tickets with claim_deadline_at within N days
+      sla_breached,                       // filter to tickets where SLA is breached
       search,
       date_from, date_to,
       sort = 'updated_at', order = 'desc',
@@ -72,6 +74,15 @@ router.get('/', async (req, res, next) => {
     }
     if (pending_draft === 'true') {
       conditions.push(`pending_drafts > 0`);
+    }
+    if (claim_deadline_days) {
+      const days = parseInt(claim_deadline_days) || 7;
+      conditions.push(`claim_deadline_at IS NOT NULL`);
+      conditions.push(`claim_deadline_at >= NOW() - INTERVAL '1 day'`);
+      conditions.push(`claim_deadline_at <= NOW() + INTERVAL '${days} days'`);
+    }
+    if (sla_breached === 'true') {
+      conditions.push(`sla_breached = true`);
     }
     if (sender_matched === 'false') {
       conditions.push(`sender_matched = false`);
