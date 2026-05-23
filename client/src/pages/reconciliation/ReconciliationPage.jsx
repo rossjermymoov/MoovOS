@@ -492,7 +492,7 @@ function ProfileManagerModal({ couriers, onClose }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       <div style={{
-        background: '#0D0F2B', border: '1px solid rgba(0,0,0,0.08)',
+        background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.10)',
         borderRadius: 12, width: 660, maxHeight: '80vh', overflow: 'auto', padding: 28,
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -900,7 +900,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       <div style={{
-        background: '#0D0F2B', border: '1px solid rgba(0,0,0,0.08)',
+        background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.10)',
         borderRadius: 12, width: 640, maxHeight: '88vh', overflow: 'auto', padding: 28,
       }}>
         {/* Header */}
