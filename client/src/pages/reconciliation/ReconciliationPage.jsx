@@ -390,6 +390,16 @@ function mapToInvoiceLine(row, colMap) {
     // for operator visibility in RunDetailPage.
     delivery_postcode: get('delivery_postcode').trim() || null,
     ship_to_country:   get('ship_to_country').trim()   || null,
+    // Recipient name: extracted from the carrier CSV delivery address column.
+    // For DPD, this is column A0 (full delivery address); the name is the first
+    // comma-delimited segment. For carriers where the name is a standalone column,
+    // map recipient_name directly — no comma-split is applied in that case.
+    recipient_name: (() => {
+      const raw = get('recipient_name').trim();
+      if (!raw) return null;
+      // If the column contains a comma (i.e. it's a full address), extract the name part
+      return raw.includes(',') ? raw.split(',')[0].trim() : raw;
+    })(),
     // DPD-specific row type: 'H' = header row (has all financials), 'S' = sub-parcel row
     // (blank financials — same consignment number as the H-row). Populated only when
     // the profile maps row_type to a carrier CSV column (e.g. DPD's "Header" column).
@@ -413,7 +423,7 @@ const BLANK_MAP = {
   charge_type: '', carrier_amount: '', billed_weight_kg: '',
   parcel_count: '', shipment_date: '',
   invoice_ref: '', invoice_date: '',
-  delivery_postcode: '', ship_to_country: '', sender_ref: '',
+  delivery_postcode: '', ship_to_country: '', sender_ref: '', recipient_name: '',
   surcharge_columns: [],   // [{ col: '<csv header>', surcharge_id: '<uuid>' }]
   // ── Carrier-format options ─────────────────────────────────────────────────
   // header_row_skip: number of preamble rows before the column header row.
@@ -765,6 +775,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
         parcel_count:     h => h.includes('piece') || h.includes('parcel') || h.includes('qty') || h.includes('quantity') || h === 'j',
         invoice_ref:      h => h.includes('invoice') && (h.includes('ref') || h.includes('num') || h.includes('no')),
         invoice_date:     h => h.includes('invoice') && (h.includes('date') || h.includes('dt')),
+        recipient_name:   h => h === 'a0' || (h.includes('delivery') && h.includes('address')) || h.includes('recipient'),
       };
       for (const [field, test] of Object.entries(AUTO_RULES)) {
         // Only auto-map if the field isn't already set from a profile,
@@ -886,6 +897,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
     { key: 'shipment_date',      label: 'Shipment Date',      required: false, hint: 'Per-parcel despatch date (not invoice date)' },
     { key: 'delivery_postcode',  label: 'Delivery Postcode',  required: false, hint: 'Used for zone resolution on external bookings' },
     { key: 'ship_to_country',    label: 'Destination Country', required: false, hint: 'ISO country code (e.g. GB, IE, DE)' },
+    { key: 'recipient_name',     label: 'Recipient Name',     required: false, hint: 'DPD: map to delivery address column (A0) — name is extracted up to first comma' },
     { key: 'invoice_ref',        label: 'Invoice Reference',  required: false, hint: 'Read from CSV' },
     { key: 'invoice_date',       label: 'Invoice Date',       required: false, hint: 'Read from CSV' },
     { key: 'sender_ref',         label: 'Senders Reference',  required: false, hint: 'Per-parcel customer ref — used to match consolidated DPD consignments to individual OMS shipments' },

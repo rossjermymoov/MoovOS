@@ -1462,6 +1462,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
         source:                   'internal',
         shipment_date:            line.shipment_date     || null,
         ship_to_postcode:         line.delivery_postcode || null,
+        ship_to_name:             line.recipient_name   || null,
         ship_to_country:          line.ship_to_country   || null,
       });
       return { status: 'unmatched' };
@@ -1783,6 +1784,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
             source:                   'internal',
             shipment_date:            line.shipment_date     || null,
             ship_to_postcode:         line.delivery_postcode || null,
+        ship_to_name:             line.recipient_name   || null,
             ship_to_country:          line.ship_to_country   || null,
             correction_metadata:      {
               declared_weight_kg: declaredKg,
@@ -1832,6 +1834,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
           source:                   'internal',
           shipment_date:            line.shipment_date     || null,
           ship_to_postcode:         line.delivery_postcode || null,
+        ship_to_name:             line.recipient_name   || null,
           ship_to_country:          line.ship_to_country   || null,
           parcel_count:             invoiceParcels > 1 ? invoiceParcels : null,
           corrected_cost_price:     round2(newCost + rollup.addExpectedCost),
@@ -1936,9 +1939,9 @@ async function insertLine(runId, data) {
        expected_amount, delta, status, corrected_by, unmatched_reason, source,
        mapping_id, is_fuel, suggested_service_id, correction_metadata, shipment_date,
        ship_to_postcode, ship_to_country, parcel_count,
-       corrected_sell_price, corrected_cost_price, surcharge_id)
+       corrected_sell_price, corrected_cost_price, surcharge_id, ship_to_name)
     VALUES
-      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
+      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
   `, [
     runId,
     data.tracking_number          ?? null,
@@ -1967,6 +1970,7 @@ async function insertLine(runId, data) {
     data.corrected_sell_price     ?? null,
     data.corrected_cost_price     ?? null,
     data.surcharge_id             || null,
+    data.ship_to_name             || null,
   ]);
 }
 

@@ -2015,54 +2015,52 @@ router.get('/runs/:id/export/preview-csv', async (req, res) => {
         rl.status,
         cs.name                                                   AS service_name,
         cu.business_name                                          AS customer_name,
-        -- Sell amounts
-        COALESCE(rl.corrected_sell_price, ch.sell_price, ch.price, rl.carrier_amount) AS sell_base,
-        COALESCE(fuel.corrected_sell_price, fuel_ch.sell_price, fuel_ch.price, 0)     AS sell_fuel,
+        -- Sell amounts: base from recon line (corrected) or charge price
+        COALESCE(rl.corrected_sell_price, ch.price, rl.carrier_amount) AS sell_base,
+        -- Fuel sell: direct from charges table (same shipment, charge_type='fuel')
+        -- This is correct for DPD separate_fuel_rows mode where fuel overhead rows
+        -- are NOT tagged is_fuel=true in reconciliation_lines.
+        COALESCE((
+          SELECT SUM(sc.price)
+          FROM   charges sc
+          WHERE  sc.shipment_id = ch.shipment_id
+            AND  sc.charge_type = 'fuel'
+            AND  sc.cancelled   = false
+        ), 0)                                                     AS sell_fuel,
+        -- Surcharge sell total: direct from charges table (standing charges, GEC etc.)
+        COALESCE((
+          SELECT SUM(sc.price)
+          FROM   charges sc
+          WHERE  sc.shipment_id = ch.shipment_id
+            AND  sc.charge_type = 'surcharge'
+            AND  sc.cancelled   = false
+            AND  NOT EXISTS (
+              SELECT 1 FROM surcharges sx
+              WHERE sx.id = sc.surcharge_id AND sx.reconciliation_excluded = true
+            )
+        ), 0)                                                     AS sell_surcharge_total,
         -- Charge metadata
         ch.order_id                                               AS order_reference,
-        ch.ship_to_name                                           AS recipient_name,
-        ch.ship_to_postcode                                       AS postcode,
-        COALESCE(rl.carrier_billed_weight_kg, sh.total_weight_kg) AS weight_kg,
-        -- Surcharge info (for surcharge lines)
-        s.name                                                    AS surcharge_name,
-        COALESCE(rl.corrected_sell_price, rl.expected_amount)     AS surcharge_sell
+        -- Recipient name: charges table → shipments table → recon line (CSV extract)
+        COALESCE(ch.ship_to_name, sh.ship_to_name, rl.ship_to_name) AS recipient_name,
+        -- Postcode: charges table → shipments table → recon line (CSV extract)
+        COALESCE(ch.ship_to_postcode, sh.ship_to_postcode, rl.ship_to_postcode) AS postcode,
+        COALESCE(rl.carrier_billed_weight_kg, sh.total_weight_kg) AS weight_kg
       FROM   reconciliation_lines rl
       LEFT JOIN courier_services cs  ON cs.id  = rl.service_id
       LEFT JOIN customers        cu  ON cu.id  = rl.customer_id
       LEFT JOIN charges          ch  ON ch.id  = rl.charge_id AND ch.charge_type = 'courier' AND ch.cancelled = false
       LEFT JOIN shipments        sh  ON sh.id  = ch.shipment_id
-      -- Fuel line for same tracking number in this run
-      LEFT JOIN reconciliation_lines fuel
-             ON fuel.run_id         = rl.run_id
-            AND fuel.tracking_number = rl.tracking_number
-            AND fuel.customer_id    = rl.customer_id
-            AND fuel.is_fuel        = true
-      LEFT JOIN charges fuel_ch ON fuel_ch.id = fuel.charge_id AND fuel_ch.cancelled = false
-      LEFT JOIN surcharges s    ON s.id = rl.surcharge_id
       WHERE  rl.run_id      = $1
         AND  rl.customer_id = $2
         AND  rl.status      IN ('matched', 'corrected')
         AND  rl.is_fuel     = false
+        AND  rl.surcharge_id IS NULL
       ORDER  BY rl.shipment_date ASC NULLS LAST, rl.tracking_number, rl.charge_type
     `, [runId, customer_id]);
 
     const allLines = linesRes.rows;
     if (!allLines.length) return res.status(404).json({ error: 'No matched/corrected lines for this customer' });
-
-    // Separate freight and surcharge rows; group surcharges by tracking number
-    const freightLines  = allLines.filter(l => !l.surcharge_id);
-    const surchargeRows = allLines.filter(l =>  l.surcharge_id);
-
-    // Collect distinct surcharge names for dynamic columns
-    const surchargeNames = [...new Set(surchargeRows.map(s => s.surcharge_name).filter(Boolean))].sort();
-
-    // Build per-tracking surcharge map
-    const surchMap = {};
-    for (const s of surchargeRows) {
-      const k = s.tracking_number;
-      if (!surchMap[k]) surchMap[k] = {};
-      surchMap[k][s.surcharge_name] = (surchMap[k][s.surcharge_name] || 0) + parseFloat(s.surcharge_sell || 0);
-    }
 
     const esc = v => { const s = String(v == null ? '' : v); return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s; };
 
@@ -2070,21 +2068,17 @@ router.get('/runs/:id/export/preview-csv', async (req, res) => {
       'Tracking Number', 'Order Reference', 'Despatch Date',
       'Recipient Name', 'Postcode', 'Service', 'Weight (kg)',
       'Base Charge (£)', 'Fuel Charge (£)',
-      ...surchargeNames.map(n => `${n} (£)`),
       'Total Surcharges (£)', 'Line Total (£)', 'Status',
     ];
 
     let totalBase = 0, totalFuel = 0, totalSurch = 0;
-    const surchargeColTotals = Object.fromEntries(surchargeNames.map(n => [n, 0]));
 
-    const rows = freightLines.map(l => {
-      const base  = parseFloat(l.sell_base || 0);
-      const fuel  = parseFloat(l.sell_fuel || 0);
-      const sm    = surchMap[l.tracking_number] || {};
-      const surch = surchargeNames.reduce((s, n) => s + (sm[n] || 0), 0);
+    const rows = allLines.map(l => {
+      const base  = parseFloat(l.sell_base         || 0);
+      const fuel  = parseFloat(l.sell_fuel         || 0);
+      const surch = parseFloat(l.sell_surcharge_total || 0);
       const total = base + fuel + surch;
       totalBase  += base; totalFuel += fuel; totalSurch += surch;
-      surchargeNames.forEach(n => { surchargeColTotals[n] += (sm[n] || 0); });
       return [
         l.tracking_number   || '',
         l.order_reference   || '',
@@ -2095,7 +2089,6 @@ router.get('/runs/:id/export/preview-csv', async (req, res) => {
         l.weight_kg != null ? parseFloat(l.weight_kg).toFixed(3) : '',
         base.toFixed(2),
         fuel.toFixed(2),
-        ...surchargeNames.map(n => (sm[n] || 0).toFixed(2)),
         surch.toFixed(2),
         total.toFixed(2),
         l.status            || '',
@@ -2105,7 +2098,6 @@ router.get('/runs/:id/export/preview-csv', async (req, res) => {
     rows.push([]);
     rows.push(['TOTAL', '', '', '', '', '', '',
       totalBase.toFixed(2), totalFuel.toFixed(2),
-      ...surchargeNames.map(n => surchargeColTotals[n].toFixed(2)),
       totalSurch.toFixed(2),
       (totalBase + totalFuel + totalSurch).toFixed(2), '',
     ]);
