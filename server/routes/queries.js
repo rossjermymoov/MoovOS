@@ -78,8 +78,7 @@ router.get('/', async (req, res, next) => {
     if (claim_deadline_days) {
       const days = parseInt(claim_deadline_days) || 7;
       conditions.push(`claim_deadline_at IS NOT NULL`);
-      conditions.push(`claim_deadline_at >= NOW() - INTERVAL '1 day'`);
-      conditions.push(`claim_deadline_at <= NOW() + INTERVAL '${days} days'`);
+      conditions.push(`claim_deadline_at BETWEEN NOW() AND NOW() + INTERVAL '${days} days'`);
     }
     if (sla_breached === 'true') {
       conditions.push(`sla_breached = true`);
