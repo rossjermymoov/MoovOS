@@ -1854,8 +1854,20 @@ router.get('/runs/:id/customers/preview', async (req, res) => {
                 AND  sc.cancelled   = false
             ), 0)
         )                                                                                   AS total_sell,
-        -- Cost: carrier_amount is the full carrier invoice total per shipment.
-        SUM(rl.carrier_amount)                                                              AS total_our_cost
+        -- Cost: use total_cost_price (base + fuel + surcharge charges) to match Finance page.
+        -- carrier_amount on the freight line only covers base for carriers like DPD where
+        -- fuel and carriage overhead rows are billed separately and auto-corrected with no
+        -- customer_id — summing carrier_amount alone gives an overstated margin.
+        SUM(
+          COALESCE(base.cost_price, 0)
+          + COALESCE((
+              SELECT SUM(sc.cost_price)
+              FROM   charges sc
+              WHERE  sc.shipment_id = base.shipment_id
+                AND  sc.charge_type IN ('fuel','surcharge')
+                AND  sc.cancelled   = false
+            ), 0)
+        )                                                                                   AS total_our_cost
       FROM   reconciliation_lines rl
       LEFT JOIN customers cu   ON cu.id   = rl.customer_id
       LEFT JOIN charges   base ON base.id = rl.charge_id AND base.charge_type = 'courier' AND base.cancelled = false
@@ -1927,7 +1939,17 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
               AND  sc.charge_type IN ('fuel', 'surcharge')
               AND  sc.cancelled   = false
           ), 0)                                                          AS sell_total,
-        rl.carrier_amount                                                AS cost_total
+        -- Cost: total_cost_price = base + fuel + surcharge charges.
+        -- Matches Finance page; avoids the DPD separate_fuel_rows inflation where
+        -- carrier_amount only covers the freight line, not overhead auto-corrected rows.
+        COALESCE(base.cost_price, 0)
+        + COALESCE((
+            SELECT SUM(sc.cost_price)
+            FROM   charges sc
+            WHERE  sc.shipment_id = base.shipment_id
+              AND  sc.charge_type IN ('fuel','surcharge')
+              AND  sc.cancelled   = false
+          ), 0)                                                          AS cost_total
       FROM   reconciliation_lines rl
       LEFT JOIN courier_services cs   ON cs.id  = rl.service_id
       LEFT JOIN charges          base ON base.id = rl.charge_id AND base.charge_type = 'courier' AND base.cancelled = false
