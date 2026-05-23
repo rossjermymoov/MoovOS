@@ -1816,26 +1816,44 @@ router.get('/runs/:id/customers/preview', async (req, res) => {
   try {
     const runId = parseInt(req.params.id);
     const result = await query(`
-      -- Each reconciliation line is now one shipment (freight + all surcharges rolled in).
-      -- corrected_sell_price = total sell (freight sell + all surcharge sells).
-      -- carrier_amount       = total cost (freight + all surcharges including absorbed).
-      -- No separate surcharge lines exist; the charge_prices CTE is no longer needed.
+      -- Full sell = freight sell + fuel surcharge + standing surcharges from charges table.
+      -- corrected_sell_price covers only the freight (base rate at billed weight).
+      -- Fuel and surcharge charge rows are separate and must be added, mirroring
+      -- what buildSnapshot does at finalization time.
       SELECT
         rl.customer_id,
         cu.business_name                                                                    AS customer_name,
         COUNT(*)::int                                                                       AS line_count,
-        -- total_sell: corrected_sell_price is the full shipment sell (engine-computed).
-        -- Falls back to booking-time sell from charges, then carrier_amount (0 margin).
-        COALESCE(
-          SUM(COALESCE(rl.corrected_sell_price, COALESCE(base.sell_price, base.price))),
-          SUM(rl.carrier_amount)
-        )                                                                                   AS total_sell,
-        -- Legacy columns kept for API compatibility — set to 0 since surcharges are now
-        -- rolled into corrected_sell_price rather than tracked separately.
-        0                                                                                   AS total_base,
-        0                                                                                   AS total_fuel,
-        0                                                                                   AS total_surcharge,
+        -- total_base: freight sell only (corrected at billed weight, or booking-time price)
+        SUM(COALESCE(rl.corrected_sell_price, base.sell_price, base.price, 0))             AS total_base,
+        -- total_fuel: fuel surcharge sell for each linked shipment
+        SUM(COALESCE((
+          SELECT SUM(sc.price)
+          FROM   charges sc
+          WHERE  sc.shipment_id = base.shipment_id
+            AND  sc.charge_type = 'fuel'
+            AND  sc.cancelled   = false
+        ), 0))                                                                              AS total_fuel,
+        -- total_surcharge: non-fuel surcharge sell (e.g. handling fee, GC charge)
+        SUM(COALESCE((
+          SELECT SUM(sc.price)
+          FROM   charges sc
+          WHERE  sc.shipment_id = base.shipment_id
+            AND  sc.charge_type = 'surcharge'
+            AND  sc.cancelled   = false
+        ), 0))                                                                              AS total_surcharge,
         0                                                                                   AS total_recon_surcharge,
+        -- total_sell: sum of all three components
+        SUM(
+          COALESCE(rl.corrected_sell_price, base.sell_price, base.price, 0)
+          + COALESCE((
+              SELECT SUM(sc.price)
+              FROM   charges sc
+              WHERE  sc.shipment_id = base.shipment_id
+                AND  sc.charge_type IN ('fuel', 'surcharge')
+                AND  sc.cancelled   = false
+            ), 0)
+        )                                                                                   AS total_sell,
         -- Cost: carrier_amount is the full carrier invoice total per shipment.
         SUM(rl.carrier_amount)                                                              AS total_our_cost
       FROM   reconciliation_lines rl
@@ -1882,11 +1900,33 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
         rl.parcel_count,
         rl.carrier_billed_weight_kg,
         cs.name                                                          AS service_name,
-        COALESCE(
-          rl.corrected_sell_price,
-          COALESCE(base.sell_price, base.price),
-          rl.carrier_amount
-        )                                                                AS sell_total,
+        -- sell_base: freight only (corrected at billed weight, or booking-time price)
+        COALESCE(rl.corrected_sell_price, base.sell_price, base.price, 0) AS sell_base,
+        -- sell_fuel: fuel surcharge sell for this shipment
+        COALESCE((
+          SELECT SUM(sc.price)
+          FROM   charges sc
+          WHERE  sc.shipment_id = base.shipment_id
+            AND  sc.charge_type = 'fuel'
+            AND  sc.cancelled   = false
+        ), 0)                                                            AS sell_fuel,
+        -- sell_surcharge: non-fuel surcharge sell (handling, GC, etc.)
+        COALESCE((
+          SELECT SUM(sc.price)
+          FROM   charges sc
+          WHERE  sc.shipment_id = base.shipment_id
+            AND  sc.charge_type = 'surcharge'
+            AND  sc.cancelled   = false
+        ), 0)                                                            AS sell_surcharge,
+        -- sell_total: full amount billed to customer
+        COALESCE(rl.corrected_sell_price, base.sell_price, base.price, 0)
+        + COALESCE((
+            SELECT SUM(sc.price)
+            FROM   charges sc
+            WHERE  sc.shipment_id = base.shipment_id
+              AND  sc.charge_type IN ('fuel', 'surcharge')
+              AND  sc.cancelled   = false
+          ), 0)                                                          AS sell_total,
         rl.carrier_amount                                                AS cost_total
       FROM   reconciliation_lines rl
       LEFT JOIN courier_services cs   ON cs.id  = rl.service_id
