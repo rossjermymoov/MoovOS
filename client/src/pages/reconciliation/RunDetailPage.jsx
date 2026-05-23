@@ -71,6 +71,12 @@ function ReasonLabel({ reason, correctedBy }) {
   if (correctedBy === 'surcharge_mapping') {
     return <span style={{ fontSize: 10, color: '#00C853', fontWeight: 600 }}>Surcharge mapping</span>;
   }
+  if (correctedBy === 'weight_correction') {
+    return <span style={{ fontSize: 10, color: '#92400E', background: '#FEF3C7', padding: '1px 5px', borderRadius: 4, fontWeight: 600 }}>⚖ Weight corrected</span>;
+  }
+  if (correctedBy === 'carrier_undercharge') {
+    return <span style={{ fontSize: 10, color: '#1E40AF', background: '#DBEAFE', padding: '1px 5px', borderRadius: 4, fontWeight: 600 }}>↓ Carrier undercharge</span>;
+  }
   const labels = {
     unknown_service_code:    { text: 'Unknown service code',  color: '#FF5252' },
     no_account_mapping:      { text: 'Account not mapped',    color: '#FFB300' },
@@ -173,6 +179,42 @@ function CorrectionDetail({ line, surchargeLookup }) {
         {!hasBreakdown && (
           <span style={{ fontSize: 10, color: '#64748B' }}>No surcharge breakdown available</span>
         )}
+      </div>
+    );
+  }
+
+  // weight_correction: carrier billed at higher weight — charge repriced upward
+  if (cb === 'weight_correction') {
+    const declared = meta?.declared_weight_kg;
+    const billed   = meta?.billed_weight_kg;
+    const diff     = meta?.weight_diff_kg;
+    const oldCost  = meta?.old_cost_price;
+    const newCost  = meta?.new_cost_price;
+    const band     = meta?.band_label;
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span style={{ fontSize: 10, color: '#92400E', fontWeight: 600 }}>⚖ Weight corrected & recharged</span>
+        {declared != null && billed != null && (
+          <span style={{ fontSize: 10, color: '#64748B' }}>
+            {parseFloat(declared).toFixed(2)}kg → {parseFloat(billed).toFixed(2)}kg (+{parseFloat(diff ?? 0).toFixed(2)}kg)
+          </span>
+        )}
+        {oldCost != null && newCost != null && (
+          <span style={{ fontSize: 10, color: '#64748B' }}>
+            Cost £{parseFloat(oldCost).toFixed(2)} → £{parseFloat(newCost).toFixed(2)}
+            {band ? ` · ${band}` : ''}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  // carrier_undercharge: carrier billed less than expected — flagged only, NOT downgraded
+  if (cb === 'carrier_undercharge') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <span style={{ fontSize: 10, color: '#1E40AF', fontWeight: 600 }}>↓ Carrier undercharge</span>
+        <span style={{ fontSize: 10, color: '#64748B' }}>Highlighted only — charge not reduced</span>
       </div>
     );
   }

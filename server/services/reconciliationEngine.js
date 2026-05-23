@@ -1677,15 +1677,14 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     return { status: 'matched' };
   }
 
-  // Phase 3b: Undercharge Rule
+  // Phase 3b: Undercharge Rule — carrier billed LESS than expected.
+  // Per policy: never downgrade a charge. We flag this for visibility only.
+  // The charges table is left untouched so the customer is billed at the
+  // original (higher) booked price. corrected_sell_price is left null
+  // so the UI clearly shows this has NOT been repriced downward.
   if (delta < -0.02) {
-    console.log(`[recon engine] UNDERCHARGE: tracking=${trackingNumber} carrier=£${totalCarrier} expected=£${totalExpected} delta=£${delta} — auto-accepted`);
-    const billedKg    = parseFloat(line.billed_weight_kg) || parseFloat(charge.declared_weight_kg) || 0;
-    const freightSell = billedKg > 0
-      ? await computeCorrectedSell(charge, serviceId, billedKg, invoiceParcels, ctx.serviceIdToCodeMap)
-      : null;
-    const addSell   = await resolveSurchargeSells(rollup.items, freightSell, invoiceParcels, ctx.surchargeOverrideCache, charge.customer_id, serviceId);
-    const totalSell  = freightSell != null ? round2(freightSell + addSell) : null;
+    const billedKg = parseFloat(line.billed_weight_kg) || parseFloat(charge.declared_weight_kg) || 0;
+    console.log(`[recon engine] UNDERCHARGE: tracking=${trackingNumber} carrier=£${totalCarrier} expected=£${totalExpected} delta=£${delta} — flagged only, charge NOT downgraded`);
     await insertLine(runId, {
       tracking_number:          trackingNumber,
       carrier_account_no:       line.account_number    || null,
@@ -1706,11 +1705,89 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       ship_to_postcode:         line.delivery_postcode || null,
       ship_to_country:          line.ship_to_country   || null,
       parcel_count:             invoiceParcels > 1 ? invoiceParcels : null,
-      corrected_sell_price:     totalSell,
-      corrected_cost_price:     totalCarrier,
+      corrected_sell_price:     null,  // never downgrade
+      corrected_cost_price:     null,  // never downgrade
       correction_metadata:      surchargeMeta(rollup.items),
     });
     return { status: 'corrected' };
+  }
+
+  // Phase 3c: Weight Correction — carrier billed at a HIGHER weight than declared.
+  // When the carrier re-weighs and finds the parcel heavier than booked, they bill
+  // at the actual weight. We accept this as correct, re-price cost and sell at the
+  // actual weight, and update the charges record so the customer is billed correctly.
+  // This only fires for upward corrections (billedKg > declaredKg). Downward
+  // discrepancies are handled by the undercharge rule above and are never applied.
+  {
+    const declaredKg = parseFloat(charge.declared_weight_kg) || 0;
+    const billedKg   = parseFloat(line.billed_weight_kg)     || 0;
+
+    if (billedKg > 0 && declaredKg > 0 && billedKg > declaredKg + 0.09) {
+      console.log(`[recon engine] WEIGHT CORRECTION: tracking=${trackingNumber} declared=${declaredKg}kg billed=${billedKg}kg — repricing`);
+
+      const newCostResult = await lookupCarrierBandCost(serviceId, billedKg, charge.zone_id || null);
+      const newSell       = await computeCorrectedSell(charge, serviceId, billedKg, invoiceParcels, ctx.serviceIdToCodeMap);
+      const newCost       = newCostResult ? newCostResult.cost : null;
+
+      if (newCost !== null) {
+        // Update the charge: actual weight + repriced cost and sell
+        await query(`
+          UPDATE charges
+          SET weight_charged_kg = $1,
+              cost_price        = $2,
+              price             = CASE WHEN $3::numeric IS NOT NULL THEN $3::numeric ELSE price END
+          WHERE id = $4
+        `, [billedKg, newCost, newSell, charge.charge_id]);
+
+        const addSell   = await resolveSurchargeSells(rollup.items, newSell, invoiceParcels, ctx.surchargeOverrideCache, charge.customer_id, serviceId);
+        const totalSell = newSell != null ? round2(newSell + addSell) : null;
+
+        console.log(
+          `[recon engine] WEIGHT CORRECTION applied: tracking=${trackingNumber} ` +
+          `declared=${declaredKg}kg → actual=${billedKg}kg, ` +
+          `cost £${round2(parseFloat(charge.expected_cost))} → £${newCost}, ` +
+          `sell → £${totalSell}`
+        );
+
+        await insertLine(runId, {
+          tracking_number:          trackingNumber,
+          carrier_account_no:       line.account_number    || null,
+          raw_service_code:         rawServiceCode,
+          charge_type:              line.charge_type       || 'base',
+          carrier_amount:           totalCarrier,
+          carrier_billed_weight_kg: billedKg,
+          service_id:               serviceId,
+          customer_id:              charge.customer_id,
+          charge_id:                charge.charge_id,
+          expected_amount:          totalExpected,
+          delta,
+          status:                   'corrected',
+          corrected_by:             'weight_correction',
+          unmatched_reason:         null,
+          source:                   'internal',
+          shipment_date:            line.shipment_date     || null,
+          ship_to_postcode:         line.delivery_postcode || null,
+          ship_to_country:          line.ship_to_country   || null,
+          parcel_count:             invoiceParcels > 1 ? invoiceParcels : null,
+          corrected_cost_price:     round2(newCost + rollup.addExpectedCost),
+          corrected_sell_price:     totalSell,
+          correction_metadata:      {
+            declared_weight_kg: declaredKg,
+            billed_weight_kg:   billedKg,
+            weight_diff_kg:     round2(billedKg - declaredKg),
+            old_cost_price:     round2(parseFloat(charge.expected_cost) || 0),
+            new_cost_price:     newCost,
+            band_label:         newCostResult.bandLabel || null,
+            ...surchargeMeta(rollup.items) || {},
+          },
+        });
+        return { status: 'corrected' };
+      }
+
+      // No rate band found for the actual weight — fall through to unmatched
+      // so the operator can investigate rather than silently accepting.
+      console.log(`[recon engine] WEIGHT CORRECTION: no rate band for ${billedKg}kg on service ${serviceId} — falling through to unmatched`);
+    }
   }
 
   // Phase 4a: Mapping Engine
