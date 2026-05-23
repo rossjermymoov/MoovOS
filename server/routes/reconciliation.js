@@ -2495,8 +2495,8 @@ router.get('/runs/:id/lines/:lineId/trace', async (req, res) => {
              WHERE  z.courier_service_id = $1
                AND  wb.zone_id = $2
                AND  wb.max_weight_kg IS NOT NULL
-               AND  $3 >= COALESCE(wb.min_weight_kg, 0)
-               AND  $3 <  wb.max_weight_kg
+               AND  $3 >  COALESCE(wb.min_weight_kg, 0)
+               AND  $3 <= wb.max_weight_kg
              ORDER BY wb.min_weight_kg DESC LIMIT 1`,
             [line.service_id, zoneId, line.carrier_billed_weight_kg]
           )
