@@ -45,11 +45,13 @@ const FILTER_FIELDS = [
 ];
 
 const TEXT_OPS = [
-  { value: 'eq',       label: 'equals' },
-  { value: 'not_eq',   label: 'does not equal' },
-  { value: 'in',       label: 'is any of' },
-  { value: 'not_in',   label: 'is none of' },
-  { value: 'contains', label: 'contains' },
+  { value: 'eq',          label: 'equals' },
+  { value: 'not_eq',      label: 'does not equal' },
+  { value: 'starts_with', label: 'starts with' },
+  { value: 'ends_with',   label: 'ends with' },
+  { value: 'contains',    label: 'contains' },
+  { value: 'in',          label: 'is any of' },
+  { value: 'not_in',      label: 'is none of' },
 ];
 
 const NUM_OPS = [

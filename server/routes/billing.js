@@ -695,7 +695,9 @@ function testCondition(f, data) {
     case 'lt':       return parseFloat(val) < parseFloat(f.value);
     case 'gte':      return parseFloat(val) >= parseFloat(f.value);
     case 'lte':      return parseFloat(val) <= parseFloat(f.value);
-    case 'contains': return val.toLowerCase().includes(String(f.value || '').toLowerCase());
+    case 'contains':     return val.toLowerCase().includes(String(f.value || '').toLowerCase());
+    case 'starts_with':  return val.toLowerCase().startsWith(String(f.value || '').toLowerCase());
+    case 'ends_with':    return val.toLowerCase().endsWith(String(f.value || '').toLowerCase());
     default:         return true;
   }
 }
