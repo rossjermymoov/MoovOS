@@ -1797,7 +1797,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
           return { status: 'unmatched' };
         }
 
-        // Both cost and sell resolved — update the charge and mark corrected
+        // Both cost and sell resolved — update the base freight charge
         await query(`
           UPDATE charges
           SET weight_charged_kg = $1,
@@ -1805,6 +1805,53 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
               price             = $3
           WHERE id = $4
         `, [billedKg, newCost, newSell, charge.charge_id]);
+
+        // Recalculate fuel and cost-percentage surcharge charges for the same shipment.
+        // The fuel charge was created at booking time at the original weight/price.
+        // Now that the base freight has changed, we must update it so the sell CSV
+        // shows the correct fuel amount (e.g. 18% of £69.28 not 18% of the 1kg price).
+        try {
+          const fuelPctRes = await query(`
+            SELECT fg.fuel_surcharge_pct                              AS cost_pct,
+                   COALESCE(cfgp.sell_pct, fg.standard_sell_pct, 0)  AS sell_pct
+            FROM   courier_services cs
+            JOIN   fuel_groups fg
+                   ON fg.id = cs.fuel_group_id
+            LEFT JOIN customer_fuel_group_pricing cfgp
+                   ON cfgp.fuel_group_id = fg.id
+                  AND cfgp.customer_id   = $2
+            WHERE  cs.id = $1
+          `, [serviceId, charge.customer_id]);
+
+          if (fuelPctRes.rows.length) {
+            const fuelCostPct = parseFloat(fuelPctRes.rows[0].cost_pct || 0);
+            const fuelSellPct = parseFloat(fuelPctRes.rows[0].sell_pct || 0);
+
+            if (fuelSellPct > 0 || fuelCostPct > 0) {
+              const newFuelSell = round2(newSell * fuelSellPct / 100);
+              const newFuelCost = round2(newCost * fuelCostPct / 100);
+
+              const fuelUpdRes = await query(`
+                UPDATE charges
+                SET price      = $1,
+                    cost_price = $2
+                WHERE shipment_id = (SELECT shipment_id FROM charges WHERE id = $3)
+                  AND charge_type = 'fuel'
+                  AND cancelled   = false
+              `, [newFuelSell, newFuelCost, charge.charge_id]);
+
+              if (fuelUpdRes.rowCount > 0) {
+                console.log(
+                  `[recon engine] WEIGHT CORRECTION: fuel charge updated for tracking=${trackingNumber} ` +
+                  `sell_pct=${fuelSellPct}% → £${newFuelSell}, cost_pct=${fuelCostPct}% → £${newFuelCost}`
+                );
+              }
+            }
+          }
+        } catch (fuelErr) {
+          // Non-fatal — log and continue. Fuel charge may be stale but base freight is correct.
+          console.warn(`[recon engine] WEIGHT CORRECTION: fuel charge update failed for tracking=${trackingNumber}:`, fuelErr.message);
+        }
 
         const addSell   = await resolveSurchargeSells(rollup.items, newSell, invoiceParcels, ctx.surchargeOverrideCache, charge.customer_id, serviceId);
         const totalSell = round2(newSell + addSell);
