@@ -56,6 +56,108 @@ import { computeGhostCharge, insertCharges, lookupCarrierBandCost, lookupCustome
 
 function round2(n) { return Math.round(n * 100) / 100; }
 
+// ─── DDP Clearance Admin Fee ──────────────────────────────────────────────────
+//
+// Charged once per DDP consignment at reconciliation time.
+//   Europe  (EU27 + EEA + CH): flat £2.50
+//   Rest of World:              max(£12.50, 2.5% of declared goods value)
+//
+// Break-even for ROW: £500 declared value (2.5% × £500 = £12.50 = minimum).
+// Below £500 → flat £12.50.  At or above £500 → 2.5%.
+
+const EUROPEAN_ISOS = new Set([
+  // EU27
+  'AT','BE','BG','CY','CZ','DE','DK','EE','ES','FI','FR','GR','HR',
+  'HU','IE','IT','LT','LU','LV','MT','NL','PL','PT','RO','SE','SI','SK',
+  // EEA (non-EU) + Switzerland
+  'IS','LI','NO','CH',
+]);
+
+function calcDdpAdminFee(countryIso, goodsValue) {
+  if (EUROPEAN_ISOS.has(String(countryIso || '').toUpperCase())) return 2.50;
+  const pct = round2((parseFloat(goodsValue) || 0) * 0.025);
+  return Math.max(12.50, pct);
+}
+
+/**
+ * Insert a DDP clearance admin charge for a reconciled DDP consignment.
+ *
+ * Fires only when:
+ *   1. The effective service code ends in 'DDP'
+ *   2. The shipment has a shipment_id and customer_id
+ *   3. total_declared_value > 0 (goods value is on record)
+ *   4. No ddp_admin charge already exists for this shipment (re-run safe)
+ *
+ * sell_price = fee; cost_price = 0  (Moov admin revenue, not a carrier cost).
+ */
+async function maybeInsertDdpAdminFee(charge, effectiveServiceId, countryIso, shipmentDate, serviceIdToCodeMap) {
+  if (!charge?.shipment_id || !charge?.customer_id) return null;
+
+  const serviceCode = serviceIdToCodeMap[effectiveServiceId];
+  if (!serviceCode || !serviceCode.toUpperCase().endsWith('DDP')) return null;
+
+  const goodsValue = parseFloat(charge.total_declared_value) || 0;
+  if (goodsValue <= 0) {
+    console.log(
+      `[recon engine] DDP admin fee SKIP: shipment=${charge.shipment_id} ` +
+      `service=${serviceCode} — no declared goods value on record`
+    );
+    return null;
+  }
+
+  // Guard: don't double-insert on re-run
+  const existing = await query(
+    `SELECT id FROM charges WHERE shipment_id = $1 AND charge_type = 'ddp_admin' AND cancelled = false LIMIT 1`,
+    [charge.shipment_id]
+  );
+  if (existing.rows.length > 0) {
+    console.log(
+      `[recon engine] DDP admin fee SKIP: shipment=${charge.shipment_id} ` +
+      `— charge already exists (id=${existing.rows[0].id})`
+    );
+    return null;
+  }
+
+  const iso    = String(countryIso || '').toUpperCase();
+  const region = EUROPEAN_ISOS.has(iso) ? 'Europe' : 'ROW';
+  const fee    = calcDdpAdminFee(iso, goodsValue);
+  const meta   = {
+    goods_value: goodsValue,
+    country_iso: countryIso || null,
+    region,
+    fee_rule:    region === 'Europe'
+      ? 'flat_2.50'
+      : `max(12.50, ${goodsValue}*2.5%=${round2(goodsValue * 0.025)})`,
+    service_code: serviceCode,
+  };
+
+  const result = await query(`
+    INSERT INTO charges (
+      customer_id, shipment_id, charge_type,
+      cost_price, sell_price, price,
+      status, verified, despatch_date,
+      pricing_logic_trace, source
+    ) VALUES ($1,$2,'ddp_admin', 0,$3,$3, 'verified',true,$4, $5,'ddp_admin_recon')
+    ON CONFLICT DO NOTHING
+    RETURNING id
+  `, [
+    charge.customer_id,
+    charge.shipment_id,
+    fee,
+    shipmentDate || null,
+    JSON.stringify(meta),
+  ]);
+
+  console.log(
+    `[recon engine] DDP admin fee: shipment=${charge.shipment_id} customer=${charge.customer_id} ` +
+    `service=${serviceCode} country=${countryIso} region=${region} ` +
+    `goods=£${goodsValue} fee=£${fee}` +
+    (result.rows[0] ? ` → charge id=${result.rows[0].id}` : ' → skipped (conflict)')
+  );
+
+  return result.rows[0] || null;
+}
+
 /**
  * Pool lookup — strict exact-match only.
  *
@@ -321,8 +423,9 @@ async function buildVerifiedPool(carrierId) {
         CASE WHEN c.tracking_code IS NOT NULL THEN ARRAY[c.tracking_code] ELSE NULL END
       )                 AS tracking_codes,
       s.dc_service_id,
-      s.total_weight_kg AS declared_weight_kg,
-      s.parcel_count    AS shipment_parcel_count,
+      s.total_weight_kg        AS declared_weight_kg,
+      s.parcel_count           AS shipment_parcel_count,
+      s.total_declared_value,
       cu.account_number AS customer_account,
       -- rate_per_parcel: normalised per-parcel base cost regardless of how cost_price was stored.
       -- For charges created with wrong parcel_qty, cost_price = per-parcel rate and
@@ -1327,6 +1430,14 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
     );
   }
 
+  // ── DDP clearance admin fee (per consignment, idempotent) ─────────────────
+  await maybeInsertDdpAdminFee(
+    charge, grpEffServiceId,
+    firstLine.ship_to_country,
+    firstLine.shipment_date,
+    ctx.serviceIdToCodeMap
+  );
+
   // Process orphan lines individually.
   for (const line of orphanLines) {
     const r = await processLine(line, runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings, ctx);
@@ -1655,6 +1766,14 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       `code="${mappedKey}" global_svc=${serviceId} → override_svc=${effectiveServiceId}`
     );
   }
+
+  // ── DDP clearance admin fee (per consignment, idempotent) ─────────────────
+  await maybeInsertDdpAdminFee(
+    charge, effectiveServiceId,
+    line.ship_to_country,
+    line.shipment_date,
+    ctx.serviceIdToCodeMap
+  );
 
   // separate_fuel_rows: carrier bills fuel/carriage/energy as separate invoice
   // rows, so the freight row's carrier_amount = base only. Compare against
