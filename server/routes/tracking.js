@@ -703,4 +703,107 @@ export async function purgeOldTrackingData() {
   }
 }
 
+// ─── POST /api/tracking/backfill-verify ──────────────────────────────────────
+//
+// Finds all unverified charges from the last N days and:
+//   1. Runs an immediate catch-up verify pass (verify any charges that already
+//      have qualifying tracking events in the DB but weren't verified yet).
+//   2. Returns a full list of shipments that remain unverified so the operator
+//      can see exactly what's missing and take manual action if needed.
+//
+// Body: { days: 14 }  — optional, defaults to 14
+//
+// Called manually when the tracking webhook has been disabled or missed events.
+
+router.post('/backfill-verify', async (req, res, next) => {
+  try {
+    const days = Math.min(parseInt(req.body?.days) || 14, 90); // cap at 90 days
+
+    // ── Step 1: Aggressive catch-up verify ───────────────────────────────────
+    // Verify any charge whose shipment already has a qualifying tracking event
+    // in the parcels/tracking_events tables (these may pre-date the webhook gap).
+    const verifyRes = await query(`
+      UPDATE charges c
+      SET    verified   = true,
+             updated_at = NOW()
+      FROM   shipments s
+      WHERE  c.shipment_id = s.id
+        AND  c.verified    = false
+        AND  c.cancelled   = false
+        AND  c.charge_type = 'courier'
+        AND  c.created_at  >= NOW() - ($1 || ' days')::INTERVAL
+        AND  s.tracking_codes IS NOT NULL
+        AND  array_length(s.tracking_codes, 1) > 0
+        AND  EXISTS (
+          SELECT 1
+          FROM   parcels p
+          JOIN   tracking_events te ON te.parcel_id = p.id
+          WHERE  p.consignment_number = ANY(s.tracking_codes)
+            AND  te.status = ANY(ARRAY[
+                   'in_transit','at_depot','out_for_delivery',
+                   'delivered','failed_delivery','on_hold',
+                   'awaiting_collection','customs_hold','exception','returned'
+                 ]::parcel_status[])
+        )
+    `, [days]);
+
+    const justVerified = verifyRes.rowCount || 0;
+
+    // ── Step 2: List still-unverified shipments ───────────────────────────────
+    // Everything that has a tracking code but still no qualifying event.
+    const stillUnverifiedRes = await query(`
+      SELECT
+        c.id                                    AS charge_id,
+        c.created_at,
+        c.charge_type,
+        cu.business_name                        AS customer_name,
+        cu.account_number,
+        s.id                                    AS shipment_id,
+        s.tracking_codes,
+        s.courier,
+        s.despatch_date,
+        -- Has any tracking event at all (even non-qualifying like 'booked')
+        EXISTS (
+          SELECT 1 FROM parcels p
+          JOIN tracking_events te ON te.parcel_id = p.id
+          WHERE p.consignment_number = ANY(s.tracking_codes)
+        )                                       AS has_any_event
+      FROM   charges    c
+      JOIN   shipments  s  ON s.id  = c.shipment_id
+      LEFT JOIN customers cu ON cu.id = c.customer_id
+      WHERE  c.verified    = false
+        AND  c.cancelled   = false
+        AND  c.charge_type = 'courier'
+        AND  c.created_at  >= NOW() - ($1 || ' days')::INTERVAL
+        AND  s.tracking_codes IS NOT NULL
+        AND  array_length(s.tracking_codes, 1) > 0
+      ORDER  BY c.created_at DESC
+    `, [days]);
+
+    const unverified = stillUnverifiedRes.rows;
+
+    console.log(
+      `[tracking/backfill-verify] days=${days}: ` +
+      `verified ${justVerified} charge(s), ${unverified.length} still unverified`
+    );
+
+    res.json({
+      days_scanned:     days,
+      just_verified:    justVerified,
+      still_unverified: unverified.length,
+      unverified_list:  unverified.map(r => ({
+        charge_id:      r.charge_id,
+        customer:       r.customer_name,
+        account_number: r.account_number,
+        shipment_id:    r.shipment_id,
+        courier:        r.courier,
+        tracking_codes: r.tracking_codes,
+        despatch_date:  r.despatch_date,
+        created_at:     r.created_at,
+        has_any_event:  r.has_any_event,
+      })),
+    });
+  } catch (err) { next(err); }
+});
+
 export default router;

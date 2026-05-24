@@ -193,11 +193,21 @@ router.post('/', async (req, res, next) => {
       tier, payment_terms_days = 7, billing_cycle = 'monthly', credit_limit = 0,
       accounts_email, eori_number, ioss_number,
       salesperson_id, account_manager_id, onboarding_person_id,
+      account_number,   // optional — if supplied, overrides the auto-generated MOOV-XXXX
     } = req.body;
 
     if (!business_name || !postcode || !phone_number || !primary_email) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
+
+    // If account_number is explicitly supplied, include it in the INSERT so the
+    // DB trigger (which only fires when account_number IS NULL) leaves it alone.
+    const accountNumberClause = account_number
+      ? ', account_number'
+      : '';
+    const accountNumberParam = account_number
+      ? ', $23'
+      : '';
 
     const result = await query(`
       INSERT INTO customers (
@@ -206,8 +216,8 @@ router.post('/', async (req, res, next) => {
         company_type, company_reg_number, vat_number,
         tier, payment_terms_days, billing_cycle, credit_limit,
         accounts_email, eori_number, ioss_number,
-        salesperson_id, account_manager_id, onboarding_person_id
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+        salesperson_id, account_manager_id, onboarding_person_id${accountNumberClause}
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22${accountNumberParam})
       RETURNING *
     `, [
       business_name, address_line_1 || null, address_line_2 || null, city || null, county || null,
@@ -216,6 +226,7 @@ router.post('/', async (req, res, next) => {
       tier || 'bronze', payment_terms_days, billing_cycle, credit_limit,
       accounts_email || null, eori_number || null, ioss_number || null,
       salesperson_id || null, account_manager_id || null, onboarding_person_id || null,
+      ...(account_number ? [account_number.trim().toUpperCase()] : []),
     ]);
 
     res.status(201).json(result.rows[0]);
@@ -845,16 +856,21 @@ router.post('/ai-onboard', async (req, res, next) => {
     if (!cd?.business_name) return res.status(400).json({ error: 'business_name required' });
 
     // ─── 1. Create customer record ────────────────────────────────
+    // account_number: if cd.account_number is supplied, include it explicitly so
+    // the DB trigger (which only fires when account_number IS NULL) leaves it alone.
+    const acctCol   = cd.account_number ? ', account_number' : '';
+    const acctParam = cd.account_number ? ', $21' : '';
+
     const custRes = await query(`
       INSERT INTO customers (
         business_name, company_type, company_reg_number, vat_number,
         address_line_1, address_line_2, city, county, postcode, country,
         phone_number, primary_email, accounts_email, eori_number, ioss_number,
         tier, credit_limit, billing_cycle, payment_terms_days,
-        dc_id, account_status, vat_enabled
+        dc_id, account_status, vat_enabled${acctCol}
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
-        $16,$17,$18,$19,$20,'active',true
+        $16,$17,$18,$19,$20,'active',true${acctParam}
       ) RETURNING *
     `, [
       cd.business_name,
@@ -877,6 +893,7 @@ router.post('/ai-onboard', async (req, res, next) => {
       cd.billing_cycle || 'monthly',
       parseInt(cd.payment_terms_days) || 30,
       dc_id || null,
+      ...(cd.account_number ? [cd.account_number.trim().toUpperCase()] : []),
     ]);
     const customer = custRes.rows[0];
 

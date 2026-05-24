@@ -62,6 +62,70 @@ export async function finalizeRun(runId, staffId = null) {
   let finalized = 0;
   let externalBalanceUpdates = 0;
 
+  // ── Step 0: Insert pending DDP admin charges ──────────────────────────────
+  //
+  // ddp_admin reconciliation lines were created by the engine without a charge_id
+  // (the engine never writes to the charges table — that's our job here at finalize
+  // time). We insert the charge now and back-populate charge_id on the recon line
+  // so buildSnapshot can enrich from the charges table normally.
+  for (const line of lines) {
+    if (line.source !== 'ddp_admin' || line.charge_id) continue;
+
+    try {
+      // Resolve shipment_id from tracking number
+      const shipRes = await query(
+        `SELECT s.id FROM shipments s WHERE $1 = ANY(s.tracking_codes) LIMIT 1`,
+        [line.tracking_number]
+      );
+      const shipmentId = shipRes.rows[0]?.id || null;
+
+      const fee = round4(parseFloat(line.corrected_sell_price) || 0);
+      if (fee <= 0) continue;  // skip zero-fee lines (shouldn't happen but guard anyway)
+
+      // Insert charge (idempotent — ON CONFLICT DO NOTHING)
+      const chargeRes = await query(`
+        INSERT INTO charges (
+          customer_id, shipment_id, charge_type,
+          cost_price, sell_price, price,
+          status, verified, despatch_date,
+          pricing_logic_trace, source
+        ) VALUES ($1,$2,'ddp_admin', 0,$3,$3, 'verified',true,$4, $5,'ddp_admin_finalized')
+        ON CONFLICT DO NOTHING
+        RETURNING id
+      `, [
+        line.customer_id,
+        shipmentId,
+        fee,
+        line.shipment_date || null,
+        line.correction_metadata || null,
+      ]);
+
+      let chargeId = chargeRes.rows[0]?.id || null;
+
+      // If ON CONFLICT fired, find the existing charge
+      if (!chargeId && shipmentId) {
+        const existingRes = await query(
+          `SELECT id FROM charges WHERE shipment_id = $1 AND charge_type = 'ddp_admin' AND cancelled = false LIMIT 1`,
+          [shipmentId]
+        );
+        chargeId = existingRes.rows[0]?.id || null;
+      }
+
+      if (chargeId) {
+        // Back-populate so buildSnapshot can enrich from the charges table
+        line.charge_id = chargeId;
+        await query(
+          `UPDATE reconciliation_lines SET charge_id = $1 WHERE id = $2`,
+          [chargeId, line.id]
+        );
+        console.log(`[finalization] DDP admin charge created: id=${chargeId} customer=${line.customer_id} fee=£${fee} tracking=${line.tracking_number}`);
+      }
+    } catch (ddpErr) {
+      console.error(`[finalization] DDP admin charge failed for tracking=${line.tracking_number}:`, ddpErr.message);
+      // Non-fatal — continue without the ddp_admin line
+    }
+  }
+
   for (const line of lines) {
     try {
       const snapshot = await buildSnapshot(line, run);

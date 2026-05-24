@@ -80,18 +80,28 @@ function calcDdpAdminFee(countryIso, goodsValue) {
 }
 
 /**
- * Insert a DDP clearance admin charge for a reconciled DDP consignment.
+ * Insert a DDP clearance admin reconciliation line for a reconciled DDP consignment.
+ *
+ * IMPORTANT: This does NOT insert a charge row. The charge is created at
+ * Finalize Run time (finalizationService.js) so the charges table stays clean
+ * until the operator explicitly finalizes the run.
  *
  * Fires only when:
  *   1. The effective service code ends in 'DDP'
- *   2. The shipment has a shipment_id and customer_id
+ *   2. The shipment has customer_id
  *   3. total_declared_value > 0 (goods value is on record)
- *   4. No ddp_admin charge already exists for this shipment (re-run safe)
+ *   4. No ddp_admin recon line already exists for this run + tracking number
  *
- * sell_price = fee; cost_price = 0  (Moov admin revenue, not a carrier cost).
+ * The reconciliation line has:
+ *   source             = 'ddp_admin'
+ *   status             = 'corrected'
+ *   carrier_amount     = 0  (Moov's own fee — not billed by the carrier)
+ *   corrected_sell_price = fee amount
+ *   corrected_cost_price = 0
+ *   charge_id          = null (populated by finalization service when charge is created)
  */
-async function maybeInsertDdpAdminFee(charge, effectiveServiceId, countryIso, shipmentDate, serviceIdToCodeMap) {
-  if (!charge?.shipment_id || !charge?.customer_id) return null;
+async function insertDdpAdminReconLine(runId, trackingNumber, charge, effectiveServiceId, countryIso, shipmentDate, serviceIdToCodeMap) {
+  if (!charge?.customer_id) return null;
 
   const serviceCode = serviceIdToCodeMap[effectiveServiceId];
   if (!serviceCode || !serviceCode.toUpperCase().endsWith('DDP')) return null;
@@ -99,21 +109,22 @@ async function maybeInsertDdpAdminFee(charge, effectiveServiceId, countryIso, sh
   const goodsValue = parseFloat(charge.total_declared_value) || 0;
   if (goodsValue <= 0) {
     console.log(
-      `[recon engine] DDP admin fee SKIP: shipment=${charge.shipment_id} ` +
+      `[recon engine] DDP admin fee SKIP: tracking=${trackingNumber} ` +
       `service=${serviceCode} — no declared goods value on record`
     );
     return null;
   }
 
-  // Guard: don't double-insert on re-run
+  // Guard: don't double-insert on re-run of the same invoice
   const existing = await query(
-    `SELECT id FROM charges WHERE shipment_id = $1 AND charge_type = 'ddp_admin' AND cancelled = false LIMIT 1`,
-    [charge.shipment_id]
+    `SELECT id FROM reconciliation_lines
+     WHERE run_id = $1 AND tracking_number = $2 AND source = 'ddp_admin' LIMIT 1`,
+    [runId, trackingNumber]
   );
   if (existing.rows.length > 0) {
     console.log(
-      `[recon engine] DDP admin fee SKIP: shipment=${charge.shipment_id} ` +
-      `— charge already exists (id=${existing.rows[0].id})`
+      `[recon engine] DDP admin fee SKIP: tracking=${trackingNumber} ` +
+      `— recon line already exists for this run (id=${existing.rows[0].id})`
     );
     return null;
   }
@@ -122,40 +133,44 @@ async function maybeInsertDdpAdminFee(charge, effectiveServiceId, countryIso, sh
   const region = EUROPEAN_ISOS.has(iso) ? 'Europe' : 'ROW';
   const fee    = calcDdpAdminFee(iso, goodsValue);
   const meta   = {
-    goods_value: goodsValue,
-    country_iso: countryIso || null,
+    goods_value:  goodsValue,
+    country_iso:  countryIso || null,
     region,
-    fee_rule:    region === 'Europe'
+    fee_rule:     region === 'Europe'
       ? 'flat_2.50'
       : `max(12.50, ${goodsValue}*2.5%=${round2(goodsValue * 0.025)})`,
     service_code: serviceCode,
   };
 
-  const result = await query(`
-    INSERT INTO charges (
-      customer_id, shipment_id, charge_type,
-      cost_price, sell_price, price,
-      status, verified, despatch_date,
-      pricing_logic_trace, source
-    ) VALUES ($1,$2,'ddp_admin', 0,$3,$3, 'verified',true,$4, $5,'ddp_admin_recon')
-    ON CONFLICT DO NOTHING
-    RETURNING id
-  `, [
-    charge.customer_id,
-    charge.shipment_id,
-    fee,
-    shipmentDate || null,
-    JSON.stringify(meta),
-  ]);
+  await insertLine(runId, {
+    tracking_number:          trackingNumber,
+    carrier_account_no:       null,
+    raw_service_code:         serviceCode,
+    charge_type:              'base',
+    carrier_amount:           0,
+    carrier_billed_weight_kg: null,
+    service_id:               effectiveServiceId,
+    customer_id:              charge.customer_id,
+    charge_id:                null,      // populated by finalization service
+    expected_amount:          0,
+    delta:                    0,
+    status:                   'corrected',
+    corrected_by:             'ddp_admin',
+    unmatched_reason:         null,
+    source:                   'ddp_admin',
+    shipment_date:            shipmentDate || null,
+    corrected_sell_price:     fee,
+    corrected_cost_price:     0,
+    correction_metadata:      meta,
+  });
 
   console.log(
-    `[recon engine] DDP admin fee: shipment=${charge.shipment_id} customer=${charge.customer_id} ` +
+    `[recon engine] DDP admin fee queued: tracking=${trackingNumber} customer=${charge.customer_id} ` +
     `service=${serviceCode} country=${countryIso} region=${region} ` +
-    `goods=£${goodsValue} fee=£${fee}` +
-    (result.rows[0] ? ` → charge id=${result.rows[0].id}` : ' → skipped (conflict)')
+    `goods=£${goodsValue} fee=£${fee} — charge will be created at Finalize Run`
   );
 
-  return result.rows[0] || null;
+  return fee;
 }
 
 /**
@@ -426,6 +441,7 @@ async function buildVerifiedPool(carrierId) {
       s.total_weight_kg        AS declared_weight_kg,
       s.parcel_count           AS shipment_parcel_count,
       s.total_declared_value,
+      cu.reconciliation_flexible_parcel_count,
       cu.account_number AS customer_account,
       -- rate_per_parcel: normalised per-parcel base cost regardless of how cost_price was stored.
       -- For charges created with wrong parcel_qty, cost_price = per-parcel rate and
@@ -1431,11 +1447,10 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
   }
 
   // ── DDP clearance admin fee (per consignment, idempotent) ─────────────────
-  await maybeInsertDdpAdminFee(
-    charge, grpEffServiceId,
-    firstLine.ship_to_country,
-    firstLine.shipment_date,
-    ctx.serviceIdToCodeMap
+  // Stores a reconciliation line only — actual charge is created at Finalize Run.
+  await insertDdpAdminReconLine(
+    runId, trackKey, charge, grpEffServiceId,
+    firstLine.ship_to_country, firstLine.shipment_date, ctx.serviceIdToCodeMap
   );
 
   // Process orphan lines individually.
@@ -1722,7 +1737,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   // by parcel count is a direct financial loss that must be surfaced.
   const invoiceParcelCount = line.parcel_count || 1;
   const bookedParcelCount  = parseInt(charge.shipment_parcel_count) || 1;
-  if (invoiceParcelCount > bookedParcelCount) {
+  if (invoiceParcelCount > bookedParcelCount && !charge.reconciliation_flexible_parcel_count) {
     console.warn(
       `[recon engine] PARCEL COUNT MISMATCH: tracking=${trackingNumber} ` +
       `invoice_parcels=${invoiceParcelCount} booked_parcels=${bookedParcelCount} ` +
@@ -1768,11 +1783,10 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   }
 
   // ── DDP clearance admin fee (per consignment, idempotent) ─────────────────
-  await maybeInsertDdpAdminFee(
-    charge, effectiveServiceId,
-    line.ship_to_country,
-    line.shipment_date,
-    ctx.serviceIdToCodeMap
+  // Stores a reconciliation line only — actual charge is created at Finalize Run.
+  await insertDdpAdminReconLine(
+    runId, trackingNumber, charge, effectiveServiceId,
+    line.ship_to_country, line.shipment_date, ctx.serviceIdToCodeMap
   );
 
   // separate_fuel_rows: carrier bills fuel/carriage/energy as separate invoice
