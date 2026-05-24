@@ -874,7 +874,7 @@ router.post('/ai-onboard', async (req, res, next) => {
         address_line_1, address_line_2, city, county, postcode, country,
         phone_number, primary_email, accounts_email, eori_number, ioss_number,
         tier, credit_limit, billing_cycle, payment_terms_days,
-        dc_id, account_status, vat_enabled${acctCol}
+        dc_customer_id, account_status, vat_enabled${acctCol}
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
         $16,$17,$18,$19,$20,'active',true${acctParam}
@@ -899,7 +899,7 @@ router.post('/ai-onboard', async (req, res, next) => {
       parseFloat(cd.credit_limit) || 0,
       cd.billing_cycle || 'monthly',
       parseInt(cd.payment_terms_days) || 30,
-      dc_id || null,
+      dc_id || null,   // dc_id from request → stored as dc_customer_id (the webhook-matching field)
       ...(cd.account_number ? [cd.account_number.trim().toUpperCase()] : []),
     ]);
     const customer = custRes.rows[0];
@@ -990,7 +990,7 @@ router.post('/ai-onboard', async (req, res, next) => {
     if (err.code === '23505') {
       const { dc_id, customer: cd } = req.body;
       if (err.constraint?.includes('account_number')) return res.status(409).json({ error: `Account number ${cd?.account_number} is already in use by another customer` });
-      if (err.constraint?.includes('dc_id'))          return res.status(409).json({ error: `DC account number '${dc_id}' is already assigned to another customer — check the customer list to find who has it` });
+      if (err.constraint?.includes('dc_customer_id') || err.constraint?.includes('dc_id')) return res.status(409).json({ error: `DC account number '${dc_id}' is already assigned to another customer — check the customer list to find who has it` });
       return res.status(409).json({ error: `A customer with these details already exists (${err.constraint || 'unique constraint'})` });
     }
     next(err);
