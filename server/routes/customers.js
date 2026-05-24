@@ -882,9 +882,9 @@ Rules:
 CRITICAL — weight bands vs flat rate:
 - A "Max Weight" column (e.g. "Max Weight: 30kg") is a SERVICE LIMIT only. It is NOT a pricing tier. Do NOT create weight bands from it.
 - Only create multiple weight-band rows (different min/max values) if the rate card shows EXPLICITLY DIFFERENT PRICES for different weight ranges for the same service and zone (e.g. separate rows for 0-5kg at £X and 5-10kg at £Y).
-- If there is ONE price per service/zone (with or without a max weight limit), it is a FLAT RATE: weight_class_name="FlatRate", min_weight_kg=null, max_weight_kg=null.
+- If there is ONE price per service/zone (with or without a max weight limit), use weight_class_name="Parcel", min_weight_kg=null, max_weight_kg=null. "FlatRate" does NOT exist — always use "Parcel" for single-price zones.
 - NEVER use 999, 30, or any other number as max_weight_kg just because a "Max Weight" column exists. That value is a service limit, not a band boundary.
-- The Purozo rate card and most standard courier rate cards are flat-rate: one price per service per zone. Use FlatRate for all of them unless you see multiple price tiers.
+- Most standard courier rate cards have one price per service per zone. Use weight_class_name="Parcel" with null min/max for all of them unless you see explicitly different prices for different weight ranges.
 
 - price: the sell price in £ as a decimal number (do NOT include £ symbol)
 - price_sub: price per additional parcel in same consignment (the "Sub" or "Sub Boxes" column), or null if not specified
