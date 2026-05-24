@@ -823,20 +823,40 @@ router.post('/ai-extract-rates', async (req, res, next) => {
 
     // Fetch existing service codes from DB to help the AI match
     const servicesRes = await query(`
-      SELECT DISTINCT service_code, service_name, courier_code, courier_name
-      FROM customer_rates
-      ORDER BY service_code
-      LIMIT 100
+      SELECT DISTINCT cs.service_code, cs.name AS service_name, c.name AS courier_name
+      FROM courier_services cs
+      JOIN couriers c ON c.id = cs.courier_id
+      ORDER BY cs.service_code
+      LIMIT 200
     `);
     const existingServices = servicesRes.rows.map(r =>
       `${r.service_code} (${r.service_name}) — ${r.courier_name}`
     ).join('\n');
+
+    // Fetch carrier zones per service so AI uses exact zone names
+    const zonesRes = await query(`
+      SELECT cs.service_code, z.name AS zone_name
+      FROM zones z
+      JOIN courier_services cs ON cs.id = z.courier_service_id
+      ORDER BY cs.service_code, z.name
+    `);
+    const zonesByService = {};
+    for (const row of zonesRes.rows) {
+      if (!zonesByService[row.service_code]) zonesByService[row.service_code] = [];
+      zonesByService[row.service_code].push(row.zone_name);
+    }
+    const zonesBlock = Object.entries(zonesByService)
+      .map(([code, zones]) => `${code}: ${zones.join(', ')}`)
+      .join('\n');
 
     const system = `You are a data extraction assistant for a UK parcel courier reseller.
 Extract pricing data from a rate card document.
 
 KNOWN SERVICE CODES IN OUR SYSTEM:
 ${existingServices || '(none yet — use your best guess based on carrier and service name)'}
+
+AVAILABLE ZONES PER SERVICE (you MUST use these exact zone names — map the rate card zone to the closest match):
+${zonesBlock || '(none defined yet)'}
 
 Respond with ONLY valid JSON:
 {
@@ -845,7 +865,7 @@ Respond with ONLY valid JSON:
       "service_code": "e.g. DPD-NX",
       "service_name": "e.g. DPD Next Day",
       "courier_name": "e.g. DPD",
-      "zone_name": "e.g. Mainland",
+      "zone_name": "e.g. UK Mainland",
       "weight_class_name": "e.g. 0-5kg",
       "min_weight_kg": 0,
       "max_weight_kg": 5,
@@ -856,8 +876,8 @@ Respond with ONLY valid JSON:
 }
 Rules:
 - Extract EVERY pricing row from the rate card as a separate entry
-- service_code: match to KNOWN SERVICE CODES above if carrier/service matches; otherwise construct as CARRIER-ABBREV (e.g. DPD Next Day → DPD-NX, Evri Standard → EV-STD)
-- zone_name: use the zone name exactly as shown in the rate card
+- service_code: match to KNOWN SERVICE CODES above; otherwise construct as CARRIER-ABBREV (e.g. DPD Next Day → DPD-NX)
+- zone_name: MUST exactly match one of the zone names from AVAILABLE ZONES for that service. Map intelligently (e.g. "Republic of Ireland" → "Ireland", "Scottish Highlands & Islands" → use closest match). If a service has no zones defined, use the zone name from the rate card.
 - weight_class_name: format as "Xkg-Ykg" or "0-Xkg" or "FlatRate" for single-price services
 - min_weight_kg/max_weight_kg: numeric kg values; use null for flat-rate (no weight bands)
 - price: the sell price in £ as a decimal number (do NOT include £ symbol)
@@ -967,6 +987,37 @@ router.post('/ai-onboard', async (req, res, next) => {
 
       const svc = svcRes.rows[0];
 
+      // Validate zone_name against actual carrier zones for this service.
+      // If the AI used a name from the rate card (e.g. "Republic of Ireland") that
+      // doesn't match a carrier zone (e.g. "Ireland"), resolve it to the correct name.
+      let resolvedZoneName = zone_name;
+      const carrierZonesRes = await query(
+        `SELECT name FROM zones WHERE courier_service_id = $1 ORDER BY name`,
+        [svc.service_id]
+      );
+      if (carrierZonesRes.rows.length) {
+        const carrierZones = carrierZonesRes.rows.map(r => r.name);
+        // Exact match (case-insensitive)
+        const exactMatch = carrierZones.find(z => z.toLowerCase() === zone_name.toLowerCase());
+        if (exactMatch) {
+          resolvedZoneName = exactMatch;
+        } else {
+          // Fuzzy: carrier zone name is contained in the AI zone name, or vice versa
+          const fuzzyMatch = carrierZones.find(z =>
+            zone_name.toLowerCase().includes(z.toLowerCase()) ||
+            z.toLowerCase().includes(zone_name.toLowerCase())
+          );
+          if (fuzzyMatch) {
+            resolvedZoneName = fuzzyMatch;
+            console.log(`[ai-onboard] zone fuzzy-matched: "${zone_name}" → "${fuzzyMatch}" for ${svc.service_code}`);
+          } else {
+            rateResults.skipped.push({ rate, reason: `zone "${zone_name}" not found for service ${svc.service_code} — available: ${carrierZones.join(', ')}` });
+            continue;
+          }
+        }
+      }
+      // (If no carrier zones are defined for this service, allow any zone name through)
+
       try {
         await query(`
           INSERT INTO customer_rates
@@ -988,7 +1039,7 @@ router.post('/ai-onboard', async (req, res, next) => {
           svc.service_id,
           svc.service_code,
           service_name || svc.service_name,
-          zone_name,
+          resolvedZoneName,
           weight_class_name || 'Parcel',
           min_weight_kg ?? null,
           max_weight_kg ?? null,
