@@ -15,6 +15,7 @@ DECLARE
   v_svc      RECORD;
   v_courier  RECORD;
   v_inserted INT := 0;
+  v_rows     INT := 0;
 BEGIN
   -- Find the Yodel Medium 48 service (AGL courier, service_name contains 'medium')
   SELECT cs.id, cs.service_code, cs.service_name, cs.courier_id
@@ -78,7 +79,8 @@ BEGIN
         AND  x.zone_name   = 'Mainland'
     );
 
-    GET DIAGNOSTICS v_inserted = v_inserted + ROW_COUNT;
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    v_inserted := v_inserted + v_rows;
   END LOOP;
 
   RAISE NOTICE 'Migration 223: restored Mainland·Packet for % customer(s) missing Yodel Medium 48.', v_inserted;
