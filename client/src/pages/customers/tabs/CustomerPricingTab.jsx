@@ -1348,6 +1348,10 @@ function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesCh
 function DDPModeSection({ customer }) {
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
+  const [enabled, setEnabled] = useState(!!customer.ddp_mode);
+
+  // Keep local state in sync if parent re-fetches with a new value
+  useEffect(() => { setEnabled(!!customer.ddp_mode); }, [customer.ddp_mode]);
 
   const { data: overridesData, isLoading } = useQuery({
     queryKey: ['service-code-overrides', customer.id],
@@ -1356,17 +1360,20 @@ function DDPModeSection({ customer }) {
   const overrides = overridesData?.overrides || [];
 
   async function toggleDDP() {
+    const newValue = !enabled;
+    setEnabled(newValue);   // move the toggle immediately
     setBusy(true);
     try {
-      await api.put(`/customers/${customer.id}/ddp-mode`, { enabled: !customer.ddp_mode });
+      await api.put(`/customers/${customer.id}/ddp-mode`, { enabled: newValue });
       qc.invalidateQueries(['customer', customer.id]);
       qc.invalidateQueries(['service-code-overrides', customer.id]);
+    } catch (err) {
+      setEnabled(!newValue);  // revert on error
+      console.error('DDP mode toggle failed:', err.response?.data || err.message);
     } finally {
       setBusy(false);
     }
   }
-
-  const enabled = !!customer.ddp_mode;
 
   return (
     <div className="moov-card" style={{ marginBottom: 16, padding: '16px 20px' }}>
