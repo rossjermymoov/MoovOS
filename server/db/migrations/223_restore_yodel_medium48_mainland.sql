@@ -73,7 +73,7 @@ BEGIN
       'Mainland',
       'Packet',
       NULL, NULL,
-      NULL, NULL
+      0, NULL
     WHERE NOT EXISTS (
       SELECT 1 FROM customer_rates x
       WHERE  x.customer_id = rec.customer_id
