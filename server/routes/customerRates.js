@@ -166,6 +166,54 @@ router.post('/:customerId/sub-rates', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── GET /debug/parcel-rows — TEMPORARY DIAGNOSTIC ──────────
+// Shows all Parcel rows with their potential zone_name matches.
+// Used to diagnose why delete migrations are matching 0 rows.
+router.get('/debug/parcel-rows', async (req, res, next) => {
+  try {
+    const parcelRows = await query(`
+      SELECT id, customer_id, service_id, service_code, service_name,
+             zone_name, weight_class_name, price
+      FROM customer_rates
+      WHERE weight_class_name ILIKE 'Parcel'
+      ORDER BY customer_id, service_id, zone_name
+      LIMIT 30
+    `);
+
+    const annotated = [];
+    for (const pr of parcelRows.rows) {
+      const byZone = await query(`
+        SELECT id, service_id, service_code, service_name, zone_name, weight_class_name
+        FROM customer_rates
+        WHERE customer_id = $1
+          AND LOWER(zone_name) = LOWER($2)
+          AND weight_class_name NOT ILIKE 'Parcel'
+          AND id != $3
+        LIMIT 5
+      `, [pr.customer_id, pr.zone_name, pr.id]);
+
+      const byCustomer = await query(`
+        SELECT COUNT(*) AS cnt
+        FROM customer_rates
+        WHERE customer_id = $1
+          AND weight_class_name NOT ILIKE 'Parcel'
+      `, [pr.customer_id]);
+
+      annotated.push({
+        parcel_row: pr,
+        zone_name_matches: byZone.rows,
+        has_zone_match: byZone.rows.length > 0,
+        customer_non_parcel_count: parseInt(byCustomer.rows[0].cnt),
+      });
+    }
+
+    res.json({
+      total_parcel_rows: parcelRows.rows.length,
+      rows: annotated,
+    });
+  } catch (err) { next(err); }
+});
+
 // ─── GET /zones/:serviceCode — zone/weight-band template ─────
 // Returns the distinct (zone_name, weight_class_name) pairs for a service.
 // Primary source: existing customer_rates rows across ALL customers (used when
