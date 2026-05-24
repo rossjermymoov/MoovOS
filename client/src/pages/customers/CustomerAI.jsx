@@ -171,8 +171,8 @@ function DocumentInput({ label, hint, onReady, loading, loadingMsg }) {
   );
 }
 
-// ─── Step 0: DC Account Number ─────────────────────────────────
-function StepDcId({ dcId, setDcId, error }) {
+// ─── Step 0: DC Account Number + Moov Account Number ──────────
+function StepDcId({ dcId, setDcId, error, moovAccountNumber, setMoovAccountNumber, moovAccountError }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{
@@ -184,20 +184,30 @@ function StepDcId({ dcId, setDcId, error }) {
           <span style={{ fontSize: 13, fontWeight: 600, color: '#7B2FBE' }}>AI-Assisted Onboarding</span>
         </div>
         <p style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6, margin: 0 }}>
-          Provide the DC account number, upload (or paste) the customer's application form PDF, then upload their rate card PDF.
+          Provide the Moov account number and DC account number, upload (or paste) the customer's application form PDF, then upload their rate card PDF.
           AI will extract all the details and pre-fill the forms — you just review and confirm.
         </p>
       </div>
-      <Field label="DC Account Number" required error={error}>
-        <input
-          style={inputStyle(error)}
-          value={dcId}
-          onChange={e => setDcId(e.target.value.trim())}
-          placeholder="e.g. 12345 — the account number already configured in the DC webhook"
-        />
-      </Field>
+      <div style={grid2}>
+        <Field label="Moov Account Number" required error={moovAccountError}>
+          <input
+            style={inputStyle(moovAccountError)}
+            value={moovAccountNumber}
+            onChange={e => setMoovAccountNumber(e.target.value.trim().toUpperCase())}
+            placeholder="e.g. MOOV-0187"
+          />
+        </Field>
+        <Field label="DC Account Number" required error={error}>
+          <input
+            style={inputStyle(error)}
+            value={dcId}
+            onChange={e => setDcId(e.target.value.trim())}
+            placeholder="e.g. 12345 — the webhook account number"
+          />
+        </Field>
+      </div>
       <p style={{ fontSize: 12, color: '#64748B', marginTop: -8 }}>
-        This is the external account number used in the delivery carrier webhook system. It links incoming shipment data to this customer.
+        The Moov account number (MOOV-xxxx) is the internal reference assigned to this customer. The DC account number links incoming shipment data via the delivery carrier webhook.
       </p>
     </div>
   );
@@ -491,7 +501,7 @@ function StepRateCard({ rates, setRates, ratesExtracted, setRatesExtracted, extr
 }
 
 // ─── Step 3: Review & Confirm ──────────────────────────────────
-function StepConfirm({ dcId, customer, contact, rates }) {
+function StepConfirm({ dcId, moovAccountNumber, customer, contact, rates }) {
   const validRates = rates.filter(r => r.service_code && r.zone_name && r.price !== '' && r.price != null);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -500,6 +510,7 @@ function StepConfirm({ dcId, customer, contact, rates }) {
           <p style={sectionH}>Customer</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <ReviewRow label="Business" value={customer.business_name} />
+            <ReviewRow label="Moov No." value={moovAccountNumber || '(auto-assigned)'} />
             <ReviewRow label="DC Account" value={dcId} />
             <ReviewRow label="Postcode" value={customer.postcode} />
             <ReviewRow label="Email" value={customer.primary_email} />
@@ -627,8 +638,10 @@ export default function CustomerAI() {
   const [result, setResult] = useState(null);
 
   // Step 0
-  const [dcId, setDcId]         = useState('');
-  const [dcIdError, setDcIdError] = useState('');
+  const [dcId, setDcId]                         = useState('');
+  const [dcIdError, setDcIdError]               = useState('');
+  const [moovAccountNumber, setMoovAccountNumber] = useState('');
+  const [moovAccountError, setMoovAccountError] = useState('');
 
   // Step 1
   const [customer, setCustomer]         = useState({});
@@ -652,7 +665,10 @@ export default function CustomerAI() {
     setSaveError('');
     try {
       const validRates = rates.filter(r => r.service_code && r.zone_name && r.price !== '' && r.price != null);
-      const data = await customersApi.aiOnboard({ dc_id: dcId, customer, contact, rates: validRates });
+      const customerPayload = moovAccountNumber
+        ? { ...customer, account_number: moovAccountNumber }
+        : customer;
+      const data = await customersApi.aiOnboard({ dc_id: dcId, customer: customerPayload, contact, rates: validRates });
       setResult(data);
       setDone(true);
     } catch (e) {
@@ -664,8 +680,10 @@ export default function CustomerAI() {
 
   function next() {
     if (step === 0) {
-      if (!dcId.trim()) { setDcIdError('DC account number is required'); return; }
-      setDcIdError('');
+      let valid = true;
+      if (!moovAccountNumber.trim()) { setMoovAccountError('Moov account number is required (e.g. MOOV-0187)'); valid = false; } else { setMoovAccountError(''); }
+      if (!dcId.trim()) { setDcIdError('DC account number is required'); valid = false; } else { setDcIdError(''); }
+      if (!valid) return;
       setStep(1);
     } else if (step === 1) {
       if (!formExtracted) { setFormError('Please upload or paste the application form first'); return; }
@@ -685,7 +703,7 @@ export default function CustomerAI() {
 
   const stepTitles = ['DC Account Number', 'Application Form', 'Rate Card', 'Review & Confirm'];
   const stepSubtitles = [
-    'Provide the DC account number that is already configured in the webhook system.',
+    'Provide the Moov account number (MOOV-xxxx) and the DC account number configured in the webhook system.',
     'Upload the PDF or paste the text of the customer application form.',
     'Upload the PDF or paste the text of the customer rate card.',
     'Review everything and create the customer record.',
@@ -717,7 +735,7 @@ export default function CustomerAI() {
         <h2 style={{ fontSize: 18, fontWeight: 600, color: '#7B2FBE', marginBottom: 4 }}>{stepTitles[step]}</h2>
         <p style={{ fontSize: 13, color: '#64748B', marginBottom: 28 }}>{stepSubtitles[step]}</p>
 
-        {step === 0 && <StepDcId dcId={dcId} setDcId={setDcId} error={dcIdError} />}
+        {step === 0 && <StepDcId dcId={dcId} setDcId={setDcId} error={dcIdError} moovAccountNumber={moovAccountNumber} setMoovAccountNumber={setMoovAccountNumber} moovAccountError={moovAccountError} />}
 
         {step === 1 && (
           <StepApplicationForm
@@ -738,7 +756,7 @@ export default function CustomerAI() {
           />
         )}
 
-        {step === 3 && <StepConfirm dcId={dcId} customer={customer} contact={contact} rates={rates} />}
+        {step === 3 && <StepConfirm dcId={dcId} moovAccountNumber={moovAccountNumber} customer={customer} contact={contact} rates={rates} />}
 
         {(formError || rateError || saveError) && (
           <div style={{ marginTop: 16, padding: 12, background: 'rgba(233,30,140,0.1)', border: '1px solid #E91E8C', borderRadius: 8, fontSize: 13, color: '#E91E8C', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
