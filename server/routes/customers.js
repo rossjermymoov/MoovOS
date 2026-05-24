@@ -1058,6 +1058,75 @@ router.post('/ai-onboard', async (req, res, next) => {
       }
     }
 
+    // ─── Auto-fill missing carrier zones ──────────────────────────────────────
+    // The AI typically extracts only the zones listed on the rate card (often
+    // just Zone A). For services where the carrier has more zones defined,
+    // replicate the extracted rate to every missing zone using the same price.
+    // This ensures the customer's rate card always mirrors the carrier's full
+    // zone structure. We copy price from the first existing zone rate found for
+    // that customer+service.
+    try {
+      const servicesWithRates = await query(`
+        SELECT DISTINCT service_id FROM customer_rates WHERE customer_id = $1
+      `, [customer.id]);
+
+      for (const { service_id } of servicesWithRates.rows) {
+        // Get all carrier zones for this service
+        const carrierZones = await query(`
+          SELECT name FROM zones WHERE courier_service_id = $1 ORDER BY name
+        `, [service_id]);
+        if (!carrierZones.rows.length) continue;
+
+        // Get existing rate rows for this customer+service (use first as price template)
+        const existingRates = await query(`
+          SELECT * FROM customer_rates
+          WHERE customer_id = $1 AND service_id = $2
+          ORDER BY zone_name LIMIT 1
+        `, [customer.id, service_id]);
+        if (!existingRates.rows.length) continue;
+
+        const template = existingRates.rows[0];
+
+        // Get zones already covered
+        const coveredZones = await query(`
+          SELECT zone_name FROM customer_rates WHERE customer_id = $1 AND service_id = $2
+        `, [customer.id, service_id]);
+        const covered = new Set(coveredZones.rows.map(r => r.zone_name.toLowerCase()));
+
+        for (const { name: zoneName } of carrierZones.rows) {
+          if (covered.has(zoneName.toLowerCase())) continue;
+          // Insert missing zone using template pricing
+          await query(`
+            INSERT INTO customer_rates
+              (customer_id, courier_id, courier_code, courier_name,
+               service_id, service_code, service_name,
+               zone_name, weight_class_name,
+               min_weight_kg, max_weight_kg,
+               price, price_sub)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+            ON CONFLICT (customer_id, service_id, zone_name, weight_class_name) DO NOTHING
+          `, [
+            customer.id,
+            template.courier_id,
+            template.courier_code,
+            template.courier_name,
+            template.service_id,
+            template.service_code,
+            template.service_name,
+            zoneName,
+            template.weight_class_name,
+            template.min_weight_kg,
+            template.max_weight_kg,
+            template.price,
+            template.price_sub,
+          ]);
+          rateResults.inserted++;
+        }
+      }
+    } catch (zoneErr) {
+      console.warn('[ai-onboard] zone fill-out error (non-fatal):', zoneErr.message);
+    }
+
     res.status(201).json({ customer, rates: rateResults });
   } catch (err) {
     if (err.code === '23505') {
