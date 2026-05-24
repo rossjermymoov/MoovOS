@@ -1111,13 +1111,11 @@ router.put('/:id/ddp-mode', async (req, res, next) => {
       JOIN   courier_services ddp
              ON  ddp.courier_id   = std.courier_id
              AND ddp.service_code = std.service_code || 'DDP'
-             AND ddp.is_active    = true
       LEFT JOIN courier_service_code_mappings m
              ON  m.carrier_id   = std.courier_id
              AND m.service_id   = std.id
              AND m.customer_id  IS NULL
              AND m.is_active    = true
-      WHERE  std.is_active = true
       GROUP  BY std.courier_id, std.id, std.service_code, ddp.id, ddp.service_code
       HAVING COUNT(m.courier_code) > 0
     `);
