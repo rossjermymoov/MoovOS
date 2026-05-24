@@ -152,11 +152,38 @@ async function buildServiceCodeMap(carrierId) {
     }
   }
 
+  // ── Customer-specific overrides (applied post pool-hit, highest priority) ─
+  // When a customer has a per-customer mapping for a courier code (e.g. DDP
+  // customers where "Air Express" must route to the DDP-10DDP rate card rather
+  // than the standard DPD-10 rate card), the engine applies the override after
+  // it knows which customer owns the shipment (from the pool hit).
+  // Stored in { [customerId]: { [CODE_UPPER]: service_id } }
+  const customerServiceOverrides = {};
+  const custMappings = await query(
+    `SELECT courier_code, service_id, customer_id::text AS customer_id
+     FROM   courier_service_code_mappings
+     WHERE  carrier_id = $1 AND is_active = true AND customer_id IS NOT NULL`,
+    [carrierId]
+  );
+  for (const row of custMappings.rows) {
+    if (!row.service_id) continue;   // surcharge overrides per-customer not currently supported
+    const custId = row.customer_id;
+    const key    = row.courier_code.trim().toUpperCase();
+    if (!customerServiceOverrides[custId]) customerServiceOverrides[custId] = {};
+    customerServiceOverrides[custId][key] = row.service_id;
+  }
+  if (custMappings.rows.length > 0) {
+    console.log(
+      `[recon engine] Customer service code overrides for carrier ${carrierId}: ` +
+      `${custMappings.rows.length} entries across ${Object.keys(customerServiceOverrides).length} customer(s)`
+    );
+  }
+
   const surchargeCount = Object.keys(surchargeMap).length;
   const impliedCount   = Object.keys(serviceMap).length - (explicit.rows.filter(r => r.service_id).length);
   console.log(`[recon engine] Code map for carrier ${carrierId}: ${explicit.rows.length} explicit (${surchargeCount} surcharge) + ${impliedCount} implied service entries`);
 
-  return { serviceMap, surchargeMap, serviceIdToCodeMap };
+  return { serviceMap, surchargeMap, serviceIdToCodeMap, customerServiceOverrides };
 }
 
 // ─── Sell-surcharge presence check ───────────────────────────────────────────
@@ -842,7 +869,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   );
 
   // ── Phase 1b: Build service code map ──────────────────────────────────────
-  const { serviceMap: serviceCodeMap, surchargeMap, serviceIdToCodeMap } = await buildServiceCodeMap(carrierId);
+  const { serviceMap: serviceCodeMap, surchargeMap, serviceIdToCodeMap, customerServiceOverrides } = await buildServiceCodeMap(carrierId);
 
   // ── Pre-condition: Build Verified Pool ────────────────────────────────────
   const { pool, poolSize } = await buildVerifiedPool(carrierId);
@@ -881,6 +908,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
     separateFuelRows,
     parcelPricing,
     serviceIdToCodeMap,
+    customerServiceOverrides,
     surchargeById,
     globallyExcludedColumns,
     surchargeOverrideCache: _surchargeOverrideCache,
@@ -1289,6 +1317,16 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
   // ── Pool HIT — aggregate comparison (freight lines only) ─────────────────
   const charge = poolHits[0];
 
+  // Customer-specific service code override for multi-parcel groups.
+  const grpCustOverride    = ctx.customerServiceOverrides?.[String(charge.customer_id)]?.[mappedKey];
+  const grpEffServiceId    = grpCustOverride ?? serviceId;
+  if (grpCustOverride) {
+    console.log(
+      `[recon engine] multi-parcel customer override: customer=${charge.customer_id} ` +
+      `code="${mappedKey}" → svc=${grpEffServiceId}`
+    );
+  }
+
   // Process orphan lines individually.
   for (const line of orphanLines) {
     const r = await processLine(line, runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings, ctx);
@@ -1351,10 +1389,10 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
   if (groupStatus !== 'unmatched') {
     const groupBilledKg = parseFloat(firstLine.billed_weight_kg) || parseFloat(charge.declared_weight_kg) || 0;
     if (groupBilledKg > 0) {
-      groupFreightSell = await computeCorrectedSell(charge, serviceId, groupBilledKg, groupParcels, ctx.serviceIdToCodeMap);
+      groupFreightSell = await computeCorrectedSell(charge, grpEffServiceId, groupBilledKg, groupParcels, ctx.serviceIdToCodeMap);
     }
   }
-  const addSell   = await resolveSurchargeSells(rollup.items, groupFreightSell, groupParcels, ctx.surchargeOverrideCache, charge.customer_id, serviceId);
+  const addSell   = await resolveSurchargeSells(rollup.items, groupFreightSell, groupParcels, ctx.surchargeOverrideCache, charge.customer_id, grpEffServiceId);
   const totalSell = groupFreightSell != null ? round2(groupFreightSell + addSell) : null;
   const sMeta     = surchargeMeta(rollup.items);
 
@@ -1365,7 +1403,7 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
     charge_type:              firstLine.charge_type || 'base',
     carrier_amount:           totalCarrierFull,
     carrier_billed_weight_kg: firstLine.billed_weight_kg || null,
-    service_id:               serviceId,
+    service_id:               grpEffServiceId,
     customer_id:              charge.customer_id,
     charge_id:                charge.charge_id,
     expected_amount:          totalExpectedFull,
@@ -1522,8 +1560,17 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     // This is a real-world shipment (return, ad-hoc send, etc.) booked directly
     // with the carrier. Price it from our rate cards and create a charge so it
     // is fully accounted for and billed (source='carrier_direct').
+    // Apply any customer-specific service code override before pricing.
+    const cdCustOverride = ctx.customerServiceOverrides?.[String(customer.customer_id)]?.[mappedKey];
+    const cdServiceId    = cdCustOverride ?? serviceId;
+    if (cdCustOverride) {
+      console.log(
+        `[recon engine] carrier-direct customer override: customer=${customer.customer_id} ` +
+        `code="${mappedKey}" → svc=${cdServiceId}`
+      );
+    }
     return handleCarrierDirect({
-      serviceId,
+      serviceId: cdServiceId,
       customer,
       trackingNumber,
       carrierAmount,
@@ -1598,6 +1645,17 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     return { status: 'unmatched' };
   }
 
+  // ── Apply customer service code override (after pool hit resolves customerId) ─
+  const poolCustOverrideMap = ctx.customerServiceOverrides?.[String(charge.customer_id)];
+  const poolCustOverride    = poolCustOverrideMap?.[mappedKey];
+  const effectiveServiceId  = poolCustOverride ?? serviceId;
+  if (poolCustOverride) {
+    console.log(
+      `[recon engine] Customer service override: customer=${charge.customer_id} ` +
+      `code="${mappedKey}" global_svc=${serviceId} → override_svc=${effectiveServiceId}`
+    );
+  }
+
   // separate_fuel_rows: carrier bills fuel/carriage/energy as separate invoice
   // rows, so the freight row's carrier_amount = base only. Compare against
   // cost_price (base) not total_cost_price (base + fuel). Overhead rows are
@@ -1628,9 +1686,9 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       // resolve it from the invoice delivery postcode so the rate-card recompute
       // can still run. Requires delivery_postcode to be mapped in the CSV profile
       // (migration 166 adds 'delivery_postcode': 'delivery' to the DPD profile).
-      if (!chargeZoneId && line.delivery_postcode && serviceId) {
+      if (!chargeZoneId && line.delivery_postcode && effectiveServiceId) {
         const resolvedZone = await matchZone(
-          serviceId,
+          effectiveServiceId,
           line.ship_to_country || 'GB',
           line.delivery_postcode
         );
@@ -1645,8 +1703,8 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
 
       let rateCardExpected    = null;
 
-      if (perParcelWeightKg > 0 && chargeZoneId && serviceId) {
-        const bandResult = await lookupCarrierBandCost(serviceId, perParcelWeightKg, chargeZoneId);
+      if (perParcelWeightKg > 0 && chargeZoneId && effectiveServiceId) {
+        const bandResult = await lookupCarrierBandCost(effectiveServiceId, perParcelWeightKg, chargeZoneId);
         if (bandResult) {
           // Only recompute using rate card when price_sub (costSub) is explicitly configured.
           // price_first is the single-parcel / first-parcel rate and MUST NOT be multiplied by
@@ -1697,9 +1755,9 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       console.log(`[recon engine] matchedSell: no invoice weight for ${trackingNumber} — using declared_weight_kg=${billedKg}kg`);
     }
     const freightSell = billedKg > 0
-      ? await computeCorrectedSell(charge, serviceId, billedKg, invoiceParcels, ctx.serviceIdToCodeMap)
+      ? await computeCorrectedSell(charge, effectiveServiceId, billedKg, invoiceParcels, ctx.serviceIdToCodeMap)
       : null;
-    const addSell  = await resolveSurchargeSells(rollup.items, freightSell, invoiceParcels, ctx.surchargeOverrideCache, charge.customer_id, serviceId);
+    const addSell  = await resolveSurchargeSells(rollup.items, freightSell, invoiceParcels, ctx.surchargeOverrideCache, charge.customer_id, effectiveServiceId);
     const totalSell = freightSell != null ? round2(freightSell + addSell) : null;
     await insertLine(runId, {
       tracking_number:          trackingNumber,
@@ -1708,7 +1766,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       charge_type:              line.charge_type       || 'base',
       carrier_amount:           totalCarrier,
       carrier_billed_weight_kg: billedKg || null,
-      service_id:               serviceId,
+      service_id:               effectiveServiceId,
       customer_id:              charge.customer_id,
       charge_id:                charge.charge_id,
       expected_amount:          totalExpected,
@@ -1743,7 +1801,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       charge_type:              line.charge_type       || 'base',
       carrier_amount:           totalCarrier,
       carrier_billed_weight_kg: billedKg || null,
-      service_id:               serviceId,
+      service_id:               effectiveServiceId,
       customer_id:              charge.customer_id,
       charge_id:                charge.charge_id,
       expected_amount:          totalExpected,
@@ -1781,11 +1839,11 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       // booking didn't save one. Try to resolve from the invoice delivery
       // country / postcode exactly as the all_sub recompute does.
       let resolvedZoneId = charge.zone_id || null;
-      if (!resolvedZoneId && serviceId) {
+      if (!resolvedZoneId && effectiveServiceId) {
         const country  = line.ship_to_country   || null;
         const postcode = line.delivery_postcode  || '';
         if (country || postcode) {
-          const z = await matchZone(serviceId, country || 'GB', postcode);
+          const z = await matchZone(effectiveServiceId, country || 'GB', postcode);
           if (z) {
             resolvedZoneId = z.id;
             console.log(
@@ -1802,8 +1860,8 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
         ? { ...charge, zone_id: resolvedZoneId }
         : charge;
 
-      const newCostResult = await lookupCarrierBandCost(serviceId, billedKg, resolvedZoneId);
-      const newSell       = await computeCorrectedSell(chargeForSell, serviceId, billedKg, invoiceParcels, ctx.serviceIdToCodeMap);
+      const newCostResult = await lookupCarrierBandCost(effectiveServiceId, billedKg, resolvedZoneId);
+      const newSell       = await computeCorrectedSell(chargeForSell, effectiveServiceId, billedKg, invoiceParcels, ctx.serviceIdToCodeMap);
       const newCost       = newCostResult ? newCostResult.cost : null;
 
       if (newCost !== null) {
@@ -1823,7 +1881,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
             charge_type:              line.charge_type       || 'base',
             carrier_amount:           totalCarrier,
             carrier_billed_weight_kg: billedKg,
-            service_id:               serviceId,
+            service_id:               effectiveServiceId,
             customer_id:              charge.customer_id,
             charge_id:                charge.charge_id,
             expected_amount:          totalExpected,
@@ -1834,7 +1892,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
             source:                   'internal',
             shipment_date:            line.shipment_date     || null,
             ship_to_postcode:         line.delivery_postcode || null,
-        ship_to_name:             line.recipient_name   || null,
+            ship_to_name:             line.recipient_name   || null,
             ship_to_country:          line.ship_to_country   || null,
             correction_metadata:      {
               declared_weight_kg: declaredKg,
@@ -1871,7 +1929,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
                    ON cfgp.fuel_group_id = fg.id
                   AND cfgp.customer_id   = $2
             WHERE  cs.id = $1
-          `, [serviceId, charge.customer_id]);
+          `, [effectiveServiceId, charge.customer_id]);
 
           if (fuelPctRes.rows.length) {
             const fuelCostPct = parseFloat(fuelPctRes.rows[0].cost_pct || 0);
@@ -1903,7 +1961,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
           console.warn(`[recon engine] WEIGHT CORRECTION: fuel charge update failed for tracking=${trackingNumber}:`, fuelErr.message);
         }
 
-        const addSell   = await resolveSurchargeSells(rollup.items, newSell, invoiceParcels, ctx.surchargeOverrideCache, charge.customer_id, serviceId);
+        const addSell   = await resolveSurchargeSells(rollup.items, newSell, invoiceParcels, ctx.surchargeOverrideCache, charge.customer_id, effectiveServiceId);
         const totalSell = round2(newSell + addSell);
 
         console.log(
@@ -1920,7 +1978,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
           charge_type:              line.charge_type       || 'base',
           carrier_amount:           totalCarrier,
           carrier_billed_weight_kg: billedKg,
-          service_id:               serviceId,
+          service_id:               effectiveServiceId,
           customer_id:              charge.customer_id,
           charge_id:                charge.charge_id,
           expected_amount:          totalExpected,
@@ -1931,7 +1989,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
           source:                   'internal',
           shipment_date:            line.shipment_date     || null,
           ship_to_postcode:         line.delivery_postcode || null,
-        ship_to_name:             line.recipient_name   || null,
+          ship_to_name:             line.recipient_name   || null,
           ship_to_country:          line.ship_to_country   || null,
           parcel_count:             invoiceParcels > 1 ? invoiceParcels : null,
           corrected_cost_price:     round2(newCost + rollup.addExpectedCost),
@@ -1964,9 +2022,9 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     );
     const billedKg    = parseFloat(line.billed_weight_kg) || parseFloat(charge.declared_weight_kg) || 0;
     const freightSell = billedKg > 0
-      ? await computeCorrectedSell(charge, serviceId, billedKg, invoiceParcels, ctx.serviceIdToCodeMap)
+      ? await computeCorrectedSell(charge, effectiveServiceId, billedKg, invoiceParcels, ctx.serviceIdToCodeMap)
       : null;
-    const addSell   = await resolveSurchargeSells(rollup.items, freightSell, invoiceParcels, ctx.surchargeOverrideCache, charge.customer_id, serviceId);
+    const addSell   = await resolveSurchargeSells(rollup.items, freightSell, invoiceParcels, ctx.surchargeOverrideCache, charge.customer_id, effectiveServiceId);
     const totalSell  = freightSell != null ? round2(freightSell + addSell) : null;
     await insertLine(runId, {
       tracking_number:          trackingNumber,
@@ -1975,7 +2033,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       charge_type:              line.charge_type       || 'base',
       carrier_amount:           totalCarrier,
       carrier_billed_weight_kg: billedKg || null,
-      service_id:               serviceId,
+      service_id:               effectiveServiceId,
       customer_id:              charge.customer_id,
       charge_id:                charge.charge_id,
       expected_amount:          totalExpected,
@@ -2008,7 +2066,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     charge_type:              line.charge_type       || 'base',
     carrier_amount:           totalCarrier,
     carrier_billed_weight_kg: line.billed_weight_kg  || null,
-    service_id:               serviceId,
+    service_id:               effectiveServiceId,
     customer_id:              charge.customer_id,
     charge_id:                charge.charge_id,
     expected_amount:          totalExpected,

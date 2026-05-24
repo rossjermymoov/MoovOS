@@ -965,4 +965,195 @@ router.post('/ai-onboard', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── DDP Mode & Service Code Overrides ───────────────────────────────────────
+//
+// Customers who ship exclusively DDP (duty-paid) have their standard air invoice
+// codes (e.g. "Air Express") redirected to DDP rate-card variants (e.g. DPD-10DDP)
+// by the reconciliation engine. The overrides are stored as per-customer entries in
+// courier_service_code_mappings. The ddp_mode flag on the customer signals that these
+// entries were created via the DDP toggle rather than added manually.
+//
+// GET    /api/customers/:id/service-code-overrides
+//   Returns all active per-customer service code mappings for this customer,
+//   joined with the courier service details so the UI can display them.
+//
+// POST   /api/customers/:id/service-code-overrides
+//   Upsert a single mapping: { carrier_id, courier_code, service_id }.
+//
+// DELETE /api/customers/:id/service-code-overrides/:mappingId
+//   Deactivate a per-customer mapping (is_active = false).
+//
+// PUT    /api/customers/:id/ddp-mode
+//   Enable or disable DDP mode for a customer.
+//   When enabling: auto-creates Air Express → DPD-10DDP and Air Classic → DPD-60DDP
+//   mappings for each carrier that has both the standard and DDP service defined.
+//   When disabling: deactivates all DDP mappings created via this toggle.
+//   Body: { enabled: bool }
+
+router.get('/:id/service-code-overrides', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const result = await query(`
+      SELECT
+        m.id,
+        m.carrier_id,
+        co.name                   AS carrier_name,
+        m.courier_code,
+        m.service_id,
+        cs.service_code,
+        cs.name                   AS service_name,
+        m.notes,
+        m.is_active,
+        m.created_at
+      FROM   courier_service_code_mappings m
+      JOIN   couriers        co ON co.id = m.carrier_id
+      LEFT JOIN courier_services cs ON cs.id = m.service_id
+      WHERE  m.customer_id = $1
+        AND  m.is_active   = true
+      ORDER  BY co.name, m.courier_code
+    `, [id]);
+    res.json({ overrides: result.rows });
+  } catch (err) { next(err); }
+});
+
+router.post('/:id/service-code-overrides', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { carrier_id, courier_code, service_id, notes } = req.body;
+    if (!carrier_id || !courier_code || !service_id) {
+      return res.status(400).json({ error: 'carrier_id, courier_code and service_id are required' });
+    }
+
+    // Manual upsert on partial index (customer_id IS NOT NULL unique constraint)
+    const existing = await query(`
+      SELECT id FROM courier_service_code_mappings
+      WHERE  carrier_id   = $1
+        AND  courier_code = $2
+        AND  customer_id  = $3
+    `, [carrier_id, courier_code.trim(), id]);
+
+    let mapping;
+    if (existing.rows.length > 0) {
+      const upd = await query(`
+        UPDATE courier_service_code_mappings
+        SET    service_id = $1, is_active = true, notes = $2
+        WHERE  id = $3
+        RETURNING *
+      `, [service_id, notes || null, existing.rows[0].id]);
+      mapping = upd.rows[0];
+    } else {
+      const ins = await query(`
+        INSERT INTO courier_service_code_mappings
+          (carrier_id, courier_code, service_id, customer_id, notes, is_active)
+        VALUES ($1, $2, $3, $4, $5, true)
+        RETURNING *
+      `, [carrier_id, courier_code.trim(), service_id, id, notes || null]);
+      mapping = ins.rows[0];
+    }
+
+    res.status(201).json({ mapping });
+  } catch (err) { next(err); }
+});
+
+router.delete('/:id/service-code-overrides/:mappingId', async (req, res, next) => {
+  try {
+    const { id, mappingId } = req.params;
+    await query(`
+      UPDATE courier_service_code_mappings
+      SET    is_active = false
+      WHERE  id = $1 AND customer_id = $2
+    `, [mappingId, id]);
+    res.json({ success: true });
+  } catch (err) { next(err); }
+});
+
+// DDP convenience toggle — sets ddp_mode and auto-creates/deactivates the standard
+// DDP override pairs (Air Express → DPD-10DDP, Air Classic → DPD-60DDP).
+router.put('/:id/ddp-mode', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { enabled } = req.body;
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled (boolean) is required' });
+    }
+
+    if (!enabled) {
+      // Disable: deactivate all mappings flagged with notes='ddp_toggle'
+      await query(`
+        UPDATE courier_service_code_mappings
+        SET    is_active = false
+        WHERE  customer_id = $1 AND notes = 'ddp_toggle'
+      `, [id]);
+      await query(`UPDATE customers SET ddp_mode = false WHERE id = $1`, [id]);
+      return res.json({ ddp_mode: false, deactivated: true });
+    }
+
+    // Enable: find all carriers that have both a standard air service and a DDP
+    // variant and create per-customer overrides for this customer.
+    //
+    // Convention: DDP services have service_code ending in 'DDP'.
+    // Standard-to-DDP pairs are derived by matching service_code + 'DDP' to an
+    // existing service. e.g. DPD-10 → DPD-10DDP.
+    //
+    // We also load the global service code mappings for this carrier to find the
+    // invoice codes (courier_codes) that currently map to the standard services,
+    // then redirect those codes to the DDP service IDs.
+    const pairsRes = await query(`
+      SELECT
+        std.courier_id      AS carrier_id,
+        std.id              AS std_service_id,
+        std.service_code    AS std_code,
+        ddp.id              AS ddp_service_id,
+        ddp.service_code    AS ddp_code,
+        -- Invoice codes that currently map to the standard service (global, no customer)
+        ARRAY_AGG(DISTINCT m.courier_code)  AS invoice_codes
+      FROM   courier_services std
+      JOIN   courier_services ddp
+             ON  ddp.courier_id   = std.courier_id
+             AND ddp.service_code = std.service_code || 'DDP'
+             AND ddp.is_active    = true
+      LEFT JOIN courier_service_code_mappings m
+             ON  m.carrier_id   = std.courier_id
+             AND m.service_id   = std.id
+             AND m.customer_id  IS NULL
+             AND m.is_active    = true
+      WHERE  std.is_active = true
+      GROUP  BY std.courier_id, std.id, std.service_code, ddp.id, ddp.service_code
+      HAVING COUNT(m.courier_code) > 0
+    `);
+
+    const created = [];
+    for (const pair of pairsRes.rows) {
+      for (const invoiceCode of (pair.invoice_codes || [])) {
+        if (!invoiceCode) continue;
+        // Upsert the per-customer mapping
+        const existing = await query(`
+          SELECT id FROM courier_service_code_mappings
+          WHERE  carrier_id   = $1
+            AND  courier_code = $2
+            AND  customer_id  = $3
+        `, [pair.carrier_id, invoiceCode, id]);
+
+        if (existing.rows.length > 0) {
+          await query(`
+            UPDATE courier_service_code_mappings
+            SET    service_id = $1, is_active = true, notes = 'ddp_toggle'
+            WHERE  id = $2
+          `, [pair.ddp_service_id, existing.rows[0].id]);
+        } else {
+          await query(`
+            INSERT INTO courier_service_code_mappings
+              (carrier_id, courier_code, service_id, customer_id, notes, is_active)
+            VALUES ($1, $2, $3, $4, 'ddp_toggle', true)
+          `, [pair.carrier_id, invoiceCode, pair.ddp_service_id, id]);
+        }
+        created.push({ carrier_id: pair.carrier_id, invoice_code: invoiceCode, std_code: pair.std_code, ddp_code: pair.ddp_code });
+      }
+    }
+
+    await query(`UPDATE customers SET ddp_mode = true WHERE id = $1`, [id]);
+    res.json({ ddp_mode: true, created });
+  } catch (err) { next(err); }
+});
+
 export default router;

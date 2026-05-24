@@ -5,7 +5,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Trash2, Globe, Search, X, ChevronDown, ChevronRight, Package, Check, Zap, AlertCircle, Percent } from 'lucide-react';
+import { Trash2, Globe, Search, X, ChevronDown, ChevronRight, Package, Check, Zap, AlertCircle, Percent, ToggleLeft, ToggleRight } from 'lucide-react';
 import axios from 'axios';
 import { getCourierLogo } from '../../../utils/courierLogos';
 
@@ -1341,6 +1341,120 @@ function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesCh
 }
 
 // ─── Main tab ─────────────────────────────────────────────────
+// ─── DDP Mode Section ──────────────────────────────────────────────────────────
+// When a customer ships exclusively DDP (duty-paid), the reconciliation engine
+// must look up DDP rate-card variants for their air services. This section lets
+// operators toggle DDP mode on/off and shows the active service code overrides.
+function DDPModeSection({ customer }) {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+
+  const { data: overridesData, isLoading } = useQuery({
+    queryKey: ['service-code-overrides', customer.id],
+    queryFn:  () => api.get(`/customers/${customer.id}/service-code-overrides`).then(r => r.data),
+  });
+  const overrides = overridesData?.overrides || [];
+
+  async function toggleDDP() {
+    setBusy(true);
+    try {
+      await api.put(`/customers/${customer.id}/ddp-mode`, { enabled: !customer.ddp_mode });
+      qc.invalidateQueries(['customer', customer.id]);
+      qc.invalidateQueries(['service-code-overrides', customer.id]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const enabled = !!customer.ddp_mode;
+
+  return (
+    <div className="moov-card" style={{ marginBottom: 16, padding: '16px 20px' }}>
+      {/* Header row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>DDP Mode</span>
+            {enabled && (
+              <span style={{
+                fontSize: 11, fontWeight: 600, color: '#FF8F00',
+                background: 'rgba(255,143,0,0.12)', border: '1px solid rgba(255,143,0,0.35)',
+                borderRadius: 12, padding: '2px 8px', letterSpacing: '0.3px',
+              }}>ACTIVE</span>
+            )}
+          </div>
+          <p style={{ fontSize: 12, color: '#64748B', margin: '3px 0 0' }}>
+            This customer books exclusively on DDP (duty-paid) air services.
+            When enabled, the reconciliation engine uses DDP rate-card variants
+            (e.g. DPD-10DDP) instead of standard air rates for invoice matching.
+          </p>
+        </div>
+        <button
+          onClick={toggleDDP}
+          disabled={busy}
+          title={enabled ? 'Disable DDP mode' : 'Enable DDP mode'}
+          style={{
+            background: 'none', border: 'none', cursor: busy ? 'wait' : 'pointer',
+            padding: 4, display: 'flex', alignItems: 'center', opacity: busy ? 0.5 : 1,
+          }}
+        >
+          {enabled
+            ? <ToggleRight size={32} color="#FF8F00" strokeWidth={1.5} />
+            : <ToggleLeft  size={32} color="#94A3B8" strokeWidth={1.5} />
+          }
+        </button>
+      </div>
+
+      {/* Active overrides list */}
+      {enabled && (
+        <div style={{ marginTop: 12, borderTop: '1px solid rgba(0,0,0,0.07)', paddingTop: 12 }}>
+          {isLoading && <span style={{ fontSize: 12, color: '#64748B' }}>Loading overrides…</span>}
+          {!isLoading && overrides.length === 0 && (
+            <span style={{ fontSize: 12, color: '#64748B' }}>
+              No overrides created yet. DDP variants will be set up automatically on the next reconciliation run.
+            </span>
+          )}
+          {!isLoading && overrides.length > 0 && (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 8 }}>
+                Active Service Code Overrides
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {overrides.map(ov => (
+                  <div
+                    key={ov.id}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      background: 'rgba(255,143,0,0.08)', border: '1px solid rgba(255,143,0,0.3)',
+                      borderRadius: 8, padding: '4px 10px', fontSize: 12,
+                    }}
+                  >
+                    <span style={{ color: '#475569' }}>{ov.carrier_name}</span>
+                    <span style={{ color: '#94A3B8', fontSize: 10 }}>·</span>
+                    <span style={{ fontFamily: 'monospace', color: '#0F172A', fontWeight: 600 }}>{ov.courier_code}</span>
+                    <span style={{ color: '#94A3B8' }}>→</span>
+                    <span style={{ fontFamily: 'monospace', color: '#FF8F00', fontWeight: 600 }}>{ov.service_code}</span>
+                    <button
+                      onClick={async () => {
+                        await api.delete(`/customers/${customer.id}/service-code-overrides/${ov.id}`);
+                        qc.invalidateQueries(['service-code-overrides', customer.id]);
+                      }}
+                      title="Remove override"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', marginLeft: 2 }}
+                    >
+                      <X size={12} color="#94A3B8" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CustomerPricingTab({ customer }) {
   const qc = useQueryClient();
 
@@ -1461,6 +1575,9 @@ export default function CustomerPricingTab({ customer }) {
     <div>
       {/* 1 — Thin carrier toggle strip */}
       <CourierToggleStrip carriers={carriers} customerId={customer.id} />
+
+      {/* 1b — DDP Mode toggle (only shown when customer has air services active) */}
+      <DDPModeSection customer={customer} />
 
       {/* 2 — Per-carrier: fuel groups + surcharge overrides (active carriers only) */}
       {activeCarriers.map(carrier => (
