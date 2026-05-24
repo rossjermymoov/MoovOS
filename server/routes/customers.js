@@ -1024,6 +1024,24 @@ router.post('/ai-onboard', async (req, res, next) => {
       }
       // (If no carrier zones are defined for this service, allow any zone name through)
 
+      // Resolve weight_class_name: if the AI defaulted to 'Parcel' but this
+      // customer already has rates for this service with a different weight class
+      // (e.g. 'Packet' from a manual import), use that existing name instead.
+      // This prevents creating duplicate Parcel rows alongside real weight classes.
+      let resolvedWeightClass = weight_class_name || 'Parcel';
+      if (resolvedWeightClass.toLowerCase() === 'parcel') {
+        const existingWcRes = await query(`
+          SELECT DISTINCT weight_class_name FROM customer_rates
+          WHERE customer_id = $1 AND service_id = $2 AND zone_name = $3
+            AND weight_class_name NOT ILIKE 'Parcel'
+          LIMIT 1
+        `, [customer.id, svc.service_id, resolvedZoneName]);
+        if (existingWcRes.rows.length) {
+          resolvedWeightClass = existingWcRes.rows[0].weight_class_name;
+          console.log(`[ai-onboard] weight class resolved: Parcel → "${resolvedWeightClass}" for ${svc.service_code} / ${resolvedZoneName}`);
+        }
+      }
+
       try {
         await query(`
           INSERT INTO customer_rates
@@ -1046,7 +1064,7 @@ router.post('/ai-onboard', async (req, res, next) => {
           svc.service_code,
           service_name || svc.service_name,
           resolvedZoneName,
-          weight_class_name || 'Parcel',
+          resolvedWeightClass,
           min_weight_kg ?? null,
           max_weight_kg ?? null,
           parseFloat(price),
