@@ -230,7 +230,14 @@ router.post('/', async (req, res, next) => {
     ]);
 
     res.status(201).json(result.rows[0]);
-  } catch (err) { next(err); }
+  } catch (err) {
+    if (err.code === '23505') {
+      if (err.constraint?.includes('account_number')) return res.status(409).json({ error: `Account number ${req.body.account_number} is already in use by another customer` });
+      if (err.constraint?.includes('dc_id'))          return res.status(409).json({ error: `DC account number '${req.body.dc_id}' is already assigned to another customer` });
+      return res.status(409).json({ error: `A customer with these details already exists (${err.constraint || 'unique constraint'})` });
+    }
+    next(err);
+  }
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -979,7 +986,15 @@ router.post('/ai-onboard', async (req, res, next) => {
     }
 
     res.status(201).json({ customer, rates: rateResults });
-  } catch (err) { next(err); }
+  } catch (err) {
+    if (err.code === '23505') {
+      const { dc_id, customer: cd } = req.body;
+      if (err.constraint?.includes('account_number')) return res.status(409).json({ error: `Account number ${cd?.account_number} is already in use by another customer` });
+      if (err.constraint?.includes('dc_id'))          return res.status(409).json({ error: `DC account number '${dc_id}' is already assigned to another customer — check the customer list to find who has it` });
+      return res.status(409).json({ error: `A customer with these details already exists (${err.constraint || 'unique constraint'})` });
+    }
+    next(err);
+  }
 });
 
 // ─── DDP Mode & Service Code Overrides ───────────────────────────────────────
