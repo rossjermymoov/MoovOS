@@ -16,7 +16,7 @@
 DO $$
 DECLARE
   r           RECORD;
-  v_keep_id   UUID;
+  v_keep_id   BIGINT;
   v_del_count INT;
   v_collapsed INT := 0;
   v_deleted   INT := 0;
