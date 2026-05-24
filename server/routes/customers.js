@@ -1004,9 +1004,14 @@ router.post('/ai-onboard', async (req, res, next) => {
   } catch (err) {
     if (err.code === '23505') {
       const { dc_id, customer: cd } = req.body;
-      if (err.constraint?.includes('account_number')) return res.status(409).json({ error: `Account number ${cd?.account_number} is already in use by another customer` });
-      if (err.constraint?.includes('dc_customer_id') || err.constraint?.includes('dc_id')) return res.status(409).json({ error: `DC account number '${dc_id}' is already assigned to another customer — check the customer list to find who has it` });
-      return res.status(409).json({ error: `A customer with these details already exists (${err.constraint || 'unique constraint'})` });
+      // Return full diagnostic detail so we can see exactly which constraint fired
+      return res.status(409).json({
+        error: `Duplicate value — ${err.detail || err.message}`,
+        constraint: err.constraint || null,
+        detail: err.detail || null,
+        account_number_attempted: cd?.account_number || null,
+        dc_id_attempted: dc_id || null,
+      });
     }
     next(err);
   }
