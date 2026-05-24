@@ -877,11 +877,17 @@ Respond with ONLY valid JSON:
 Rules:
 - Extract EVERY pricing row from the rate card as a separate entry
 - service_code: match to KNOWN SERVICE CODES above; otherwise construct as CARRIER-ABBREV (e.g. DPD Next Day → DPD-NX)
-- zone_name: MUST exactly match one of the zone names from AVAILABLE ZONES for that service. Map intelligently (e.g. "Republic of Ireland" → "Ireland", "Scottish Highlands & Islands" → use closest match). If a service has no zones defined, use the zone name from the rate card.
-- weight_class_name: format as "Xkg-Ykg" or "0-Xkg" or "FlatRate" for single-price services
-- min_weight_kg/max_weight_kg: numeric kg values; use null for flat-rate (no weight bands)
+- zone_name: MUST exactly match one of the zone names from AVAILABLE ZONES for that service. Map intelligently (e.g. "Republic of Ireland" → "Ireland"). If a service has no zones defined, use the zone name from the rate card.
+
+CRITICAL — weight bands vs flat rate:
+- A "Max Weight" column (e.g. "Max Weight: 30kg") is a SERVICE LIMIT only. It is NOT a pricing tier. Do NOT create weight bands from it.
+- Only create multiple weight-band rows (different min/max values) if the rate card shows EXPLICITLY DIFFERENT PRICES for different weight ranges for the same service and zone (e.g. separate rows for 0-5kg at £X and 5-10kg at £Y).
+- If there is ONE price per service/zone (with or without a max weight limit), it is a FLAT RATE: weight_class_name="FlatRate", min_weight_kg=null, max_weight_kg=null.
+- NEVER use 999, 30, or any other number as max_weight_kg just because a "Max Weight" column exists. That value is a service limit, not a band boundary.
+- The Purozo rate card and most standard courier rate cards are flat-rate: one price per service per zone. Use FlatRate for all of them unless you see multiple price tiers.
+
 - price: the sell price in £ as a decimal number (do NOT include £ symbol)
-- price_sub: price per additional parcel in same consignment, or null if not specified
+- price_sub: price per additional parcel in same consignment (the "Sub" or "Sub Boxes" column), or null if not specified
 - All prices as numeric values, not strings`;
 
     const result = await callAI(system, `Extract rate card pricing from this document:\n\n${rate_card_text}`);
