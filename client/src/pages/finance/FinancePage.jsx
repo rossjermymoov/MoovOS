@@ -1334,23 +1334,21 @@ export default function FinancePage() {
             <XCircle size={14} />
             {purgeRunning ? 'Purging…' : 'Remove tracking events'}
           </button>
-          {stats?.unpriced > 0 && (
-            <button
-              onClick={runBatchReprice}
-              disabled={batchRunning}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                background: batchRunning ? 'rgba(217,119,6,0.08)' : 'rgba(217,119,6,0.12)',
-                border: '1px solid rgba(217,119,6,0.4)',
-                borderRadius: 8, color: '#D97706',
-                padding: '7px 14px', cursor: batchRunning ? 'not-allowed' : 'pointer',
-                fontSize: 13, fontWeight: 700,
-              }}
-            >
-              <Zap size={14} />
-              {batchRunning ? 'Pricing…' : `Auto-price ${stats.unpriced} charges`}
-            </button>
-          )}
+          <button
+            onClick={runBatchReprice}
+            disabled={batchRunning}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: batchRunning ? 'rgba(217,119,6,0.08)' : 'rgba(217,119,6,0.12)',
+              border: '1px solid rgba(217,119,6,0.4)',
+              borderRadius: 8, color: '#D97706',
+              padding: '7px 14px', cursor: batchRunning ? 'not-allowed' : 'pointer',
+              fontSize: 13, fontWeight: 700,
+            }}
+          >
+            <Zap size={14} />
+            {batchRunning ? 'Pricing…' : `Price Unpriced${stats?.unpriced > 0 ? ` (${stats.unpriced})` : ''}`}
+          </button>
           <button
             onClick={runFullReprice}
             disabled={fullRepriceRunning}

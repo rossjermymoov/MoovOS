@@ -2058,8 +2058,10 @@ router.post('/batch-reprice', async (req, res, next) => {
              s.customer_account, s.ship_to_postcode, s.ship_to_country_iso, s.raw_payload
       FROM charges c
       LEFT JOIN shipments s ON s.id = c.shipment_id
-      WHERE c.price IS NULL
+      WHERE (c.price IS NULL OR c.price = 0)
         AND c.cancelled = false
+        AND c.charge_type = 'courier'
+        AND (c.source IS NULL OR c.source != 'carrier_direct')
       ORDER BY c.created_at ASC
     `);
 
