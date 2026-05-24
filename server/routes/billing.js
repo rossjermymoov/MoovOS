@@ -2196,7 +2196,6 @@ router.post('/full-reprice', async (req, res, next) => {
       WHERE c.charge_type = 'courier'
         AND c.cancelled   = false
         AND (c.source IS NULL OR c.source != 'carrier_direct')
-        ${costOnly ? '' : 'AND c.billed = false'}
       ORDER BY c.created_at ASC
     `);
 

@@ -1261,7 +1261,7 @@ export default function FinancePage() {
   }
 
   async function runFullReprice() {
-    if (!confirm('This will reprice ALL unbilled courier charges using your current rate cards, and recalculate fuel on each one. This cannot be undone. Continue?')) return;
+    if (!confirm('This will reprice ALL courier charges (including billed) using your current rate cards, and recalculate fuel on each one. This cannot be undone. Continue?')) return;
     setFullRepriceRunning(true);
     setFullRepriceResult(null);
     try {
