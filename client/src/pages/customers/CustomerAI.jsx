@@ -739,7 +739,7 @@ export default function CustomerAI() {
           />
         )}
 
-        {step === 3 && <StepConfirm dcId={dcId} moovAccountNumber={moovAccountNumber} customer={customer} contact={contact} rates={rates} />}
+        {step === 3 && <StepConfirm moovAccountNumber={moovAccountNumber} customer={customer} contact={contact} rates={rates} />}
 
         {(formError || rateError || saveError) && (
           <div style={{ marginTop: 16, padding: 12, background: 'rgba(233,30,140,0.1)', border: '1px solid #E91E8C', borderRadius: 8, fontSize: 13, color: '#E91E8C', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
