@@ -5,53 +5,55 @@
 -- Mainland·Parcel to be deleted too — because "Mainland" matched across services.
 -- Yodel Medium 48 is mainland-only, so those customers now have no Medium 48 rates.
 --
--- This migration re-adds a Mainland·Packet row (price NULL) for every customer
--- that has any AGL/Yodel service rates but is missing Yodel Medium 48 entirely.
+-- Service info is read from customer_rates (customers not affected by mig 222
+-- will still have their Medium rows). courier_services has no service_name column.
+--
 -- Prices are left NULL for manual entry.
 
 DO $$
 DECLARE
   rec        RECORD;
   v_svc      RECORD;
-  v_courier  RECORD;
   v_inserted INT := 0;
   v_rows     INT := 0;
 BEGIN
-  -- Find the Yodel Medium 48 service (AGL courier, service_name contains 'medium')
-  SELECT cs.id, cs.service_code, cs.service_name, cs.courier_id
-  INTO   v_svc
-  FROM   courier_services cs
-  WHERE  cs.service_name ILIKE '%medium%'
-    AND  EXISTS (
-           SELECT 1 FROM couriers c
-           WHERE c.id = cs.courier_id
-             AND (c.name ILIKE '%AGL%' OR c.name ILIKE '%Yodel%')
-         )
+  -- Find Medium 48 service details from existing customer_rates rows
+  -- (only customers who did NOT have Mini 48 are unaffected and still have rows)
+  SELECT DISTINCT ON (cr.service_id)
+    cr.service_id,
+    cr.service_code,
+    cr.service_name,
+    cr.courier_id,
+    cr.courier_code,
+    cr.courier_name
+  INTO v_svc
+  FROM customer_rates cr
+  WHERE cr.service_name ILIKE '%medium%'
+    AND (
+      cr.courier_name ILIKE '%AGL%' OR cr.courier_name ILIKE '%Yodel%'
+      OR cr.courier_code ILIKE '%AGL%'
+    )
+  ORDER BY cr.service_id
   LIMIT 1;
 
-  IF v_svc.id IS NULL THEN
-    RAISE NOTICE 'Migration 223: could not find AGL/Yodel Medium service — skipping.';
+  IF v_svc.service_id IS NULL THEN
+    RAISE NOTICE 'Migration 223: no AGL/Yodel Medium rows found in customer_rates — nothing to restore.';
     RETURN;
   END IF;
 
-  RAISE NOTICE 'Migration 223: found service "%" (%) id=%', v_svc.service_name, v_svc.service_code, v_svc.id;
-
-  -- Get courier display fields
-  SELECT code, name INTO v_courier
-  FROM   couriers
-  WHERE  id = v_svc.courier_id;
+  RAISE NOTICE 'Migration 223: found service "%" (%) id=%',
+    v_svc.service_name, v_svc.service_code, v_svc.service_id;
 
   -- For every customer that has any AGL/Yodel rates but no Medium 48 rates, restore Mainland
   FOR rec IN
     SELECT DISTINCT cr.customer_id
     FROM   customer_rates cr
-    JOIN   courier_services cs ON cs.service_code = cr.service_code
-    JOIN   couriers c          ON c.id = cs.courier_id
-    WHERE  (c.name ILIKE '%AGL%' OR c.name ILIKE '%Yodel%')
+    WHERE  (cr.courier_name ILIKE '%AGL%' OR cr.courier_name ILIKE '%Yodel%'
+            OR cr.courier_code ILIKE '%AGL%')
       AND  NOT EXISTS (
              SELECT 1 FROM customer_rates cr2
              WHERE  cr2.customer_id = cr.customer_id
-               AND  cr2.service_id  = v_svc.id
+               AND  cr2.service_id  = v_svc.service_id
            )
   LOOP
     INSERT INTO customer_rates
@@ -63,9 +65,9 @@ BEGIN
     SELECT
       rec.customer_id,
       v_svc.courier_id,
-      v_courier.code,
-      v_courier.name,
-      v_svc.id,
+      v_svc.courier_code,
+      v_svc.courier_name,
+      v_svc.service_id,
       v_svc.service_code,
       v_svc.service_name,
       'Mainland',
@@ -75,7 +77,7 @@ BEGIN
     WHERE NOT EXISTS (
       SELECT 1 FROM customer_rates x
       WHERE  x.customer_id = rec.customer_id
-        AND  x.service_id  = v_svc.id
+        AND  x.service_id  = v_svc.service_id
         AND  x.zone_name   = 'Mainland'
     );
 
