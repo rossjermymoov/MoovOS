@@ -102,12 +102,13 @@ router.post('/:customerId', async (req, res, next) => {
          min_weight_kg, max_weight_kg,
          price, price_sub)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-      ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
+      ON CONFLICT (customer_id, service_id, zone_name)
       DO UPDATE SET
-        price         = EXCLUDED.price,
-        price_sub     = EXCLUDED.price_sub,
-        min_weight_kg = COALESCE(customer_rates.min_weight_kg, EXCLUDED.min_weight_kg),
-        max_weight_kg = COALESCE(customer_rates.max_weight_kg, EXCLUDED.max_weight_kg)
+        price             = EXCLUDED.price,
+        price_sub         = EXCLUDED.price_sub,
+        weight_class_name = EXCLUDED.weight_class_name,
+        min_weight_kg     = COALESCE(customer_rates.min_weight_kg, EXCLUDED.min_weight_kg),
+        max_weight_kg     = COALESCE(customer_rates.max_weight_kg, EXCLUDED.max_weight_kg)
       RETURNING *
     `, [customerId, courier_id, courier_code, courier_name,
         service_id, service_code, service_name,

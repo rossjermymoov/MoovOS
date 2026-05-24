@@ -1051,10 +1051,11 @@ router.post('/ai-onboard', async (req, res, next) => {
              min_weight_kg, max_weight_kg,
              price, price_sub)
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-          ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
+          ON CONFLICT (customer_id, service_id, zone_name)
           DO UPDATE SET
-            price     = EXCLUDED.price,
-            price_sub = EXCLUDED.price_sub
+            price              = EXCLUDED.price,
+            price_sub          = EXCLUDED.price_sub,
+            weight_class_name  = EXCLUDED.weight_class_name
         `, [
           customer.id,
           svc.courier_id,
@@ -1122,7 +1123,7 @@ router.post('/ai-onboard', async (req, res, next) => {
                min_weight_kg, max_weight_kg,
                price, price_sub)
             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-            ON CONFLICT (customer_id, service_id, zone_name, weight_class_name) DO NOTHING
+            ON CONFLICT (customer_id, service_id, zone_name) DO NOTHING
           `, [
             customer.id,
             template.courier_id,
