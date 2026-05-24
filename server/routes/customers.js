@@ -873,7 +873,7 @@ Rules:
 // Creates customer + contact + rates in one transaction
 router.post('/ai-onboard', async (req, res, next) => {
   try {
-    const { dc_id, customer: cd, contact: co, rates = [] } = req.body;
+    const { customer: cd, contact: co, rates = [] } = req.body;
 
     if (!cd?.business_name) return res.status(400).json({ error: 'business_name required' });
 
@@ -881,7 +881,7 @@ router.post('/ai-onboard', async (req, res, next) => {
     // account_number: if cd.account_number is supplied, include it explicitly so
     // the DB trigger (which only fires when account_number IS NULL) leaves it alone.
     const acctCol   = cd.account_number ? ', account_number' : '';
-    const acctParam = cd.account_number ? ', $21' : '';
+    const acctParam = cd.account_number ? ', $20' : '';
 
     const custRes = await query(`
       INSERT INTO customers (
@@ -889,10 +889,10 @@ router.post('/ai-onboard', async (req, res, next) => {
         address_line_1, address_line_2, city, county, postcode, country,
         phone_number, primary_email, accounts_email, eori_number, ioss_number,
         tier, credit_limit, billing_cycle, payment_terms_days,
-        dc_customer_id, account_status, vat_enabled${acctCol}
+        account_status, vat_enabled${acctCol}
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
-        $16,$17,$18,$19,$20,'active',true${acctParam}
+        $16,$17,$18,$19,'active',true${acctParam}
       ) RETURNING *
     `, [
       cd.business_name,
@@ -914,7 +914,8 @@ router.post('/ai-onboard', async (req, res, next) => {
       parseFloat(cd.credit_limit) || 0,
       cd.billing_cycle || 'monthly',
       parseInt(cd.payment_terms_days) || 30,
-      dc_id || null,   // dc_id from request → stored as dc_customer_id (the webhook-matching field)
+      // dc_customer_id is kept in sync with account_number automatically by the
+      // trg_customer_dc_id_sync DB trigger (migration 203) — no need to pass it here.
       ...(cd.account_number ? [cd.account_number.trim().toUpperCase()] : []),
     ]);
     const customer = custRes.rows[0];

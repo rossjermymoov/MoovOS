@@ -171,8 +171,8 @@ function DocumentInput({ label, hint, onReady, loading, loadingMsg }) {
   );
 }
 
-// ─── Step 0: DC Account Number + Moov Account Number ──────────
-function StepDcId({ dcId, setDcId, error, moovAccountNumber, setMoovAccountNumber, moovAccountError }) {
+// ─── Step 0: Moov Account Number ──────────────────────────────
+function StepDcId({ moovAccountNumber, setMoovAccountNumber, moovAccountError }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{
@@ -184,30 +184,20 @@ function StepDcId({ dcId, setDcId, error, moovAccountNumber, setMoovAccountNumbe
           <span style={{ fontSize: 13, fontWeight: 600, color: '#7B2FBE' }}>AI-Assisted Onboarding</span>
         </div>
         <p style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6, margin: 0 }}>
-          Provide the Moov account number and DC account number, upload (or paste) the customer's application form PDF, then upload their rate card PDF.
+          Provide the Moov account number, upload (or paste) the customer's application form PDF, then upload their rate card PDF.
           AI will extract all the details and pre-fill the forms — you just review and confirm.
         </p>
       </div>
-      <div style={grid2}>
-        <Field label="Moov Account Number" required error={moovAccountError}>
-          <input
-            style={inputStyle(moovAccountError)}
-            value={moovAccountNumber}
-            onChange={e => setMoovAccountNumber(e.target.value.trim().toUpperCase())}
-            placeholder="e.g. MOOV-0187"
-          />
-        </Field>
-        <Field label="DC Account Number" required error={error}>
-          <input
-            style={inputStyle(error)}
-            value={dcId}
-            onChange={e => setDcId(e.target.value.trim())}
-            placeholder="e.g. 12345 — the webhook account number"
-          />
-        </Field>
-      </div>
+      <Field label="Moov Account Number" required error={moovAccountError}>
+        <input
+          style={inputStyle(moovAccountError)}
+          value={moovAccountNumber}
+          onChange={e => setMoovAccountNumber(e.target.value.trim().toUpperCase())}
+          placeholder="e.g. MOOV-0187"
+        />
+      </Field>
       <p style={{ fontSize: 12, color: '#64748B', marginTop: -8 }}>
-        The Moov account number (MOOV-xxxx) is the internal reference assigned to this customer. The DC account number links incoming shipment data via the delivery carrier webhook.
+        The Moov account number (MOOV-xxxx) is used as the customer's identifier throughout the system, including for incoming webhook data from the delivery carrier.
       </p>
     </div>
   );
@@ -510,8 +500,7 @@ function StepConfirm({ dcId, moovAccountNumber, customer, contact, rates }) {
           <p style={sectionH}>Customer</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <ReviewRow label="Business" value={customer.business_name} />
-            <ReviewRow label="Moov No." value={moovAccountNumber || '(auto-assigned)'} />
-            <ReviewRow label="DC Account" value={dcId} />
+            <ReviewRow label="Moov No." value={moovAccountNumber} />
             <ReviewRow label="Postcode" value={customer.postcode} />
             <ReviewRow label="Email" value={customer.primary_email} />
             <ReviewRow label="Phone" value={customer.phone_number} />
@@ -638,8 +627,6 @@ export default function CustomerAI() {
   const [result, setResult] = useState(null);
 
   // Step 0
-  const [dcId, setDcId]                         = useState('');
-  const [dcIdError, setDcIdError]               = useState('');
   const [moovAccountNumber, setMoovAccountNumber] = useState('');
   const [moovAccountError, setMoovAccountError] = useState('');
 
@@ -665,10 +652,8 @@ export default function CustomerAI() {
     setSaveError('');
     try {
       const validRates = rates.filter(r => r.service_code && r.zone_name && r.price !== '' && r.price != null);
-      const customerPayload = moovAccountNumber
-        ? { ...customer, account_number: moovAccountNumber }
-        : customer;
-      const data = await customersApi.aiOnboard({ dc_id: dcId, customer: customerPayload, contact, rates: validRates });
+      const customerPayload = { ...customer, account_number: moovAccountNumber };
+      const data = await customersApi.aiOnboard({ customer: customerPayload, contact, rates: validRates });
       setResult(data);
       setDone(true);
     } catch (e) {
@@ -680,10 +665,8 @@ export default function CustomerAI() {
 
   function next() {
     if (step === 0) {
-      let valid = true;
-      if (!moovAccountNumber.trim()) { setMoovAccountError('Moov account number is required (e.g. MOOV-0187)'); valid = false; } else { setMoovAccountError(''); }
-      if (!dcId.trim()) { setDcIdError('DC account number is required'); valid = false; } else { setDcIdError(''); }
-      if (!valid) return;
+      if (!moovAccountNumber.trim()) { setMoovAccountError('Moov account number is required (e.g. MOOV-0187)'); return; }
+      setMoovAccountError('');
       setStep(1);
     } else if (step === 1) {
       if (!formExtracted) { setFormError('Please upload or paste the application form first'); return; }
@@ -703,7 +686,7 @@ export default function CustomerAI() {
 
   const stepTitles = ['DC Account Number', 'Application Form', 'Rate Card', 'Review & Confirm'];
   const stepSubtitles = [
-    'Provide the Moov account number (MOOV-xxxx) and the DC account number configured in the webhook system.',
+    'Enter the Moov account number (MOOV-xxxx) for this customer.',
     'Upload the PDF or paste the text of the customer application form.',
     'Upload the PDF or paste the text of the customer rate card.',
     'Review everything and create the customer record.',
@@ -735,7 +718,7 @@ export default function CustomerAI() {
         <h2 style={{ fontSize: 18, fontWeight: 600, color: '#7B2FBE', marginBottom: 4 }}>{stepTitles[step]}</h2>
         <p style={{ fontSize: 13, color: '#64748B', marginBottom: 28 }}>{stepSubtitles[step]}</p>
 
-        {step === 0 && <StepDcId dcId={dcId} setDcId={setDcId} error={dcIdError} moovAccountNumber={moovAccountNumber} setMoovAccountNumber={setMoovAccountNumber} moovAccountError={moovAccountError} />}
+        {step === 0 && <StepDcId moovAccountNumber={moovAccountNumber} setMoovAccountNumber={setMoovAccountNumber} moovAccountError={moovAccountError} />}
 
         {step === 1 && (
           <StepApplicationForm
