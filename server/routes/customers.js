@@ -182,6 +182,21 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// GET /api/customers/lookup/:accountNumber  — raw lookup by account number
+// Returns the customer regardless of status — used for diagnostics.
+// ─────────────────────────────────────────────────────────────
+router.get('/lookup/:accountNumber', async (req, res, next) => {
+  try {
+    const { rows } = await query(
+      `SELECT id, business_name, account_number, account_status, dc_id, dc_customer_id, date_onboarded
+       FROM customers WHERE UPPER(account_number) = UPPER($1)`,
+      [req.params.accountNumber]
+    );
+    res.json({ count: rows.length, customers: rows });
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────
 // POST /api/customers  — create customer
 // ─────────────────────────────────────────────────────────────
 router.post('/', async (req, res, next) => {
