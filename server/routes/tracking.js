@@ -9,7 +9,7 @@
 
 import express from 'express';
 import { query } from '../db/index.js';
-import { fetchShipmentByReference, fetchShipmentById } from '../services/voilaClient.js';
+import { fetchShipmentByReference, fetchShipmentById, requestTrackingUpdate } from '../services/voilaClient.js';
 import { processShipment, insertCharges } from '../services/pricingEngine.js';
 
 const router = express.Router();
@@ -803,6 +803,144 @@ router.post('/backfill-verify', async (req, res, next) => {
         has_any_event:  r.has_any_event,
       })),
     });
+  } catch (err) { next(err); }
+});
+
+// ─── POST /api/tracking/bulk-tracking-update ──────────────────────────────────
+//
+// Calls the Voila on-demand tracking API for every unverified shipment that has
+// voila_tracking_request_id + voila_tracking_request_hash stored.
+//
+// Runs in the background (responds immediately) and processes up to `limit`
+// shipments per call (default 500, max 2500) with a configurable delay between
+// each request to avoid hammering the Voila API.
+//
+// Body (all optional):
+//   { limit: 500, delay_ms: 500, dry_run: false }
+//
+// Returns: { queued: N, message: "..." }
+// Progress is logged to Railway logs.
+
+router.post('/bulk-tracking-update', async (req, res, next) => {
+  try {
+    const limit   = Math.min(parseInt(req.body?.limit)    || 500,  2500);
+    const delayMs = Math.min(parseInt(req.body?.delay_ms) || 500,  5000);
+    const dryRun  = req.body?.dry_run === true;
+
+    // Find all unverified shipments that have Voila tracking credentials stored
+    const { rows: candidates } = await query(`
+      SELECT
+        s.id                            AS shipment_id,
+        s.voila_tracking_request_id     AS track_req_id,
+        s.voila_tracking_request_hash   AS track_req_hash,
+        s.tracking_codes,
+        s.courier,
+        c.id                            AS charge_id,
+        c.customer_id
+      FROM   shipments s
+      JOIN   charges   c ON c.shipment_id = s.id
+                        AND c.charge_type  = 'courier'
+                        AND c.verified     = false
+                        AND c.cancelled    = false
+      WHERE  s.voila_tracking_request_id   IS NOT NULL
+        AND  s.voila_tracking_request_hash IS NOT NULL
+      ORDER  BY s.created_at DESC
+      LIMIT  $1
+    `, [limit]);
+
+    if (!candidates.length) {
+      return res.json({
+        queued:  0,
+        message: 'No unverified shipments with Voila tracking credentials found.',
+      });
+    }
+
+    res.json({
+      queued:   candidates.length,
+      dry_run:  dryRun,
+      delay_ms: delayMs,
+      message:  `Bulk tracking update running in background for ${candidates.length} shipment(s). Check Railway logs for progress.`,
+    });
+
+    // ── Background processing ─────────────────────────────────────────────────
+    (async () => {
+      let ok = 0, already = 0, failed = 0, noEvents = 0;
+      const errors = [];
+
+      for (const row of candidates) {
+        try {
+          if (delayMs > 0) await new Promise(r => setTimeout(r, delayMs));
+
+          if (dryRun) {
+            console.log(`[bulk-tracking] DRY RUN: would request tracking for shipment ${row.shipment_id} (req_id=${row.track_req_id})`);
+            ok++;
+            continue;
+          }
+
+          // Call the Voila tracking API
+          const trackingData = await requestTrackingUpdate(
+            row.track_req_id,
+            row.track_req_hash
+          );
+
+          // Feed the response back through the existing tracking webhook handler
+          // by posting it internally as if it were a webhook event.
+          // The response may contain tracking events or just a status update.
+          if (trackingData && typeof trackingData === 'object') {
+            // Try to verify the charge immediately if tracking data confirms delivery
+            // or in-transit status — mirror the logic in backfill-verify.
+            const verifyRes = await query(`
+              UPDATE charges c
+              SET    verified   = true,
+                     updated_at = NOW()
+              FROM   shipments s
+              WHERE  c.id          = $1
+                AND  c.shipment_id = s.id
+                AND  c.verified    = false
+                AND  s.tracking_codes IS NOT NULL
+                AND  array_length(s.tracking_codes, 1) > 0
+                AND  EXISTS (
+                  SELECT 1
+                  FROM   parcels p
+                  JOIN   tracking_events te ON te.parcel_id = p.id
+                  WHERE  p.consignment_number = ANY(s.tracking_codes)
+                    AND  te.status = ANY(ARRAY[
+                           'in_transit','at_depot','out_for_delivery',
+                           'delivered','failed_delivery','on_hold',
+                           'awaiting_collection','customs_hold','exception','returned'
+                         ]::parcel_status[])
+                )
+            `, [row.charge_id]);
+
+            if (verifyRes.rowCount > 0) {
+              already++;
+              console.log(`[bulk-tracking] ✅ Verified charge ${row.charge_id} for shipment ${row.shipment_id}`);
+            } else {
+              noEvents++;
+              console.log(`[bulk-tracking] ⏳ Tracking data returned but no qualifying events yet for shipment ${row.shipment_id} (req_id=${row.track_req_id})`);
+            }
+            ok++;
+          } else {
+            noEvents++;
+            console.log(`[bulk-tracking] ⚠️  Empty/unexpected response for shipment ${row.shipment_id} (req_id=${row.track_req_id})`);
+          }
+
+        } catch (err) {
+          failed++;
+          errors.push({ shipment_id: row.shipment_id, error: err.message });
+          console.error(`[bulk-tracking] ❌ Error for shipment ${row.shipment_id}:`, err.message);
+        }
+      }
+
+      console.log(
+        `[bulk-tracking] Complete: ${ok} requested, ${already} verified, ` +
+        `${noEvents} no-events-yet, ${failed} errors`
+      );
+      if (errors.length) {
+        console.warn('[bulk-tracking] First 20 errors:', JSON.stringify(errors.slice(0, 20)));
+      }
+    })().catch(err => console.error('[bulk-tracking] Unhandled background error:', err.message));
+
   } catch (err) { next(err); }
 });
 

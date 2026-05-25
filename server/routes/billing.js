@@ -1196,6 +1196,11 @@ router.post('/webhook', (req, res) => {
     const primaryTrackingCode = trackingCodes[0] || null;
     const trackingHashVal = computeTrackingHash(primaryTrackingCode, collectionDate);
 
+    // Voila tracking request credentials — needed for on-demand tracking API calls.
+    // These sit at the top level of the parsed response JSON alongside tracking_codes.
+    const voilaTrackingRequestId   = responseParsed.tracking_request_id   ? parseInt(responseParsed.tracking_request_id, 10)   : null;
+    const voilaTrackingRequestHash = responseParsed.tracking_request_hash ? parseInt(responseParsed.tracking_request_hash, 10) : null;
+
     // Carrier surcharge cost — from DC billing block (used by applySurcharges until surcharge cost calc moves to rate cards)
     const dcSurchargeCosts          = Array.isArray(billingResp.surcharges) ? billingResp.surcharges : (billingResp.surcharges != null ? [billingResp.surcharges] : []);
     const totalCarrierSurchargeCost = dcSurchargeCosts.reduce((s, c) => s + (parseFloat(c) || 0), 0);
@@ -1298,26 +1303,29 @@ router.post('/webhook', (req, res) => {
          reference, reference_2,
          parcel_count, total_weight_kg, collection_date, tracking_codes,
          tracking_hash,
+         voila_tracking_request_id, voila_tracking_request_hash,
          ship_from_country_iso,
          dim_length_cm, dim_width_cm, dim_height_cm, parcel_weight_kg,
          total_declared_value, parcel_declared_value, hs_codes,
          raw_payload)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)
       ON CONFLICT (platform_shipment_id) DO UPDATE SET
-        customer_id           = COALESCE(EXCLUDED.customer_id, shipments.customer_id),
-        customer_account      = COALESCE(EXCLUDED.customer_account, shipments.customer_account),
-        service_name          = COALESCE(EXCLUDED.service_name, shipments.service_name),
-        tracking_codes        = COALESCE(EXCLUDED.tracking_codes, shipments.tracking_codes),
-        tracking_hash         = COALESCE(EXCLUDED.tracking_hash, shipments.tracking_hash),
-        ship_from_country_iso = COALESCE(EXCLUDED.ship_from_country_iso, shipments.ship_from_country_iso),
-        dim_length_cm         = COALESCE(EXCLUDED.dim_length_cm, shipments.dim_length_cm),
-        dim_width_cm          = COALESCE(EXCLUDED.dim_width_cm, shipments.dim_width_cm),
-        dim_height_cm         = COALESCE(EXCLUDED.dim_height_cm, shipments.dim_height_cm),
-        parcel_weight_kg      = COALESCE(EXCLUDED.parcel_weight_kg, shipments.parcel_weight_kg),
-        total_declared_value  = COALESCE(EXCLUDED.total_declared_value, shipments.total_declared_value),
-        parcel_declared_value = COALESCE(EXCLUDED.parcel_declared_value, shipments.parcel_declared_value),
-        hs_codes              = COALESCE(EXCLUDED.hs_codes, shipments.hs_codes),
-        updated_at            = NOW()
+        customer_id                   = COALESCE(EXCLUDED.customer_id, shipments.customer_id),
+        customer_account              = COALESCE(EXCLUDED.customer_account, shipments.customer_account),
+        service_name                  = COALESCE(EXCLUDED.service_name, shipments.service_name),
+        tracking_codes                = COALESCE(EXCLUDED.tracking_codes, shipments.tracking_codes),
+        tracking_hash                 = COALESCE(EXCLUDED.tracking_hash, shipments.tracking_hash),
+        voila_tracking_request_id     = COALESCE(EXCLUDED.voila_tracking_request_id, shipments.voila_tracking_request_id),
+        voila_tracking_request_hash   = COALESCE(EXCLUDED.voila_tracking_request_hash, shipments.voila_tracking_request_hash),
+        ship_from_country_iso         = COALESCE(EXCLUDED.ship_from_country_iso, shipments.ship_from_country_iso),
+        dim_length_cm                 = COALESCE(EXCLUDED.dim_length_cm, shipments.dim_length_cm),
+        dim_width_cm                  = COALESCE(EXCLUDED.dim_width_cm, shipments.dim_width_cm),
+        dim_height_cm                 = COALESCE(EXCLUDED.dim_height_cm, shipments.dim_height_cm),
+        parcel_weight_kg              = COALESCE(EXCLUDED.parcel_weight_kg, shipments.parcel_weight_kg),
+        total_declared_value          = COALESCE(EXCLUDED.total_declared_value, shipments.total_declared_value),
+        parcel_declared_value         = COALESCE(EXCLUDED.parcel_declared_value, shipments.parcel_declared_value),
+        hs_codes                      = COALESCE(EXCLUDED.hs_codes, shipments.hs_codes),
+        updated_at                    = NOW()
       RETURNING id
     `, [
       platformId || null, eventType,
@@ -1328,6 +1336,7 @@ router.post('/webhook', (req, res) => {
       parcelCount, totalWeightKg || null, collectionDate,
       trackingCodes.length ? trackingCodes : null,
       trackingHashVal,
+      voilaTrackingRequestId, voilaTrackingRequestHash,
       addl.shipFromCountryIso,
       addl.dimLength, addl.dimWidth, addl.dimHeight, addl.parcelWeightKg,
       addl.totalDeclaredValue, addl.parcelDeclaredValue,
