@@ -82,9 +82,22 @@ router.post('/:customerId', async (req, res, next) => {
       return res.status(400).json({ error: 'service_id, zone_name, and price are required' });
     }
 
-    // Pull numeric weight bounds from dc_weight_classes if available.
-    // This makes the carrier rate card the source of truth rather than
-    // relying on the weight_class_name text to be parsed at pricing time.
+    // Resolve numeric weight bounds for this band.
+    //
+    // Strategy (first match wins):
+    //   1. dc_weight_classes — for bands stored in the old DC platform name format
+    //   2. weight_bands table — for services whose zones/bands are defined in the
+    //      carrier rate card (domestic DPD, Yodel, etc.)
+    //   3. Parse weight_class_name directly — bandLabel() format is "0-2KG", "2-5KG",
+    //      "10KG+" etc., so we can extract bounds reliably when neither table matches.
+    //
+    // Without numeric bounds, rateCoversWeight() treats every row as a catch-all and
+    // the billing engine can pick the wrong (more expensive) band.
+
+    let resolvedMin = null;
+    let resolvedMax = null;
+
+    // 1. dc_weight_classes
     const wcRes = await query(
       `SELECT min_weight_kg, max_weight_kg
        FROM dc_weight_classes
@@ -92,7 +105,63 @@ router.post('/:customerId', async (req, res, next) => {
        LIMIT 1`,
       [service_code, weight_class_name]
     );
-    const wc = wcRes.rows[0] || {};
+    if (wcRes.rows[0]) {
+      resolvedMin = wcRes.rows[0].min_weight_kg;
+      resolvedMax = wcRes.rows[0].max_weight_kg;
+    }
+
+    // 2. weight_bands for this service + zone
+    if (resolvedMin == null && resolvedMax == null && zone_name) {
+      const wbRes = await query(
+        `SELECT wb.min_weight_kg, wb.max_weight_kg
+         FROM weight_bands wb
+         JOIN zones z             ON z.id  = wb.zone_id
+         JOIN courier_services cs ON cs.id = z.courier_service_id
+         WHERE cs.service_code ILIKE $1
+           AND z.name          ILIKE $2
+           AND (
+             -- Match by numeric bounds derived from the bandLabel name
+             (wb.min_weight_kg IS NOT NULL AND wb.max_weight_kg IS NOT NULL AND
+              CONCAT(
+                CASE WHEN wb.min_weight_kg = floor(wb.min_weight_kg)
+                     THEN floor(wb.min_weight_kg)::int::text
+                     ELSE round(wb.min_weight_kg::numeric,1)::text END,
+                '-',
+                CASE WHEN wb.max_weight_kg = floor(wb.max_weight_kg)
+                     THEN floor(wb.max_weight_kg)::int::text
+                     ELSE round(wb.max_weight_kg::numeric,1)::text END,
+                'KG'
+              ) ILIKE $3)
+             OR
+             (wb.max_weight_kg IS NULL AND
+              CONCAT(
+                CASE WHEN wb.min_weight_kg = floor(wb.min_weight_kg)
+                     THEN floor(wb.min_weight_kg)::int::text
+                     ELSE round(wb.min_weight_kg::numeric,1)::text END,
+                'KG+'
+              ) ILIKE $3)
+           )
+         LIMIT 1`,
+        [service_code, zone_name, weight_class_name]
+      );
+      if (wbRes.rows[0]) {
+        resolvedMin = wbRes.rows[0].min_weight_kg;
+        resolvedMax = wbRes.rows[0].max_weight_kg;
+      }
+    }
+
+    // 3. Parse bandLabel format directly: "0-2KG", "2-5KG", "10KG+"
+    if (resolvedMin == null && resolvedMax == null) {
+      const rangeMatch = weight_class_name.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)KG$/i);
+      const openMatch  = weight_class_name.match(/^(\d+(?:\.\d+)?)KG\+$/i);
+      if (rangeMatch) {
+        resolvedMin = parseFloat(rangeMatch[1]);
+        resolvedMax = parseFloat(rangeMatch[2]);
+      } else if (openMatch) {
+        resolvedMin = parseFloat(openMatch[1]);
+        resolvedMax = null; // open-ended upper band
+      }
+    }
 
     const result = await query(`
       INSERT INTO customer_rates
@@ -112,7 +181,7 @@ router.post('/:customerId', async (req, res, next) => {
     `, [customerId, courier_id, courier_code, courier_name,
         service_id, service_code, service_name,
         zone_name, weight_class_name,
-        wc.min_weight_kg ?? null, wc.max_weight_kg ?? null,
+        resolvedMin ?? null, resolvedMax ?? null,
         parseFloat(price),
         price_sub != null ? parseFloat(price_sub) : null]);
 
