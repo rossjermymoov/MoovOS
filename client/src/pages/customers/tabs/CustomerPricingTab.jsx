@@ -963,7 +963,7 @@ function ServiceSelector({ customerId, activeCourierIds }) {
                   <div style={{ width: 15, height: 15, borderRadius: 4, border: `2px solid ${active ? '#00C853' : 'rgba(0,0,0,0.14)'}`, background: active ? '#00C853' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 12, flexShrink: 0, transition: 'all 0.15s' }}>
                     {active && <Check size={9} color="#000" strokeWidth={3} />}
                   </div>
-                  <span style={{ fontSize: 13, color: active ? '#fff' : '#64748B', fontWeight: active ? 600 : 400, flex: 1 }}>{svc.name}</span>
+                  <span style={{ fontSize: 13, color: active ? '#0F172A' : '#64748B', fontWeight: active ? 600 : 400, flex: 1 }}>{svc.name}</span>
                   <span style={{ fontSize: 11, fontFamily: 'monospace', color: active ? '#00C853' : '#444', background: active ? 'rgba(0,200,83,0.08)' : 'transparent', padding: '1px 6px', borderRadius: 3 }}>{svc.service_code}</span>
                   {svc.service_type === 'international' && (
                     <span style={{ fontSize: 10, color: '#00BCD4', fontWeight: 700, marginLeft: 8 }}>INTL</span>
