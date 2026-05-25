@@ -34,18 +34,29 @@ export default function Sidebar() {
 
   return (
     <aside
-      style={{ width: 140, minHeight: '100vh', background: '#FFFFFF', borderRight: '1px solid rgba(0,0,0,0.08)' }}
-      className="flex flex-col py-6 shrink-0"
+      style={{
+        width: 140,
+        height: '100vh',
+        position: 'sticky',
+        top: 0,
+        background: '#FFFFFF',
+        borderRight: '1px solid rgba(0,0,0,0.08)',
+        display: 'flex',
+        flexDirection: 'column',
+        flexShrink: 0,
+        overflow: 'hidden',
+      }}
+      className="py-6"
     >
       {/* Logo */}
-      <div className="px-4 mb-6">
+      <div className="px-4 mb-6" style={{ flexShrink: 0 }}>
         <span style={{ color: '#00C853', fontSize: 20, fontWeight: 700, letterSpacing: '-0.5px' }}>
           MOOV<span style={{ color: '#0F172A' }}> OS</span>
         </span>
       </div>
 
-      {/* Nav items */}
-      <div className="flex flex-col gap-1 flex-1">
+      {/* Nav items — scrollable when content exceeds viewport */}
+      <div className="flex flex-col gap-1" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
         {visibleItems.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
