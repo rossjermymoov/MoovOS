@@ -1256,6 +1256,18 @@ router.post('/webhook', (req, res) => {
         if (cr5.rows.length) customerId = cr5.rows[0].id;
       } catch (_) {}
     }
+    // Step 7: customerDcId → billing_aliases
+    // Covers test/dev accounts where the DC customer ID is stored as an alias
+    // rather than as the primary dc_customer_id on the customer record.
+    if (!customerId && customerDcId) {
+      try {
+        const cr6 = await query(
+          `SELECT id FROM customers WHERE EXISTS (SELECT 1 FROM unnest(billing_aliases) a WHERE LOWER(a) = LOWER($1)) LIMIT 1`,
+          [customerDcId.trim().toLowerCase()]
+        );
+        if (cr6.rows.length) customerId = cr6.rows[0].id;
+      } catch (_) {}
+    }
 
     // Effective account identifier to store — prefer accountNumber, fall back to customerDcId
     // so the relink-customers endpoint can find unlinked shipments later.
