@@ -5,7 +5,11 @@ import {
   ArrowLeft, AlertTriangle, Phone, Mail, MapPin, Building2,
   Users, MessageSquare, TrendingUp, DollarSign, Zap, Info,
   Pencil, X, Check, ShieldCheck, Trash2, Bug, ChevronDown, ChevronRight, RefreshCw,
+  ToggleLeft, ToggleRight, Plus, FlaskConical,
 } from 'lucide-react';
+import axios from 'axios';
+
+const api = axios.create({ baseURL: '/api' });
 import { customersApi } from '../../api/customers';
 import { customerRateCardsApi } from '../../api/customerRateCards';
 import { HealthBadge, AccountStatusBadge, TierBadge, CreditUtilisationBar } from '../../components/ui/StatusBadge';
@@ -140,6 +144,168 @@ function CustomerRateCardAssignments({ customerId }) {
 }
 
 // ─── Overview Tab ────────────────────────────────────────────
+// ─── Test Account Section ────────────────────────────────────────────────────
+// Toggle that marks a customer as a test/developer account. All incoming
+// charges are forced to £0 and surcharges are skipped.
+function TestAccountSection({ customer, onToggle }) {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [enabled, setEnabled] = useState(!!customer.is_test_account);
+
+  useEffect(() => { setEnabled(!!customer.is_test_account); }, [customer.is_test_account]);
+
+  async function toggle() {
+    const newValue = !enabled;
+    setEnabled(newValue);
+    setBusy(true);
+    try {
+      await api.put(`/customers/${customer.id}/test-account`, { enabled: newValue });
+      qc.invalidateQueries(['customer', customer.id]);
+      onToggle?.();
+    } catch (err) {
+      setEnabled(!newValue);
+      console.error('Test account toggle failed:', err.response?.data || err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="moov-card" style={{
+      marginBottom: 16, padding: '14px 18px',
+      border: enabled ? '1px solid rgba(239,68,68,0.35)' : '1px solid rgba(0,0,0,0.08)',
+      background: enabled ? 'rgba(239,68,68,0.05)' : undefined,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <FlaskConical size={18} color={enabled ? '#EF4444' : '#94A3B8'} strokeWidth={1.5} />
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Test Account</span>
+            {enabled && (
+              <span style={{
+                fontSize: 11, fontWeight: 700, color: '#EF4444',
+                background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)',
+                borderRadius: 12, padding: '2px 8px', letterSpacing: '0.3px',
+              }}>ACTIVE — ALL CHARGES £0</span>
+            )}
+          </div>
+          <p style={{ fontSize: 12, color: '#64748B', margin: '3px 0 0' }}>
+            When enabled, all incoming shipment charges are forced to £0 and surcharges are skipped.
+            Add Moov IDs or DCIDs below to route multiple test accounts here.
+          </p>
+        </div>
+        <button
+          onClick={toggle}
+          disabled={busy}
+          style={{ background: 'none', border: 'none', cursor: busy ? 'wait' : 'pointer', padding: 4, opacity: busy ? 0.5 : 1 }}
+        >
+          {enabled
+            ? <ToggleRight size={32} color="#EF4444" strokeWidth={1.5} />
+            : <ToggleLeft  size={32} color="#94A3B8" strokeWidth={1.5} />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Linked Moov IDs Section ──────────────────────────────────────────────────
+// Manage billing_aliases — the Moov IDs / DCIDs that route to this customer.
+function LinkedIdsSection({ customer }) {
+  const qc = useQueryClient();
+  const [aliases, setAliases] = useState(customer.billing_aliases || []);
+  const [input, setInput] = useState('');
+  const [adding, setAdding] = useState(false);
+
+  useEffect(() => { setAliases(customer.billing_aliases || []); }, [customer.billing_aliases]);
+
+  async function addAlias() {
+    const trimmed = input.trim();
+    if (!trimmed) return;
+    setAdding(true);
+    try {
+      const res = await api.post(`/customers/${customer.id}/billing-aliases`, { alias: trimmed });
+      setAliases(res.data.billing_aliases);
+      setInput('');
+      qc.invalidateQueries(['customer', customer.id]);
+    } catch (err) {
+      console.error('Add alias failed:', err.response?.data || err.message);
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function removeAlias(alias) {
+    try {
+      const res = await api.delete(`/customers/${customer.id}/billing-aliases`, { data: { alias } });
+      setAliases(res.data.billing_aliases);
+      qc.invalidateQueries(['customer', customer.id]);
+    } catch (err) {
+      console.error('Remove alias failed:', err.response?.data || err.message);
+    }
+  }
+
+  return (
+    <div className="moov-card" style={{ marginBottom: 16, padding: '14px 18px' }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', marginBottom: 10 }}>
+        Linked Moov IDs / DCIDs
+      </div>
+      <p style={{ fontSize: 12, color: '#64748B', margin: '0 0 12px' }}>
+        Any Moov ID or DCID added here will route incoming shipments to this account.
+        Use this to consolidate multiple test accounts under one record.
+      </p>
+
+      {/* Add new alias */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+        <input
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && addAlias()}
+          placeholder="e.g. MOOV-0042 or DC-00123"
+          style={{
+            flex: 1, padding: '6px 12px', borderRadius: 8, fontSize: 12,
+            border: '1px solid rgba(0,0,0,0.12)', outline: 'none', color: '#0F172A',
+            fontFamily: 'monospace',
+          }}
+        />
+        <button
+          onClick={addAlias}
+          disabled={adding || !input.trim()}
+          style={{
+            padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+            background: '#00C853', color: '#000', border: 'none', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 4, opacity: adding || !input.trim() ? 0.5 : 1,
+          }}
+        >
+          <Plus size={12} /> Add
+        </button>
+      </div>
+
+      {/* Existing aliases */}
+      {aliases.length === 0 ? (
+        <span style={{ fontSize: 12, color: '#94A3B8' }}>No linked IDs yet.</span>
+      ) : (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {aliases.map(alias => (
+            <div key={alias} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: 'rgba(0,0,0,0.05)', border: '1px solid rgba(0,0,0,0.10)',
+              borderRadius: 8, padding: '4px 10px', fontSize: 12,
+            }}>
+              <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#0F172A' }}>{alias}</span>
+              <button
+                onClick={() => removeAlias(alias)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', lineHeight: 1 }}
+              >
+                <X size={12} color="#94A3B8" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function OverviewTab({ c, onSaved, onDeleteRequest }) {
   const [edit, setEdit] = useState(false);
   const [form, setForm] = useState({});
@@ -196,6 +362,10 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
 
   return (
     <div>
+      {/* Test Account toggle + Linked IDs */}
+      <TestAccountSection customer={c} onToggle={onSaved} />
+      <LinkedIdsSection customer={c} />
+
       {/* Edit / Save bar */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10, gap: 8 }}>
         {edit ? (

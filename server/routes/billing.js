@@ -1261,6 +1261,20 @@ router.post('/webhook', (req, res) => {
     // so the relink-customers endpoint can find unlinked shipments later.
     const effectiveAccount = accountNumber || customerDcId || null;
 
+    // Test account check — if this customer is flagged as a test account, all
+    // charges are forced to £0 and surcharges are skipped entirely.
+    let isTestAccount = false;
+    if (customerId) {
+      const testRes = await query(
+        `SELECT is_test_account FROM customers WHERE id = $1`,
+        [customerId]
+      );
+      isTestAccount = testRes.rows[0]?.is_test_account === true;
+      if (isTestAccount) {
+        console.log(`[billing/webhook] test account ${customerId} — forcing £0 charge, skipping surcharges`);
+      }
+    }
+
     // Extract additional fields for dimension/value/hs_code surcharge rule filtering
     const addl = extractAdditionalShipmentFields(payload);
 
@@ -1323,12 +1337,20 @@ router.post('/webhook', (req, res) => {
     }
 
     // Look up rate card — pass destination postcode + country for zone resolution
-    const { rate, reason: priceFailReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, shipToPostcode, shipToCountry || 'GB');
-    const pricingMode = rate ? await getParcelPricingMode(customerId) : 'sub';
-    const unitPrice   = rate ? rate.price : null;
-    const totalPrice  = unitPrice != null
-      ? parseFloat(calcTotal(rate, parcelCount, pricingMode).toFixed(2))
-      : null;
+    // Test accounts bypass rate lookup entirely — all charges are £0.
+    let rate = null, priceFailReason = null, totalPrice = null;
+    if (isTestAccount) {
+      totalPrice = 0;
+    } else {
+      const result = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, shipToPostcode, shipToCountry || 'GB');
+      rate             = result.rate;
+      priceFailReason  = result.reason;
+      const pricingMode = rate ? await getParcelPricingMode(customerId) : 'sub';
+      const unitPrice   = rate ? rate.price : null;
+      totalPrice        = unitPrice != null
+        ? parseFloat(calcTotal(rate, parcelCount, pricingMode).toFixed(2))
+        : null;
+    }
 
     // Idempotency guard — if a courier charge already exists for this order_id
     // (same customer), skip creating a new one and return the existing charge id.
@@ -1362,7 +1384,7 @@ router.post('/webhook', (req, res) => {
       shipmentId, customerId, 'courier',
       reference, parcelCount, serviceName,
       totalPrice,
-      calcCostTotal(rate, parcelCount, await isAllSubParcelPricing(dcServiceId)),
+      isTestAccount ? 0 : calcCostTotal(rate, parcelCount, await isAllSubParcelPricing(dcServiceId)),
       rate?.zone_name || null,
       rate?.weight_class_name || null,
       rate != null,
@@ -1370,6 +1392,11 @@ router.post('/webhook', (req, res) => {
     ]);
 
     // Apply surcharges (fuel, clearance, congestion, etc.) — non-blocking
+    // Skipped entirely for test accounts.
+    if (isTestAccount) {
+      console.log(`[billing/webhook] test account — surcharges skipped for shipment ${shipmentId}`);
+      return;
+    }
     await applySurcharges(shipmentId, customerId, totalPrice, {
       courier,
       dc_service_id:          dcServiceId,

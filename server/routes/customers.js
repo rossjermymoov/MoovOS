@@ -1181,6 +1181,73 @@ router.post('/ai-onboard', async (req, res, next) => {
 // DELETE /api/customers/:id/service-code-overrides/:mappingId
 //   Deactivate a per-customer mapping (is_active = false).
 //
+// PUT    /api/customers/:id/test-account
+//   Enable or disable test account mode. Forces all incoming charges to £0.
+//   Body: { enabled: bool }
+
+router.put('/:id/test-account', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { enabled } = req.body;
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled (boolean) is required' });
+    }
+    await query(`UPDATE customers SET is_test_account = $1 WHERE id = $2`, [enabled, id]);
+    return res.json({ is_test_account: enabled });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST   /api/customers/:id/billing-aliases
+//   Add a Moov ID / DCID alias that routes to this customer.
+//   Body: { alias: string }
+
+router.post('/:id/billing-aliases', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { alias } = req.body;
+    if (!alias || typeof alias !== 'string') {
+      return res.status(400).json({ error: 'alias (string) is required' });
+    }
+    const trimmed = alias.trim();
+    await query(
+      `UPDATE customers
+       SET billing_aliases = array_append(billing_aliases, $1)
+       WHERE id = $2 AND NOT ($1 = ANY(billing_aliases))`,
+      [trimmed, id]
+    );
+    const res2 = await query(`SELECT billing_aliases FROM customers WHERE id = $1`, [id]);
+    return res.json({ billing_aliases: res2.rows[0]?.billing_aliases || [] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/customers/:id/billing-aliases
+//   Remove a Moov ID / DCID alias from this customer.
+//   Body: { alias: string }
+
+router.delete('/:id/billing-aliases', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { alias } = req.body;
+    if (!alias || typeof alias !== 'string') {
+      return res.status(400).json({ error: 'alias (string) is required' });
+    }
+    await query(
+      `UPDATE customers
+       SET billing_aliases = array_remove(billing_aliases, $1)
+       WHERE id = $2`,
+      [alias.trim(), id]
+    );
+    const res2 = await query(`SELECT billing_aliases FROM customers WHERE id = $1`, [id]);
+    return res.json({ billing_aliases: res2.rows[0]?.billing_aliases || [] });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // PUT    /api/customers/:id/companion-parcel-billing
 //   Enable or disable companion parcel billing for a customer.
 //   When enabled, the reconciliation engine finds companion charges that share
