@@ -486,6 +486,40 @@ router.get('/:customerId', async (req, res, next) => {
       ORDER BY COALESCE(c.name, cr.courier_name), cr.service_name
     `, [customerId]);
 
+    // Also include services the customer has selected (customer_services) but hasn't
+    // priced yet — so they appear in the UI with 0 rates, ready for markup application.
+    // Only fetches services NOT already covered by customer_rates above.
+    const existingCodes = new Set(summaryRes.rows.map(r => r.service_code));
+    const unPricedRes = await query(`
+      SELECT
+        co.id   AS courier_id,
+        co.code AS courier_code,
+        co.name AS courier_name,
+        -- Fall back to courier_services.id as the legacy service_id when no rates exist
+        COALESCE(
+          (SELECT cr2.service_id FROM customer_rates cr2
+           WHERE cr2.service_code = cs.service_code LIMIT 1),
+          cs.id
+        ) AS service_id,
+        cs.service_code,
+        cs.name         AS service_name,
+        0               AS rate_count,
+        cs.service_type::text AS service_type,
+        false           AS has_sub_rates
+      FROM customer_services cust_svc
+      JOIN courier_services cs ON cs.id = cust_svc.courier_service_id
+      JOIN couriers         co ON co.id = cs.courier_id
+      WHERE cust_svc.customer_id = $1
+        AND cs.service_type = 'international'
+      ORDER BY co.name, cs.name
+    `, [customerId]);
+
+    // Merge: add unpriced services that aren't already represented
+    const allSummaryRows = [
+      ...summaryRes.rows,
+      ...unPricedRes.rows.filter(r => !existingCodes.has(r.service_code)),
+    ];
+
     // All rate rows (include id, price_sub for edit/delete)
     // Sort weight bands numerically by extracting the leading number from the
     // weight_class_name (e.g. "2KG"→2, "5KG"→5, "10KG"→10) so that "2KG" sorts
@@ -520,7 +554,7 @@ router.get('/:customerId', async (req, res, next) => {
       });
     }
 
-    const services = summaryRes.rows.map(s => ({
+    const services = allSummaryRows.map(s => ({
       courier_id:    s.courier_id,
       courier_code:  s.courier_code,
       courier_name:  s.courier_name,
