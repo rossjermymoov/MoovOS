@@ -542,7 +542,7 @@ function ReviewRow({ label, value }) {
   return (
     <div style={{ display: 'flex', gap: 8 }}>
       <span style={{ fontSize: 12, color: '#64748B', minWidth: 90 }}>{label}</span>
-      <span style={{ fontSize: 12, color: value ? '#fff' : '#444' }}>{value || '—'}</span>
+      <span style={{ fontSize: 12, color: '#0F172A' }}>{value || '—'}</span>
     </div>
   );
 }
