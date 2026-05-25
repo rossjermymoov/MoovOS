@@ -1108,6 +1108,8 @@ export default function FinancePage() {
   const [fixCostsResult, setFixCostsResult] = useState(null);
   const [purgeRunning, setPurgeRunning] = useState(false);
   const [relinkRunning, setRelinkRunning] = useState(false);
+  const [customerRepriceRunning, setCustomerRepriceRunning] = useState(false);
+  const [customerRepriceResult, setCustomerRepriceResult] = useState(null);
   const [activeTab, setActiveTab] = useState('created');
 
   // Customer dropdown data
@@ -1259,6 +1261,24 @@ export default function FinancePage() {
       setBatchResult({ error: err.message });
     } finally {
       setBatchRunning(false);
+    }
+  }
+
+  async function repriceForCustomer() {
+    const cust = customers.find(c => c.id === filters.customer_id);
+    const name = cust?.business_name || 'this customer';
+    if (!confirm(`Reprice all courier charges for ${name}? This will update prices and recalculate fuel using current rate cards. Billed charges will also be updated.`)) return;
+    setCustomerRepriceRunning(true);
+    setCustomerRepriceResult(null);
+    try {
+      const result = await billingApi.fullRepriceCustomer(filters.customer_id);
+      setCustomerRepriceResult(result);
+      qc.invalidateQueries(['billing-charges']);
+      qc.invalidateQueries(['billing-stats']);
+    } catch (err) {
+      setCustomerRepriceResult({ error: err.message });
+    } finally {
+      setCustomerRepriceRunning(false);
     }
   }
 
@@ -1695,7 +1715,7 @@ export default function FinancePage() {
           {/* Customer */}
           <select
             value={filters.customer_id}
-            onChange={e => setFilter('customer_id', e.target.value)}
+            onChange={e => { setFilter('customer_id', e.target.value); setCustomerRepriceResult(null); }}
             className="pill-select"
             style={{ minWidth: 180 }}
           >
@@ -1704,6 +1724,27 @@ export default function FinancePage() {
               <option key={c.id} value={c.id}>{c.business_name}</option>
             ))}
           </select>
+
+          {/* Per-customer reprice button — only shown when a customer is selected */}
+          {filters.customer_id && (
+            <button
+              onClick={repriceForCustomer}
+              disabled={customerRepriceRunning}
+              title={`Reprice all charges for ${customers.find(c => c.id === filters.customer_id)?.business_name}`}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '6px 13px', borderRadius: 20, fontSize: 12, fontWeight: 700,
+                border: '1px solid rgba(99,102,241,0.4)',
+                background: customerRepriceRunning ? 'rgba(99,102,241,0.06)' : 'rgba(99,102,241,0.12)',
+                color: '#A5B4FC',
+                cursor: customerRepriceRunning ? 'not-allowed' : 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <RefreshCw size={11} style={customerRepriceRunning ? { animation: 'spin 1s linear infinite' } : {}} />
+              {customerRepriceRunning ? 'Repricing…' : 'Reprice Customer'}
+            </button>
+          )}
 
           {/* Verified filter */}
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
@@ -1791,6 +1832,38 @@ export default function FinancePage() {
 
         </div>
       </div>
+
+      {/* Customer reprice result banner */}
+      {customerRepriceResult && (
+        <div style={{
+          background: customerRepriceResult.error ? 'rgba(244,67,54,0.08)' : 'rgba(99,102,241,0.08)',
+          border: `1px solid ${customerRepriceResult.error ? 'rgba(244,67,54,0.3)' : 'rgba(99,102,241,0.3)'}`,
+          borderRadius: 10, padding: '12px 16px', marginBottom: 14,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        }}>
+          {customerRepriceResult.error ? (
+            <span style={{ color: '#F44336', fontSize: 13 }}>Reprice error: {customerRepriceResult.error}</span>
+          ) : (
+            <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ color: '#A5B4FC', fontWeight: 700 }}>✓ Customer reprice complete</span>
+              <span style={{ color: '#00C853' }}>{customerRepriceResult.repriced} charges updated</span>
+              {customerRepriceResult.changed > 0 && (
+                <span style={{ color: '#D97706' }}>{customerRepriceResult.changed} prices changed</span>
+              )}
+              {customerRepriceResult.no_rate > 0 && (
+                <span style={{ color: '#F44336' }}>{customerRepriceResult.no_rate} no rate found</span>
+              )}
+              {customerRepriceResult.errors > 0 && (
+                <span style={{ color: '#F44336' }}>{customerRepriceResult.errors} errors</span>
+              )}
+            </div>
+          )}
+          <button onClick={() => setCustomerRepriceResult(null)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: 4 }}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Table */}
       <div className="moov-card" style={{ overflow: 'hidden' }}>

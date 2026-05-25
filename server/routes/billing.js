@@ -2230,7 +2230,16 @@ router.post('/batch-reprice', async (req, res, next) => {
 //
 router.post('/full-reprice', async (req, res, next) => {
   try {
-    const costOnly = req.query.cost_only === 'true';
+    const costOnly   = req.query.cost_only   === 'true';
+    const customerId = req.query.customer_id || null;   // scope to one customer when set
+
+    const conds = [
+      `c.charge_type = 'courier'`,
+      `c.cancelled   = false`,
+      `(c.source IS NULL OR c.source != 'carrier_direct')`,
+    ];
+    const vals = [];
+    if (customerId) { vals.push(customerId); conds.push(`c.customer_id = $${vals.length}`); }
 
     const { rows: charges } = await query(`
       SELECT c.id AS charge_id, c.customer_id, c.parcel_qty, c.price AS current_price,
@@ -2241,20 +2250,19 @@ router.post('/full-reprice', async (req, res, next) => {
              s.customer_account, s.ship_to_postcode, s.ship_to_country_iso, s.raw_payload
       FROM charges c
       LEFT JOIN shipments s ON s.id = c.shipment_id
-      WHERE c.charge_type = 'courier'
-        AND c.cancelled   = false
-        AND (c.source IS NULL OR c.source != 'carrier_direct')
+      WHERE ${conds.join(' AND ')}
       ORDER BY c.created_at ASC
-    `);
+    `, vals);
 
-    // Respond immediately so nginx proxy timeout can't kill the request.
-    // The actual repricing runs in the background — check server logs for completion.
-    // timestamp prevents Express from returning a cached 304 when the charge count hasn't changed.
+    // When scoped to one customer: run synchronously and return real results.
+    // When global: respond immediately and run in background to avoid proxy timeouts.
     res.set('Cache-Control', 'no-store');
-    res.json({ started: true, total: charges.length, ts: Date.now(), note: 'Reprice running in background — refresh in a moment to see updates' });
+    if (!customerId) {
+      res.json({ started: true, total: charges.length, ts: Date.now(), note: 'Reprice running in background — refresh in a moment to see updates' });
+    }
 
-    // ── Background processing ─────────────────────────────────────────────────
-    (async () => {
+    // ── Processing (sync for customer-scoped, background for global) ──────────
+    const runReprice = async () => {
     const summary = {
       total:              charges.length,
       repriced:           0,
@@ -2435,7 +2443,17 @@ router.post('/full-reprice', async (req, res, next) => {
       fuel_updated: summary.fuel_updated, no_rate: summary.no_rate,
       errors: summary.errors, changed: summary.changed,
     }));
-    })().catch(err => console.error('[full-reprice] background error:', err.message));
+    return summary;
+    };
+
+    if (customerId) {
+      // Synchronous — customer-scoped, small set, return real results
+      const summary = await runReprice();
+      res.json({ ok: true, ...summary });
+    } else {
+      // Background — global reprice, already responded above
+      runReprice().catch(err => console.error('[full-reprice] background error:', err.message));
+    }
 
   } catch (err) { next(err); }
 });
