@@ -6,6 +6,7 @@
  * DELETE /api/customer-rates/rate/:rateId             — delete a single rate row
  * POST   /api/customer-rates/:customerId              — add a new rate row for a customer
  * POST   /api/customer-rates/:customerId/sub-rates    — bulk apply sub rates by service_code + zone_name
+ * POST   /api/customer-rates/:customerId/apply-markup — bulk delete + re-insert all zones at markup % from carrier card
  */
 
 import express from 'express';
@@ -190,6 +191,140 @@ router.post('/:customerId', async (req, res, next) => {
 
     res.status(201).json(result.rows[0]);
   } catch (err) { next(err); }
+});
+
+// ─── POST /:customerId/apply-markup — bulk delete + re-insert from carrier ────
+//
+// The "Apply to all zones" operation.  Runs as a single DB transaction:
+//   1. Delete ALL existing customer_rates rows for (customer, service_code).
+//   2. Walk every (zone, weight_band) in the carrier rate card and insert a new row
+//      with price = carrier_price_first × (1 + markup_pct / 100).
+//
+// Body: {
+//   service_code          — e.g. "DPD-60DDP"
+//   service_id            — legacy billing ID (stored in customer_rates.service_id)
+//   service_name          — display name
+//   courier_id            — couriers.id for this service
+//   courier_code          — e.g. "DPD"
+//   courier_name          — e.g. "DPD"
+//   carrier_rate_card_id  — which carrier_rate_cards row to source prices from
+//   markup_pct            — e.g. 10 (meaning 10 %)
+// }
+// Returns: { deleted, inserted, zones, weight_classes }
+router.post('/:customerId/apply-markup', async (req, res, next) => {
+  const client = await (await import('../db/index.js')).getClient();
+  try {
+    const { customerId } = req.params;
+    const {
+      service_code, service_id, service_name,
+      courier_id = 0, courier_code = '', courier_name = '',
+      carrier_rate_card_id,
+      markup_pct,
+    } = req.body;
+
+    if (!service_code || !service_id || carrier_rate_card_id == null || markup_pct == null) {
+      return res.status(400).json({ error: 'service_code, service_id, carrier_rate_card_id, and markup_pct are required' });
+    }
+
+    const pct = parseFloat(markup_pct);
+    if (isNaN(pct) || pct < 0) {
+      return res.status(400).json({ error: 'markup_pct must be a non-negative number' });
+    }
+    const multiplier = 1 + pct / 100;
+
+    // Fetch all (zone, band) pairs from the carrier rate card for this service.
+    // Band name: use wb.name when meaningful, otherwise compute from min/max (same
+    // logic as GET /zones/:serviceCode so labels stay consistent everywhere).
+    const bandsRes = await client.query(`
+      SELECT
+        z.name  AS zone_name,
+        CASE
+          WHEN wb.name IS NOT NULL AND wb.name NOT IN ('None', '') THEN wb.name
+          WHEN wb.max_weight_kg IS NOT NULL THEN
+            (CASE WHEN wb.min_weight_kg = floor(wb.min_weight_kg)
+                  THEN floor(wb.min_weight_kg)::int::text
+                  ELSE round(wb.min_weight_kg::numeric, 1)::text END)
+            || '-' ||
+            (CASE WHEN wb.max_weight_kg = floor(wb.max_weight_kg)
+                  THEN floor(wb.max_weight_kg)::int::text
+                  ELSE round(wb.max_weight_kg::numeric, 1)::text END)
+            || 'kg'
+          ELSE
+            (CASE WHEN wb.min_weight_kg = floor(wb.min_weight_kg)
+                  THEN floor(wb.min_weight_kg)::int::text
+                  ELSE round(wb.min_weight_kg::numeric, 1)::text END)
+            || 'kg+'
+        END                   AS weight_class_name,
+        wb.min_weight_kg,
+        wb.max_weight_kg,
+        wb.price_first,
+        wb.price_sub
+      FROM courier_services cs
+      JOIN zones       z  ON z.courier_service_id = cs.id
+      JOIN weight_bands wb ON wb.zone_id = z.id
+      WHERE cs.service_code ILIKE $1
+        AND wb.carrier_rate_card_id = $2
+      ORDER BY z.name, wb.min_weight_kg
+    `, [service_code, carrier_rate_card_id]);
+
+    if (!bandsRes.rows.length) {
+      return res.status(404).json({ error: `No carrier bands found for ${service_code} on rate card ${carrier_rate_card_id}` });
+    }
+
+    await client.query('BEGIN');
+
+    // 1. Delete all existing customer rates for this service
+    const delRes = await client.query(
+      `DELETE FROM customer_rates WHERE customer_id = $1 AND service_code = $2`,
+      [customerId, service_code]
+    );
+    const deleted = delRes.rowCount;
+
+    // 2. Bulk-insert new rates
+    let inserted = 0;
+    for (const band of bandsRes.rows) {
+      const sellPrice = parseFloat((parseFloat(band.price_first) * multiplier).toFixed(2));
+      const sellSub   = band.price_sub != null
+        ? parseFloat((parseFloat(band.price_sub) * multiplier).toFixed(2))
+        : null;
+
+      await client.query(`
+        INSERT INTO customer_rates
+          (customer_id, courier_id, courier_code, courier_name,
+           service_id, service_code, service_name,
+           zone_name, weight_class_name,
+           min_weight_kg, max_weight_kg,
+           price, price_sub)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+        ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
+        DO UPDATE SET
+          price         = EXCLUDED.price,
+          price_sub     = EXCLUDED.price_sub,
+          min_weight_kg = COALESCE(customer_rates.min_weight_kg, EXCLUDED.min_weight_kg),
+          max_weight_kg = COALESCE(customer_rates.max_weight_kg, EXCLUDED.max_weight_kg)
+      `, [
+        customerId,
+        courier_id, courier_code, courier_name,
+        service_id, service_code, service_name,
+        band.zone_name, band.weight_class_name,
+        band.min_weight_kg, band.max_weight_kg,
+        sellPrice, sellSub,
+      ]);
+      inserted++;
+    }
+
+    await client.query('COMMIT');
+
+    const zones         = new Set(bandsRes.rows.map(b => b.zone_name)).size;
+    const weight_classes = new Set(bandsRes.rows.map(b => b.weight_class_name)).size;
+
+    res.json({ deleted, inserted, zones, weight_classes });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(err);
+  } finally {
+    client.release();
+  }
 });
 
 // ─── POST /:customerId/sub-rates — bulk apply sub rates ───────

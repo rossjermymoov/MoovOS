@@ -316,58 +316,41 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
 
   const cardService = cardData?.services?.find(s => s.service_code === service.service_code);
 
-  // Derive a consistent weight_class_name from a carrier band's min/max kg
+  // Derive a consistent weight_class_name from a carrier band's min/max kg (lowercase, matches DB)
   function bandLabel(band) {
     const fmt = n => {
       const f = parseFloat(n);
       return Number.isInteger(f) ? String(f) : f.toFixed(f < 1 ? 3 : 1).replace(/\.?0+$/, '');
     };
-    return `${fmt(band.min_weight_kg)}-${fmt(band.max_weight_kg)}KG`;
+    if (band.max_weight_kg == null) return `${fmt(band.min_weight_kg)}kg+`;
+    return `${fmt(band.min_weight_kg)}-${fmt(band.max_weight_kg)}kg`;
   }
 
-  // Apply markup: cost × (1 + pct/100) for every zone/band in the carrier card
+  // Apply markup: single server-side call — deletes all existing rates for this
+  // service and re-inserts fresh rows at carrier_price × (1 + pct/100).
   async function applyMarkup() {
     const pct = parseFloat(markup);
-    if (isNaN(pct) || pct < 0 || !cardService) return;
+    if (isNaN(pct) || pct < 0 || !activeCardId) return;
     setApplying(true);
     setApplyResult(null);
     try {
-      // Build lookup of existing customer rates for this service
-      const existingMap = {};
-      for (const r of service.rates) existingMap[`${r.zone_name}::${r.weight_class_name}`] = r;
+      const result = await api.post(`/customer-rates/${customerId}/apply-markup`, {
+        service_code:         service.service_code,
+        service_id:           service.service_id,
+        service_name:         service.service_name,
+        courier_id:           service.courier_id   || 0,
+        courier_code:         service.courier_code || '',
+        courier_name:         service.courier_name || '',
+        carrier_rate_card_id: activeCardId,
+        markup_pct:           pct,
+      });
 
-      const toCreate = [];
-      for (const zone of cardService.zones) {
-        for (const band of zone.bands) {
-          const wcn      = bandLabel(band);
-          const sellPrice = parseFloat((parseFloat(band.price_first) * (1 + pct / 100)).toFixed(2));
-          const sellSub   = band.price_sub != null
-            ? parseFloat((parseFloat(band.price_sub) * (1 + pct / 100)).toFixed(2))
-            : null;
-          toCreate.push({ zone_name: zone.zone_name, wcn, sellPrice, sellSub });
-        }
-      }
-
-      await Promise.all(toCreate.map(({ zone_name, wcn, sellPrice, sellSub }) =>
-        api.post(`/customer-rates/${customerId}`, {
-          courier_id:        service.courier_id   || 0,
-          courier_code:      service.courier_code || '',
-          courier_name:      service.courier_name || '',
-          service_id:        service.service_id,
-          service_code:      service.service_code,
-          service_name:      service.service_name,
-          zone_name,
-          weight_class_name: wcn,
-          price:             sellPrice,
-          price_sub:         sellSub,
-        })
-      ));
-
-      setApplyResult({ created: toCreate.length });
+      setApplyResult({ created: result.data.inserted });
       qc.invalidateQueries(['customer-rates', customerId]);
       onRateCreated?.();
     } catch (e) {
-      console.error('[applyMarkup] failed', e);
+      console.error('[applyMarkup] failed', e.response?.data || e.message);
+      setApplyResult({ error: e.response?.data?.error || 'Failed to apply markup' });
     } finally {
       setApplying(false);
     }
@@ -471,8 +454,8 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
         </button>
       </div>
 
-      {/* Markup toolbar — only shown when carrier rate card is available */}
-      {cardService && (
+      {/* Markup toolbar — shown whenever a carrier rate card is linked */}
+      {activeCardId && (
         <div style={{ flexShrink: 0, padding: '8px 28px', background: 'rgba(0,200,83,0.04)', borderBottom: '1px solid rgba(0,200,83,0.08)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <Percent size={12} color="#00C853" />
           <span style={{ fontSize: 12, color: '#64748B' }}>Markup from carrier cost</span>
@@ -497,14 +480,21 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
           >
             {applying ? 'Applying…' : 'Apply to all zones'}
           </button>
-          {applyResult && (
+          {applyResult && !applyResult.error && (
             <span style={{ fontSize: 12, color: '#00C853', fontWeight: 700 }}>
               ✓ {applyResult.created} rates set
             </span>
           )}
-          <span style={{ fontSize: 11, color: '#475569', marginLeft: 'auto' }}>
-            {cardService.zones.length} zones · {[...new Set(cardService.zones.flatMap(z => z.bands.map(bandLabel)))].length} weight bands in carrier card
-          </span>
+          {applyResult?.error && (
+            <span style={{ fontSize: 12, color: '#E91E8C', fontWeight: 700 }}>
+              ✗ {applyResult.error}
+            </span>
+          )}
+          {cardService && (
+            <span style={{ fontSize: 11, color: '#475569', marginLeft: 'auto' }}>
+              {cardService.zones.length} zones · {[...new Set(cardService.zones.flatMap(z => z.bands.map(bandLabel)))].length} weight bands in carrier card
+            </span>
+          )}
         </div>
       )}
 
