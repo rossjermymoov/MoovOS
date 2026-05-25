@@ -117,7 +117,8 @@ const STATUS_MAP = {
   exception: 'exception', damaged: 'exception', lost: 'exception',
   missing: 'exception', problem: 'exception', delay: 'exception',
   address_query: 'exception', address_issue: 'exception', undeliverable: 'exception',
-  tracking_expired: 'exception', cancelled: 'exception',
+  tracking_expired: 'exception',
+  cancelled: 'cancelled', cancellation: 'cancelled', voided: 'cancelled',
 
   // ── Returned ──────────────────────────────────────────────────────────────
   returned: 'returned', return: 'returned', rts: 'returned',
@@ -357,6 +358,33 @@ export async function upsertEvent(event, rawBody) {
     ON CONFLICT DO NOTHING
   `, [parcelId, consignment, eventCode, status, description, location, eventAt,
       JSON.stringify(event._raw || event)]);
+
+  // Auto-cancel: if the carrier has cancelled this booking, cancel the linked charge.
+  // This fires when a cancellation tracking event arrives (status_code 12 from DPD,
+  // or text "Cancelled" from Voila's tracking API) and no shipment.cancelled webhook
+  // was received. Mirrors the billing webhook cancellation handler exactly.
+  if (status === 'cancelled') {
+    await query(`
+      UPDATE charges
+      SET    cancelled = true, updated_at = NOW()
+      WHERE  cancelled = false
+        AND  shipment_id IN (
+               SELECT id FROM shipments
+               WHERE  $1 = ANY(tracking_codes)
+                 AND  (collection_date IS NULL OR collection_date >= CURRENT_DATE - INTERVAL '400 days')
+             )
+    `, [consignment]);
+
+    await query(`
+      UPDATE shipments
+      SET    cancelled = true, cancelled_at = NOW(), updated_at = NOW()
+      WHERE  $1 = ANY(tracking_codes)
+        AND  cancelled = false
+        AND  (collection_date IS NULL OR collection_date >= CURRENT_DATE - INTERVAL '400 days')
+    `, [consignment]);
+
+    return { ok: true, consignment, status: 'cancelled', parcel_id: parcelId, auto_cancelled: true };
+  }
 
   // Auto-verify: if this event confirms physical movement, mark the linked charge verified.
   // The 400-day window is a belt-and-braces guard against tracking number recycling —
@@ -978,17 +1006,21 @@ router.post('/bulk-tracking-update', async (req, res, next) => {
           const events = normalisePayload(syntheticPayload);
           let eventsStored = 0;
           let eventsVerified = 0;
+          let eventsCancelled = 0;
 
           for (const ev of events) {
             const result = await upsertEvent(ev, null);
+            if (result?.auto_cancelled) { eventsCancelled++; continue; }
             if (!result?.skipped && !result?.deduped) eventsStored++;
             if (result?.verified) eventsVerified++;
           }
 
-          if (eventsVerified > 0) {
-            already += eventsVerified;
-          }
-          if (eventsStored > 0 || eventsVerified > 0) {
+          if (eventsVerified > 0) already += eventsVerified;
+
+          if (eventsCancelled > 0) {
+            ok++;
+            console.log(`[bulk-tracking] 🚫 shipment ${row.shipment_id}: cancelled — charge auto-cancelled`);
+          } else if (eventsStored > 0 || eventsVerified > 0) {
             ok++;
             console.log(
               `[bulk-tracking] ✅ shipment ${row.shipment_id}: ` +
@@ -996,7 +1028,7 @@ router.post('/bulk-tracking-update', async (req, res, next) => {
             );
           } else {
             noEvents++;
-            console.log(`[bulk-tracking] ⏳ shipment ${row.shipment_id}: only 'booked' status returned — nothing to verify yet`);
+            console.log(`[bulk-tracking] ⏳ shipment ${row.shipment_id}: only 'booked' status — nothing to verify yet`);
           }
 
         } catch (err) {
