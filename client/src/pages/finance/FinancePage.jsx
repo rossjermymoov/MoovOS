@@ -333,9 +333,11 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
   const repriceMut = useMutation({
     mutationFn: () => billingApi.repriceCharge(charge.id),
     onSuccess: (result) => {
+      // Always refresh the charge list so the UI reflects the updated price
+      // (or cleared price + failure reason) regardless of whether reprice succeeded.
+      qc.invalidateQueries(['billing-charges']);
+      qc.invalidateQueries(['billing-stats']);
       if (result.ok) {
-        qc.invalidateQueries(['billing-charges']);
-        qc.invalidateQueries(['billing-stats']);
         onRepriced(result.price);
       }
     },

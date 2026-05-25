@@ -3336,8 +3336,11 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
 
     const { rate, reason: failReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, row.ship_to_postcode, row.ship_to_country_iso || 'GB');
     if (!rate) {
-      await query(`UPDATE charges SET price_failure_reason = $1, updated_at = NOW() WHERE id = $2`,
-        [failReason, id]);
+      // Clear the price so the UI shows "no price found" rather than a stale value.
+      await query(
+        `UPDATE charges SET price = NULL, price_auto = false, price_failure_reason = $1, updated_at = NOW() WHERE id = $2`,
+        [failReason, id]
+      );
       return res.json({ ok: false, message: failReason || 'No matching rate found' });
     }
 
