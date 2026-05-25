@@ -1462,6 +1462,74 @@ function DDPModeSection({ customer }) {
   );
 }
 
+// ─── Companion Parcel Billing Section ──────────────────────────────────────────
+// When a customer books multiple parcels under the same reference on the same day
+// (e.g. Europa two-parcel consignments), the carrier may consolidate them under one
+// master tracking number in their invoice. This toggle enables the reconciliation
+// engine to automatically match and close out those companion charges.
+function CompanionParcelBillingSection({ customer }) {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [enabled, setEnabled] = useState(!!customer.reconciliation_flexible_parcel_count);
+
+  useEffect(() => {
+    setEnabled(!!customer.reconciliation_flexible_parcel_count);
+  }, [customer.reconciliation_flexible_parcel_count]);
+
+  async function toggle() {
+    const newValue = !enabled;
+    setEnabled(newValue);
+    setBusy(true);
+    try {
+      await api.put(`/customers/${customer.id}/companion-parcel-billing`, { enabled: newValue });
+      qc.invalidateQueries(['customer', customer.id]);
+    } catch (err) {
+      setEnabled(!newValue);
+      console.error('Companion parcel billing toggle failed:', err.response?.data || err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="moov-card" style={{ marginBottom: 16, padding: '16px 20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Companion Parcel Billing</span>
+            {enabled && (
+              <span style={{
+                fontSize: 11, fontWeight: 600, color: '#0891B2',
+                background: 'rgba(8,145,178,0.10)', border: '1px solid rgba(8,145,178,0.30)',
+                borderRadius: 12, padding: '2px 8px', letterSpacing: '0.3px',
+              }}>ACTIVE</span>
+            )}
+          </div>
+          <p style={{ fontSize: 12, color: '#64748B', margin: '3px 0 0' }}>
+            This customer books multiple parcels under the same reference on the same day.
+            When enabled, the reconciliation engine automatically matches companion charges
+            to the master consignment and reconciles them without manual intervention.
+          </p>
+        </div>
+        <button
+          onClick={toggle}
+          disabled={busy}
+          title={enabled ? 'Disable companion parcel billing' : 'Enable companion parcel billing'}
+          style={{
+            background: 'none', border: 'none', cursor: busy ? 'wait' : 'pointer',
+            padding: 4, display: 'flex', alignItems: 'center', opacity: busy ? 0.5 : 1,
+          }}
+        >
+          {enabled
+            ? <ToggleRight size={32} color="#0891B2" strokeWidth={1.5} />
+            : <ToggleLeft  size={32} color="#94A3B8" strokeWidth={1.5} />
+          }
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function CustomerPricingTab({ customer }) {
   const qc = useQueryClient();
 
@@ -1583,8 +1651,11 @@ export default function CustomerPricingTab({ customer }) {
       {/* 1 — Thin carrier toggle strip */}
       <CourierToggleStrip carriers={carriers} customerId={customer.id} />
 
-      {/* 1b — DDP Mode toggle (only shown when customer has air services active) */}
+      {/* 1b — DDP Mode toggle */}
       <DDPModeSection customer={customer} />
+
+      {/* 1c — Companion Parcel Billing toggle */}
+      <CompanionParcelBillingSection customer={customer} />
 
       {/* 2 — Per-carrier: fuel groups + surcharge overrides (active carriers only) */}
       {activeCarriers.map(carrier => (

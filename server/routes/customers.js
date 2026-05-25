@@ -1181,6 +1181,30 @@ router.post('/ai-onboard', async (req, res, next) => {
 // DELETE /api/customers/:id/service-code-overrides/:mappingId
 //   Deactivate a per-customer mapping (is_active = false).
 //
+// PUT    /api/customers/:id/companion-parcel-billing
+//   Enable or disable companion parcel billing for a customer.
+//   When enabled, the reconciliation engine finds companion charges that share
+//   the same customer reference and booking date as a master parcel and
+//   reconciles them automatically as companion_parcel lines.
+//   Body: { enabled: bool }
+
+router.put('/:id/companion-parcel-billing', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { enabled } = req.body;
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled (boolean) is required' });
+    }
+    await query(
+      `UPDATE customers SET reconciliation_flexible_parcel_count = $1 WHERE id = $2`,
+      [enabled, id]
+    );
+    return res.json({ reconciliation_flexible_parcel_count: enabled });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // PUT    /api/customers/:id/ddp-mode
 //   Enable or disable DDP mode for a customer.
 //   When enabling: auto-creates Air Express → DPD-10DDP and Air Classic → DPD-60DDP
