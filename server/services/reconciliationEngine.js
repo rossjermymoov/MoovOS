@@ -443,6 +443,7 @@ async function buildVerifiedPool(carrierId) {
       s.total_declared_value,
       cu.reconciliation_flexible_parcel_count,
       cu.account_number AS customer_account,
+      c.created_at,
       -- rate_per_parcel: normalised per-parcel base cost regardless of how cost_price was stored.
       -- For charges created with wrong parcel_qty, cost_price = per-parcel rate and
       -- shipment_parcel_count = 1 → rate_per_parcel = cost_price.
@@ -1771,6 +1772,38 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     return { status: 'unmatched' };
   }
 
+  // ── Companion parcel lookup ───────────────────────────────────────────────────
+  // For carriers (e.g. DPD/Europa) that consolidate multiple parcels under one
+  // master tracking number in their invoice, find companion charges that share
+  // the same customer + reference + booking date. These will be reconciled as
+  // separate zero-carrier-amount lines after the master line is resolved.
+  const companionCharges = [];
+  if (
+    charge.reconciliation_flexible_parcel_count &&
+    invoiceParcelCount > 1 &&
+    charge.reference
+  ) {
+    const refKey    = String(charge.reference).trim().toUpperCase();
+    const refHits   = pool.get(refKey) || [];
+    const invoiceDate = line.shipment_date ? new Date(line.shipment_date) : null;
+    for (const hit of refHits) {
+      if (hit.charge_id === charge.charge_id)   continue; // skip master itself
+      if (hit.customer_id !== charge.customer_id) continue; // must be same customer
+      if (invoiceDate && hit.created_at) {
+        const diffMs = Math.abs(new Date(hit.created_at) - invoiceDate);
+        if (diffMs > 2 * 24 * 60 * 60 * 1000) continue;   // within ±2 days
+      }
+      companionCharges.push(hit);
+      if (companionCharges.length >= invoiceParcelCount - 1) break; // cap at invoice count - 1
+    }
+    if (companionCharges.length > 0) {
+      console.log(
+        `[recon engine] COMPANION PARCEL: master=${trackingNumber} ref=${charge.reference} ` +
+        `found ${companionCharges.length} companion charge(s) to reconcile`
+      );
+    }
+  }
+
   // ── Apply customer service code override (after pool hit resolves customerId) ─
   const poolCustOverrideMap = ctx.customerServiceOverrides?.[String(charge.customer_id)];
   const poolCustOverride    = poolCustOverrideMap?.[mappedKey];
@@ -1916,6 +1949,9 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       corrected_cost_price:     totalCarrier,
       correction_metadata:      surchargeMeta(rollup.items),
     });
+    if (companionCharges.length > 0) {
+      await insertCompanionLines(runId, companionCharges, trackingNumber, rawServiceCode, line, effectiveServiceId);
+    }
     return { status: 'matched' };
   }
 
@@ -1951,6 +1987,9 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       corrected_cost_price:     null,  // never downgrade
       correction_metadata:      surchargeMeta(rollup.items),
     });
+    if (companionCharges.length > 0) {
+      await insertCompanionLines(runId, companionCharges, trackingNumber, rawServiceCode, line, effectiveServiceId);
+    }
     return { status: 'corrected' };
   }
 
@@ -2138,6 +2177,9 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
             ...surchargeMeta(rollup.items) || {},
           },
         });
+        if (companionCharges.length > 0) {
+          await insertCompanionLines(runId, companionCharges, trackingNumber, rawServiceCode, line, effectiveServiceId);
+        }
         return { status: 'corrected' };
       }
 
@@ -2184,6 +2226,9 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       corrected_cost_price:     totalCarrier,
       correction_metadata:      surchargeMeta(rollup.items),
     });
+    if (companionCharges.length > 0) {
+      await insertCompanionLines(runId, companionCharges, trackingNumber, rawServiceCode, line, effectiveServiceId);
+    }
     return { status: 'corrected' };
   }
 
@@ -2260,6 +2305,46 @@ async function insertLine(runId, data) {
     data.surcharge_id             || null,
     data.ship_to_name             || null,
   ]);
+}
+
+// ─── Insert companion parcel reconciliation lines ─────────────────────────────
+//
+// Called after a master parcel line is successfully reconciled.
+// Companion parcels were shipped under the same reference on the same day but
+// billed by the carrier under the master tracking number only.
+// Each companion gets a zero-carrier-amount reconciliation line so the charge
+// is closed out without double-counting the carrier invoice total.
+
+async function insertCompanionLines(runId, companionCharges, masterTracking, rawServiceCode, line, effectiveServiceId) {
+  for (const companion of companionCharges) {
+    const companionExpected = round2(parseFloat(companion.total_cost_price) || 0);
+    const companionSell     = round2(parseFloat(companion.stored_sell_price) || 0);
+    console.log(
+      `[recon engine] COMPANION PARCEL: inserting line for charge=${companion.charge_id} ` +
+      `customer=${companion.customer_id} expected=£${companionExpected} under master=${masterTracking}`
+    );
+    await insertLine(runId, {
+      tracking_number:      masterTracking,
+      carrier_account_no:   line.account_number || null,
+      raw_service_code:     rawServiceCode,
+      charge_type:          'courier',
+      carrier_amount:       0,
+      service_id:           effectiveServiceId,
+      customer_id:          companion.customer_id,
+      charge_id:            companion.charge_id,
+      expected_amount:      companionExpected,
+      delta:                0,
+      status:               'matched',
+      corrected_by:         'companion_parcel',
+      source:               'companion_parcel',
+      shipment_date:        line.shipment_date    || null,
+      ship_to_postcode:     line.delivery_postcode || null,
+      ship_to_country:      line.ship_to_country  || null,
+      corrected_sell_price: companionSell || null,
+      corrected_cost_price: companionExpected,
+      correction_metadata:  { master_tracking: masterTracking },
+    });
+  }
 }
 
 // ─── Reprocess lines after a service code mapping is saved ───────────────────
