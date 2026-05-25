@@ -1585,10 +1585,17 @@ export default function CustomerPricingTab({ customer }) {
   // Rate cards:
   // When services are selected, use selectedServices as the primary list so every
   // selected service gets a block — even those with no rate rows yet.
-  // When nothing is selected, fall back to whatever rate data exists.
+  // When nothing is selected AND active carriers exist, show empty state — the user
+  // must explicitly select services to see rate cards.  This enforces the rule that
+  // rates are only shown for services that are actively selected.
+  // When no carriers are active (brand-new customer), fall back to all rate data so
+  // existing rows are visible even before carrier links are set up.
   let visibleServices;
-  if (selectedCodes.size === 0) {
-    // No services selected: show all rate data filtered to active carriers
+  if (selectedCodes.size === 0 && activeCourierIds.size > 0) {
+    // Services explicitly deselected (or never selected) — show nothing
+    visibleServices = [];
+  } else if (selectedCodes.size === 0) {
+    // No carriers active: show all rate data (new customer / setup in progress)
     visibleServices = (rateData?.services || []).filter(s =>
       activeCourierCodes.size === 0 || activeCourierCodes.has(s.courier_code)
     );
@@ -1688,9 +1695,19 @@ export default function CustomerPricingTab({ customer }) {
         <div className="moov-card" style={{ padding: 32, textAlign: 'center', color: '#64748B' }}>Loading rates…</div>
       )}
 
-      {!ratesLoading && visibleServices.length === 0 && activeCourierIds.size > 0 && (
+      {!ratesLoading && visibleServices.length === 0 && activeCourierIds.size > 0 && selectedCodes.size === 0 && (
         <div className="moov-card" style={{ padding: 24, textAlign: 'center', color: '#64748B', fontSize: 13 }}>
-          No rate data for the selected carriers yet.
+          No services selected — use <strong>Service Selection</strong> above to choose which services to display rate cards for.
+          <div style={{ marginTop: 8, fontSize: 11, color: '#94A3B8' }}>
+            Note: selecting services here only controls the display. Rate rows in the database are unchanged.
+            Use the individual delete buttons on each rate to permanently remove pricing.
+          </div>
+        </div>
+      )}
+
+      {!ratesLoading && visibleServices.length === 0 && activeCourierIds.size > 0 && selectedCodes.size > 0 && (
+        <div className="moov-card" style={{ padding: 24, textAlign: 'center', color: '#64748B', fontSize: 13 }}>
+          No rate data for the selected services yet.
         </div>
       )}
 

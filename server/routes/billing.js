@@ -2272,6 +2272,7 @@ router.post('/full-reprice', async (req, res, next) => {
       fuel_no_group:      0,   // courier service has no fuel group configured
       fuel_no_charge_row: 0,   // no existing fuel charge row to update
       no_rate:            0,
+      no_rate_cleared:    0,   // auto-priced charges whose price was cleared (golden rule)
       no_customer:        0,
       errors:             0,
       changed:            0,   // courier price actually changed
@@ -2312,6 +2313,22 @@ router.post('/full-reprice', async (req, res, next) => {
         if (!rate) {
           summary.no_rate++;
           summary.no_rate_details.push({ charge_id: row.charge_id, service_code: dcServiceId, weight_kg: weightPerParcel, reason: noRateReason });
+
+          // Golden rule: if the charge was auto-priced and we no longer have a rate card entry,
+          // clear the price so it is visibly unpriced rather than silently carrying a stale value.
+          // Manually-set prices (price_auto = false) are left untouched — they are explicit overrides.
+          // cost_only mode is also excluded — we are only adjusting cost prices, not sell prices.
+          if (!costOnly && row.price_auto !== false && row.price_auto !== 'false') {
+            await query(`
+              UPDATE charges
+              SET price                = NULL,
+                  price_auto           = false,
+                  price_failure_reason = $1,
+                  updated_at           = NOW()
+              WHERE id = $2
+            `, [noRateReason || 'No rate found', row.charge_id]);
+            summary.no_rate_cleared++;
+          }
           continue;
         }
 
