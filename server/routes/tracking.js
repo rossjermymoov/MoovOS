@@ -806,6 +806,76 @@ router.post('/backfill-verify', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── POST /api/tracking/test-tracking-request ────────────────────────────────
+//
+// Diagnostic endpoint — picks the single OLDEST unverified shipment that has
+// Voila tracking credentials stored and calls the Voila tracking API synchronously.
+// Returns the raw Voila response so the format can be inspected before wiring up
+// the full bulk runner to process events from it.
+
+router.post('/test-tracking-request', async (req, res, next) => {
+  try {
+    // Find the oldest unverified shipment with credentials
+    const { rows } = await query(`
+      SELECT
+        s.id                            AS shipment_id,
+        s.voila_tracking_request_id     AS track_req_id,
+        s.voila_tracking_request_hash   AS track_req_hash,
+        s.tracking_codes,
+        s.courier,
+        s.created_at,
+        c.id                            AS charge_id,
+        cu.business_name                AS customer_name
+      FROM   shipments s
+      JOIN   charges   c  ON c.shipment_id = s.id
+                         AND c.charge_type  = 'courier'
+                         AND c.verified     = false
+                         AND c.cancelled    = false
+      LEFT JOIN customers cu ON cu.id = c.customer_id
+      WHERE  s.voila_tracking_request_id   IS NOT NULL
+        AND  s.voila_tracking_request_hash IS NOT NULL
+      ORDER  BY s.created_at ASC
+      LIMIT  1
+    `);
+
+    if (!rows.length) {
+      return res.json({ ok: false, message: 'No unverified shipments with Voila tracking credentials found.' });
+    }
+
+    const shipment = rows[0];
+
+    console.log(
+      `[test-tracking-request] Calling Voila for shipment ${shipment.shipment_id} ` +
+      `(req_id=${shipment.track_req_id}, customer="${shipment.customer_name}", ` +
+      `created=${shipment.created_at})`
+    );
+
+    const voilaResponse = await requestTrackingUpdate(
+      shipment.track_req_id,
+      shipment.track_req_hash
+    );
+
+    return res.json({
+      ok: true,
+      shipment: {
+        shipment_id:    shipment.shipment_id,
+        charge_id:      shipment.charge_id,
+        customer:       shipment.customer_name,
+        courier:        shipment.courier,
+        tracking_codes: shipment.tracking_codes,
+        created_at:     shipment.created_at,
+        track_req_id:   shipment.track_req_id,
+        track_req_hash: shipment.track_req_hash,
+      },
+      voila_response: voilaResponse,
+    });
+
+  } catch (err) {
+    console.error('[test-tracking-request] Error:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // ─── POST /api/tracking/bulk-tracking-update ──────────────────────────────────
 //
 // Calls the Voila on-demand tracking API for every unverified shipment that has
