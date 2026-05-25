@@ -847,11 +847,11 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData, 
         carrierSurchargeCost = carrierCostRate;
       }
 
-      // Absorbed surcharges (reconciliation_excluded = true, e.g. Carriage) are costs
-      // we pay the carrier but never pass on to the customer.  Set sell price (price) to
-      // zero so they reduce margin correctly without inflating revenue.  The cost still
-      // flows through cost_price so profitability figures are accurate from booking day.
-      const sellPrice = surcharge.reconciliation_excluded ? 0 : price;
+      // reconciliation_excluded = true means the carrier does NOT invoice us for this
+      // surcharge (e.g. EPS — we charge it to customers but DHL never bills us back).
+      // It does NOT mean "don't charge the customer" — that was a previous mis-reading.
+      // The reconciliation engine ignores these surcharges independently via the flag.
+      const sellPrice = price;
 
       await query(`
         INSERT INTO charges
@@ -1003,11 +1003,10 @@ async function repriceSurchargesForShipment(shipmentId, customerId, dcServiceId,
         : parseFloat(surcharge.default_value);
 
       // Recalculate using current charge_per / calc_type.
-      // Absorbed surcharges (reconciliation_excluded) are never billed to customers — sell price = 0.
+      // reconciliation_excluded = true only means the carrier doesn't invoice us for
+      // this surcharge — we still charge the customer the full calculated price.
       let newPrice;
-      if (surcharge.reconciliation_excluded) {
-        newPrice = 0;
-      } else if (surcharge.calc_type === 'percentage') {
+      if (surcharge.calc_type === 'percentage') {
         newPrice = parseFloat(((baseSellPrice || 0) * effectiveValue / 100).toFixed(2));
       } else if (surcharge.charge_per === 'parcel') {
         newPrice = parseFloat((effectiveValue * (parcelQty || 1)).toFixed(2));
