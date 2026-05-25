@@ -972,7 +972,7 @@ async function repriceSurchargesForShipment(shipmentId, customerId, dcServiceId,
     // Get active surcharges for this courier — same two-category logic as applySurcharges:
     // always-apply surcharges + any absorbed-cost (reconciliation_excluded) surcharges.
     const { rows: surcharges } = await query(`
-      SELECT s.id, s.name, s.calc_type, s.charge_per, s.default_value, s.reconciliation_excluded
+      SELECT s.id, s.name, s.calc_type, s.charge_per, s.default_value, s.cost_price, s.reconciliation_excluded
       FROM surcharges s
       WHERE s.active = true
         AND s.courier_id = $1
@@ -1014,8 +1014,10 @@ async function repriceSurchargesForShipment(shipmentId, customerId, dcServiceId,
         newPrice = effectiveValue;
       }
 
-      // Cost side: re-use default_value as carrier cost
-      const carrierDefault = parseFloat(surcharge.default_value || 0);
+      // Cost side: use cost_price if explicitly set, otherwise fall back to default_value.
+      // For reconciliation_excluded surcharges (e.g. EPS), cost_price = 0 because the
+      // carrier never invoices us — using default_value would incorrectly record a cost.
+      const carrierDefault = parseFloat(surcharge.cost_price ?? surcharge.default_value ?? 0);
       let newCost;
       if (surcharge.calc_type === 'percentage') {
         newCost = parseFloat(((baseSellPrice || 0) * carrierDefault / 100).toFixed(2));
