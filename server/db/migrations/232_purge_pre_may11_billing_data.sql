@@ -27,13 +27,6 @@ BEGIN
   );
   GET DIAGNOSTICS v_recon_lines = ROW_COUNT;
 
-  -- Also clear recon lines whose shipment_id links to an old shipment
-  -- (covers companion_parcel lines that have no charge_id)
-  DELETE FROM reconciliation_lines
-  WHERE shipment_id IN (
-    SELECT id FROM shipments WHERE created_at < '2026-05-11 00:00:00+00'
-  );
-
   -- ── 2. Charges (cascades courier_queries via ON DELETE CASCADE) ──────────────
   DELETE FROM charges
   WHERE created_at < '2026-05-11 00:00:00+00';
