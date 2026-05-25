@@ -719,9 +719,22 @@ function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateD
     rateMap[`${rate.zone_name}::${rate.weight_class_name}`] = rate;
   }
   const zonesToShow = !isIntl
-    ? (templateZones.length > 0
-        ? templateZones
-        : service.rates.map(r => ({ zone_name: r.zone_name, weight_class_name: r.weight_class_name })))
+    ? (() => {
+        if (templateZones.length === 0) {
+          // No template — use the customer's own rate keys directly
+          return service.rates.map(r => ({ zone_name: r.zone_name, weight_class_name: r.weight_class_name }));
+        }
+        // Template loaded — but only use it if at least one zone key actually
+        // matches a customer rate.  When weight_class_name labels in the DB
+        // (e.g. "Parcel", "Medium Bagit") differ from the weight_bands-derived
+        // labels (e.g. "0-2KG", "0-30KG"), the rateMap lookup always misses and
+        // every zone shows a NewPriceCell instead of the real price.
+        const anyMatch = templateZones.some(t => rateMap[`${t.zone_name}::${t.weight_class_name}`]);
+        if (!anyMatch && service.rates.length > 0) {
+          return service.rates.map(r => ({ zone_name: r.zone_name, weight_class_name: r.weight_class_name }));
+        }
+        return templateZones;
+      })()
     : [];
   const multiWeight = [...new Set(zonesToShow.map(z => z.weight_class_name))].length > 1;
   const pricedCount = service.rates.length;
