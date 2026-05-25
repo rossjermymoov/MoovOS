@@ -177,7 +177,47 @@ router.get('/zones/:serviceCode', async (req, res, next) => {
   try {
     const { serviceCode } = req.params;
 
-    // Primary: existing customer_rates for this service (any customer)
+    // Primary: weight_bands table — the authoritative source for domestic services.
+    // Each zone can have multiple bands (2KG, 5KG, 10KG…) stored here.
+    // Returns one row per (zone, band) with a weight_class_name label that matches
+    // the format produced by the UI's bandLabel() function: "0-2KG", "2-5KG", "10KG+".
+    // Groups across all carrier rate cards so the template is card-agnostic.
+    const weightBandResult = await query(`
+      SELECT
+        z.name AS zone_name,
+        CASE
+          WHEN wb.max_weight_kg IS NOT NULL THEN
+            (CASE WHEN wb.min_weight_kg = floor(wb.min_weight_kg)
+                  THEN floor(wb.min_weight_kg)::int::text
+                  ELSE round(wb.min_weight_kg::numeric, 1)::text END)
+            || '-' ||
+            (CASE WHEN wb.max_weight_kg = floor(wb.max_weight_kg)
+                  THEN floor(wb.max_weight_kg)::int::text
+                  ELSE round(wb.max_weight_kg::numeric, 1)::text END)
+            || 'KG'
+          ELSE
+            (CASE WHEN wb.min_weight_kg = floor(wb.min_weight_kg)
+                  THEN floor(wb.min_weight_kg)::int::text
+                  ELSE round(wb.min_weight_kg::numeric, 1)::text END)
+            || 'KG+'
+        END                               AS weight_class_name,
+        BOOL_OR(wb.price_sub IS NOT NULL) AS has_sub_price,
+        MIN(wb.min_weight_kg)             AS sort_weight
+      FROM courier_services cs
+      JOIN zones      z  ON z.courier_service_id = cs.id
+      JOIN weight_bands wb ON wb.zone_id = z.id
+      WHERE cs.service_code ILIKE $1
+      GROUP BY z.name, wb.min_weight_kg, wb.max_weight_kg
+      ORDER BY z.name, MIN(wb.min_weight_kg)
+    `, [serviceCode]);
+
+    if (weightBandResult.rows.length > 0) {
+      return res.json(weightBandResult.rows.map(({ sort_weight, ...rest }) => rest));
+    }
+
+    // Secondary: existing customer_rates for this service (any customer).
+    // Used for international services where zones are stored directly in
+    // customer_rates — no weight_bands table entries exist for these.
     const ratesResult = await query(`
       SELECT   zone_name, weight_class_name,
                BOOL_OR(price_sub IS NOT NULL) AS has_sub_price
