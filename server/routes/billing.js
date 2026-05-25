@@ -577,15 +577,14 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
   };
 }
 
-// ── Main lookup — tries new model first, falls back to legacy ─────────────────
-// serviceName is accepted for backwards-compat but NEVER used for matching.
-// iso defaults to 'GB' for domestic; pass ship_to_country_iso for correct zone lookup.
+// ── Main lookup — explicit customer_rates only ────────────────────────────────
+// Pricing is always explicit: one zone, one weight band, one price per customer.
+// If a price is not explicitly set in customer_rates, pricing fails.
+// No fallbacks, no guessing, no secondary models.
+// serviceName is accepted for backwards-compat but never used for matching.
 async function lookupRateWithReason(customerId, serviceCode, _serviceName, weightKg, postcode, iso = 'GB') {
   if (!customerId) return { rate: null, reason: 'No matching customer' };
   if (!serviceCode) return { rate: null, reason: 'No service code' };
-
-  const newResult = await lookupViaServicePricing(customerId, serviceCode, weightKg, postcode, iso);
-  if (newResult !== null) return newResult;
 
   return lookupViaCustomerRates(customerId, serviceCode, weightKg, postcode, iso);
 }
