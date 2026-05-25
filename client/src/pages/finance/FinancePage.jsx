@@ -1205,11 +1205,11 @@ export default function FinancePage() {
   async function repriceCharge(charge) {
     try {
       const result = await billingApi.repriceCharge(charge.id);
-      if (result.ok) {
-        qc.invalidateQueries(['billing-charges']);
-        qc.invalidateQueries(['billing-stats']);
-      } else {
-        alert(`Reprice failed: ${result.message || 'No matching rate found'}`);
+      // Always refresh — even a failed reprice clears the stale price in the DB
+      qc.invalidateQueries(['billing-charges']);
+      qc.invalidateQueries(['billing-stats']);
+      if (!result.ok) {
+        alert(`Reprice: ${result.message || 'No matching rate found'}`);
       }
     } catch (err) {
       alert(`Reprice error: ${err.message}`);
