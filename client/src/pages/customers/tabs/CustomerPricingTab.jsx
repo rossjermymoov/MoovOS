@@ -1583,23 +1583,15 @@ export default function CustomerPricingTab({ customer }) {
   const rateServiceMap = Object.fromEntries((rateData?.services || []).map(s => [s.service_code, s]));
 
   // Rate cards:
-  // When services are selected, use selectedServices as the primary list so every
-  // selected service gets a block — even those with no rate rows yet.
-  // When nothing is selected AND active carriers exist, show empty state — the user
-  // must explicitly select services to see rate cards.  This enforces the rule that
-  // rates are only shown for services that are actively selected.
-  // When no carriers are active (brand-new customer), fall back to all rate data so
-  // existing rows are visible even before carrier links are set up.
+  // Three cases:
+  // 1. selectedCodes > 0: show only the explicitly selected services
+  // 2. selectedServices configured (rows in DB) but nothing currently selected:
+  //    the user deliberately chose "none" — show empty state
+  // 3. selectedServices never configured (no rows in DB): default to showing all
+  //    rate data for active couriers — this is the normal state for most customers
   let visibleServices;
-  if (selectedCodes.size === 0 && activeCourierIds.size > 0) {
-    // Services explicitly deselected (or never selected) — show nothing
-    visibleServices = [];
-  } else if (selectedCodes.size === 0) {
-    // No carriers active: show all rate data (new customer / setup in progress)
-    visibleServices = (rateData?.services || []).filter(s =>
-      activeCourierCodes.size === 0 || activeCourierCodes.has(s.courier_code)
-    );
-  } else {
+  if (selectedCodes.size > 0) {
+    // User has explicitly selected specific services — show only those
     visibleServices = selectedServices
       .filter(s => {
         const meta = allServicesMeta[s.service_code];
@@ -1624,6 +1616,16 @@ export default function CustomerPricingTab({ customer }) {
           rates:        [],
         };
       });
+  } else if (selectedServices.length > 0) {
+    // Service selection has been configured for this customer but nothing is
+    // currently ticked — the user deliberately chose to show nothing
+    visibleServices = [];
+  } else {
+    // Service selection has never been configured — default to showing all
+    // rate data for active couriers (the standard state for most customers)
+    visibleServices = (rateData?.services || []).filter(s =>
+      activeCourierCodes.size === 0 || activeCourierCodes.has(s.courier_code)
+    );
   }
 
   // Map courier_code → active_card_id so ServiceBlock can fetch carrier cost prices for markup
@@ -1695,7 +1697,7 @@ export default function CustomerPricingTab({ customer }) {
         <div className="moov-card" style={{ padding: 32, textAlign: 'center', color: '#64748B' }}>Loading rates…</div>
       )}
 
-      {!ratesLoading && visibleServices.length === 0 && activeCourierIds.size > 0 && selectedCodes.size === 0 && (
+      {!ratesLoading && visibleServices.length === 0 && selectedServices.length > 0 && selectedCodes.size === 0 && (
         <div className="moov-card" style={{ padding: 24, textAlign: 'center', color: '#64748B', fontSize: 13 }}>
           No services selected — use <strong>Service Selection</strong> above to choose which services to display rate cards for.
           <div style={{ marginTop: 8, fontSize: 11, color: '#94A3B8' }}>
