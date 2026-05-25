@@ -11,6 +11,7 @@ import express from 'express';
 import { query } from '../db/index.js';
 import { fetchShipmentByReference, fetchShipmentById, requestTrackingUpdate } from '../services/voilaClient.js';
 import { processShipment, insertCharges } from '../services/pricingEngine.js';
+// upsertEvent and normalisePayload are defined later in this file and used by bulk runner below
 
 const router = express.Router();
 
@@ -953,46 +954,49 @@ router.post('/bulk-tracking-update', async (req, res, next) => {
             row.track_req_hash
           );
 
-          // Feed the response back through the existing tracking webhook handler
-          // by posting it internally as if it were a webhook event.
-          // The response may contain tracking events or just a status update.
-          if (trackingData && typeof trackingData === 'object') {
-            // Try to verify the charge immediately if tracking data confirms delivery
-            // or in-transit status — mirror the logic in backfill-verify.
-            const verifyRes = await query(`
-              UPDATE charges c
-              SET    verified   = true,
-                     updated_at = NOW()
-              FROM   shipments s
-              WHERE  c.id          = $1
-                AND  c.shipment_id = s.id
-                AND  c.verified    = false
-                AND  s.tracking_codes IS NOT NULL
-                AND  array_length(s.tracking_codes, 1) > 0
-                AND  EXISTS (
-                  SELECT 1
-                  FROM   parcels p
-                  JOIN   tracking_events te ON te.parcel_id = p.id
-                  WHERE  p.consignment_number = ANY(s.tracking_codes)
-                    AND  te.status = ANY(ARRAY[
-                           'in_transit','at_depot','out_for_delivery',
-                           'delivered','failed_delivery','on_hold',
-                           'awaiting_collection','customs_hold','exception','returned'
-                         ]::parcel_status[])
-                )
-            `, [row.charge_id]);
+          // Feed the Voila response through the standard tracking event pipeline.
+          // The API response has the same parcel/event structure as the tracking webhook,
+          // so we wrap it in a synthetic tracking_update envelope and normalise it.
+          const parcels = trackingData?.data?.parcels;
+          if (!Array.isArray(parcels) || !parcels.length) {
+            noEvents++;
+            console.log(`[bulk-tracking] ⚠️  No parcels in response for shipment ${row.shipment_id}`);
+            continue;
+          }
 
-            if (verifyRes.rowCount > 0) {
-              already++;
-              console.log(`[bulk-tracking] ✅ Verified charge ${row.charge_id} for shipment ${row.shipment_id}`);
-            } else {
-              noEvents++;
-              console.log(`[bulk-tracking] ⏳ Tracking data returned but no qualifying events yet for shipment ${row.shipment_id} (req_id=${row.track_req_id})`);
-            }
+          const syntheticPayload = {
+            tracking_update: {
+              parcels,
+              expected_delivery: trackingData.data.expected_delivery || null,
+            },
+            shipment: {
+              id:           String(trackingData.data.shipment_id || row.shipment_id),
+              courier:      row.courier || null,
+            },
+          };
+
+          const events = normalisePayload(syntheticPayload);
+          let eventsStored = 0;
+          let eventsVerified = 0;
+
+          for (const ev of events) {
+            const result = await upsertEvent(ev, null);
+            if (!result?.skipped && !result?.deduped) eventsStored++;
+            if (result?.verified) eventsVerified++;
+          }
+
+          if (eventsVerified > 0) {
+            already += eventsVerified;
+          }
+          if (eventsStored > 0 || eventsVerified > 0) {
             ok++;
+            console.log(
+              `[bulk-tracking] ✅ shipment ${row.shipment_id}: ` +
+              `${eventsStored} event(s) stored, ${eventsVerified} charge(s) verified`
+            );
           } else {
             noEvents++;
-            console.log(`[bulk-tracking] ⚠️  Empty/unexpected response for shipment ${row.shipment_id} (req_id=${row.track_req_id})`);
+            console.log(`[bulk-tracking] ⏳ shipment ${row.shipment_id}: only 'booked' status returned — nothing to verify yet`);
           }
 
         } catch (err) {
