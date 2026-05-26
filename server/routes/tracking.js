@@ -1050,4 +1050,169 @@ router.post('/bulk-tracking-update', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── POST /api/tracking/refresh-stale ─────────────────────────────────────────
+//
+// Fetches the latest tracking from Voila for every parcel whose status has not
+// advanced in the last N days and is not in a terminal state.
+//
+// This is the counterpart to bulk-tracking-update.  That endpoint targets
+// *unverified charges* (parcels that have never been scanned).  This one
+// targets parcels that WERE verified (e.g. reached "on_hold") but whose
+// tracking webhook has since gone silent — they are stuck in a non-terminal
+// status with a stale last_event_at.
+//
+// Body (all optional):
+//   {
+//     days:     7,    // treat parcels with last_event_at older than this as stale
+//     limit:    500,  // max parcels to process per call (hard cap 2500)
+//     delay_ms: 500,  // ms to wait between Voila API calls
+//     dry_run:  false // if true, log candidates without calling the API
+//   }
+//
+// Returns immediately: { queued: N, message: "..." }
+// Progress is written to Railway logs.
+
+router.post('/refresh-stale', async (req, res, next) => {
+  try {
+    const days    = Math.max(parseInt(req.body?.days)     || 7,    1);
+    const limit   = Math.min(parseInt(req.body?.limit)    || 500,  2500);
+    const delayMs = Math.min(parseInt(req.body?.delay_ms) || 500,  5000);
+    const dryRun  = req.body?.dry_run === true;
+
+    // Terminal statuses — parcels in these states are considered resolved and
+    // should never be refreshed regardless of how old they are.
+    const TERMINAL = `'delivered','returned','cancelled','tracking_expired'`;
+
+    // Find stale non-terminal parcels that have Voila tracking credentials
+    // stored on their linked shipment.  DISTINCT ON ensures each parcel
+    // (consignment_number) appears only once even when multiple charge rows
+    // exist for the same shipment.
+    const { rows: candidates } = await query(`
+      SELECT DISTINCT ON (p.consignment_number)
+        p.id                             AS parcel_id,
+        p.consignment_number,
+        p.status                         AS current_status,
+        p.last_event_at,
+        s.id                             AS shipment_id,
+        s.voila_tracking_request_id      AS track_req_id,
+        s.voila_tracking_request_hash    AS track_req_hash,
+        s.courier
+      FROM   parcels  p
+      JOIN   charges  ch ON ch.tracking_code = p.consignment_number
+                        AND ch.charge_type   = 'courier'
+                        AND ch.cancelled     = false
+      JOIN   shipments s  ON s.id = ch.shipment_id
+                        AND s.voila_tracking_request_id   IS NOT NULL
+                        AND s.voila_tracking_request_hash IS NOT NULL
+      WHERE  p.status NOT IN (${TERMINAL})
+        AND  (
+               p.last_event_at IS NULL
+               OR p.last_event_at < NOW() - ($1 || ' days')::INTERVAL
+             )
+      ORDER  BY p.consignment_number, p.last_event_at ASC NULLS FIRST
+      LIMIT  $2
+    `, [days, limit]);
+
+    if (!candidates.length) {
+      return res.json({
+        queued:  0,
+        days,
+        message: `No stale non-terminal parcels found (threshold: ${days} day(s)).`,
+      });
+    }
+
+    res.json({
+      queued:   candidates.length,
+      days,
+      dry_run:  dryRun,
+      delay_ms: delayMs,
+      message:  `Stale tracking refresh running in background for ${candidates.length} parcel(s) ` +
+                `(>${days}d stale). Check Railway logs for progress.`,
+    });
+
+    // ── Background processing ─────────────────────────────────────────────────
+    (async () => {
+      let updated = 0, unchanged = 0, failed = 0, noData = 0;
+      const errors = [];
+
+      for (const row of candidates) {
+        try {
+          if (delayMs > 0) await new Promise(r => setTimeout(r, delayMs));
+
+          if (dryRun) {
+            console.log(
+              `[refresh-stale] DRY RUN: ${row.consignment_number} ` +
+              `status=${row.current_status} last_event=${row.last_event_at?.toISOString() ?? 'null'}`
+            );
+            updated++;
+            continue;
+          }
+
+          // Request the latest tracking snapshot from Voila
+          const trackingData = await requestTrackingUpdate(
+            row.track_req_id,
+            row.track_req_hash
+          );
+
+          const parcels = trackingData?.data?.parcels;
+          if (!Array.isArray(parcels) || !parcels.length) {
+            noData++;
+            console.log(`[refresh-stale] ⚠️  No parcel data returned for ${row.consignment_number}`);
+            continue;
+          }
+
+          // Wrap in the synthetic envelope that normalisePayload expects
+          const syntheticPayload = {
+            tracking_update: {
+              parcels,
+              expected_delivery: trackingData.data.expected_delivery || null,
+            },
+            shipment: {
+              id:      String(trackingData.data.shipment_id || row.shipment_id),
+              courier: row.courier || null,
+            },
+          };
+
+          const events = normalisePayload(syntheticPayload);
+          let eventsStored = 0;
+
+          for (const ev of events) {
+            const result = await upsertEvent(ev, null);
+            if (!result?.skipped && !result?.deduped && !result?.auto_cancelled) {
+              eventsStored++;
+            }
+          }
+
+          if (eventsStored > 0) {
+            updated++;
+            console.log(
+              `[refresh-stale] ✅ ${row.consignment_number}: ` +
+              `${eventsStored} new event(s) (was ${row.current_status})`
+            );
+          } else {
+            unchanged++;
+            console.log(
+              `[refresh-stale] ⏳ ${row.consignment_number}: no new events — still ${row.current_status}`
+            );
+          }
+
+        } catch (err) {
+          failed++;
+          errors.push({ consignment: row.consignment_number, error: err.message });
+          console.error(`[refresh-stale] ❌ ${row.consignment_number}:`, err.message);
+        }
+      }
+
+      console.log(
+        `[refresh-stale] Complete — updated: ${updated}, unchanged: ${unchanged}, ` +
+        `no_data: ${noData}, errors: ${failed}`
+      );
+      if (errors.length) {
+        console.warn('[refresh-stale] First 20 errors:', JSON.stringify(errors.slice(0, 20)));
+      }
+    })().catch(err => console.error('[refresh-stale] Unhandled background error:', err.message));
+
+  } catch (err) { next(err); }
+});
+
 export default router;
