@@ -2123,12 +2123,14 @@ router.post('/batch-reprice', async (req, res, next) => {
   try {
     const charges = await query(`
       SELECT c.id AS charge_id, c.customer_id, c.parcel_qty,
+             cust.is_test_account,
              s.id AS shipment_id,
              s.dc_service_id, s.service_name AS s_service_name,
              s.total_weight_kg, s.parcel_count,
              s.customer_account, s.ship_to_postcode, s.ship_to_country_iso, s.raw_payload
       FROM charges c
       LEFT JOIN shipments s ON s.id = c.shipment_id
+      LEFT JOIN customers cust ON cust.id = c.customer_id
       WHERE (c.price IS NULL OR c.price = 0)
         AND c.cancelled = false
         AND c.charge_type = 'courier'
@@ -2177,6 +2179,20 @@ router.post('/batch-reprice', async (req, res, next) => {
           summary.no_customer++;
           await query(`UPDATE charges SET price_failure_reason = $1, updated_at = NOW() WHERE id = $2`,
             ['No matching customer', row.charge_id]);
+          continue;
+        }
+
+        // Test accounts always bill at £0 — restore and skip rather than failing rate lookup
+        if (row.is_test_account === true) {
+          await query(`
+            UPDATE charges
+            SET price                = 0,
+                price_auto           = false,
+                price_failure_reason = NULL,
+                updated_at           = NOW()
+            WHERE id = $1
+          `, [row.charge_id]);
+          summary.priced++;
           continue;
         }
 
@@ -2268,13 +2284,15 @@ router.post('/full-reprice', async (req, res, next) => {
 
     const { rows: charges } = await query(`
       SELECT c.id AS charge_id, c.customer_id, c.parcel_qty, c.price AS current_price,
-             c.billed, c.source,
+             c.billed, c.source, c.price_auto,
+             cust.is_test_account,
              s.id AS shipment_id,
              s.dc_service_id, s.service_name AS s_service_name,
              s.total_weight_kg, s.parcel_count, s.parcel_weight_kg,
              s.customer_account, s.ship_to_postcode, s.ship_to_country_iso, s.raw_payload
       FROM charges c
       LEFT JOIN shipments s ON s.id = c.shipment_id
+      LEFT JOIN customers cust ON cust.id = c.customer_id
       WHERE ${conds.join(' AND ')}
       ORDER BY c.created_at ASC
     `, vals);
@@ -2324,6 +2342,24 @@ router.post('/full-reprice', async (req, res, next) => {
         }
 
         if (!customerId) { summary.no_customer++; continue; }
+
+        // Test accounts always bill at £0 — skip rate lookup and restore £0 if the
+        // price was incorrectly cleared by a previous reprice run.
+        const isTestAccount = row.is_test_account === true;
+        if (isTestAccount) {
+          if (row.current_price == null) {
+            await query(`
+              UPDATE charges
+              SET price                = 0,
+                  price_auto           = false,
+                  price_failure_reason = NULL,
+                  updated_at           = NOW()
+              WHERE id = $1
+            `, [row.charge_id]);
+            summary.repriced++;
+          }
+          continue;
+        }
 
         const dcServiceId      = row.dc_service_id || extracted.dcServiceId;
         const serviceName      = row.s_service_name || extracted.serviceName;
