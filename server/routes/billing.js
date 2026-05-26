@@ -2437,6 +2437,7 @@ router.post('/full-reprice', async (req, res, next) => {
             try {
               const fuelRes = await query(`
                 SELECT fg.id AS fuel_group_id,
+                       fg.name AS fuel_group_name,
                        fg.standard_sell_pct, fg.fuel_surcharge_pct AS carrier_pct,
                        cfgp.sell_pct AS customer_sell_pct
                 FROM courier_services cs
@@ -2476,7 +2477,7 @@ router.post('/full-reprice', async (req, res, next) => {
                         (shipment_id, customer_id, charge_type, service_name,
                          price, cost_price, price_auto, parcel_qty)
                       VALUES ($1, $2, 'fuel', $3, $4, $5, true, 1)
-                    `, [row.shipment_id, customerId, row.s_service_name || serviceName, newFuelPrice, newFuelCost]);
+                    `, [row.shipment_id, customerId, `${fg.fuel_group_name} Fuel`, newFuelPrice, newFuelCost]);
                     summary.fuel_updated++;
                   }
                 }
@@ -3462,6 +3463,7 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
       if (shipmentId && dcServiceId && customerId) {
         const fuelRes = await query(`
           SELECT fg.id AS fuel_group_id,
+                 fg.name AS fuel_group_name,
                  fg.standard_sell_pct, fg.fuel_surcharge_pct AS carrier_pct,
                  cfgp.sell_pct AS customer_sell_pct
           FROM courier_services cs
@@ -3506,7 +3508,7 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
                   (shipment_id, customer_id, charge_type, service_name,
                    price, cost_price, price_auto, parcel_qty)
                 VALUES ($1, $2, 'fuel', $3, $4, $5, true, 1)
-              `, [shipmentId, customerId, chgSvcName || serviceName, newFuelPrice, newFuelCost]);
+              `, [shipmentId, customerId, `${fg.fuel_group_name} Fuel`, newFuelPrice, newFuelCost]);
               fuelUpdated = true;
               fuelNote    = 'created';
             }
