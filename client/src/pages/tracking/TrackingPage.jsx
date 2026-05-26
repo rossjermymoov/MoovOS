@@ -222,8 +222,203 @@ function EventTimeline({ events }) {
   );
 }
 
+// ─── Claims window logic ──────────────────────────────────────
+const CLAIM_RULES = {
+  dpd:             { windowDays: 14, windowFrom: 'network entry',   action: 'email',  actionLabel: 'Email DPD Platinum',  actionTo: 'platinum@dpd.co.uk',              note: 'Email DPD Platinum support to kick off the investigation. DPD will invite you to raise a formal claim once the investigation closes.' },
+  dpd_local:       { windowDays: 14, windowFrom: 'network entry',   action: 'email',  actionLabel: 'Email DPD Platinum',  actionTo: 'platinum@dpd.co.uk',              note: 'Email DPD Platinum support to kick off the investigation. DPD will invite you to raise a formal claim once the investigation closes.' },
+  dpdlocal:        { windowDays: 14, windowFrom: 'network entry',   action: 'email',  actionLabel: 'Email DPD Platinum',  actionTo: 'platinum@dpd.co.uk',              note: 'Email DPD Platinum support to kick off the investigation. DPD will invite you to raise a formal claim once the investigation closes.' },
+  dhlparcelukcloud:{ windowDays: 14, windowFrom: 'expected delivery',action: 'email', actionLabel: 'Email DHL Support',   actionTo: 'parcel.uk@dhl.com',               note: 'Email DHL support to open an investigation. DHL should invite you to raise a formal claim within 21 days of the delivery date.' },
+  dhl:             { windowDays: 14, windowFrom: 'expected delivery',action: 'email', actionLabel: 'Email DHL Support',   actionTo: 'parcel.uk@dhl.com',               note: 'Email DHL support to open an investigation. DHL should invite you to raise a formal claim within 21 days of the delivery date.' },
+  yodel:           { windowDays: 7,  windowFrom: 'label generation', action: 'portal', actionLabel: 'Raise on AGL Portal', actionUrl: 'https://agl.yodel.co.uk',        note: 'Yodel claims must be raised via the AGL portal within 7 days of label generation (portal may accept up to 10 days). Act immediately.' },
+  agl:             { windowDays: 7,  windowFrom: 'label generation', action: 'portal', actionLabel: 'Raise on AGL Portal', actionUrl: 'https://agl.yodel.co.uk',        note: 'Yodel claims must be raised via the AGL portal within 7 days of label generation (portal may accept up to 10 days). Act immediately.' },
+  ups:             { windowDays: 14, windowFrom: 'network entry',   action: 'email',  actionLabel: 'Email UPS Claims',    actionTo: 'ukparcelclaims@ups.com',           note: 'Submit a UPS claim by email within 14 days of the parcel entering the network. Include shipment details and supporting evidence.' },
+};
+
+function getClaimInfo(parcel, consignmentNumber) {
+  if (!parcel) return null;
+  const code = (parcel.courier_code || '').toLowerCase();
+  // Yodel parcels have JJD-prefix tracking numbers
+  const isYodel = (consignmentNumber || '').toUpperCase().startsWith('JJD') || code === 'yodel' || code === 'agl';
+  const rule = isYodel ? CLAIM_RULES.yodel : CLAIM_RULES[code];
+  if (!rule) return null;
+
+  // Reference date: for DHL use estimated/actual delivery; for others use network entry (created_at)
+  const refDate = (code.startsWith('dhl') && (parcel.delivered_at || parcel.estimated_delivery))
+    ? (parcel.delivered_at || parcel.estimated_delivery)
+    : parcel.created_at;
+  if (!refDate) return null;
+
+  const deadline     = new Date(new Date(refDate).getTime() + rule.windowDays * 86400000);
+  const msRemaining  = deadline.getTime() - Date.now();
+  const daysRemaining = Math.ceil(msRemaining / 86400000);
+  const expired       = daysRemaining < 0;
+  const urgent        = !expired && daysRemaining <= 2;
+  const warning       = !expired && !urgent && daysRemaining <= 5;
+
+  return { ...rule, deadline, daysRemaining, expired, urgent, warning, refDate };
+}
+
+function ClaimsTab({ data, consignment }) {
+  const info = getClaimInfo(data, consignment);
+  const borderCol = '#1E293B';
+
+  if (!info) {
+    return (
+      <div style={{ padding: '32px 24px', textAlign: 'center' }}>
+        <div style={{ fontSize: 32, marginBottom: 12 }}>📦</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: '#334155', marginBottom: 6 }}>No claims window data</div>
+        <div style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6 }}>
+          Claims window rules are not configured for this carrier.<br />Check directly with {data?.courier_name || 'the carrier'}.
+        </div>
+      </div>
+    );
+  }
+
+  // Status band colours
+  const statusColor = info.expired  ? '#EF4444'
+                    : info.urgent   ? '#F97316'
+                    : info.warning  ? '#D97706'
+                    : '#00C853';
+  const statusBg    = info.expired  ? 'rgba(239,68,68,0.12)'
+                    : info.urgent   ? 'rgba(249,115,22,0.12)'
+                    : info.warning  ? 'rgba(217,119,6,0.12)'
+                    : 'rgba(0,200,83,0.10)';
+  const statusLabel = info.expired
+    ? `Window closed ${Math.abs(info.daysRemaining)} day${Math.abs(info.daysRemaining) !== 1 ? 's' : ''} ago`
+    : info.urgent
+    ? `⚠ URGENT — ${info.daysRemaining} day${info.daysRemaining !== 1 ? 's' : ''} remaining`
+    : info.warning
+    ? `${info.daysRemaining} days remaining — act soon`
+    : `${info.daysRemaining} days remaining`;
+
+  // Build mailto / portal URL
+  const consignmentRef = consignment || '';
+  const courierName    = data?.courier_name || '';
+  const customerName   = data?.customer_name || data?.customer_account || '';
+  let actionUrl;
+  if (info.action === 'portal') {
+    actionUrl = info.actionUrl;
+  } else {
+    const subject = encodeURIComponent(`Claims enquiry — ${courierName} — ${consignmentRef}`);
+    const body = encodeURIComponent(
+      `Dear ${courierName} Claims Team,\n\n` +
+      `I am writing regarding consignment ${consignmentRef}.\n` +
+      `Customer: ${customerName}\n` +
+      `Carrier: ${courierName}\n\n` +
+      `[Please describe the issue and attach supporting evidence here]\n\n` +
+      `Kind regards,\nMoov Parcel`
+    );
+    actionUrl = `mailto:${info.actionTo}?subject=${subject}&body=${body}`;
+  }
+
+  return (
+    <div style={{ padding: '20px 24px' }}>
+
+      {/* Status banner */}
+      <div style={{
+        background: statusBg,
+        border: `1px solid ${statusColor}55`,
+        borderRadius: 10,
+        padding: '14px 16px',
+        marginBottom: 20,
+        display: 'flex', alignItems: 'center', gap: 14,
+      }}>
+        <div style={{ fontSize: 28, lineHeight: 1 }}>
+          {info.expired ? '🔴' : info.urgent ? '🟠' : info.warning ? '🟡' : '🟢'}
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: statusColor, marginBottom: 2 }}>
+            {statusLabel}
+          </div>
+          <div style={{ fontSize: 12, color: '#64748B' }}>
+            Deadline: {info.deadline.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}
+          </div>
+        </div>
+      </div>
+
+      {/* Window rules */}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+          Claims Window Rules
+        </div>
+        {[
+          ['Carrier',       data?.courier_name || '—'],
+          ['Window',        `${info.windowDays} days from ${info.windowFrom}`],
+          ['Reference date',new Date(info.refDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })],
+          ['Deadline',      info.deadline.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })],
+        ].map(([label, value]) => (
+          <div key={label} style={{ display: 'flex', padding: '7px 0', borderBottom: `1px solid ${borderCol}` }}>
+            <span style={{ fontSize: 12, color: '#64748B', width: 120, flexShrink: 0 }}>{label}</span>
+            <span style={{ fontSize: 13, color: '#0F172A', fontWeight: 500 }}>{value}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Process note */}
+      <div style={{
+        background: 'rgba(30,64,175,0.07)',
+        border: '1px solid rgba(30,64,175,0.18)',
+        borderRadius: 8,
+        padding: '12px 14px',
+        marginBottom: 20,
+        fontSize: 13,
+        color: '#1E293B',
+        lineHeight: 1.6,
+      }}>
+        {info.note}
+      </div>
+
+      {/* Action button */}
+      {!info.expired && (
+        <a
+          href={actionUrl}
+          target={info.action === 'portal' ? '_blank' : '_self'}
+          rel="noopener noreferrer"
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            width: '100%', padding: '12px 20px',
+            background: statusColor,
+            color: '#FFFFFF',
+            borderRadius: 8,
+            fontSize: 14, fontWeight: 700,
+            textDecoration: 'none',
+            border: 'none',
+            cursor: 'pointer',
+          }}
+        >
+          {info.action === 'portal' ? (
+            <>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+              </svg>
+              {info.actionLabel}
+            </>
+          ) : (
+            <>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+              </svg>
+              {info.actionLabel}
+            </>
+          )}
+        </a>
+      )}
+      {info.expired && (
+        <div style={{
+          padding: '12px 16px', borderRadius: 8,
+          background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
+          fontSize: 13, color: '#991B1B', textAlign: 'center', lineHeight: 1.5,
+        }}>
+          The standard claims window has closed. Contact {data?.courier_name || 'the carrier'} directly — some carriers may accept late claims in exceptional circumstances.
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Parcel drawer ────────────────────────────────────────────
 function ParcelDrawer({ consignment, onClose }) {
+  const [activeTab, setActiveTab] = useState('events');
   const { data, isLoading } = useQuery({
     queryKey: ['parcel', consignment],
     queryFn:  () => api.get(`/tracking/${encodeURIComponent(consignment)}`).then(r => r.data),
@@ -236,6 +431,14 @@ function ParcelDrawer({ consignment, onClose }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // Compute claim status for tab badge
+  const claimInfo = data ? getClaimInfo(data, consignment) : null;
+  const claimBadgeColor = claimInfo?.expired  ? '#EF4444'
+                        : claimInfo?.urgent   ? '#F97316'
+                        : claimInfo?.warning  ? '#D97706'
+                        : claimInfo           ? '#00C853'
+                        : null;
+
   return (
     <>
       {/* Backdrop */}
@@ -244,111 +447,144 @@ function ParcelDrawer({ consignment, onClose }) {
       {/* Drawer */}
       <div style={{
         position: 'fixed', top: 0, right: 0, bottom: 0,
-        width: 480, background: '#0F1128',
-        borderLeft: '1px solid rgba(0,0,0,0.08)',
+        width: 480, background: '#FFFFFF',
+        borderLeft: '1px solid rgba(0,0,0,0.10)',
         zIndex: 401, display: 'flex', flexDirection: 'column',
-        boxShadow: '-32px 0 80px rgba(0,0,0,0.5)',
+        boxShadow: '-8px 0 40px rgba(0,0,0,0.12)',
       }}>
         {/* Drawer header */}
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ padding: '18px 24px', borderBottom: '1px solid rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 11, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Consignment</div>
+            <div style={{ fontSize: 10, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Consignment</div>
             {(() => {
-              // Build tracking URL: use stored URL first, then fall back to known courier patterns
               const stored = data?.tracking_url;
               const code = (data?.courier_code || '').toLowerCase();
               const post = encodeURIComponent((data?.recipient_postcode || '').trim());
-              // Yodel tracking numbers always start with JJD (covers AGL parcels too)
               const isYodel = consignment.toUpperCase().startsWith('JJD') || code === 'yodel' || code === 'agl';
               const fallback =
-                isYodel                                 ? `https://www.yodel.co.uk/tracking/${consignment}/${post}`
-                : code === 'dpd' || code === 'dpd_local' || code === 'dpdlocal' ? `https://www.dpd.co.uk/apps/tracking/?reference=${consignment}`
-                : code === 'dhl' || code === 'dhl_parcel' ? `https://track.dhlparcel.co.uk/?con=${consignment}`
-                : code === 'evri' || code === 'hermes'  ? `https://www.evri.com/track-a-parcel/${consignment}`
-                : code === 'royal_mail' || code === 'royalmail' ? `https://www.royalmail.com/track-your-item#/tracking-results/${consignment}`
-                : code === 'parcelforce'                ? `https://www.parcelforce.com/track-trace?trackNumber=${consignment}`
-                : code === 'ups'                        ? `https://www.ups.com/track?loc=en_GB&tracknum=${consignment}`
-                : code === 'fedex'                      ? `https://www.fedex.com/en-gb/tracking.html?tracknumbers=${consignment}`
+                isYodel                                           ? `https://www.yodel.co.uk/tracking/${consignment}/${post}`
+                : code === 'dpd' || code === 'dpd_local' || code === 'dpdlocal'
+                                                                  ? `https://www.dpd.co.uk/apps/tracking/?reference=${consignment}`
+                : code.startsWith('dhl')                         ? `https://track.dhlparcel.co.uk/?con=${consignment}`
+                : code === 'evri' || code === 'hermes'           ? `https://www.evri.com/track-a-parcel/${consignment}`
+                : code === 'royal_mail' || code === 'royalmail'  ? `https://www.royalmail.com/track-your-item#/tracking-results/${consignment}`
+                : code === 'parcelforce'                         ? `https://www.parcelforce.com/track-trace?trackNumber=${consignment}`
+                : code === 'ups'                                 ? `https://www.ups.com/track?loc=en_GB&tracknum=${consignment}`
+                : code === 'fedex'                               ? `https://www.fedex.com/en-gb/tracking.html?tracknumbers=${consignment}`
                 : null;
               const url = stored || fallback;
               return url ? (
-                <a href={url} target="_blank" rel="noopener noreferrer" title="Track on courier website" style={{
-                  fontSize: 18, fontWeight: 900, color: '#0F172A', fontFamily: 'monospace',
+                <a href={url} target="_blank" rel="noopener noreferrer" style={{
+                  fontSize: 17, fontWeight: 900, color: '#0F172A', fontFamily: 'monospace',
                   textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 7,
-                  borderBottom: '2px solid rgba(26,115,232,0.5)',
-                  paddingBottom: 1,
+                  borderBottom: '2px solid rgba(26,115,232,0.4)', paddingBottom: 1,
                 }}>
                   {consignment}
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1a73e8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginBottom: 1 }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a73e8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
                   </svg>
                 </a>
               ) : (
-                <div style={{ fontSize: 18, fontWeight: 900, color: '#0F172A', fontFamily: 'monospace' }}>{consignment}</div>
+                <div style={{ fontSize: 17, fontWeight: 900, color: '#0F172A', fontFamily: 'monospace' }}>{consignment}</div>
               );
             })()}
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer' }}><X size={18} /></button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: 4 }}><X size={18} /></button>
+        </div>
+
+        {/* Tab bar */}
+        <div style={{ display: 'flex', borderBottom: '1px solid rgba(0,0,0,0.08)', background: '#F8FAFC' }}>
+          {[
+            { key: 'events', label: `Events${data ? ` (${data.events?.length || 0})` : ''}` },
+            { key: 'claims', label: 'Claims Window', badgeColor: claimBadgeColor },
+          ].map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              style={{
+                flex: 1, padding: '11px 14px',
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: 12, fontWeight: 700,
+                color: activeTab === tab.key ? '#1E40AF' : '#64748B',
+                borderBottom: activeTab === tab.key ? '2px solid #1E40AF' : '2px solid transparent',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                transition: 'color 0.1s',
+              }}
+            >
+              {tab.label}
+              {tab.badgeColor && (
+                <span style={{
+                  width: 8, height: 8, borderRadius: '50%',
+                  background: tab.badgeColor,
+                  display: 'inline-block', flexShrink: 0,
+                }} />
+              )}
+            </button>
+          ))}
         </div>
 
         {isLoading ? (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}>Loading…</div>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8' }}>Loading…</div>
         ) : data ? (
-          <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
-            {/* Delivery address */}
-            {(data.recipient_name || data.recipient_address || data.recipient_postcode) && (
-              <div style={{ marginBottom: 20, padding: 14, background: 'rgba(0,188,212,0.05)', borderRadius: 10, border: '1px solid rgba(0,188,212,0.15)' }}>
-                <div style={{ fontSize: 11, color: '#00BCD4', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <MapPin size={11} /> Delivery Address
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+
+            {activeTab === 'events' && (
+              <div style={{ padding: '20px 24px' }}>
+                {/* Delivery address */}
+                {(data.recipient_name || data.recipient_address || data.recipient_postcode) && (
+                  <div style={{ marginBottom: 20, padding: 14, background: 'rgba(0,188,212,0.05)', borderRadius: 10, border: '1px solid rgba(0,188,212,0.2)' }}>
+                    <div style={{ fontSize: 11, color: '#0891B2', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <MapPin size={11} /> Delivery Address
+                    </div>
+                    {data.recipient_name && <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>{data.recipient_name}</div>}
+                    {data.recipient_address && <div style={{ fontSize: 13, color: '#334155', lineHeight: 1.6, whiteSpace: 'pre-line' }}>{data.recipient_address}</div>}
+                    {data.recipient_postcode && <div style={{ fontSize: 13, fontWeight: 700, color: '#334155', marginTop: data.recipient_address ? 2 : 0 }}>{data.recipient_postcode}</div>}
+                    {data.estimated_delivery && (
+                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(0,0,0,0.06)', display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: 11, color: '#64748B' }}>Estimated delivery</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#D97706' }}>{fmtDate(data.estimated_delivery)}</span>
+                      </div>
+                    )}
+                    {data.delivered_at && (
+                      <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: 11, color: '#64748B' }}>Delivered</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#00C853' }}>{new Date(data.delivered_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Event timeline */}
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
+                  Event History ({data.events?.length || 0})
                 </div>
-                {data.recipient_name && (
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>{data.recipient_name}</div>
-                )}
-                {data.recipient_address && (
-                  <div style={{ fontSize: 13, color: '#334155', lineHeight: 1.6, whiteSpace: 'pre-line' }}>{data.recipient_address}</div>
-                )}
-                {data.recipient_postcode && (
-                  <div style={{ fontSize: 13, fontWeight: 700, color: '#334155', marginTop: data.recipient_address ? 2 : 0 }}>{data.recipient_postcode}</div>
-                )}
-                {data.estimated_delivery && (
-                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(0,0,0,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 11, color: '#64748B' }}>Estimated delivery</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#D97706' }}>{fmtDate(data.estimated_delivery)}</span>
-                  </div>
-                )}
-                {data.delivered_at && (
-                  <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 11, color: '#64748B' }}>Delivered</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#00C853' }}>{new Date(data.delivered_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                  </div>
-                )}
+                <EventTimeline events={data.events} />
+
+                {/* Parcel meta */}
+                <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+                  {[
+                    ['Courier',   data.courier_name ? <CourierBadge name={data.courier_name} code={data.courier_code} /> : null],
+                    ['Service',   data.service_name || null],
+                    ['Customer',  data.customer_name || data.customer_account || null],
+                    ['Account',   data.customer_account || null],
+                    ['Weight',    data.weight_kg ? `${parseFloat(data.weight_kg).toFixed(2)} kg` : null],
+                  ].filter(([, v]) => v).map(([label, value]) => (
+                    <div key={label} style={{ display: 'flex', padding: '7px 0', borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                      <span style={{ fontSize: 12, color: '#94A3B8', width: 120, flexShrink: 0 }}>{label}</span>
+                      <span style={{ fontSize: 13, color: '#0F172A', fontWeight: 500 }}>{value}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
-            {/* Event timeline — newest first */}
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
-              Event History ({data.events?.length || 0})
-            </div>
-            <EventTimeline events={data.events} />
+            {activeTab === 'claims' && (
+              <ClaimsTab data={data} consignment={consignment} />
+            )}
 
-            {/* Parcel details */}
-            <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
-              {[
-                ['Courier',    data.courier_name ? <CourierBadge name={data.courier_name} code={data.courier_code} /> : null],
-                ['Service',    data.service_name || null],
-                ['Customer',   data.customer_name || data.customer_account || null],
-                ['Account',    data.customer_account || null],
-                ['Weight',     data.weight_kg ? `${parseFloat(data.weight_kg).toFixed(2)} kg` : null],
-              ].filter(([, v]) => v).map(([label, value]) => (
-                <div key={label} style={{ display: 'flex', padding: '7px 0', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
-                  <span style={{ fontSize: 12, color: '#64748B', width: 120, flexShrink: 0 }}>{label}</span>
-                  <span style={{ fontSize: 13, color: '#0F172A', fontWeight: 500 }}>{value}</span>
-                </div>
-              ))}
-            </div>
           </div>
         ) : (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}>Not found</div>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8' }}>Not found</div>
         )}
       </div>
     </>

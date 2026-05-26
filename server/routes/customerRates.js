@@ -83,6 +83,15 @@ router.post('/:customerId', async (req, res, next) => {
       return res.status(400).json({ error: 'service_id, zone_name, and price are required' });
     }
 
+    // Normalise weight_class_name to lowercase so that uppercase variants (e.g.
+    // "0-0.5KG" from old client code) never create duplicate rows.  The unique
+    // constraint on (customer_id, service_id, zone_name, weight_class_name) is
+    // case-sensitive, so without this normalisation an uppercase submission would
+    // create a phantom duplicate alongside any existing lowercase row.
+    const normWeightClassName = typeof weight_class_name === 'string'
+      ? weight_class_name.toLowerCase()
+      : weight_class_name;
+
     // Resolve numeric weight bounds for this band.
     //
     // Strategy (first match wins):
@@ -104,7 +113,7 @@ router.post('/:customerId', async (req, res, next) => {
        FROM dc_weight_classes
        WHERE service_code = $1 AND weight_class_name = $2
        LIMIT 1`,
-      [service_code, weight_class_name]
+      [service_code, normWeightClassName]
     );
     if (wcRes.rows[0]) {
       resolvedMin = wcRes.rows[0].min_weight_kg;
@@ -146,7 +155,7 @@ router.post('/:customerId', async (req, res, next) => {
               ) ILIKE $3)
            )
          LIMIT 1`,
-        [service_code, zone_name, weight_class_name]
+        [service_code, zone_name, normWeightClassName]
       );
       if (wbRes.rows[0]) {
         resolvedMin = wbRes.rows[0].min_weight_kg;
@@ -154,10 +163,10 @@ router.post('/:customerId', async (req, res, next) => {
       }
     }
 
-    // 3. Parse bandLabel format directly: "0-2KG", "2-5KG", "10KG+"
+    // 3. Parse bandLabel format directly: "0-2kg", "2-5kg", "10kg+"
     if (resolvedMin == null && resolvedMax == null) {
-      const rangeMatch = weight_class_name.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)KG$/i);
-      const openMatch  = weight_class_name.match(/^(\d+(?:\.\d+)?)KG\+$/i);
+      const rangeMatch = normWeightClassName.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)kg$/i);
+      const openMatch  = normWeightClassName.match(/^(\d+(?:\.\d+)?)kg\+$/i);
       if (rangeMatch) {
         resolvedMin = parseFloat(rangeMatch[1]);
         resolvedMax = parseFloat(rangeMatch[2]);
@@ -184,7 +193,7 @@ router.post('/:customerId', async (req, res, next) => {
       RETURNING *
     `, [customerId, courier_id, courier_code, courier_name,
         service_id, service_code, service_name,
-        zone_name, weight_class_name,
+        zone_name, normWeightClassName,
         resolvedMin ?? null, resolvedMax ?? null,
         parseFloat(price),
         price_sub != null ? parseFloat(price_sub) : null]);
@@ -403,12 +412,12 @@ router.get('/zones/:serviceCode', async (req, res, next) => {
             (CASE WHEN wb.max_weight_kg = floor(wb.max_weight_kg)
                   THEN floor(wb.max_weight_kg)::int::text
                   ELSE round(wb.max_weight_kg::numeric, 1)::text END)
-            || 'KG'
+            || 'kg'
           ELSE
             (CASE WHEN wb.min_weight_kg = floor(wb.min_weight_kg)
                   THEN floor(wb.min_weight_kg)::int::text
                   ELSE round(wb.min_weight_kg::numeric, 1)::text END)
-            || 'KG+'
+            || 'kg+'
         END                               AS weight_class_name,
         BOOL_OR(wb.price_sub IS NOT NULL) AS has_sub_price,
         MIN(wb.min_weight_kg)             AS sort_weight
