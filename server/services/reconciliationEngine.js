@@ -854,6 +854,44 @@ async function handleCarrierDirect({
     `| total_cost=£${totalCostPrice} carrier=£${carrierAmount}`
   );
 
+  // ── Create a proper shipment record from invoice data ────────────────────
+  // Carrier-direct charges represent real shipments booked outside the OMS.
+  // We create a full shipment row so Finance shows name, postcode, reference,
+  // and tracking — identical to any webhook-created shipment.
+  // platform_shipment_id = 'carrier_direct_<tracking>' is deterministic so
+  // re-running the same invoice is idempotent (ON CONFLICT DO UPDATE).
+  const cdShipRes = await query(`
+    INSERT INTO shipments (
+      platform_shipment_id, event_type,
+      customer_id, courier, service_name,
+      reference, parcel_count, tracking_codes,
+      ship_to_name, ship_to_postcode, ship_to_country_iso,
+      collection_date
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    ON CONFLICT (platform_shipment_id) DO UPDATE SET
+      ship_to_name        = COALESCE(EXCLUDED.ship_to_name,        shipments.ship_to_name),
+      ship_to_postcode    = COALESCE(EXCLUDED.ship_to_postcode,    shipments.ship_to_postcode),
+      ship_to_country_iso = COALESCE(EXCLUDED.ship_to_country_iso, shipments.ship_to_country_iso),
+      reference           = COALESCE(EXCLUDED.reference,           shipments.reference),
+      tracking_codes      = COALESCE(EXCLUDED.tracking_codes,      shipments.tracking_codes),
+      updated_at          = NOW()
+    RETURNING id
+  `, [
+    `carrier_direct_${trackingNumber}`,
+    'carrier_direct',
+    customer.customer_id,
+    'DPD',
+    rawServiceCode        || null,   // raw service code from invoice (e.g. 'DPD Next Day')
+    line.sender_ref       || null,   // Senders Ref column = customer's order reference
+    parcelCount > 1 ? parcelCount : null,
+    [trackingNumber],
+    line.recipient_name   || null,   // Delivery Address column
+    postcode              || null,
+    countryIso            || 'GB',
+    line.shipment_date    || null,
+  ]);
+  const cdShipmentId = cdShipRes.rows[0]?.id || null;
+
   // ── Insert the carrier-direct charge ─────────────────────────────────────
   // - charge_type = 'courier' so it appears in Finance and pool on next runs.
   // - verified = true so it passes buildVerifiedPool's gate.
@@ -861,7 +899,7 @@ async function handleCarrierDirect({
   const newCharges = await insertCharges([{
     customer_id:         customer.customer_id,
     voila_shipment_id:   null,
-    order_id:            null,
+    order_id:            line.sender_ref    || null,  // customer's order reference
     tracking_code:       trackingNumber,
     courier_service_id:  serviceId,
     zone_id:             pricing.zone_id,
@@ -870,8 +908,10 @@ async function handleCarrierDirect({
     cost_price:          totalCostPrice,
     sell_price:          totalSellPrice,
     status:              'verified',
-    ship_to_postcode:    postcode    || null,
-    ship_to_country_iso: countryIso || null,
+    ship_to_postcode:    postcode              || null,
+    ship_to_country_iso: countryIso           || null,
+    ship_to_name:        line.recipient_name  || null,
+    shipment_id:         cdShipmentId,
     source:              'carrier_direct',
     raw_payload:         JSON.stringify({
       carrier_direct: true, run_id: runId,
@@ -880,7 +920,7 @@ async function handleCarrierDirect({
       band_label: pricing.band_label,
       rate_basis: isAllSub && parcelCount > 1 ? 'price_sub' : 'price_first',
     }),
-  }]);
+  }], cdShipmentId);
 
   // insertCharges uses ON CONFLICT DO NOTHING — if a carrier_direct charge was
   // already created for this tracking number in a prior run, the INSERT returns
