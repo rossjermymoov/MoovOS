@@ -782,7 +782,9 @@ export async function processShipment(payload) {
       // For carriers with all_sub_parcel_pricing (e.g. DPD), every parcel in a
       // multi-parcel shipment — including the first — is billed at price_sub.
       // Standard carriers use price_first for parcel 1, price_sub for the rest.
-      const forceSubRate = allSubParcelPricing && totalParcels > 1;
+      // Customers with multi_box_pricing=true use the same all-sub model at the
+      // customer level: 1 parcel → price_first; 2+ parcels → ALL at price_sub.
+      const forceSubRate = (allSubParcelPricing || multi_box_pricing) && totalParcels > 1;
       const useFirstParcel = forceSubRate ? false : (isFirst || !multi_box_pricing);
       const baseCost = useFirstParcel
         ? costResult.cost
