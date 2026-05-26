@@ -486,11 +486,46 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
 
   const distinctZones = zonesRes.rows.map(r => r.zone_name);
   let zoneName;
+
+  // GOLDEN RULE: always resolve the zone from the postcode using the carrier's
+  // zone definitions, then look up a rate for that resolved zone.
+  //
+  // The old shortcut (distinctZones.length === 1 → use that zone) is WRONG for
+  // multi-zone services where the customer simply hasn't set rates for all zones
+  // yet.  It would price Zone A parcels at Zone C rates if Zone C was the only
+  // zone present in customer_rates — silently undercharging or overcharging the
+  // customer and producing charges with incorrect zone labels.
+  //
+  // The ONLY safe shortcut is for services that are genuinely single-zone at the
+  // carrier level (no postcode rules, only one zone exists).  We detect that by
+  // checking how many zones the carrier has defined for this service.  If the
+  // carrier itself defines only one zone we can skip the postcode lookup.
+  // Otherwise we always resolve via zoneForPostcode, and if the resolved zone has
+  // no customer rate we return an explicit failure — never silently substituting
+  // a different zone.
   if (distinctZones.length === 1) {
-    zoneName = distinctZones[0];
+    // Only use the shortcut if the carrier also has just one zone for this service
+    // (true single-zone service like DHLPUK-72 "Out of Area").
+    const carrierZoneCount = await query(`
+      SELECT COUNT(DISTINCT z.id) AS cnt
+      FROM zones z
+      JOIN courier_services cs ON cs.id = z.courier_service_id
+      WHERE cs.service_code ILIKE $1
+    `, [serviceCode]);
+    const carrierZones = parseInt(carrierZoneCount.rows[0]?.cnt || 0, 10);
+    if (carrierZones <= 1) {
+      // Carrier is single-zone — shortcut is safe
+      zoneName = distinctZones[0];
+    } else {
+      // Multi-zone carrier, customer has rates for one zone only.
+      // Still resolve from postcode — if the resolved zone has no rate, fail.
+      const resolved = await zoneForPostcode(serviceCode, postcode, iso);
+      if (!resolved) return { rate: null, reason: `no matching zone for postcode "${postcode || 'none'}" (iso: ${iso})` };
+      zoneName = resolved;
+    }
   } else {
     const resolved = await zoneForPostcode(serviceCode, postcode, iso);
-    if (!resolved) return { rate: null, reason: `no matching zone for postcode "${postcode}" (iso: ${iso})` };
+    if (!resolved) return { rate: null, reason: `no matching zone for postcode "${postcode || 'none'}" (iso: ${iso})` };
     zoneName = resolved;
   }
 
@@ -2370,7 +2405,15 @@ router.post('/full-reprice', async (req, res, next) => {
             }
           }
         } else {
-          // Standard mode: update sell price + cost_price + labels (billed=false only)
+          // Standard mode: update sell price + cost_price + labels — billed charges only only
+          // (billed = true means the charge has been included in a customer invoice and
+          // the price must not change — we cannot alter what was invoiced after the fact).
+          if (row.billed) {
+            // Skip billed charges — their sell price is fixed on the invoice.
+            // Cost-only corrections should use ?cost_only=true instead.
+            continue;
+          }
+
           const pricingMode = await getParcelPricingMode(customerId);
           const newPrice    = parseFloat(calcTotal(rate, parcelQty, pricingMode).toFixed(2));
 
