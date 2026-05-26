@@ -1408,22 +1408,10 @@ router.post('/webhook', (req, res) => {
         : null;
     }
 
-    // Idempotency guard — if a courier charge already exists for this order_id
-    // (same customer), skip creating a new one and return the existing charge id.
-    // This prevents duplicate charges when the webhook fires more than once for
-    // the same shipment (e.g. DPD retries after a slow acknowledgement).
-    if (reference) {
-      const existing = await query(
-        `SELECT id FROM charges
-         WHERE order_id = $1 AND customer_id = $2 AND charge_type = 'courier' AND cancelled = false
-         LIMIT 1`,
-        [String(reference), customerId]
-      );
-      if (existing.rows.length) {
-        console.log(`[billing] idempotency: courier charge already exists for order ${reference}, skipping`);
-        return; // duplicate — response already sent above
-      }
-    }
+    // NOTE: order_id idempotency guard removed — it incorrectly blocked sub-parcel
+    // webhooks on multi-parcel orders (e.g. Europa first+sub) where both parcels share
+    // the same order reference but have distinct platform_shipment_ids and tracking codes.
+    // The shipment_id guard above (line ~1386) already handles true webhook retries.
 
     // Insert charge — rate_id is UUID on the charges table so we leave it null;
     // zone_name + weight_class_name carry the human-readable pricing reference.
