@@ -634,6 +634,8 @@ export default function TrackingPage() {
   const [showCustomDate,  setShowCustomDate]= useState(false);
   const [page,            setPage]          = useState(0);
   const [selected,        setSelected]      = useState(null);
+  const [staleRunning,    setStaleRunning]  = useState(false);
+  const [staleResult,     setStaleResult]   = useState(null);
   const searchRef = useRef(null);
   const LIMIT = 50;
 
@@ -688,6 +690,20 @@ export default function TrackingPage() {
   });
 
   function refresh() { refetchStats(); refetchList(); }
+
+  async function refreshStale() {
+    setStaleRunning(true);
+    setStaleResult(null);
+    try {
+      const res = await api.post('/tracking/refresh-stale', { days: 7, limit: 500, delay_ms: 400 });
+      setStaleResult({ ok: true, msg: `Found ${res.data.found} stale parcels — updating in background` });
+    } catch (err) {
+      setStaleResult({ ok: false, msg: err?.response?.data?.error || 'Request failed' });
+    } finally {
+      setStaleRunning(false);
+    }
+  }
+
   function clearAll() {
     setStatusFilter(''); setCourierFilter(''); setCustomerFilter(''); setSearch('');
     clearDateRange();
@@ -738,6 +754,32 @@ export default function TrackingPage() {
         <button onClick={refresh} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: '1px solid rgba(0,0,0,0.10)', borderRadius: 7, color: '#64748B', fontSize: 12, padding: '7px 14px', cursor: 'pointer' }}>
           <RefreshCw size={13} /> Refresh
         </button>
+        <button
+          onClick={refreshStale}
+          disabled={staleRunning}
+          title="Re-fetch tracking for parcels with no update in 7+ days"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            background: staleRunning ? 'rgba(123,47,190,0.08)' : 'rgba(123,47,190,0.06)',
+            border: '1px solid rgba(123,47,190,0.25)',
+            borderRadius: 7, color: '#7B2FBE', fontSize: 12, fontWeight: 600,
+            padding: '7px 14px', cursor: staleRunning ? 'not-allowed' : 'pointer',
+            opacity: staleRunning ? 0.7 : 1,
+          }}
+        >
+          <RotateCcw size={13} style={{ animation: staleRunning ? 'spin 1s linear infinite' : 'none' }} />
+          {staleRunning ? 'Refreshing…' : 'Refresh Stale'}
+        </button>
+        {staleResult && (
+          <span style={{
+            fontSize: 12, padding: '5px 11px', borderRadius: 7,
+            background: staleResult.ok ? 'rgba(0,200,83,0.08)' : 'rgba(244,67,54,0.08)',
+            border: `1px solid ${staleResult.ok ? 'rgba(0,200,83,0.3)' : 'rgba(244,67,54,0.3)'}`,
+            color: staleResult.ok ? '#00C853' : '#F44336',
+          }}>
+            {staleResult.msg}
+          </span>
+        )}
       </div>
 
       {/* ── KPI cards ──────────────────────────────────────────── */}
