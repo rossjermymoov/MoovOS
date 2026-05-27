@@ -874,39 +874,51 @@ async function handleCarrierDirect({
   // Carrier-direct charges represent real shipments booked outside the OMS.
   // We create a full shipment row so Finance shows name, postcode, reference,
   // and tracking — identical to any webhook-created shipment.
-  // platform_shipment_id = 'carrier_direct_<tracking>' is deterministic so
-  // re-running the same invoice is idempotent (ON CONFLICT DO UPDATE).
-  const cdShipRes = await query(`
-    INSERT INTO shipments (
-      platform_shipment_id, event_type,
-      customer_id, courier, service_name,
-      reference, parcel_count, tracking_codes,
-      ship_to_name, ship_to_postcode, ship_to_country_iso,
-      collection_date
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-    ON CONFLICT (platform_shipment_id) DO UPDATE SET
-      ship_to_name        = COALESCE(EXCLUDED.ship_to_name,        shipments.ship_to_name),
-      ship_to_postcode    = COALESCE(EXCLUDED.ship_to_postcode,    shipments.ship_to_postcode),
-      ship_to_country_iso = COALESCE(EXCLUDED.ship_to_country_iso, shipments.ship_to_country_iso),
-      reference           = COALESCE(EXCLUDED.reference,           shipments.reference),
-      tracking_codes      = COALESCE(EXCLUDED.tracking_codes,      shipments.tracking_codes),
-      updated_at          = NOW()
-    RETURNING id
-  `, [
-    `carrier_direct_${trackingNumber}`,
-    'carrier_direct',
-    customer.customer_id,
-    'DPD',
-    rawServiceCode        || null,   // raw service code from invoice (e.g. 'DPD Next Day')
-    line.sender_ref       || null,   // Senders Ref column = customer's order reference
-    parcelCount > 1 ? parcelCount : null,
-    [trackingNumber],
-    line.recipient_name   || null,   // Delivery Address column
-    postcode              || null,
-    countryIso            || 'GB',
-    line.shipment_date    || null,
-  ]);
-  const cdShipmentId = cdShipRes.rows[0]?.id || null;
+  // We look up by tracking_codes rather than platform_shipment_id because
+  // platform_shipment_id is a BIGINT column and cannot hold text keys.
+  let cdShipmentId = null;
+  try {
+    // Check if a carrier_direct shipment already exists for this tracking
+    const existingShip = await query(
+      `SELECT id FROM shipments
+       WHERE  $1 = ANY(tracking_codes)
+         AND  event_type = 'carrier_direct'
+       LIMIT  1`,
+      [trackingNumber]
+    );
+    if (existingShip.rows.length) {
+      cdShipmentId = existingShip.rows[0].id;
+      console.log(`[carrier-direct] reused existing shipment id=${cdShipmentId} for tracking=${trackingNumber}`);
+    } else {
+      const cdShipRes = await query(`
+        INSERT INTO shipments (
+          event_type,
+          customer_id, courier, service_name,
+          reference, parcel_count, tracking_codes,
+          ship_to_name, ship_to_postcode, ship_to_country_iso,
+          collection_date
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        RETURNING id
+      `, [
+        'carrier_direct',
+        customer.customer_id,
+        'DPD',
+        rawServiceCode        || null,
+        line.sender_ref       || null,
+        parcelCount > 1 ? parcelCount : null,
+        [trackingNumber],
+        line.recipient_name   || null,
+        postcode              || null,
+        countryIso            || 'GB',
+        line.shipment_date    || null,
+      ]);
+      cdShipmentId = cdShipRes.rows[0]?.id || null;
+      console.log(`[carrier-direct] created shipment id=${cdShipmentId} for tracking=${trackingNumber}`);
+    }
+  } catch (shipErr) {
+    // Non-fatal — charge can be created without a shipment row.
+    console.warn(`[carrier-direct] shipment insert failed for ${trackingNumber}: ${shipErr.message} — continuing without shipment record`);
+  }
 
   // ── Insert the carrier-direct charge ─────────────────────────────────────
   // - charge_type = 'courier' so it appears in Finance and pool on next runs.
