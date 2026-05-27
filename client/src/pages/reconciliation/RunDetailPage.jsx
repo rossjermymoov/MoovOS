@@ -341,9 +341,9 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
       display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end',
     }}>
       <div style={{
-        width: 460, height: '100vh', background: '#0D0F2B',
+        width: 460, height: '100vh', background: '#FFFFFF',
         border: '1px solid rgba(0,0,0,0.08)',
-        boxShadow: '-8px 0 40px rgba(0,0,0,0.5)',
+        boxShadow: '-8px 0 40px rgba(0,0,0,0.18)',
         padding: 24, overflowY: 'auto',
         display: 'flex', flexDirection: 'column', gap: 16,
       }}>
@@ -404,7 +404,7 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
             <div style={{ fontSize: 11, color: '#79AAFF', fontWeight: 700, marginBottom: 4 }}>
               ✦ Smart Suggestion
             </div>
-            <div style={{ fontSize: 12, color: '#C8D8EF' }}>
+            <div style={{ fontSize: 12, color: '#475569' }}>
               The tracking number was found in the Verified Pool. The shipment was booked as:
             </div>
             <div style={{ marginTop: 6, fontSize: 13, fontWeight: 700, color: '#0F172A' }}>
