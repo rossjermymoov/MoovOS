@@ -2194,7 +2194,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
         }
       }
 
-      expectedBase = rateCardExpected != null ? rateCardExpected : baseFromDb;
+      expectedBase = rateCardExpected != null ? rateCardExpected : round2(baseFromDb * invoiceParcelCount);
     } else {
       // Single-parcel or no all_sub mode — trust stored cost_price directly.
       expectedBase = baseFromDb;
@@ -2377,110 +2377,157 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
           return { status: 'unmatched' };
         }
 
-        // Both cost and sell resolved — update the base freight charge
-        await query(`
-          UPDATE charges
-          SET weight_charged_kg = $1,
-              cost_price        = $2,
-              price             = $3
-          WHERE id = $4
-        `, [billedKg, newCost, newSell, charge.charge_id]);
+        // ── Carrier amount verification ──────────────────────────────────────
+        // A weight correction is only valid when the carrier billed at or below
+        // what our rate card says for the new (billed) weight. If the carrier
+        // billed MORE than that, the extra amount is unexplained and cannot be
+        // silently accepted — it must go through the mapping engine and, if
+        // still unexplained, surface as unmatched for operator review.
+        //
+        // Same-band rule: when old_cost === new_cost the weight change is
+        // informational only (the rate band didn't change). If the carrier
+        // still billed more than our expected cost, that's a price discrepancy
+        // unrelated to weight — always fall through so it's properly surfaced.
+        const newExpectedFull = round2(newCost + rollup.addExpectedCost);
+        const weightDelta     = round2(totalCarrier - newExpectedFull);
+        const oldCost         = round2(parseFloat(charge.expected_cost) || 0);
+        const sameBand        = Math.abs(newCost - oldCost) < 0.01;
 
-        // Recalculate fuel and cost-percentage surcharge charges for the same shipment.
-        // The fuel charge was created at booking time at the original weight/price.
-        // Now that the base freight has changed, we must update it so the sell CSV
-        // shows the correct fuel amount (e.g. 18% of £69.28 not 18% of the 1kg price).
-        try {
-          const fuelPctRes = await query(`
-            SELECT fg.fuel_surcharge_pct                              AS cost_pct,
-                   COALESCE(cfgp.sell_pct, fg.standard_sell_pct, 0)  AS sell_pct
-            FROM   courier_services cs
-            JOIN   fuel_groups fg
-                   ON fg.id = cs.fuel_group_id
-            LEFT JOIN customer_fuel_group_pricing cfgp
-                   ON cfgp.fuel_group_id = fg.id
-                  AND cfgp.customer_id   = $2
-            WHERE  cs.id = $1
-          `, [effectiveServiceId, charge.customer_id]);
-
-          if (fuelPctRes.rows.length) {
-            const fuelCostPct = parseFloat(fuelPctRes.rows[0].cost_pct || 0);
-            const fuelSellPct = parseFloat(fuelPctRes.rows[0].sell_pct || 0);
-
-            if (fuelSellPct > 0 || fuelCostPct > 0) {
-              const newFuelSell = round2(newSell * fuelSellPct / 100);
-              const newFuelCost = round2(newCost * fuelCostPct / 100);
-
-              const fuelUpdRes = await query(`
-                UPDATE charges
-                SET price      = $1,
-                    cost_price = $2
-                WHERE shipment_id = (SELECT shipment_id FROM charges WHERE id = $3)
-                  AND charge_type = 'fuel'
-                  AND cancelled   = false
-              `, [newFuelSell, newFuelCost, charge.charge_id]);
-
-              if (fuelUpdRes.rowCount > 0) {
-                console.log(
-                  `[recon engine] WEIGHT CORRECTION: fuel charge updated for tracking=${trackingNumber} ` +
-                  `sell_pct=${fuelSellPct}% → £${newFuelSell}, cost_pct=${fuelCostPct}% → £${newFuelCost}`
-                );
-              }
-            }
-          }
-        } catch (fuelErr) {
-          // Non-fatal — log and continue. Fuel charge may be stale but base freight is correct.
-          console.warn(`[recon engine] WEIGHT CORRECTION: fuel charge update failed for tracking=${trackingNumber}:`, fuelErr.message);
-        }
-
-        const addSell   = await resolveSurchargeSells(rollup.items, newSell, invoiceParcels, ctx.surchargeOverrideCache, charge.customer_id, effectiveServiceId);
-        const totalSell = round2(newSell + addSell);
-
-        console.log(
-          `[recon engine] WEIGHT CORRECTION applied: tracking=${trackingNumber} ` +
-          `declared=${declaredKg}kg → actual=${billedKg}kg, ` +
-          `cost £${round2(parseFloat(charge.expected_cost))} → £${newCost}, ` +
-          `sell → £${totalSell}`
-        );
-
-        await insertLine(runId, {
-          tracking_number:          trackingNumber,
-          carrier_account_no:       line.account_number    || null,
-          raw_service_code:         rawServiceCode,
-          charge_type:              line.charge_type       || 'base',
-          carrier_amount:           totalCarrier,
-          carrier_billed_weight_kg: billedKg,
-          service_id:               effectiveServiceId,
-          customer_id:              charge.customer_id,
-          charge_id:                charge.charge_id,
-          expected_amount:          totalExpected,
-          delta,
-          status:                   'corrected',
-          corrected_by:             'weight_correction',
-          unmatched_reason:         null,
-          source:                   'internal',
-          shipment_date:            line.shipment_date     || null,
-          ship_to_postcode:         line.delivery_postcode || null,
-          ship_to_name:             line.recipient_name   || null,
-          ship_to_country:          line.ship_to_country   || null,
-          parcel_count:             invoiceParcels > 1 ? invoiceParcels : null,
-          corrected_cost_price:     round2(newCost + rollup.addExpectedCost),
-          corrected_sell_price:     totalSell,
-          correction_metadata:      {
+        if (weightDelta > 0.02) {
+          // Carrier billed MORE than our rate at the new weight.
+          // Stash weight context on the line so the mapping engine and
+          // unmatched insertLine can include it for operator visibility.
+          console.log(
+            `[recon engine] WEIGHT CORRECTION OVERCHARGE: tracking=${trackingNumber} ` +
+            `declared=${declaredKg}kg → billed=${billedKg}kg ` +
+            `(${sameBand ? 'SAME BAND — cost unchanged' : `band changed £${oldCost}→£${newCost}`}) ` +
+            `carrier=£${totalCarrier} expected_at_billed_weight=£${newExpectedFull} ` +
+            `over=£${weightDelta} — falling through to mapping/unmatched`
+          );
+          line._weight_context = {
             declared_weight_kg: declaredKg,
             billed_weight_kg:   billedKg,
             weight_diff_kg:     round2(billedKg - declaredKg),
-            old_cost_price:     round2(parseFloat(charge.expected_cost) || 0),
+            old_cost_price:     oldCost,
             new_cost_price:     newCost,
             band_label:         newCostResult.bandLabel || null,
             resolved_zone_id:   resolvedZoneId,
-            ...surchargeMeta(rollup.items) || {},
-          },
-        });
-        if (companionCharges.length > 0) {
-          await insertCompanionLines(runId, companionCharges, trackingNumber, rawServiceCode, line, effectiveServiceId);
+            same_band:          sameBand,
+            weight_overcharge:  weightDelta,
+          };
+          // Fall through to Phase 4a (mapping engine) / Phase 4 (unmatched).
+        } else {
+          // Carrier billed at or below our expected rate at the new weight.
+          // Accept as a valid weight correction.
+          //
+          // Skip the charges DB update when the band didn't change (newCost ===
+          // oldCost): the cost_price is already correct — no write needed.
+          if (!sameBand) {
+            await query(`
+              UPDATE charges
+              SET weight_charged_kg = $1,
+                  cost_price        = $2,
+                  price             = $3
+              WHERE id = $4
+            `, [billedKg, newCost, newSell, charge.charge_id]);
+
+            // Recalculate fuel and cost-percentage surcharge charges for the same
+            // shipment. The fuel charge was created at booking time at the original
+            // weight/price. Now the base freight has changed we must update it so
+            // the sell CSV shows the correct fuel amount.
+            try {
+              const fuelPctRes = await query(`
+                SELECT fg.fuel_surcharge_pct                              AS cost_pct,
+                       COALESCE(cfgp.sell_pct, fg.standard_sell_pct, 0)  AS sell_pct
+                FROM   courier_services cs
+                JOIN   fuel_groups fg
+                       ON fg.id = cs.fuel_group_id
+                LEFT JOIN customer_fuel_group_pricing cfgp
+                       ON cfgp.fuel_group_id = fg.id
+                      AND cfgp.customer_id   = $2
+                WHERE  cs.id = $1
+              `, [effectiveServiceId, charge.customer_id]);
+
+              if (fuelPctRes.rows.length) {
+                const fuelCostPct = parseFloat(fuelPctRes.rows[0].cost_pct || 0);
+                const fuelSellPct = parseFloat(fuelPctRes.rows[0].sell_pct || 0);
+
+                if (fuelSellPct > 0 || fuelCostPct > 0) {
+                  const newFuelSell = round2(newSell * fuelSellPct / 100);
+                  const newFuelCost = round2(newCost * fuelCostPct / 100);
+
+                  const fuelUpdRes = await query(`
+                    UPDATE charges
+                    SET price      = $1,
+                        cost_price = $2
+                    WHERE shipment_id = (SELECT shipment_id FROM charges WHERE id = $3)
+                      AND charge_type = 'fuel'
+                      AND cancelled   = false
+                  `, [newFuelSell, newFuelCost, charge.charge_id]);
+
+                  if (fuelUpdRes.rowCount > 0) {
+                    console.log(
+                      `[recon engine] WEIGHT CORRECTION: fuel charge updated for tracking=${trackingNumber} ` +
+                      `sell_pct=${fuelSellPct}% → £${newFuelSell}, cost_pct=${fuelCostPct}% → £${newFuelCost}`
+                    );
+                  }
+                }
+              }
+            } catch (fuelErr) {
+              console.warn(`[recon engine] WEIGHT CORRECTION: fuel charge update failed for tracking=${trackingNumber}:`, fuelErr.message);
+            }
+          }
+
+          const addSell   = await resolveSurchargeSells(rollup.items, newSell, invoiceParcels, ctx.surchargeOverrideCache, charge.customer_id, effectiveServiceId);
+          const totalSell = round2(newSell + addSell);
+
+          console.log(
+            `[recon engine] WEIGHT CORRECTION applied: tracking=${trackingNumber} ` +
+            `declared=${declaredKg}kg → actual=${billedKg}kg ` +
+            `(${sameBand ? 'same band' : `£${oldCost}→£${newCost}`}), ` +
+            `carrier=£${totalCarrier} ≈ expected=£${newExpectedFull}`
+          );
+
+          await insertLine(runId, {
+            tracking_number:          trackingNumber,
+            carrier_account_no:       line.account_number    || null,
+            raw_service_code:         rawServiceCode,
+            charge_type:              line.charge_type       || 'base',
+            carrier_amount:           totalCarrier,
+            carrier_billed_weight_kg: billedKg,
+            service_id:               effectiveServiceId,
+            customer_id:              charge.customer_id,
+            charge_id:                charge.charge_id,
+            expected_amount:          newExpectedFull,
+            delta:                    round2(totalCarrier - newExpectedFull),
+            status:                   'corrected',
+            corrected_by:             'weight_correction',
+            unmatched_reason:         null,
+            source:                   'internal',
+            shipment_date:            line.shipment_date     || null,
+            ship_to_postcode:         line.delivery_postcode || null,
+            ship_to_name:             line.recipient_name   || null,
+            ship_to_country:          line.ship_to_country   || null,
+            parcel_count:             invoiceParcels > 1 ? invoiceParcels : null,
+            corrected_cost_price:     newExpectedFull,
+            corrected_sell_price:     totalSell,
+            correction_metadata:      {
+              declared_weight_kg: declaredKg,
+              billed_weight_kg:   billedKg,
+              weight_diff_kg:     round2(billedKg - declaredKg),
+              old_cost_price:     oldCost,
+              new_cost_price:     newCost,
+              band_label:         newCostResult.bandLabel || null,
+              same_band:          sameBand,
+              resolved_zone_id:   resolvedZoneId,
+              ...surchargeMeta(rollup.items) || {},
+            },
+          });
+          if (companionCharges.length > 0) {
+            await insertCompanionLines(runId, companionCharges, trackingNumber, rawServiceCode, line, effectiveServiceId);
+          }
+          return { status: 'corrected' };
         }
-        return { status: 'corrected' };
       }
 
       // No carrier cost band found for the actual weight — fall through to unmatched.
@@ -2524,7 +2571,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       mapping_id:               mappingResult.mappingId,
       corrected_sell_price:     totalSell,
       corrected_cost_price:     totalCarrier,
-      correction_metadata:      surchargeMeta(rollup.items),
+      correction_metadata:      { ...surchargeMeta(rollup.items), ...line._weight_context || {} },
     });
     if (companionCharges.length > 0) {
       await insertCompanionLines(runId, companionCharges, trackingNumber, rawServiceCode, line, effectiveServiceId);
@@ -2536,7 +2583,8 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   console.log(`[recon engine] UNMATCHED: tracking=${trackingNumber} carrier=£${totalCarrier} expected=£${totalExpected} delta=£${delta}`);
   const rawColMeta   = (line.raw_col_values && Object.keys(line.raw_col_values).length > 0) ? { raw_col_values: line.raw_col_values } : null;
   const sMeta        = surchargeMeta(rollup.items);
-  const combinedMeta = (rawColMeta || sMeta) ? { ...rawColMeta, ...sMeta } : null;
+  const wCtx         = line._weight_context || null;
+  const combinedMeta = (rawColMeta || sMeta || wCtx) ? { ...rawColMeta, ...sMeta, ...wCtx } : null;
   await insertLine(runId, {
     tracking_number:          trackingNumber,
     carrier_account_no:       line.account_number    || null,
