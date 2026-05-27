@@ -71,21 +71,38 @@ function FlagBadge({ value, trueLabel = 'Yes', falseLabel = 'No' }) {
 }
 
 // ─── Price breakdown tooltip ──────────────────────────────────────────────────
+// Uses position:fixed so it escapes overflow:hidden on the table container.
+// rect is the DOMRect of the trigger element.
 
-function BreakdownTooltip({ charge, mode, above = false }) {
+function BreakdownTooltip({ charge, mode, anchorRect }) {
   // mode: 'sell' | 'cost'
   const base      = mode === 'sell' ? parseFloat(charge.price || 0) : parseFloat(charge.cost_price || 0);
   const lines     = Array.isArray(charge.charge_lines) ? charge.charge_lines : [];
   const total     = base + lines.reduce((s, l) => s + parseFloat(mode === 'sell' ? (l.price || 0) : (l.cost_price || l.price || 0)), 0);
   const accentCol = mode === 'sell' ? '#00C853' : '#B39DDB';
 
+  if (!anchorRect) return null;
+
+  const TOOLTIP_WIDTH  = 240;
+  const TOOLTIP_HEIGHT = 120; // approx
+  const GAP            = 6;
+
+  // Try below first; flip above if not enough room
+  const spaceBelow = window.innerHeight - anchorRect.bottom;
+  const top  = spaceBelow > TOOLTIP_HEIGHT + GAP
+    ? anchorRect.bottom + GAP
+    : anchorRect.top - TOOLTIP_HEIGHT - GAP;
+  // Right-align with the trigger; clamp so it doesn't go off the left edge
+  const left = Math.max(8, anchorRect.right - TOOLTIP_WIDTH);
+
   return (
     <div style={{
-      position: 'absolute',
-      ...(above ? { bottom: 'calc(100% + 6px)' } : { top: 'calc(100% + 6px)' }),
-      right: 0,
+      position: 'fixed',
+      top,
+      left,
+      width: TOOLTIP_WIDTH,
       background: '#1E293B', border: `1px solid rgba(255,255,255,0.10)`,
-      borderRadius: 8, padding: '10px 14px', minWidth: 220, zIndex: 200,
+      borderRadius: 8, padding: '10px 14px', zIndex: 9999,
       boxShadow: '0 8px 28px rgba(0,0,0,0.35)', pointerEvents: 'none',
       fontFamily: 'monospace', fontSize: 12,
     }}>
@@ -126,29 +143,23 @@ function BreakdownTooltip({ charge, mode, above = false }) {
 // ─── Charge cell with hover breakdown ────────────────────────────────────────
 
 function ChargeCellSell({ charge, onSave, onDebug }) {
-  const [hov, setHov] = useState(false);
-  const [above, setAbove] = useState(false);
+  const [anchorRect, setAnchorRect] = useState(null);
   const wrapRef = useRef(null);
   const hasPrice = charge.price != null;
   return (
-    <div ref={wrapRef} style={{ position: 'relative', display: 'inline-block' }}
+    <div ref={wrapRef} style={{ display: 'inline-block' }}
       onMouseEnter={() => {
-        if (hasPrice) {
-          const rect = wrapRef.current?.getBoundingClientRect();
-          setAbove(rect ? (window.innerHeight - rect.bottom) < 180 : false);
-          setHov(true);
-        }
+        if (hasPrice) setAnchorRect(wrapRef.current?.getBoundingClientRect() || null);
       }}
-      onMouseLeave={() => setHov(false)}>
+      onMouseLeave={() => setAnchorRect(null)}>
       <PriceCell charge={charge} onSave={onSave} onDebug={onDebug} />
-      {hov && <BreakdownTooltip charge={charge} mode="sell" above={above} />}
+      {anchorRect && <BreakdownTooltip charge={charge} mode="sell" anchorRect={anchorRect} />}
     </div>
   );
 }
 
 function ChargeCellCost({ charge }) {
-  const [hov, setHov] = useState(false);
-  const [above, setAbove] = useState(false);
+  const [anchorRect, setAnchorRect] = useState(null);
   const wrapRef = useRef(null);
   const hasCost = charge.cost_price != null;
   const lines = Array.isArray(charge.charge_lines) ? charge.charge_lines : [];
@@ -156,17 +167,15 @@ function ChargeCellCost({ charge }) {
     ? parseFloat(charge.cost_price || 0) + lines.reduce((s, l) => s + parseFloat(l.cost_price ?? l.price ?? 0), 0)
     : null;
   return (
-    <div ref={wrapRef} style={{ position: 'relative', display: 'inline-block' }}
+    <div ref={wrapRef} style={{ display: 'inline-block' }}
       onMouseEnter={() => {
-        const rect = wrapRef.current?.getBoundingClientRect();
-        setAbove(rect ? (window.innerHeight - rect.bottom) < 180 : false);
-        setHov(true);
+        if (hasCost) setAnchorRect(wrapRef.current?.getBoundingClientRect() || null);
       }}
-      onMouseLeave={() => setHov(false)}>
+      onMouseLeave={() => setAnchorRect(null)}>
       <span style={{ color: hasCost ? '#7C3AED' : '#475569', fontWeight: hasCost ? 700 : 400, fontSize: 13 }}>
         {totalCost != null ? gbp(totalCost) : '—'}
       </span>
-      {hov && hasCost && <BreakdownTooltip charge={charge} mode="cost" above={above} />}
+      {anchorRect && <BreakdownTooltip charge={charge} mode="cost" anchorRect={anchorRect} />}
     </div>
   );
 }
@@ -174,16 +183,18 @@ function ChargeCellCost({ charge }) {
 // ─── Row actions hamburger menu ───────────────────────────────────────────────
 
 function MoreMenu({ charge, onBill, onReprice, onLog, onDebug, onCancel }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
+  const [open, setOpen]         = useState(false);
+  const [menuRect, setMenuRect] = useState(null);
+  const btnRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
-    function handleClick(e) {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    function handleClose(e) {
+      if (btnRef.current && !btnRef.current.contains(e.target)) setOpen(false);
     }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    document.addEventListener('mousedown', handleClose);
+    document.addEventListener('scroll', () => setOpen(false), { capture: true, once: true });
+    return () => document.removeEventListener('mousedown', handleClose);
   }, [open]);
 
   const items = [
@@ -194,10 +205,30 @@ function MoreMenu({ charge, onBill, onReprice, onLog, onDebug, onCancel }) {
     { label: 'Cancel', action: onCancel, color: '#F44336' },
   ].filter(Boolean);
 
+  function handleToggle() {
+    const rect = btnRef.current?.getBoundingClientRect();
+    setMenuRect(rect || null);
+    setOpen(v => !v);
+  }
+
+  // position: fixed so it escapes overflow:hidden on the table container
+  const menuStyle = menuRect ? {
+    position: 'fixed',
+    top: menuRect.bottom + 4,
+    right: window.innerWidth - menuRect.right,
+    background: '#FFFFFF',
+    border: '1px solid rgba(0,0,0,0.12)',
+    borderRadius: 8,
+    minWidth: 150,
+    zIndex: 9999,
+    boxShadow: '0 6px 20px rgba(0,0,0,0.15)',
+    overflow: 'hidden',
+  } : null;
+
   return (
-    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+    <div ref={btnRef} style={{ display: 'inline-block' }}>
       <button
-        onClick={() => setOpen(v => !v)}
+        onClick={handleToggle}
         style={{
           background: open ? 'rgba(0,0,0,0.08)' : 'none',
           border: '1px solid rgba(0,0,0,0.08)',
@@ -207,14 +238,8 @@ function MoreMenu({ charge, onBill, onReprice, onLog, onDebug, onCancel }) {
       >
         <MoreHorizontal size={14} />
       </button>
-      {open && (
-        <div style={{
-          position: 'absolute', right: 0, top: 'calc(100% + 4px)',
-          background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
-          borderRadius: 8, minWidth: 150, zIndex: 100,
-          boxShadow: '0 6px 20px rgba(0,0,0,0.12)',
-          overflow: 'hidden',
-        }}>
+      {open && menuStyle && (
+        <div style={menuStyle}>
           {items.map((item, i) => (
             <button
               key={i}
