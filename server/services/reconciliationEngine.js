@@ -442,6 +442,7 @@ async function buildVerifiedPool(carrierId) {
       s.parcel_count           AS shipment_parcel_count,
       s.total_declared_value,
       s.collection_date,
+      s.ship_to_postcode,
       cu.reconciliation_flexible_parcel_count,
       cu.account_number AS customer_account,
       c.created_at,
@@ -2155,9 +2156,11 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     // the same collection date that are NOT already billed on their own invoice
     // line. If we find enough companions, handle them via insertCompanionLines
     // (same path as Europa) rather than flagging a dispute.
+    // How many companion parcels do we need to account for the difference?
+    const extraNeeded = invoiceParcelCount - bookedParcelCount;
     const autoCompanions = [];
     if (
-      bookedParcelCount === 1 &&
+      extraNeeded > 0 &&
       charge.collection_date &&
       ctx.customerDatePool &&
       ctx.allInvoiceTrackings
@@ -2166,15 +2169,22 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       const cdKey   = `${charge.customer_id}|${dateStr}`;
       const cdHits  = ctx.customerDatePool.get(cdKey) || [];
       const masterTrackUpper = trackKey; // already upper
+      const masterPostcode   = (charge.ship_to_postcode || '').trim().toUpperCase();
       for (const hit of cdHits) {
         if (hit.charge_id === charge.charge_id) continue;        // skip master
         if (hit.customer_id !== charge.customer_id)  continue;   // same customer only
+        // Postcode guard: if master has a postcode, companion must match to avoid
+        // false matches from same-day shipments going to different destinations
+        if (masterPostcode) {
+          const hitPostcode = (hit.ship_to_postcode || '').trim().toUpperCase();
+          if (hitPostcode && hitPostcode !== masterPostcode) continue;
+        }
         // Skip if this companion's tracking has its own carrier invoice line
         const hitTracks = (hit.tracking_codes || []).map(t => String(t).trim().toUpperCase());
         const hasOwnInvoiceLine = hitTracks.some(t => ctx.allInvoiceTrackings.has(t) && t !== masterTrackUpper);
         if (hasOwnInvoiceLine) continue;
         autoCompanions.push(hit);
-        if (autoCompanions.length >= invoiceParcelCount - 1) break;
+        if (autoCompanions.length >= extraNeeded) break;
       }
     }
 
