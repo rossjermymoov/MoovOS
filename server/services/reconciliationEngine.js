@@ -1143,7 +1143,9 @@ export async function processReconciliationRun(runId, carrierId, lines) {
       )
     );
 
-    for (const res of results) {
+    for (let gi = 0; gi < results.length; gi++) {
+      const res                  = results[gi];
+      const [trackKey, group]    = batch[gi];
       if (res.status === 'fulfilled') {
         for (const r of res.value) {
           switch (r.status) {
@@ -1155,8 +1157,36 @@ export async function processReconciliationRun(runId, carrierId, lines) {
           }
         }
       } else {
-        console.error(`[recon engine] Run ${runId}: group processing error:`, res.reason?.message);
-        unmatched++;
+        // Processing error — ensure every line in the group gets a DB row so
+        // total_lines always equals actual inserted rows.  An unrecovered group
+        // error (null-deref, DB failure, etc.) must never silently drop lines.
+        console.error(
+          `[recon engine] Run ${runId}: group processing error for tracking=${trackKey}:`,
+          res.reason?.message, res.reason?.stack?.split('\n')[1]?.trim()
+        );
+        for (const line of group) {
+          try {
+            await insertLine(runId, {
+              tracking_number:     String(line.tracking_number || '').trim(),
+              carrier_account_no:  line.account_number || null,
+              raw_service_code:    line.service_code   || null,
+              charge_type:         line.charge_type    || 'base',
+              carrier_amount:      round2(parseFloat(line.carrier_amount) || 0),
+              service_id:          null,
+              customer_id:         null,
+              charge_id:           null,
+              expected_amount:     null,
+              delta:               null,
+              status:              'unmatched',
+              corrected_by:        null,
+              unmatched_reason:    'processing_error',
+              source:              'internal',
+            });
+          } catch (insertErr) {
+            console.error(`[recon engine] Run ${runId}: failed to insert error fallback for ${line.tracking_number}:`, insertErr.message);
+          }
+          unmatched++;
+        }
       }
     }
   }

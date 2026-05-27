@@ -96,6 +96,7 @@ function ReasonLabel({ reason, correctedBy }) {
     weight_sell_lookup_failed:    { text: '⚖ Weight corrected — sell rate missing', color: '#FF5252' },
     cancelled_unshipped:          { text: '🚫 Cancelled — dispute with DPD', color: '#FF5252' },
     cancelled_shipped:            { text: '⚠ Cancelled — parcel was shipped', color: '#FFB300' },
+    processing_error:             { text: '⚡ Processing error — re-import', color: '#FF5252' },
   };
   const cfg = labels[reason] || { text: reason || '—', color: '#64748B' };
   return <span style={{ fontSize: 10, color: cfg.color, fontWeight: 600 }}>{cfg.text}</span>;

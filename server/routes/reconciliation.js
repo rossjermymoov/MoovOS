@@ -706,7 +706,22 @@ router.get('/runs', async (req, res) => {
         rr.*,
         c.name AS carrier_name,
         c.code AS carrier_code,
-        s.full_name AS created_by_name
+        s.full_name AS created_by_name,
+        CASE
+          WHEN (SELECT COUNT(DISTINCT rl.customer_id)
+                FROM reconciliation_lines rl
+                WHERE rl.run_id = rr.id AND rl.customer_id IS NOT NULL) = 1
+          THEN (SELECT cust.business_name
+                FROM reconciliation_lines rl
+                JOIN customers cust ON cust.id = rl.customer_id
+                WHERE rl.run_id = rr.id AND rl.customer_id IS NOT NULL
+                LIMIT 1)
+          WHEN (SELECT COUNT(DISTINCT rl.customer_id)
+                FROM reconciliation_lines rl
+                WHERE rl.run_id = rr.id AND rl.customer_id IS NOT NULL) > 1
+          THEN 'Mixed'
+          ELSE NULL
+        END AS customer_display
       FROM   reconciliation_runs rr
       LEFT JOIN couriers c ON c.id = rr.carrier_id
       LEFT JOIN staff    s ON s.id = rr.created_by

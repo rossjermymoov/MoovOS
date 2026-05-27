@@ -1605,7 +1605,7 @@ export default function ReconciliationPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
-                {['Carrier', 'Invoice Ref', 'Date', 'Lines', 'Matched', 'Corrected', 'Unmatched', 'Automation', 'Status', ''].map(h => (
+                {['Carrier', 'Customer', 'Invoice Ref', 'Date', 'Lines', 'Matched', 'Corrected', 'Unmatched', 'Automation', 'Status', ''].map(h => (
                   <th key={h} style={{ padding: '8px 10px', textAlign: 'left', color: '#64748B', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
                 ))}
               </tr>
@@ -1620,6 +1620,7 @@ export default function ReconciliationPage() {
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
                   <td style={{ padding: '10px 10px', color: '#0F172A', fontWeight: 600 }}>{run.carrier_name || '—'}</td>
+                  <td style={{ padding: '10px 10px', color: run.customer_display === 'Mixed' ? '#79AAFF' : '#0F172A', fontStyle: run.customer_display === 'Mixed' ? 'italic' : 'normal' }}>{run.customer_display || '—'}</td>
                   <td style={{ padding: '10px 10px', color: '#64748B' }}>{run.invoice_ref || '—'}</td>
                   <td style={{ padding: '10px 10px', color: '#64748B' }}>{run.invoice_date ? new Date(run.invoice_date).toLocaleDateString('en-GB') : '—'}</td>
                   <td style={{ padding: '10px 10px', color: '#0F172A' }}>{(run.total_lines || 0).toLocaleString()}</td>
