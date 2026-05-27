@@ -893,7 +893,7 @@ router.get('/runs/:id/lines', async (req, res) => {
     const result = await query(`
       SELECT
         rl.*,
-        cs.name              AS service_name,
+        CASE WHEN rl.source = 'ddp_admin' THEN 'DPD Surcharge' ELSE cs.name END AS service_name,
         cs.service_code      AS service_code_internal,
         cu.business_name     AS customer_name,
         s.full_name          AS resolved_by_name,

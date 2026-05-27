@@ -38,6 +38,8 @@
 
 import { query } from '../db/index.js';
 import { computeGhostCharge, insertCharges, lookupCarrierBandCost, lookupCustomerSellPrice, matchZone } from './pricingEngine.js';
+import { requestTrackingUpdate } from './voilaClient.js';
+import { normalisePayload, upsertEvent } from '../routes/tracking.js';
 
 // ─── Types (JSDoc) ────────────────────────────────────────────────────────────
 /**
@@ -1278,6 +1280,56 @@ export async function processReconciliationRun(runId, carrierId, lines) {
         }
       }
     }
+  }
+
+  // ── Pre-tag: refresh live tracking for cancelled shipment candidates ─────
+  // Before deciding shipped vs. unshipped, pull fresh tracking events from
+  // Voila for any cancelled shipments that are candidates for tagging. This
+  // catches parcels that DPD collected despite an OMS cancellation — their
+  // scan events may not have arrived via webhook if the shipment was cancelled
+  // before DPD's first update, so we fetch explicitly here.
+  try {
+    const { rows: cancelledCandidates } = await query(`
+      SELECT DISTINCT
+        s.id                            AS shipment_id,
+        s.voila_tracking_request_id     AS track_req_id,
+        s.voila_tracking_request_hash   AS track_req_hash,
+        s.courier,
+        rl.tracking_number
+      FROM   reconciliation_lines rl
+      JOIN   shipments s ON s.tracking_codes @> ARRAY[rl.tracking_number::text]
+                       AND s.cancelled = true
+                       AND s.voila_tracking_request_id   IS NOT NULL
+                       AND s.voila_tracking_request_hash IS NOT NULL
+      WHERE  rl.run_id           = $1
+        AND  rl.status           = 'unmatched'
+        AND  rl.unmatched_reason IN ('no_account_mapping', 'cancelled_booking_invoiced')
+    `, [runId]);
+
+    for (const cand of cancelledCandidates) {
+      try {
+        const trackingData = await requestTrackingUpdate(cand.track_req_id, cand.track_req_hash);
+        const parcels = trackingData?.data?.parcels;
+        if (!Array.isArray(parcels) || !parcels.length) continue;
+
+        const syntheticPayload = {
+          tracking_update: {
+            parcels,
+            expected_delivery: trackingData.data.expected_delivery || null,
+          },
+          shipment: { id: String(cand.shipment_id), courier: cand.courier || null },
+        };
+        const events = normalisePayload(syntheticPayload);
+        for (const ev of events) {
+          await upsertEvent(ev, null);
+        }
+        console.log(`[recon engine] Refreshed tracking for cancelled shipment tracking=${cand.tracking_number}`);
+      } catch (trackErr) {
+        console.warn(`[recon engine] Tracking refresh failed for ${cand.tracking_number}: ${trackErr.message}`);
+      }
+    }
+  } catch (err) {
+    console.error(`[recon engine] Cancelled tracking refresh error: ${err.message}`);
   }
 
   // ── Post-process: tag cancelled-shipment lines ───────────────────────────
