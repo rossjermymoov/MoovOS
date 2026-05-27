@@ -2015,14 +2015,20 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   ) {
     const refKey    = String(charge.reference).trim().toUpperCase();
     const refHits   = pool.get(refKey) || [];
-    const invoiceDate = line.shipment_date ? new Date(line.shipment_date) : null;
+    // Use invoice shipment_date if available; fall back to master charge's collection_date.
+    // One of these must be present — if neither is, skip companion matching entirely
+    // rather than accepting all pool hits regardless of date.
+    const refDate = line.shipment_date
+      ? new Date(line.shipment_date)
+      : (charge.collection_date ? new Date(charge.collection_date) : null);
     for (const hit of refHits) {
       if (hit.charge_id === charge.charge_id)   continue; // skip master itself
       if (hit.customer_id !== charge.customer_id) continue; // must be same customer
-      if (invoiceDate && hit.created_at) {
-        const diffMs = Math.abs(new Date(hit.created_at) - invoiceDate);
-        if (diffMs > 2 * 24 * 60 * 60 * 1000) continue;   // within ±2 days
-      }
+      if (!refDate) continue; // cannot validate date — skip companion to avoid false matches
+      const hitDate = hit.collection_date ? new Date(hit.collection_date) : null;
+      if (!hitDate) continue; // hit has no date — skip
+      const diffMs = Math.abs(hitDate - refDate);
+      if (diffMs > 2 * 24 * 60 * 60 * 1000) continue;   // within ±2 days
       companionCharges.push(hit);
       if (companionCharges.length >= invoiceParcelCount - 1) break; // cap at invoice count - 1
     }
@@ -2565,7 +2571,7 @@ async function insertCompanionLines(runId, companionCharges, masterTracking, raw
       expected_amount:      companionExpected,
       delta:                0,
       status:               'matched',
-      corrected_by:         'companion_parcel',
+      corrected_by:         null,
       source:               'companion_parcel',
       shipment_date:        line.shipment_date    || null,
       ship_to_postcode:     line.delivery_postcode || null,
@@ -2631,11 +2637,12 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
 
           // Zone fallback (same logic as processLine) — resolve from postcode
           // when zone_id is null on the charge.
-          if (!chargeZoneId && line.delivery_postcode && serviceId) {
+          // NOTE: query above selects ship_to_postcode (not delivery_postcode).
+          if (!chargeZoneId && line.ship_to_postcode && serviceId) {
             const resolvedZone = await matchZone(
               serviceId,
               line.ship_to_country || 'GB',
-              line.delivery_postcode
+              line.ship_to_postcode
             );
             if (resolvedZone) chargeZoneId = resolvedZone.id;
           }
