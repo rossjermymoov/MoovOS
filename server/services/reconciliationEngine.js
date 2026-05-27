@@ -1383,6 +1383,61 @@ export async function processReconciliationRun(runId, carrierId, lines) {
     console.error(`[recon engine] Run ${runId}: cancelled-shipment tagging failed:`, err.message);
   }
 
+  // ── Post-process: price cancelled_shipped lines from the cancelled charge ─
+  // A cancelled_shipped line means DPD collected the parcel despite the OMS
+  // cancellation — we should bill the customer for it. The cancelled charge
+  // already holds cost_price (what we pay DPD) and sell_price/price (what
+  // we charge the customer). Use these to populate expected_amount and
+  // corrected_sell_price so the line moves out of unmatched into
+  // matched (if carrier == expected) or corrected (if there's a delta).
+  try {
+    const shippedRes = await query(`
+      WITH shipped_lines AS (
+        SELECT rl.id, rl.tracking_number, rl.carrier_amount
+        FROM   reconciliation_lines rl
+        WHERE  rl.run_id           = $1
+          AND  rl.status           = 'unmatched'
+          AND  rl.unmatched_reason = 'cancelled_shipped'
+      ),
+      charge_data AS (
+        SELECT DISTINCT ON (sl.id)
+          sl.id             AS line_id,
+          sl.carrier_amount,
+          c.id              AS charge_id,
+          c.cost_price,
+          COALESCE(c.sell_price, c.price) AS sell_price
+        FROM   shipped_lines sl
+        JOIN   shipments s  ON s.tracking_codes @> ARRAY[sl.tracking_number::text]
+                           AND s.cancelled = true
+        JOIN   charges c    ON c.shipment_id = s.id
+                           AND c.charge_type = 'courier'
+        ORDER  BY sl.id, c.created_at DESC
+      )
+      UPDATE reconciliation_lines rl
+      SET    expected_amount      = cd.cost_price,
+             delta                = ROUND((cd.carrier_amount - cd.cost_price)::numeric, 2),
+             status               = CASE
+               WHEN ABS(cd.carrier_amount - cd.cost_price) < 0.02 THEN 'matched'
+               ELSE 'corrected'
+             END,
+             corrected_by         = 'cancelled_shipped',
+             corrected_sell_price = cd.sell_price,
+             charge_id            = cd.charge_id,
+             unmatched_reason     = NULL
+      FROM   charge_data cd
+      WHERE  rl.id = cd.line_id
+      RETURNING rl.tracking_number, rl.status, rl.expected_amount, rl.corrected_sell_price
+    `, [runId]);
+    if (shippedRes.rowCount > 0) {
+      console.log(`[recon engine] Run ${runId}: priced ${shippedRes.rowCount} cancelled_shipped line(s) from cancelled charges`);
+      shippedRes.rows.forEach(r =>
+        console.log(`  tracking=${r.tracking_number} status=${r.status} expected=£${r.expected_amount} sell=£${r.corrected_sell_price}`)
+      );
+    }
+  } catch (err) {
+    console.error(`[recon engine] Run ${runId}: cancelled_shipped pricing failed:`, err.message);
+  }
+
   // ── Finalise run — derive counts from actual DB rows ─────────────────────
   // Use subqueries against reconciliation_lines rather than in-memory counters.
   // With the rollup architecture there are no separate surcharge rows — each
