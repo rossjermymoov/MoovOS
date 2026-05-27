@@ -1281,34 +1281,45 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   }
 
   // ── Post-process: tag cancelled-shipment lines ───────────────────────────
-  // Some carrier invoice lines correspond to shipments that were cancelled in
-  // our system after DPD collected the parcel. These appear as unmatched with
-  // reason 'no_account_mapping' because cancelled charges are excluded from the
-  // pool. We detect them here and update unmatched_reason so operators can
-  // clearly see which to dispute (never shipped) vs. bill (was shipped).
+  // Carrier invoice lines that match a cancelled OMS shipment need to be split
+  // into two categories so operators know what action to take:
+  //   cancelled_shipped   → parcel was actually collected by DPD despite the
+  //                         OMS cancellation; we should bill the customer.
+  //   cancelled_unshipped → DPD never physically scanned the parcel; we
+  //                         should dispute the charge with the carrier.
+  //
+  // Source lines: both 'no_account_mapping' (cancelled charge not in pool)
+  // and 'cancelled_booking_invoiced' (matched directly via cancelled pool).
+  //
+  // "Was shipped" is determined by tracking_events — any scan event with a
+  // status other than 'booked' proves DPD physically handled the parcel.
+  // A 'booked' event is just label creation and does not confirm collection.
   try {
     const cancelledTagRes = await query(`
-      WITH unmatched_lines AS (
+      WITH target_lines AS (
         SELECT rl.id, rl.tracking_number
         FROM   reconciliation_lines rl
         WHERE  rl.run_id           = $1
           AND  rl.status           = 'unmatched'
-          AND  rl.unmatched_reason = 'no_account_mapping'
+          AND  rl.unmatched_reason IN ('no_account_mapping', 'cancelled_booking_invoiced')
       ),
       cancelled_matches AS (
-        SELECT ul.id AS line_id,
-               -- was any charge verified before the shipment was cancelled?
-               BOOL_OR(c.verified = true) AS was_verified
-        FROM   unmatched_lines ul
-        JOIN   shipments s  ON s.tracking_codes @> ARRAY[ul.tracking_number::text]
-                           AND s.cancelled = true
-        LEFT JOIN charges c ON c.shipment_id = s.id
-        GROUP BY ul.id
+        SELECT DISTINCT ON (ul.id) ul.id AS line_id,
+               -- Any tracking event beyond 'booked' means DPD physically
+               -- handled the parcel (at_depot, in_transit, delivered, etc.)
+               EXISTS (
+                 SELECT 1 FROM tracking_events te
+                 WHERE  te.consignment_number = ul.tracking_number
+                   AND  te.status NOT IN ('booked', 'unknown')
+               ) AS was_shipped
+        FROM   target_lines ul
+        JOIN   shipments s ON s.tracking_codes @> ARRAY[ul.tracking_number::text]
+                          AND s.cancelled = true
       )
       UPDATE reconciliation_lines rl
       SET    unmatched_reason = CASE
-               WHEN cm.was_verified THEN 'cancelled_shipped'
-               ELSE                      'cancelled_unshipped'
+               WHEN cm.was_shipped THEN 'cancelled_shipped'
+               ELSE                     'cancelled_unshipped'
              END
       FROM   cancelled_matches cm
       WHERE  rl.id = cm.line_id
