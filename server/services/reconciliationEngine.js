@@ -1961,6 +1961,67 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   }
 
   if (poolHits.length === 0) {
+    // ── DPD hash-continuation row ─────────────────────────────────────────────
+    // DPD splits consignments above a threshold across multiple invoice rows.
+    // The continuation row uses "TRACKING#" as its identifier (e.g. 4366832341#).
+    // There is no matching shipment in the OMS for this pseudo-tracking.
+    // Resolve it by stripping the trailing # and looking up the base consignment.
+    if (trackKey.endsWith('#')) {
+      const baseTrackKey = trackKey.slice(0, -1);
+      const basePoolHits = poolLookup(pool, baseTrackKey);
+
+      if (basePoolHits.length > 0) {
+        const baseCharge       = basePoolHits[0];
+        const totalExpected    = round2(parseFloat(baseCharge.expected_cost) || 0);
+
+        // Find how much expected was already accounted for on the base row.
+        // The base row will have been inserted before the # row (DPD CSV order).
+        const baseReconRes  = await query(
+          `SELECT expected_amount FROM reconciliation_lines WHERE run_id = $1 AND tracking_number = $2 LIMIT 1`,
+          [runId, baseTrackKey]
+        );
+        const baseAccounted    = round2(parseFloat(baseReconRes.rows[0]?.expected_amount) || 0);
+        const remainingExpected = (totalExpected > 0 && baseAccounted > 0)
+          ? round2(totalExpected - baseAccounted)
+          : carrierAmount; // fallback: accept at face value
+
+        const hashDelta  = round2(carrierAmount - remainingExpected);
+        const isHashMatch = Math.abs(hashDelta) < 0.02;
+
+        console.log(
+          `[recon engine] HASH CONTINUATION: ${trackingNumber} → base=${baseTrackKey} ` +
+          `carrier=£${carrierAmount} total_expected=£${totalExpected} base_accounted=£${baseAccounted} ` +
+          `remaining=£${remainingExpected} delta=£${hashDelta} → ${isHashMatch ? 'MATCHED' : 'MISMATCH'}`
+        );
+
+        await insertLine(runId, {
+          tracking_number:          trackingNumber,
+          carrier_account_no:       line.account_number     || null,
+          raw_service_code:         rawServiceCode,
+          charge_type:              line.charge_type        || 'base',
+          carrier_amount:           carrierAmount,
+          carrier_billed_weight_kg: line.billed_weight_kg   || null,
+          service_id:               serviceId,
+          customer_id:              baseCharge.customer_id,
+          charge_id:                baseCharge.charge_id,
+          expected_amount:          remainingExpected,
+          delta:                    hashDelta,
+          status:                   isHashMatch ? 'matched' : 'unmatched',
+          unmatched_reason:         isHashMatch ? null : 'price_mismatch',
+          corrected_by:             null,
+          source:                   'internal',
+          shipment_date:            line.shipment_date      || null,
+          ship_to_postcode:         line.delivery_postcode  || null,
+          ship_to_name:             line.recipient_name     || null,
+          ship_to_country:          line.ship_to_country    || null,
+          parcel_count:             line.parcel_count       || null,
+          correction_metadata:      { hash_continuation_of: baseTrackKey },
+        });
+        return { status: isHashMatch ? 'matched' : 'unmatched' };
+      }
+      // Base tracking also not in pool — fall through to standard no_account_mapping.
+    }
+
     // ── Cancelled booking check ───────────────────────────────────────────────
     // Before falling through to carrier_direct, check whether this tracking
     // belongs to a CANCELLED OMS shipment. DPD has no cancellation API, so a

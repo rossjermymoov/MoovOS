@@ -97,6 +97,7 @@ function ReasonLabel({ reason, correctedBy }) {
     cancelled_unshipped:          { text: '🚫 Cancelled — dispute with DPD', color: '#FF5252' },
     cancelled_shipped:            { text: '⚠ Cancelled — parcel was shipped', color: '#FFB300' },
     cancelled_booking_invoiced:   { text: '🚫 Cancelled booking — credit DPD',  color: '#FF5252' },
+    hash_continuation:            { text: '# Split row — continuation parcel',  color: '#64748B' },
     processing_error:             { text: '⚡ Processing error — re-import', color: '#FF5252' },
   };
   const cfg = labels[reason] || { text: reason || '—', color: '#64748B' };
