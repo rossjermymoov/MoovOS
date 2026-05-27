@@ -441,6 +441,7 @@ async function buildVerifiedPool(carrierId) {
       s.total_weight_kg        AS declared_weight_kg,
       s.parcel_count           AS shipment_parcel_count,
       s.total_declared_value,
+      s.collection_date,
       cu.reconciliation_flexible_parcel_count,
       cu.account_number AS customer_account,
       c.created_at,
@@ -500,10 +501,22 @@ async function buildVerifiedPool(carrierId) {
   `, [carrierId]);
 
   const pool = new Map();
+  // Secondary index for carrier-side auto-consolidation: customer + collection date → charge[]
+  // Used when DPD bills multiple individually-booked single-parcel shipments under one tracking.
+  const customerDatePool = new Map();
 
   function addToPool(key, row) {
     if (!pool.has(key)) pool.set(key, []);
     const bucket = pool.get(key);
+    if (!bucket.find(r => r.charge_id === row.charge_id)) bucket.push(row);
+  }
+
+  function addToCustomerDatePool(row) {
+    if (!row.customer_id || !row.collection_date) return;
+    const dateStr = new Date(row.collection_date).toISOString().slice(0, 10); // YYYY-MM-DD
+    const cdKey   = `${row.customer_id}|${dateStr}`;
+    if (!customerDatePool.has(cdKey)) customerDatePool.set(cdKey, []);
+    const bucket = customerDatePool.get(cdKey);
     if (!bucket.find(r => r.charge_id === row.charge_id)) bucket.push(row);
   }
 
@@ -526,15 +539,18 @@ async function buildVerifiedPool(carrierId) {
       const refKey = String(row.reference).trim().toUpperCase();
       addToPool(refKey, row);
     }
+
+    // ── Index by customer + collection date (carrier auto-consolidation) ──
+    addToCustomerDatePool(row);
   }
 
   const poolSize = pool.size;
-  console.log(`[recon engine] Verified pool built: ${poolSize} unique keys from ${res.rows.length} charge records`);
+  console.log(`[recon engine] Verified pool built: ${poolSize} unique keys from ${res.rows.length} charge records (${customerDatePool.size} customer-date buckets)`);
   if (poolSize === 0) {
     console.warn(`[recon engine] WARNING: pool is EMPTY — carrier name/code may not match shipments.courier, or no verified shipments have dc_service_id/tracking_codes`);
   }
 
-  return { pool, poolSize };
+  return { pool, poolSize, customerDatePool };
 }
 
 // ─── Phase 2: Account number → customer lookup ────────────────────────────────
@@ -1032,7 +1048,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   const { serviceMap: serviceCodeMap, surchargeMap, serviceIdToCodeMap, customerServiceOverrides } = await buildServiceCodeMap(carrierId);
 
   // ── Pre-condition: Build Verified Pool ────────────────────────────────────
-  const { pool, poolSize } = await buildVerifiedPool(carrierId);
+  const { pool, poolSize, customerDatePool } = await buildVerifiedPool(carrierId);
 
   await query(
     `UPDATE reconciliation_runs SET pool_size = $2 WHERE id = $1`,
@@ -1064,6 +1080,12 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   const _custCache    = new Map();
   // surcharge override cache: `${customerId}:${surchargeId}` → sell price (number|null)
   const _surchargeOverrideCache = new Map();
+  // Set of all tracking numbers present in the carrier invoice (UPPER).
+  // Used by auto-consolidation to avoid treating a tracking that has its own
+  // carrier invoice line as an "unaccounted companion" for another line.
+  const allInvoiceTrackings = new Set(
+    lines.map(l => String(l.tracking_number || '').trim().toUpperCase()).filter(Boolean)
+  );
   const ctx = {
     separateFuelRows,
     parcelPricing,
@@ -1072,6 +1094,8 @@ export async function processReconciliationRun(runId, carrierId, lines) {
     surchargeById,
     globallyExcludedColumns,
     surchargeOverrideCache: _surchargeOverrideCache,
+    customerDatePool,
+    allInvoiceTrackings,
     async customerLookup(accountNumber) {
       if (!accountNumber) return null;
       const k = String(accountNumber).trim();
@@ -1135,6 +1159,46 @@ export async function processReconciliationRun(runId, carrierId, lines) {
         unmatched++;
       }
     }
+  }
+
+  // ── Post-process: tag cancelled-shipment lines ───────────────────────────
+  // Some carrier invoice lines correspond to shipments that were cancelled in
+  // our system after DPD collected the parcel. These appear as unmatched with
+  // reason 'no_account_mapping' because cancelled charges are excluded from the
+  // pool. We detect them here and update unmatched_reason so operators can
+  // clearly see which to dispute (never shipped) vs. bill (was shipped).
+  try {
+    const cancelledTagRes = await query(`
+      WITH unmatched_lines AS (
+        SELECT rl.id, rl.tracking_number
+        FROM   reconciliation_lines rl
+        WHERE  rl.run_id           = $1
+          AND  rl.status           = 'unmatched'
+          AND  rl.unmatched_reason = 'no_account_mapping'
+      ),
+      cancelled_matches AS (
+        SELECT ul.id AS line_id,
+               -- was any charge verified before the shipment was cancelled?
+               BOOL_OR(c.verified = true) AS was_verified
+        FROM   unmatched_lines ul
+        JOIN   shipments s  ON s.tracking_codes @> ARRAY[ul.tracking_number::text]
+                           AND s.cancelled = true
+        LEFT JOIN charges c ON c.shipment_id = s.id
+        GROUP BY ul.id
+      )
+      UPDATE reconciliation_lines rl
+      SET    unmatched_reason = CASE
+               WHEN cm.was_verified THEN 'cancelled_shipped'
+               ELSE                      'cancelled_unshipped'
+             END
+      FROM   cancelled_matches cm
+      WHERE  rl.id = cm.line_id
+    `, [runId]);
+    if (cancelledTagRes.rowCount > 0) {
+      console.log(`[recon engine] Run ${runId}: tagged ${cancelledTagRes.rowCount} line(s) as cancelled_shipped/cancelled_unshipped`);
+    }
+  } catch (err) {
+    console.error(`[recon engine] Run ${runId}: cancelled-shipment tagging failed:`, err.message);
   }
 
   // ── Finalise run — derive counts from actual DB rows ─────────────────────
@@ -1779,46 +1843,92 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   const invoiceParcelCount = line.parcel_count || 1;
   const bookedParcelCount  = parseInt(charge.shipment_parcel_count) || 1;
   if (invoiceParcelCount > bookedParcelCount && !charge.reconciliation_flexible_parcel_count) {
-    console.warn(
-      `[recon engine] PARCEL COUNT MISMATCH: tracking=${trackingNumber} ` +
-      `invoice_parcels=${invoiceParcelCount} booked_parcels=${bookedParcelCount} ` +
-      `carrier=£${carrierAmount} — flagging as unmatched for operator dispute`
-    );
-    await insertLine(runId, {
-      tracking_number:          trackingNumber,
-      carrier_account_no:       line.account_number     || null,
-      raw_service_code:         rawServiceCode,
-      charge_type:              line.charge_type         || 'base',
-      carrier_amount:           carrierAmount,
-      carrier_billed_weight_kg: parseFloat(line.billed_weight_kg) || null,
-      service_id:               serviceId,
-      customer_id:              charge.customer_id,
-      charge_id:                charge.charge_id,
-      expected_amount:          null,
-      delta:                    null,
-      status:                   'unmatched',
-      corrected_by:             null,
-      unmatched_reason:         'parcel_count_mismatch',
-      source:                   'internal',
-      shipment_date:            line.shipment_date       || null,
-      ship_to_postcode:         line.delivery_postcode   || null,
-      ship_to_country:          line.ship_to_country     || 'GB',
-      parcel_count:             invoiceParcelCount,
-      correction_metadata:      {
-        invoice_parcel_count: invoiceParcelCount,
-        booked_parcel_count:  bookedParcelCount,
-      },
-    });
-    return { status: 'unmatched' };
+    // ── Carrier auto-consolidation check ─────────────────────────────────────
+    // DPD sometimes consolidates multiple individually-booked single-parcel
+    // shipments onto one invoice line (one master tracking, parcel_count=N).
+    // Detect this by looking up companion charges from the same customer on
+    // the same collection date that are NOT already billed on their own invoice
+    // line. If we find enough companions, handle them via insertCompanionLines
+    // (same path as Europa) rather than flagging a dispute.
+    const autoCompanions = [];
+    if (
+      bookedParcelCount === 1 &&
+      charge.collection_date &&
+      ctx.customerDatePool &&
+      ctx.allInvoiceTrackings
+    ) {
+      const dateStr = new Date(charge.collection_date).toISOString().slice(0, 10);
+      const cdKey   = `${charge.customer_id}|${dateStr}`;
+      const cdHits  = ctx.customerDatePool.get(cdKey) || [];
+      const masterTrackUpper = trackKey; // already upper
+      for (const hit of cdHits) {
+        if (hit.charge_id === charge.charge_id) continue;        // skip master
+        if (hit.customer_id !== charge.customer_id)  continue;   // same customer only
+        // Skip if this companion's tracking has its own carrier invoice line
+        const hitTracks = (hit.tracking_codes || []).map(t => String(t).trim().toUpperCase());
+        const hasOwnInvoiceLine = hitTracks.some(t => ctx.allInvoiceTrackings.has(t) && t !== masterTrackUpper);
+        if (hasOwnInvoiceLine) continue;
+        autoCompanions.push(hit);
+        if (autoCompanions.length >= invoiceParcelCount - 1) break;
+      }
+    }
+
+    if (autoCompanions.length > 0) {
+      console.log(
+        `[recon engine] AUTO-CONSOLIDATION: tracking=${trackingNumber} invoice_parcels=${invoiceParcelCount} ` +
+        `booked_parcels=${bookedParcelCount} → found ${autoCompanions.length} companion(s) by customer+date`
+      );
+      // Fall through to normal matching for the master line; companions inserted after.
+      // We stash them on charge so the post-match companion insertion can pick them up.
+      charge._autoCompanions = autoCompanions;
+    } else {
+      console.warn(
+        `[recon engine] PARCEL COUNT MISMATCH: tracking=${trackingNumber} ` +
+        `invoice_parcels=${invoiceParcelCount} booked_parcels=${bookedParcelCount} ` +
+        `carrier=£${carrierAmount} — no companions found, flagging as unmatched for operator dispute`
+      );
+      await insertLine(runId, {
+        tracking_number:          trackingNumber,
+        carrier_account_no:       line.account_number     || null,
+        raw_service_code:         rawServiceCode,
+        charge_type:              line.charge_type         || 'base',
+        carrier_amount:           carrierAmount,
+        carrier_billed_weight_kg: parseFloat(line.billed_weight_kg) || null,
+        service_id:               serviceId,
+        customer_id:              charge.customer_id,
+        charge_id:                charge.charge_id,
+        expected_amount:          null,
+        delta:                    null,
+        status:                   'unmatched',
+        corrected_by:             null,
+        unmatched_reason:         'parcel_count_mismatch',
+        source:                   'internal',
+        shipment_date:            line.shipment_date       || null,
+        ship_to_postcode:         line.delivery_postcode   || null,
+        ship_to_country:          line.ship_to_country     || 'GB',
+        parcel_count:             invoiceParcelCount,
+        correction_metadata:      {
+          invoice_parcel_count: invoiceParcelCount,
+          booked_parcel_count:  bookedParcelCount,
+        },
+      });
+      return { status: 'unmatched' };
+    }
   }
 
   // ── Companion parcel lookup ───────────────────────────────────────────────────
-  // For carriers (e.g. DPD/Europa) that consolidate multiple parcels under one
-  // master tracking number in their invoice, find companion charges that share
-  // the same customer + reference + booking date. These will be reconciled as
-  // separate zero-carrier-amount lines after the master line is resolved.
-  const companionCharges = [];
+  // Two paths:
+  // 1. Europa / reconciliation_flexible_parcel_count: customer books multi-parcel
+  //    consignment upfront; companions share the same order reference.
+  // 2. DPD auto-consolidation: customer books individual parcels; DPD groups them
+  //    on collection — companions pre-identified by the parcel_count_mismatch block
+  //    above and stashed on charge._autoCompanions.
+  const companionCharges = charge._autoCompanions?.length > 0
+    ? charge._autoCompanions
+    : [];
+
   if (
+    companionCharges.length === 0 &&
     charge.reconciliation_flexible_parcel_count &&
     invoiceParcelCount > 1 &&
     charge.reference

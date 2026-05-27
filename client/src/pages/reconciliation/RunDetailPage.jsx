@@ -94,6 +94,8 @@ function ReasonLabel({ reason, correctedBy }) {
     aggregate_mismatch:      { text: 'Aggregate mismatch',    color: '#FFB300' },
     parcel_count_mismatch:        { text: '⚠ Parcel count overbill',      color: '#FF5252' },
     weight_sell_lookup_failed:    { text: '⚖ Weight corrected — sell rate missing', color: '#FF5252' },
+    cancelled_unshipped:          { text: '🚫 Cancelled — dispute with DPD', color: '#FF5252' },
+    cancelled_shipped:            { text: '⚠ Cancelled — parcel was shipped', color: '#FFB300' },
   };
   const cfg = labels[reason] || { text: reason || '—', color: '#64748B' };
   return <span style={{ fontSize: 10, color: cfg.color, fontWeight: 600 }}>{cfg.text}</span>;
@@ -1917,7 +1919,9 @@ const QUERY_TYPE_OPTS = [
 ];
 
 function inferQueryType(reason) {
-  if (reason === 'parcel_count_mismatch') return 'parcel_count_overbill';
+  if (reason === 'parcel_count_mismatch')  return 'parcel_count_overbill';
+  if (reason === 'cancelled_unshipped')    return 'unrecognised_charge';
+  if (reason === 'cancelled_shipped')      return 'unrecognised_charge';
   if (reason === 'unexplained_delta' || reason === 'aggregate_mismatch') return 'rate_dispute';
   return 'other';
 }
@@ -1928,6 +1932,12 @@ function RaiseQueryModal({ line, runId, carrierId, invoiceRef, onClose, onRaised
     if (line.unmatched_reason === 'parcel_count_mismatch' && line.correction_metadata) {
       const m = line.correction_metadata;
       return `DPD invoiced ${m.invoice_parcel_count} parcel${m.invoice_parcel_count !== 1 ? 's' : ''} but booking was for ${m.booked_parcel_count} parcel${m.booked_parcel_count !== 1 ? 's' : ''}. Disputed amount: £${Math.abs(parseFloat(line.carrier_amount || 0) - parseFloat(line.expected_amount || 0)).toFixed(2)}.`;
+    }
+    if (line.unmatched_reason === 'cancelled_unshipped') {
+      return `Tracking number ${line.tracking_number} was invoiced by DPD at £${parseFloat(line.carrier_amount || 0).toFixed(2)} but this booking was cancelled in our system and the parcel was never collected/despatched. Please credit this charge.`;
+    }
+    if (line.unmatched_reason === 'cancelled_shipped') {
+      return `Tracking number ${line.tracking_number} was invoiced by DPD at £${parseFloat(line.carrier_amount || 0).toFixed(2)}. The booking was cancelled in our system but the parcel appears to have been despatched. Please confirm delivery status.`;
     }
     return '';
   });
