@@ -688,7 +688,7 @@ router.delete('/service-mappings/:id', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ─── GET /api/reconciliation/runs ─────────────────────────────────────────────
-// List all reconciliation runs, newest first. (customer_display wired)
+// List all reconciliation runs, newest first.
 
 router.get('/runs', async (req, res) => {
   try {
@@ -1684,6 +1684,85 @@ router.post('/runs/:id/finalize', async (req, res) => {
     console.error('[reconciliation/finalize] error:', err.message);
     const status = err.message.includes('Unmatched') ? 422 : 500;
     return res.status(status).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/reconciliation/totals ──────────────────────────────────────────
+// Aggregate financial totals across all runs (revenue, carrier cost, margin)
+// plus a count of runs that are ready to finalize.
+// Source: reconciliation_lines for all matched/corrected lines (works whether
+// or not a run is finalized — uses corrected_sell_price / carrier_amount).
+
+router.get('/totals', async (req, res) => {
+  try {
+    const totalsResult = await query(`
+      SELECT
+        ROUND(COALESCE(SUM(corrected_sell_price), 0)::numeric, 2)                        AS total_revenue,
+        ROUND(COALESCE(SUM(COALESCE(corrected_cost_price, carrier_amount)), 0)::numeric, 2) AS total_carrier_cost,
+        COUNT(*)                                                                            AS priced_lines
+      FROM reconciliation_lines
+      WHERE status IN ('matched', 'corrected')
+        AND source != 'ddp_admin'
+    `);
+
+    const finalizableResult = await query(`
+      SELECT COUNT(*)::int AS finalizable_count
+      FROM reconciliation_runs
+      WHERE finalized      = false
+        AND unmatched_count = 0
+        AND status IN ('complete', 'needs_review')
+    `);
+
+    const { total_revenue, total_carrier_cost } = totalsResult.rows[0];
+    const rev  = parseFloat(total_revenue)      || 0;
+    const cost = parseFloat(total_carrier_cost) || 0;
+
+    return res.json({
+      total_revenue:       rev,
+      total_carrier_cost:  cost,
+      total_margin:        Math.round((rev - cost) * 100) / 100,
+      finalizable_count:   finalizableResult.rows[0].finalizable_count,
+    });
+  } catch (err) {
+    console.error('[reconciliation/totals] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/reconciliation/finalize-all ────────────────────────────────────
+// Finalize every run that is ready (unmatched_count=0, not yet finalized,
+// status complete or needs_review). Calls finalizeRun for each in sequence.
+
+router.post('/finalize-all', async (req, res) => {
+  try {
+    const readyRuns = await query(`
+      SELECT id FROM reconciliation_runs
+      WHERE finalized      = false
+        AND unmatched_count = 0
+        AND status IN ('complete', 'needs_review')
+      ORDER BY id
+    `);
+
+    if (readyRuns.rows.length === 0) {
+      return res.json({ ok: true, finalized: [], message: 'No runs ready to finalize' });
+    }
+
+    const finalized = [];
+    const errors    = [];
+
+    for (const row of readyRuns.rows) {
+      try {
+        await finalizeRun(row.id, req.user?.id || null);
+        finalized.push(row.id);
+      } catch (err) {
+        errors.push({ run_id: row.id, error: err.message });
+      }
+    }
+
+    return res.json({ ok: true, finalized, errors });
+  } catch (err) {
+    console.error('[reconciliation/finalize-all] error:', err.message);
+    return res.status(500).json({ error: err.message });
   }
 });
 

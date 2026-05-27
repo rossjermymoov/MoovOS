@@ -1486,10 +1486,18 @@ export default function ReconciliationPage() {
     return () => { cancelled = true; };
   }, [pollingRunId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const [finalizingAll, setFinalizingAll] = useState(false);
+
   const { data: runsData, isLoading: runsLoading } = useQuery({
     queryKey: ['recon-runs'],
     queryFn:  () => api.get('/reconciliation/runs').then(r => r.data),
     refetchInterval: 5000,
+  });
+
+  const { data: totalsData, refetch: refetchTotals } = useQuery({
+    queryKey: ['recon-totals'],
+    queryFn:  () => api.get('/reconciliation/totals').then(r => r.data),
+    refetchInterval: 15000,
   });
 
   const { data: couriers = [] } = useQuery({
@@ -1506,6 +1514,13 @@ export default function ReconciliationPage() {
   const openItems   = runs.reduce((s, r) => s + (r.unmatched_count || 0), 0);
   const needsReview = runs.filter(r => r.status === 'needs_review').length;
 
+  const finalizableCount = totalsData?.finalizable_count || 0;
+
+  function fmtGBP(val) {
+    if (val == null) return '—';
+    return '£' + Number(val).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
   function handleRunSuccess(runId) {
     setShowUpload(false);
     setPollingRunId(runId);
@@ -1521,6 +1536,24 @@ export default function ReconciliationPage() {
       alert(err.response?.data?.error || 'Failed to delete run');
     } finally {
       setDeletingRunId(null);
+    }
+  }
+
+  async function handleFinalizeAll() {
+    if (!finalizableCount) return;
+    setFinalizingAll(true);
+    try {
+      const res = await api.post('/reconciliation/finalize-all');
+      const { finalized = [], errors = [] } = res.data;
+      qc.invalidateQueries({ queryKey: ['recon-runs'] });
+      refetchTotals();
+      if (errors.length) {
+        alert(`Finalized ${finalized.length} run(s). ${errors.length} error(s):\n${errors.map(e => `Run ${e.run_id}: ${e.error}`).join('\n')}`);
+      }
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to finalize runs');
+    } finally {
+      setFinalizingAll(false);
     }
   }
 
@@ -1565,6 +1598,23 @@ export default function ReconciliationPage() {
           <button style={btnGhost} onClick={() => setShowProfiles(true)}>
             <BookOpen size={15} />Column Profiles
           </button>
+          {finalizableCount > 0 && (
+            <button
+              style={{
+                background: finalizingAll ? 'rgba(121,170,255,0.10)' : 'rgba(121,170,255,0.15)',
+                border: '1px solid rgba(121,170,255,0.4)',
+                borderRadius: 7, color: '#79AAFF', padding: '9px 16px', cursor: finalizingAll ? 'not-allowed' : 'pointer',
+                fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
+                opacity: finalizingAll ? 0.7 : 1,
+              }}
+              onClick={handleFinalizeAll}
+              disabled={finalizingAll}
+              title={`Finalize ${finalizableCount} ready run${finalizableCount > 1 ? 's' : ''}`}
+            >
+              {finalizingAll ? <RefreshCw size={14} style={{ animation: 'recon-spin 0.9s linear infinite' }} /> : <CheckCircle2 size={15} />}
+              {finalizingAll ? 'Finalizing…' : `Finalize All (${finalizableCount})`}
+            </button>
+          )}
           <button style={btnGreen} onClick={() => setShowUpload(true)}>
             <Plus size={16} />New Run
           </button>
@@ -1587,6 +1637,38 @@ export default function ReconciliationPage() {
               </div>
               <Icon size={18} color='#333' />
             </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Financial totals strip */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 28 }}>
+        {[
+          {
+            label: 'Total Revenue',
+            value: fmtGBP(totalsData?.total_revenue),
+            color: '#79AAFF',
+            sub: 'across all runs',
+          },
+          {
+            label: 'Total Carrier Cost',
+            value: fmtGBP(totalsData?.total_carrier_cost),
+            color: '#FFB300',
+            sub: 'carrier invoice amounts',
+          },
+          {
+            label: 'Total Margin',
+            value: fmtGBP(totalsData?.total_margin),
+            color: (totalsData?.total_margin ?? 0) >= 0 ? '#00C853' : '#FF5252',
+            sub: totalsData?.total_revenue
+              ? `${Math.round(((totalsData.total_margin ?? 0) / totalsData.total_revenue) * 100)}% margin`
+              : 'revenue – carrier cost',
+          },
+        ].map(({ label, value, color, sub }) => (
+          <div key={label} style={{ ...card }}>
+            <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{label}</div>
+            <div style={{ fontSize: 26, fontWeight: 800, color, marginBottom: 4 }}>{value}</div>
+            <div style={{ fontSize: 11, color: '#94A3B8' }}>{sub}</div>
           </div>
         ))}
       </div>
