@@ -1695,14 +1695,44 @@ router.post('/runs/:id/finalize', async (req, res) => {
 
 router.get('/totals', async (req, res) => {
   try {
+    // Use the same logic as /customers/preview but across ALL runs:
+    // freight sell (corrected_sell_price or booking price) + fuel & surcharge
+    // charges from the charges table — this matches what each run detail page
+    // shows per-customer and gives fully accurate revenue/cost figures without
+    // needing runs to be finalized first.
     const totalsResult = await query(`
       SELECT
-        ROUND(COALESCE(SUM(corrected_sell_price), 0)::numeric, 2)                        AS total_revenue,
-        ROUND(COALESCE(SUM(COALESCE(corrected_cost_price, carrier_amount)), 0)::numeric, 2) AS total_carrier_cost,
-        COUNT(*)                                                                            AS priced_lines
-      FROM reconciliation_lines
-      WHERE status IN ('matched', 'corrected')
-        AND source != 'ddp_admin'
+        ROUND(
+          COALESCE(SUM(
+            COALESCE(rl.corrected_sell_price, base.sell_price, base.price, 0)
+            + COALESCE((
+                SELECT SUM(sc.price)
+                FROM   charges sc
+                WHERE  sc.shipment_id  = base.shipment_id
+                  AND  sc.charge_type IN ('fuel', 'surcharge')
+                  AND  sc.cancelled    = false
+              ), 0)
+          ), 0)::numeric, 2
+        ) AS total_revenue,
+        ROUND(
+          COALESCE(SUM(
+            COALESCE(base.cost_price, 0)
+            + COALESCE((
+                SELECT SUM(sc.cost_price)
+                FROM   charges sc
+                WHERE  sc.shipment_id  = base.shipment_id
+                  AND  sc.charge_type IN ('fuel', 'surcharge')
+                  AND  sc.cancelled    = false
+              ), 0)
+          ), 0)::numeric, 2
+        ) AS total_carrier_cost
+      FROM   reconciliation_lines rl
+      LEFT JOIN charges base
+             ON base.id          = rl.charge_id
+            AND base.charge_type = 'courier'
+            AND base.cancelled   = false
+      WHERE  rl.status  IN ('matched', 'corrected')
+        AND  rl.is_fuel  = false
     `);
 
     const finalizableResult = await query(`
