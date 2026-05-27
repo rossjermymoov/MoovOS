@@ -705,8 +705,14 @@ function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateD
 
   // Derived values (used in both header and body)
   const rateMap = {};
+  // Fallback lookup by zone name only — used when weight_class_name labels differ
+  // between what the weight_bands table derives ("0-2kg") and what customer_rates
+  // stores ("Parcel"). Without this, existing rates become invisible when a new
+  // zone is added to the service and the template is used for display.
+  const rateByZone = {};
   for (const rate of service.rates) {
     rateMap[`${rate.zone_name}::${rate.weight_class_name}`] = rate;
+    if (!rateByZone[rate.zone_name]) rateByZone[rate.zone_name] = rate;
   }
   const zonesToShow = !isIntl
     ? (() => {
@@ -714,13 +720,15 @@ function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateD
           // No template — use the customer's own rate keys directly
           return service.rates.map(r => ({ zone_name: r.zone_name, weight_class_name: r.weight_class_name }));
         }
-        // Template loaded — but only use it if at least one zone key actually
-        // matches a customer rate.  When weight_class_name labels in the DB
-        // (e.g. "Parcel", "Medium Bagit") differ from the weight_bands-derived
-        // labels (e.g. "0-2KG", "0-30KG"), the rateMap lookup always misses and
-        // every zone shows a NewPriceCell instead of the real price.
-        const anyMatch = templateZones.some(t => rateMap[`${t.zone_name}::${t.weight_class_name}`]);
-        if (!anyMatch && service.rates.length > 0) {
+        // Template loaded — use it if any zone NAME matches a customer rate.
+        // We check zone names only (not the full zone::weight key) because
+        // weight_class_name labels can differ between weight_bands ("0-2kg")
+        // and customer_rates ("Parcel") for the same logical band. Using only
+        // zone names means a newly-added zone (e.g. "Isle of Man") will appear
+        // alongside existing zones even when weight labels don't exactly match.
+        const customerZoneNames = new Set(service.rates.map(r => r.zone_name));
+        const anyZoneMatch = templateZones.some(t => customerZoneNames.has(t.zone_name));
+        if (!anyZoneMatch && service.rates.length > 0) {
           return service.rates.map(r => ({ zone_name: r.zone_name, weight_class_name: r.weight_class_name }));
         }
         return templateZones;
@@ -804,7 +812,7 @@ function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateD
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {zonesToShow.map(({ zone_name, weight_class_name }) => {
                 const key  = `${zone_name}::${weight_class_name}`;
-                const rate = rateMap[key];
+                const rate = rateMap[key] || rateByZone[zone_name];
                 return (
                   <div key={key} style={{
                     display: 'inline-flex', alignItems: 'center', gap: 8,
