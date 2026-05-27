@@ -1,7 +1,7 @@
 /**
  * ReconciliationPage  —  /reconciliation
  *
- * Lists all reconciliation runs. Lets staff upload a new carrier invoice CSV
+ * Lists all reconciliation runs (customer column wired). Lets staff upload a new carrier invoice CSV
  * and kick off an automated reconciliation run.
  *
  * CSV Column Profiles: saved per-carrier column mappings so users don't have
