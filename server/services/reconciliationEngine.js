@@ -1704,7 +1704,45 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     // rows with full-description service codes ("Fuel and Energy Charge" etc.).
     // These are already accounted for in charges.total_cost_price, so we
     // auto-accept them rather than blocking on unknown_service_code.
+    //
+    // IMPORTANT: only auto-accept as overhead when the tracking number has NO
+    // hit in the verified pool.  If the pool DOES contain this tracking, the
+    // line is a real charge whose service code is simply not yet mapped — we
+    // surface it as unknown_service_code so the operator sees it and can add
+    // the mapping.  Silently accepting a real shipment as carrier_overhead
+    // hides the charge, assigns no customer, and leaves revenue unrecovered.
     if (ctx.separateFuelRows) {
+      const overheadPoolHits = poolLookup(pool, trackKey);
+      if (overheadPoolHits.length > 0) {
+        // Real shipment — service code unmapped but shipment IS in our pool.
+        // Surface as unknown_service_code so the operator adds the mapping.
+        console.log(
+          `[recon engine] WARN: ${trackKey} svc_code="${rawServiceCode}" is unmapped ` +
+          `but tracking IS in verified pool — surfacing as unknown_service_code (not carrier_overhead)`
+        );
+        await insertLine(runId, {
+          tracking_number:          trackingNumber,
+          carrier_account_no:       line.account_number    || null,
+          raw_service_code:         rawServiceCode,
+          charge_type:              line.charge_type || 'base',
+          carrier_amount:           carrierAmount,
+          carrier_billed_weight_kg: line.billed_weight_kg  || null,
+          service_id:               null,
+          customer_id:              null,
+          charge_id:                null,
+          expected_amount:          null,
+          delta:                    null,
+          status:                   'unmatched',
+          corrected_by:             null,
+          unmatched_reason:         'unknown_service_code',
+          source:                   'internal',
+          shipment_date:            line.shipment_date     || null,
+          suggested_service_id:     null,
+        });
+        return { status: 'unmatched' };
+      }
+      // No pool hit → genuinely an overhead/fuel row (e.g. DPD Fuel & Energy
+      // aggregate, carriage supplement).  Safe to auto-accept.
       await insertLine(runId, {
         tracking_number:          trackingNumber,
         carrier_account_no:       line.account_number    || null,
