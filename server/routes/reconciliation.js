@@ -1891,12 +1891,21 @@ router.get('/runs/:id/customers/preview', async (req, res) => {
 router.get('/runs/:id/customers/preview/lines', async (req, res) => {
   try {
     const runId      = parseInt(req.params.id);
-    const customerId = req.query.customer_id || null;
+    // customer_id may be:
+    //   absent / undefined  → no filter (return all lines)
+    //   'null' or ''        → filter for lines where customer_id IS NULL (unattributed group)
+    //   a UUID string       → filter for that specific customer
+    const rawCustId  = req.query.customer_id;
     const params     = [runId];
     let   custFilter = '';
-    if (customerId) {
-      params.push(customerId);
-      custFilter = `AND rl.customer_id = $${params.length}`;
+    if (rawCustId !== undefined) {
+      const isUnattributed = !rawCustId || rawCustId === 'null';
+      if (isUnattributed) {
+        custFilter = `AND rl.customer_id IS NULL`;
+      } else {
+        params.push(rawCustId);
+        custFilter = `AND rl.customer_id = $${params.length}`;
+      }
     }
 
     const result = await query(`

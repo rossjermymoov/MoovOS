@@ -1542,7 +1542,9 @@ function CustomerLinesDrilldown({ runId, customerId }) {
   const { data: lines = [], isLoading } = useQuery({
     queryKey: ['recon-preview-lines', runId, customerId],
     queryFn:  () => api.get(`/reconciliation/runs/${runId}/customers/preview/lines`, {
-      params: { customer_id: customerId },
+      // Pass 'null' string explicitly so the backend knows to filter for unattributed lines,
+      // rather than omitting the param (which would return all lines with no filter).
+      params: { customer_id: customerId ?? 'null' },
     }).then(r => r.data),
     staleTime: 30_000,
   });
