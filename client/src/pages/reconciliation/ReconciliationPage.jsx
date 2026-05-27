@@ -1598,6 +1598,17 @@ export default function ReconciliationPage() {
           <button style={btnGhost} onClick={() => setShowProfiles(true)}>
             <BookOpen size={15} />Column Profiles
           </button>
+          <a
+            href="/api/reconciliation/cancelled-credit-request"
+            download
+            style={{
+              ...btnRed,
+              textDecoration: 'none', padding: '9px 16px', fontSize: 13, fontWeight: 600,
+            }}
+            title="Download all cancelled-booking lines across every run as a single DPD credit request CSV"
+          >
+            <FileText size={14} />DPD Credit Request
+          </a>
           {finalizableCount > 0 && (
             <button
               style={{

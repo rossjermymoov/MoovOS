@@ -2643,37 +2643,21 @@ export default function RunDetailPage() {
       {/* Unmatched tab — service code mapping banner + lines table */}
       {activeTab === 'unmatched' && (
         <>
-          {/* Cancelled booking credit request banner */}
+          {/* Cancelled booking notice — download is on the main reconciliation page */}
           {unmatchedLines.some(l => l.unmatched_reason === 'cancelled_booking_invoiced') && (
             <div style={{
               background: 'rgba(213,0,0,0.07)', border: '1px solid rgba(213,0,0,0.25)',
-              borderRadius: 8, padding: '12px 16px', marginBottom: 16,
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
+              borderRadius: 8, padding: '10px 14px', marginBottom: 16,
+              display: 'flex', alignItems: 'center', gap: 10,
             }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                <span style={{ fontSize: 16, lineHeight: 1 }}>🚫</span>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: '#B71C1C', marginBottom: 2 }}>
-                    {unmatchedLines.filter(l => l.unmatched_reason === 'cancelled_booking_invoiced').length} cancelled booking{unmatchedLines.filter(l => l.unmatched_reason === 'cancelled_booking_invoiced').length !== 1 ? 's' : ''} invoiced by DPD
-                  </div>
-                  <div style={{ fontSize: 12, color: '#7F1D1D', lineHeight: 1.5 }}>
-                    DPD has charged for labels that were cancelled in the system. These lines are held as unmatched.
-                    Download the credit request CSV and send to DPD to reclaim these charges.
-                  </div>
-                </div>
+              <span style={{ fontSize: 15, lineHeight: 1 }}>🚫</span>
+              <div style={{ fontSize: 12, color: '#7F1D1D', lineHeight: 1.5 }}>
+                <strong style={{ color: '#B71C1C' }}>
+                  {unmatchedLines.filter(l => l.unmatched_reason === 'cancelled_booking_invoiced').length} cancelled booking{unmatchedLines.filter(l => l.unmatched_reason === 'cancelled_booking_invoiced').length !== 1 ? 's' : ''} invoiced by DPD
+                </strong>
+                {' '}— these are held as unmatched and will not be billed to the customer.
+                Use <strong>Download DPD Credit Request</strong> on the reconciliation home page to export all cancelled lines across every invoice in one file.
               </div>
-              <a
-                href={`/api/reconciliation/runs/${id}/cancelled-credit-request`}
-                download
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  padding: '7px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-                  background: '#B71C1C', color: '#fff', textDecoration: 'none',
-                  whiteSpace: 'nowrap', flexShrink: 0,
-                }}
-              >
-                ↓ Download Credit Request
-              </a>
             </div>
           )}
           <ServiceCodeMappingBanner
