@@ -2295,7 +2295,14 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
         }
       }
 
-      expectedBase = rateCardExpected != null ? rateCardExpected : round2(baseFromDb * invoiceParcelCount);
+      // Scale up cost_price ONLY when the carrier invoiced more parcels than we booked
+      // (companion-parcel overbill: cost_price stored for bookedParcelCount parcels, carrier
+      // charged for invoiceParcelCount). When invoice count matches the booked count, the
+      // stored cost_price already represents the full consignment total — multiply by 1.
+      const overBilledFactor = (invoiceParcelCount > bookedParcelCount && bookedParcelCount > 0)
+        ? invoiceParcelCount / bookedParcelCount
+        : 1;
+      expectedBase = rateCardExpected != null ? rateCardExpected : round2(baseFromDb * overBilledFactor);
     } else {
       // Single-parcel or no all_sub mode — trust stored cost_price directly.
       expectedBase = baseFromDb;
