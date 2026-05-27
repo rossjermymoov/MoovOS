@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { CheckCircle, Search, Link2, Unlink, RefreshCw, Zap, ChevronRight, X } from 'lucide-react';
+import { CheckCircle, Search, Link2, Unlink, RefreshCw, Zap, ChevronRight, X, Save } from 'lucide-react';
 import axios from 'axios';
 import { SettingsNav } from './RulesSettings';
 
@@ -470,6 +470,126 @@ function CustomerMatchingPanel({ connected }) {
   );
 }
 
+// ─── Nominal codes panel ──────────────────────────────────────────────────────
+function NominalCodesPanel() {
+  const queryClient = useQueryClient();
+  const [domestic, setDomestic]       = useState('');
+  const [international, setInternational] = useState('');
+  const [saved, setSaved]             = useState(false);
+
+  const { data: settings, isLoading } = useQuery({
+    queryKey: ['billing-settings'],
+    queryFn: () => api.get('/billing/settings').then(r => r.data),
+    staleTime: 60_000,
+  });
+
+  // Populate fields once settings load
+  useEffect(() => {
+    if (settings) {
+      setDomestic(settings.xero_domestic_account_code || '');
+      setInternational(settings.xero_international_account_code || '');
+    }
+  }, [settings]);
+
+  const saveMutation = useMutation({
+    mutationFn: () => api.put('/billing/settings', {
+      xero_domestic_account_code:     domestic.trim() || null,
+      xero_international_account_code: international.trim() || null,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['billing-settings']);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    },
+  });
+
+  const isDirty =
+    domestic.trim()       !== (settings?.xero_domestic_account_code     || '') ||
+    international.trim()  !== (settings?.xero_international_account_code || '');
+
+  const fieldStyle = {
+    background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.12)',
+    borderRadius: 7, padding: '8px 12px', fontSize: 13, color: '#1E293B',
+    width: '100%', outline: 'none', fontFamily: 'monospace', letterSpacing: '0.03em',
+    boxSizing: 'border-box',
+  };
+
+  return (
+    <div style={{
+      background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.07)',
+      borderRadius: 12, padding: '20px 24px', marginTop: 16,
+    }}>
+      <div style={{ fontWeight: 700, fontSize: 14, color: '#1E293B', marginBottom: 4 }}>Nominal codes</div>
+      <div style={{ fontSize: 12, color: '#64748B', marginBottom: 18, lineHeight: 1.5 }}>
+        These Xero account codes are applied to each invoice line item when pushing to Xero.
+        Domestic applies to GB→GB shipments (VAT charged). International applies to everything else (zero-rated).
+      </div>
+
+      {isLoading ? (
+        <div style={{ color: '#64748B', fontSize: 13 }}>Loading…</div>
+      ) : (
+        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+
+          {/* Domestic */}
+          <div style={{ flex: 1, minWidth: 180 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+              Domestic (GB → GB)
+            </div>
+            <div style={{ fontSize: 11, color: '#64748B', marginBottom: 6 }}>VAT applied (OUTPUT2)</div>
+            <input
+              value={domestic}
+              onChange={e => setDomestic(e.target.value)}
+              placeholder="e.g. 200"
+              style={fieldStyle}
+            />
+          </div>
+
+          {/* International */}
+          <div style={{ flex: 1, minWidth: 180 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+              International (GB → non-GB)
+            </div>
+            <div style={{ fontSize: 11, color: '#64748B', marginBottom: 6 }}>Zero-rated (no VAT)</div>
+            <input
+              value={international}
+              onChange={e => setInternational(e.target.value)}
+              placeholder="e.g. 201"
+              style={fieldStyle}
+            />
+          </div>
+
+          {/* Save button */}
+          <div style={{ flexShrink: 0 }}>
+            <button
+              onClick={() => saveMutation.mutate()}
+              disabled={!isDirty || saveMutation.isPending}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                background: saved ? 'rgba(0,200,83,0.12)' : isDirty ? 'rgba(19,181,234,0.12)' : 'rgba(0,0,0,0.04)',
+                border: `1px solid ${saved ? 'rgba(0,200,83,0.3)' : isDirty ? 'rgba(19,181,234,0.3)' : 'rgba(0,0,0,0.08)'}`,
+                color: saved ? '#00C853' : isDirty ? '#13B5EA' : '#94A3B8',
+                borderRadius: 8, padding: '8px 16px', fontSize: 12,
+                cursor: (!isDirty || saveMutation.isPending) ? 'not-allowed' : 'pointer',
+                fontWeight: 600, whiteSpace: 'nowrap',
+                transition: 'all 0.2s',
+              }}
+            >
+              {saved ? <CheckCircle size={13} /> : <Save size={13} />}
+              {saveMutation.isPending ? 'Saving…' : saved ? 'Saved' : 'Save codes'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {saveMutation.isError && (
+        <div style={{ marginTop: 10, fontSize: 12, color: '#EF4444' }}>
+          {saveMutation.error?.response?.data?.error || 'Failed to save — please try again.'}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function XeroSettings() {
   const queryClient = useQueryClient();
@@ -514,6 +634,7 @@ export default function XeroSettings() {
       )}
 
       <ConnectionPanel status={status} onDisconnect={handleDisconnect} disconnecting={disconnecting} />
+      <NominalCodesPanel />
       <CustomerMatchingPanel connected={status?.connected} />
 
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>

@@ -3826,22 +3826,23 @@ router.put('/settings', async (req, res, next) => {
       enabled,
       volume_mix_refresh_day,
       volume_mix_refresh_hour,
+      xero_domestic_account_code,
+      xero_international_account_code,
     } = req.body;
 
-    const r = await query(`
-      UPDATE billing_settings SET
-        billing_day_of_week      = COALESCE($1, billing_day_of_week),
-        billing_hour             = COALESCE($2, billing_hour),
-        billing_minute           = COALESCE($3, billing_minute),
-        fortnightly_parity       = COALESCE($4, fortnightly_parity),
-        monthly_billing_date     = COALESCE($5, monthly_billing_date),
-        enabled                  = COALESCE($6, enabled),
-        volume_mix_refresh_day   = COALESCE($7, volume_mix_refresh_day),
-        volume_mix_refresh_hour  = COALESCE($8, volume_mix_refresh_hour),
-        updated_at               = NOW()
-      WHERE id = 1
-      RETURNING *
-    `, [
+    // Build dynamic SET clause — xero codes can be explicitly cleared to null
+    const sets = [
+      `billing_day_of_week     = COALESCE($1, billing_day_of_week)`,
+      `billing_hour            = COALESCE($2, billing_hour)`,
+      `billing_minute          = COALESCE($3, billing_minute)`,
+      `fortnightly_parity      = COALESCE($4, fortnightly_parity)`,
+      `monthly_billing_date    = COALESCE($5, monthly_billing_date)`,
+      `enabled                 = COALESCE($6, enabled)`,
+      `volume_mix_refresh_day  = COALESCE($7, volume_mix_refresh_day)`,
+      `volume_mix_refresh_hour = COALESCE($8, volume_mix_refresh_hour)`,
+      `updated_at              = NOW()`,
+    ];
+    const vals = [
       billing_day_of_week      ?? null,
       billing_hour             ?? null,
       billing_minute           ?? null,
@@ -3850,7 +3851,21 @@ router.put('/settings', async (req, res, next) => {
       enabled                  ?? null,
       volume_mix_refresh_day   ?? null,
       volume_mix_refresh_hour  ?? null,
-    ]);
+    ];
+
+    // Xero nominal codes: include in SET only if present in request body (allows explicit null clear)
+    if ('xero_domestic_account_code' in req.body) {
+      vals.push(xero_domestic_account_code || null);
+      sets.splice(-1, 0, `xero_domestic_account_code = $${vals.length}`);
+    }
+    if ('xero_international_account_code' in req.body) {
+      vals.push(xero_international_account_code || null);
+      sets.splice(-1, 0, `xero_international_account_code = $${vals.length}`);
+    }
+
+    const r = await query(`
+      UPDATE billing_settings SET ${sets.join(', ')} WHERE id = 1 RETURNING *
+    `, vals);
     res.json(r.rows[0]);
   } catch (err) { next(err); }
 });

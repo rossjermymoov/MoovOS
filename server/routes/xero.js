@@ -602,27 +602,41 @@ router.post('/invoices/:id/push', async (req, res, next) => {
     }
 
     const { rows: lines } = await query(
-      `SELECT * FROM invoice_line_items WHERE invoice_id = $1 ORDER BY id`,
+      `SELECT ili.*, s.ship_to_country_iso
+       FROM invoice_line_items ili
+       LEFT JOIN charges ch ON ch.id = ili.charge_id
+       LEFT JOIN shipments s ON s.id = ch.shipment_id
+       WHERE ili.invoice_id = $1 ORDER BY ili.id`,
       [invId]
     );
 
-    // Map line items to Xero format
-    const lineItems = lines.map(l => ({
-      Description: l.description,
-      Quantity:    l.quantity,
-      UnitAmount:  parseFloat(l.unit_price),
-      AccountCode: process.env.XERO_ACCOUNT_CODE || '200',  // Sales account
-      TaxType:     inv.vat_enabled ? 'OUTPUT2' : 'NONE',
-    }));
+    // Load nominal codes from billing settings
+    const xeroSettingsRes = await query(`SELECT xero_domestic_account_code, xero_international_account_code FROM billing_settings WHERE id = 1`);
+    const xeroSettings = xeroSettingsRes.rows[0] || {};
+    const fallbackCode      = process.env.XERO_ACCOUNT_CODE || '200';
+    const domesticCode      = xeroSettings.xero_domestic_account_code     || fallbackCode;
+    const internationalCode = xeroSettings.xero_international_account_code || fallbackCode;
 
-    // If no line items, create a single summary line
+    // Map line items — domestic (GB→GB) gets OUTPUT2 + domestic code, international gets NONE + international code
+    const lineItems = lines.map(l => {
+      const isDomestic = l.ship_to_country_iso === 'GB';
+      return {
+        Description: l.description,
+        Quantity:    l.quantity,
+        UnitAmount:  parseFloat(l.unit_price),
+        AccountCode: isDomestic ? domesticCode : internationalCode,
+        TaxType:     isDomestic ? 'OUTPUT2' : 'NONE',
+      };
+    });
+
+    // If no line items, create a single summary line (fall back to customer vat_enabled flag)
     if (!lineItems.length) {
       lineItems.push({
         Description: `Parcel delivery services — ${inv.billing_period_start} to ${inv.billing_period_end}`,
         Quantity:    1,
         UnitAmount:  parseFloat(inv.total),
-        AccountCode: process.env.XERO_ACCOUNT_CODE || '200',
-        TaxType:     'NONE',
+        AccountCode: domesticCode,
+        TaxType:     inv.vat_enabled ? 'OUTPUT2' : 'NONE',
       });
     }
 
@@ -760,8 +774,30 @@ router.post('/reconciliation-runs/:runId/push', async (req, res, next) => {
     const errors   = [];
     const today    = new Date().toISOString().split('T')[0];
     const dueDate  = dueDateFromGenerated(new Date());
-    const xeroAccountCode = process.env.XERO_ACCOUNT_CODE || '200';
     const reference = `MoovOS Recon Run #${runId}${run.invoice_ref ? ` — ${run.invoice_ref}` : ''}`;
+
+    // Load nominal codes from billing settings
+    const settingsRes = await query(`SELECT xero_domestic_account_code, xero_international_account_code FROM billing_settings WHERE id = 1`);
+    const settings = settingsRes.rows[0] || {};
+    const fallbackCode     = process.env.XERO_ACCOUNT_CODE || '200';
+    const domesticCode     = settings.xero_domestic_account_code     || fallbackCode;
+    const internationalCode = settings.xero_international_account_code || fallbackCode;
+
+    // Enrich finalized lines with ship_to_country_iso via charges → shipments
+    const lineIds = linesRes.rows.map(l => l.id);
+    let countryByLineId = {};
+    if (lineIds.length > 0) {
+      const countryRes = await query(`
+        SELECT fbl.id AS line_id, s.ship_to_country_iso
+        FROM finalized_billing_lines fbl
+        JOIN charges ch ON ch.id = fbl.charge_id
+        JOIN shipments s ON s.id = ch.shipment_id
+        WHERE fbl.id = ANY($1::int[])
+      `, [lineIds]);
+      for (const row of countryRes.rows) {
+        countryByLineId[row.line_id] = row.ship_to_country_iso;
+      }
+    }
 
     for (const [, cust] of byCustomer) {
       if (!cust.xero_contact_id) {
@@ -774,7 +810,7 @@ router.post('/reconciliation-runs/:runId/push', async (req, res, next) => {
       }
 
       try {
-        // Build Xero line items — one per shipment
+        // Build Xero line items — one per shipment, split domestic vs international
         const lineItems = cust.lines.map(l => {
           const parts = [
             l.tracking_number || l.order_reference || '',
@@ -783,12 +819,15 @@ router.post('/reconciliation-runs/:runId/push', async (req, res, next) => {
             l.recipient_postcode || '',
           ].filter(Boolean).join(' — ');
 
+          const destCountry = countryByLineId[l.id] || null;
+          const isDomestic  = destCountry === 'GB';
+
           return {
             Description: parts || 'Parcel delivery service',
             Quantity:    1,
             UnitAmount:  parseFloat(l.sell_total_amount || 0),
-            AccountCode: xeroAccountCode,
-            TaxType:     'NONE',
+            AccountCode: isDomestic ? domesticCode : internationalCode,
+            TaxType:     isDomestic ? 'OUTPUT2' : 'NONE',
           };
         });
 
