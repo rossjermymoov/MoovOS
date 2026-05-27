@@ -550,7 +550,55 @@ async function buildVerifiedPool(carrierId) {
     console.warn(`[recon engine] WARNING: pool is EMPTY — carrier name/code may not match shipments.courier, or no verified shipments have dc_service_id/tracking_codes`);
   }
 
-  return { pool, poolSize, customerDatePool };
+  // ── Cancelled booking pool ──────────────────────────────────────────────────
+  // Loads tracking numbers from CANCELLED shipments so the engine can identify
+  // the correct customer when DPD invoices a label that was cancelled in the OMS
+  // (DPD has no cancellation API — labels can travel even after OMS cancellation).
+  // Only tracking keys NOT already in the active pool are added, so active entries
+  // always take precedence.
+  const cancelledRes = await query(`
+    SELECT
+      c.id              AS charge_id,
+      c.customer_id,
+      c.shipment_id,
+      COALESCE(
+        s.tracking_codes,
+        CASE WHEN c.tracking_code IS NOT NULL THEN ARRAY[c.tracking_code] ELSE NULL END
+      )                 AS tracking_codes,
+      s.ship_to_postcode,
+      s.collection_date
+    FROM   charges   c
+    LEFT JOIN shipments s ON s.id = c.shipment_id
+    JOIN      couriers  cu_carrier ON cu_carrier.id = $1
+    WHERE  c.cancelled   = true
+      AND  c.charge_type = 'courier'
+      AND  s.cancelled   = true
+      AND (
+        LOWER(s.courier) = LOWER(cu_carrier.code)
+        OR LOWER(s.courier) = LOWER(cu_carrier.name)
+        OR EXISTS (SELECT 1 FROM unnest(cu_carrier.aliases) alias WHERE LOWER(alias) = LOWER(s.courier))
+        OR EXISTS (SELECT 1 FROM courier_services cs2 WHERE cs2.id = c.courier_service_id AND cs2.courier_id = $1)
+      )
+      AND s.tracking_codes IS NOT NULL
+      AND array_length(s.tracking_codes, 1) > 0
+  `, [carrierId]);
+
+  const cancelledPool = new Map();
+  for (const row of cancelledRes.rows) {
+    const codes = row.tracking_codes || [];
+    for (const code of codes) {
+      const key = String(code).trim().toUpperCase();
+      // Only add to cancelled pool if NOT already in the active pool
+      if (!pool.has(key)) {
+        if (!cancelledPool.has(key)) cancelledPool.set(key, []);
+        const bucket = cancelledPool.get(key);
+        if (!bucket.find(r => r.charge_id === row.charge_id)) bucket.push(row);
+      }
+    }
+  }
+  console.log(`[recon engine] Cancelled booking pool built: ${cancelledPool.size} unique keys from ${cancelledRes.rows.length} cancelled charge records`);
+
+  return { pool, poolSize, customerDatePool, cancelledPool };
 }
 
 // ─── Phase 2: Account number → customer lookup ────────────────────────────────
@@ -1079,7 +1127,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   const { serviceMap: serviceCodeMap, surchargeMap, serviceIdToCodeMap, customerServiceOverrides } = await buildServiceCodeMap(carrierId);
 
   // ── Pre-condition: Build Verified Pool ────────────────────────────────────
-  const { pool, poolSize, customerDatePool } = await buildVerifiedPool(carrierId);
+  const { pool, poolSize, customerDatePool, cancelledPool } = await buildVerifiedPool(carrierId);
 
   await query(
     `UPDATE reconciliation_runs SET pool_size = $2 WHERE id = $1`,
@@ -1129,6 +1177,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
     surchargeOverrideCache: _surchargeOverrideCache,
     costOverrideCache:      _costOverrideCache,
     customerDatePool,
+    cancelledPool,
     allInvoiceTrackings,
     async customerLookup(accountNumber) {
       if (!accountNumber) return null;
@@ -1899,6 +1948,45 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   }
 
   if (poolHits.length === 0) {
+    // ── Cancelled booking check ───────────────────────────────────────────────
+    // Before falling through to carrier_direct, check whether this tracking
+    // belongs to a CANCELLED OMS shipment. DPD has no cancellation API, so a
+    // label can be physically collected and invoiced even after Moov marks the
+    // booking cancelled. If we find a cancelled match we know the customer and
+    // can flag it for manual review without creating phantom billing data.
+    const cancelledHits = poolLookup(ctx.cancelledPool, trackKey);
+    if (cancelledHits.length > 0) {
+      const cancelledCharge = cancelledHits[0];
+      console.log(
+        `[recon engine] CANCELLED BOOKING INVOICED: tracking=${trackingNumber} ` +
+        `customer=${cancelledCharge.customer_id} cancelled_charge=${cancelledCharge.charge_id} ` +
+        `carrier_amount=£${carrierAmount}`
+      );
+      await insertLine(runId, {
+        tracking_number:          trackingNumber,
+        carrier_account_no:       line.account_number     || null,
+        raw_service_code:         rawServiceCode,
+        charge_type:              line.charge_type        || 'base',
+        carrier_amount:           carrierAmount,
+        carrier_billed_weight_kg: line.billed_weight_kg   || null,
+        service_id:               serviceId,
+        customer_id:              cancelledCharge.customer_id,
+        charge_id:                cancelledCharge.charge_id,
+        expected_amount:          null,
+        delta:                    null,
+        status:                   'unmatched',
+        corrected_by:             null,
+        unmatched_reason:         'cancelled_booking_invoiced',
+        source:                   'internal',
+        shipment_date:            line.shipment_date      || null,
+        ship_to_postcode:         line.delivery_postcode  || null,
+        ship_to_name:             line.recipient_name     || null,
+        ship_to_country:          line.ship_to_country    || null,
+        parcel_count:             line.parcel_count       || null,
+      });
+      return { status: 'unmatched' };
+    }
+
     // Pool MISS — no charge record in the OMS for this tracking number.
     // Could be a return shipment, a customer booking made directly with the
     // carrier, or any other "outside the platform" scenario.
