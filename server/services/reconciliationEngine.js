@@ -1278,7 +1278,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
         ignored_count   = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = $1 AND status = 'ignored'),
         automation_rate = CASE WHEN rr.total_lines > 0 THEN
           ROUND(
-            (SELECT COUNT(*)::numeric FROM reconciliation_lines WHERE run_id = $1 AND status IN ('matched','corrected','warning'))
+            (SELECT COUNT(*)::numeric FROM reconciliation_lines WHERE run_id = $1 AND status IN ('matched','corrected','warning') AND source != 'ddp_admin')
             / rr.total_lines * 100, 2
           )
         ELSE 0 END,
