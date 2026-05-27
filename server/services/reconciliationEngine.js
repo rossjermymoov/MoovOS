@@ -975,8 +975,26 @@ async function handleCarrierDirect({
   const rollup     = buildSurchargeRollup(
     line.surcharge_amounts, ctx.surchargeById, carrierAmount, cdParcels, ctx.globallyExcludedColumns
   );
-  const totalCarrierFull  = round2(carrierAmount   + rollup.addCarrierAmt);
-  const totalExpectedFull = round2(totalCostPrice  + rollup.addExpectedCost);
+  const totalCarrierFull = round2(carrierAmount + rollup.addCarrierAmt);
+
+  // ── Carrier-Direct surcharge pass-through ─────────────────────────────────
+  // For pool-hit lines, surcharges with cost_price=0 (e.g. Insurance Liability)
+  // are zero because the base cost_price already includes that premium.
+  // For carrier_direct lines, the ghost rate is the standard (non-insurance) rate,
+  // so cost_price=0 surcharges that DPD DID bill (carrier_amt > 0) represent
+  // legitimate costs that were NOT in the ghost rate.  Absorb them into expected
+  // so the line doesn't flag a spurious overage.
+  let passThrough = 0;
+  for (const item of rollup.items) {
+    if (item.expectedCost === 0 && item.carrierAmt > 0) {
+      passThrough = round2(passThrough + item.carrierAmt);
+      console.log(
+        `[carrier-direct] pass-through surcharge "${item.name}" ` +
+        `carrier_amt=£${item.carrierAmt} absorbed into expected (cost_price=0)`
+      );
+    }
+  }
+  const totalExpectedFull = round2(totalCostPrice + rollup.addExpectedCost + passThrough);
   const delta   = round2(totalCarrierFull - totalExpectedFull);
   const isMatch = Math.abs(delta) < 0.02;
 
