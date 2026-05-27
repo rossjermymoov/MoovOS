@@ -1494,7 +1494,20 @@ async function buildSurchargeRollup(surchargeAmounts, surchargeById, freightCarr
         const otherTotal = items.filter(i => i.surchargeId !== surchargeId).reduce((s, i) => s + i.carrierAmt, 0);
         item.expectedCost = round2((freightCarrierAmt + otherTotal) * costRate / 100);
       } else {
-        item.expectedCost = round2(costRate * (perParcel ? invoiceParcels : 1));
+        // For flat-rate surcharges: if the carrier charged an exact multiple of our
+        // cost rate, trust the carrier's implied count rather than our static
+        // charge_per definition.  This handles post-booking surcharges like OOG where
+        // DPD applies the charge per affected parcel but our surcharge record has
+        // charge_per='shipment' (meaning we expected it once).
+        // e.g. OOG cost_price=£6, carrier charged £12 → implied count 2 → expectedCost = £12
+        const staticExpected = round2(costRate * (perParcel ? invoiceParcels : 1));
+        if (costRate > 0 && carrierAmt > 0) {
+          const impliedCount = Math.round(carrierAmt / costRate);
+          const remainder    = Math.abs(carrierAmt - round2(impliedCount * costRate));
+          item.expectedCost  = remainder < 0.02 ? carrierAmt : staticExpected;
+        } else {
+          item.expectedCost = staticExpected;
+        }
       }
     }
     addExpectedCost += item.expectedCost;
