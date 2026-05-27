@@ -972,8 +972,9 @@ async function handleCarrierDirect({
   }
 
   const cdParcels  = parcelCount > 1 ? parcelCount : 1;
-  const rollup     = buildSurchargeRollup(
-    line.surcharge_amounts, ctx.surchargeById, carrierAmount, cdParcels, ctx.globallyExcludedColumns
+  const rollup     = await buildSurchargeRollup(
+    line.surcharge_amounts, ctx.surchargeById, carrierAmount, cdParcels, ctx.globallyExcludedColumns,
+    customer.customer_id, ctx.costOverrideCache
   );
   const totalCarrierFull = round2(carrierAmount + rollup.addCarrierAmt);
 
@@ -1110,6 +1111,8 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   const _custCache    = new Map();
   // surcharge override cache: `${customerId}:${surchargeId}` → sell price (number|null)
   const _surchargeOverrideCache = new Map();
+  // cost override cache: `${customerId}:${surchargeId}` → cost price (number|null)
+  const _costOverrideCache = new Map();
   // Set of all tracking numbers present in the carrier invoice (UPPER).
   // Used by auto-consolidation to avoid treating a tracking that has its own
   // carrier invoice line as an "unaccounted companion" for another line.
@@ -1124,6 +1127,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
     surchargeById,
     globallyExcludedColumns,
     surchargeOverrideCache: _surchargeOverrideCache,
+    costOverrideCache:      _costOverrideCache,
     customerDatePool,
     allInvoiceTrackings,
     async customerLookup(accountNumber) {
@@ -1355,7 +1359,7 @@ async function loadCarrierSurcharges(carrierId) {
 // ─── Surcharge Rollup ─────────────────────────────────────────────────────────
 // One shipment = one reconciliation line.
 // Surcharge amounts are rolled into the freight line totals rather than
-// producing separate rows.  buildSurchargeRollup (sync) computes carrier
+// producing separate rows.  buildSurchargeRollup computes carrier
 // amounts and expected costs; resolveSurchargeSells (async) adds sell prices
 // once the freight sell is known.
 
@@ -1367,7 +1371,7 @@ async function loadCarrierSurcharges(carrierId) {
  * @param {Set}         globallyExcludedColumns
  * @returns {{ addCarrierAmt, addExpectedCost, items }}
  */
-function buildSurchargeRollup(surchargeAmounts, surchargeById, freightCarrierAmt, invoiceParcels, globallyExcludedColumns) {
+async function buildSurchargeRollup(surchargeAmounts, surchargeById, freightCarrierAmt, invoiceParcels, globallyExcludedColumns, customerId = null, costOverrideCache = null) {
   if (!surchargeAmounts || !Object.keys(surchargeAmounts).length) {
     return { addCarrierAmt: 0, addExpectedCost: 0, items: [] };
   }
@@ -1396,7 +1400,26 @@ function buildSurchargeRollup(surchargeAmounts, surchargeById, freightCarrierAmt
     } else {
       const isPercent = surcharge.calc_type === 'percentage';
       const perParcel  = surcharge.charge_per === 'parcel';
-      const costRate   = parseFloat(surcharge.cost_price) || 0;
+      let costRate     = parseFloat(surcharge.cost_price) || 0;
+      // Apply per-customer cost override if provided
+      if (customerId && costOverrideCache) {
+        const cacheKey = `${customerId}:${surchargeId}`;
+        let overrideCost;
+        if (costOverrideCache.has(cacheKey)) {
+          overrideCost = costOverrideCache.get(cacheKey);
+        } else {
+          const ovRes = await query(
+            `SELECT cost_price_override FROM customer_surcharge_overrides
+             WHERE  surcharge_id = $1 AND customer_id = $2 AND active = true LIMIT 1`,
+            [surchargeId, customerId]
+          );
+          overrideCost = ovRes.rows[0]?.cost_price_override ?? null;
+          costOverrideCache.set(cacheKey, overrideCost !== null ? parseFloat(overrideCost) : null);
+        }
+        if (overrideCost !== null) {
+          costRate = overrideCost;
+        }
+      }
       if (isPercent && freightCarrierAmt > 0) {
         const otherTotal = items.filter(i => i.surchargeId !== surchargeId).reduce((s, i) => s + i.carrierAmt, 0);
         item.expectedCost = round2((freightCarrierAmt + otherTotal) * costRate / 100);
@@ -1641,8 +1664,9 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
     sumGroupColumnSurcharges(group).breakdown.map(({ surcharge_id, amount }) => [surcharge_id, amount])
   );
   const groupParcels = freightLines.reduce((s, l) => s + (parseInt(l.parcel_count) || 1), 0);
-  const rollup       = buildSurchargeRollup(
-    groupSurchargeMap, ctx.surchargeById, totalCarrierAmount, groupParcels, ctx.globallyExcludedColumns
+  const rollup       = await buildSurchargeRollup(
+    groupSurchargeMap, ctx.surchargeById, totalCarrierAmount, groupParcels, ctx.globallyExcludedColumns,
+    charge.customer_id, ctx.costOverrideCache
   );
   const totalCarrierFull  = round2(totalCarrierAmount + rollup.addCarrierAmt);
   const totalExpectedFull = round2(expectedBase        + rollup.addExpectedCost);
@@ -2162,8 +2186,9 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
 
   // Roll up all named CSV-column surcharges into the single shipment line.
   const invoiceParcels = parseInt(line.parcel_count) || 1;
-  const rollup         = buildSurchargeRollup(
-    line.surcharge_amounts, ctx.surchargeById, carrierAmount, invoiceParcels, ctx.globallyExcludedColumns
+  const rollup         = await buildSurchargeRollup(
+    line.surcharge_amounts, ctx.surchargeById, carrierAmount, invoiceParcels, ctx.globallyExcludedColumns,
+    charge.customer_id, ctx.costOverrideCache
   );
   const totalCarrier  = round2(carrierAmount + rollup.addCarrierAmt);
   const totalExpected = round2(fullExpected  + rollup.addExpectedCost);
