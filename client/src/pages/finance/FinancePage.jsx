@@ -84,15 +84,15 @@ function BreakdownTooltip({ charge, mode, above = false }) {
       position: 'absolute',
       ...(above ? { bottom: 'calc(100% + 6px)' } : { top: 'calc(100% + 6px)' }),
       right: 0,
-      background: '#FFFFFF', border: `1px solid rgba(0,0,0,0.12)`,
+      background: '#1E293B', border: `1px solid rgba(255,255,255,0.10)`,
       borderRadius: 8, padding: '10px 14px', minWidth: 220, zIndex: 200,
-      boxShadow: '0 4px 16px rgba(0,0,0,0.12)', pointerEvents: 'none',
+      boxShadow: '0 8px 28px rgba(0,0,0,0.35)', pointerEvents: 'none',
       fontFamily: 'monospace', fontSize: 12,
     }}>
       {/* Base */}
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 4 }}>
-        <span style={{ color: '#64748B' }}>Base rate</span>
-        <span style={{ color: '#0F172A' }}>
+        <span style={{ color: '#94A3B8' }}>Base rate</span>
+        <span style={{ color: '#F1F5F9' }}>
           {base > 0 ? `£${base.toFixed(2)}` : <span style={{ color: '#F44336' }}>not set</span>}
         </span>
       </div>
@@ -101,10 +101,10 @@ function BreakdownTooltip({ charge, mode, above = false }) {
         const val = mode === 'sell' ? parseFloat(l.price || 0) : parseFloat(l.cost_price ?? l.price ?? 0);
         return (
           <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 4 }}>
-            <span style={{ color: '#64748B' }}>{l.name || (l.type === 'fuel' ? 'Fuel' : 'Surcharge')}</span>
-            <span style={{ color: '#0F172A' }}>
+            <span style={{ color: '#94A3B8' }}>{l.name || (l.type === 'fuel' ? 'Fuel' : 'Surcharge')}</span>
+            <span style={{ color: '#F1F5F9' }}>
               {l.cost_price == null && mode === 'cost'
-                ? <span style={{ color: '#94A3B8' }}>—</span>
+                ? <span style={{ color: '#64748B' }}>—</span>
                 : `£${val.toFixed(2)}`}
             </span>
           </div>
@@ -113,10 +113,10 @@ function BreakdownTooltip({ charge, mode, above = false }) {
       {/* Divider + total */}
       <div style={{
         display: 'flex', justifyContent: 'space-between', gap: 16,
-        marginTop: 6, paddingTop: 6, borderTop: `1px solid rgba(0,0,0,0.08)`,
+        marginTop: 6, paddingTop: 6, borderTop: `1px solid rgba(255,255,255,0.08)`,
         fontWeight: 700,
       }}>
-        <span style={{ color: '#334155' }}>Total</span>
+        <span style={{ color: '#CBD5E1' }}>Total</span>
         <span style={{ color: accentCol }}>£{total.toFixed(2)}</span>
       </div>
     </div>
@@ -210,9 +210,9 @@ function MoreMenu({ charge, onBill, onReprice, onLog, onDebug, onCancel }) {
       {open && (
         <div style={{
           position: 'absolute', right: 0, top: 'calc(100% + 4px)',
-          background: '#1A1B3A', border: '1px solid rgba(0,0,0,0.10)',
-          borderRadius: 8, minWidth: 140, zIndex: 100,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+          background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
+          borderRadius: 8, minWidth: 150, zIndex: 100,
+          boxShadow: '0 6px 20px rgba(0,0,0,0.12)',
           overflow: 'hidden',
         }}>
           {items.map((item, i) => (
@@ -224,7 +224,7 @@ function MoreMenu({ charge, onBill, onReprice, onLog, onDebug, onCancel }) {
                 background: 'none', border: 'none',
                 padding: '9px 14px', fontSize: 13,
                 color: item.color, cursor: 'pointer',
-                borderBottom: i < items.length - 1 ? '1px solid rgba(0,0,0,0.04)' : 'none',
+                borderBottom: i < items.length - 1 ? '1px solid rgba(0,0,0,0.06)' : 'none',
               }}
               onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.04)'}
               onMouseLeave={e => e.currentTarget.style.background = 'none'}
