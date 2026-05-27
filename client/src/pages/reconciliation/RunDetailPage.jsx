@@ -96,6 +96,7 @@ function ReasonLabel({ reason, correctedBy }) {
     weight_sell_lookup_failed:    { text: '⚖ Weight corrected — sell rate missing', color: '#FF5252' },
     cancelled_unshipped:          { text: '🚫 Cancelled — dispute with DPD', color: '#FF5252' },
     cancelled_shipped:            { text: '⚠ Cancelled — parcel was shipped', color: '#FFB300' },
+    cancelled_booking_invoiced:   { text: '🚫 Cancelled booking — credit DPD',  color: '#FF5252' },
     processing_error:             { text: '⚡ Processing error — re-import', color: '#FF5252' },
   };
   const cfg = labels[reason] || { text: reason || '—', color: '#64748B' };
@@ -2641,6 +2642,39 @@ export default function RunDetailPage() {
       {/* Unmatched tab — service code mapping banner + lines table */}
       {activeTab === 'unmatched' && (
         <>
+          {/* Cancelled booking credit request banner */}
+          {unmatchedLines.some(l => l.unmatched_reason === 'cancelled_booking_invoiced') && (
+            <div style={{
+              background: 'rgba(213,0,0,0.07)', border: '1px solid rgba(213,0,0,0.25)',
+              borderRadius: 8, padding: '12px 16px', marginBottom: 16,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                <span style={{ fontSize: 16, lineHeight: 1 }}>🚫</span>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: '#B71C1C', marginBottom: 2 }}>
+                    {unmatchedLines.filter(l => l.unmatched_reason === 'cancelled_booking_invoiced').length} cancelled booking{unmatchedLines.filter(l => l.unmatched_reason === 'cancelled_booking_invoiced').length !== 1 ? 's' : ''} invoiced by DPD
+                  </div>
+                  <div style={{ fontSize: 12, color: '#7F1D1D', lineHeight: 1.5 }}>
+                    DPD has charged for labels that were cancelled in the system. These lines are held as unmatched.
+                    Download the credit request CSV and send to DPD to reclaim these charges.
+                  </div>
+                </div>
+              </div>
+              <a
+                href={`/api/reconciliation/runs/${id}/cancelled-credit-request`}
+                download
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '7px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                  background: '#B71C1C', color: '#fff', textDecoration: 'none',
+                  whiteSpace: 'nowrap', flexShrink: 0,
+                }}
+              >
+                ↓ Download Credit Request
+              </a>
+            </div>
+          )}
           <ServiceCodeMappingBanner
             unmatchedLines={unmatchedLines}
             runId={parseInt(id)}

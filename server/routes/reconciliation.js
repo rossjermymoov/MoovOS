@@ -2278,6 +2278,86 @@ router.get('/runs/:id/export/preview-csv', async (req, res) => {
   }
 });
 
+// ─── GET /api/reconciliation/runs/:id/cancelled-credit-request ───────────────
+// Generates a CSV of all cancelled_booking_invoiced lines for this run,
+// formatted as a DPD credit request that can be sent directly to the carrier.
+// Fields: Account No, Tracking No, Collection Date, Recipient, Postcode,
+//         Parcels, Amount Charged (£), Our Reference, Customer, Reason
+
+router.get('/runs/:id/cancelled-credit-request', async (req, res) => {
+  try {
+    const runId = parseInt(req.params.id);
+    if (isNaN(runId)) return res.status(400).json({ error: 'Invalid run id' });
+
+    const { rows } = await query(`
+      SELECT
+        rl.carrier_account_no,
+        rl.tracking_number,
+        COALESCE(s.collection_date, rl.shipment_date)  AS collection_date,
+        rl.ship_to_name,
+        rl.ship_to_postcode,
+        COALESCE(rl.parcel_count, 1)                   AS parcel_count,
+        rl.carrier_amount,
+        s.reference                                    AS shipment_reference,
+        cu.business_name                               AS customer_name,
+        rr.invoice_ref
+      FROM   reconciliation_lines rl
+      JOIN   reconciliation_runs rr ON rr.id = rl.run_id
+      LEFT JOIN charges ch ON ch.id = rl.charge_id
+      LEFT JOIN shipments s  ON s.id  = ch.shipment_id
+      LEFT JOIN customers cu ON cu.id = rl.customer_id
+      WHERE  rl.run_id            = $1
+      AND    rl.unmatched_reason  = 'cancelled_booking_invoiced'
+      ORDER  BY rl.tracking_number
+    `, [runId]);
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'No cancelled-booking lines found for this run' });
+    }
+
+    const invoiceRef = rows[0].invoice_ref || runId;
+    const filename   = `dpd_credit_request_${invoiceRef}.csv`;
+
+    // CSV header + rows
+    const escape = v => {
+      if (v == null) return '';
+      const s = String(v);
+      return s.includes(',') || s.includes('"') || s.includes('\n')
+        ? `"${s.replace(/"/g, '""')}"`
+        : s;
+    };
+    const fmt = (d) => d ? new Date(d).toLocaleDateString('en-GB') : '';
+
+    const header = [
+      'Account No', 'Tracking Number', 'Collection Date', 'Recipient Name',
+      'Recipient Postcode', 'Parcels', 'Amount Charged (GBP)',
+      'Our Reference', 'Customer', 'Reason'
+    ];
+    const csvLines = [
+      header.map(escape).join(','),
+      ...rows.map(r => [
+        r.carrier_account_no || '',
+        r.tracking_number,
+        fmt(r.collection_date),
+        r.ship_to_name || '',
+        r.ship_to_postcode || '',
+        r.parcel_count,
+        parseFloat(r.carrier_amount).toFixed(2),
+        r.shipment_reference || '',
+        r.customer_name || '',
+        'Cancelled booking — credit requested',
+      ].map(escape).join(',')),
+    ];
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csvLines.join('\r\n'));
+  } catch (err) {
+    console.error('[reconciliation/cancelled-credit-request] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── GET /api/reconciliation/runs/:id/export/csv ─────────────────────────────
 // Generate and download an itemized CSV for one customer.
 // Query param: customer_id (required)
