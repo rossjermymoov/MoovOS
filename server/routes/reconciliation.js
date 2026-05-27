@@ -688,7 +688,7 @@ router.delete('/service-mappings/:id', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ─── GET /api/reconciliation/runs ─────────────────────────────────────────────
-// List all reconciliation runs, newest first.
+// List all reconciliation runs, newest first. (customer_display wired)
 
 router.get('/runs', async (req, res) => {
   try {
