@@ -647,7 +647,7 @@ router.post('/invoices/:id/push', async (req, res, next) => {
       DueDate:       dueDateFromGenerated(inv.generated_at),
       InvoiceNumber: inv.invoice_number,
       LineItems:     lineItems,
-      Status:        'AUTHORISED',
+      Status:        'DRAFT',
       Reference:     `MoovOS ${inv.invoice_number}`,
     };
 
@@ -908,7 +908,7 @@ router.post('/reconciliation-runs/:runId/push', async (req, res, next) => {
           Date:          today,
           DueDate:       custDueDateStr,
           LineItems:     itemsToSend,
-          Status:        'AUTHORISED',
+          Status:        'DRAFT',
           InvoiceNumber: invoiceNumber,
         };
 
