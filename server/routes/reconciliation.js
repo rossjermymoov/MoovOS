@@ -2717,13 +2717,27 @@ router.get('/runs/:id/customers/preview', async (req, res) => {
             AND  sc.charge_type = 'fuel'
             AND  sc.cancelled   = false
         ), 0))                                                                              AS total_fuel,
-        -- total_surcharge: non-fuel surcharge sell (e.g. handling fee, GC charge)
+        -- total_surcharge: non-fuel surcharge sell.
+        -- Two paths: (a) via freight shipment_id (standard OMS bookings),
+        --            (b) directly via charge_id on resolved surcharge recon lines
+        --                (carrier_direct where freight charge has null shipment_id).
         SUM(COALESCE((
           SELECT SUM(sc.price)
           FROM   charges sc
-          WHERE  sc.shipment_id = base.shipment_id
-            AND  sc.charge_type = 'surcharge'
+          WHERE  sc.charge_type = 'surcharge'
             AND  sc.cancelled   = false
+            AND  (
+              (base.shipment_id IS NOT NULL AND sc.shipment_id = base.shipment_id)
+              OR sc.id IN (
+                SELECT rl3.charge_id
+                FROM   reconciliation_lines rl3
+                WHERE  rl3.run_id           = $1
+                  AND  rl3.tracking_number  = rl.tracking_number
+                  AND  rl3.surcharge_id    IS NOT NULL
+                  AND  rl3.status           = 'corrected'
+                  AND  rl3.charge_id       IS NOT NULL
+              )
+            )
         ), 0))                                                                              AS total_surcharge,
         0                                                                                   AS total_recon_surcharge,
         -- total_sell: sum of all three components
@@ -2732,9 +2746,20 @@ router.get('/runs/:id/customers/preview', async (req, res) => {
           + COALESCE((
               SELECT SUM(sc.price)
               FROM   charges sc
-              WHERE  sc.shipment_id = base.shipment_id
-                AND  sc.charge_type IN ('fuel', 'surcharge')
+              WHERE  sc.charge_type IN ('fuel', 'surcharge')
                 AND  sc.cancelled   = false
+                AND  (
+                  (base.shipment_id IS NOT NULL AND sc.shipment_id = base.shipment_id)
+                  OR (sc.charge_type = 'surcharge' AND sc.id IN (
+                    SELECT rl3.charge_id
+                    FROM   reconciliation_lines rl3
+                    WHERE  rl3.run_id          = $1
+                      AND  rl3.tracking_number = rl.tracking_number
+                      AND  rl3.surcharge_id   IS NOT NULL
+                      AND  rl3.status          = 'corrected'
+                      AND  rl3.charge_id      IS NOT NULL
+                  ))
+                )
             ), 0)
         )                                                                                   AS total_sell,
         -- Cost: use total_cost_price (base + fuel + surcharge charges) to match Finance page.
@@ -2837,15 +2862,28 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
             AND  sc.charge_type = 'fuel'
             AND  sc.cancelled   = false
         ), 0)                                                            AS sell_fuel,
-        -- sell_surcharge: from charges table (primary) + recon-line fallback for any
-        -- resolved surcharge lines (sell_surcharge_missing OR map_to_surcharge) that
-        -- haven't had a charge created yet (charge_id IS NULL).
+        -- sell_surcharge: two paths to find the surcharge charge +
+        -- a fallback for when no charge was created yet (charge_id IS NULL).
+        -- Path A: via freight charge shipment_id (standard OMS bookings).
+        -- Path B: directly via charge_id on the resolved surcharge recon line
+        --         (carrier-direct where freight charge has null shipment_id).
         COALESCE((
           SELECT SUM(sc.price)
           FROM   charges sc
-          WHERE  sc.shipment_id = base.shipment_id
-            AND  sc.charge_type = 'surcharge'
+          WHERE  sc.charge_type = 'surcharge'
             AND  sc.cancelled   = false
+            AND  (
+              (base.shipment_id IS NOT NULL AND sc.shipment_id = base.shipment_id)
+              OR sc.id IN (
+                SELECT rl3.charge_id
+                FROM   reconciliation_lines rl3
+                WHERE  rl3.run_id          = rl.run_id
+                  AND  rl3.tracking_number = rl.tracking_number
+                  AND  rl3.surcharge_id   IS NOT NULL
+                  AND  rl3.status          = 'corrected'
+                  AND  rl3.charge_id      IS NOT NULL
+              )
+            )
         ), 0)
         + COALESCE((
           SELECT SUM(wl.corrected_sell_price)
@@ -2854,7 +2892,7 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
             AND  wl.tracking_number  = rl.tracking_number
             AND  wl.surcharge_id    IS NOT NULL
             AND  wl.status           = 'corrected'
-            AND  wl.charge_id       IS NULL   -- only fallback when no charge row created yet
+            AND  wl.charge_id       IS NULL   -- fallback: charge creation failed
             AND  wl.id              != rl.id
         ), 0)                                                            AS sell_surcharge,
         -- sell_total
@@ -2862,9 +2900,20 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
         + COALESCE((
             SELECT SUM(sc.price)
             FROM   charges sc
-            WHERE  sc.shipment_id = base.shipment_id
-              AND  sc.charge_type IN ('fuel', 'surcharge')
+            WHERE  sc.charge_type IN ('fuel', 'surcharge')
               AND  sc.cancelled   = false
+              AND  (
+                (base.shipment_id IS NOT NULL AND sc.shipment_id = base.shipment_id)
+                OR (sc.charge_type = 'surcharge' AND sc.id IN (
+                  SELECT rl3.charge_id
+                  FROM   reconciliation_lines rl3
+                  WHERE  rl3.run_id          = rl.run_id
+                    AND  rl3.tracking_number = rl.tracking_number
+                    AND  rl3.surcharge_id   IS NOT NULL
+                    AND  rl3.status          = 'corrected'
+                    AND  rl3.charge_id      IS NOT NULL
+                ))
+              )
           ), 0)
         + COALESCE((
             SELECT SUM(wl.corrected_sell_price)
@@ -2873,7 +2922,7 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
               AND  wl.tracking_number  = rl.tracking_number
               AND  wl.surcharge_id    IS NOT NULL
               AND  wl.status           = 'corrected'
-              AND  wl.charge_id       IS NULL   -- fallback: no charge created yet
+              AND  wl.charge_id       IS NULL   -- fallback: charge creation failed
               AND  wl.id              != rl.id
           ), 0)                                                          AS sell_total,
         -- cost_total: carrier cost + charges + recon-line fallback for unresolved surcharge lines
