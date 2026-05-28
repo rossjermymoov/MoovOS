@@ -1061,9 +1061,13 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
       if (sellRes.rows.length) {
         const sp = sellRes.rows[0];
         const sellVal = parseFloat(sp.sell_price || 0);
+        const parcels = Math.max(1, parseInt(line.parcel_count || 1) || 1);
         if (sp.calc_type === 'percentage') {
           // % of the carrier_amount
           surchargeSell = Math.round(parseFloat(line.carrier_amount || 0) * (sellVal / 100) * 100) / 100;
+        } else if (sp.charge_per === 'parcel') {
+          // flat rate × parcel count (e.g. £5 × 2 parcels = £10)
+          surchargeSell = Math.round(sellVal * parcels * 100) / 100;
         } else {
           surchargeSell = sellVal;
         }
