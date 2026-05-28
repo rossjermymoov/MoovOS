@@ -1247,19 +1247,39 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
           }
         }
 
-        // Create the charge even if shipment is null — at minimum the charge
-        // appears under the customer so billing is correct.
-        if (line.customer_id) {
+        // If the surcharge line has no customer_id (unattributed), inherit it from
+        // the freight counterpart in the same run. This happens when a carrier
+        // account number isn't in billing_aliases but the freight line was matched
+        // via the pool (carrier_direct) and already has the customer set.
+        let scCustomerId = line.customer_id;
+        if (!scCustomerId) {
+          const custRes = await query(`
+            SELECT customer_id FROM reconciliation_lines
+            WHERE  run_id          = $1
+              AND  tracking_number = $2
+              AND  surcharge_id   IS NULL
+              AND  customer_id    IS NOT NULL
+            LIMIT 1
+          `, [line.run_id, line.tracking_number]);
+          scCustomerId = custRes.rows[0]?.customer_id || null;
+          if (scCustomerId) {
+            console.log(`[reconciliation/resolve] Inherited customer_id=${scCustomerId} from freight line for tracking=${line.tracking_number}`);
+          }
+        }
+
+        // Create the charge — even without shipment_id the charge appears under
+        // the customer so billing is correct.
+        if (scCustomerId) {
           // Idempotency check — don't double-insert if already created
           const existRes = await query(`
             SELECT id FROM charges
             WHERE  customer_id  = $1
               AND  surcharge_id = $2
-              AND  shipment_id  = $3
               AND  charge_type  = 'surcharge'
               AND  cancelled    = false
+              AND  ($3::uuid IS NULL OR shipment_id = $3::uuid)
             LIMIT 1
-          `, [line.customer_id, resolution_value, scShipmentId]);
+          `, [scCustomerId, resolution_value, scShipmentId]);
 
           if (existRes.rows.length) {
             surchargeChargeId = existRes.rows[0].id;
@@ -1272,12 +1292,14 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
                 status, verified, despatch_date, source
               ) VALUES ($1,$2,'surcharge',$3,$4,$5,$5,'verified',true,$6,'recon_surcharge')
               RETURNING id
-            `, [line.customer_id, scShipmentId, resolution_value, scCostAmt, surchargeSell, scDespatchDate]);
+            `, [scCustomerId, scShipmentId, resolution_value, scCostAmt, surchargeSell, scDespatchDate]);
             surchargeChargeId = scChargeRes.rows[0]?.id || null;
             if (surchargeChargeId) {
               console.log(`[reconciliation/resolve] Surcharge charge created: id=${surchargeChargeId} surcharge=${resolution_value} sell=£${surchargeSell} tracking=${line.tracking_number}`);
             }
           }
+        } else {
+          console.warn(`[reconciliation/resolve] Cannot create surcharge charge — no customer_id for tracking=${line.tracking_number}`);
         }
       } catch (scErr) {
         console.warn(`[reconciliation/resolve] Surcharge charge creation failed for tracking=${line.tracking_number}:`, scErr.message);
