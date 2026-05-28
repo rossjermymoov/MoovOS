@@ -2105,17 +2105,21 @@ function CustomerSummaryPanel({ runId, run }) {
                 £{parseFloat(c.total_margin || 0).toFixed(2)}
               </td>
               <td style={{ padding: '9px 10px' }}>
-                {c.xero_pushed_count > 0 ? (
-                  <span style={{ color: '#00C853', fontSize: 11, fontWeight: 700 }}>✓ Pushed</span>
-                ) : c.xero_linked ? (
-                  <button
-                    style={{ ...btnGhost, padding: '3px 8px', fontSize: 10, opacity: pushing === c.customer_id ? 0.7 : 1 }}
-                    onClick={() => handleXeroPush(c.customer_id)}
-                    disabled={!!pushing}
-                  >
-                    {pushing === c.customer_id ? <RefreshCw size={11} /> : <Send size={11} />}
-                    Push
-                  </button>
+                {c.xero_linked ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {c.xero_pushed_count > 0 && (
+                      <span style={{ color: '#00C853', fontSize: 11, fontWeight: 700 }}>✓ Pushed</span>
+                    )}
+                    <button
+                      style={{ ...btnGhost, padding: '3px 8px', fontSize: 10, opacity: pushing === c.customer_id ? 0.7 : 1 }}
+                      onClick={() => handleXeroPush(c.customer_id)}
+                      disabled={!!pushing}
+                      title={c.xero_pushed_count > 0 ? 'Re-push to Xero (void the existing invoice in Xero first)' : 'Push to Xero'}
+                    >
+                      {pushing === c.customer_id ? <RefreshCw size={11} /> : <Send size={11} />}
+                      {c.xero_pushed_count > 0 ? 'Re-push' : 'Push'}
+                    </button>
+                  </div>
                 ) : (
                   <span style={{ color: '#64748B', fontSize: 10 }}>Not linked</span>
                 )}
