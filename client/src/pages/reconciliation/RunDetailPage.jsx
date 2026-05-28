@@ -2936,6 +2936,7 @@ export default function RunDetailPage() {
   const [defaultResolveType, setDefaultResolveType] = useState(null);
   const [finalizing,        setFinalizing]        = useState(false);
   const [finalizeError,     setFinalizeError]     = useState('');
+  const [unfinalizing,      setUnfinalizing]      = useState(false);
   const [raisingQueryLine,  setRaisingQueryLine]  = useState(null);
 
   const { data: run, isLoading: runLoading, refetch: refetchRun } = useQuery({
@@ -2943,6 +2944,21 @@ export default function RunDetailPage() {
     queryFn:  () => api.get(`/reconciliation/runs/${id}`).then(r => r.data),
     refetchInterval: (data) => data?.status === 'processing' ? 3000 : false,
   });
+
+  async function handleUnfinalize() {
+    if (!window.confirm('Reset this run back to editable? This will delete the billing snapshot so you can fix lines and re-finalize. Any Xero invoices already pushed will need to be voided in Xero manually.')) return;
+    setUnfinalizing(true);
+    try {
+      await api.post(`/reconciliation/runs/${id}/unfinalize`);
+      qc.invalidateQueries({ queryKey: ['recon-run', id] });
+      qc.invalidateQueries({ queryKey: ['recon-customers', id] });
+      refetchRun();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Reset failed');
+    } finally {
+      setUnfinalizing(false);
+    }
+  }
 
   async function handleFinalize() {
     if (!window.confirm('Finalize this run? This will lock all Matched and Corrected lines and create the billing snapshot. This cannot be undone.')) return;
@@ -3030,9 +3046,20 @@ export default function RunDetailPage() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {run.finalized && (
-            <span style={{ color: '#00C853', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
-              <Lock size={13} />Finalized
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ color: '#00C853', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <Lock size={13} />Finalized
+              </span>
+              <button
+                style={{ ...btnRed, padding: '4px 10px', fontSize: 11, opacity: unfinalizing ? 0.7 : 1 }}
+                onClick={handleUnfinalize}
+                disabled={unfinalizing}
+                title='Reset run — deletes the billing snapshot so you can fix lines and re-finalize'
+              >
+                {unfinalizing ? <RefreshCw size={11} /> : <X size={11} />}
+                {unfinalizing ? 'Resetting…' : 'Reset Run'}
+              </button>
+            </div>
           )}
           {run.status === 'failed' && (
             <span style={{ color: '#FF5252', fontSize: 12, fontWeight: 700 }}>✗ Run Failed</span>

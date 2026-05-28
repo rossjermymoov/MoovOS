@@ -2233,6 +2233,46 @@ router.post('/runs/:id/finalize', async (req, res) => {
   }
 });
 
+// ─── POST /api/reconciliation/runs/:id/unfinalize ────────────────────────────
+// Resets a finalized run back to editable state.
+// Deletes finalized_billing_lines for this run and clears the finalized flag.
+// Use when the finalized snapshot contains errors that need correcting.
+
+router.post('/runs/:id/unfinalize', async (req, res) => {
+  try {
+    const runId = parseInt(req.params.id);
+
+    const runCheck = await query(
+      `SELECT id, finalized, invoice_ref FROM reconciliation_runs WHERE id = $1`,
+      [runId]
+    );
+    if (!runCheck.rows.length) return res.status(404).json({ error: 'Run not found' });
+    if (!runCheck.rows[0].finalized) return res.status(400).json({ error: 'Run is not finalized' });
+
+    // Delete the snapshot
+    const delRes = await query(
+      `DELETE FROM finalized_billing_lines WHERE run_id = $1`,
+      [runId]
+    );
+
+    // Reset finalization state on the run
+    await query(`
+      UPDATE reconciliation_runs
+      SET finalized    = false,
+          finalized_at = NULL,
+          finalized_by = NULL,
+          status       = 'needs_review'
+      WHERE id = $1
+    `, [runId]);
+
+    console.log(`[reconciliation/unfinalize] Run ${runId} reset — ${delRes.rowCount} snapshot lines deleted`);
+    return res.json({ ok: true, run_id: runId, lines_deleted: delRes.rowCount });
+  } catch (err) {
+    console.error('[reconciliation/unfinalize] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── POST /api/reconciliation/runs/:id/re-snapshot ───────────────────────────
 // Recovery: re-runs the snapshot INSERT step for a finalized run that has
 // empty or partial finalized_billing_lines (e.g. due to a DB error during
