@@ -2093,13 +2093,16 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
         const baseCharge       = basePoolHits[0];
         const totalExpected    = round2(parseFloat(baseCharge.expected_cost) || 0);
 
-        // Find how much expected was already accounted for on the base row.
-        // The base row will have been inserted before the # row (DPD CSV order).
+        // Find how much DPD actually charged on the base row so we know what's
+        // left to account for on this # continuation row.
+        // We use carrier_amount (what DPD billed) NOT expected_amount (what we expect)
+        // because expected_amount is the same value for both rows (full charge total),
+        // which would make remainingExpected = 0 and misclassify the hash row.
         const baseReconRes  = await query(
-          `SELECT expected_amount FROM reconciliation_lines WHERE run_id = $1 AND tracking_number = $2 LIMIT 1`,
+          `SELECT carrier_amount FROM reconciliation_lines WHERE run_id = $1 AND tracking_number = $2 LIMIT 1`,
           [runId, baseTrackKey]
         );
-        const baseAccounted    = round2(parseFloat(baseReconRes.rows[0]?.expected_amount) || 0);
+        const baseAccounted    = round2(parseFloat(baseReconRes.rows[0]?.carrier_amount) || 0);
         const remainingExpected = (totalExpected > 0 && baseAccounted > 0)
           ? round2(totalExpected - baseAccounted)
           : carrierAmount; // fallback: accept at face value
