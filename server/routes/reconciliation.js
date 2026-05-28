@@ -2267,52 +2267,77 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
         rl.charge_type,
         rl.parcel_count,
         rl.carrier_billed_weight_kg,
-        cs.name                                                          AS service_name,
-        -- sell_base: freight only (corrected at billed weight, or booking-time price)
-        COALESCE(rl.corrected_sell_price, base.sell_price, base.price, 0) AS sell_base,
-        -- sell_fuel: fuel surcharge sell for this shipment
-        COALESCE((
-          SELECT SUM(sc.price)
-          FROM   charges sc
-          WHERE  sc.shipment_id = base.shipment_id
-            AND  sc.charge_type = 'fuel'
-            AND  sc.cancelled   = false
-        ), 0)                                                            AS sell_fuel,
-        -- sell_surcharge: non-fuel surcharge sell (handling, GC, etc.)
-        COALESCE((
-          SELECT SUM(sc.price)
-          FROM   charges sc
-          WHERE  sc.shipment_id = base.shipment_id
-            AND  sc.charge_type = 'surcharge'
-            AND  sc.cancelled   = false
-        ), 0)                                                            AS sell_surcharge,
-        -- sell_total: full amount billed to customer
-        COALESCE(rl.corrected_sell_price, base.sell_price, base.price, 0)
-        + COALESCE((
+        rl.surcharge_id,
+        rl.unmatched_reason,
+        CASE WHEN rl.surcharge_id IS NOT NULL THEN sur.name ELSE cs.name END AS service_name,
+        sur.name                                                         AS surcharge_name,
+        -- sell_base: 0 for surcharge lines, freight price for freight lines
+        CASE
+          WHEN rl.surcharge_id IS NOT NULL THEN 0
+          ELSE COALESCE(rl.corrected_sell_price, base.sell_price, base.price, 0)
+        END                                                              AS sell_base,
+        -- sell_fuel: 0 for surcharge lines
+        CASE
+          WHEN rl.surcharge_id IS NOT NULL THEN 0
+          ELSE COALESCE((
             SELECT SUM(sc.price)
             FROM   charges sc
             WHERE  sc.shipment_id = base.shipment_id
-              AND  sc.charge_type IN ('fuel', 'surcharge')
+              AND  sc.charge_type = 'fuel'
               AND  sc.cancelled   = false
-          ), 0)                                                          AS sell_total,
-        -- Cost: total_cost_price = base + fuel + surcharge charges.
-        -- Matches Finance page; avoids the DPD separate_fuel_rows inflation where
-        -- carrier_amount only covers the freight line, not overhead auto-corrected rows.
-        COALESCE(base.cost_price, 0)
-        + COALESCE((
-            SELECT SUM(sc.cost_price)
+          ), 0)
+        END                                                              AS sell_fuel,
+        -- sell_surcharge: corrected_sell_price for warning lines, charges subquery for freight
+        CASE
+          WHEN rl.surcharge_id IS NOT NULL AND rl.unmatched_reason = 'sell_surcharge_missing'
+            THEN COALESCE(rl.corrected_sell_price, 0)
+          WHEN rl.surcharge_id IS NOT NULL THEN 0
+          ELSE COALESCE((
+            SELECT SUM(sc.price)
             FROM   charges sc
             WHERE  sc.shipment_id = base.shipment_id
-              AND  sc.charge_type IN ('fuel','surcharge')
+              AND  sc.charge_type = 'surcharge'
               AND  sc.cancelled   = false
-          ), 0)                                                          AS cost_total
+          ), 0)
+        END                                                              AS sell_surcharge,
+        -- sell_total
+        CASE
+          WHEN rl.surcharge_id IS NOT NULL AND rl.unmatched_reason = 'sell_surcharge_missing'
+            THEN COALESCE(rl.corrected_sell_price, 0)
+          WHEN rl.surcharge_id IS NOT NULL THEN 0
+          ELSE COALESCE(rl.corrected_sell_price, base.sell_price, base.price, 0)
+               + COALESCE((
+                   SELECT SUM(sc.price)
+                   FROM   charges sc
+                   WHERE  sc.shipment_id = base.shipment_id
+                     AND  sc.charge_type IN ('fuel', 'surcharge')
+                     AND  sc.cancelled   = false
+                 ), 0)
+        END                                                              AS sell_total,
+        -- cost_total: carrier_amount for surcharge lines, full charge breakdown for freight
+        CASE
+          WHEN rl.surcharge_id IS NOT NULL
+            THEN COALESCE(rl.carrier_amount, 0)
+          ELSE COALESCE(base.cost_price, 0)
+               + COALESCE((
+                   SELECT SUM(sc.cost_price)
+                   FROM   charges sc
+                   WHERE  sc.shipment_id = base.shipment_id
+                     AND  sc.charge_type IN ('fuel','surcharge')
+                     AND  sc.cancelled   = false
+                 ), 0)
+        END                                                              AS cost_total
       FROM   reconciliation_lines rl
       LEFT JOIN courier_services cs   ON cs.id  = rl.service_id
+      LEFT JOIN surcharges        sur ON sur.id  = rl.surcharge_id
       LEFT JOIN charges          base ON base.id = rl.charge_id AND base.charge_type = 'courier' AND base.cancelled = false
       WHERE  rl.run_id = $1
         AND  rl.status IN ('matched', 'corrected')
         AND  rl.is_fuel = false
-        AND  rl.surcharge_id IS NULL
+        AND  (
+          rl.surcharge_id IS NULL
+          OR (rl.unmatched_reason = 'sell_surcharge_missing' AND rl.status = 'corrected')
+        )
         ${custFilter}
       ORDER  BY rl.shipment_date ASC NULLS LAST, rl.tracking_number
     `, params);
