@@ -340,7 +340,7 @@ async function buildSnapshot(line, run) {
         s.ship_to_postcode                 AS postcode,
         s.total_weight_kg                  AS weight_kg,
         s.dc_service_id                    AS service_code,
-        s.despatch_date,
+        s.collection_date                  AS despatch_date,
         cs.name                            AS service_name,
         -- Fuel sell (for this shipment, excluding recon-excluded surcharges)
         COALESCE((
