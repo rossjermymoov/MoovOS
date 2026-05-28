@@ -19,6 +19,13 @@
 --      skipped here to avoid mis-attribution — they need manual resolution.
 --
 -- IDEMPOTENT: WHERE account_number IS NULL means safe to re-run.
+--
+-- Guard added after initial deployment failure:
+--   account_number has a UNIQUE constraint (migration 239).  If the same DPD
+--   account number already exists on a different customer's carrier link (or
+--   was set manually), the UPDATE would violate the constraint.  The fourth
+--   guard below skips any account_no already present in the table for ANY
+--   customer, leaving those ambiguous cases for manual resolution.
 
 DO $$
 DECLARE
@@ -61,17 +68,30 @@ BEGIN
     WHERE  account_number IS NULL
     GROUP  BY customer_id, courier_id
     HAVING COUNT(*) = 1
+  ),
+
+  safe_account AS (
+    -- Skip any account_no already used by ANY other row in customer_carrier_links.
+    -- If account 116390 is already set on Customer A, we must not also try to set
+    -- it on Customer B — that would violate the unique constraint on account_number.
+    -- These cases need manual review to determine the true owner.
+    SELECT ba.customer_id, ba.carrier_id, ba.carrier_account_no
+    FROM   best_account ba
+    WHERE  NOT EXISTS (
+      SELECT 1 FROM customer_carrier_links ccl2
+      WHERE  ccl2.account_number = ba.carrier_account_no
+    )
   )
 
   UPDATE customer_carrier_links ccl
-  SET    account_number = ba.carrier_account_no,
+  SET    account_number = sa.carrier_account_no,
          updated_at     = NOW()
-  FROM   best_account ba
+  FROM   safe_account sa
   JOIN   single_link  sl
-         ON  sl.customer_id = ba.customer_id
-         AND sl.courier_id  = ba.carrier_id
-  WHERE  ccl.customer_id    = ba.customer_id
-    AND  ccl.courier_id     = ba.carrier_id
+         ON  sl.customer_id = sa.customer_id
+         AND sl.courier_id  = sa.carrier_id
+  WHERE  ccl.customer_id    = sa.customer_id
+    AND  ccl.courier_id     = sa.carrier_id
     AND  ccl.account_number IS NULL;
 
   GET DIAGNOSTICS v_updated = ROW_COUNT;
