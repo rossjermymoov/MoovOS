@@ -1108,25 +1108,16 @@ function CustomerFuelRow({ fg, customerId }) {
   );
 }
 
-// ─── Per-surcharge override row ───────────────────────────────
-function SurchargeOverrideRow({ surcharge, override, customerId, onChanged }) {
-  const qc = useQueryClient();
+// ─── Inline editable price field (used for both cost and sell in surcharge rows) ─
+function SurchargePriceField({ label, standardValue, overrideValue, isPct, accentColor, accentBg, accentBorder, onSave }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal]         = useState('');
   const inputRef              = useRef(null);
-
-  const upsert = useMutation({
-    mutationFn: (override_value) =>
-      api.post(`/surcharges/customer-overrides/${customerId}`, { surcharge_id: surcharge.id, override_value }),
-    onSuccess: () => { qc.invalidateQueries(['surcharge-overrides', customerId]); onChanged?.(); },
-  });
-  const remove = useMutation({
-    mutationFn: () => api.delete(`/surcharges/customer-overrides/${customerId}/${override.id}`),
-    onSuccess: () => { qc.invalidateQueries(['surcharge-overrides', customerId]); onChanged?.(); },
-  });
+  const hasOverride           = overrideValue !== null && overrideValue !== undefined;
+  const fmt = (v) => isPct ? `${parseFloat(v).toFixed(2)}%` : `£${parseFloat(v).toFixed(2)}`;
 
   function startEdit() {
-    setVal(override ? String(override.override_value) : String(parseFloat(surcharge.default_value || 0).toFixed(2)));
+    setVal(hasOverride ? String(parseFloat(overrideValue).toFixed(2)) : String(parseFloat(standardValue || 0).toFixed(2)));
     setEditing(true);
     setTimeout(() => inputRef.current?.select(), 0);
   }
@@ -1134,19 +1125,15 @@ function SurchargeOverrideRow({ surcharge, override, customerId, onChanged }) {
   function commit() {
     const parsed = parseFloat(val);
     if (isNaN(parsed) || parsed < 0) { setEditing(false); return; }
-    upsert.mutate(parsed);
+    onSave(parsed);
     setEditing(false);
   }
 
-  const hasOverride = !!override;
-  const isPct = surcharge.calc_type === 'percentage';
-  const fmt = (v) => isPct ? `${parseFloat(v).toFixed(2)}%` : `£${parseFloat(v).toFixed(2)}`;
-
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 6px', borderRadius: 5, background: hasOverride ? 'rgba(255,193,7,0.03)' : 'transparent' }}>
-      <span style={{ fontSize: 12, color: hasOverride ? '#334155' : '#64748B', flex: 1 }}>{surcharge.name}</span>
-      <span style={{ fontSize: 11, color: '#475569', fontFamily: 'monospace' }}>{fmt(surcharge.default_value || 0)}</span>
-      <span style={{ fontSize: 10, color: '#333' }}>→</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+      <span style={{ fontSize: 10, color: '#94A3B8', minWidth: 26 }}>{label}</span>
+      <span style={{ fontSize: 11, color: '#64748B', fontFamily: 'monospace' }}>{fmt(standardValue || 0)}</span>
+      <span style={{ fontSize: 9, color: '#94A3B8' }}>→</span>
       {editing ? (
         <input
           ref={inputRef}
@@ -1154,30 +1141,81 @@ function SurchargeOverrideRow({ surcharge, override, customerId, onChanged }) {
           onChange={e => setVal(e.target.value)}
           onBlur={commit}
           onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
-          style={{ ...inp, width: 72, textAlign: 'right', color: '#D97706', fontFamily: 'monospace', border: '1px solid rgba(255,193,7,0.6)', background: 'rgba(255,193,7,0.08)', fontSize: 11 }}
+          style={{ ...inp, width: 64, textAlign: 'right', color: accentColor, fontFamily: 'monospace', border: `1px solid ${accentBorder}`, background: accentBg, fontSize: 11 }}
         />
       ) : (
         <span
           onClick={startEdit}
+          title="Click to override"
           style={{
-            fontSize: 12, fontWeight: hasOverride ? 700 : 400,
-            color: hasOverride ? '#D97706' : '#444',
-            cursor: 'pointer', padding: '2px 8px', borderRadius: 4,
-            border: `1px solid ${hasOverride ? 'rgba(255,193,7,0.35)' : 'rgba(0,0,0,0.06)'}`,
-            background: hasOverride ? 'rgba(255,193,7,0.08)' : 'transparent',
+            fontSize: 11, fontWeight: hasOverride ? 700 : 400,
+            color: hasOverride ? accentColor : '#475569',
+            cursor: 'pointer', padding: '1px 7px', borderRadius: 4,
+            border: `1px solid ${hasOverride ? accentBorder : 'rgba(0,0,0,0.06)'}`,
+            background: hasOverride ? accentBg : 'transparent',
             fontFamily: 'monospace',
           }}
-          onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(255,193,7,0.5)'}
-          onMouseLeave={e => e.currentTarget.style.borderColor = hasOverride ? 'rgba(255,193,7,0.35)' : 'rgba(0,0,0,0.06)'}
         >
-          {hasOverride ? fmt(override.override_value) : '+ Override'}
+          {hasOverride ? fmt(overrideValue) : '+ Override'}
         </span>
       )}
-      {hasOverride && !editing && (
-        <button onClick={() => remove.mutate()} title="Remove override"
-          style={{ background: 'none', border: 'none', color: '#333', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center' }}
+    </div>
+  );
+}
+
+// ─── Per-surcharge override row ───────────────────────────────
+function SurchargeOverrideRow({ surcharge, override, customerId, onChanged }) {
+  const qc = useQueryClient();
+
+  const upsert = useMutation({
+    mutationFn: (body) =>
+      api.post(`/surcharges/customer-overrides/${customerId}`, { surcharge_id: surcharge.id, ...body }),
+    onSuccess: () => { qc.invalidateQueries(['surcharge-overrides', customerId]); onChanged?.(); },
+  });
+  const remove = useMutation({
+    mutationFn: () => api.delete(`/surcharges/customer-overrides/${customerId}/${override.id}`),
+    onSuccess: () => { qc.invalidateQueries(['surcharge-overrides', customerId]); onChanged?.(); },
+  });
+
+  const hasOverride = !!override;
+  const isPct = surcharge.calc_type === 'percentage';
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 8,
+      padding: '6px 6px', borderRadius: 5,
+      background: hasOverride ? 'rgba(255,193,7,0.03)' : 'transparent',
+    }}>
+      <span style={{ fontSize: 12, color: hasOverride ? '#334155' : '#64748B', flex: 1, minWidth: 0 }}>{surcharge.name}</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {/* Cost price override */}
+        <SurchargePriceField
+          label="Cost"
+          standardValue={surcharge.cost_price ?? surcharge.default_value}
+          overrideValue={override?.cost_price_override ?? null}
+          isPct={isPct}
+          accentColor="#64748B"
+          accentBg="rgba(100,116,139,0.08)"
+          accentBorder="rgba(100,116,139,0.35)"
+          onSave={(v) => upsert.mutate({ cost_price_override: v })}
+        />
+        {/* Sell price override */}
+        <SurchargePriceField
+          label="Sell"
+          standardValue={surcharge.default_value}
+          overrideValue={override?.override_value ?? null}
+          isPct={isPct}
+          accentColor="#D97706"
+          accentBg="rgba(255,193,7,0.08)"
+          accentBorder="rgba(255,193,7,0.35)"
+          onSave={(v) => upsert.mutate({ override_value: v })}
+        />
+      </div>
+      {hasOverride && (
+        <button onClick={() => remove.mutate()} title="Remove all overrides"
+          style={{ background: 'none', border: 'none', color: '#CBD5E1', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center', flexShrink: 0 }}
           onMouseEnter={e => e.currentTarget.style.color = '#E91E8C'}
-          onMouseLeave={e => e.currentTarget.style.color = '#333'}
+          onMouseLeave={e => e.currentTarget.style.color = '#CBD5E1'}
         >
           <Trash2 size={11} />
         </button>

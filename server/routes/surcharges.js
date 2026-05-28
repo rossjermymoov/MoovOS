@@ -189,17 +189,34 @@ router.get('/customer-overrides/:customerId', async (req, res, next) => {
 
 router.post('/customer-overrides/:customerId', async (req, res, next) => {
   try {
-    const { surcharge_id, override_value } = req.body;
-    if (!surcharge_id || override_value === undefined) {
-      return res.status(400).json({ error: 'surcharge_id and override_value are required' });
+    const { surcharge_id, override_value, cost_price_override } = req.body;
+    if (!surcharge_id) {
+      return res.status(400).json({ error: 'surcharge_id is required' });
     }
+    if (override_value === undefined && cost_price_override === undefined) {
+      return res.status(400).json({ error: 'At least one of override_value or cost_price_override is required' });
+    }
+
+    const sellVal = override_value      !== undefined ? parseFloat(override_value)      : null;
+    const costVal = cost_price_override !== undefined ? parseFloat(cost_price_override)  : null;
+
+    // Upsert — preserve whichever field is not being updated this call
     const { rows } = await query(
-      `INSERT INTO customer_surcharge_overrides (customer_id, surcharge_id, override_value)
-       VALUES ($1,$2,$3)
+      `INSERT INTO customer_surcharge_overrides
+         (customer_id, surcharge_id, override_value, cost_price_override)
+       VALUES ($1, $2, $3, $4)
        ON CONFLICT (customer_id, surcharge_id)
-       DO UPDATE SET override_value=$3, active=true, updated_at=NOW()
+       DO UPDATE SET
+         override_value      = CASE WHEN $3::numeric IS NOT NULL
+                                    THEN $3::numeric
+                                    ELSE customer_surcharge_overrides.override_value END,
+         cost_price_override = CASE WHEN $4::numeric IS NOT NULL
+                                    THEN $4::numeric
+                                    ELSE customer_surcharge_overrides.cost_price_override END,
+         active     = true,
+         updated_at = NOW()
        RETURNING *`,
-      [req.params.customerId, surcharge_id, parseFloat(override_value)]
+      [req.params.customerId, surcharge_id, sellVal, costVal]
     );
     res.status(201).json(rows[0]);
   } catch (e) { next(e); }
