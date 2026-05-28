@@ -4449,6 +4449,124 @@ router.post('/backfill-carrier-direct-surcharges', async (req, res) => {
   }
 });
 
+// ─── POST /api/reconciliation/link-carrier-direct-shipments ─────────────────
+// For carrier_direct charges that have no shipment_id (shipment creation failed
+// during reconciliation), this endpoint:
+//   1. Creates a shipment record linked to the tracking code
+//   2. Updates the freight charge to set shipment_id
+//   3. Creates fuel + always-apply surcharge charges for the new shipment
+//
+// Required: ?customer_id=<uuid>
+// Optional: ?dry_run=1
+
+router.post('/link-carrier-direct-shipments', async (req, res) => {
+  try {
+    const { customer_id, dry_run } = req.query;
+    if (!customer_id) return res.status(400).json({ error: 'customer_id is required' });
+    const isDry = dry_run === '1' || dry_run === 'true';
+
+    // Find carrier_direct freight charges without a shipment_id
+    const { rows: unlinked } = await query(`
+      SELECT c.id, c.tracking_code, c.courier_service_id, c.sell_price, c.price,
+             c.cost_price, c.ship_to_postcode, c.ship_to_country_iso, c.ship_to_name,
+             c.despatch_date, c.order_id, c.parcel_count,
+             cs.courier_id
+      FROM   charges c
+      JOIN   courier_services cs ON cs.id = c.courier_service_id
+      WHERE  c.customer_id  = $1
+        AND  c.charge_type  = 'courier'
+        AND  c.source       = 'carrier_direct'
+        AND  c.shipment_id  IS NULL
+        AND  c.cancelled    = false
+        AND  c.tracking_code IS NOT NULL
+    `, [customer_id]);
+
+    console.log(`[link-carrier-direct-shipments] ${unlinked.length} unlinked carrier_direct charges for customer ${customer_id}`);
+
+    let linked = 0, fuelCreated = 0, errors = 0;
+    for (const row of unlinked) {
+      try {
+        // Check if a shipment already exists for this tracking code
+        const { rows: existingShip } = await query(
+          `SELECT id FROM shipments WHERE $1 = ANY(tracking_codes) AND event_type = 'carrier_direct' LIMIT 1`,
+          [row.tracking_code]
+        );
+
+        let shipmentId = existingShip[0]?.id || null;
+
+        if (!shipmentId && !isDry) {
+          // Create the shipment
+          const { rows: newShip } = await query(`
+            INSERT INTO shipments (
+              event_type, customer_id, tracking_codes,
+              ship_to_postcode, ship_to_country_iso, ship_to_name,
+              collection_date
+            ) VALUES ('carrier_direct', $1, $2, $3, $4, $5, $6)
+            ON CONFLICT DO NOTHING
+            RETURNING id
+          `, [
+            customer_id,
+            [row.tracking_code],
+            row.ship_to_postcode   || null,
+            row.ship_to_country_iso || 'GB',
+            row.ship_to_name       || null,
+            row.despatch_date      || null,
+          ]);
+          shipmentId = newShip[0]?.id || null;
+
+          // If ON CONFLICT fired, look it up
+          if (!shipmentId) {
+            const { rows: lookup } = await query(
+              `SELECT id FROM shipments WHERE $1 = ANY(tracking_codes) AND event_type = 'carrier_direct' LIMIT 1`,
+              [row.tracking_code]
+            );
+            shipmentId = lookup[0]?.id || null;
+          }
+        }
+
+        if (!shipmentId) {
+          console.log(`[link-carrier-direct-shipments] ${isDry ? '[DRY] ' : ''}no shipment for tracking=${row.tracking_code}`);
+          continue;
+        }
+
+        console.log(`[link-carrier-direct-shipments] ${isDry ? '[DRY] ' : ''}link charge ${row.id} → shipment ${shipmentId} (tracking=${row.tracking_code})`);
+
+        if (!isDry) {
+          // Link the freight charge to the shipment
+          await query(`UPDATE charges SET shipment_id = $1 WHERE id = $2`, [shipmentId, row.id]);
+          linked++;
+
+          // Create fuel + surcharge charges for this shipment
+          const freightSell = parseFloat(row.sell_price ?? row.price ?? 0);
+          const freightCost = parseFloat(row.cost_price ?? 0);
+          if (freightSell > 0 && row.courier_service_id) {
+            await createCarrierDirectSurcharges({
+              shipmentId:       shipmentId,
+              customerId:       customer_id,
+              carrierId:        row.courier_id,
+              serviceId:        row.courier_service_id,
+              freightSellPrice: freightSell,
+              freightCostPrice: freightCost,
+              parcelCount:      row.parcel_count || 1,
+            });
+            fuelCreated++;
+          }
+        } else {
+          linked++;
+        }
+      } catch (err) {
+        console.error(`[link-carrier-direct-shipments] charge ${row.id}:`, err.message);
+        errors++;
+      }
+    }
+
+    return res.json({ ok: true, dry_run: isDry, found: unlinked.length, linked, fuel_created: fuelCreated, errors });
+  } catch (err) {
+    console.error('[link-carrier-direct-shipments] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── GET /api/reconciliation/diagnose-fuel ───────────────────────────────────
 // Diagnostic: breakdown of a customer's courier charges by data completeness.
 // Tells us exactly why fuel isn't showing.
