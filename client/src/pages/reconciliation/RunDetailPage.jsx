@@ -261,16 +261,21 @@ function CorrectionDetail({ line, surchargeLookup }) {
 
 // ─── Resolve drawer ───────────────────────────────────────────────────────────
 function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolutionType }) {
-  const isUnknownCode = line.unmatched_reason === 'unknown_service_code';
+  const isUnknownCode        = line.unmatched_reason === 'unknown_service_code';
+  const isCancelledBooking   = line.unmatched_reason === 'cancelled_booking_invoiced';
+  const isNoAccountMapping   = line.unmatched_reason === 'no_account_mapping';
 
   // For unknown service code lines default straight into the mapping flow.
   // defaultResolutionType lets callers (e.g. the DeltaCell tooltip) pre-select
   // a resolution type without the operator having to pick it manually.
   const [scope,           setScope]           = useState('once');
-  const [saveRule,        setSaveRule]        = useState(isUnknownCode);   // "Save as Permanent Rule" checkbox
+  const [saveRule,        setSaveRule]        = useState(isUnknownCode || isNoAccountMapping);
   const [ruleScope,       setRuleScope]       = useState('global');        // 'global' | 'customer'
   const [resolutionType,  setResolutionType]  = useState(
-    defaultResolutionType || (isUnknownCode ? 'map_to_service' : '')
+    defaultResolutionType
+    || (isUnknownCode    ? 'map_to_service'   : '')
+    || (isCancelledBooking ? 'credit_request' : '')
+    || (isNoAccountMapping ? 'map_to_customer': '')
   );
   const [resolutionValue, setResolutionValue] = useState(
     // Pre-populate with suggested service if the engine found one
@@ -281,13 +286,32 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
         ? String(line.surcharge_id)
         : ''
   );
-  const [notes,    setNotes]   = useState('');
-  const [loading,  setLoading] = useState(false);
-  const [error,    setError]   = useState('');
-  const [fuelRate, setFuelRate] = useState(null); // { fuel_pct, fuel_group_name } | null
+  const [notes,           setNotes]           = useState('');
+  const [loading,         setLoading]         = useState(false);
+  const [error,           setError]           = useState('');
+  const [fuelRate,        setFuelRate]        = useState(null);
+  // Customer search state for map_to_customer
+  const [custSearch,      setCustSearch]      = useState('');
+  const [custResults,     setCustResults]     = useState([]);
+  const [custSearching,   setCustSearching]   = useState(false);
+  const [selectedCust,    setSelectedCust]    = useState(null); // { id, business_name, account_number }
 
   const isSurchargeMapping  = resolutionType === 'map_to_surcharge';
   const isManualPrice       = resolutionType === 'manual_price';
+  const isMapToCustomer     = resolutionType === 'map_to_customer';
+
+  // Customer search for map_to_customer
+  useEffect(() => {
+    if (!isMapToCustomer || custSearch.length < 2) { setCustResults([]); return; }
+    setCustSearching(true);
+    const timer = setTimeout(() => {
+      api.get(`/customers?search=${encodeURIComponent(custSearch)}&limit=10`)
+        .then(r => setCustResults(r.data?.customers || r.data || []))
+        .catch(() => setCustResults([]))
+        .finally(() => setCustSearching(false));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [custSearch, isMapToCustomer]);
 
   // Fetch fuel rate when manual_price is selected
   useEffect(() => {
@@ -315,17 +339,23 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
   });
 
   const suggestedMappingType = {
-    unknown_service_code:    'service_code',
-    no_account_mapping:      'account_number',
-    no_pricing_rules:        null,
-    unexplained_delta:       'delta_acceptance',
-    external_booking_review: 'account_number',
+    unknown_service_code:       'service_code',
+    no_account_mapping:         'account_number',
+    no_pricing_rules:           null,
+    unexplained_delta:          'delta_acceptance',
+    external_booking_review:    'account_number',
+    cancelled_booking_invoiced: 'credit_request',  // triggers bulk-apply in server
   }[line.unmatched_reason];
 
   async function handleResolve() {
     const noValueNeeded = resolutionType === 'credit_request';
-    if (!resolutionType || (!noValueNeeded && !resolutionValue)) {
+    const customerValueNeeded = isMapToCustomer;
+    if (!resolutionType || (!noValueNeeded && !customerValueNeeded && !resolutionValue)) {
       setError('Please fill in all required fields');
+      return;
+    }
+    if (isMapToCustomer && !selectedCust) {
+      setError('Select a customer from the dropdown');
       return;
     }
     if (resolutionType === 'manual_price' && (parseFloat(resolutionValue) || 0) <= 0) {
@@ -336,11 +366,13 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
     setError('');
     try {
       const effectiveScope = saveRule ? 'always' : 'once';
-      const customerId     = (saveRule && ruleScope === 'customer') ? (line.customer_id || null) : null;
+      const customerId = isMapToCustomer
+        ? selectedCust.id
+        : (saveRule && ruleScope === 'customer') ? (line.customer_id || null) : null;
 
       await api.post(`/reconciliation/runs/${line.run_id}/lines/${line.id}/resolve`, {
         resolution_type:  resolutionType,
-        resolution_value: resolutionValue,
+        resolution_value: isMapToCustomer ? selectedCust.id : resolutionValue,
         scope:            effectiveScope,
         mapping_type:     effectiveScope === 'always' ? suggestedMappingType : null,
         customer_id:      customerId,
@@ -623,24 +655,69 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
           </div>
         )}
 
+        {/* Customer search for map_to_customer */}
+        {isMapToCustomer && (
+          <div>
+            {line.carrier_account_no && (
+              <div style={{ fontSize: 11, color: '#64748B', marginBottom: 8 }}>
+                Carrier account: <span style={{ fontFamily: 'monospace', color: '#0F172A', fontWeight: 700 }}>{line.carrier_account_no}</span>
+              </div>
+            )}
+            <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>ASSIGN TO CUSTOMER *</label>
+            {selectedCust ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'rgba(0,200,83,0.08)', border: '1px solid rgba(0,200,83,0.3)', borderRadius: 6 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>{selectedCust.business_name}</div>
+                  <div style={{ fontSize: 10, color: '#64748B' }}>Account: {selectedCust.account_number || '—'}</div>
+                </div>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 16 }} onClick={() => { setSelectedCust(null); setCustSearch(''); }}>×</button>
+              </div>
+            ) : (
+              <div style={{ position: 'relative' }}>
+                <input
+                  style={inputSt}
+                  placeholder='Type customer name or account number…'
+                  value={custSearch}
+                  onChange={e => setCustSearch(e.target.value)}
+                  autoFocus
+                />
+                {custSearching && <div style={{ fontSize: 10, color: '#64748B', marginTop: 4 }}>Searching…</div>}
+                {custResults.length > 0 && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, background: '#FFF', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', marginTop: 2, maxHeight: 200, overflowY: 'auto' }}>
+                    {custResults.map(c => (
+                      <div
+                        key={c.id}
+                        style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid rgba(0,0,0,0.06)' }}
+                        onMouseDown={() => { setSelectedCust(c); setResolutionValue(c.id); setCustResults([]); setCustSearch(''); }}
+                      >
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#0F172A' }}>{c.business_name}</div>
+                        <div style={{ fontSize: 10, color: '#64748B' }}>Account: {c.account_number || '—'}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            <div style={{ fontSize: 10, color: '#64748B', marginTop: 6 }}>
+              Tick "Save as Permanent Rule" below to auto-assign all future lines from this DPD account to this customer.
+            </div>
+          </div>
+        )}
+
         {/* Generic value input for other types */}
-        {!isUnknownCode && resolutionType !== 'map_to_service' && resolutionType !== 'accept_delta' && resolutionType !== 'credit_request' && !isManualPrice && resolutionType && (
+        {!isUnknownCode && !isMapToCustomer && resolutionType !== 'map_to_service' && resolutionType !== 'accept_delta' && resolutionType !== 'credit_request' && !isManualPrice && resolutionType && (
           <div>
             <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>RESOLUTION VALUE *</label>
             <input
               style={inputSt}
-              placeholder={
-                resolutionType === 'map_to_customer' ? 'Customer name or account number' :
-                resolutionType === 'reject'           ? 'Reason for rejection' :
-                'Resolution value'
-              }
+              placeholder={resolutionType === 'reject' ? 'Reason for rejection' : 'Resolution value'}
               value={resolutionValue}
               onChange={e => setResolutionValue(e.target.value)}
             />
           </div>
         )}
 
-        {/* Save as Permanent Rule */}
+        {/* Save as Permanent Rule / Apply to all */}
         <div style={{
           background: saveRule ? 'rgba(0,200,83,0.06)' : 'rgba(0,0,0,0.03)',
           border: `1px solid ${saveRule ? 'rgba(0,200,83,0.3)' : 'rgba(0,0,0,0.08)'}`,
@@ -655,10 +732,14 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
             />
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, color: saveRule ? '#00C853' : '#0F172A' }}>
-                Save as Permanent Rule
+                {isCancelledBooking ? 'Apply to all cancelled lines in this run' :
+                 isMapToCustomer   ? 'Save account → customer mapping permanently' :
+                 'Save as Permanent Rule'}
               </div>
               <div style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
-                Auto-resolve this code on all future runs for this carrier
+                {isCancelledBooking ? 'Marks all other cancelled booking lines in this run for credit' :
+                 isMapToCustomer   ? `Always assign DPD account ${line.carrier_account_no || '—'} to this customer` :
+                 'Auto-resolve this code on all future runs for this carrier'}
               </div>
             </div>
           </label>

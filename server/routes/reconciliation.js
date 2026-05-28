@@ -1074,6 +1074,37 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
       }
     }
 
+    // ── map_to_customer: assign line to a customer and look up their existing charge ─
+    // resolution_value = customer UUID.
+    // Finds the matching charge for that customer by tracking number and uses its
+    // sell_price as corrected_sell_price. Also sets customer_id on the recon line.
+    let mappedCustomerId   = null;
+    let mappedSell         = null;
+    let mappedChargeId     = null;
+    if (resolution_type === 'map_to_customer' && resolution_value) {
+      mappedCustomerId = resolution_value; // customer UUID
+      // Look up the charge for this tracking number under that customer
+      const chRes = await query(`
+        SELECT c.id, COALESCE(c.sell_price, c.price, 0) AS sell_price
+        FROM   charges c
+        JOIN   shipments s ON s.id = c.shipment_id
+        WHERE  s.tracking_codes @> ARRAY[$1::text]
+          AND  c.customer_id  = $2
+          AND  c.charge_type  = 'courier'
+          AND  c.cancelled    = false
+        ORDER  BY c.created_at DESC
+        LIMIT  1
+      `, [line.tracking_number, mappedCustomerId]);
+
+      if (chRes.rows.length) {
+        mappedChargeId = chRes.rows[0].id;
+        mappedSell     = parseFloat(chRes.rows[0].sell_price || 0);
+      } else {
+        // No charge found — still assign the customer, leave sell price null
+        console.log(`[reconciliation/resolve] map_to_customer: no charge found for tracking=${line.tracking_number} customer=${mappedCustomerId}`);
+      }
+    }
+
     // ── manual_price: set corrected_sell_price and link the charge ──────────────
     let manualSell = null;
     let manualChargeId = null;
@@ -1124,11 +1155,15 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
     // Zero out the delta — the human has accepted the carrier's charge as correct.
     // expected_amount is set to carrier_amount so the Corrected tab shows £0.00 delta.
     // Determine corrected_sell_price across all resolution types that set one
-    const resolvedSell = manualSell ?? surchargeSell ?? null;
+    const resolvedSell = manualSell ?? surchargeSell ?? mappedSell ?? null;
     // corrected_cost_price: for manual_price and map_to_surcharge, set to carrier_amount
-    const resolvedCost = (resolution_type === 'manual_price' || resolution_type === 'map_to_surcharge')
+    const resolvedCost = (resolution_type === 'manual_price' || resolution_type === 'map_to_surcharge' || resolution_type === 'map_to_customer')
       ? parseFloat(line.carrier_amount || 0)
       : null;
+    // Effective charge_id: from manual_price lookup, or map_to_customer lookup
+    const resolvedChargeId = manualChargeId || mappedChargeId || null;
+    // Effective customer_id: from map_to_customer, or original line value
+    const resolvedCustomerId = mappedCustomerId || line.customer_id || null;
 
     await query(`
       UPDATE reconciliation_lines
@@ -1139,6 +1174,7 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
              resolution_notes      = $3,
              expected_amount       = carrier_amount,
              delta                 = 0,
+             customer_id           = $7,
              corrected_sell_price  = COALESCE($4, corrected_sell_price),
              corrected_cost_price  = COALESCE($5, corrected_cost_price),
              charge_id             = COALESCE($6, charge_id)
@@ -1146,7 +1182,8 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
     `, [lineId, req.user?.id || null, notes || null,
         resolvedSell,
         resolvedCost,
-        manualChargeId]);
+        resolvedChargeId,
+        resolvedCustomerId]);
 
     // If scope = 'always', save a mapping rule
     let mappingId = null;
@@ -1171,6 +1208,46 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
         req.user?.id || null,
       ]);
       mappingId = mRes.rows[0]?.id || null;
+    }
+
+    // ── credit_request apply-to-all: mark all cancelled_booking_invoiced lines in this run ─
+    if (scope === 'always' && resolution_type === 'credit_request') {
+      const bulkCreditRes = await query(`
+        UPDATE reconciliation_lines
+        SET    status       = 'corrected',
+               corrected_by = 'human',
+               resolved_at  = NOW(),
+               resolution_notes = 'Bulk: Applying for credit with Courier',
+               expected_amount  = carrier_amount,
+               delta            = 0
+        WHERE  run_id           = $1
+          AND  unmatched_reason = 'cancelled_booking_invoiced'
+          AND  status           = 'unmatched'
+          AND  id              <> $2
+        RETURNING id
+      `, [line.run_id, lineId]);
+      const creditBulk = bulkCreditRes.rowCount || 0;
+      if (creditBulk > 0) {
+        console.log(`[reconciliation/resolve] credit_request bulk-applied to ${creditBulk} cancelled line(s) in run ${line.run_id}`);
+      }
+    }
+
+    // ── map_to_customer with scope=always: save carrier account → customer mapping ─
+    if (scope === 'always' && resolution_type === 'map_to_customer' && mappedCustomerId && line.carrier_account_no) {
+      await query(`
+        INSERT INTO reconciliation_mappings
+          (mapping_type, carrier_id, match_field, match_value,
+           resolution_type, resolution_value, customer_id,
+           created_from_line_id, created_by)
+        VALUES ('account_number',$1,'carrier_account_no',$2,'map_to_customer',$3,$3,$4,$5)
+        ON CONFLICT DO NOTHING
+      `, [
+        line.carrier_id,
+        line.carrier_account_no,
+        mappedCustomerId,
+        lineId,
+        req.user?.id || null,
+      ]);
     }
 
     // If this was an unknown_service_code, save to courier_service_code_mappings.
