@@ -445,14 +445,15 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
           </div>
         )}
 
-        {/* Resolution type — for unknown_service_code show both service and surcharge mapping options */}
+        {/* Resolution type — for unknown_service_code show tile grid + manual price option */}
         {isUnknownCode ? (
           <div>
             <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>RESOLUTION TYPE</label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
               {[
-                { val: 'map_to_service',   label: 'Delivery Service', desc: 'Base freight service (e.g. DHL Next Day)' },
+                { val: 'map_to_service',   label: 'Delivery Service', desc: 'Map code to a service, price from rate card' },
                 { val: 'map_to_surcharge', label: 'Surcharge',        desc: 'Named fee (e.g. congestion, remote area)' },
+                { val: 'manual_price',     label: 'Manual Price',     desc: 'Enter a sell price directly for this line' },
               ].map(opt => (
                 <button
                   key={opt.val}
