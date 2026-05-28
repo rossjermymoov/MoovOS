@@ -2671,6 +2671,41 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
     );
   }
 
+  // ── Carrier-direct pool hit: repair missing fuel/GEC surcharges ──────────────
+  // Carrier-direct charges get verified=true via DPD tracking events, which puts
+  // them in the pool. When the pool-hit path runs, it doesn't call handleCarrierDirect
+  // so surcharges are never checked/created. Catch them here: if a carrier_direct
+  // charge has a valid sell price but no fuel charge, create the missing surcharges.
+  // createCarrierDirectSurcharges is fully idempotent — safe to call every run.
+  if (charge.charge_id && charge.shipment_id && ctx?.carrierId) {
+    try {
+      const { rows: srcRows } = await query(
+        `SELECT source, sell_price FROM charges WHERE id = $1 LIMIT 1`,
+        [charge.charge_id]
+      );
+      const cdRow = srcRows[0];
+      if (cdRow?.source === 'carrier_direct') {
+        const cdSell = parseFloat(cdRow.sell_price);
+        if (cdSell > 0) {
+          // Only attempt if we already have a valid sell price — surcharges depend on it.
+          // If sell_price is null, the backfill endpoint re-prices and inserts surcharges.
+          await createCarrierDirectSurcharges({
+            shipmentId:       charge.shipment_id,
+            customerId:       charge.customer_id,
+            carrierId:        ctx.carrierId,
+            serviceId:        effectiveServiceId,
+            freightSellPrice: cdSell,
+            freightCostPrice: parseFloat(charge.expected_cost || 0),
+            parcelCount:      Math.max(invoiceParcelCount, 1),
+          });
+        }
+      }
+    } catch (cdRepairErr) {
+      // Non-fatal — log but don't fail the reconciliation line
+      console.warn(`[recon engine] carrier-direct pool-hit surcharge repair failed for ${trackingNumber}:`, cdRepairErr.message);
+    }
+  }
+
   // ── DDP clearance admin fee (per consignment, idempotent) ─────────────────
   // Stores a reconciliation line only — actual charge is created at Finalize Run.
   await insertDdpAdminReconLine(

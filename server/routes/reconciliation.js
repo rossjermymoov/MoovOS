@@ -17,7 +17,7 @@ import { query } from '../db/index.js';
 import { processReconciliationRun, ageUnmatchedLines, reprocessMappedLines, createCarrierDirectSurcharges } from '../services/reconciliationEngine.js';
 import { finalizeRun, reSnapshot, reSnapshotCustomer, getCustomerSummaries, generateCustomerCSV, getMarginReport } from '../services/finalizationService.js';
 import { fetchShipmentById, fetchShipmentByReference, fetchShipmentByReferenceAndTracking, probeShipmentRaw } from '../services/voilaClient.js';
-import { processShipment, insertCharges } from '../services/pricingEngine.js';
+import { processShipment, insertCharges, computeGhostCharge } from '../services/pricingEngine.js';
 
 const router = express.Router();
 
@@ -5091,40 +5091,49 @@ router.get('/zero-margin-audit', async (req, res) => {
 });
 
 // ─── POST /api/reconciliation/backfill-carrier-direct-surcharges ──────────────
-// One-shot backfill: find shipments missing fuel / GEC surcharge charges and
-// create them.  Safe to re-run — createCarrierDirectSurcharges is idempotent.
+// Repair backfill: find carrier_direct freight charges missing fuel / GEC
+// surcharges and create them.  Handles two cases:
+//
+//   1. sell_price IS NULL (pricing_error — broken charge from before multi-parcel
+//      fix): re-prices from the rate card using computeGhostCharge, updates the
+//      charge, then inserts the missing surcharges.
+//
+//   2. sell_price > 0 but fuel charge is absent: inserts the missing surcharges
+//      directly (e.g. shipment was created before fuel groups were configured).
+//
+// Safe to re-run — createCarrierDirectSurcharges is idempotent (skips charges
+// that already exist for the shipment).
 //
 // Query params:
-//   ?customer_id=<uuid>  — required when broad=1, optional otherwise
-//   ?broad=1             — when set, includes ALL courier charges (not just
-//                          carrier_direct) for the given customer.  Use this
-//                          to fix OMS-booked shipments that were booked before
-//                          fuel groups / surcharges were configured.
+//   ?customer_id=<uuid>  — optional filter to one customer
+//   ?broad=1             — also include non-carrier_direct courier charges
+//                          (requires customer_id)
 
 router.post('/backfill-carrier-direct-surcharges', async (req, res) => {
   try {
     const { customer_id, broad } = req.query;
     const isBroad = broad === '1' || broad === 'true';
 
-    // Find courier charges missing a fuel charge for the same shipment.
-    // In broad mode (customer_id required): any source, any verified status.
-    // In standard mode: carrier_direct only (safe to run without customer filter).
+    function round2(n) { return Math.round(n * 100) / 100; }
+
+    // Find ALL carrier_direct freight charges missing a fuel charge.
+    // This now includes sell_price = null charges (pricing_error) which
+    // the old query excluded — those are the broken multi-parcel charges
+    // that need re-pricing before surcharges can be inserted.
     const params  = [];
     let   where   = `c.charge_type = 'courier'
-      AND c.cancelled   = false
-      AND c.sell_price  IS NOT NULL
-      AND c.sell_price  > 0
-      AND c.shipment_id IS NOT NULL
+      AND c.cancelled          = false
+      AND c.shipment_id        IS NOT NULL
       AND c.courier_service_id IS NOT NULL
       AND NOT EXISTS (
         SELECT 1 FROM charges fc
-        WHERE  fc.shipment_id  = c.shipment_id
-          AND  fc.charge_type  = 'fuel'
-          AND  fc.cancelled    = false
+        WHERE  fc.shipment_id = c.shipment_id
+          AND  fc.charge_type = 'fuel'
+          AND  fc.cancelled   = false
       )`;
 
     if (!isBroad) {
-      where = `c.source = 'carrier_direct' AND c.verified = true\n      AND ` + where;
+      where = `c.source = 'carrier_direct'\n      AND ` + where;
     }
 
     if (customer_id) {
@@ -5137,39 +5146,101 @@ router.post('/backfill-carrier-direct-surcharges', async (req, res) => {
     const { rows } = await query(`
       SELECT c.id, c.shipment_id, c.customer_id, c.courier_service_id,
              c.sell_price, c.cost_price,
+             c.weight_charged_kg,
+             c.ship_to_postcode, c.ship_to_country_iso,
              cs.courier_id,
              COALESCE(s.parcel_count, 1) AS parcel_count
-      FROM   charges  c
+      FROM   charges c
       JOIN   courier_services cs ON cs.id = c.courier_service_id
       LEFT JOIN shipments s ON s.id = c.shipment_id
       WHERE  ${where}
       ORDER  BY c.created_at
     `, params);
 
-    console.log(`[backfill-cd-surcharges] Found ${rows.length} carrier_direct charge(s) missing fuel`);
+    console.log(`[backfill-cd-surcharges] Found ${rows.length} carrier_direct charge(s) missing fuel (incl. unpriced)`);
 
     let processed = 0;
+    let repriced  = 0;
     let errors    = 0;
+
     for (const row of rows) {
       try {
-        await createCarrierDirectSurcharges({
-          shipmentId:       row.shipment_id,
-          customerId:       row.customer_id,
-          carrierId:        row.courier_id,
-          serviceId:        row.courier_service_id,
-          freightSellPrice: parseFloat(row.sell_price),
-          freightCostPrice: parseFloat(row.cost_price || 0),
-          parcelCount:      parseInt(row.parcel_count) || 1,
-        });
-        processed++;
+        let freightSellPrice = row.sell_price != null ? parseFloat(row.sell_price) : null;
+
+        // ── Case 1: sell_price is null — re-price from rate card ──────────────
+        // This covers charges created when the multi-parcel all_sub pricing was
+        // broken (sell_price was forced to null because hasSellRate was false
+        // for parcelCount > 1 when only sell_sub was set on the rate card).
+        if (freightSellPrice == null || freightSellPrice === 0) {
+          const parcelCount = parseInt(row.parcel_count) || 1;
+          const carrierId   = row.courier_id;
+          const kg          = parseFloat(row.weight_charged_kg) || 0;
+
+          // Determine if this is an all_sub carrier (DPD) so we use per-parcel kg
+          const profileRes = await query(
+            `SELECT column_map FROM carrier_csv_profiles
+             WHERE  carrier_id = $1 AND is_default = true LIMIT 1`,
+            [carrierId]
+          );
+          const isAllSub    = profileRes.rows[0]?.column_map?.parcel_pricing === 'all_sub';
+          const perParcelKg = (isAllSub && parcelCount > 1) ? round2(kg / parcelCount) : kg;
+
+          if (perParcelKg > 0) {
+            const pricing = await computeGhostCharge(
+              row.courier_service_id,
+              row.customer_id,
+              perParcelKg,
+              row.ship_to_postcode   || null,
+              row.ship_to_country_iso || 'GB'
+            );
+
+            if (!pricing.error) {
+              const hasSubSell = isAllSub && parcelCount > 1 && pricing.sell_sub != null;
+              if (hasSubSell) {
+                freightSellPrice = round2(pricing.sell_sub * parcelCount);
+              } else if (pricing.sell_price != null) {
+                freightSellPrice = round2(pricing.sell_price * parcelCount);
+              }
+
+              if (freightSellPrice != null && freightSellPrice > 0) {
+                await query(
+                  `UPDATE charges
+                   SET    sell_price = $1, price = $1, status = 'verified', updated_at = NOW()
+                   WHERE  id = $2`,
+                  [freightSellPrice, row.id]
+                );
+                repriced++;
+                console.log(`[backfill-cd-surcharges] repriced charge ${row.id}: sell=£${freightSellPrice} (${parcelCount} parcel(s) @ ${isAllSub ? 'all_sub' : 'standard'})`);
+              } else {
+                console.warn(`[backfill-cd-surcharges] charge ${row.id}: repricing returned 0/null — rate card may be missing`);
+              }
+            } else {
+              console.warn(`[backfill-cd-surcharges] charge ${row.id}: pricing error — ${pricing.error} (${pricing.detail})`);
+            }
+          }
+        }
+
+        // ── Case 2: we now have a valid sell price — insert surcharges ────────
+        if (freightSellPrice != null && freightSellPrice > 0) {
+          await createCarrierDirectSurcharges({
+            shipmentId:       row.shipment_id,
+            customerId:       row.customer_id,
+            carrierId:        row.courier_id,
+            serviceId:        row.courier_service_id,
+            freightSellPrice,
+            freightCostPrice: parseFloat(row.cost_price || 0),
+            parcelCount:      parseInt(row.parcel_count) || 1,
+          });
+          processed++;
+        }
       } catch (err) {
         console.error(`[backfill-cd-surcharges] charge ${row.id}:`, err.message);
         errors++;
       }
     }
 
-    console.log(`[backfill-cd-surcharges] Done: ${processed} processed, ${errors} errors`);
-    return res.json({ ok: true, found: rows.length, processed, errors });
+    console.log(`[backfill-cd-surcharges] Done: ${rows.length} found, ${repriced} repriced, ${processed} surcharges inserted, ${errors} errors`);
+    return res.json({ ok: true, found: rows.length, repriced, processed, errors });
   } catch (err) {
     console.error('[backfill-cd-surcharges] error:', err.message);
     return res.status(500).json({ error: err.message });
