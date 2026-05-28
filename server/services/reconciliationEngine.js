@@ -941,46 +941,56 @@ async function handleCarrierDirect({
   // platform_shipment_id is a BIGINT column and cannot hold text keys.
   let cdShipmentId = null;
   try {
-    // Check if a carrier_direct shipment already exists for this tracking
-    const existingShip = await query(
-      `SELECT id FROM shipments
-       WHERE  $1 = ANY(tracking_codes)
-         AND  event_type = 'carrier_direct'
-       LIMIT  1`,
-      [trackingNumber]
-    );
-    if (existingShip.rows.length) {
-      cdShipmentId = existingShip.rows[0].id;
-      console.log(`[carrier-direct] reused existing shipment id=${cdShipmentId} for tracking=${trackingNumber}`);
+    // UPSERT: try to insert; if a unique constraint fires (e.g. duplicate
+    // tracking_codes entry from a concurrent/prior run), do nothing and fall
+    // through to the lookup below.  Without ON CONFLICT the bare INSERT threw
+    // an error that was silently swallowed, leaving cdShipmentId null and
+    // skipping fuel/surcharge creation for the shipment.
+    const cdShipRes = await query(`
+      INSERT INTO shipments (
+        event_type,
+        customer_id, courier, service_name,
+        reference, parcel_count, tracking_codes,
+        ship_to_name, ship_to_postcode, ship_to_country_iso,
+        collection_date
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ON CONFLICT DO NOTHING
+      RETURNING id
+    `, [
+      'carrier_direct',
+      customer.customer_id,
+      'DPD',
+      rawServiceCode        || null,
+      line.sender_ref       || null,
+      parcelCount > 1 ? parcelCount : null,
+      [trackingNumber],
+      line.recipient_name   || null,
+      postcode              || null,
+      countryIso            || 'GB',
+      line.shipment_date    || null,
+    ]);
+    cdShipmentId = cdShipRes.rows[0]?.id || null;
+
+    // ON CONFLICT DO NOTHING returns 0 rows — look up the existing record.
+    if (!cdShipmentId) {
+      const existingShip = await query(
+        `SELECT id FROM shipments
+         WHERE  $1 = ANY(tracking_codes)
+           AND  event_type = 'carrier_direct'
+         LIMIT  1`,
+        [trackingNumber]
+      );
+      cdShipmentId = existingShip.rows[0]?.id || null;
+    }
+
+    if (cdShipmentId) {
+      console.log(`[carrier-direct] shipment id=${cdShipmentId} for tracking=${trackingNumber}`);
     } else {
-      const cdShipRes = await query(`
-        INSERT INTO shipments (
-          event_type,
-          customer_id, courier, service_name,
-          reference, parcel_count, tracking_codes,
-          ship_to_name, ship_to_postcode, ship_to_country_iso,
-          collection_date
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-        RETURNING id
-      `, [
-        'carrier_direct',
-        customer.customer_id,
-        'DPD',
-        rawServiceCode        || null,
-        line.sender_ref       || null,
-        parcelCount > 1 ? parcelCount : null,
-        [trackingNumber],
-        line.recipient_name   || null,
-        postcode              || null,
-        countryIso            || 'GB',
-        line.shipment_date    || null,
-      ]);
-      cdShipmentId = cdShipRes.rows[0]?.id || null;
-      console.log(`[carrier-direct] created shipment id=${cdShipmentId} for tracking=${trackingNumber}`);
+      console.warn(`[carrier-direct] could not obtain shipment for tracking=${trackingNumber} — fuel will be skipped`);
     }
   } catch (shipErr) {
-    // Non-fatal — charge can be created without a shipment row.
-    console.warn(`[carrier-direct] shipment insert failed for ${trackingNumber}: ${shipErr.message} — continuing without shipment record`);
+    // Non-fatal — log with full message so we can diagnose any remaining issues.
+    console.warn(`[carrier-direct] shipment upsert failed for ${trackingNumber}: ${shipErr.message} — continuing without shipment record`);
   }
 
   // ── Insert the carrier-direct charge ─────────────────────────────────────
