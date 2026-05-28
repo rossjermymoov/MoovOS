@@ -1256,24 +1256,27 @@ router.get('/service-code-mappings', async (req, res) => {
 
 router.post('/service-code-mappings', async (req, res) => {
   try {
-    const { carrier_id, courier_code, service_id, notes, customer_id } = req.body;
+    const { carrier_id, courier_code, service_id, notes, customer_id, product_code } = req.body;
     if (!carrier_id)   return res.status(400).json({ error: 'carrier_id is required' });
     if (!courier_code) return res.status(400).json({ error: 'courier_code is required' });
     if (!service_id)   return res.status(400).json({ error: 'service_id is required' });
 
     const normCode     = courier_code.trim().toUpperCase();
+    const normProduct  = product_code ? product_code.trim().toUpperCase() : null;
     const carrierIdInt = parseInt(carrier_id);
     const serviceIdInt = parseInt(service_id);
     const custId       = customer_id || null;
 
-    // Check for an existing row matching the same (carrier, code, customer scope)
+    // Check for an existing row matching the same (carrier, code, product_code, customer scope)
     const existing = await query(`
       SELECT id FROM courier_service_code_mappings
       WHERE  carrier_id   = $1
         AND  courier_code = $2
-        AND  ($3::uuid IS NULL AND customer_id IS NULL
-              OR customer_id = $3::uuid)
-    `, [carrierIdInt, normCode, custId]);
+        AND  ($3::text IS NULL AND product_code IS NULL
+              OR product_code = $3::text)
+        AND  ($4::uuid IS NULL AND customer_id IS NULL
+              OR customer_id = $4::uuid)
+    `, [carrierIdInt, normCode, normProduct, custId]);
 
     let result;
     if (existing.rows.length) {
@@ -1286,10 +1289,10 @@ router.post('/service-code-mappings', async (req, res) => {
     } else {
       result = await query(`
         INSERT INTO courier_service_code_mappings
-          (carrier_id, courier_code, service_id, notes, customer_id, created_by)
-        VALUES ($1,$2,$3,$4,$5,$6)
+          (carrier_id, courier_code, product_code, service_id, notes, customer_id, created_by)
+        VALUES ($1,$2,$3,$4,$5,$6,$7)
         RETURNING *
-      `, [carrierIdInt, normCode, serviceIdInt, notes || null, custId, req.user?.id || null]);
+      `, [carrierIdInt, normCode, normProduct, serviceIdInt, notes || null, custId, req.user?.id || null]);
     }
 
     return res.status(201).json(result.rows[0]);

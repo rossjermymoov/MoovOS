@@ -76,6 +76,7 @@ export default function ServiceCodeMappingsPage() {
 
   const [selectedCarrierId, setSelectedCarrierId] = useState(null);
   const [newCode,    setNewCode]    = useState('');
+  const [newProduct, setNewProduct] = useState('');
   const [newService, setNewService] = useState('');
   const [newNotes,   setNewNotes]   = useState('');
   const [formError,  setFormError]  = useState('');
@@ -110,6 +111,7 @@ export default function ServiceCodeMappingsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['service-code-mappings'] });
       setNewCode('');
+      setNewProduct('');
       setNewService('');
       setNewNotes('');
       setFormError('');
@@ -134,6 +136,7 @@ export default function ServiceCodeMappingsPage() {
     saveMutation.mutate({
       carrier_id:   selectedCarrierId,
       courier_code: newCode.trim(),
+      product_code: newProduct.trim() || undefined,
       service_id:   parseInt(newService),
       notes:        newNotes.trim() || undefined,
     });
@@ -221,6 +224,7 @@ export default function ServiceCodeMappingsPage() {
               <colgroup>
                 <col style={{ width: 110 }} />
                 <col style={{ width: 60 }} />
+                <col style={{ width: 70 }} />
                 <col />
                 <col />
                 <col style={{ width: 100 }} />
@@ -229,6 +233,7 @@ export default function ServiceCodeMappingsPage() {
                 <tr>
                   <th style={TH}>Carrier</th>
                   <th style={TH}>Invoice Code</th>
+                  <th style={TH}>Product Code</th>
                   <th style={TH}>Maps to Service</th>
                   <th style={TH}>Notes</th>
                   <th style={{ ...TH, textAlign: 'right' }}>Action</th>
@@ -251,6 +256,19 @@ export default function ServiceCodeMappingsPage() {
                       }}>
                         {m.courier_code}
                       </span>
+                    </td>
+                    <td style={TD}>
+                      {m.product_code ? (
+                        <span style={{
+                          background: 'rgba(0,188,212,0.1)', border: '1px solid rgba(0,188,212,0.25)',
+                          borderRadius: 6, color: '#00BCD4', fontSize: 12, fontWeight: 700,
+                          padding: '3px 8px', fontFamily: 'monospace',
+                        }}>
+                          {m.product_code}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#475569', fontSize: 12 }}>—</span>
+                      )}
                     </td>
                     <td style={TD}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -295,9 +313,9 @@ export default function ServiceCodeMappingsPage() {
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr', gap: 14, alignItems: 'end', maxWidth: 700 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '120px 100px 1fr 1fr', gap: 14, alignItems: 'end', maxWidth: 860 }}>
 
-          {/* Carrier code */}
+          {/* Invoice code */}
           <div>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748B', marginBottom: 6 }}>
               <Hash size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />
@@ -306,10 +324,27 @@ export default function ServiceCodeMappingsPage() {
             <input
               value={newCode}
               onChange={e => setNewCode(e.target.value)}
-              placeholder="e.g. 4"
+              placeholder="e.g. 2"
               maxLength={20}
               disabled={!selectedCarrierId}
               style={{ ...INPUT, opacity: selectedCarrierId ? 1 : 0.45, fontFamily: 'monospace', fontWeight: 700 }}
+              onKeyDown={e => e.key === 'Enter' && handleSave()}
+            />
+          </div>
+
+          {/* Product code */}
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748B', marginBottom: 6 }}>
+              <Hash size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />
+              Product Code <span style={{ fontWeight: 400 }}>(opt)</span>
+            </label>
+            <input
+              value={newProduct}
+              onChange={e => setNewProduct(e.target.value)}
+              placeholder="e.g. 1"
+              maxLength={60}
+              disabled={!selectedCarrierId}
+              style={{ ...INPUT, opacity: selectedCarrierId ? 1 : 0.45, fontFamily: 'monospace', fontWeight: 700, color: '#00BCD4' }}
               onKeyDown={e => e.key === 'Enter' && handleSave()}
             />
           </div>
@@ -344,7 +379,7 @@ export default function ServiceCodeMappingsPage() {
             <input
               value={newNotes}
               onChange={e => setNewNotes(e.target.value)}
-              placeholder="e.g. Saturday delivery"
+              placeholder="e.g. Express Pack"
               disabled={!selectedCarrierId}
               style={{ ...INPUT, opacity: selectedCarrierId ? 1 : 0.45 }}
               onKeyDown={e => e.key === 'Enter' && handleSave()}

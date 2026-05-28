@@ -5,7 +5,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Trash2, Globe, Search, X, ChevronDown, ChevronRight, Package, Check, Zap, AlertCircle, Percent, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Trash2, Globe, Search, X, ChevronDown, ChevronRight, Package, Check, Zap, AlertCircle, Percent, ToggleLeft, ToggleRight, Plus } from 'lucide-react';
 import axios from 'axios';
 import { getCourierLogo } from '../../../utils/courierLogos';
 
@@ -1186,15 +1186,70 @@ function SurchargeOverrideRow({ surcharge, override, customerId, onChanged }) {
   );
 }
 
-// ─── Per-active-carrier section (account number + fuel + surcharges) ──────────
+// ─── Single account row (label + account number, inline editable) ─────────────
+function CarrierAccountRow({ account, customerId }) {
+  const qc = useQueryClient();
+  const [labelVal, setLabelVal] = useState(account.label || '');
+  const [acctVal,  setAcctVal]  = useState(account.account_number || '');
+  const [saving,   setSaving]   = useState(false);
+
+  async function savePatch(updates) {
+    setSaving(true);
+    try {
+      await api.patch(`/customer-carrier-links/${customerId}/link/${account.link_id}`, updates);
+      qc.invalidateQueries(['customer-carrier-links', customerId]);
+    } catch (e) { console.error('Failed to update account:', e); }
+    finally { setSaving(false); }
+  }
+
+  async function removeAccount() {
+    if (!window.confirm('Remove this account?')) return;
+    await api.delete(`/customer-carrier-links/${customerId}/link/${account.link_id}`);
+    qc.invalidateQueries(['customer-carrier-links', customerId]);
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+      <input
+        value={labelVal}
+        onChange={e => setLabelVal(e.target.value)}
+        onBlur={() => { if (labelVal !== (account.label || '')) savePatch({ label: labelVal }); }}
+        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setLabelVal(account.label || ''); }}
+        placeholder="Label"
+        title="Account label (e.g. Perishable)"
+        style={{ ...inp, width: 100, fontSize: 11 }}
+        disabled={saving}
+      />
+      <input
+        value={acctVal}
+        onChange={e => setAcctVal(e.target.value)}
+        onBlur={() => { if (acctVal !== (account.account_number || '')) savePatch({ account_number: acctVal }); }}
+        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setAcctVal(account.account_number || ''); }}
+        placeholder="Account No."
+        title="Carrier account number"
+        style={{ ...inp, width: 100, fontSize: 11, fontFamily: 'monospace', color: '#00BCD4' }}
+        disabled={saving}
+      />
+      <button
+        onClick={removeAccount}
+        title="Remove this account"
+        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', padding: '2px 4px', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+      >
+        <Trash2 size={11} />
+      </button>
+    </div>
+  );
+}
+
+// ─── Per-active-carrier section (account numbers + fuel + surcharges) ─────────
 function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesChange }) {
   const [fuelOpen,  setFuelOpen]  = useState(false);
   const [surchOpen, setSurchOpen] = useState(true);  // open by default so surcharges are visible
-  // Account number inline editing
-  const [acctEditing, setAcctEditing] = useState(false);
-  const [acctVal, setAcctVal]         = useState(carrier.account_number || '');
-  const [acctSaving, setAcctSaving]   = useState(false);
-  const acctRef = useRef(null);
+  // Multi-account: add-account inline form
+  const [addingAccount, setAddingAccount] = useState(false);
+  const [newLabel,      setNewLabel]      = useState('');
+  const [newAcctNo,     setNewAcctNo]     = useState('');
+  const [addSaving,     setAddSaving]     = useState(false);
 
   const logo    = getCourierLogo(carrier.courier_code);
   // Only show fuel section for active (linked) carriers
@@ -1216,23 +1271,20 @@ function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesCh
     onSuccess:  () => qc.invalidateQueries(['customer-carrier-links', customerId]),
   });
 
-  async function saveAcctNumber() {
-    const trimmed = acctVal.trim();
-    if (trimmed === (carrier.account_number || '')) { setAcctEditing(false); return; }
-    setAcctSaving(true);
+  async function addAccount() {
+    if (!newAcctNo.trim() && !newLabel.trim()) return;
+    setAddSaving(true);
     try {
-      await api.patch(`/customer-carrier-links/${customerId}/${carrier.courier_id}`, { account_number: trimmed });
+      await api.post(`/customer-carrier-links/${customerId}`, {
+        courier_id:     carrier.courier_id,
+        account_number: newAcctNo.trim() || null,
+        label:          newLabel.trim()  || null,
+      });
       qc.invalidateQueries(['customer-carrier-links', customerId]);
-    } finally {
-      setAcctSaving(false);
-      setAcctEditing(false);
-    }
-  }
-
-  function startAcctEdit() {
-    setAcctVal(carrier.account_number || '');
-    setAcctEditing(true);
-    setTimeout(() => acctRef.current?.select(), 0);
+      setNewLabel('');
+      setNewAcctNo('');
+      setAddingAccount(false);
+    } finally { setAddSaving(false); }
   }
 
   return (
@@ -1257,39 +1309,48 @@ function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesCh
           <span style={{ fontSize: 11, color: '#64748B' }}>{carrier.available_cards?.[0]?.name || 'Master'}</span>
         )}
 
-        {/* Account number — inline editable, optional */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 10, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0 }}>Acct No.</span>
-          {acctEditing ? (
-            <input
-              ref={acctRef}
-              value={acctVal}
-              onChange={e => setAcctVal(e.target.value)}
-              onBlur={saveAcctNumber}
-              onKeyDown={e => { if (e.key === 'Enter') saveAcctNumber(); if (e.key === 'Escape') { setAcctEditing(false); setAcctVal(carrier.account_number || ''); } }}
-              placeholder="e.g. 123456789"
-              style={{ ...inp, width: 130, fontSize: 11, fontFamily: 'monospace', color: '#00BCD4', border: '1px solid rgba(0,188,212,0.5)', background: 'rgba(0,188,212,0.08)' }}
-              disabled={acctSaving}
-            />
-          ) : (
-            <span
-              onClick={startAcctEdit}
-              title="Click to set account number"
-              style={{
-                fontSize: 11, fontFamily: 'monospace', fontWeight: 600,
-                color: carrier.account_number ? '#00BCD4' : '#333',
-                cursor: 'pointer', padding: '3px 10px', borderRadius: 5,
-                border: `1px solid ${carrier.account_number ? 'rgba(0,188,212,0.35)' : 'rgba(0,0,0,0.08)'}`,
-                background: carrier.account_number ? 'rgba(0,188,212,0.08)' : 'rgba(0,0,0,0.02)',
-                transition: 'border-color 0.12s, background 0.12s',
-                minWidth: 80, display: 'inline-block', textAlign: 'center',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(0,188,212,0.6)'; e.currentTarget.style.background = 'rgba(0,188,212,0.12)'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = carrier.account_number ? 'rgba(0,188,212,0.35)' : 'rgba(0,0,0,0.08)'; e.currentTarget.style.background = carrier.account_number ? 'rgba(0,188,212,0.08)' : 'rgba(0,0,0,0.02)'; }}
-            >
-              {carrier.account_number || '+ Add'}
-            </span>
-          )}
+        {/* Account numbers — multi-account */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+          <span style={{ fontSize: 10, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0, paddingTop: 6 }}>Accts</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {(carrier.accounts || []).map(acct => (
+              <CarrierAccountRow key={acct.link_id} account={acct} customerId={customerId} />
+            ))}
+            {addingAccount ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <input
+                  value={newLabel}
+                  onChange={e => setNewLabel(e.target.value)}
+                  placeholder="Label (optional)"
+                  style={{ ...inp, width: 100, fontSize: 11 }}
+                  autoFocus
+                  disabled={addSaving}
+                  onKeyDown={e => { if (e.key === 'Enter') addAccount(); if (e.key === 'Escape') setAddingAccount(false); }}
+                />
+                <input
+                  value={newAcctNo}
+                  onChange={e => setNewAcctNo(e.target.value)}
+                  placeholder="Account No."
+                  style={{ ...inp, width: 100, fontSize: 11, fontFamily: 'monospace', color: '#00BCD4' }}
+                  disabled={addSaving}
+                  onKeyDown={e => { if (e.key === 'Enter') addAccount(); if (e.key === 'Escape') setAddingAccount(false); }}
+                />
+                <button onClick={addAccount} disabled={addSaving} title="Save" style={{ background: 'rgba(0,200,83,0.15)', border: '1px solid rgba(0,200,83,0.4)', borderRadius: 6, color: '#00C853', padding: '3px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                  <Check size={11} />
+                </button>
+                <button onClick={() => { setAddingAccount(false); setNewLabel(''); setNewAcctNo(''); }} title="Cancel" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: '2px 4px', display: 'flex', alignItems: 'center' }}>
+                  <X size={11} />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setAddingAccount(true)}
+                style={{ background: 'none', border: '1px dashed rgba(0,188,212,0.45)', borderRadius: 5, color: '#64748B', padding: '2px 8px', cursor: 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', gap: 4, alignSelf: 'flex-start' }}
+              >
+                <Plus size={9} /> Add account
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
