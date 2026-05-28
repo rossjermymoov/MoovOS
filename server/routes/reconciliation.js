@@ -1042,6 +1042,34 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
       return res.status(400).json({ error: 'Line is not Unmatched — cannot resolve' });
     }
 
+    // ── map_to_surcharge: set corrected_sell_price from customer's surcharge price ─
+    // When a human maps a reconciliation line to a surcharge, we need to know what
+    // to charge the customer. Look up: customer override → surcharge default_value.
+    let surchargeSell = null;
+    if (resolution_type === 'map_to_surcharge' && resolution_value) {
+      const surchargeId = resolution_value; // surcharge UUID
+      const sellRes = await query(`
+        SELECT COALESCE(cso.override_value, s.default_value) AS sell_price,
+               s.calc_type, s.charge_per,
+               s.default_value
+        FROM   surcharges s
+        LEFT JOIN customer_surcharge_overrides cso
+                  ON cso.surcharge_id = s.id AND cso.customer_id = $2 AND cso.active = true
+        WHERE  s.id = $1
+      `, [surchargeId, line.customer_id]);
+
+      if (sellRes.rows.length) {
+        const sp = sellRes.rows[0];
+        const sellVal = parseFloat(sp.sell_price || 0);
+        if (sp.calc_type === 'percentage') {
+          // % of the carrier_amount
+          surchargeSell = Math.round(parseFloat(line.carrier_amount || 0) * (sellVal / 100) * 100) / 100;
+        } else {
+          surchargeSell = sellVal;
+        }
+      }
+    }
+
     // ── manual_price: set corrected_sell_price and link the charge ──────────────
     let manualSell = null;
     let manualChargeId = null;
@@ -1087,6 +1115,13 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
     // Mark line as resolved.
     // Zero out the delta — the human has accepted the carrier's charge as correct.
     // expected_amount is set to carrier_amount so the Corrected tab shows £0.00 delta.
+    // Determine corrected_sell_price across all resolution types that set one
+    const resolvedSell = manualSell ?? surchargeSell ?? null;
+    // corrected_cost_price: for manual_price and map_to_surcharge, set to carrier_amount
+    const resolvedCost = (resolution_type === 'manual_price' || resolution_type === 'map_to_surcharge')
+      ? parseFloat(line.carrier_amount || 0)
+      : null;
+
     await query(`
       UPDATE reconciliation_lines
       SET    status                = 'corrected',
@@ -1101,8 +1136,8 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
              charge_id             = COALESCE($6, charge_id)
       WHERE  id = $1
     `, [lineId, req.user?.id || null, notes || null,
-        manualSell,
-        resolution_type === 'manual_price' ? parseFloat(line.carrier_amount || 0) : null,
+        resolvedSell,
+        resolvedCost,
         manualChargeId]);
 
     // If scope = 'always', save a mapping rule
@@ -1238,7 +1273,7 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
       resolved:      true,
       mapping_id:    mappingId,
       bulk_applied:  bulkApplied,
-      ...(manualSell != null && { manual_sell_total: manualSell }),
+      ...(resolvedSell != null && { corrected_sell_price: resolvedSell }),
     });
   } catch (err) {
     console.error('[reconciliation/resolve] POST error:', err);

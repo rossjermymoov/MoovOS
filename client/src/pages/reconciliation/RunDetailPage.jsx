@@ -509,30 +509,52 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
         )}
 
         {/* Surcharge mapping dropdown */}
-        {(resolutionType === 'map_to_surcharge') && (
-          <div>
-            <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>
-              MAP "{line.raw_service_code}" TO SURCHARGE *
-            </label>
-            <select
-              style={inputSt}
-              value={resolutionValue}
-              onChange={e => setResolutionValue(e.target.value)}
-            >
-              <option value=''>— Select surcharge —</option>
-              {surcharges.map(s => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.code})
-                </option>
-              ))}
-            </select>
-            {surcharges.length === 0 && (
-              <div style={{ fontSize: 10, color: '#FFB300', marginTop: 4 }}>
-                No surcharges configured for this carrier yet. Add them in Settings → Surcharges first.
-              </div>
-            )}
-          </div>
-        )}
+        {(resolutionType === 'map_to_surcharge') && (() => {
+          const selectedSurcharge = surcharges.find(s => s.id === resolutionValue);
+          return (
+            <div>
+              <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>
+                MAP "{line.raw_service_code}" TO SURCHARGE *
+              </label>
+              <select
+                style={inputSt}
+                value={resolutionValue}
+                onChange={e => setResolutionValue(e.target.value)}
+              >
+                <option value=''>— Select surcharge —</option>
+                {surcharges.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.code})
+                  </option>
+                ))}
+              </select>
+              {surcharges.length === 0 && (
+                <div style={{ fontSize: 10, color: '#FFB300', marginTop: 4 }}>
+                  No surcharges configured for this carrier yet. Add them in Carriers → Surcharges first.
+                </div>
+              )}
+              {selectedSurcharge && (
+                <div style={{
+                  marginTop: 8, padding: '9px 12px',
+                  background: 'rgba(0,200,83,0.05)', border: '1px solid rgba(0,200,83,0.18)',
+                  borderRadius: 7, fontSize: 11,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#64748B' }}>Standard sell price</span>
+                    <span style={{ fontWeight: 700, color: '#0F172A' }}>
+                      {selectedSurcharge.calc_type === 'percentage'
+                        ? `${parseFloat(selectedSurcharge.default_value).toFixed(2)}% of base`
+                        : `£${parseFloat(selectedSurcharge.default_value || 0).toFixed(2)} / ${selectedSurcharge.charge_per || 'shipment'}`}
+                    </span>
+                  </div>
+                  <div style={{ color: '#64748B', marginTop: 4 }}>
+                    Override this customer's sell price in their Pricing tab if needed.
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Delta tolerance input */}
         {resolutionType === 'accept_delta' && (
