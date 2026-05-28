@@ -171,7 +171,7 @@ function CarrierAccountsRow({ carrier, customerId, onUpdateLink, onRemoveLink, o
       </div>
 
       {/* Each account row */}
-      {carrier.accounts.map(acct => (
+      {(carrier.accounts || []).map(acct => (
         <div key={acct.link_id} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, paddingLeft: 8 }}>
           {/* Label (editable inline) */}
           <input
