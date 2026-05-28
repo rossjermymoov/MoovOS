@@ -80,7 +80,10 @@ export async function finalizeRun(runId, staffId = null) {
   // We look up the shipment via the freight line (same tracking, surcharge_id IS NULL, has charge_id)
   // rather than the tracking_codes array, which is more reliable for DPD-style prefixed numbers.
   for (const line of lines) {
-    if (line.unmatched_reason !== 'sell_surcharge_missing' || !line.surcharge_id) continue;
+    // Fire for any corrected line with surcharge_id set — covers both:
+    //   • sell_surcharge_missing warnings (carrier billed a surcharge we never charged)
+    //   • manually resolved map_to_surcharge lines (operator mapped an unmatched line to a surcharge)
+    if (!line.surcharge_id) continue;
     if (line.status !== 'corrected' || !line.corrected_sell_price) continue;
 
     try {

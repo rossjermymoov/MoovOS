@@ -1220,6 +1220,9 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
     const resolvedChargeId = manualChargeId || mappedChargeId || null;
     // Effective customer_id: from map_to_customer, or original line value
     const resolvedCustomerId = mappedCustomerId || line.customer_id || null;
+    // Effective surcharge_id: set on the recon line when map_to_surcharge so that
+    // finalization Step 0.5 knows to create a surcharge charge for this line.
+    const resolvedSurchargeId = resolution_type === 'map_to_surcharge' ? resolution_value : null;
 
     await query(`
       UPDATE reconciliation_lines
@@ -1233,13 +1236,15 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
              customer_id           = $7,
              corrected_sell_price  = COALESCE($4, corrected_sell_price),
              corrected_cost_price  = COALESCE($5, corrected_cost_price),
-             charge_id             = COALESCE($6, charge_id)
+             charge_id             = COALESCE($6, charge_id),
+             surcharge_id          = COALESCE($8, surcharge_id)
       WHERE  id = $1
     `, [lineId, req.user?.id || null, notes || null,
         resolvedSell,
         resolvedCost,
         resolvedChargeId,
-        resolvedCustomerId]);
+        resolvedCustomerId,
+        resolvedSurchargeId]);
 
     // If scope = 'always', save a mapping rule
     let mappingId = null;
