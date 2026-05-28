@@ -961,7 +961,11 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
     const { resolution_type, resolution_value, scope = 'once', notes, mapping_type, customer_id } = req.body;
 
     if (!resolution_type) return res.status(400).json({ error: 'resolution_type is required' });
-    if (!resolution_value) return res.status(400).json({ error: 'resolution_value is required' });
+    // credit_request doesn't need a value — use the type itself as the stored value
+    const effective_resolution_value = resolution_type === 'credit_request'
+      ? 'credit_request'
+      : resolution_value;
+    if (!effective_resolution_value) return res.status(400).json({ error: 'resolution_value is required' });
     if (!['once', 'always'].includes(scope)) {
       return res.status(400).json({ error: 'scope must be once or always' });
     }
@@ -1013,7 +1017,7 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
         line.unmatched_reason === 'delta_acceptance' ? 'charge_type' : 'raw_service_code',
         line.raw_service_code || line.charge_type || '*',
         resolution_type,
-        resolution_value,
+        effective_resolution_value,
         line.customer_id || null,
         lineId,
         req.user?.id || null,

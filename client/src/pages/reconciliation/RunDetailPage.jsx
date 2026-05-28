@@ -303,7 +303,8 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
   }[line.unmatched_reason];
 
   async function handleResolve() {
-    if (!resolutionType || !resolutionValue) {
+    const valueRequired = resolutionType !== 'credit_request';
+    if (!resolutionType || (valueRequired && !resolutionValue)) {
       setError('Please fill in all required fields');
       return;
     }
@@ -460,6 +461,7 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
               <option value='map_to_customer'>Map account to customer</option>
               <option value='accept_delta'>Accept delta as tolerance</option>
               <option value='reject'>Reject / dispute charge</option>
+              <option value='credit_request'>Applying for credit with Courier</option>
             </select>
           </div>
         )}
@@ -528,7 +530,7 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
         )}
 
         {/* Generic value input for other types */}
-        {!isUnknownCode && resolutionType !== 'map_to_service' && resolutionType !== 'accept_delta' && resolutionType && (
+        {!isUnknownCode && resolutionType !== 'map_to_service' && resolutionType !== 'accept_delta' && resolutionType !== 'credit_request' && resolutionType && (
           <div>
             <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>RESOLUTION VALUE *</label>
             <input
