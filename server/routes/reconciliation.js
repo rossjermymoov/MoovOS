@@ -1207,6 +1207,66 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
       }
     }
 
+    // ── map_to_surcharge: create the surcharge charge immediately ──────────────
+    // The charge must exist in the charges table right now so the customer record
+    // shows it at once — before finalization. Step 0.5 in finalizationService will
+    // detect the existing charge and skip re-creation (idempotent).
+    let surchargeChargeId = null;
+    if (resolution_type === 'map_to_surcharge' && surchargeSell && surchargeSell > 0) {
+      try {
+        // Find shipment_id via the freight counterpart line in the same run
+        const freightRes = await query(`
+          SELECT ch.shipment_id, sh.despatch_date
+          FROM   reconciliation_lines rl2
+          JOIN   charges ch ON ch.id = rl2.charge_id
+          LEFT JOIN shipments sh ON sh.id = ch.shipment_id
+          WHERE  rl2.run_id          = $1
+            AND  rl2.tracking_number = $2
+            AND  rl2.surcharge_id   IS NULL
+            AND  rl2.charge_id      IS NOT NULL
+          LIMIT 1
+        `, [line.run_id, line.tracking_number]);
+
+        const scShipmentId   = freightRes.rows[0]?.shipment_id || null;
+        const scDespatchDate = freightRes.rows[0]?.despatch_date || line.shipment_date || null;
+        const scCostAmt      = parseFloat(line.carrier_amount || 0);
+
+        if (scShipmentId) {
+          // Idempotency check — don't double-insert if already created
+          const existRes = await query(`
+            SELECT id FROM charges
+            WHERE  customer_id  = $1
+              AND  surcharge_id = $2
+              AND  shipment_id  = $3
+              AND  charge_type  = 'surcharge'
+              AND  cancelled    = false
+            LIMIT 1
+          `, [line.customer_id, resolution_value, scShipmentId]);
+
+          if (existRes.rows.length) {
+            surchargeChargeId = existRes.rows[0].id;
+            console.log(`[reconciliation/resolve] Surcharge charge already exists: id=${surchargeChargeId} surcharge=${resolution_value} tracking=${line.tracking_number}`);
+          } else {
+            const scChargeRes = await query(`
+              INSERT INTO charges (
+                customer_id, shipment_id, charge_type,
+                surcharge_id, cost_price, sell_price, price,
+                status, verified, despatch_date, source
+              ) VALUES ($1,$2,'surcharge',$3,$4,$5,$5,'verified',true,$6,'recon_surcharge')
+              RETURNING id
+            `, [line.customer_id, scShipmentId, resolution_value, scCostAmt, surchargeSell, scDespatchDate]);
+            surchargeChargeId = scChargeRes.rows[0]?.id || null;
+            if (surchargeChargeId) {
+              console.log(`[reconciliation/resolve] Surcharge charge created: id=${surchargeChargeId} surcharge=${resolution_value} sell=£${surchargeSell} tracking=${line.tracking_number}`);
+            }
+          }
+        }
+      } catch (scErr) {
+        console.warn(`[reconciliation/resolve] Surcharge charge creation failed for tracking=${line.tracking_number}:`, scErr.message);
+        // Non-fatal — charge will be created at finalization via Step 0.5
+      }
+    }
+
     // Mark line as resolved.
     // Zero out the delta — the human has accepted the carrier's charge as correct.
     // expected_amount is set to carrier_amount so the Corrected tab shows £0.00 delta.
@@ -1216,12 +1276,12 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
     const resolvedCost = (resolution_type === 'manual_price' || resolution_type === 'map_to_surcharge' || resolution_type === 'map_to_customer')
       ? parseFloat(line.carrier_amount || 0)
       : null;
-    // Effective charge_id: from manual_price lookup, or map_to_customer lookup
-    const resolvedChargeId = manualChargeId || mappedChargeId || null;
+    // Effective charge_id: manual_price, map_to_customer, or newly created surcharge charge
+    const resolvedChargeId = manualChargeId || mappedChargeId || surchargeChargeId || null;
     // Effective customer_id: from map_to_customer, or original line value
     const resolvedCustomerId = mappedCustomerId || line.customer_id || null;
     // Effective surcharge_id: set on the recon line when map_to_surcharge so that
-    // finalization Step 0.5 knows to create a surcharge charge for this line.
+    // finalization Step 0.5 knows to skip/trace the surcharge charge for this line.
     const resolvedSurchargeId = resolution_type === 'map_to_surcharge' ? resolution_value : null;
 
     await query(`

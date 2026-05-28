@@ -107,32 +107,58 @@ export async function finalizeRun(runId, staffId = null) {
       const shipmentId  = freightRes.rows[0]?.shipment_id  || null;
       const despatchDate = freightRes.rows[0]?.despatch_date || line.shipment_date || null;
 
-      // Insert surcharge charge (idempotent — ON CONFLICT skips duplicates)
-      const chargeRes = await query(`
-        INSERT INTO charges (
-          customer_id, shipment_id, charge_type,
-          surcharge_id, cost_price, sell_price, price,
-          status, verified, despatch_date, source
-        ) VALUES ($1,$2,'surcharge', $3,$4,$5,$5, 'verified',true,$6,'recon_surcharge')
-        ON CONFLICT DO NOTHING
-        RETURNING id
-      `, [
-        line.customer_id,
-        shipmentId,
-        line.surcharge_id,
-        costAmt,
-        sellAmt,
-        despatchDate,
-      ]);
+      // Idempotency: if the charge was already created at resolve time (map_to_surcharge),
+      // charge_id on the line will point to a 'surcharge' charge — skip creation.
+      if (line.charge_id) {
+        const { rows: cTypeRows } = await query(
+          `SELECT charge_type FROM charges WHERE id = $1 LIMIT 1`,
+          [line.charge_id]
+        );
+        if (cTypeRows[0]?.charge_type === 'surcharge') {
+          console.log(`[finalization] Surcharge charge already exists (id=${line.charge_id}), skipping creation for tracking=${line.tracking_number}`);
+          continue;
+        }
+      }
 
-      const chargeId = chargeRes.rows[0]?.id || null;
+      // Insert surcharge charge (explicit existence check — ON CONFLICT alone doesn't
+      // prevent duplicates without a matching unique constraint on the table)
+      const existRes = await query(`
+        SELECT id FROM charges
+        WHERE  customer_id  = $1
+          AND  surcharge_id = $3
+          AND  charge_type  = 'surcharge'
+          AND  cancelled    = false
+          AND  ($2::uuid IS NULL OR shipment_id = $2::uuid)
+        LIMIT 1
+      `, [line.customer_id, shipmentId, line.surcharge_id]);
+
+      let chargeId = existRes.rows[0]?.id || null;
+      if (!chargeId) {
+        const chargeRes = await query(`
+          INSERT INTO charges (
+            customer_id, shipment_id, charge_type,
+            surcharge_id, cost_price, sell_price, price,
+            status, verified, despatch_date, source
+          ) VALUES ($1,$2,'surcharge',$3,$4,$5,$5,'verified',true,$6,'recon_surcharge')
+          RETURNING id
+        `, [
+          line.customer_id,
+          shipmentId,
+          line.surcharge_id,
+          costAmt,
+          sellAmt,
+          despatchDate,
+        ]);
+        chargeId = chargeRes.rows[0]?.id || null;
+      }
+
       if (chargeId) {
         // Back-populate charge_id on the recon line so subsequent reporting can trace it
         await query(
           `UPDATE reconciliation_lines SET charge_id = $1 WHERE id = $2`,
           [chargeId, line.id]
         );
-        console.log(`[finalization] Surcharge charge created: id=${chargeId} surcharge=${line.surcharge_id} sell=£${sellAmt} tracking=${line.tracking_number}`);
+        console.log(`[finalization] Surcharge charge linked: id=${chargeId} surcharge=${line.surcharge_id} sell=£${sellAmt} tracking=${line.tracking_number}`);
       }
     } catch (surchargeErr) {
       console.error(`[finalization] Surcharge charge creation failed for tracking=${line.tracking_number}:`, surchargeErr.message);
