@@ -15,7 +15,7 @@
 import express from 'express';
 import { query } from '../db/index.js';
 import { processReconciliationRun, ageUnmatchedLines, reprocessMappedLines, createCarrierDirectSurcharges } from '../services/reconciliationEngine.js';
-import { finalizeRun, getCustomerSummaries, generateCustomerCSV, getMarginReport } from '../services/finalizationService.js';
+import { finalizeRun, reSnapshot, getCustomerSummaries, generateCustomerCSV, getMarginReport } from '../services/finalizationService.js';
 import { fetchShipmentById, fetchShipmentByReference, fetchShipmentByReferenceAndTracking, probeShipmentRaw } from '../services/voilaClient.js';
 import { processShipment, insertCharges } from '../services/pricingEngine.js';
 
@@ -2219,6 +2219,23 @@ router.post('/runs/:id/finalize', async (req, res) => {
     console.error('[reconciliation/finalize] error:', err.message);
     const status = err.message.includes('Unmatched') ? 422 : 500;
     return res.status(status).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/reconciliation/runs/:id/re-snapshot ───────────────────────────
+// Recovery: re-runs the snapshot INSERT step for a finalized run that has
+// empty or partial finalized_billing_lines (e.g. due to a DB error during
+// the original finalization). Safe to re-run — uses ON CONFLICT DO NOTHING.
+// Returns { inserted, skipped, errors[] } so we can see what went wrong.
+
+router.post('/runs/:id/re-snapshot', async (req, res) => {
+  try {
+    const runId = parseInt(req.params.id);
+    const result = await reSnapshot(runId);
+    return res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error('[reconciliation/re-snapshot] error:', err.message);
+    return res.status(500).json({ error: err.message });
   }
 });
 

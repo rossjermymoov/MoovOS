@@ -505,6 +505,54 @@ async function insertSnapshot(runId, reconLineId, s) {
   ]);
 }
 
+// ─── Re-snapshot: recovery for finalized runs with empty billing lines ────────
+//
+// Re-runs only the INSERT step for a run that is already finalized but has
+// missing rows in finalized_billing_lines (e.g. DB error silently swallowed
+// during original finalization). Uses ON CONFLICT DO NOTHING so safe to repeat.
+
+export async function reSnapshot(runId) {
+  const runRes = await query(`SELECT * FROM reconciliation_runs WHERE id = $1`, [runId]);
+  if (!runRes.rows.length) throw new Error('Run not found');
+  const run = runRes.rows[0];
+  if (!run.finalized) throw new Error('Run is not finalized — use the normal Finalize button instead');
+
+  const linesRes = await query(`
+    SELECT rl.*
+    FROM   reconciliation_lines rl
+    WHERE  rl.run_id = $1
+      AND  rl.status IN ('matched', 'corrected')
+  `, [runId]);
+
+  const lines = linesRes.rows;
+  if (!lines.length) throw new Error('No matched or corrected lines found for this run');
+
+  let inserted = 0;
+  let skipped  = 0;
+  const errors = [];
+
+  for (const line of lines) {
+    try {
+      const snapshot = await buildSnapshot(line, run);
+      const before = await query(
+        `SELECT id FROM finalized_billing_lines WHERE reconciliation_line_id = $1`, [line.id]
+      );
+      if (before.rows.length) {
+        skipped++;
+        continue;
+      }
+      await insertSnapshot(runId, line.id, snapshot);
+      inserted++;
+    } catch (err) {
+      errors.push({ line_id: line.id, tracking: line.tracking_number, error: err.message });
+      console.error(`[re-snapshot] Failed line ${line.id} (${line.tracking_number}):`, err.message);
+    }
+  }
+
+  console.log(`[re-snapshot] Run ${runId}: inserted=${inserted} skipped=${skipped} errors=${errors.length}`);
+  return { inserted, skipped, errors };
+}
+
 // ─── Customer summary for a finalized run ─────────────────────────────────────
 
 export async function getCustomerSummaries(runId) {
