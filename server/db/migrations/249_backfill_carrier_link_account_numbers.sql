@@ -70,17 +70,31 @@ BEGIN
     HAVING COUNT(*) = 1
   ),
 
+  account_uniqueness AS (
+    -- Count how many distinct (customer, carrier) pairs each account_no maps to.
+    -- An account number shared by two customers in reconciliation_lines cannot be
+    -- safely auto-assigned — the UPDATE would try to write it to two rows in the
+    -- same statement and violate the unique constraint even though both rows are
+    -- NULL before the statement runs (CTEs are evaluated before the UPDATE).
+    SELECT carrier_account_no, COUNT(*) AS customer_count
+    FROM   best_account
+    GROUP  BY carrier_account_no
+  ),
+
   safe_account AS (
-    -- Skip any account_no already used by ANY other row in customer_carrier_links.
-    -- If account 116390 is already set on Customer A, we must not also try to set
-    -- it on Customer B — that would violate the unique constraint on account_number.
-    -- These cases need manual review to determine the true owner.
+    -- Only proceed when BOTH conditions hold:
+    --   1. The account_no maps to exactly one customer (no ambiguity).
+    --   2. The account_no is not already present in customer_carrier_links
+    --      (avoids violating the unique constraint on account_number).
+    -- Cases that fail either check need manual review.
     SELECT ba.customer_id, ba.carrier_id, ba.carrier_account_no
-    FROM   best_account ba
-    WHERE  NOT EXISTS (
-      SELECT 1 FROM customer_carrier_links ccl2
-      WHERE  ccl2.account_number = ba.carrier_account_no
-    )
+    FROM   best_account        ba
+    JOIN   account_uniqueness  au ON au.carrier_account_no = ba.carrier_account_no
+    WHERE  au.customer_count = 1
+      AND  NOT EXISTS (
+             SELECT 1 FROM customer_carrier_links ccl2
+             WHERE  ccl2.account_number = ba.carrier_account_no
+           )
   )
 
   UPDATE customer_carrier_links ccl

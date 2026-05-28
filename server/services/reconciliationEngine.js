@@ -255,14 +255,20 @@ async function buildServiceCodeMap(carrierId) {
   }
 
   // ── Layer 1 (higher priority) — explicit saved rules ─────────────────────
+  // product_code support: when a mapping has a product_code set, it is stored
+  // under a composite key "SERVICE_CODE:PRODUCT_CODE" so the lookup can prefer
+  // the specific combination over the generic catch-all.
   const explicit = await query(
-    `SELECT courier_code, service_id, surcharge_id
+    `SELECT courier_code, product_code, service_id, surcharge_id
      FROM   courier_service_code_mappings
      WHERE  carrier_id = $1 AND is_active = true AND customer_id IS NULL`,
     [carrierId]
   );
   for (const row of explicit.rows) {
-    const key = row.courier_code.trim().toUpperCase();
+    const svc = row.courier_code.trim().toUpperCase();
+    const prd = row.product_code ? row.product_code.trim().toUpperCase() : null;
+    // Composite key when product_code is set; generic key otherwise
+    const key = prd ? `${svc}:${prd}` : svc;
     if (row.surcharge_id) {
       delete serviceMap[key];
       surchargeMap[key] = row.surcharge_id;
@@ -1734,6 +1740,28 @@ function surchargeMeta(items) {
   };
 }
 
+/**
+ * Resolve a service code → service_id from the serviceMap.
+ *
+ * When a product_code is present on the invoice line, prefer the composite
+ * key "SERVICE_CODE:PRODUCT_CODE" (specific mapping) before falling back to
+ * the generic key "SERVICE_CODE" (catch-all mapping).
+ *
+ * This lets DPD invoices disambiguate services that share the same service
+ * code (col G) but have different product codes (col E), e.g.:
+ *   product 1 (Parcel)       + service code 2 → DPD-12
+ *   product 3 (Express Pack) + service code 2 → DPD-EXP or similar
+ */
+function resolveServiceId(serviceMap, serviceCode, productCode) {
+  const svc = String(serviceCode || '').trim().toUpperCase();
+  const prd = String(productCode || '').trim().toUpperCase();
+  if (prd) {
+    const compositeKey = `${svc}:${prd}`;
+    if (serviceMap[compositeKey] !== undefined) return serviceMap[compositeKey];
+  }
+  return serviceMap[svc] ?? null;
+}
+
 async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCodeMap, surchargeMap, pool, mappings, ctx) {
   // Single-line shortcut
   if (group.length === 1) {
@@ -1787,8 +1815,10 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
   // ── Continue with just the base/freight lines ─────────────────────────────
   const firstLine      = baseLines[0];
   const rawServiceCode = String(firstLine.service_code || '').trim();
+  const rawProductCode = String(firstLine.product_code || '').trim();
   const mappedKey      = rawServiceCode.toUpperCase();
-  const serviceId      = serviceCodeMap[mappedKey] || null;
+  // Composite lookup: prefer "SERVICE:PRODUCT" key when product_code is present
+  const serviceId      = resolveServiceId(serviceCodeMap, rawServiceCode, rawProductCode);
 
   // ── Separate freight lines from unmapped orphan surcharge lines ───────────
   const freightLines = baseLines.filter(
@@ -1963,11 +1993,13 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   const trackingNumber = String(line.tracking_number || '').trim();
   const trackKey       = trackingNumber.toUpperCase();
   const rawServiceCode = String(line.service_code   || '').trim();
+  const rawProductCode = String(line.product_code   || '').trim();
   const carrierAmount  = round2(parseFloat(line.carrier_amount) || 0);
 
   // ── Phase 1b: Service code normalisation ──────────────────────────────────
+  // Composite lookup: prefer "SERVICE:PRODUCT" key when product_code is present
   const mappedKey = rawServiceCode.toUpperCase();
-  const serviceId = serviceCodeMap[mappedKey] || null;
+  const serviceId = resolveServiceId(serviceCodeMap, rawServiceCode, rawProductCode);
 
   // ── Surcharge mapping check ───────────────────────────────────────────────
   // If the raw carrier code maps to a known surcharge, auto-correct the cost

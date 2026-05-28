@@ -359,6 +359,7 @@ function mapToInvoiceLine(row, colMap) {
     tracking_number:  String(get('tracking_number')).trim(),
     account_number:   get('account_number').trim(),
     service_code:     get('service_code').trim(),
+    product_code:     get('product_code').trim() || null,
     charge_type:      get('charge_type').trim() || 'base',
     // carrier_amount = Revenue (freight base) ONLY.
     //
@@ -419,7 +420,7 @@ function mapToInvoiceLine(row, colMap) {
 }
 
 const BLANK_MAP = {
-  tracking_number: '', account_number: '', service_code: '',
+  tracking_number: '', account_number: '', service_code: '', product_code: '',
   charge_type: '', carrier_amount: '', billed_weight_kg: '',
   parcel_count: '', shipment_date: '',
   invoice_ref: '', invoice_date: '',
