@@ -34,7 +34,26 @@ ALTER TABLE courier_service_code_mappings
 ALTER TABLE courier_service_code_mappings
   DROP CONSTRAINT IF EXISTS courier_service_code_mappings_carrier_id_courier_code_key;
 
--- ── 3. Create replacement partial unique indexes ──────────────────────────────
+-- ── 3. Deduplicate before indexing ───────────────────────────────────────────
+-- The existing data has duplicate (carrier_id, courier_code) rows (product_code
+-- will be NULL for all of them after step 1).  The new partial unique index
+-- would fail if duplicates remain.  Keep the most-used row per pair (highest
+-- applied_count); delete the rest.
+DELETE FROM courier_service_code_mappings
+WHERE id IN (
+  SELECT id FROM (
+    SELECT id,
+           ROW_NUMBER() OVER (
+             PARTITION BY carrier_id, courier_code
+             ORDER BY applied_count DESC, id ASC
+           ) AS rn
+    FROM   courier_service_code_mappings
+    WHERE  product_code IS NULL
+  ) ranked
+  WHERE rn > 1
+);
+
+-- ── 4. Create replacement partial unique indexes ──────────────────────────────
 -- Generic mapping (no product code specified — acts as catch-all)
 CREATE UNIQUE INDEX IF NOT EXISTS cscm_unique_generic
   ON courier_service_code_mappings (carrier_id, courier_code)

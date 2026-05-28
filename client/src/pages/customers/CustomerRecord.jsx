@@ -85,13 +85,33 @@ function CustomerRateCardAssignments({ customerId }) {
     enabled: !!customerId,
   });
 
-  const setAssignment = useMutation({
-    mutationFn: ({ courierId, cardId }) =>
-      fetch(`/api/customer-carrier-links/${customerId}/${courierId}`, {
+  // Update a specific link (by link_id) — rate card, account number, or label
+  const updateLink = useMutation({
+    mutationFn: ({ linkId, ...fields }) =>
+      fetch(`/api/customer-carrier-links/${customerId}/link/${linkId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ carrier_rate_card_id: cardId }),
-      }).then(r => r.ok ? r.json() : Promise.reject('Failed to update assignment')),
+        body: JSON.stringify(fields),
+      }).then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e.error || 'Failed'))),
+    onSuccess: () => qc.invalidateQueries(['customer-carrier-links', customerId]),
+  });
+
+  // Remove a specific link by ID
+  const removeLink = useMutation({
+    mutationFn: (linkId) =>
+      fetch(`/api/customer-carrier-links/${customerId}/link/${linkId}`, { method: 'DELETE' })
+        .then(r => r.ok ? r.json() : Promise.reject('Failed to remove')),
+    onSuccess: () => qc.invalidateQueries(['customer-carrier-links', customerId]),
+  });
+
+  // Add a new account to an existing carrier
+  const addAccount = useMutation({
+    mutationFn: ({ courierId, accountNumber, label }) =>
+      fetch(`/api/customer-carrier-links/${customerId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courier_id: courierId, account_number: accountNumber, label }),
+      }).then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e.error || 'Failed'))),
     onSuccess: () => qc.invalidateQueries(['customer-carrier-links', customerId]),
   });
 
@@ -112,34 +132,134 @@ function CustomerRateCardAssignments({ customerId }) {
 
   return (
     <InfoCard title="Rate Cards">
-      {activeCarriers.map(link => {
-        const currentCardId = link.active_card_id ?? link.master_card_id;
-        return (
-          <Row
-            key={link.courier_id}
-            label={link.courier_name}
-            value={link.active_card_name || link.master_card_name || '—'}
-            edit={true}
-            editNode={
-              <select
-                value={String(currentCardId || '')}
-                onChange={e => setAssignment.mutate({ courierId: link.courier_id, cardId: parseInt(e.target.value) })}
-                style={inp({ width: 180, flexShrink: 0, fontSize: 11 })}
-              >
-                {(link.available_cards || []).map(card => (
-                  <option key={card.id} value={card.id}>
-                    {card.name}{card.is_master ? ' (Master)' : ''}
-                  </option>
-                ))}
-              </select>
-            }
-          />
-        );
-      })}
+      {activeCarriers.map(carrier => (
+        <CarrierAccountsRow
+          key={carrier.courier_id}
+          carrier={carrier}
+          customerId={customerId}
+          onUpdateLink={updateLink}
+          onRemoveLink={removeLink}
+          onAddAccount={addAccount}
+        />
+      ))}
       <p style={{ fontSize:11, color:'#475569', marginTop:6, fontStyle:'italic' }}>
         Master is the default rate card. Select an alternative to use custom pricing for this customer.
       </p>
     </InfoCard>
+  );
+}
+
+function CarrierAccountsRow({ carrier, customerId, onUpdateLink, onRemoveLink, onAddAccount }) {
+  const [addingAccount, setAddingAccount] = React.useState(false);
+  const [newAcctNum,    setNewAcctNum]    = React.useState('');
+  const [newLabel,      setNewLabel]      = React.useState('');
+
+  const inpSt = { fontSize: 11, padding: '3px 6px', border: '1px solid rgba(0,0,0,0.15)', borderRadius: 4, background: '#fff', color: '#0F172A' };
+
+  return (
+    <div style={{ marginBottom: 10 }}>
+      {/* Carrier name header row */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>{carrier.courier_name}</span>
+        <button
+          onClick={() => setAddingAccount(v => !v)}
+          title="Add another account number for this carrier"
+          style={{ fontSize: 11, padding: '2px 8px', border: '1px solid rgba(0,0,0,0.15)', borderRadius: 4, background: 'none', cursor: 'pointer', color: '#475569' }}
+        >
+          + Add account
+        </button>
+      </div>
+
+      {/* Each account row */}
+      {carrier.accounts.map(acct => (
+        <div key={acct.link_id} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, paddingLeft: 8 }}>
+          {/* Label (editable inline) */}
+          <input
+            defaultValue={acct.label || ''}
+            placeholder="Label (e.g. Perishable)"
+            onBlur={e => {
+              const val = e.target.value.trim();
+              if (val !== (acct.label || '')) onUpdateLink.mutate({ linkId: acct.link_id, label: val });
+            }}
+            style={{ ...inpSt, width: 120 }}
+          />
+          {/* Account number (editable inline) */}
+          <input
+            defaultValue={acct.account_number || ''}
+            placeholder="Account no."
+            onBlur={e => {
+              const val = e.target.value.trim();
+              if (val !== (acct.account_number || '')) onUpdateLink.mutate({ linkId: acct.link_id, account_number: val });
+            }}
+            style={{ ...inpSt, width: 110, fontFamily: 'monospace' }}
+          />
+          {/* Rate card selector */}
+          <select
+            value={String(acct.carrier_rate_card_id ?? carrier.master_card_id ?? '')}
+            onChange={e => onUpdateLink.mutate({ linkId: acct.link_id, carrier_rate_card_id: parseInt(e.target.value) })}
+            style={{ ...inpSt, minWidth: 130 }}
+          >
+            {(carrier.available_cards || []).map(card => (
+              <option key={card.id} value={card.id}>
+                {card.name}{card.is_master ? ' (Master)' : ''}
+              </option>
+            ))}
+          </select>
+          {/* Remove this account (only if there are multiple, or always allow) */}
+          <button
+            onClick={() => {
+              if (window.confirm(`Remove this account${acct.account_number ? ` (${acct.account_number})` : ''}?`)) {
+                onRemoveLink.mutate(acct.link_id);
+              }
+            }}
+            title="Remove this account"
+            style={{ fontSize: 11, padding: '2px 6px', border: '1px solid rgba(233,30,140,0.3)', borderRadius: 4, background: 'none', cursor: 'pointer', color: '#E91E8C' }}
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+
+      {/* Add account form (shown when + Add account is clicked) */}
+      {addingAccount && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 8, marginTop: 4 }}>
+          <input
+            value={newLabel}
+            onChange={e => setNewLabel(e.target.value)}
+            placeholder="Label (e.g. Perishable)"
+            style={{ ...inpSt, width: 120 }}
+          />
+          <input
+            value={newAcctNum}
+            onChange={e => setNewAcctNum(e.target.value)}
+            placeholder="Account no."
+            style={{ ...inpSt, width: 110, fontFamily: 'monospace' }}
+          />
+          <button
+            onClick={() => {
+              if (!newAcctNum.trim()) return;
+              onAddAccount.mutate({
+                courierId: carrier.courier_id,
+                accountNumber: newAcctNum.trim(),
+                label: newLabel.trim() || null,
+              });
+              setNewAcctNum('');
+              setNewLabel('');
+              setAddingAccount(false);
+            }}
+            style={{ fontSize: 11, padding: '3px 10px', border: '1px solid rgba(0,200,83,0.4)', borderRadius: 4, background: 'none', cursor: 'pointer', color: '#00C853', fontWeight: 600 }}
+          >
+            Save
+          </button>
+          <button
+            onClick={() => { setAddingAccount(false); setNewAcctNum(''); setNewLabel(''); }}
+            style={{ fontSize: 11, padding: '3px 8px', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 4, background: 'none', cursor: 'pointer', color: '#64748B' }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
