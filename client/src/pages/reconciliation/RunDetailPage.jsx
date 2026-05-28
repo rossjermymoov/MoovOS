@@ -2005,8 +2005,18 @@ function CustomerSummaryPanel({ runId, run }) {
   async function handleXeroPush(customerId) {
     setPushing(customerId);
     try {
-      await api.post(`/xero/reconciliation-runs/${runId}/push`, { customer_id: customerId });
+      const res = await api.post(`/xero/reconciliation-runs/${runId}/push`, { customer_id: customerId });
+      const { pushed = [], skipped = [], errors = [] } = res.data;
       refetch();
+      if (pushed.length > 0) {
+        // Success — no alert needed, UI will update to show ✓ Pushed
+      } else if (errors.length > 0) {
+        alert(`Xero push failed: ${errors[0]?.error || 'Unknown error'}`);
+      } else if (skipped.length > 0) {
+        alert(`Not pushed — customer is not linked to a Xero contact.\nGo to Settings → Xero to link them.`);
+      } else {
+        alert('Push returned no result — check server logs.');
+      }
     } catch (err) {
       alert(err.response?.data?.error || 'Xero push failed');
     } finally {

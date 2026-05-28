@@ -522,7 +522,8 @@ export async function getCustomerSummaries(runId) {
       SUM(f.margin_amount)              AS total_margin,
       COUNT(*) FILTER (WHERE f.xero_pushed_at IS NOT NULL) AS xero_pushed_count,
       MAX(f.xero_invoice_id)            AS xero_invoice_id,
-      MAX(f.xero_pushed_at)             AS xero_pushed_at
+      MAX(f.xero_pushed_at)             AS xero_pushed_at,
+      MAX(f.xero_push_error)            AS xero_push_error
     FROM   finalized_billing_lines f
     LEFT JOIN customers cu ON cu.id = f.customer_id
     WHERE  f.run_id = $1
