@@ -4449,4 +4449,170 @@ router.post('/backfill-carrier-direct-surcharges', async (req, res) => {
   }
 });
 
+// ─── POST /api/reconciliation/repair-zero-fuel ───────────────────────────────
+// Repairs fuel (and GEC/always-apply surcharge) charges that exist but have
+// price = 0 because the freight charge had sell_price = 0 when billing.js
+// first created them (i.e. rates weren't set up at booking time).
+//
+// For each zero-priced fuel charge, we:
+//   1. Look up the current sell price on the linked freight charge
+//   2. Look up the customer's fuel group sell % via the service's fuel_group_id
+//   3. Recalculate and UPDATE the fuel charge to the correct price
+//
+// Similarly for zero-priced surcharge charges — looks up current default_value
+// or customer override and updates.
+//
+// Required query param: ?customer_id=<uuid>
+// Optional: ?dry_run=1  — logs what would change without writing anything
+
+router.post('/repair-zero-fuel', async (req, res) => {
+  try {
+    const { customer_id, dry_run } = req.query;
+    if (!customer_id) return res.status(400).json({ error: 'customer_id is required' });
+    const isDry = dry_run === '1' || dry_run === 'true';
+
+    // ── Step 1: Find zero-priced fuel charges linked to a shipment with a freight charge ──
+    const { rows: zeroFuelRows } = await query(`
+      SELECT
+        fc.id         AS fuel_charge_id,
+        fc.shipment_id,
+        fc.service_name,
+        -- Current freight sell price for this shipment
+        COALESCE(bc.sell_price, bc.price, 0) AS freight_sell,
+        COALESCE(bc.cost_price, 0)           AS freight_cost,
+        bc.courier_service_id,
+        cs.courier_id
+      FROM   charges fc
+      JOIN   charges bc ON bc.shipment_id = fc.shipment_id
+                        AND bc.charge_type = 'courier'
+                        AND bc.cancelled   = false
+      JOIN   courier_services cs ON cs.id = bc.courier_service_id
+      WHERE  fc.customer_id  = $1
+        AND  fc.charge_type  = 'fuel'
+        AND  fc.cancelled    = false
+        AND  COALESCE(fc.price, 0) = 0
+    `, [customer_id]);
+
+    console.log(`[repair-zero-fuel] Found ${zeroFuelRows.length} zero-priced fuel charge(s) for customer ${customer_id}`);
+
+    let fuelFixed = 0, fuelErrors = 0;
+    for (const row of zeroFuelRows) {
+      try {
+        const freightSell = parseFloat(row.freight_sell) || 0;
+        if (freightSell <= 0) continue; // freight also repriced to 0 — skip
+
+        // Get fuel group sell % for this service + customer
+        const { rows: fgRows } = await query(`
+          SELECT fg.standard_sell_pct, fg.fuel_surcharge_pct AS carrier_pct,
+                 cfgp.sell_pct AS customer_sell_pct
+          FROM   courier_services cs
+          JOIN   fuel_groups fg ON fg.id = cs.fuel_group_id
+          LEFT JOIN customer_fuel_group_pricing cfgp
+                    ON cfgp.fuel_group_id = fg.id AND cfgp.customer_id = $2
+          WHERE  cs.id = $1 LIMIT 1
+        `, [row.courier_service_id, customer_id]);
+
+        if (!fgRows.length) continue;
+        const fg      = fgRows[0];
+        const sellPct = parseFloat(fg.customer_sell_pct ?? fg.standard_sell_pct ?? 0);
+        const costPct = parseFloat(fg.carrier_pct ?? 0);
+        if (sellPct <= 0) continue;
+
+        const newSell = Math.round(freightSell * sellPct / 100 * 100) / 100;
+        const newCost = costPct > 0
+          ? Math.round(parseFloat(row.freight_cost) * costPct / 100 * 100) / 100
+          : null;
+
+        console.log(`[repair-zero-fuel] fuel charge ${row.fuel_charge_id}: price 0 → £${newSell} (${sellPct}% of £${freightSell})${isDry ? ' [DRY RUN]' : ''}`);
+        if (!isDry) {
+          await query(
+            `UPDATE charges SET price = $1, sell_price = $1, cost_price = COALESCE($2, cost_price), price_auto = true
+             WHERE id = $3`,
+            [newSell, newCost, row.fuel_charge_id]
+          );
+        }
+        fuelFixed++;
+      } catch (err) {
+        console.error(`[repair-zero-fuel] fuel charge ${row.fuel_charge_id}:`, err.message);
+        fuelErrors++;
+      }
+    }
+
+    // ── Step 2: Find zero-priced always-apply surcharge charges ──────────────
+    const { rows: zeroSurRows } = await query(`
+      SELECT
+        sc.id          AS surcharge_charge_id,
+        sc.shipment_id,
+        sc.surcharge_id,
+        COALESCE(bc.sell_price, bc.price, 0) AS freight_sell,
+        COALESCE(bc.cost_price, 0)           AS freight_cost,
+        s.calc_type, s.default_value, s.cost_price AS surcharge_cost,
+        s.charge_per, s.name AS surcharge_name
+      FROM   charges sc
+      JOIN   surcharges s ON s.id = sc.surcharge_id
+      JOIN   charges bc ON bc.shipment_id = sc.shipment_id
+                        AND bc.charge_type = 'courier'
+                        AND bc.cancelled   = false
+      WHERE  sc.customer_id  = $1
+        AND  sc.charge_type  = 'surcharge'
+        AND  sc.cancelled    = false
+        AND  COALESCE(sc.price, 0) = 0
+        AND  (s.applies_when = 'always' OR s.applies_when IS NULL)
+    `, [customer_id]);
+
+    console.log(`[repair-zero-fuel] Found ${zeroSurRows.length} zero-priced surcharge charge(s)`);
+
+    let surFixed = 0, surErrors = 0;
+    for (const row of zeroSurRows) {
+      try {
+        const freightSell = parseFloat(row.freight_sell) || 0;
+        if (freightSell <= 0) continue;
+
+        // Customer override
+        const { rows: ov } = await query(
+          `SELECT override_value FROM customer_surcharge_overrides WHERE customer_id=$1 AND surcharge_id=$2 AND active=true`,
+          [customer_id, row.surcharge_id]
+        );
+        const effectiveVal = ov.length
+          ? parseFloat(ov[0].override_value)
+          : parseFloat(row.default_value);
+        const costRate = parseFloat(row.surcharge_cost ?? row.default_value ?? 0);
+
+        let newSell, newCost;
+        if (row.calc_type === 'percentage') {
+          newSell = Math.round(freightSell * effectiveVal / 100 * 100) / 100;
+          newCost = Math.round(parseFloat(row.freight_cost) * costRate / 100 * 100) / 100;
+        } else {
+          newSell = effectiveVal;
+          newCost = costRate;
+        }
+
+        if (newSell <= 0) continue;
+
+        console.log(`[repair-zero-fuel] surcharge ${row.surcharge_charge_id} "${row.surcharge_name}": price 0 → £${newSell}${isDry ? ' [DRY RUN]' : ''}`);
+        if (!isDry) {
+          await query(
+            `UPDATE charges SET price = $1, sell_price = $1, cost_price = $2, price_auto = true WHERE id = $3`,
+            [newSell, newCost, row.surcharge_charge_id]
+          );
+        }
+        surFixed++;
+      } catch (err) {
+        console.error(`[repair-zero-fuel] surcharge ${row.surcharge_charge_id}:`, err.message);
+        surErrors++;
+      }
+    }
+
+    return res.json({
+      ok: true,
+      dry_run: isDry,
+      fuel:       { found: zeroFuelRows.length, fixed: fuelFixed, errors: fuelErrors },
+      surcharges: { found: zeroSurRows.length,  fixed: surFixed,  errors: surErrors },
+    });
+  } catch (err) {
+    console.error('[repair-zero-fuel] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
