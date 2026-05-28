@@ -1227,11 +1227,29 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
           LIMIT 1
         `, [line.run_id, line.tracking_number]);
 
-        const scShipmentId   = freightRes.rows[0]?.shipment_id || null;
-        const scDespatchDate = freightRes.rows[0]?.despatch_date || line.shipment_date || null;
-        const scCostAmt      = parseFloat(line.carrier_amount || 0);
+        let scShipmentId   = freightRes.rows[0]?.shipment_id || null;
+        let scDespatchDate = freightRes.rows[0]?.despatch_date || line.shipment_date || null;
+        const scCostAmt    = parseFloat(line.carrier_amount || 0);
 
-        if (scShipmentId) {
+        // Fallback: if no freight line in this run has a charge_id, look up
+        // the shipment directly by tracking number (handles unmatched freight lines).
+        if (!scShipmentId && line.tracking_number) {
+          const trackRes = await query(
+            `SELECT s.id AS shipment_id, s.despatch_date
+             FROM   shipments s
+             WHERE  $1 = ANY(s.tracking_codes)
+             LIMIT 1`,
+            [line.tracking_number]
+          );
+          if (trackRes.rows.length) {
+            scShipmentId   = trackRes.rows[0].shipment_id;
+            scDespatchDate = trackRes.rows[0].despatch_date || scDespatchDate;
+          }
+        }
+
+        // Create the charge even if shipment is null — at minimum the charge
+        // appears under the customer so billing is correct.
+        if (line.customer_id) {
           // Idempotency check — don't double-insert if already created
           const existRes = await query(`
             SELECT id FROM charges
@@ -2739,6 +2757,7 @@ router.get('/runs/:id/customers/preview', async (req, res) => {
       WHERE  rl.run_id = $1
         AND  rl.status IN ('matched', 'corrected')
         AND  rl.is_fuel = false
+        AND  rl.surcharge_id IS NULL   -- exclude surcharge recon lines; their amounts are in the charges table
       GROUP  BY rl.customer_id, cu.business_name
       ORDER  BY cu.business_name
     `, [runId]);
@@ -2787,13 +2806,13 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
         rl.carrier_billed_weight_kg,
         rl.unmatched_reason,
         cs.name                                                          AS service_name,
-        -- Does this freight line have corrected warning lines (sell_surcharge_missing)?
-        -- If so, show a "corrected" indicator and fold the amount into sell_surcharge.
+        -- Does this freight line have corrected surcharge lines (sell_surcharge_missing
+        -- warnings OR manually mapped map_to_surcharge lines)?
         EXISTS(
           SELECT 1 FROM reconciliation_lines wl
           WHERE  wl.run_id           = rl.run_id
             AND  wl.tracking_number  = rl.tracking_number
-            AND  wl.unmatched_reason = 'sell_surcharge_missing'
+            AND  wl.surcharge_id    IS NOT NULL
             AND  wl.status           = 'corrected'
             AND  wl.id              != rl.id
         )                                                                AS has_warning_correction,
@@ -2804,7 +2823,7 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
           JOIN   surcharges sur2 ON sur2.id = wl.surcharge_id
           WHERE  wl.run_id           = rl.run_id
             AND  wl.tracking_number  = rl.tracking_number
-            AND  wl.unmatched_reason = 'sell_surcharge_missing'
+            AND  wl.surcharge_id    IS NOT NULL
             AND  wl.status           = 'corrected'
             AND  wl.id              != rl.id
         )                                                                AS corrected_surcharge_names,
@@ -2818,7 +2837,9 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
             AND  sc.charge_type = 'fuel'
             AND  sc.cancelled   = false
         ), 0)                                                            AS sell_fuel,
-        -- sell_surcharge: existing charges surcharges + any corrected warning-line amounts
+        -- sell_surcharge: from charges table (primary) + recon-line fallback for any
+        -- resolved surcharge lines (sell_surcharge_missing OR map_to_surcharge) that
+        -- haven't had a charge created yet (charge_id IS NULL).
         COALESCE((
           SELECT SUM(sc.price)
           FROM   charges sc
@@ -2831,8 +2852,9 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
           FROM   reconciliation_lines wl
           WHERE  wl.run_id           = rl.run_id
             AND  wl.tracking_number  = rl.tracking_number
-            AND  wl.unmatched_reason = 'sell_surcharge_missing'
+            AND  wl.surcharge_id    IS NOT NULL
             AND  wl.status           = 'corrected'
+            AND  wl.charge_id       IS NULL   -- only fallback when no charge row created yet
             AND  wl.id              != rl.id
         ), 0)                                                            AS sell_surcharge,
         -- sell_total
@@ -2849,11 +2871,12 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
             FROM   reconciliation_lines wl
             WHERE  wl.run_id           = rl.run_id
               AND  wl.tracking_number  = rl.tracking_number
-              AND  wl.unmatched_reason = 'sell_surcharge_missing'
+              AND  wl.surcharge_id    IS NOT NULL
               AND  wl.status           = 'corrected'
+              AND  wl.charge_id       IS NULL   -- fallback: no charge created yet
               AND  wl.id              != rl.id
           ), 0)                                                          AS sell_total,
-        -- cost_total: carrier cost + any warning-line carrier amounts
+        -- cost_total: carrier cost + charges + recon-line fallback for unresolved surcharge lines
         COALESCE(base.cost_price, 0)
         + COALESCE((
             SELECT SUM(sc.cost_price)
@@ -2867,8 +2890,9 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
             FROM   reconciliation_lines wl
             WHERE  wl.run_id           = rl.run_id
               AND  wl.tracking_number  = rl.tracking_number
-              AND  wl.unmatched_reason = 'sell_surcharge_missing'
+              AND  wl.surcharge_id    IS NOT NULL
               AND  wl.status           = 'corrected'
+              AND  wl.charge_id       IS NULL   -- fallback: no charge created yet
               AND  wl.id              != rl.id
           ), 0)                                                          AS cost_total
       FROM   reconciliation_lines rl
