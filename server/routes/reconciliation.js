@@ -4493,7 +4493,6 @@ router.get('/carrier-direct-fuel-audit', async (req, res) => {
 router.post('/link-carrier-direct-shipments', async (req, res) => {
   try {
     const { customer_id, dry_run } = req.query;
-    if (!customer_id) return res.status(400).json({ error: 'customer_id is required' });
     const isDry = dry_run === '1' || dry_run === 'true';
 
     // Find carrier_direct freight charges without a shipment_id
