@@ -910,13 +910,32 @@ router.get('/runs/:id/lines', async (req, res) => {
           ch_direct.weight_charged_kg,
           ch_lookup.weight_charged_kg,
           sh.total_weight_kg
-        ) AS declared_weight_kg
+        ) AS declared_weight_kg,
+        -- For warning (sell_surcharge_missing) lines: the surcharge name and the
+        -- customer's configured sell price (override → default_value).
+        -- Handles charge_per='parcel' by multiplying by parcel_count.
+        sur.name AS surcharge_name,
+        CASE
+          WHEN sur.id IS NULL THEN NULL
+          WHEN sur.calc_type = 'percentage'
+            THEN ROUND(rl.carrier_amount * COALESCE(cso.override_value, sur.default_value) / 100, 2)
+          WHEN sur.charge_per = 'parcel'
+            THEN ROUND(COALESCE(cso.override_value, sur.default_value, 0) * GREATEST(1, COALESCE(rl.parcel_count, 1)), 2)
+          ELSE COALESCE(cso.override_value, sur.default_value)
+        END AS suggested_sell_price
       FROM   reconciliation_lines rl
       LEFT JOIN courier_services      cs     ON cs.id     = rl.service_id
       LEFT JOIN courier_services      cs_sug ON cs_sug.id = rl.suggested_service_id
       LEFT JOIN customers             cu     ON cu.id      = rl.customer_id
       LEFT JOIN staff                 s      ON s.id       = rl.resolved_by
       LEFT JOIN reconciliation_mappings rm   ON rm.id      = rl.mapping_id
+      -- Surcharge definition for warning lines
+      LEFT JOIN surcharges sur ON sur.id = rl.surcharge_id
+      -- Customer-specific surcharge price override (active only)
+      LEFT JOIN customer_surcharge_overrides cso
+             ON cso.surcharge_id = rl.surcharge_id
+            AND cso.customer_id  = rl.customer_id
+            AND cso.active       = true
       -- Direct charge join for matched lines (charge_id is populated)
       LEFT JOIN charges ch_direct ON ch_direct.id = rl.charge_id
       -- Shipment weight from the matched charge's shipment
@@ -1439,6 +1458,101 @@ router.post('/runs/:id/lines/:lineId/reopen', async (req, res) => {
     return res.json({ reopened: true });
   } catch (err) {
     console.error('[reconciliation/reopen]', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/reconciliation/runs/:id/resolve-all-warnings ─────────────────
+// One-click: accept all sell_surcharge_missing warning lines at each customer's
+// configured surcharge sell price. Lines without a surcharge_id are skipped.
+// Returns { resolved, skipped } counts.
+
+router.post('/runs/:id/resolve-all-warnings', async (req, res) => {
+  try {
+    const runId = parseInt(req.params.id);
+
+    // Fetch all warning lines for this run that have a surcharge_id
+    const linesRes = await query(`
+      SELECT
+        rl.id,
+        rl.tracking_number,
+        rl.carrier_amount,
+        rl.parcel_count,
+        rl.customer_id,
+        rl.surcharge_id,
+        sur.calc_type,
+        sur.charge_per,
+        sur.default_value,
+        COALESCE(cso.override_value, sur.default_value) AS sell_price_base
+      FROM   reconciliation_lines rl
+      JOIN   surcharges sur ON sur.id = rl.surcharge_id
+      LEFT JOIN customer_surcharge_overrides cso
+             ON cso.surcharge_id = rl.surcharge_id
+            AND cso.customer_id  = rl.customer_id
+            AND cso.active       = true
+      WHERE  rl.run_id = $1
+        AND  rl.status = 'warning'
+        AND  rl.unmatched_reason = 'sell_surcharge_missing'
+        AND  rl.surcharge_id IS NOT NULL
+    `, [runId]);
+
+    if (!linesRes.rows.length) {
+      return res.json({ resolved: 0, skipped: 0 });
+    }
+
+    let resolved = 0;
+    let skipped  = 0;
+
+    for (const line of linesRes.rows) {
+      const sellBase   = parseFloat(line.sell_price_base || 0);
+      const carrierAmt = parseFloat(line.carrier_amount  || 0);
+      const parcels    = Math.max(1, parseInt(line.parcel_count || 1) || 1);
+
+      let surchargeSell;
+      if (line.calc_type === 'percentage') {
+        surchargeSell = Math.round(carrierAmt * (sellBase / 100) * 100) / 100;
+      } else if (line.charge_per === 'parcel') {
+        surchargeSell = Math.round(sellBase * parcels * 100) / 100;
+      } else {
+        surchargeSell = Math.round(sellBase * 100) / 100;
+      }
+
+      if (surchargeSell <= 0) { skipped++; continue; }
+
+      await query(`
+        UPDATE reconciliation_lines
+        SET    status               = 'corrected',
+               corrected_by         = 'human',
+               resolved_at          = NOW(),
+               resolution_notes     = 'Accepted at standard price',
+               expected_amount      = carrier_amount,
+               delta                = 0,
+               corrected_sell_price = $2,
+               corrected_cost_price = $3
+        WHERE  id = $1
+      `, [line.id, surchargeSell, carrierAmt]);
+
+      resolved++;
+    }
+
+    // Recount run stats
+    const runRes = await query(`SELECT run_id FROM reconciliation_lines WHERE id = $1`, [linesRes.rows[0].id]);
+    await query(`
+      UPDATE reconciliation_runs rr
+      SET    warning_count   = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'warning'),
+             corrected_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'corrected'),
+             automation_rate = CASE WHEN rr.total_lines > 0 THEN
+               ROUND(
+                 (SELECT COUNT(*)::numeric FROM reconciliation_lines WHERE run_id = rr.id AND status IN ('matched','corrected','warning'))
+                 / rr.total_lines * 100, 2
+               )
+             ELSE 0 END
+      WHERE  id = $1
+    `, [runId]);
+
+    return res.json({ resolved, skipped });
+  } catch (err) {
+    console.error('[reconciliation/resolve-all-warnings]', err);
     return res.status(500).json({ error: err.message });
   }
 });

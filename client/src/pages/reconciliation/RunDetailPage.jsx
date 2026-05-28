@@ -2583,6 +2583,193 @@ function CourierQueriesPanel({ runId, carrierId }) {
   );
 }
 
+// ─── WarningTab ───────────────────────────────────────────────────────────────
+// Simplified one-click acceptance UI for sell_surcharge_missing warning lines.
+// Each row shows the carrier cost, the surcharge name, and the customer's
+// configured sell price, with a single "Accept £X.XX" button.
+// Lines without a known surcharge_id still have a "Manual Resolve" button.
+
+function WarningTab({ lines, runId, onResolved, onOpenDrawer }) {
+  const [acceptingId,   setAcceptingId]   = useState(null);   // line id being accepted
+  const [acceptingAll,  setAcceptingAll]  = useState(false);
+  const [error,         setError]         = useState('');
+
+  // Lines that can be auto-accepted (have a surcharge_id + positive suggested_sell_price)
+  const autoLines   = lines.filter(l => l.surcharge_id && parseFloat(l.suggested_sell_price || 0) > 0);
+  const manualLines = lines.filter(l => !l.surcharge_id || parseFloat(l.suggested_sell_price || 0) <= 0);
+
+  async function acceptOne(line) {
+    setAcceptingId(line.id);
+    setError('');
+    try {
+      await api.post(`/reconciliation/runs/${runId}/lines/${line.id}/resolve`, {
+        resolution_type:  'map_to_surcharge',
+        resolution_value: line.surcharge_id,
+        scope:            'once',
+      });
+      onResolved();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to accept');
+    } finally {
+      setAcceptingId(null);
+    }
+  }
+
+  async function acceptAll() {
+    setAcceptingAll(true);
+    setError('');
+    try {
+      const res = await api.post(`/reconciliation/runs/${runId}/resolve-all-warnings`);
+      onResolved();
+      if (res.data?.skipped > 0) {
+        setError(`${res.data.resolved} accepted. ${res.data.skipped} lines skipped (no price configured).`);
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to accept all');
+    } finally {
+      setAcceptingAll(false);
+    }
+  }
+
+  const thSt = { padding: '8px 12px', fontSize: 10, fontWeight: 700, color: '#64748B',
+                 textAlign: 'left', borderBottom: '1px solid rgba(0,0,0,0.08)', whiteSpace: 'nowrap' };
+  const tdSt = { padding: '9px 12px', fontSize: 12, color: '#0F172A', verticalAlign: 'middle' };
+
+  return (
+    <div>
+      {/* Header bar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: 14,
+      }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: '#92400E' }}>
+            ⚠ {lines.length} unbilled surcharge{lines.length !== 1 ? 's' : ''} — carrier charged, customer not billed
+          </div>
+          <div style={{ fontSize: 12, color: '#78350F', marginTop: 3 }}>
+            Click "Accept" on each row to add the surcharge to the customer's invoice at the standard price.
+          </div>
+        </div>
+        {autoLines.length > 1 && (
+          <button
+            onClick={acceptAll}
+            disabled={acceptingAll}
+            style={{
+              padding: '9px 18px', borderRadius: 7, cursor: acceptingAll ? 'wait' : 'pointer',
+              background: acceptingAll ? '#e2e8f0' : '#00C853',
+              border: 'none', color: '#fff', fontWeight: 700, fontSize: 12,
+              flexShrink: 0, marginLeft: 16,
+            }}
+          >
+            {acceptingAll ? 'Accepting…' : `✓ Accept All ${autoLines.length} at Standard Price`}
+          </button>
+        )}
+      </div>
+
+      {error && (
+        <div style={{
+          background: 'rgba(213,0,0,0.08)', border: '1px solid rgba(213,0,0,0.25)',
+          borderRadius: 7, padding: '9px 14px', fontSize: 12, color: '#C62828', marginBottom: 12,
+        }}>
+          {error}
+        </div>
+      )}
+
+      {lines.length === 0 && (
+        <div style={{ ...card, textAlign: 'center', color: '#64748B', padding: '32px 20px' }}>
+          No warning lines — all surcharges accounted for.
+        </div>
+      )}
+
+      {lines.length > 0 && (
+        <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: 'rgba(255,179,0,0.08)' }}>
+                <th style={thSt}>TRACKING</th>
+                <th style={thSt}>DATE</th>
+                <th style={thSt}>CUSTOMER</th>
+                <th style={thSt}>SURCHARGE</th>
+                <th style={{ ...thSt, textAlign: 'right' }}>CARRIER COST</th>
+                <th style={{ ...thSt, textAlign: 'right' }}>SELL PRICE</th>
+                <th style={{ ...thSt, textAlign: 'right' }}>ACTION</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((line, idx) => {
+                const sellPrice = parseFloat(line.suggested_sell_price || 0);
+                const canAuto   = !!line.surcharge_id && sellPrice > 0;
+                const isLoading = acceptingId === line.id;
+                return (
+                  <tr key={line.id} style={{
+                    borderBottom: idx < lines.length - 1 ? '1px solid rgba(0,0,0,0.05)' : 'none',
+                    background: isLoading ? 'rgba(0,200,83,0.04)' : 'rgba(255,179,0,0.04)',
+                  }}>
+                    <td style={{ ...tdSt, fontFamily: 'monospace', fontSize: 10, color: '#79AAFF' }}>
+                      {line.tracking_number || '—'}
+                    </td>
+                    <td style={{ ...tdSt, color: '#64748B', fontSize: 11 }}>
+                      {line.shipment_date ? new Date(line.shipment_date).toLocaleDateString('en-GB') : '—'}
+                    </td>
+                    <td style={{ ...tdSt, color: '#475569' }}>
+                      {line.customer_name || '—'}
+                    </td>
+                    <td style={{ ...tdSt }}>
+                      {line.surcharge_name
+                        ? <span style={{ background: 'rgba(255,179,0,0.15)', color: '#92400E',
+                            borderRadius: 4, padding: '2px 7px', fontSize: 11, fontWeight: 600 }}>
+                            {line.surcharge_name}
+                          </span>
+                        : <span style={{ color: '#94A3B8', fontSize: 11 }}>Unknown</span>
+                      }
+                    </td>
+                    <td style={{ ...tdSt, textAlign: 'right', fontWeight: 600 }}>
+                      £{parseFloat(line.carrier_amount || 0).toFixed(2)}
+                    </td>
+                    <td style={{ ...tdSt, textAlign: 'right', fontWeight: 700,
+                      color: canAuto ? '#00C853' : '#94A3B8' }}>
+                      {canAuto ? `£${sellPrice.toFixed(2)}` : '—'}
+                    </td>
+                    <td style={{ ...tdSt, textAlign: 'right' }}>
+                      {canAuto ? (
+                        <button
+                          onClick={() => acceptOne(line)}
+                          disabled={isLoading || acceptingAll}
+                          style={{
+                            padding: '6px 14px', borderRadius: 6, cursor: 'pointer',
+                            background: isLoading ? '#e2e8f0' : 'rgba(0,200,83,0.12)',
+                            border: '1px solid rgba(0,200,83,0.35)',
+                            color: '#00A040', fontWeight: 700, fontSize: 11,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {isLoading ? '…' : `✓ Accept £${sellPrice.toFixed(2)}`}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => onOpenDrawer(line)}
+                          style={{
+                            padding: '6px 12px', borderRadius: 6, cursor: 'pointer',
+                            background: 'rgba(0,0,0,0.05)',
+                            border: '1px solid rgba(0,0,0,0.12)',
+                            color: '#475569', fontWeight: 600, fontSize: 11,
+                          }}
+                        >
+                          Set Price…
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function RunDetailPage() {
   const { id }     = useParams();
@@ -2927,38 +3114,15 @@ export default function RunDetailPage() {
 
       {/* Warning tab — carrier surcharges with no sell-side customer charge */}
       {activeTab === 'warning' && (
-        <>
-          <div style={{
-            background: 'rgba(255,179,0,0.10)', border: '1px solid rgba(255,179,0,0.4)',
-            borderRadius: 8, padding: '12px 16px', marginBottom: 16,
-            display: 'flex', alignItems: 'flex-start', gap: 10,
-          }}>
-            <span style={{ fontSize: 16, lineHeight: 1 }}>⚠</span>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 13, color: '#92400E', marginBottom: 2 }}>
-                Unbilled surcharges — customer not charged
-              </div>
-              <div style={{ fontSize: 12, color: '#78350F', lineHeight: 1.5 }}>
-                The carrier has billed a surcharge for the shipments below, but no corresponding sell-side
-                surcharge charge was found on the shipment record. The cost has been reconciled correctly,
-                but the customer has not been invoiced for this charge. Review each line and apply the
-                surcharge manually if appropriate.
-              </div>
-            </div>
-          </div>
-          <div style={card}>
-            <LinesTable
-              lines={warningLines}
-              showResolve
-              onResolve={(line) => { setDefaultResolveType('map_to_surcharge'); setResolvingLine(line); }}
-              onResolveAsSurcharge={(line) => { setDefaultResolveType('map_to_surcharge'); setResolvingLine(line); }}
-              runId={id}
-              courierId={run.carrier_id}
-              exportFilename={`${run.carrier_name || 'recon'}_${run.invoice_ref || id}_warnings.csv`}
-              rowStyle={() => ({ background: 'rgba(255,179,0,0.06)' })}
-            />
-          </div>
-        </>
+        <WarningTab
+          lines={warningLines}
+          runId={id}
+          onResolved={() => {
+            qc.invalidateQueries({ queryKey: ['recon-run', id] });
+            qc.invalidateQueries({ queryKey: ['recon-lines', id] });
+          }}
+          onOpenDrawer={(line) => { setDefaultResolveType('map_to_surcharge'); setResolvingLine(line); }}
+        />
       )}
 
       {/* Carrier Queries tab */}
