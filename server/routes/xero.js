@@ -810,52 +810,64 @@ router.post('/reconciliation-runs/:runId/push', async (req, res, next) => {
       }
 
       try {
-        // Build summary line items grouped by service + surcharge type
-        // Format: "Parcel Delivery — DPD Next Day — 38 parcels" and separate surcharge lines
+        // Build summary line items:
+        //   - One freight line per service type (base only, not fuel)
+        //   - One fuel line totalled across all services
+        //   - One line per named surcharge (GEC, Long Length, etc.) totalled across all services
         const summaryGroups = {};
 
         for (const l of cust.lines) {
-          const destCountry  = countryByLineId[l.id] || null;
-          const isDomestic   = destCountry === 'GB';
-          const accountCode  = isDomestic ? domesticCode : internationalCode;
-          const taxType      = isDomestic ? 'OUTPUT2' : 'NONE';
-          const serviceName  = l.service_name || 'Parcel Delivery';
-          const surchargeAmt = parseFloat(l.sell_surcharge_amount || 0);
-          const freightAmt   = parseFloat(l.sell_total_amount || 0) - surchargeAmt;
+          const destCountry = countryByLineId[l.id] || null;
+          const isDomestic  = destCountry === 'GB';
+          const accountCode = isDomestic ? domesticCode : internationalCode;
+          const taxType     = isDomestic ? 'OUTPUT2' : 'NONE';
+          const serviceName = l.service_name || 'Parcel Delivery';
 
-          // Freight + fuel grouped by service name
-          if (freightAmt > 0 || surchargeAmt === 0) {
+          // Freight — base sell only, one line per service name
+          const baseAmt = parseFloat(l.sell_base_amount || 0);
+          if (baseAmt !== 0) {
             const freightKey = `freight|${isDomestic}|${serviceName}`;
             if (!summaryGroups[freightKey]) {
               summaryGroups[freightKey] = {
-                sortOrder:   0,
-                description: serviceName,
-                count:       0,
-                total:       0,
-                accountCode,
-                taxType,
+                sortOrder: 0, description: serviceName, count: 0, total: 0, accountCode, taxType,
               };
             }
             summaryGroups[freightKey].count++;
-            summaryGroups[freightKey].total += freightAmt > 0 ? freightAmt : parseFloat(l.sell_total_amount || 0);
+            summaryGroups[freightKey].total += baseAmt;
           }
 
-          // Surcharge grouped by surcharge name
-          if (surchargeAmt > 0) {
-            const surchargeName = l.surcharge_name || 'Additional Surcharges';
-            const surchargeKey  = `surcharge|${isDomestic}|${surchargeName}`;
+          // Fuel — combined total across all services (one line)
+          const fuelAmt = parseFloat(l.sell_fuel_amount || 0);
+          if (fuelAmt > 0) {
+            if (!summaryGroups['fuel']) {
+              summaryGroups['fuel'] = {
+                sortOrder: 2, description: 'Fuel Surcharge', count: 0, total: 0, accountCode, taxType,
+              };
+            }
+            summaryGroups['fuel'].count++;
+            summaryGroups['fuel'].total += fuelAmt;
+          }
+
+          // Named surcharges — from surcharge_detail JSONB, one line per surcharge name
+          const detail = l.surcharge_detail
+            ? (Array.isArray(l.surcharge_detail)
+                ? l.surcharge_detail
+                : JSON.parse(l.surcharge_detail))
+            : [];
+
+          for (const s of detail) {
+            if (s.charge_type !== 'surcharge') continue; // fuel entries already handled above
+            const sAmt = parseFloat(s.sell_amount || 0);
+            if (sAmt <= 0) continue;
+            const sName = s.surcharge_name || 'Additional Surcharges';
+            const surchargeKey = `surcharge|${sName}`;
             if (!summaryGroups[surchargeKey]) {
               summaryGroups[surchargeKey] = {
-                sortOrder:   1,
-                description: surchargeName,
-                count:       0,
-                total:       0,
-                accountCode,
-                taxType,
+                sortOrder: 1, description: sName, count: 0, total: 0, accountCode, taxType,
               };
             }
             summaryGroups[surchargeKey].count++;
-            summaryGroups[surchargeKey].total += surchargeAmt;
+            summaryGroups[surchargeKey].total += sAmt;
           }
         }
 
