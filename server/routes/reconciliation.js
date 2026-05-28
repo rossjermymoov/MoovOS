@@ -4449,6 +4449,61 @@ router.post('/backfill-carrier-direct-surcharges', async (req, res) => {
   }
 });
 
+// ─── GET /api/reconciliation/diagnose-fuel ───────────────────────────────────
+// Diagnostic: breakdown of a customer's courier charges by data completeness.
+// Tells us exactly why fuel isn't showing.
+// Required: ?customer_id=<uuid>
+
+router.get('/diagnose-fuel', async (req, res) => {
+  try {
+    const { customer_id } = req.query;
+    if (!customer_id) return res.status(400).json({ error: 'customer_id is required' });
+
+    const { rows } = await query(`
+      SELECT
+        COUNT(*)::int                                              AS total_courier_charges,
+        COUNT(*) FILTER (WHERE c.shipment_id IS NOT NULL)::int    AS has_shipment_id,
+        COUNT(*) FILTER (WHERE c.shipment_id IS NULL)::int        AS no_shipment_id,
+        COUNT(*) FILTER (WHERE c.courier_service_id IS NOT NULL)::int AS has_service_id,
+        COUNT(*) FILTER (WHERE c.sell_price IS NOT NULL AND c.sell_price > 0)::int AS has_sell_price,
+        COUNT(*) FILTER (WHERE c.sell_price IS NULL OR c.sell_price = 0)::int      AS no_sell_price,
+        COUNT(*) FILTER (WHERE EXISTS (
+          SELECT 1 FROM charges f WHERE f.shipment_id = c.shipment_id AND f.charge_type='fuel' AND f.cancelled=false
+        ) AND c.shipment_id IS NOT NULL)::int AS has_fuel_via_shipment,
+        COUNT(*) FILTER (WHERE NOT EXISTS (
+          SELECT 1 FROM charges f WHERE f.shipment_id = c.shipment_id AND f.charge_type='fuel' AND f.cancelled=false
+        ) AND c.shipment_id IS NOT NULL)::int AS missing_fuel_via_shipment,
+        COUNT(*) FILTER (WHERE c.source = 'carrier_direct')::int  AS carrier_direct,
+        COUNT(*) FILTER (WHERE c.source IS NULL OR c.source != 'carrier_direct')::int AS oms_booked,
+        COUNT(*) FILTER (WHERE c.verified = true)::int            AS verified,
+        -- Sample of sources
+        array_agg(DISTINCT c.source) FILTER (WHERE c.source IS NOT NULL) AS sources
+      FROM charges c
+      WHERE c.customer_id  = $1
+        AND c.charge_type  = 'courier'
+        AND c.cancelled    = false
+    `, [customer_id]);
+
+    // Also grab a sample of 3 charges with their shipment_id and sell_price
+    const { rows: samples } = await query(`
+      SELECT c.id, c.tracking_code, c.shipment_id, c.courier_service_id,
+             c.sell_price, c.price, c.source, c.verified, c.created_at::date AS created_date,
+             EXISTS (
+               SELECT 1 FROM charges f WHERE f.shipment_id = c.shipment_id AND f.charge_type='fuel' AND f.cancelled=false
+             ) AS has_fuel
+      FROM charges c
+      WHERE c.customer_id = $1 AND c.charge_type = 'courier' AND c.cancelled = false
+      ORDER BY c.created_at DESC
+      LIMIT 5
+    `, [customer_id]);
+
+    return res.json({ summary: rows[0], samples });
+  } catch (err) {
+    console.error('[diagnose-fuel] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── POST /api/reconciliation/repair-zero-fuel ───────────────────────────────
 // Repairs fuel (and GEC/always-apply surcharge) charges that exist but have
 // price = 0 because the freight charge had sell_price = 0 when billing.js
