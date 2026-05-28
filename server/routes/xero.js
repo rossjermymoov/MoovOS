@@ -747,7 +747,8 @@ router.post('/reconciliation-runs/:runId/push', async (req, res, next) => {
       SELECT
         f.*,
         cu.xero_contact_id,
-        cu.business_name AS xero_customer_name
+        cu.business_name        AS xero_customer_name,
+        cu.payment_terms_days   AS payment_terms_days
       FROM   finalized_billing_lines f
       LEFT JOIN customers cu ON cu.id = f.customer_id
       WHERE  f.run_id = $1 ${custFilter}
@@ -760,10 +761,11 @@ router.post('/reconciliation-runs/:runId/push', async (req, res, next) => {
       const key = String(line.customer_id);
       if (!byCustomer.has(key)) {
         byCustomer.set(key, {
-          customer_id:      line.customer_id,
-          customer_name:    line.xero_customer_name || line.customer_name,
-          xero_contact_id:  line.xero_contact_id,
-          lines:            [],
+          customer_id:        line.customer_id,
+          customer_name:      line.xero_customer_name || line.customer_name,
+          xero_contact_id:    line.xero_contact_id,
+          payment_terms_days: parseInt(line.payment_terms_days || 7),
+          lines:              [],
         });
       }
       byCustomer.get(key).lines.push(line);
@@ -773,8 +775,6 @@ router.post('/reconciliation-runs/:runId/push', async (req, res, next) => {
     const skipped  = [];
     const errors   = [];
     const today    = new Date().toISOString().split('T')[0];
-    const dueDate  = dueDateFromGenerated(new Date());
-    const reference = `MoovOS Recon Run #${runId}${run.invoice_ref ? ` — ${run.invoice_ref}` : ''}`;
 
     // Load nominal codes from billing settings
     const settingsRes = await query(`SELECT xero_domestic_account_code, xero_international_account_code FROM billing_settings WHERE id = 1`);
@@ -864,8 +864,8 @@ router.post('/reconciliation-runs/:runId/push', async (req, res, next) => {
           .sort((a, b) => a.sortOrder - b.sortOrder)
           .map(g => ({
             Description: `${g.description} — ${g.count} ${g.count === 1 ? 'parcel' : 'parcels'}`,
-            Quantity:    g.count,
-            UnitAmount:  Math.round((g.total / g.count) * 10000) / 10000,
+            Quantity:    1,
+            UnitAmount:  Math.round(g.total * 100) / 100,
             AccountCode: g.accountCode,
             TaxType:     g.taxType,
           }));
@@ -874,15 +874,30 @@ router.post('/reconciliation-runs/:runId/push', async (req, res, next) => {
         const nonZeroLines = lineItems.filter(l => l.UnitAmount !== 0);
         const itemsToSend  = nonZeroLines.length > 0 ? nonZeroLines : lineItems;
 
+        // Due date from customer payment terms (default 7 days)
+        const custDueDate = new Date(today);
+        custDueDate.setDate(custDueDate.getDate() + cust.payment_terms_days);
+        const custDueDateStr = custDueDate.toISOString().split('T')[0];
+
+        // Invoice number: abbreviated customer name + DDMMYY from run invoice date
+        const custAbbrev = (cust.customer_name || '')
+          .replace(/[^a-zA-Z0-9]/g, '')
+          .toUpperCase()
+          .slice(0, 10);
+        const runDate = run.invoice_date ? new Date(run.invoice_date) : new Date(today);
+        const dd = String(runDate.getDate()).padStart(2, '0');
+        const mm = String(runDate.getMonth() + 1).padStart(2, '0');
+        const yy = String(runDate.getFullYear()).slice(-2);
+        const invoiceNumber = `${custAbbrev}-${dd}${mm}${yy}`;
+
         const xeroInvoice = {
-          Type:         'ACCREC',
-          Contact:      { ContactID: cust.xero_contact_id },
-          Date:         today,
-          DueDate:      dueDate,
-          LineItems:    itemsToSend,
-          Status:       'AUTHORISED',
-          Reference:    reference,
-          InvoiceNumber: `MO-REC-${runId}-${String(cust.customer_id).slice(0, 6).toUpperCase()}`,
+          Type:          'ACCREC',
+          Contact:       { ContactID: cust.xero_contact_id },
+          Date:          today,
+          DueDate:       custDueDateStr,
+          LineItems:     itemsToSend,
+          Status:        'AUTHORISED',
+          InvoiceNumber: invoiceNumber,
         };
 
         const data = await xeroRequest('POST', '/Invoices', { Invoices: [xeroInvoice] });

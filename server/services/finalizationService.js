@@ -652,7 +652,6 @@ export async function generateCustomerCSV(runId, customerId) {
     ...surchargeNamesSorted.map(n => `${n} (£)`),
     'Total Surcharges (£)',
     'Line Total (£)',
-    'Status',
   ];
 
   const rows = lines.map(l => {
@@ -681,7 +680,6 @@ export async function generateCustomerCSV(runId, customerId) {
       ...surchargeNamesSorted.map(n => (surchargeMap[n] || 0).toFixed(2)),
       parseFloat(l.sell_surcharge_amount || 0).toFixed(2),
       parseFloat(l.sell_total_amount     || 0).toFixed(2),
-      l.recon_status          || '',
     ];
   });
 
@@ -716,7 +714,6 @@ export async function generateCustomerCSV(runId, customerId) {
     ...surchargeNamesSorted.map(n => (totals.surchargeByName[n] || 0).toFixed(2)),
     totals.surcharge.toFixed(2),
     totals.total.toFixed(2),
-    '',
   ]);
 
   // Escape and join
