@@ -650,6 +650,11 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
                     ⚠ No fuel rate found for this customer — total equals base freight
                   </div>
                 )}
+                {fuelPct > 0 && fuelRate?.source === 'carrier_standard' && (
+                  <div style={{ fontSize: 10, color: '#64748B', marginTop: 6 }}>
+                    Using carrier standard rate (no billing history yet for this customer)
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -1018,6 +1018,30 @@ router.get('/runs/:id/lines/:lineId/fuel-rate', async (req, res) => {
     `, [customer_id, carrier_id]);
 
     if (!fuelRes.rows.length) {
+      // No historical verified charges for this customer + carrier.
+      // Fall back to the carrier's standard fuel group rate (most common group
+      // by service count, preferring the domestic group if name contains 'domestic').
+      const fallbackRes = await query(`
+        SELECT COALESCE(cfgp.sell_pct, fg.standard_sell_pct) AS sell_pct,
+               fg.name AS fuel_group_name
+        FROM   fuel_groups fg
+        LEFT JOIN customer_fuel_group_pricing cfgp
+                  ON cfgp.fuel_group_id = fg.id AND cfgp.customer_id = $1
+        WHERE  fg.courier_id = $2
+        ORDER  BY
+          -- prefer domestic group
+          CASE WHEN fg.name ILIKE '%domestic%' THEN 0 ELSE 1 END,
+          fg.standard_sell_pct DESC
+        LIMIT  1
+      `, [customer_id, carrier_id]);
+
+      if (fallbackRes.rows.length) {
+        return res.json({
+          fuel_pct:        parseFloat(fallbackRes.rows[0].sell_pct || 0),
+          fuel_group_name: fallbackRes.rows[0].fuel_group_name,
+          source:          'carrier_standard',
+        });
+      }
       return res.json({ fuel_pct: 0, fuel_group_name: null, source: 'none' });
     }
     const { sell_pct, fuel_group_name } = fuelRes.rows[0];
