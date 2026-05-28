@@ -15,7 +15,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Upload, RefreshCw, CheckCircle2, AlertTriangle, Clock,
   ChevronRight, TrendingUp, X, Plus, FileText, Trash2,
-  BookOpen, Save, Star, Pencil, Check, Hash,
+  BookOpen, Save, Star, Pencil, Check, Hash, Archive, ArchiveRestore,
 } from 'lucide-react';
 import axios from 'axios';
 import { getCourierLogo } from '../../utils/courierLogos';
@@ -1461,8 +1461,10 @@ export default function ReconciliationPage() {
   const qc           = useQueryClient();
   const [showUpload,    setShowUpload]    = useState(false);
   const [showProfiles,  setShowProfiles]  = useState(false);
-  const [deletingRunId, setDeletingRunId] = useState(null);
-  const [pollingRunId,  setPollingRunId]  = useState(null);
+  const [deletingRunId,  setDeletingRunId]  = useState(null);
+  const [archivingRunId, setArchivingRunId] = useState(null);
+  const [pollingRunId,   setPollingRunId]   = useState(null);
+  const [showArchived,   setShowArchived]   = useState(false);
 
   // Poll run status after submission until it leaves 'processing'
   useEffect(() => {
@@ -1490,8 +1492,8 @@ export default function ReconciliationPage() {
   const [finalizingAll, setFinalizingAll] = useState(false);
 
   const { data: runsData, isLoading: runsLoading } = useQuery({
-    queryKey: ['recon-runs'],
-    queryFn:  () => api.get('/reconciliation/runs').then(r => r.data),
+    queryKey: ['recon-runs', showArchived],
+    queryFn:  () => api.get(`/reconciliation/runs${showArchived ? '?show_archived=true' : ''}`).then(r => r.data),
     refetchInterval: 5000,
   });
 
@@ -1558,6 +1560,22 @@ export default function ReconciliationPage() {
     }
   }
 
+  async function handleArchiveRun(e, runId, currentlyArchived) {
+    e.stopPropagation();
+    setArchivingRunId(runId);
+    try {
+      const url = currentlyArchived
+        ? `/reconciliation/runs/${runId}/archive?unarchive=true`
+        : `/reconciliation/runs/${runId}/archive`;
+      await api.post(url);
+      qc.invalidateQueries({ queryKey: ['recon-runs'] });
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to archive run');
+    } finally {
+      setArchivingRunId(null);
+    }
+  }
+
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto' }}>
 
@@ -1590,6 +1608,18 @@ export default function ReconciliationPage() {
           <p style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>Automated courier invoice matching engine</p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            style={{
+              ...btnGhost,
+              background: showArchived ? 'rgba(121,170,255,0.12)' : btnGhost.background,
+              borderColor: showArchived ? 'rgba(121,170,255,0.4)' : btnGhost.borderColor,
+              color: showArchived ? '#79AAFF' : btnGhost.color,
+            }}
+            onClick={() => setShowArchived(v => !v)}
+            title={showArchived ? 'Hide archived runs' : 'Show archived runs'}
+          >
+            <Archive size={15} />{showArchived ? 'Hide Archived' : 'Show Archived'}
+          </button>
           <button style={btnGhost} onClick={() => navigate('/reconciliation/margin-report')}>
             <TrendingUp size={15} />Margin Report
           </button>
@@ -1699,67 +1729,98 @@ export default function ReconciliationPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
-                {['Carrier', 'Customer Name', 'Invoice Ref', 'Date', 'Lines', 'Matched', 'Corrected', 'Unmatched', 'Automation', 'Status', ''].map(h => (
+                {['Carrier', 'Customer Name', 'Invoice Ref', 'Finalized', 'Lines', 'Matched', 'Corrected', 'Unmatched', 'Automation', 'Status', ''].map(h => (
                   <th key={h} style={{ padding: '8px 10px', textAlign: 'left', color: '#64748B', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {runs.map(run => (
-                <tr
-                  key={run.id}
-                  onClick={() => navigate(`/reconciliation/${run.id}`)}
-                  style={{ borderBottom: '1px solid rgba(0,0,0,0.03)', cursor: 'pointer' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                >
-                  <td style={{ padding: '10px 10px', color: '#0F172A', fontWeight: 600 }}>{run.carrier_name || '—'}</td>
-                  <td style={{ padding: '10px 10px', color: run.customer_display === 'Mixed' ? '#79AAFF' : '#0F172A', fontStyle: run.customer_display === 'Mixed' ? 'italic' : 'normal' }}>{run.customer_display || '—'}</td>
-                  <td style={{ padding: '10px 10px', color: '#64748B' }}>{run.invoice_ref || '—'}</td>
-                  <td style={{ padding: '10px 10px', color: '#64748B' }}>{run.invoice_date ? new Date(run.invoice_date).toLocaleDateString('en-GB') : '—'}</td>
-                  <td style={{ padding: '10px 10px', color: '#0F172A' }}>{(run.total_lines || 0).toLocaleString()}</td>
-                  <td style={{ padding: '10px 10px', color: '#00C853' }}>{run.matched_count || 0}</td>
-                  <td style={{ padding: '10px 10px', color: '#79AAFF' }}>{run.corrected_count || 0}</td>
-                  <td style={{ padding: '10px 10px', color: (run.unmatched_count || 0) > 0 ? '#FFB300' : '#475569' }}>
-                    {run.unmatched_count || 0}
-                  </td>
-                  <td style={{ padding: '10px 10px', minWidth: 100 }}>
-                    {run.automation_rate != null ? <AutoBar rate={run.automation_rate} /> : <span style={{ color: '#64748B' }}>—</span>}
-                  </td>
-                  <td style={{ padding: '10px 10px' }}><StatusBadge status={run.status} /></td>
-                  <td style={{ padding: '10px 10px' }} onClick={e => e.stopPropagation()}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <ChevronRight size={14} color='#475569' />
-                      {deletingRunId === run.id ? (
-                        <div style={{ display: 'flex', gap: 5 }}>
-                          <button
-                            style={{ ...btnRed, padding: '3px 8px', fontSize: 10, whiteSpace: 'nowrap' }}
-                            onClick={e => handleDeleteRun(e, run.id)}
-                          >
-                            Confirm
-                          </button>
-                          <button
-                            style={{ ...btnGhost, padding: '3px 6px', fontSize: 10 }}
-                            onClick={e => { e.stopPropagation(); setDeletingRunId(null); }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
+              {runs.map(run => {
+                const isFinalized = run.finalized;
+                const displayDate = run.finalized_at
+                  ? new Date(run.finalized_at).toLocaleDateString('en-GB')
+                  : run.invoice_date
+                    ? new Date(run.invoice_date).toLocaleDateString('en-GB')
+                    : '—';
+                const rowBg = run.archived
+                  ? 'rgba(0,0,0,0.015)'
+                  : isFinalized
+                    ? 'rgba(0,200,83,0.04)'
+                    : 'transparent';
+                return (
+                  <tr
+                    key={run.id}
+                    onClick={() => navigate(`/reconciliation/${run.id}`)}
+                    style={{ borderBottom: '1px solid rgba(0,0,0,0.03)', cursor: 'pointer', background: rowBg }}
+                    onMouseEnter={e => e.currentTarget.style.background = isFinalized ? 'rgba(0,200,83,0.08)' : 'rgba(0,0,0,0.02)'}
+                    onMouseLeave={e => e.currentTarget.style.background = rowBg}
+                  >
+                    <td style={{ padding: '10px 10px', color: run.archived ? '#94A3B8' : '#0F172A', fontWeight: 600 }}>{run.carrier_name || '—'}</td>
+                    <td style={{ padding: '10px 10px', color: run.customer_display === 'Mixed' ? '#79AAFF' : (run.archived ? '#94A3B8' : '#0F172A'), fontStyle: run.customer_display === 'Mixed' ? 'italic' : 'normal' }}>{run.customer_display || '—'}</td>
+                    <td style={{ padding: '10px 10px', color: run.archived ? '#94A3B8' : '#64748B' }}>{run.invoice_ref || '—'}</td>
+                    <td style={{ padding: '10px 10px' }}>
+                      {isFinalized ? (
+                        <span style={{ color: '#00C853', fontWeight: 600, fontSize: 11 }}>{displayDate}</span>
                       ) : (
-                        <button
-                          style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', padding: '2px 4px', borderRadius: 4 }}
-                          title='Delete this run'
-                          onClick={e => handleDeleteRun(e, run.id)}
-                          onMouseEnter={e => e.currentTarget.style.color = '#FF5252'}
-                          onMouseLeave={e => e.currentTarget.style.color = '#444'}
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        <span style={{ color: '#94A3B8', fontSize: 11 }}>—</span>
                       )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td style={{ padding: '10px 10px', color: run.archived ? '#94A3B8' : '#0F172A' }}>{(run.total_lines || 0).toLocaleString()}</td>
+                    <td style={{ padding: '10px 10px', color: run.archived ? '#94A3B8' : '#00C853' }}>{run.matched_count || 0}</td>
+                    <td style={{ padding: '10px 10px', color: run.archived ? '#94A3B8' : '#79AAFF' }}>{run.corrected_count || 0}</td>
+                    <td style={{ padding: '10px 10px', color: (run.unmatched_count || 0) > 0 ? '#FFB300' : (run.archived ? '#94A3B8' : '#475569') }}>
+                      {run.unmatched_count || 0}
+                    </td>
+                    <td style={{ padding: '10px 10px', minWidth: 100 }}>
+                      {run.automation_rate != null ? <AutoBar rate={run.automation_rate} /> : <span style={{ color: '#64748B' }}>—</span>}
+                    </td>
+                    <td style={{ padding: '10px 10px' }}><StatusBadge status={run.status} /></td>
+                    <td style={{ padding: '10px 10px' }} onClick={e => e.stopPropagation()}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <ChevronRight size={14} color='#475569' />
+                        {isFinalized && (
+                          <button
+                            style={{ background: 'none', border: 'none', cursor: archivingRunId === run.id ? 'not-allowed' : 'pointer', padding: '2px 4px', borderRadius: 4, color: run.archived ? '#79AAFF' : '#94A3B8', opacity: archivingRunId === run.id ? 0.5 : 1 }}
+                            title={run.archived ? 'Unarchive this run' : 'Archive this run'}
+                            onClick={e => handleArchiveRun(e, run.id, run.archived)}
+                            disabled={archivingRunId === run.id}
+                            onMouseEnter={e => e.currentTarget.style.color = run.archived ? '#3B82F6' : '#64748B'}
+                            onMouseLeave={e => e.currentTarget.style.color = run.archived ? '#79AAFF' : '#94A3B8'}
+                          >
+                            {run.archived ? <ArchiveRestore size={13} /> : <Archive size={13} />}
+                          </button>
+                        )}
+                        {deletingRunId === run.id ? (
+                          <div style={{ display: 'flex', gap: 5 }}>
+                            <button
+                              style={{ ...btnRed, padding: '3px 8px', fontSize: 10, whiteSpace: 'nowrap' }}
+                              onClick={e => handleDeleteRun(e, run.id)}
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              style={{ ...btnGhost, padding: '3px 6px', fontSize: 10 }}
+                              onClick={e => { e.stopPropagation(); setDeletingRunId(null); }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', padding: '2px 4px', borderRadius: 4 }}
+                            title='Delete this run'
+                            onClick={e => handleDeleteRun(e, run.id)}
+                            onMouseEnter={e => e.currentTarget.style.color = '#FF5252'}
+                            onMouseLeave={e => e.currentTarget.style.color = '#444'}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

@@ -692,13 +692,19 @@ router.delete('/service-mappings/:id', async (req, res) => {
 
 router.get('/runs', async (req, res) => {
   try {
-    const { carrier_id, limit = 50, offset = 0 } = req.query;
+    const { carrier_id, limit = 50, offset = 0, show_archived = 'false' } = req.query;
     const params = [];
-    let where = '';
+    const conditions = [];
+
     if (carrier_id) {
       params.push(parseInt(carrier_id));
-      where = `WHERE rr.carrier_id = $${params.length}`;
+      conditions.push(`rr.carrier_id = $${params.length}`);
     }
+    if (show_archived !== 'true') {
+      conditions.push(`rr.archived = false`);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     params.push(parseInt(limit), parseInt(offset));
 
     const result = await query(`
@@ -721,7 +727,12 @@ router.get('/runs', async (req, res) => {
                 WHERE rl.run_id = rr.id AND rl.customer_id IS NOT NULL) > 1
           THEN 'Mixed'
           ELSE NULL
-        END AS customer_display
+        END AS customer_display,
+        (
+          SELECT COUNT(DISTINCT f.customer_id)::int
+          FROM   finalized_billing_lines f
+          WHERE  f.run_id = rr.id AND f.xero_invoice_id IS NOT NULL
+        ) AS xero_pushed_customers
       FROM   reconciliation_runs rr
       LEFT JOIN couriers c ON c.id = rr.carrier_id
       LEFT JOIN staff    s ON s.id = rr.created_by
@@ -732,7 +743,7 @@ router.get('/runs', async (req, res) => {
 
     const countRes = await query(
       `SELECT COUNT(*) FROM reconciliation_runs rr ${where}`,
-      carrier_id ? [parseInt(carrier_id)] : []
+      params.slice(0, -2)
     );
 
     return res.json({
@@ -2235,6 +2246,37 @@ router.post('/runs/:id/re-snapshot', async (req, res) => {
     return res.json({ ok: true, ...result });
   } catch (err) {
     console.error('[reconciliation/re-snapshot] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/reconciliation/runs/:id/archive ───────────────────────────────
+// Archive a finalized run so it no longer appears in the default runs list.
+// Can be undone via ?unarchive=true.
+
+router.post('/runs/:id/archive', async (req, res) => {
+  try {
+    const runId     = parseInt(req.params.id);
+    const unarchive = req.query.unarchive === 'true';
+
+    const runCheck = await query(
+      `SELECT id, finalized, archived FROM reconciliation_runs WHERE id = $1`,
+      [runId]
+    );
+    if (!runCheck.rows.length) return res.status(404).json({ error: 'Run not found' });
+
+    if (!unarchive && !runCheck.rows[0].finalized) {
+      return res.status(400).json({ error: 'Only finalized runs can be archived' });
+    }
+
+    await query(
+      `UPDATE reconciliation_runs SET archived = $1 WHERE id = $2`,
+      [!unarchive, runId]
+    );
+
+    return res.json({ ok: true, run_id: runId, archived: !unarchive });
+  } catch (err) {
+    console.error('[reconciliation/archive] error:', err.message);
     return res.status(500).json({ error: err.message });
   }
 });

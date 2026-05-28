@@ -2094,7 +2094,13 @@ function CustomerSummaryPanel({ runId, run }) {
         </thead>
         <tbody>
           {customers.map(c => (
-            <tr key={c.customer_id} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
+            <tr
+              key={c.customer_id}
+              style={{
+                borderBottom: '1px solid rgba(0,0,0,0.03)',
+                background: c.xero_pushed_count > 0 ? 'rgba(0,200,83,0.05)' : 'transparent',
+              }}
+            >
               <td style={{ padding: '9px 10px', color: '#0F172A', fontWeight: 600 }}>{c.customer_name || '—'}</td>
               <td style={{ padding: '9px 10px', color: '#64748B' }}>{c.line_count}</td>
               <td style={{ padding: '9px 10px', color: '#64748B' }}>£{parseFloat(c.total_base || 0).toFixed(2)}</td>
