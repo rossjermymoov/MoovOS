@@ -716,14 +716,23 @@ export async function generateCustomerCSV(runId, customerId) {
     totals.total.toFixed(2),
   ]);
 
+  // Compute the Xero invoice number using the same logic as xero.js
+  // so the CSV reference always matches what was (or will be) sent to Xero.
+  const custName   = lines[0]?.customer_name || 'CUST';
+  const custAbbrev = custName.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+  const runDate    = run.invoice_date ? new Date(run.invoice_date) : new Date();
+  const dd  = String(runDate.getDate()).padStart(2, '0');
+  const mm  = String(runDate.getMonth() + 1).padStart(2, '0');
+  const yy  = String(runDate.getFullYear()).slice(-2);
+  const xeroInvoiceNumber = `${custAbbrev}-${dd}${mm}${yy}`;
+
   // Escape and join
   const escape = (v) => `"${String(v).replace(/"/g, '""')}"`;
   const csvLines = [
     // Header block
     `"Moov OS — Carrier Invoice Reconciliation Export"`,
     `"Carrier: ${run.carrier_name || ''}"`,
-    `"Invoice Ref: ${run.invoice_ref || ''}"`,
-    `"Run ID: ${run.id}"`,
+    `"Invoice Number: ${xeroInvoiceNumber}"`,
     `"Customer: ${lines[0]?.customer_name || ''}"`,
     `"Generated: ${new Date().toLocaleString('en-GB')}"`,
     '',
