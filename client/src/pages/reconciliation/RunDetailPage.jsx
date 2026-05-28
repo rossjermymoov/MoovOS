@@ -481,13 +481,13 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
             <select style={inputSt} value={resolutionType} onChange={e => setResolutionType(e.target.value)}>
               <option value=''>— Select type —</option>
               <option value='accept'>Accept charge as-is</option>
-              <option value='map_to_service'>Map to internal service</option>
-              <option value='map_to_surcharge'>Map to surcharge</option>
-              <option value='map_to_customer'>Map account to customer</option>
               <option value='accept_delta'>Accept delta as tolerance</option>
               <option value='manual_price'>Set manual sell price</option>
-              <option value='reject'>Reject / dispute charge</option>
               <option value='credit_request'>Applying for credit with Courier</option>
+              <option value='map_to_surcharge'>Map to surcharge</option>
+              <option value='map_to_service'>Map to internal service</option>
+              <option value='map_to_customer'>Map account to customer</option>
+              <option value='reject'>Reject / dispute charge</option>
             </select>
           </div>
         )}
