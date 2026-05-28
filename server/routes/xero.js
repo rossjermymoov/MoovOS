@@ -810,26 +810,65 @@ router.post('/reconciliation-runs/:runId/push', async (req, res, next) => {
       }
 
       try {
-        // Build Xero line items — one per shipment, split domestic vs international
-        const lineItems = cust.lines.map(l => {
-          const parts = [
-            l.tracking_number || l.order_reference || '',
-            l.service_name    || '',
-            l.weight_kg       ? `${parseFloat(l.weight_kg).toFixed(2)}kg` : '',
-            l.recipient_postcode || '',
-          ].filter(Boolean).join(' — ');
+        // Build summary line items grouped by service + surcharge type
+        // Format: "Parcel Delivery — DPD Next Day — 38 parcels" and separate surcharge lines
+        const summaryGroups = {};
 
-          const destCountry = countryByLineId[l.id] || null;
-          const isDomestic  = destCountry === 'GB';
+        for (const l of cust.lines) {
+          const destCountry  = countryByLineId[l.id] || null;
+          const isDomestic   = destCountry === 'GB';
+          const accountCode  = isDomestic ? domesticCode : internationalCode;
+          const taxType      = isDomestic ? 'OUTPUT2' : 'NONE';
+          const serviceName  = l.service_name || 'Parcel Delivery';
+          const surchargeAmt = parseFloat(l.sell_surcharge_amount || 0);
+          const freightAmt   = parseFloat(l.sell_total_amount || 0) - surchargeAmt;
 
-          return {
-            Description: parts || 'Parcel delivery service',
-            Quantity:    1,
-            UnitAmount:  parseFloat(l.sell_total_amount || 0),
-            AccountCode: isDomestic ? domesticCode : internationalCode,
-            TaxType:     isDomestic ? 'OUTPUT2' : 'NONE',
-          };
-        });
+          // Freight + fuel grouped by service name
+          if (freightAmt > 0 || surchargeAmt === 0) {
+            const freightKey = `freight|${isDomestic}|${serviceName}`;
+            if (!summaryGroups[freightKey]) {
+              summaryGroups[freightKey] = {
+                sortOrder:   0,
+                description: serviceName,
+                count:       0,
+                total:       0,
+                accountCode,
+                taxType,
+              };
+            }
+            summaryGroups[freightKey].count++;
+            summaryGroups[freightKey].total += freightAmt > 0 ? freightAmt : parseFloat(l.sell_total_amount || 0);
+          }
+
+          // Surcharge grouped by surcharge name
+          if (surchargeAmt > 0) {
+            const surchargeName = l.surcharge_name || 'Additional Surcharges';
+            const surchargeKey  = `surcharge|${isDomestic}|${surchargeName}`;
+            if (!summaryGroups[surchargeKey]) {
+              summaryGroups[surchargeKey] = {
+                sortOrder:   1,
+                description: surchargeName,
+                count:       0,
+                total:       0,
+                accountCode,
+                taxType,
+              };
+            }
+            summaryGroups[surchargeKey].count++;
+            summaryGroups[surchargeKey].total += surchargeAmt;
+          }
+        }
+
+        const lineItems = Object.values(summaryGroups)
+          .filter(g => g.total > 0)
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .map(g => ({
+            Description: `${g.description} — ${g.count} ${g.count === 1 ? 'parcel' : 'parcels'}`,
+            Quantity:    g.count,
+            UnitAmount:  Math.round((g.total / g.count) * 10000) / 10000,
+            AccountCode: g.accountCode,
+            TaxType:     g.taxType,
+          }));
 
         // Deduplicate: collapse pure-zero lines
         const nonZeroLines = lineItems.filter(l => l.UnitAmount !== 0);
