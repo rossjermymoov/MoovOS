@@ -150,9 +150,9 @@ function CustomerRateCardAssignments({ customerId }) {
 }
 
 function CarrierAccountsRow({ carrier, customerId, onUpdateLink, onRemoveLink, onAddAccount }) {
-  const [addingAccount, setAddingAccount] = React.useState(false);
-  const [newAcctNum,    setNewAcctNum]    = React.useState('');
-  const [newLabel,      setNewLabel]      = React.useState('');
+  const [addingAccount, setAddingAccount] = useState(false);
+  const [newAcctNum,    setNewAcctNum]    = useState('');
+  const [newLabel,      setNewLabel]      = useState('');
 
   const inpSt = { fontSize: 11, padding: '3px 6px', border: '1px solid rgba(0,0,0,0.15)', borderRadius: 4, background: '#fff', color: '#0F172A' };
 
