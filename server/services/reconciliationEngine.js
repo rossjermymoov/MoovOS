@@ -1035,6 +1035,22 @@ async function handleCarrierDirect({
   }
 
   const cdParcels  = parcelCount > 1 ? parcelCount : 1;
+
+  // Create fuel and always-apply surcharges (GEC etc.) for this carrier_direct
+  // shipment — mirrors what billing.js does for OMS-booked shipments.
+  // Only run when we have a real shipment row and a sell price to base % on.
+  if (cdShipmentId && hasSellRate && serviceId && ctx?.carrierId) {
+    await createCarrierDirectSurcharges({
+      shipmentId:       cdShipmentId,
+      customerId:       customer.customer_id,
+      carrierId:        ctx.carrierId,
+      serviceId,
+      freightSellPrice: totalSellPrice,
+      freightCostPrice: totalCostPrice,
+      parcelCount:      cdParcels,
+    });
+  }
+
   const rollup     = await buildSurchargeRollup(
     line.surcharge_amounts, ctx.surchargeById, carrierAmount, cdParcels, ctx.globallyExcludedColumns,
     customer.customer_id, ctx.costOverrideCache, serviceId
@@ -1114,6 +1130,134 @@ async function handleCarrierDirect({
   });
 
   return { status: cdStatus };
+}
+
+// ─── Carrier-Direct Surcharge & Fuel Creation ────────────────────────────────
+//
+// Mirrors billing.js applySurcharges() but for carrier_direct shipments.
+// Called after handleCarrierDirect creates the base freight charge so that
+// fuel and always-apply surcharges (GEC, etc.) are also inserted for the
+// customer's invoice — identical to what OMS-booked shipments get.
+//
+// Charges are created with verified=true (same as the freight charge) so
+// they appear immediately in Finance and in total_cost_price on future
+// reconciliation runs.
+//
+// Idempotent — each surcharge/fuel charge has a unique constraint on
+// (shipment_id, surcharge_id) / (shipment_id, charge_type='fuel'), so
+// re-running on the same tracking number is safe.
+
+async function createCarrierDirectSurcharges({
+  shipmentId, customerId, carrierId, serviceId,
+  freightSellPrice, freightCostPrice, parcelCount,
+}) {
+  if (!shipmentId || !customerId || !carrierId) return;
+  const baseSell = parseFloat(freightSellPrice) || 0;
+  const baseCost = parseFloat(freightCostPrice) || 0;
+  const qty      = parcelCount > 1 ? parcelCount : 1;
+
+  try {
+    // ── Step 1: Always-apply flat/percentage surcharges (e.g. GEC) ────────────
+    const { rows: surcharges } = await query(`
+      SELECT s.id, s.name, s.calc_type, s.default_value, s.cost_price,
+             s.charge_per, s.reconciliation_excluded
+      FROM   surcharges s
+      WHERE  s.active       = true
+        AND  s.courier_id   = $1
+        AND  (s.applies_when = 'always' OR s.applies_when IS NULL)
+        AND  (s.effective_date IS NULL OR s.effective_date <= CURRENT_DATE)
+    `, [carrierId]);
+
+    for (const s of surcharges) {
+      // Idempotency: skip if surcharge charge already exists for this shipment
+      const { rows: existing } = await query(
+        'SELECT id FROM charges WHERE shipment_id=$1 AND surcharge_id=$2 AND cancelled=false',
+        [shipmentId, s.id]
+      );
+      if (existing.length) continue;
+
+      // Customer override for sell price
+      const { rows: overrides } = await query(
+        `SELECT override_value FROM customer_surcharge_overrides
+         WHERE  customer_id=$1 AND surcharge_id=$2 AND active=true`,
+        [customerId, s.id]
+      );
+      const effectiveVal = overrides.length
+        ? parseFloat(overrides[0].override_value)
+        : parseFloat(s.default_value);
+
+      let sellPrice;
+      if (s.calc_type === 'percentage') {
+        sellPrice = round2(baseSell * effectiveVal / 100);
+      } else if (s.charge_per === 'parcel') {
+        sellPrice = round2(effectiveVal * qty);
+      } else {
+        sellPrice = effectiveVal;
+      }
+
+      const costRate = parseFloat(s.cost_price ?? s.default_value ?? 0);
+      let costPrice;
+      if (s.calc_type === 'percentage') {
+        costPrice = round2(baseCost * costRate / 100);
+      } else if (s.charge_per === 'parcel') {
+        costPrice = round2(costRate * qty);
+      } else {
+        costPrice = costRate;
+      }
+
+      // reconciliation_excluded surcharges: keep cost_price but sell = 0
+      // (we pay the carrier but don't pass on to customer)
+      if (s.reconciliation_excluded) sellPrice = 0;
+
+      await query(`
+        INSERT INTO charges
+          (shipment_id, customer_id, charge_type, service_name, price, cost_price,
+           price_auto, surcharge_id, parcel_qty, verified, status, source)
+        VALUES ($1, $2, 'surcharge', $3, $4, $5, true, $6, 1, true, 'verified', 'carrier_direct')
+      `, [shipmentId, customerId, s.name, sellPrice, costPrice, s.id]);
+      console.log(`[carrier-direct surcharges] inserted surcharge "${s.name}" sell=£${sellPrice} cost=£${costPrice} shipment=${shipmentId}`);
+    }
+
+    // ── Step 2: Fuel group charge ─────────────────────────────────────────────
+    const { rows: fgRows } = await query(`
+      SELECT fg.id, fg.name, fg.standard_sell_pct, fg.fuel_surcharge_pct AS carrier_pct,
+             cfgp.sell_pct AS customer_sell_pct
+      FROM   courier_services cs
+      JOIN   fuel_groups fg ON fg.id = cs.fuel_group_id
+      LEFT JOIN customer_fuel_group_pricing cfgp
+                ON cfgp.fuel_group_id = fg.id AND cfgp.customer_id = $2
+      WHERE  cs.id = $1
+      LIMIT  1
+    `, [serviceId, customerId]);
+
+    if (fgRows.length) {
+      const fg      = fgRows[0];
+      const sellPct = parseFloat(fg.customer_sell_pct ?? fg.standard_sell_pct ?? 0);
+      const costPct = parseFloat(fg.carrier_pct ?? 0);
+
+      if (sellPct > 0 && baseSell > 0) {
+        // Idempotency: one fuel charge per shipment
+        const { rows: existingFuel } = await query(
+          `SELECT id FROM charges WHERE shipment_id=$1 AND charge_type='fuel' AND cancelled=false`,
+          [shipmentId]
+        );
+        if (!existingFuel.length) {
+          const fuelSell = round2(baseSell * sellPct / 100);
+          const fuelCost = costPct > 0 ? round2(baseCost * costPct / 100) : null;
+          await query(`
+            INSERT INTO charges
+              (shipment_id, customer_id, charge_type, service_name, price, cost_price,
+               price_auto, parcel_qty, verified, status, source)
+            VALUES ($1, $2, 'fuel', $3, $4, $5, true, 1, true, 'verified', 'carrier_direct')
+          `, [shipmentId, customerId, `${fg.name} Fuel`, fuelSell, fuelCost]);
+          console.log(`[carrier-direct surcharges] inserted fuel "${fg.name}" sell=£${fuelSell} cost=${fuelCost != null ? `£${fuelCost}` : 'null'} shipment=${shipmentId}`);
+        }
+      }
+    }
+  } catch (err) {
+    // Non-fatal — log but don't fail the reconciliation line
+    console.warn(`[carrier-direct surcharges] failed for shipment=${shipmentId}:`, err.message);
+  }
 }
 
 // ─── Main engine entry point ──────────────────────────────────────────────────
@@ -1196,6 +1340,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   const ctx = {
     separateFuelRows,
     parcelPricing,
+    carrierId,
     serviceIdToCodeMap,
     customerServiceOverrides,
     surchargeById,
