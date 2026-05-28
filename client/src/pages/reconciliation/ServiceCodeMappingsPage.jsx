@@ -118,7 +118,14 @@ export default function ServiceCodeMappingsPage() {
       setSaveOk(true);
       setTimeout(() => setSaveOk(false), 3000);
     },
-    onError: (err) => setFormError(err.response?.data?.error || 'Save failed'),
+    onError: (err) => {
+      const raw = err.response?.data?.error || '';
+      if (raw.includes('unique') || raw.includes('duplicate')) {
+        setFormError(`A mapping for invoice code "${newCode.trim()}" already exists — edit the existing entry instead.`);
+      } else {
+        setFormError(raw || 'Save failed');
+      }
+    },
   });
 
   const deleteMutation = useMutation({

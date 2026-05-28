@@ -279,8 +279,23 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
   const [notes,    setNotes]   = useState('');
   const [loading,  setLoading] = useState(false);
   const [error,    setError]   = useState('');
+  const [fuelRate, setFuelRate] = useState(null); // { fuel_pct, fuel_group_name } | null
 
-  const isSurchargeMapping = resolutionType === 'map_to_surcharge';
+  const isSurchargeMapping  = resolutionType === 'map_to_surcharge';
+  const isManualPrice       = resolutionType === 'manual_price';
+
+  // Fetch fuel rate when manual_price is selected
+  useEffect(() => {
+    if (!isManualPrice) return;
+    api.get(`/reconciliation/runs/${line.run_id}/lines/${line.id}/fuel-rate`)
+      .then(r => setFuelRate(r.data))
+      .catch(() => setFuelRate({ fuel_pct: 0, fuel_group_name: null }));
+  }, [isManualPrice, line.run_id, line.id]);
+
+  // Derived: total sell when manual_price is active
+  const manualBase  = parseFloat(resolutionValue) || 0;
+  const fuelPct     = fuelRate?.fuel_pct ?? 0;
+  const manualTotal = manualBase > 0 ? Math.round(manualBase * (1 + fuelPct / 100) * 100) / 100 : 0;
 
   const { data: services = [] } = useQuery({
     queryKey: ['recon-services', courierId],
@@ -303,9 +318,13 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
   }[line.unmatched_reason];
 
   async function handleResolve() {
-    const valueRequired = resolutionType !== 'credit_request';
-    if (!resolutionType || (valueRequired && !resolutionValue)) {
+    const noValueNeeded = resolutionType === 'credit_request';
+    if (!resolutionType || (!noValueNeeded && !resolutionValue)) {
       setError('Please fill in all required fields');
+      return;
+    }
+    if (resolutionType === 'manual_price' && (parseFloat(resolutionValue) || 0) <= 0) {
+      setError('Enter a base freight price greater than £0');
       return;
     }
     setLoading(true);
@@ -460,6 +479,7 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
               <option value='map_to_surcharge'>Map to surcharge</option>
               <option value='map_to_customer'>Map account to customer</option>
               <option value='accept_delta'>Accept delta as tolerance</option>
+              <option value='manual_price'>Set manual sell price</option>
               <option value='reject'>Reject / dispute charge</option>
               <option value='credit_request'>Applying for credit with Courier</option>
             </select>
@@ -529,8 +549,54 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
           </div>
         )}
 
+        {/* Manual price input */}
+        {isManualPrice && (
+          <div>
+            <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>
+              BASE FREIGHT SELL PRICE (£) *
+            </label>
+            <input
+              style={inputSt}
+              type='number' step='0.01' min='0.01'
+              placeholder='e.g. 45.00'
+              value={resolutionValue}
+              onChange={e => setResolutionValue(e.target.value)}
+            />
+            {fuelRate === null && manualBase > 0 && (
+              <div style={{ fontSize: 10, color: '#64748B', marginTop: 6 }}>Loading fuel rate…</div>
+            )}
+            {fuelRate !== null && manualBase > 0 && (
+              <div style={{
+                marginTop: 8, padding: '10px 12px',
+                background: 'rgba(0,200,83,0.06)', border: '1px solid rgba(0,200,83,0.2)',
+                borderRadius: 7, fontSize: 12,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ color: '#64748B' }}>Base freight</span>
+                  <span style={{ color: '#0F172A', fontWeight: 600 }}>£{manualBase.toFixed(2)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ color: '#64748B' }}>
+                    Fuel {fuelRate.fuel_group_name ? `(${fuelRate.fuel_group_name})` : ''} {fuelPct}%
+                  </span>
+                  <span style={{ color: '#0F172A' }}>£{(manualTotal - manualBase).toFixed(2)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(0,0,0,0.08)', paddingTop: 6, marginTop: 4 }}>
+                  <span style={{ color: '#0F172A', fontWeight: 700 }}>Total to bill customer</span>
+                  <span style={{ color: '#00C853', fontWeight: 700, fontSize: 13 }}>£{manualTotal.toFixed(2)}</span>
+                </div>
+                {fuelPct === 0 && (
+                  <div style={{ fontSize: 10, color: '#FFB300', marginTop: 6 }}>
+                    ⚠ No fuel rate found for this customer — total equals base freight
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Generic value input for other types */}
-        {!isUnknownCode && resolutionType !== 'map_to_service' && resolutionType !== 'accept_delta' && resolutionType !== 'credit_request' && resolutionType && (
+        {!isUnknownCode && resolutionType !== 'map_to_service' && resolutionType !== 'accept_delta' && resolutionType !== 'credit_request' && !isManualPrice && resolutionType && (
           <div>
             <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>RESOLUTION VALUE *</label>
             <input

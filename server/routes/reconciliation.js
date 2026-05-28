@@ -951,6 +951,57 @@ router.get('/runs/:id/lines', async (req, res) => {
   }
 });
 
+// ─── GET /api/reconciliation/runs/:id/lines/:lineId/fuel-rate ────────────────
+// Returns the applicable fuel sell % for a line's customer + carrier combo.
+// Used by the manual_price resolve UI to show a live fuel calculation.
+// Falls back to the most-used fuel group across the customer's verified charges.
+
+router.get('/runs/:id/lines/:lineId/fuel-rate', async (req, res) => {
+  try {
+    const lineId = parseInt(req.params.lineId);
+    const lineRes = await query(
+      `SELECT rl.customer_id, rr.carrier_id
+       FROM   reconciliation_lines rl
+       JOIN   reconciliation_runs  rr ON rr.id = rl.run_id
+       WHERE  rl.id = $1`,
+      [lineId]
+    );
+    if (!lineRes.rows.length) return res.status(404).json({ error: 'Line not found' });
+    const { customer_id, carrier_id } = lineRes.rows[0];
+
+    // Find the most-used fuel group for this customer + carrier
+    const fuelRes = await query(`
+      SELECT COALESCE(cfgp.sell_pct, fg.standard_sell_pct) AS sell_pct,
+             fg.name AS fuel_group_name
+      FROM   charges c
+      JOIN   courier_services cs  ON cs.id  = c.service_id
+      JOIN   fuel_groups      fg  ON fg.id  = cs.fuel_group_id
+      LEFT JOIN customer_fuel_group_pricing cfgp
+                ON cfgp.fuel_group_id = fg.id AND cfgp.customer_id = $1
+      WHERE  c.customer_id = $1
+        AND  cs.carrier_id = $2
+        AND  c.status      = 'verified'
+        AND  c.service_id  IS NOT NULL
+      GROUP  BY fg.id, fg.name, fg.standard_sell_pct, cfgp.sell_pct
+      ORDER  BY COUNT(*) DESC
+      LIMIT  1
+    `, [customer_id, carrier_id]);
+
+    if (!fuelRes.rows.length) {
+      return res.json({ fuel_pct: 0, fuel_group_name: null, source: 'none' });
+    }
+    const { sell_pct, fuel_group_name } = fuelRes.rows[0];
+    return res.json({
+      fuel_pct:        parseFloat(sell_pct || 0),
+      fuel_group_name,
+      source:          'customer_history',
+    });
+  } catch (err) {
+    console.error('[reconciliation/fuel-rate]', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── POST /api/reconciliation/runs/:id/lines/:lineId/resolve ──────────────────
 // Human resolution of an Unmatched line.
 // Body: { resolution_type, resolution_value, scope: 'once'|'always', notes? }
@@ -961,11 +1012,17 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
     const { resolution_type, resolution_value, scope = 'once', notes, mapping_type, customer_id } = req.body;
 
     if (!resolution_type) return res.status(400).json({ error: 'resolution_type is required' });
-    // credit_request doesn't need a value — use the type itself as the stored value
-    const effective_resolution_value = resolution_type === 'credit_request'
-      ? 'credit_request'
+    // credit_request: no value needed — type itself is the value
+    // manual_price:   resolution_value = base freight sell price (numeric string)
+    const noValueTypes = new Set(['credit_request', 'manual_price']);
+    const effective_resolution_value = noValueTypes.has(resolution_type)
+      ? resolution_type
       : resolution_value;
     if (!effective_resolution_value) return res.status(400).json({ error: 'resolution_value is required' });
+    if (resolution_type === 'manual_price') {
+      const base = parseFloat(resolution_value);
+      if (isNaN(base) || base <= 0) return res.status(400).json({ error: 'manual_price requires a positive base freight amount' });
+    }
     if (!['once', 'always'].includes(scope)) {
       return res.status(400).json({ error: 'scope must be once or always' });
     }
@@ -985,20 +1042,68 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
       return res.status(400).json({ error: 'Line is not Unmatched — cannot resolve' });
     }
 
+    // ── manual_price: set corrected_sell_price and link the charge ──────────────
+    let manualSell = null;
+    let manualChargeId = null;
+    if (resolution_type === 'manual_price') {
+      const basePence = parseFloat(resolution_value);
+
+      // Look up fuel sell % for this customer + carrier
+      const fuelRes = await query(`
+        SELECT COALESCE(cfgp.sell_pct, fg.standard_sell_pct, 0) AS sell_pct
+        FROM   charges c
+        JOIN   courier_services cs  ON cs.id  = c.service_id
+        JOIN   fuel_groups      fg  ON fg.id  = cs.fuel_group_id
+        LEFT JOIN customer_fuel_group_pricing cfgp
+                  ON cfgp.fuel_group_id = fg.id AND cfgp.customer_id = $1
+        WHERE  c.customer_id = $1
+          AND  cs.carrier_id = $2
+          AND  c.status      = 'verified'
+          AND  c.service_id  IS NOT NULL
+        GROUP  BY fg.id, fg.standard_sell_pct, cfgp.sell_pct
+        ORDER  BY COUNT(*) DESC
+        LIMIT  1
+      `, [line.customer_id, line.carrier_id]);
+
+      const fuelPct = parseFloat(fuelRes.rows[0]?.sell_pct || 0);
+      manualSell    = Math.round((basePence * (1 + fuelPct / 100)) * 100) / 100;
+
+      // Try to find the linked charge via tracking number
+      if (line.tracking_number) {
+        const chargeRes = await query(`
+          SELECT c.id
+          FROM   charges c
+          JOIN   shipments s ON s.id = c.shipment_id
+          WHERE  s.tracking_codes @> ARRAY[$1::text]
+            AND  c.customer_id   = $2
+            AND  c.charge_type   = 'courier'
+          ORDER  BY c.created_at DESC
+          LIMIT  1
+        `, [line.tracking_number, line.customer_id]);
+        manualChargeId = chargeRes.rows[0]?.id || null;
+      }
+    }
+
     // Mark line as resolved.
     // Zero out the delta — the human has accepted the carrier's charge as correct.
     // expected_amount is set to carrier_amount so the Corrected tab shows £0.00 delta.
     await query(`
       UPDATE reconciliation_lines
-      SET    status           = 'corrected',
-             corrected_by     = 'human',
-             resolved_by      = $2,
-             resolved_at      = NOW(),
-             resolution_notes = $3,
-             expected_amount  = carrier_amount,
-             delta            = 0
+      SET    status                = 'corrected',
+             corrected_by          = 'human',
+             resolved_by           = $2,
+             resolved_at           = NOW(),
+             resolution_notes      = $3,
+             expected_amount       = carrier_amount,
+             delta                 = 0,
+             corrected_sell_price  = COALESCE($4, corrected_sell_price),
+             corrected_cost_price  = COALESCE($5, corrected_cost_price),
+             charge_id             = COALESCE($6, charge_id)
       WHERE  id = $1
-    `, [lineId, req.user?.id || null, notes || null]);
+    `, [lineId, req.user?.id || null, notes || null,
+        manualSell,
+        resolution_type === 'manual_price' ? parseFloat(line.carrier_amount || 0) : null,
+        manualChargeId]);
 
     // If scope = 'always', save a mapping rule
     let mappingId = null;
@@ -1129,7 +1234,12 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
       WHERE  id = $1
     `, [line.run_id]);
 
-    return res.json({ resolved: true, mapping_id: mappingId, bulk_applied: bulkApplied });
+    return res.json({
+      resolved:      true,
+      mapping_id:    mappingId,
+      bulk_applied:  bulkApplied,
+      ...(manualSell != null && { manual_sell_total: manualSell }),
+    });
   } catch (err) {
     console.error('[reconciliation/resolve] POST error:', err);
     return res.status(500).json({ error: err.message });
