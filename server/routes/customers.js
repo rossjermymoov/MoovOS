@@ -1272,6 +1272,32 @@ router.put('/:id/companion-parcel-billing', async (req, res, next) => {
   }
 });
 
+// PUT    /api/customers/:id/parcel-pricing-mode
+//   Switch between first+sub and multi-parcel pricing for a customer.
+//   Mode 'sub'  (default): 1st parcel at the zone price, 2nd+ at price_sub.
+//   Mode 'multi': ALL parcels charged at price_sub (for high-volume customers
+//                 who consistently send multiple parcels per consignment and
+//                 qualify for the sub rate on every box).
+//   Has no effect if the customer's rate card has no price_sub values set.
+//   Body: { mode: 'sub' | 'multi' }
+
+router.put('/:id/parcel-pricing-mode', async (req, res, next) => {
+  try {
+    const { id }   = req.params;
+    const { mode } = req.body;
+    if (mode !== 'sub' && mode !== 'multi') {
+      return res.status(400).json({ error: "mode must be 'sub' or 'multi'" });
+    }
+    await query(
+      `UPDATE customers SET parcel_pricing_mode = $1 WHERE id = $2`,
+      [mode, id]
+    );
+    return res.json({ parcel_pricing_mode: mode });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // PUT    /api/customers/:id/ddp-mode
 //   Enable or disable DDP mode for a customer.
 //   When enabling: auto-creates Air Express → DPD-10DDP and Air Classic → DPD-60DDP

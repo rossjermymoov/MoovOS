@@ -15,7 +15,7 @@
 import express from 'express';
 import { query } from '../db/index.js';
 import { processReconciliationRun, ageUnmatchedLines, reprocessMappedLines, createCarrierDirectSurcharges } from '../services/reconciliationEngine.js';
-import { finalizeRun, reSnapshot, getCustomerSummaries, generateCustomerCSV, getMarginReport } from '../services/finalizationService.js';
+import { finalizeRun, reSnapshot, reSnapshotCustomer, getCustomerSummaries, generateCustomerCSV, getMarginReport } from '../services/finalizationService.js';
 import { fetchShipmentById, fetchShipmentByReference, fetchShipmentByReferenceAndTracking, probeShipmentRaw } from '../services/voilaClient.js';
 import { processShipment, insertCharges } from '../services/pricingEngine.js';
 
@@ -2310,6 +2310,24 @@ router.post('/runs/:id/re-snapshot', async (req, res) => {
     return res.json({ ok: true, ...result });
   } catch (err) {
     console.error('[reconciliation/re-snapshot] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/reconciliation/runs/:id/re-snapshot-customer/:customerId ───────
+// Deletes and re-builds finalized_billing_lines for one customer in a finalized
+// run.  Used after charge corrections (cancelled surcharges, repriced parcels)
+// to refresh the snapshot without re-running the full reconciliation.
+// Returns { deleted, inserted, errors[] }.
+
+router.post('/runs/:id/re-snapshot-customer/:customerId', async (req, res) => {
+  try {
+    const runId      = parseInt(req.params.id);
+    const customerId = req.params.customerId;
+    const result     = await reSnapshotCustomer(runId, customerId);
+    return res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error('[reconciliation/re-snapshot-customer] error:', err.message);
     return res.status(500).json({ error: err.message });
   }
 });

@@ -1640,6 +1640,95 @@ function CompanionParcelBillingSection({ customer }) {
   );
 }
 
+// ─── Multi-Parcel Pricing Section ──────────────────────────────────────────────
+// Controls whether multi-parcel shipments are billed as first+sub or all-at-sub.
+//
+// Pricing modes:
+//   'sub'   (default, toggle OFF): 1st parcel at the rate-card price, 2nd+ at
+//           price_sub. Only applies when price_sub values are set. If there is
+//           no price_sub, every parcel is charged at price regardless.
+//   'multi' (toggle ON): ALL parcels billed at price_sub — used for customers
+//           who consistently ship multiple parcels per order and have negotiated
+//           the sub rate on every box.
+//
+// When there is no price_sub at all (i.e. a flat single-rate customer), this
+// toggle has no effect — shown as a greyed note in that case.
+function MultiParcelPricingSection({ customer }) {
+  const qc      = useQueryClient();
+  const [busy, setBusy]       = useState(false);
+  const [mode, setMode]       = useState(customer.parcel_pricing_mode || 'sub');
+
+  useEffect(() => {
+    setMode(customer.parcel_pricing_mode || 'sub');
+  }, [customer.parcel_pricing_mode]);
+
+  const isMulti  = mode === 'multi';
+  const accent   = '#10B981';   // emerald — distinct from DDP orange + companion cyan
+  const accentBg = 'rgba(16,185,129,0.10)';
+  const accentBd = 'rgba(16,185,129,0.30)';
+
+  async function toggle() {
+    const next = isMulti ? 'sub' : 'multi';
+    setMode(next);
+    setBusy(true);
+    try {
+      await api.put(`/customers/${customer.id}/parcel-pricing-mode`, { mode: next });
+      qc.invalidateQueries(['customer', customer.id]);
+    } catch (err) {
+      setMode(isMulti ? 'multi' : 'sub');   // revert on error
+      console.error('Parcel pricing mode toggle failed:', err.response?.data || err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="moov-card" style={{ marginBottom: 16, padding: '16px 20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Multi-Parcel Pricing</span>
+            {isMulti && (
+              <span style={{
+                fontSize: 11, fontWeight: 600, color: accent,
+                background: accentBg, border: `1px solid ${accentBd}`,
+                borderRadius: 12, padding: '2px 8px', letterSpacing: '0.3px',
+              }}>ACTIVE</span>
+            )}
+          </div>
+          <p style={{ fontSize: 12, color: '#64748B', margin: '3px 0 0' }}>
+            {isMulti
+              ? 'All parcels on a multi-parcel shipment are charged at the sub rate.'
+              : 'Standard: 1st parcel at the main rate, 2nd+ at the sub rate (if set).'}
+          </p>
+          <div style={{ marginTop: 6, display: 'flex', gap: 16 }}>
+            <span style={{ fontSize: 11, color: isMulti ? '#94A3B8' : '#0F172A', fontWeight: isMulti ? 400 : 600 }}>
+              Off — flat / first+sub
+            </span>
+            <span style={{ fontSize: 11, color: isMulti ? accent : '#94A3B8', fontWeight: isMulti ? 600 : 400 }}>
+              On — all parcels at sub rate
+            </span>
+          </div>
+        </div>
+        <button
+          onClick={toggle}
+          disabled={busy}
+          title={isMulti ? 'Switch to first+sub pricing' : 'Switch to multi-parcel (all at sub rate)'}
+          style={{
+            background: 'none', border: 'none', cursor: busy ? 'wait' : 'pointer',
+            padding: 4, display: 'flex', alignItems: 'center', opacity: busy ? 0.5 : 1,
+          }}
+        >
+          {isMulti
+            ? <ToggleRight size={32} color={accent} strokeWidth={1.5} />
+            : <ToggleLeft  size={32} color="#94A3B8" strokeWidth={1.5} />
+          }
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function CustomerPricingTab({ customer }) {
   const qc = useQueryClient();
 
@@ -1775,6 +1864,9 @@ export default function CustomerPricingTab({ customer }) {
 
       {/* 1c — Companion Parcel Billing toggle */}
       <CompanionParcelBillingSection customer={customer} />
+
+      {/* 1d — Multi-Parcel Pricing mode */}
+      <MultiParcelPricingSection customer={customer} />
 
       {/* 2 — Per-carrier: fuel groups + surcharge overrides (active carriers only) */}
       {activeCarriers.map(carrier => (

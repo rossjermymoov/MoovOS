@@ -1999,13 +1999,30 @@ function CustomerPreviewPanel({ runId }) {
 
 function CustomerSummaryPanel({ runId, run }) {
   const qc = useQueryClient();
-  const [pushing, setPushing] = useState(null); // customer_id being pushed
+  const [pushing,    setPushing]    = useState(null); // customer_id being pushed
+  const [refreshing, setRefreshing] = useState(null); // customer_id being re-snapshotted
 
   const { data: customers = [], refetch } = useQuery({
     queryKey: ['recon-customers', runId],
     queryFn:  () => api.get(`/reconciliation/runs/${runId}/customers`).then(r => r.data),
     enabled:  !!run?.finalized,
   });
+
+  async function handleRefreshSnapshot(customerId, customerName) {
+    if (!window.confirm(
+      `Refresh billing snapshot for ${customerName}?\n\nThis deletes and re-builds their finalized billing lines from the current state of the charges table. Use this after running charge corrections (e.g. cancelled surcharges, repriced parcels).`
+    )) return;
+    setRefreshing(customerId);
+    try {
+      const res = await api.post(`/reconciliation/runs/${runId}/re-snapshot-customer/${customerId}`);
+      refetch();
+      alert(`Snapshot refreshed: ${res.data.deleted} line(s) replaced with ${res.data.inserted} fresh line(s).`);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Refresh failed — check server logs');
+    } finally {
+      setRefreshing(null);
+    }
+  }
 
   async function handleXeroPush(customerId) {
     setPushing(customerId);
@@ -2145,7 +2162,18 @@ function CustomerSummaryPanel({ runId, run }) {
                 </button>
               </td>
               <td style={{ padding: '9px 10px', color: '#64748B' }}>
-                {c.xero_push_error && <span style={{ color: '#FF5252', fontSize: 10 }} title={c.xero_push_error}>⚠ Error</span>}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {c.xero_push_error && <span style={{ color: '#FF5252', fontSize: 10 }} title={c.xero_push_error}>⚠ Error</span>}
+                  <button
+                    style={{ ...btnGhost, padding: '3px 8px', fontSize: 10, opacity: refreshing === c.customer_id ? 0.6 : 1 }}
+                    onClick={() => handleRefreshSnapshot(c.customer_id, c.customer_name)}
+                    disabled={!!pushing || !!refreshing}
+                    title="Refresh billing snapshot — re-builds from current charges (use after charge corrections)"
+                  >
+                    <RefreshCw size={11} />
+                    {refreshing === c.customer_id ? '…' : 'Refresh'}
+                  </button>
+                </div>
               </td>
             </tr>
           ))}

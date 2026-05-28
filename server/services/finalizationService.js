@@ -667,6 +667,16 @@ export async function generateCustomerCSV(runId, customerId) {
       }
     }
 
+    // Compute totals from the individual surcharge columns rather than the
+    // snapshot sell_surcharge_amount / sell_total_amount fields.  Those fields
+    // exclude reconciliation_excluded surcharges (e.g. Emergency Fuel Surcharge)
+    // because they were designed for reconciliation comparison, not billing.
+    // The CSV must show the full customer charge, so we sum every visible column.
+    const namedSurchargeTotal = surchargeNamesSorted.reduce((sum, n) => sum + (surchargeMap[n] || 0), 0);
+    const base = parseFloat(l.sell_base_amount || 0);
+    const fuel = parseFloat(l.sell_fuel_amount || 0);
+    const lineTotal = base + fuel + namedSurchargeTotal;
+
     return [
       l.tracking_number       || '',
       l.order_reference       || '',
@@ -675,11 +685,11 @@ export async function generateCustomerCSV(runId, customerId) {
       l.recipient_postcode    || '',
       l.service_name          || '',
       l.weight_kg != null     ? parseFloat(l.weight_kg).toFixed(3) : '',
-      parseFloat(l.sell_base_amount      || 0).toFixed(2),
-      parseFloat(l.sell_fuel_amount      || 0).toFixed(2),
+      base.toFixed(2),
+      fuel.toFixed(2),
       ...surchargeNamesSorted.map(n => (surchargeMap[n] || 0).toFixed(2)),
-      parseFloat(l.sell_surcharge_amount || 0).toFixed(2),
-      parseFloat(l.sell_total_amount     || 0).toFixed(2),
+      namedSurchargeTotal.toFixed(2),
+      lineTotal.toFixed(2),
     ];
   });
 
@@ -706,14 +716,19 @@ export async function generateCustomerCSV(runId, customerId) {
     };
   }, { base: 0, fuel: 0, surcharge: 0, total: 0, surchargeByName: {} });
 
+  // Same logic as the per-row totals: sum from individual surcharge columns,
+  // not from sell_surcharge_amount / sell_total_amount snapshot fields.
+  const totalNamedSurcharge = surchargeNamesSorted.reduce((sum, n) => sum + (totals.surchargeByName[n] || 0), 0);
+  const grandTotal = totals.base + totals.fuel + totalNamedSurcharge;
+
   rows.push([]); // blank separator
   rows.push([
     'TOTAL', '', '', '', '', '', '',
     totals.base.toFixed(2),
     totals.fuel.toFixed(2),
     ...surchargeNamesSorted.map(n => (totals.surchargeByName[n] || 0).toFixed(2)),
-    totals.surcharge.toFixed(2),
-    totals.total.toFixed(2),
+    totalNamedSurcharge.toFixed(2),
+    grandTotal.toFixed(2),
   ]);
 
   // Compute the Xero invoice number using the same logic as xero.js
@@ -741,6 +756,58 @@ export async function generateCustomerCSV(runId, customerId) {
   ];
 
   return csvLines.join('\r\n');
+}
+
+// ─── Re-snapshot a single customer within a finalized run ─────────────────────
+//
+// Deletes finalized_billing_lines for one customer in a run and re-builds them
+// from the current state of the charges table.  Used after charge corrections
+// (e.g. cancelled phantom surcharges, repriced multi-parcel charges) to refresh
+// the snapshot without re-running the full reconciliation.
+//
+// The run must already be finalized.  Reconciliation_lines are not changed.
+
+export async function reSnapshotCustomer(runId, customerId) {
+  const runRes = await query(`SELECT * FROM reconciliation_runs WHERE id = $1`, [runId]);
+  if (!runRes.rows.length) throw new Error('Run not found');
+  const run = runRes.rows[0];
+  if (!run.finalized) throw new Error('Run is not finalized — use the normal Finalize button instead');
+
+  // Load this customer's matched/corrected lines
+  const linesRes = await query(`
+    SELECT rl.*
+    FROM   reconciliation_lines rl
+    WHERE  rl.run_id      = $1
+      AND  rl.customer_id = $2
+      AND  rl.status IN ('matched', 'corrected')
+  `, [runId, customerId]);
+
+  const lines = linesRes.rows;
+  if (!lines.length) throw new Error('No matched or corrected lines found for this customer in this run');
+
+  // Delete existing snapshots for this customer in this run
+  const delRes = await query(
+    `DELETE FROM finalized_billing_lines WHERE run_id = $1 AND customer_id = $2`,
+    [runId, customerId]
+  );
+  const deleted = delRes.rowCount || 0;
+
+  let inserted = 0;
+  const errors = [];
+
+  for (const line of lines) {
+    try {
+      const snapshot = await buildSnapshot(line, run);
+      await insertSnapshot(runId, line.id, snapshot);
+      inserted++;
+    } catch (err) {
+      errors.push({ line_id: line.id, tracking: line.tracking_number, error: err.message });
+      console.error(`[re-snapshot-customer] Failed line ${line.id} (${line.tracking_number}):`, err.message);
+    }
+  }
+
+  console.log(`[re-snapshot-customer] Run ${runId} / customer ${customerId}: deleted=${deleted} inserted=${inserted} errors=${errors.length}`);
+  return { deleted, inserted, errors };
 }
 
 // ─── Margin report for all finalized runs ─────────────────────────────────────
