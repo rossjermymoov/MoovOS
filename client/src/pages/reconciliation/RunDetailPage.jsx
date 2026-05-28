@@ -2583,6 +2583,142 @@ function CourierQueriesPanel({ runId, carrierId }) {
   );
 }
 
+// ─── BulkSurchargeResolver ────────────────────────────────────────────────────
+// When the Needs Review tab has price-mismatch lines that are all the same
+// surcharge type, this banner lets the operator pick the surcharge once and
+// apply it to every line in one click.
+
+function BulkSurchargeResolver({ unmatchedLines, runId, courierId, onResolved }) {
+  // Only show for lines that have a carrier delta (price mismatch / weight corrected)
+  const deltaLines = unmatchedLines.filter(l =>
+    ['unexplained_delta', 'weight_correction', 'parcel_count_mismatch'].includes(l.unmatched_reason)
+    || (l.delta && parseFloat(l.delta) !== 0)
+  );
+
+  const [open,        setOpen]        = useState(false);
+  const [surchargeId, setSurchargeId] = useState('');
+  const [applying,    setApplying]    = useState(false);
+  const [done,        setDone]        = useState(null);   // { resolved, skipped }
+  const [error,       setError]       = useState('');
+
+  const { data: surcharges = [] } = useQuery({
+    queryKey: ['recon-surcharges', courierId],
+    queryFn:  () => api.get(`/reconciliation/surcharges?carrier_id=${courierId}`).then(r => r.data),
+    enabled:  !!courierId && open,
+  });
+
+  if (deltaLines.length === 0) return null;
+
+  async function applyAll() {
+    if (!surchargeId) { setError('Select a surcharge first'); return; }
+    setApplying(true);
+    setError('');
+    try {
+      const res = await api.post(`/reconciliation/runs/${runId}/bulk-resolve-as-surcharge`, {
+        surcharge_id: surchargeId,
+      });
+      setDone(res.data);
+      onResolved();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed');
+    } finally {
+      setApplying(false);
+    }
+  }
+
+  const selectedSur = surcharges.find(s => s.id === surchargeId);
+
+  return (
+    <div style={{
+      background: 'rgba(121,170,255,0.08)', border: '1px solid rgba(121,170,255,0.3)',
+      borderRadius: 8, padding: '12px 16px', marginBottom: 16,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <span style={{ fontWeight: 700, fontSize: 13, color: '#1E3A5F' }}>
+            {deltaLines.length} price mismatch line{deltaLines.length !== 1 ? 's' : ''}
+          </span>
+          <span style={{ fontSize: 12, color: '#475569', marginLeft: 8 }}>
+            — Are these all the same surcharge? Resolve them all at once:
+          </span>
+        </div>
+        {!open && !done && (
+          <button
+            onClick={() => setOpen(true)}
+            style={{
+              padding: '7px 16px', borderRadius: 6, cursor: 'pointer',
+              background: 'rgba(121,170,255,0.15)', border: '1px solid rgba(121,170,255,0.4)',
+              color: '#1E40AF', fontWeight: 700, fontSize: 12, flexShrink: 0,
+            }}
+          >
+            Bulk Resolve…
+          </button>
+        )}
+        {done && (
+          <span style={{ fontSize: 12, color: '#00A040', fontWeight: 700 }}>
+            ✓ {done.resolved} resolved{done.skipped > 0 ? `, ${done.skipped} skipped` : ''}
+          </span>
+        )}
+      </div>
+
+      {open && !done && (
+        <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <select
+            value={surchargeId}
+            onChange={e => { setSurchargeId(e.target.value); setError(''); }}
+            style={{
+              padding: '7px 10px', borderRadius: 6, fontSize: 12,
+              border: '1px solid rgba(0,0,0,0.15)', background: '#fff', color: '#0F172A',
+              minWidth: 200,
+            }}
+          >
+            <option value=''>— Which surcharge? —</option>
+            {surcharges.map(s => (
+              <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+            ))}
+          </select>
+
+          {selectedSur && (
+            <span style={{ fontSize: 11, color: '#64748B' }}>
+              Standard sell: <strong>
+                {selectedSur.calc_type === 'percentage'
+                  ? `${parseFloat(selectedSur.default_value).toFixed(2)}% of base`
+                  : `£${parseFloat(selectedSur.default_value || 0).toFixed(2)} / ${selectedSur.charge_per || 'shipment'}`
+                }
+              </strong> — added on top of each line's existing freight sell price
+            </span>
+          )}
+
+          <button
+            onClick={applyAll}
+            disabled={applying || !surchargeId}
+            style={{
+              padding: '7px 18px', borderRadius: 6, cursor: applying ? 'wait' : 'pointer',
+              background: applying || !surchargeId ? '#e2e8f0' : '#00C853',
+              border: 'none', color: '#fff', fontWeight: 700, fontSize: 12,
+            }}
+          >
+            {applying ? 'Applying…' : `Apply to all ${deltaLines.length} lines`}
+          </button>
+
+          <button
+            onClick={() => setOpen(false)}
+            style={{
+              padding: '7px 12px', borderRadius: 6, cursor: 'pointer',
+              background: 'transparent', border: '1px solid rgba(0,0,0,0.1)',
+              color: '#64748B', fontSize: 12,
+            }}
+          >
+            Cancel
+          </button>
+
+          {error && <span style={{ fontSize: 12, color: '#C62828' }}>{error}</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── WarningTab ───────────────────────────────────────────────────────────────
 // Simplified one-click acceptance UI for sell_surcharge_missing warning lines.
 // Each row shows the carrier cost, the surcharge name, and the customer's
@@ -3062,6 +3198,17 @@ export default function RunDetailPage() {
       {/* Unmatched tab — service code mapping banner + lines table */}
       {activeTab === 'unmatched' && (
         <>
+          {/* Bulk surcharge resolver — shown when there are price-mismatch lines */}
+          <BulkSurchargeResolver
+            unmatchedLines={unmatchedLines}
+            runId={parseInt(id)}
+            courierId={run.carrier_id}
+            onResolved={() => {
+              qc.invalidateQueries({ queryKey: ['recon-run', id] });
+              qc.invalidateQueries({ queryKey: ['recon-lines', id] });
+            }}
+          />
+
           {/* Cancelled booking notice — download is on the main reconciliation page */}
           {unmatchedLines.some(l => l.unmatched_reason === 'cancelled_booking_invoiced') && (
             <div style={{

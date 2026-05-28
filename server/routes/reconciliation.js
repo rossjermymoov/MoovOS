@@ -1557,6 +1557,116 @@ router.post('/runs/:id/resolve-all-warnings', async (req, res) => {
   }
 });
 
+// ─── POST /api/reconciliation/runs/:id/bulk-resolve-as-surcharge ─────────────
+// One-click: resolve all unmatched (price-mismatch) lines in a run as a named
+// surcharge. The surcharge sell price is added ON TOP of each line's existing
+// freight charge sell price, so the customer is billed freight + surcharge.
+//
+// Body: { surcharge_id }
+// Returns: { resolved, skipped }
+
+router.post('/runs/:id/bulk-resolve-as-surcharge', async (req, res) => {
+  try {
+    const runId = parseInt(req.params.id);
+    const { surcharge_id } = req.body;
+    if (!surcharge_id) return res.status(400).json({ error: 'surcharge_id is required' });
+
+    // Fetch all unmatched lines for this run that have a linked charge
+    const linesRes = await query(`
+      SELECT
+        rl.id,
+        rl.carrier_amount,
+        rl.parcel_count,
+        rl.customer_id,
+        -- Existing freight sell price (what the customer was going to be charged)
+        COALESCE(ch.sell_price, ch.price, 0) AS existing_sell_price
+      FROM   reconciliation_lines rl
+      LEFT JOIN charges ch ON ch.id = rl.charge_id
+      WHERE  rl.run_id = $1
+        AND  rl.status = 'unmatched'
+    `, [runId]);
+
+    if (!linesRes.rows.length) return res.json({ resolved: 0, skipped: 0 });
+
+    // Fetch the surcharge definition once
+    const surRes = await query(`
+      SELECT id, calc_type, charge_per, default_value, name
+      FROM   surcharges
+      WHERE  id = $1
+    `, [surcharge_id]);
+    if (!surRes.rows.length) return res.status(404).json({ error: 'Surcharge not found' });
+    const sur = surRes.rows[0];
+
+    let resolved = 0;
+    let skipped  = 0;
+
+    for (const line of linesRes.rows) {
+      const existingSell = parseFloat(line.existing_sell_price || 0);
+      const carrierAmt   = parseFloat(line.carrier_amount || 0);
+      const parcels      = Math.max(1, parseInt(line.parcel_count || 1) || 1);
+
+      // Look up customer-specific surcharge override if set
+      let surchargeBase = parseFloat(sur.default_value || 0);
+      if (line.customer_id) {
+        const overRes = await query(`
+          SELECT override_value FROM customer_surcharge_overrides
+          WHERE  surcharge_id = $1 AND customer_id = $2 AND active = true
+          LIMIT  1
+        `, [surcharge_id, line.customer_id]);
+        if (overRes.rows.length) surchargeBase = parseFloat(overRes.rows[0].override_value || surchargeBase);
+      }
+
+      let surchargeAdd;
+      if (sur.calc_type === 'percentage') {
+        surchargeAdd = Math.round(carrierAmt * (surchargeBase / 100) * 100) / 100;
+      } else if (sur.charge_per === 'parcel') {
+        surchargeAdd = Math.round(surchargeBase * parcels * 100) / 100;
+      } else {
+        surchargeAdd = Math.round(surchargeBase * 100) / 100;
+      }
+
+      if (surchargeAdd < 0) { skipped++; continue; }
+
+      // New sell = existing freight sell + surcharge sell
+      const newSell = Math.round((existingSell + surchargeAdd) * 100) / 100;
+
+      await query(`
+        UPDATE reconciliation_lines
+        SET    status               = 'corrected',
+               corrected_by         = 'human',
+               resolved_at          = NOW(),
+               resolution_notes     = $2,
+               expected_amount      = carrier_amount,
+               delta                = 0,
+               corrected_sell_price = $3,
+               corrected_cost_price = carrier_amount
+        WHERE  id = $1
+      `, [line.id, `Bulk surcharge: ${sur.name}`, newSell]);
+
+      resolved++;
+    }
+
+    // Recount run stats
+    await query(`
+      UPDATE reconciliation_runs rr
+      SET    corrected_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'corrected'),
+             unmatched_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'unmatched'),
+             automation_rate = CASE WHEN rr.total_lines > 0 THEN
+               ROUND(
+                 (SELECT COUNT(*)::numeric FROM reconciliation_lines WHERE run_id = rr.id AND status IN ('matched','corrected','warning'))
+                 / rr.total_lines * 100, 2
+               )
+             ELSE 0 END
+      WHERE  id = $1
+    `, [runId]);
+
+    return res.json({ resolved, skipped });
+  } catch (err) {
+    console.error('[reconciliation/bulk-resolve-as-surcharge]', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // banner that groups lines by raw_service_code so the user can map them in bulk.
 //
 // Body: { mappings: [{ raw_service_code, service_id, customer_id? }] }
