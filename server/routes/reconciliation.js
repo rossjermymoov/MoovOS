@@ -4449,6 +4449,37 @@ router.post('/backfill-carrier-direct-surcharges', async (req, res) => {
   }
 });
 
+// ─── GET /api/reconciliation/carrier-direct-fuel-audit ──────────────────────
+// Audit: lists every customer that has carrier_direct courier charges with
+// no shipment_id (and therefore no fuel/surcharge charges).
+// Use this to see who needs fixing before running the bulk fix below.
+
+router.get('/carrier-direct-fuel-audit', async (req, res) => {
+  try {
+    const { rows } = await query(`
+      SELECT
+        cu.id                                         AS customer_id,
+        cu.business_name                              AS customer_name,
+        COUNT(*)::int                                 AS unlinked_charges,
+        MIN(c.created_at)::date                       AS earliest,
+        MAX(c.created_at)::date                       AS latest
+      FROM   charges c
+      JOIN   customers cu ON cu.id = c.customer_id
+      WHERE  c.charge_type   = 'courier'
+        AND  c.source        = 'carrier_direct'
+        AND  c.shipment_id   IS NULL
+        AND  c.cancelled     = false
+        AND  c.tracking_code IS NOT NULL
+      GROUP  BY cu.id, cu.business_name
+      ORDER  BY COUNT(*) DESC
+    `);
+    return res.json({ customers: rows, total_unlinked: rows.reduce((s, r) => s + r.unlinked_charges, 0) });
+  } catch (err) {
+    console.error('[carrier-direct-fuel-audit] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── POST /api/reconciliation/link-carrier-direct-shipments ─────────────────
 // For carrier_direct charges that have no shipment_id (shipment creation failed
 // during reconciliation), this endpoint:
@@ -4466,25 +4497,32 @@ router.post('/link-carrier-direct-shipments', async (req, res) => {
     const isDry = dry_run === '1' || dry_run === 'true';
 
     // Find carrier_direct freight charges without a shipment_id
+    const params = [];
+    let custFilter = '';
+    if (customer_id) {
+      params.push(customer_id);
+      custFilter = `AND c.customer_id = $${params.length}`;
+    }
     const { rows: unlinked } = await query(`
-      SELECT c.id, c.tracking_code, c.courier_service_id, c.sell_price, c.price,
+      SELECT c.id, c.customer_id, c.tracking_code, c.courier_service_id, c.sell_price, c.price,
              c.cost_price, c.ship_to_postcode, c.ship_to_country_iso, c.ship_to_name,
              c.despatch_date, c.order_id, c.parcel_count,
              cs.courier_id
       FROM   charges c
       JOIN   courier_services cs ON cs.id = c.courier_service_id
-      WHERE  c.customer_id  = $1
-        AND  c.charge_type  = 'courier'
+      WHERE  c.charge_type  = 'courier'
         AND  c.source       = 'carrier_direct'
         AND  c.shipment_id  IS NULL
         AND  c.cancelled    = false
         AND  c.tracking_code IS NOT NULL
-    `, [customer_id]);
+        ${custFilter}
+    `, params);
 
-    console.log(`[link-carrier-direct-shipments] ${unlinked.length} unlinked carrier_direct charges for customer ${customer_id}`);
+    console.log(`[link-carrier-direct-shipments] ${unlinked.length} unlinked carrier_direct charges${customer_id ? ` for customer ${customer_id}` : ' (all customers)'}`);
 
     let linked = 0, fuelCreated = 0, errors = 0;
     for (const row of unlinked) {
+      const rowCustomerId = row.customer_id;
       try {
         // Check if a shipment already exists for this tracking code
         const { rows: existingShip } = await query(
@@ -4505,7 +4543,7 @@ router.post('/link-carrier-direct-shipments', async (req, res) => {
             ON CONFLICT DO NOTHING
             RETURNING id
           `, [
-            customer_id,
+            rowCustomerId,
             [row.tracking_code],
             row.ship_to_postcode   || null,
             row.ship_to_country_iso || 'GB',
@@ -4542,7 +4580,7 @@ router.post('/link-carrier-direct-shipments', async (req, res) => {
           if (freightSell > 0 && row.courier_service_id) {
             await createCarrierDirectSurcharges({
               shipmentId:       shipmentId,
-              customerId:       customer_id,
+              customerId:       rowCustomerId,
               carrierId:        row.courier_id,
               serviceId:        row.courier_service_id,
               freightSellPrice: freightSell,
