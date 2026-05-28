@@ -1642,7 +1642,7 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, onRai
                       Resolve
                     </button>
                   )}
-                  {showResolve && line.status === 'corrected' && line.corrected_by === 'human' && (
+                  {line.status === 'corrected' && line.corrected_by === 'human' && runId && (
                     <ReopenButton lineId={line.id} runId={runId} />
                   )}
                   {onRaiseQuery && line.status === 'unmatched' && (
