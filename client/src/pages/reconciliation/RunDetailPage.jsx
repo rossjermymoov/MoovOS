@@ -1875,13 +1875,39 @@ function CustomerLinesDrilldown({ runId, customerId }) {
 
 // ─── Customer preview panel (pre-finalization) ────────────────────────────────
 function CustomerPreviewPanel({ runId }) {
+  const qc = useQueryClient();
   const [expandedId, setExpandedId] = useState(null);
+  const [repairing,  setRepairing]  = useState(false);
+  const [repairMsg,  setRepairMsg]  = useState(null);
 
-  const { data: customers = [], isLoading } = useQuery({
+  const { data: customers = [], isLoading, refetch } = useQuery({
     queryKey: ['recon-customers-preview', runId],
     queryFn:  () => api.get(`/reconciliation/runs/${runId}/customers/preview`).then(r => r.data),
     staleTime: 30_000,
   });
+
+  async function handleRepairAndRefresh() {
+    setRepairing(true);
+    setRepairMsg(null);
+    try {
+      const res = await api.post('/reconciliation/backfill-carrier-direct-surcharges');
+      const { found, repriced, processed, errors } = res.data;
+      setRepairMsg(
+        repriced > 0 || processed > 0
+          ? `✓ ${repriced} charge(s) repriced · ${processed} surcharge(s) inserted`
+          : found === 0
+            ? '✓ No missing surcharges found — data already correct'
+            : errors > 0
+              ? `⚠ ${errors} error(s) — check server logs`
+              : '✓ Checked — no changes needed'
+      );
+      await refetch();
+    } catch (err) {
+      setRepairMsg(`✗ ${err.response?.data?.error || err.message}`);
+    } finally {
+      setRepairing(false);
+    }
+  }
 
   if (isLoading) return <div style={{ color: '#64748B', fontSize: 12, padding: 20 }}>Loading preview…</div>;
   if (!customers.length) return (
@@ -1907,9 +1933,34 @@ function CustomerPreviewPanel({ runId }) {
             {customers.length} customer{customers.length !== 1 ? 's' : ''} · {customers.reduce((s, c) => s + (c.line_count || 0), 0)} shipments · Click a row to see line detail · Finalise to push to Xero
           </div>
         </div>
-        <span style={{ fontSize: 11, color: '#FFB300', fontWeight: 600 }}>
-          ⏳ Preview — not yet finalised
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {repairMsg && (
+            <span style={{
+              fontSize: 11, color: repairMsg.startsWith('✓') ? '#00C853' : repairMsg.startsWith('⚠') ? '#FFB300' : '#FF5252',
+              fontWeight: 600,
+            }}>
+              {repairMsg}
+            </span>
+          )}
+          <button
+            onClick={handleRepairAndRefresh}
+            disabled={repairing}
+            title="Re-price and insert missing fuel &amp; surcharges for carrier-direct shipments, then refresh this preview"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              fontSize: 11, fontWeight: 600, cursor: repairing ? 'default' : 'pointer',
+              background: repairing ? 'rgba(0,0,0,0.04)' : 'rgba(59,130,246,0.08)',
+              border: '1px solid rgba(59,130,246,0.3)',
+              color: repairing ? '#94A3B8' : '#3B82F6',
+              borderRadius: 5, padding: '5px 10px',
+            }}
+          >
+            {repairing ? '⟳ Repairing…' : '⟳ Repair & Refresh'}
+          </button>
+          <span style={{ fontSize: 11, color: '#FFB300', fontWeight: 600 }}>
+            ⏳ Preview — not yet finalised
+          </span>
+        </div>
       </div>
 
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
