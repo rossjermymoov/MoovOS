@@ -3008,12 +3008,19 @@ router.get('/runs/:id/export/csv', async (req, res) => {
 
     const csv = await generateCustomerCSV(parseInt(req.params.id), customer_id);
 
-    // Get customer name for the filename
+    // Build filename using the same Xero invoice number formula: CUSTABBREV-DDMMYY
+    const runRes  = await query(`SELECT invoice_date FROM reconciliation_runs WHERE id = $1`, [req.params.id]);
     const custRes = await query(`SELECT business_name FROM customers WHERE id = $1`, [customer_id]);
-    const custName = (custRes.rows[0]?.business_name || 'customer').replace(/[^a-z0-9]/gi, '_');
+    const custAbbrev = (custRes.rows[0]?.business_name || 'CUST')
+      .toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+    const runDate = runRes.rows[0]?.invoice_date ? new Date(runRes.rows[0].invoice_date) : new Date();
+    const dd  = String(runDate.getDate()).padStart(2, '0');
+    const mm  = String(runDate.getMonth() + 1).padStart(2, '0');
+    const yy  = String(runDate.getFullYear()).slice(-2);
+    const filename = `${custAbbrev}-${dd}${mm}${yy}.csv`;
 
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="recon_run_${req.params.id}_${custName}.csv"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     return res.send(csv);
   } catch (err) {
     console.error('[reconciliation/export/csv] error:', err.message);
