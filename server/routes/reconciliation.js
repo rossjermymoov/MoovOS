@@ -14,7 +14,7 @@
 
 import express from 'express';
 import { query } from '../db/index.js';
-import { processReconciliationRun, ageUnmatchedLines, reprocessMappedLines } from '../services/reconciliationEngine.js';
+import { processReconciliationRun, ageUnmatchedLines, reprocessMappedLines, createCarrierDirectSurcharges } from '../services/reconciliationEngine.js';
 import { finalizeRun, getCustomerSummaries, generateCustomerCSV, getMarginReport } from '../services/finalizationService.js';
 import { fetchShipmentById, fetchShipmentByReference, fetchShipmentByReferenceAndTracking, probeShipmentRaw } from '../services/voilaClient.js';
 import { processShipment, insertCharges } from '../services/pricingEngine.js';
@@ -4359,6 +4359,83 @@ router.get('/zero-margin-audit', async (req, res) => {
     });
   } catch (err) {
     console.error('[zero-margin-audit] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/reconciliation/backfill-carrier-direct-surcharges ──────────────
+// One-shot backfill: find all carrier_direct shipments missing fuel / GEC
+// surcharge charges and create them.  Safe to re-run — createCarrierDirectSurcharges
+// is idempotent (skips charges that already exist).
+//
+// Optional query param: ?customer_id=<uuid>  — limit to one customer
+
+router.post('/backfill-carrier-direct-surcharges', async (req, res) => {
+  try {
+    const { customer_id } = req.query;
+
+    // Find all carrier_direct courier charges that have a sell_price (we need
+    // it to compute fuel %) and a shipment_id (needed to link aux charges).
+    // We only look for charges that are missing a fuel charge for the same shipment.
+    const params  = [];
+    let   where   = `c.source = 'carrier_direct'
+      AND c.charge_type = 'courier'
+      AND c.cancelled   = false
+      AND c.verified    = true
+      AND c.sell_price  IS NOT NULL
+      AND c.sell_price  > 0
+      AND c.shipment_id IS NOT NULL
+      AND c.courier_service_id IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM charges fc
+        WHERE  fc.shipment_id  = c.shipment_id
+          AND  fc.charge_type  = 'fuel'
+          AND  fc.cancelled    = false
+      )`;
+
+    if (customer_id) {
+      params.push(customer_id);
+      where += ` AND c.customer_id = $${params.length}`;
+    }
+
+    const { rows } = await query(`
+      SELECT c.id, c.shipment_id, c.customer_id, c.courier_service_id,
+             c.sell_price, c.cost_price,
+             cs.courier_id,
+             COALESCE(s.parcel_count, 1) AS parcel_count
+      FROM   charges  c
+      JOIN   courier_services cs ON cs.id = c.courier_service_id
+      LEFT JOIN shipments s ON s.id = c.shipment_id
+      WHERE  ${where}
+      ORDER  BY c.created_at
+    `, params);
+
+    console.log(`[backfill-cd-surcharges] Found ${rows.length} carrier_direct charge(s) missing fuel`);
+
+    let processed = 0;
+    let errors    = 0;
+    for (const row of rows) {
+      try {
+        await createCarrierDirectSurcharges({
+          shipmentId:       row.shipment_id,
+          customerId:       row.customer_id,
+          carrierId:        row.courier_id,
+          serviceId:        row.courier_service_id,
+          freightSellPrice: parseFloat(row.sell_price),
+          freightCostPrice: parseFloat(row.cost_price || 0),
+          parcelCount:      parseInt(row.parcel_count) || 1,
+        });
+        processed++;
+      } catch (err) {
+        console.error(`[backfill-cd-surcharges] charge ${row.id}:`, err.message);
+        errors++;
+      }
+    }
+
+    console.log(`[backfill-cd-surcharges] Done: ${processed} processed, ${errors} errors`);
+    return res.json({ ok: true, found: rows.length, processed, errors });
+  } catch (err) {
+    console.error('[backfill-cd-surcharges] error:', err.message);
     return res.status(500).json({ error: err.message });
   }
 });

@@ -1147,7 +1147,7 @@ async function handleCarrierDirect({
 // (shipment_id, surcharge_id) / (shipment_id, charge_type='fuel'), so
 // re-running on the same tracking number is safe.
 
-async function createCarrierDirectSurcharges({
+export async function createCarrierDirectSurcharges({
   shipmentId, customerId, carrierId, serviceId,
   freightSellPrice, freightCostPrice, parcelCount,
 }) {
