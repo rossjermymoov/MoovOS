@@ -910,18 +910,30 @@ async function handleCarrierDirect({
 
   const totalCostPrice = round2(perParcelRate * parcelCount);
 
-  // Sell: price_first for parcel 1 + price_sub for parcels 2..N (all_sub carriers).
-  // Mirrors how billing.js computes sell at booking time.
+  // Sell: for DPD all_sub every parcel — including the first — is billed at price_sub.
+  // Customer rate cards for all_sub carriers sometimes have price=null on lighter bands
+  // (only price_sub is filled in, because sub-rate is the only rate that matters for
+  // multi-parcel all_sub shipments). In that case sell_price is null but sell_sub is set.
+  // We accept sell_sub as a valid sell rate for all_sub multi-parcel, and compute
+  // totalSellPrice = sell_sub × N (all parcels at sub rate) rather than the incorrect
+  // first-parcel + subsequent formula that was used before.
+  //
   // IMPORTANT: never fall back to cost price when no customer rate exists — instead
   // set sell = null so the charge is flagged as pricing_error and the recon line
   // is marked unmatched/no_rate for operator review.
-  const hasSellRate    = pricing.sell_price != null;
-  const baseSellFirst  = pricing.sell_price;   // null when no customer_rates row
-  const totalSellPrice = hasSellRate
-    ? ((isAllSub && parcelCount > 1 && pricing.sell_sub != null)
-        ? round2(baseSellFirst + pricing.sell_sub * (parcelCount - 1))
-        : round2(baseSellFirst * parcelCount))
-    : null;  // null → charge flagged pricing_error; recon line → unmatched/no_rate
+  const hasSubSell  = isAllSub && parcelCount > 1 && pricing.sell_sub != null;
+  const hasSellRate = pricing.sell_price != null || hasSubSell;
+
+  let totalSellPrice = null;
+  if (hasSellRate) {
+    if (hasSubSell) {
+      // all_sub multi-parcel: every parcel (including first) at price_sub
+      totalSellPrice = round2(pricing.sell_sub * parcelCount);
+    } else {
+      // single-parcel or non-all_sub: use sell_price × N
+      totalSellPrice = round2(pricing.sell_price * parcelCount);
+    }
+  }
 
   // ── Full diagnostic trace ─────────────────────────────────────────────────
   console.log(
@@ -930,7 +942,9 @@ async function handleCarrierDirect({
     `| zone_id=${pricing.zone_id} zone="${pricing.zone_name}" band="${pricing.band_label}" ` +
     `| price_first=£${pricing.cost_price} price_sub=£${pricing.cost_sub ?? 'n/a'} ` +
     `| per_parcel_rate=£${perParcelRate} (${isAllSub && parcelCount > 1 ? 'all_sub → price_sub' : 'price_first'}) ` +
-    `| total_cost=£${totalCostPrice} carrier=£${carrierAmount}`
+    `| total_cost=£${totalCostPrice} carrier=£${carrierAmount} ` +
+    `| sell_price=£${pricing.sell_price ?? 'null'} sell_sub=£${pricing.sell_sub ?? 'null'} ` +
+    `| hasSellRate=${hasSellRate} hasSubSell=${hasSubSell} total_sell=£${totalSellPrice ?? 'null'}`
   );
 
   // ── Create a proper shipment record from invoice data ────────────────────
@@ -1029,7 +1043,7 @@ async function handleCarrierDirect({
   let insertedId = newCharges[0]?.id || null;
   if (!insertedId) {
     const existing = await query(
-      `SELECT id FROM charges
+      `SELECT id, sell_price, status FROM charges
        WHERE  tracking_code       = $1
          AND  courier_service_id  = $2
          AND  source              = 'carrier_direct'
@@ -1041,6 +1055,20 @@ async function handleCarrierDirect({
     insertedId = existing.rows[0]?.id || null;
     if (insertedId) {
       console.log(`[carrier-direct] reused existing charge id=${insertedId} for tracking=${trackingNumber}`);
+
+      // If the existing charge was a pricing_error (sell_price null) but we now have
+      // a valid sell price, repair it so fuel/surcharges can be created and the billing
+      // snapshot shows the correct sell price.
+      const prevStatus = existing.rows[0]?.status;
+      const prevSell   = existing.rows[0]?.sell_price;
+      if (hasSellRate && (prevStatus === 'pricing_error' || prevSell == null) && totalSellPrice != null) {
+        await query(
+          `UPDATE charges SET sell_price = $1, status = 'verified', updated_at = NOW()
+           WHERE  id = $2`,
+          [totalSellPrice, insertedId]
+        );
+        console.log(`[carrier-direct] repaired charge id=${insertedId}: sell_price=£${totalSellPrice} status=verified (was ${prevStatus})`);
+      }
     }
   }
 

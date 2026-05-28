@@ -329,9 +329,11 @@ export async function lookupCustomerSellPrice(customerId, serviceCode, weightKg,
 
     if (p1.rows.length) {
       const r = p1.rows[0];
-      let sellPrice = round2(parseFloat(r.price || 0));
+      // Preserve null: price=null means "not configured" (different from price=0).
+      // all_sub DPD rate cards often leave price null for bands used only as sub-rate.
+      let sellPrice = r.price != null ? round2(parseFloat(r.price)) : null;
       let overageKg = null;
-      if (r.per_kg_rate != null && r.per_kg_threshold_kg != null && weightKg > parseFloat(r.per_kg_threshold_kg)) {
+      if (sellPrice != null && r.per_kg_rate != null && r.per_kg_threshold_kg != null && weightKg > parseFloat(r.per_kg_threshold_kg)) {
         overageKg = round2(weightKg - parseFloat(r.per_kg_threshold_kg));
         sellPrice = round2(sellPrice + overageKg * parseFloat(r.per_kg_rate));
       }
@@ -361,9 +363,10 @@ export async function lookupCustomerSellPrice(customerId, serviceCode, weightKg,
 
     if (p2.rows.length) {
       const r = p2.rows[0];
-      let sellPrice = round2(parseFloat(r.price || 0));
+      // Preserve null: price=null means "not configured" (different from price=0).
+      let sellPrice = r.price != null ? round2(parseFloat(r.price)) : null;
       let overageKg = null;
-      if (r.per_kg_rate != null && r.per_kg_threshold_kg != null && weightKg > parseFloat(r.per_kg_threshold_kg)) {
+      if (sellPrice != null && r.per_kg_rate != null && r.per_kg_threshold_kg != null && weightKg > parseFloat(r.per_kg_threshold_kg)) {
         overageKg = round2(weightKg - parseFloat(r.per_kg_threshold_kg));
         sellPrice = round2(sellPrice + overageKg * parseFloat(r.per_kg_rate));
       }
@@ -1101,8 +1104,8 @@ export async function computeGhostCharge(serviceId, customerId, weightKg, postco
     cost_price:            costResult.cost,         // price_first — single-parcel / first-parcel rate
     cost_sub:              costResult.costSub,      // price_sub   — per-parcel rate for all_sub carriers; null if not set
     band_label:            costResult.bandLabel,    // e.g. "0–2kg" — for trace/diagnostics
-    sell_price:            sellResult?.sellPrice || null,
-    sell_sub:              sellResult?.sellSub   || null,  // price_sub sell — for all_sub multi-parcel sell calc
+    sell_price:            sellResult?.sellPrice ?? null,   // null = price not configured on rate card
+    sell_sub:              sellResult?.sellSub   ?? null,  // price_sub sell — for all_sub multi-parcel sell calc
     fallback_service_code: fallbackServiceCode,            // propagated for use in correctedSell helpers
   };
 }
