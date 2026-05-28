@@ -4255,4 +4255,109 @@ router.get('/customer-volume', async (req, res) => {
   }
 });
 
+// ─── GET /api/reconciliation/zero-margin-audit ───────────────────────────────
+//
+// Returns all reconciliation lines across every run where the corrected sell
+// price equals the corrected cost price (i.e. the parcel was billed to the
+// customer at pure carrier cost — zero margin).  These are "sneaked through"
+// because a rate card entry was missing and the engine fell back to cost.
+//
+// Also returns lines where corrected_sell_price IS NULL (no rate found at all,
+// unmatched/no_rate) so missing rate card entries are surfaced in one place.
+//
+// Optional query params:
+//   ?customer=<partial name>   — filter to one customer
+//   ?run=<run_id>              — filter to one run
+router.get('/zero-margin-audit', async (req, res) => {
+  try {
+    const { customer, run } = req.query;
+    const params  = [];
+    const clauses = [`rl.customer_id IS NOT NULL`];
+
+    // Only care about matched/corrected lines (not intentional unmatched lines)
+    clauses.push(`rl.status IN ('matched', 'corrected', 'unmatched')`);
+
+    // Zero-margin: sell ≈ cost, OR no sell at all
+    clauses.push(`(
+      (rl.corrected_sell_price IS NOT NULL
+        AND rl.corrected_cost_price IS NOT NULL
+        AND ABS(rl.corrected_sell_price - rl.corrected_cost_price) < 0.02)
+      OR
+      (rl.corrected_sell_price IS NULL AND rl.status IN ('matched', 'corrected'))
+      OR
+      (rl.unmatched_reason = 'no_rate')
+    )`);
+
+    if (customer) {
+      params.push(`%${customer}%`);
+      clauses.push(`cu.business_name ILIKE $${params.length}`);
+    }
+    if (run) {
+      params.push(parseInt(run, 10));
+      clauses.push(`rl.run_id = $${params.length}`);
+    }
+
+    const where = `WHERE ${clauses.join(' AND ')}`;
+
+    const result = await query(`
+      SELECT
+        r.id                                    AS run_id,
+        r.invoice_filename,
+        r.created_at                            AS run_date,
+        cu.account_number,
+        cu.business_name                        AS customer_name,
+        rl.tracking_number,
+        rl.status,
+        rl.corrected_by,
+        rl.unmatched_reason,
+        rl.carrier_amount,
+        ROUND(rl.corrected_sell_price::numeric, 2) AS sell_price,
+        ROUND(rl.corrected_cost_price::numeric, 2) AS cost_price,
+        CASE
+          WHEN rl.corrected_sell_price IS NULL THEN NULL
+          WHEN rl.corrected_cost_price IS NULL THEN NULL
+          ELSE ROUND((rl.corrected_sell_price - rl.corrected_cost_price)::numeric, 2)
+        END                                     AS margin,
+        CASE
+          WHEN rl.unmatched_reason = 'no_rate'                       THEN 'no_rate'
+          WHEN rl.corrected_sell_price IS NULL                       THEN 'no_sell_price'
+          WHEN ABS(rl.corrected_sell_price - rl.corrected_cost_price) < 0.02 THEN 'zero_margin'
+          ELSE 'other'
+        END                                     AS issue_type
+      FROM   reconciliation_lines rl
+      JOIN   reconciliation_runs r ON r.id = rl.run_id
+      JOIN   customers cu ON cu.id = rl.customer_id
+      ${where}
+      ORDER  BY r.created_at DESC, cu.business_name, rl.tracking_number
+    `, params);
+
+    // Summary by customer
+    const byCustomer = {};
+    for (const row of result.rows) {
+      const key = row.customer_name;
+      if (!byCustomer[key]) {
+        byCustomer[key] = {
+          customer_name:   row.customer_name,
+          account_number:  row.account_number,
+          zero_margin:     0,
+          no_rate:         0,
+          no_sell_price:   0,
+          total:           0,
+        };
+      }
+      byCustomer[key][row.issue_type] = (byCustomer[key][row.issue_type] || 0) + 1;
+      byCustomer[key].total++;
+    }
+
+    return res.json({
+      total:       result.rows.length,
+      by_customer: Object.values(byCustomer).sort((a, b) => b.total - a.total),
+      lines:       result.rows,
+    });
+  } catch (err) {
+    console.error('[zero-margin-audit] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

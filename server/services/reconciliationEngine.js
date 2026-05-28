@@ -906,10 +906,16 @@ async function handleCarrierDirect({
 
   // Sell: price_first for parcel 1 + price_sub for parcels 2..N (all_sub carriers).
   // Mirrors how billing.js computes sell at booking time.
-  const baseSellFirst = pricing.sell_price ?? perParcelRate;
-  const totalSellPrice = (isAllSub && parcelCount > 1 && pricing.sell_sub != null)
-    ? round2(baseSellFirst + pricing.sell_sub * (parcelCount - 1))
-    : round2(baseSellFirst * parcelCount);
+  // IMPORTANT: never fall back to cost price when no customer rate exists — instead
+  // set sell = null so the charge is flagged as pricing_error and the recon line
+  // is marked unmatched/no_rate for operator review.
+  const hasSellRate    = pricing.sell_price != null;
+  const baseSellFirst  = pricing.sell_price;   // null when no customer_rates row
+  const totalSellPrice = hasSellRate
+    ? ((isAllSub && parcelCount > 1 && pricing.sell_sub != null)
+        ? round2(baseSellFirst + pricing.sell_sub * (parcelCount - 1))
+        : round2(baseSellFirst * parcelCount))
+    : null;  // null → charge flagged pricing_error; recon line → unmatched/no_rate
 
   // ── Full diagnostic trace ─────────────────────────────────────────────────
   console.log(
@@ -985,8 +991,8 @@ async function handleCarrierDirect({
     charge_type:         'courier',
     weight_charged_kg:   kg,
     cost_price:          totalCostPrice,
-    sell_price:          totalSellPrice,
-    status:              'verified',
+    sell_price:          totalSellPrice,          // null when no customer rate → pricing_error
+    status:              hasSellRate ? 'verified' : 'pricing_error',
     ship_to_postcode:    postcode              || null,
     ship_to_country_iso: countryIso           || null,
     ship_to_name:        line.recipient_name  || null,
@@ -1050,20 +1056,31 @@ async function handleCarrierDirect({
   const delta   = round2(totalCarrierFull - totalExpectedFull);
   const isMatch = Math.abs(delta) < 0.02;
 
-  console.log(
-    `[carrier-direct] charge id=${insertedId}: ` +
-    `expected=£${totalExpectedFull} carrier=£${totalCarrierFull} delta=£${delta} sell=£${totalSellPrice} → ${isMatch ? 'MATCHED' : 'CORRECTED'}`
-  );
+  // (trace log moved below, after cdStatus is computed)
 
   let cdMeta = null;
   if (!isMatch) {
     const rawCols = (line.raw_col_values && Object.keys(line.raw_col_values).length > 0) ? line.raw_col_values : null;
     if (rawCols) cdMeta = { raw_col_values: rawCols };
   }
-  const addSell  = await resolveSurchargeSells(rollup.items, totalSellPrice, cdParcels, ctx.surchargeOverrideCache, customer.customer_id, serviceId);
-  const finalSell = round2(totalSellPrice + addSell);
+  const addSell   = hasSellRate
+    ? await resolveSurchargeSells(rollup.items, totalSellPrice, cdParcels, ctx.surchargeOverrideCache, customer.customer_id, serviceId)
+    : 0;
+  const finalSell = hasSellRate ? round2(totalSellPrice + addSell) : null;
   const sMeta     = surchargeMeta(rollup.items);
   const combinedMeta = (cdMeta || sMeta) ? { ...cdMeta, ...sMeta } : null;
+
+  // When no customer rate exists: flag unmatched/no_rate so the operator knows
+  // a rate card entry is missing.  The ghost charge is created as pricing_error
+  // so it is visible in Finance but not invoiced at cost.
+  const cdStatus      = !hasSellRate ? 'unmatched' : (isMatch ? 'matched' : 'corrected');
+  const cdCorrectedBy = !hasSellRate ? null        : (isMatch ? null       : 'carrier_direct');
+  const cdReason      = !hasSellRate ? 'no_rate'   : null;
+
+  console.log(
+    `[carrier-direct] charge id=${insertedId}: ` +
+    `expected=£${totalExpectedFull} carrier=£${totalCarrierFull} delta=£${delta} sell=${finalSell != null ? `£${finalSell}` : 'NO_RATE'} → ${cdStatus}`
+  );
 
   await insertLine(runId, {
     tracking_number:          trackingNumber,
@@ -1077,9 +1094,9 @@ async function handleCarrierDirect({
     charge_id:                insertedId,
     expected_amount:          totalExpectedFull,
     delta,
-    status:                   isMatch ? 'matched' : 'corrected',
-    corrected_by:             isMatch ? null : 'carrier_direct',
-    unmatched_reason:         null,
+    status:                   cdStatus,
+    corrected_by:             cdCorrectedBy,
+    unmatched_reason:         cdReason,
     source:                   'carrier_direct',
     shipment_date:            line.shipment_date     || null,
     ship_to_postcode:         postcode               || null,
@@ -1090,7 +1107,7 @@ async function handleCarrierDirect({
     corrected_cost_price:     totalCarrierFull,
   });
 
-  return { status: isMatch ? 'matched' : 'corrected' };
+  return { status: cdStatus };
 }
 
 // ─── Main engine entry point ──────────────────────────────────────────────────
@@ -2028,7 +2045,27 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
         return { status: 'unmatched' };
       }
       // No pool hit → genuinely an overhead/fuel row (e.g. DPD Fuel & Energy
-      // aggregate, carriage supplement).  Safe to auto-accept.
+      // per-shipment surcharge).  Safe to auto-accept.
+      // IMPORTANT: still attribute to the correct customer so fuel lines appear
+      // on their invoice — even for ghost/carrier_direct freight rows that weren't
+      // in the pool.  Look up customer by DPD account number.
+      const fuelCustomer = await lookupCustomerByAccount(line.account_number);
+      // Also try to link to the ghost charge for this tracking number so the
+      // fuel line is visible in the Finance view alongside the freight charge.
+      let fuelChargeId = null;
+      if (fuelCustomer) {
+        const fuelChargeRes = await query(
+          `SELECT id FROM charges
+           WHERE  tracking_code = $1
+             AND  customer_id   = $2
+             AND  source        = 'carrier_direct'
+             AND  cancelled     = false
+           ORDER  BY created_at DESC
+           LIMIT  1`,
+          [trackingNumber, fuelCustomer.customer_id]
+        );
+        fuelChargeId = fuelChargeRes.rows[0]?.id || null;
+      }
       await insertLine(runId, {
         tracking_number:          trackingNumber,
         carrier_account_no:       line.account_number    || null,
@@ -2037,8 +2074,8 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
         carrier_amount:           carrierAmount,
         carrier_billed_weight_kg: line.billed_weight_kg  || null,
         service_id:               null,
-        customer_id:              null,
-        charge_id:                null,
+        customer_id:              fuelCustomer?.customer_id || null,
+        charge_id:                fuelChargeId,
         expected_amount:          null,
         delta:                    null,
         status:                   'corrected',
@@ -3139,6 +3176,7 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
         const pricing = await computeGhostCharge(serviceId, customer.customer_id, kg, postcode, country);
 
         if (!pricing.error) {
+          const rmpHasSell = pricing.sell_price != null;
           const newCharges = await insertCharges([{
             customer_id:         customer.customer_id,
             voila_shipment_id:   null,
@@ -3149,8 +3187,8 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
             charge_type:         'courier',
             weight_charged_kg:   kg,
             cost_price:          pricing.cost_price,
-            sell_price:          pricing.sell_price ?? pricing.cost_price,
-            status:              'verified',
+            sell_price:          pricing.sell_price ?? null,       // never fall back to cost_price
+            status:              rmpHasSell ? 'verified' : 'pricing_error',
             ship_to_postcode:    postcode,
             ship_to_country_iso: country,
             source:              'carrier_direct',
@@ -3161,6 +3199,9 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
           const expected    = round2(pricing.cost_price);
           const delta       = round2(carrierAmount - expected);
           const isMatch     = Math.abs(delta) < 0.02;
+          const rmpStatus   = !rmpHasSell ? 'unmatched' : (isMatch ? 'matched' : 'corrected');
+          const rmpReason   = !rmpHasSell ? 'no_rate'   : null;
+          const rmpCorrBy   = !rmpHasSell ? null        : (isMatch ? null : 'carrier_direct');
 
           await query(`
             UPDATE reconciliation_lines
@@ -3170,25 +3211,26 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
                  charge_id        = $4,
                  expected_amount  = $5,
                  delta            = $6,
-                 unmatched_reason = NULL,
+                 unmatched_reason = $9,
                  source           = 'carrier_direct',
                  corrected_by     = $7,
                  resolved_at      = NULL,
                  resolved_by      = NULL
             WHERE id = $8
           `, [
-            isMatch ? 'matched' : 'corrected',
+            rmpStatus,
             serviceId,
             customer.customer_id,
             insertedId,
             expected,
             delta,
-            isMatch ? null : 'carrier_direct',
+            rmpCorrBy,
             line.line_id,
+            rmpReason,
           ]);
 
           carrier_direct_created++;
-          if (isMatch) matched++; else unmatched++;
+          if (rmpStatus === 'matched') matched++; else unmatched++;
           continue;
         }
 
