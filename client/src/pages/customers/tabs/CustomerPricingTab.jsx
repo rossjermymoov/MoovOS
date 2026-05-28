@@ -812,7 +812,7 @@ function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateD
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {zonesToShow.map(({ zone_name, weight_class_name }) => {
                 const key  = `${zone_name}::${weight_class_name}`;
-                const rate = rateMap[key] || rateByZone[zone_name];
+                const rate = rateMap[key] || (!multiWeight ? rateByZone[zone_name] : null);
                 return (
                   <div key={key} style={{
                     display: 'inline-flex', alignItems: 'center', gap: 8,
