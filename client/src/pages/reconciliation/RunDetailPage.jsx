@@ -1445,6 +1445,53 @@ function exportLinesToCSV(lines, filename) {
   setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
 }
 
+// ─── Re-open button ───────────────────────────────────────────────────────────
+function ReopenButton({ lineId, runId }) {
+  const queryClient = useQueryClient();
+  const [confirming, setConfirming] = useState(false);
+
+  const { mutate, isLoading } = useMutation(
+    () => api.post(`/reconciliation/runs/${runId}/lines/${lineId}/reopen`),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['recon-lines', runId]);
+        queryClient.invalidateQueries(['recon-run', runId]);
+        setConfirming(false);
+      },
+    }
+  );
+
+  if (confirming) {
+    return (
+      <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        <button
+          style={{ ...btnRed, padding: '4px 8px', fontSize: 10 }}
+          onClick={() => mutate()}
+          disabled={isLoading}
+        >
+          {isLoading ? '…' : 'Confirm re-open'}
+        </button>
+        <button
+          style={{ ...btnGhost, padding: '4px 8px', fontSize: 10 }}
+          onClick={() => setConfirming(false)}
+        >
+          Cancel
+        </button>
+      </span>
+    );
+  }
+
+  return (
+    <button
+      title="Revert this correction back to unmatched so it can be resolved again"
+      style={{ ...btnGhost, padding: '4px 8px', fontSize: 10 }}
+      onClick={() => setConfirming(true)}
+    >
+      Re-open
+    </button>
+  );
+}
+
 function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, onRaiseQuery, runId, courierId, exportFilename }) {
   const [traceLine,      setTraceLine]      = useState(null);
   const [surchargeFilter, setSurchargeFilter] = useState('all'); // 'all' | 'freight' | surcharge_id
@@ -1589,6 +1636,9 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, onRai
                     <button style={{ ...btnGhost, padding: '4px 8px', fontSize: 10 }} onClick={() => onResolve(line)}>
                       Resolve
                     </button>
+                  )}
+                  {showResolve && line.status === 'corrected' && line.corrected_by === 'human' && (
+                    <ReopenButton lineId={line.id} runId={runId} />
                   )}
                   {onRaiseQuery && line.status === 'unmatched' && (
                     <button

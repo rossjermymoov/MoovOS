@@ -1096,8 +1096,12 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
       const fuelPct = parseFloat(fuelRes.rows[0]?.sell_pct || 0);
       manualSell    = Math.round((basePence * (1 + fuelPct / 100)) * 100) / 100;
 
-      // Try to find the linked charge via tracking number
-      if (line.tracking_number) {
+      // Try to find the linked charge via tracking number.
+      // Only link freight charges (charge_type = 'courier') for freight lines.
+      // Surcharge / fuel lines (is_fuel=true or surcharge_id set or charge_type != base)
+      // should NOT overwrite the freight charge sell price.
+      const isFreightLine = !line.is_fuel && !line.surcharge_id && (line.charge_type === 'base' || line.charge_type === 'courier' || !line.charge_type);
+      if (line.tracking_number && isFreightLine) {
         const chargeRes = await query(`
           SELECT c.id
           FROM   charges c
@@ -1284,6 +1288,73 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
 // ─── POST /api/reconciliation/runs/:id/bulk-map-service-codes ─────────────────
 // Save multiple service code mappings at once and immediately apply them to all
 // matching unmatched lines in this run. Designed for the "Map Unknown Codes"
+// ─── POST /api/reconciliation/runs/:id/lines/:lineId/reopen ─────────────────
+// Revert a corrected line back to unmatched so it can be re-resolved.
+// Clears corrected_sell_price, corrected_cost_price, charge_id, resolution
+// fields, and recounts run stats. Does NOT delete any mapping rules that
+// were saved — those need to be removed separately if no longer wanted.
+
+router.post('/runs/:id/lines/:lineId/reopen', async (req, res) => {
+  try {
+    const lineId = parseInt(req.params.lineId);
+
+    const lineRes = await query(
+      `SELECT rl.*, rr.carrier_id
+       FROM   reconciliation_lines rl
+       JOIN   reconciliation_runs  rr ON rr.id = rl.run_id
+       WHERE  rl.id = $1`,
+      [lineId]
+    );
+    if (!lineRes.rows.length) return res.status(404).json({ error: 'Line not found' });
+    const line = lineRes.rows[0];
+
+    if (line.status === 'matched') {
+      return res.status(400).json({ error: 'Cannot reopen a matched line — only corrected lines can be reopened' });
+    }
+    if (line.status === 'unmatched') {
+      return res.status(400).json({ error: 'Line is already unmatched' });
+    }
+
+    // Revert to unmatched, clear all resolution fields
+    await query(`
+      UPDATE reconciliation_lines
+      SET    status                = 'unmatched',
+             corrected_by          = NULL,
+             corrected_sell_price  = NULL,
+             corrected_cost_price  = NULL,
+             charge_id             = NULL,
+             mapping_id            = NULL,
+             resolved_by           = NULL,
+             resolved_at           = NULL,
+             resolution_notes      = NULL,
+             expected_amount       = NULL,
+             delta                 = NULL
+      WHERE  id = $1
+    `, [lineId]);
+
+    // Recount run stats
+    await query(`
+      UPDATE reconciliation_runs rr
+      SET    matched_count   = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'matched'),
+             corrected_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'corrected'),
+             unmatched_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'unmatched'),
+             automation_rate = CASE WHEN rr.total_lines > 0 THEN
+               ROUND(
+                 (SELECT COUNT(*)::numeric FROM reconciliation_lines WHERE run_id = rr.id AND status IN ('matched','corrected'))
+                 / rr.total_lines * 100, 2
+               )
+             ELSE 0 END,
+             status = 'needs_review'
+      WHERE  id = $1
+    `, [line.run_id]);
+
+    return res.json({ reopened: true });
+  } catch (err) {
+    console.error('[reconciliation/reopen]', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // banner that groups lines by raw_service_code so the user can map them in bulk.
 //
 // Body: { mappings: [{ raw_service_code, service_id, customer_id? }] }
