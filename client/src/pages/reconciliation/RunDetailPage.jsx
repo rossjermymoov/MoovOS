@@ -3398,6 +3398,7 @@ export default function RunDetailPage() {
           onResolved={() => {
             qc.invalidateQueries({ queryKey: ['recon-run', id] });
             qc.invalidateQueries({ queryKey: ['recon-lines', id] });
+            qc.invalidateQueries({ queryKey: ['recon-customers-preview', parseInt(id)] });
           }}
           onOpenDrawer={(line) => { setDefaultResolveType('map_to_surcharge'); setResolvingLine(line); }}
         />
@@ -3433,6 +3434,7 @@ export default function RunDetailPage() {
           onResolved={() => {
             qc.invalidateQueries({ queryKey: ['recon-run', id] });
             qc.invalidateQueries({ queryKey: ['recon-lines', id] });
+            qc.invalidateQueries({ queryKey: ['recon-customers-preview', parseInt(id)] });
             setResolvingLine(null);
             setDefaultResolveType(null);
           }}
