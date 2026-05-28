@@ -1038,8 +1038,10 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
     if (!lineRes.rows.length) return res.status(404).json({ error: 'Line not found' });
 
     const line = lineRes.rows[0];
-    if (line.status !== 'unmatched') {
-      return res.status(400).json({ error: 'Line is not Unmatched — cannot resolve' });
+    // Allow resolving both 'unmatched' lines (standard) and 'warning' lines
+    // (sell_surcharge_missing — carrier billed a surcharge we haven't charged the customer for).
+    if (!['unmatched', 'warning'].includes(line.status)) {
+      return res.status(400).json({ error: 'Line is not in a resolvable state (must be Unmatched or Warning)' });
     }
 
     // ── map_to_surcharge: set corrected_sell_price from customer's surcharge price ─
@@ -1392,14 +1394,19 @@ router.post('/runs/:id/lines/:lineId/reopen', async (req, res) => {
     if (line.status === 'matched') {
       return res.status(400).json({ error: 'Cannot reopen a matched line — only corrected lines can be reopened' });
     }
-    if (line.status === 'unmatched') {
-      return res.status(400).json({ error: 'Line is already unmatched' });
+    if (line.status === 'unmatched' || line.status === 'warning') {
+      return res.status(400).json({ error: 'Line is already open' });
     }
 
-    // Revert to unmatched, clear all resolution fields
+    // Revert to original open status:
+    // - Warning lines (sell_surcharge_missing) go back to 'warning'
+    // - All other lines go back to 'unmatched'
+    const revertStatus = line.unmatched_reason === 'sell_surcharge_missing' ? 'warning' : 'unmatched';
+
+    // Revert to original status, clear all resolution fields
     await query(`
       UPDATE reconciliation_lines
-      SET    status                = 'unmatched',
+      SET    status                = $2,
              corrected_by          = NULL,
              corrected_sell_price  = NULL,
              corrected_cost_price  = NULL,
@@ -1411,7 +1418,7 @@ router.post('/runs/:id/lines/:lineId/reopen', async (req, res) => {
              expected_amount       = NULL,
              delta                 = NULL
       WHERE  id = $1
-    `, [lineId]);
+    `, [lineId, revertStatus]);
 
     // Recount run stats
     await query(`
