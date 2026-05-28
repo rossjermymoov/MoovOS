@@ -274,7 +274,12 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
   );
   const [resolutionValue, setResolutionValue] = useState(
     // Pre-populate with suggested service if the engine found one
-    isUnknownCode && line.suggested_service_id ? String(line.suggested_service_id) : ''
+    isUnknownCode && line.suggested_service_id
+      ? String(line.suggested_service_id)
+      // Pre-populate surcharge for warning lines (sell_surcharge_missing) where we already know the surcharge
+      : (defaultResolutionType === 'map_to_surcharge' && line.surcharge_id)
+        ? String(line.surcharge_id)
+        : ''
   );
   const [notes,    setNotes]   = useState('');
   const [loading,  setLoading] = useState(false);
@@ -1632,7 +1637,7 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, onRai
               </td>
               <td style={{ padding: '9px 10px' }}>
                 <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-                  {showResolve && line.status === 'unmatched' && (
+                  {showResolve && (line.status === 'unmatched' || line.status === 'warning') && (
                     <button style={{ ...btnGhost, padding: '4px 8px', fontSize: 10 }} onClick={() => onResolve(line)}>
                       Resolve
                     </button>
@@ -2796,8 +2801,9 @@ export default function RunDetailPage() {
                 <strong style={{ color: '#B71C1C' }}>
                   {unmatchedLines.filter(l => l.unmatched_reason === 'cancelled_booking_invoiced').length} cancelled booking{unmatchedLines.filter(l => l.unmatched_reason === 'cancelled_booking_invoiced').length !== 1 ? 's' : ''} invoiced by DPD
                 </strong>
-                {' '}— these are held as unmatched and will not be billed to the customer.
-                Use <strong>Download DPD Credit Request</strong> on the reconciliation home page to export all cancelled lines across every invoice in one file.
+                {' '}— DPD charged for these but the parcel was never sent. They will not be billed to the customer.
+                Resolve each line using <strong>Applying for credit with Courier</strong> once you have claimed the refund from DPD,
+                or use <strong>Download DPD Credit Request</strong> on the reconciliation home page to export all outstanding lines as a CSV.
               </div>
             </div>
           )}
@@ -2857,8 +2863,8 @@ export default function RunDetailPage() {
           <div style={card}>
             <LinesTable
               lines={warningLines}
-              showResolve={false}
-              onResolve={(line) => { setDefaultResolveType(null); setResolvingLine(line); }}
+              showResolve
+              onResolve={(line) => { setDefaultResolveType('map_to_surcharge'); setResolvingLine(line); }}
               onResolveAsSurcharge={(line) => { setDefaultResolveType('map_to_surcharge'); setResolvingLine(line); }}
               runId={id}
               courierId={run.carrier_id}
