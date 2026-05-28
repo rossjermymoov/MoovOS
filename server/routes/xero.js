@@ -823,6 +823,22 @@ router.post('/reconciliation-runs/:runId/push', async (req, res, next) => {
           const taxType     = isDomestic ? 'OUTPUT2' : 'NONE';
           const serviceName = l.service_name || 'Parcel Delivery';
 
+          // DDP Admin Fee — own dedicated line, not vatable
+          if (l.source === 'ddp_admin') {
+            const ddpAmt = parseFloat(l.sell_base_amount || 0);
+            if (ddpAmt !== 0) {
+              if (!summaryGroups['ddp_admin']) {
+                summaryGroups['ddp_admin'] = {
+                  sortOrder: 3, description: 'DDP Admin Fee', count: 0, total: 0,
+                  accountCode, taxType: 'NONE',
+                };
+              }
+              summaryGroups['ddp_admin'].count++;
+              summaryGroups['ddp_admin'].total += ddpAmt;
+            }
+            continue; // skip freight/fuel/surcharge processing for this line
+          }
+
           // Freight — base sell only, one line per service name
           const baseAmt = parseFloat(l.sell_base_amount || 0);
           if (baseAmt !== 0) {
