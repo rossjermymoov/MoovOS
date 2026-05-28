@@ -4364,24 +4364,27 @@ router.get('/zero-margin-audit', async (req, res) => {
 });
 
 // ─── POST /api/reconciliation/backfill-carrier-direct-surcharges ──────────────
-// One-shot backfill: find all carrier_direct shipments missing fuel / GEC
-// surcharge charges and create them.  Safe to re-run — createCarrierDirectSurcharges
-// is idempotent (skips charges that already exist).
+// One-shot backfill: find shipments missing fuel / GEC surcharge charges and
+// create them.  Safe to re-run — createCarrierDirectSurcharges is idempotent.
 //
-// Optional query param: ?customer_id=<uuid>  — limit to one customer
+// Query params:
+//   ?customer_id=<uuid>  — required when broad=1, optional otherwise
+//   ?broad=1             — when set, includes ALL courier charges (not just
+//                          carrier_direct) for the given customer.  Use this
+//                          to fix OMS-booked shipments that were booked before
+//                          fuel groups / surcharges were configured.
 
 router.post('/backfill-carrier-direct-surcharges', async (req, res) => {
   try {
-    const { customer_id } = req.query;
+    const { customer_id, broad } = req.query;
+    const isBroad = broad === '1' || broad === 'true';
 
-    // Find all carrier_direct courier charges that have a sell_price (we need
-    // it to compute fuel %) and a shipment_id (needed to link aux charges).
-    // We only look for charges that are missing a fuel charge for the same shipment.
+    // Find courier charges missing a fuel charge for the same shipment.
+    // In broad mode (customer_id required): any source, any verified status.
+    // In standard mode: carrier_direct only (safe to run without customer filter).
     const params  = [];
-    let   where   = `c.source = 'carrier_direct'
-      AND c.charge_type = 'courier'
+    let   where   = `c.charge_type = 'courier'
       AND c.cancelled   = false
-      AND c.verified    = true
       AND c.sell_price  IS NOT NULL
       AND c.sell_price  > 0
       AND c.shipment_id IS NOT NULL
@@ -4393,9 +4396,15 @@ router.post('/backfill-carrier-direct-surcharges', async (req, res) => {
           AND  fc.cancelled    = false
       )`;
 
+    if (!isBroad) {
+      where = `c.source = 'carrier_direct' AND c.verified = true\n      AND ` + where;
+    }
+
     if (customer_id) {
       params.push(customer_id);
       where += ` AND c.customer_id = $${params.length}`;
+    } else if (isBroad) {
+      return res.status(400).json({ error: 'customer_id is required when broad=1' });
     }
 
     const { rows } = await query(`
