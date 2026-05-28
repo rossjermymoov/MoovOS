@@ -1168,6 +1168,14 @@ export async function createCarrierDirectSurcharges({
 
   try {
     // ── Step 1: Always-apply flat/percentage surcharges (e.g. GEC) ────────────
+    // IMPORTANT: only apply surcharges that have NO active surcharge_rules.
+    // Surcharges with rules (e.g. Congestion Charge — certain postcodes only,
+    // Clearance Charge — NI/international only) are conditional and must NOT
+    // be applied blindly to every carrier_direct shipment regardless of
+    // destination.  Rule evaluation for carrier_direct is not yet implemented,
+    // so we skip rule-gated surcharges entirely here.  They will only fire if
+    // the carrier invoice actually billed them (csv_column path) or if the
+    // shipment is manually resolved.
     const { rows: surcharges } = await query(`
       SELECT s.id, s.name, s.calc_type, s.default_value, s.cost_price,
              s.charge_per, s.reconciliation_excluded
@@ -1176,6 +1184,10 @@ export async function createCarrierDirectSurcharges({
         AND  s.courier_id   = $1
         AND  (s.applies_when = 'always' OR s.applies_when IS NULL)
         AND  (s.effective_date IS NULL OR s.effective_date <= CURRENT_DATE)
+        AND  NOT EXISTS (
+          SELECT 1 FROM surcharge_rules sr
+          WHERE  sr.surcharge_id = s.id AND sr.active = true
+        )
     `, [carrierId]);
 
     for (const s of surcharges) {
