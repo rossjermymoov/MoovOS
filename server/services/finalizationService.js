@@ -68,6 +68,75 @@ export async function finalizeRun(runId, staffId = null) {
   // (the engine never writes to the charges table — that's our job here at finalize
   // time). We insert the charge now and back-populate charge_id on the recon line
   // so buildSnapshot can enrich from the charges table normally.
+  // ── Step 0.5: Create surcharge charges for resolved sell_surcharge_missing lines ──
+  //
+  // When a carrier bills a surcharge that has no sell-side equivalent (sell_surcharge_missing
+  // warning lines), the operator resolves them as map_to_surcharge and sets corrected_sell_price.
+  // We now create an actual charges record (charge_type='surcharge') so that:
+  //   1. buildSnapshot picks it up via the sell_surcharge subquery on the freight line.
+  //   2. The customer CSV export shows the surcharge as a named line-item column.
+  //   3. The customer is actually billed for it.
+  //
+  // We look up the shipment via the freight line (same tracking, surcharge_id IS NULL, has charge_id)
+  // rather than the tracking_codes array, which is more reliable for DPD-style prefixed numbers.
+  for (const line of lines) {
+    if (line.unmatched_reason !== 'sell_surcharge_missing' || !line.surcharge_id) continue;
+    if (line.status !== 'corrected' || !line.corrected_sell_price) continue;
+
+    try {
+      const sellAmt = round4(parseFloat(line.corrected_sell_price) || 0);
+      const costAmt = round4(parseFloat(line.carrier_amount) || 0);
+      if (sellAmt <= 0) continue;
+
+      // Find shipment_id from the freight counterpart line (same run + tracking, no surcharge_id)
+      const freightRes = await query(`
+        SELECT ch.shipment_id, ch.customer_id, sh.despatch_date
+        FROM   reconciliation_lines rl2
+        JOIN   charges ch ON ch.id = rl2.charge_id
+        LEFT JOIN shipments sh ON sh.id = ch.shipment_id
+        WHERE  rl2.run_id           = $1
+          AND  rl2.tracking_number  = $2
+          AND  rl2.surcharge_id    IS NULL
+          AND  rl2.charge_id       IS NOT NULL
+        LIMIT 1
+      `, [line.run_id, line.tracking_number]);
+
+      const shipmentId  = freightRes.rows[0]?.shipment_id  || null;
+      const despatchDate = freightRes.rows[0]?.despatch_date || line.shipment_date || null;
+
+      // Insert surcharge charge (idempotent — ON CONFLICT skips duplicates)
+      const chargeRes = await query(`
+        INSERT INTO charges (
+          customer_id, shipment_id, charge_type,
+          surcharge_id, cost_price, sell_price, price,
+          status, verified, despatch_date, source
+        ) VALUES ($1,$2,'surcharge', $3,$4,$5,$5, 'verified',true,$6,'recon_surcharge')
+        ON CONFLICT DO NOTHING
+        RETURNING id
+      `, [
+        line.customer_id,
+        shipmentId,
+        line.surcharge_id,
+        costAmt,
+        sellAmt,
+        despatchDate,
+      ]);
+
+      const chargeId = chargeRes.rows[0]?.id || null;
+      if (chargeId) {
+        // Back-populate charge_id on the recon line so subsequent reporting can trace it
+        await query(
+          `UPDATE reconciliation_lines SET charge_id = $1 WHERE id = $2`,
+          [chargeId, line.id]
+        );
+        console.log(`[finalization] Surcharge charge created: id=${chargeId} surcharge=${line.surcharge_id} sell=£${sellAmt} tracking=${line.tracking_number}`);
+      }
+    } catch (surchargeErr) {
+      console.error(`[finalization] Surcharge charge creation failed for tracking=${line.tracking_number}:`, surchargeErr.message);
+      // Non-fatal — continue
+    }
+  }
+
   for (const line of lines) {
     if (line.source !== 'ddp_admin' || line.charge_id) continue;
 

@@ -1455,16 +1455,14 @@ function ReopenButton({ lineId, runId }) {
   const queryClient = useQueryClient();
   const [confirming, setConfirming] = useState(false);
 
-  const { mutate, isLoading } = useMutation(
-    () => api.post(`/reconciliation/runs/${runId}/lines/${lineId}/reopen`),
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['recon-lines', runId]);
-        queryClient.invalidateQueries(['recon-run', runId]);
-        setConfirming(false);
-      },
-    }
-  );
+  const { mutate, isPending } = useMutation({
+    mutationFn: () => api.post(`/reconciliation/runs/${runId}/lines/${lineId}/reopen`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['recon-lines', runId] });
+      queryClient.invalidateQueries({ queryKey: ['recon-run', runId] });
+      setConfirming(false);
+    },
+  });
 
   if (confirming) {
     return (
@@ -1472,9 +1470,9 @@ function ReopenButton({ lineId, runId }) {
         <button
           style={{ ...btnRed, padding: '4px 8px', fontSize: 10 }}
           onClick={() => mutate()}
-          disabled={isLoading}
+          disabled={isPending}
         >
-          {isLoading ? '…' : 'Confirm re-open'}
+          {isPending ? '…' : 'Confirm re-open'}
         </button>
         <button
           style={{ ...btnGhost, padding: '4px 8px', fontSize: 10 }}
@@ -1734,24 +1732,31 @@ function CustomerLinesDrilldown({ runId, customerId }) {
               const cost      = parseFloat(l.cost_total || 0);
               const sell      = parseFloat(l.sell_total || 0);
               const margin    = sell - cost;
-              const isSurcharge = !!l.surcharge_id;
-              const rowBg     = isSurcharge ? 'rgba(0,188,212,0.04)' : 'transparent';
+              const hasCorrectedSurcharge = !!l.has_warning_correction;
+              const rowBg     = hasCorrectedSurcharge ? 'rgba(255,143,0,0.04)' : 'transparent';
               return (
                 <tr key={l.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.02)', background: rowBg }}>
-                  <td style={{ ...tdStyle, color: isSurcharge ? '#00BCD4' : '#79AAFF', fontFamily: 'monospace', fontSize: 10 }}>
-                    {isSurcharge ? <span style={{ color: '#64748B', fontFamily: 'sans-serif' }}>↳</span> : null}
-                    {' '}{l.tracking_number || '—'}
+                  <td style={{ ...tdStyle, color: '#79AAFF', fontFamily: 'monospace', fontSize: 10 }}>
+                    {l.tracking_number || '—'}
                   </td>
                   <td style={{ ...tdStyle, color: '#64748B' }}>{l.shipment_date ? new Date(l.shipment_date).toLocaleDateString('en-GB') : '—'}</td>
-                  <td style={{ ...tdStyle, color: isSurcharge ? '#00BCD4' : '#64748B' }}>
-                    {isSurcharge ? (l.surcharge_name || l.raw_service_code || 'Surcharge') : (l.service_name || '—')}
+                  <td style={{ ...tdStyle, color: '#64748B' }}>
+                    {l.service_name || '—'}
+                    {hasCorrectedSurcharge && (
+                      <span
+                        title={`Surcharge added: ${l.corrected_surcharge_names || 'manual correction'}`}
+                        style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, color: '#FF8F00', background: 'rgba(255,143,0,0.15)', border: '1px solid rgba(255,143,0,0.4)', borderRadius: 3, padding: '1px 5px', verticalAlign: 'middle', cursor: 'help' }}
+                      >
+                        +SURCHARGE
+                      </span>
+                    )}
                   </td>
-                  <td style={{ ...tdStyle, color: '#64748B' }}>{isSurcharge ? '—' : (l.parcel_count || 1)}</td>
+                  <td style={{ ...tdStyle, color: '#64748B' }}>{l.parcel_count || 1}</td>
                   <td style={{ ...tdStyle, color: '#64748B', textAlign: 'right' }}>£{cost.toFixed(2)}</td>
                   <td style={{ ...tdStyle, color: '#64748B', textAlign: 'right' }}>£{parseFloat(l.sell_base || 0).toFixed(2)}</td>
                   <td style={{ ...tdStyle, color: '#64748B', textAlign: 'right' }}>£{parseFloat(l.sell_fuel || 0).toFixed(2)}</td>
-                  <td style={{ ...tdStyle, color: '#64748B', textAlign: 'right' }}>£{parseFloat(l.sell_surcharge || 0).toFixed(2)}</td>
-                  <td style={{ ...tdStyle, color: isSurcharge ? '#00BCD4' : '#00C853', fontWeight: 700, textAlign: 'right' }}>£{sell.toFixed(2)}</td>
+                  <td style={{ ...tdStyle, color: hasCorrectedSurcharge ? '#FF8F00' : '#64748B', textAlign: 'right', fontWeight: hasCorrectedSurcharge ? 700 : 400 }}>£{parseFloat(l.sell_surcharge || 0).toFixed(2)}</td>
+                  <td style={{ ...tdStyle, color: '#00C853', fontWeight: 700, textAlign: 'right' }}>£{sell.toFixed(2)}</td>
                   <td style={{ ...tdStyle, color: margin >= 0 ? '#00C853' : '#FF5252', fontWeight: 600, textAlign: 'right' }}>£{margin.toFixed(2)}</td>
                   <td style={{ ...tdStyle }}><StatusBadge status={l.status} /></td>
                 </tr>

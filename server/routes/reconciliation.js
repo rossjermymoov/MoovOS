@@ -2271,77 +2271,99 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
         rl.charge_type,
         rl.parcel_count,
         rl.carrier_billed_weight_kg,
-        rl.surcharge_id,
         rl.unmatched_reason,
-        CASE WHEN rl.surcharge_id IS NOT NULL THEN sur.name ELSE cs.name END AS service_name,
-        sur.name                                                         AS surcharge_name,
-        -- sell_base: 0 for surcharge lines, freight price for freight lines
-        CASE
-          WHEN rl.surcharge_id IS NOT NULL THEN 0
-          ELSE COALESCE(rl.corrected_sell_price, base.sell_price, base.price, 0)
-        END                                                              AS sell_base,
-        -- sell_fuel: 0 for surcharge lines
-        CASE
-          WHEN rl.surcharge_id IS NOT NULL THEN 0
-          ELSE COALESCE((
-            SELECT SUM(sc.price)
-            FROM   charges sc
-            WHERE  sc.shipment_id = base.shipment_id
-              AND  sc.charge_type = 'fuel'
-              AND  sc.cancelled   = false
-          ), 0)
-        END                                                              AS sell_fuel,
-        -- sell_surcharge: corrected_sell_price for warning lines, charges subquery for freight
-        CASE
-          WHEN rl.surcharge_id IS NOT NULL AND rl.unmatched_reason = 'sell_surcharge_missing'
-            THEN COALESCE(rl.corrected_sell_price, 0)
-          WHEN rl.surcharge_id IS NOT NULL THEN 0
-          ELSE COALESCE((
-            SELECT SUM(sc.price)
-            FROM   charges sc
-            WHERE  sc.shipment_id = base.shipment_id
-              AND  sc.charge_type = 'surcharge'
-              AND  sc.cancelled   = false
-          ), 0)
-        END                                                              AS sell_surcharge,
+        cs.name                                                          AS service_name,
+        -- Does this freight line have corrected warning lines (sell_surcharge_missing)?
+        -- If so, show a "corrected" indicator and fold the amount into sell_surcharge.
+        EXISTS(
+          SELECT 1 FROM reconciliation_lines wl
+          WHERE  wl.run_id           = rl.run_id
+            AND  wl.tracking_number  = rl.tracking_number
+            AND  wl.unmatched_reason = 'sell_surcharge_missing'
+            AND  wl.status           = 'corrected'
+            AND  wl.id              != rl.id
+        )                                                                AS has_warning_correction,
+        -- Corrected surcharge names for tooltip (comma-separated)
+        (
+          SELECT STRING_AGG(DISTINCT COALESCE(sur2.name, 'Surcharge'), ', ')
+          FROM   reconciliation_lines wl
+          JOIN   surcharges sur2 ON sur2.id = wl.surcharge_id
+          WHERE  wl.run_id           = rl.run_id
+            AND  wl.tracking_number  = rl.tracking_number
+            AND  wl.unmatched_reason = 'sell_surcharge_missing'
+            AND  wl.status           = 'corrected'
+            AND  wl.id              != rl.id
+        )                                                                AS corrected_surcharge_names,
+        -- sell_base: freight sell price
+        COALESCE(rl.corrected_sell_price, base.sell_price, base.price, 0) AS sell_base,
+        -- sell_fuel
+        COALESCE((
+          SELECT SUM(sc.price)
+          FROM   charges sc
+          WHERE  sc.shipment_id = base.shipment_id
+            AND  sc.charge_type = 'fuel'
+            AND  sc.cancelled   = false
+        ), 0)                                                            AS sell_fuel,
+        -- sell_surcharge: existing charges surcharges + any corrected warning-line amounts
+        COALESCE((
+          SELECT SUM(sc.price)
+          FROM   charges sc
+          WHERE  sc.shipment_id = base.shipment_id
+            AND  sc.charge_type = 'surcharge'
+            AND  sc.cancelled   = false
+        ), 0)
+        + COALESCE((
+          SELECT SUM(wl.corrected_sell_price)
+          FROM   reconciliation_lines wl
+          WHERE  wl.run_id           = rl.run_id
+            AND  wl.tracking_number  = rl.tracking_number
+            AND  wl.unmatched_reason = 'sell_surcharge_missing'
+            AND  wl.status           = 'corrected'
+            AND  wl.id              != rl.id
+        ), 0)                                                            AS sell_surcharge,
         -- sell_total
-        CASE
-          WHEN rl.surcharge_id IS NOT NULL AND rl.unmatched_reason = 'sell_surcharge_missing'
-            THEN COALESCE(rl.corrected_sell_price, 0)
-          WHEN rl.surcharge_id IS NOT NULL THEN 0
-          ELSE COALESCE(rl.corrected_sell_price, base.sell_price, base.price, 0)
-               + COALESCE((
-                   SELECT SUM(sc.price)
-                   FROM   charges sc
-                   WHERE  sc.shipment_id = base.shipment_id
-                     AND  sc.charge_type IN ('fuel', 'surcharge')
-                     AND  sc.cancelled   = false
-                 ), 0)
-        END                                                              AS sell_total,
-        -- cost_total: carrier_amount for surcharge lines, full charge breakdown for freight
-        CASE
-          WHEN rl.surcharge_id IS NOT NULL
-            THEN COALESCE(rl.carrier_amount, 0)
-          ELSE COALESCE(base.cost_price, 0)
-               + COALESCE((
-                   SELECT SUM(sc.cost_price)
-                   FROM   charges sc
-                   WHERE  sc.shipment_id = base.shipment_id
-                     AND  sc.charge_type IN ('fuel','surcharge')
-                     AND  sc.cancelled   = false
-                 ), 0)
-        END                                                              AS cost_total
+        COALESCE(rl.corrected_sell_price, base.sell_price, base.price, 0)
+        + COALESCE((
+            SELECT SUM(sc.price)
+            FROM   charges sc
+            WHERE  sc.shipment_id = base.shipment_id
+              AND  sc.charge_type IN ('fuel', 'surcharge')
+              AND  sc.cancelled   = false
+          ), 0)
+        + COALESCE((
+            SELECT SUM(wl.corrected_sell_price)
+            FROM   reconciliation_lines wl
+            WHERE  wl.run_id           = rl.run_id
+              AND  wl.tracking_number  = rl.tracking_number
+              AND  wl.unmatched_reason = 'sell_surcharge_missing'
+              AND  wl.status           = 'corrected'
+              AND  wl.id              != rl.id
+          ), 0)                                                          AS sell_total,
+        -- cost_total: carrier cost + any warning-line carrier amounts
+        COALESCE(base.cost_price, 0)
+        + COALESCE((
+            SELECT SUM(sc.cost_price)
+            FROM   charges sc
+            WHERE  sc.shipment_id = base.shipment_id
+              AND  sc.charge_type IN ('fuel','surcharge')
+              AND  sc.cancelled   = false
+          ), 0)
+        + COALESCE((
+            SELECT SUM(wl.carrier_amount)
+            FROM   reconciliation_lines wl
+            WHERE  wl.run_id           = rl.run_id
+              AND  wl.tracking_number  = rl.tracking_number
+              AND  wl.unmatched_reason = 'sell_surcharge_missing'
+              AND  wl.status           = 'corrected'
+              AND  wl.id              != rl.id
+          ), 0)                                                          AS cost_total
       FROM   reconciliation_lines rl
       LEFT JOIN courier_services cs   ON cs.id  = rl.service_id
-      LEFT JOIN surcharges        sur ON sur.id  = rl.surcharge_id
       LEFT JOIN charges          base ON base.id = rl.charge_id AND base.charge_type = 'courier' AND base.cancelled = false
       WHERE  rl.run_id = $1
         AND  rl.status IN ('matched', 'corrected')
         AND  rl.is_fuel = false
-        AND  (
-          rl.surcharge_id IS NULL
-          OR (rl.unmatched_reason = 'sell_surcharge_missing' AND rl.status = 'corrected')
-        )
+        AND  rl.surcharge_id IS NULL
         ${custFilter}
       ORDER  BY rl.shipment_date ASC NULLS LAST, rl.tracking_number
     `, params);
