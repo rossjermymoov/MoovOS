@@ -298,9 +298,10 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
   const [custResults,     setCustResults]     = useState([]);
   const [custSearching,   setCustSearching]   = useState(false);
   const [selectedCust,    setSelectedCust]    = useState(null); // { id, business_name, account_number }
-  // Surcharge charge preview
+  // Surcharge charge preview (pre-resolve) and post-resolve confirmation
   const [chargePreview,   setChargePreview]   = useState(null);
   const [previewLoading,  setPreviewLoading]  = useState(false);
+  const [confirmedCharge, setConfirmedCharge] = useState(null); // set after resolve succeeds
 
   const isSurchargeMapping  = resolutionType === 'map_to_surcharge';
   const isManualPrice       = resolutionType === 'manual_price';
@@ -390,7 +391,7 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
         ? selectedCust.id
         : (saveRule && ruleScope === 'customer') ? (line.customer_id || null) : null;
 
-      await api.post(`/reconciliation/runs/${line.run_id}/lines/${line.id}/resolve`, {
+      const { data } = await api.post(`/reconciliation/runs/${line.run_id}/lines/${line.id}/resolve`, {
         resolution_type:  resolutionType,
         resolution_value: isMapToCustomer ? selectedCust.id : resolutionValue,
         scope:            effectiveScope,
@@ -398,12 +399,128 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
         customer_id:      customerId,
         notes,
       });
+
+      // Refresh the line list immediately so the resolved line moves tabs
       onResolved();
-      onClose();
+
+      // For surcharge mappings, hold the drawer open and show a confirmation ledger.
+      // For all other resolution types, close straight away.
+      if (isSurchargeMapping && (data.confirmed || chargePreview)) {
+        setConfirmedCharge({
+          ...(chargePreview || {}),
+          ...(data.confirmed || {}),
+          bulk_applied: data.bulk_applied || 0,
+        });
+        setLoading(false);
+      } else {
+        onClose();
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to resolve');
       setLoading(false);
     }
+  }
+
+  // ── Post-resolve confirmation screen ────────────────────────────────────────
+  if (confirmedCharge) {
+    const cc         = confirmedCharge;
+    const hasCustomer = !!cc.customer_id || !!cc.customer_name;
+    const accentColor = cc.status === 'unmatched' ? '#FFB300' : '#00C853';
+    const bgColor     = cc.status === 'unmatched' ? 'rgba(255,179,0,0.06)' : 'rgba(0,200,83,0.06)';
+    const borderColor = cc.status === 'unmatched' ? 'rgba(255,179,0,0.35)' : 'rgba(0,200,83,0.3)';
+
+    const totalSell = (cc.freight_sell ?? 0) + (cc.calculated_sell ?? cc.corrected_sell ?? 0);
+    const totalCost = (cc.freight_cost ?? 0) + (cc.carrier_cost ?? 0);
+
+    const LedgerRow = ({ label, cost, sell, bold, topBorder }) => (
+      <div style={{
+        display: 'grid', gridTemplateColumns: '1fr 80px 80px',
+        padding: bold ? '6px 0 2px' : '4px 0',
+        ...(topBorder ? { borderTop: '1px solid rgba(0,0,0,0.09)', marginTop: 4, paddingTop: 8 } : {}),
+      }}>
+        <span style={{ fontSize: 12, color: bold ? '#0F172A' : '#64748B', fontWeight: bold ? 700 : 400 }}>{label}</span>
+        <span style={{ fontSize: 12, fontFamily: 'monospace', textAlign: 'right', color: '#64748B' }}>
+          {cost > 0 ? `£${cost.toFixed(2)}` : '—'}
+        </span>
+        <span style={{ fontSize: bold ? 13 : 12, fontFamily: 'monospace', textAlign: 'right', fontWeight: bold ? 700 : 600, color: bold ? accentColor : '#0F172A' }}>
+          {sell > 0 ? `£${sell.toFixed(2)}` : '—'}
+        </span>
+      </div>
+    );
+
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end' }}>
+        <div style={{ width: 460, height: '100vh', background: '#FFFFFF', padding: 24, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16, boxShadow: '-8px 0 40px rgba(0,0,0,0.18)' }}>
+
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: 0 }}>Charge Confirmed</h3>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer' }}>
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Status badge */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: bgColor, border: `1px solid ${borderColor}`, borderRadius: 8 }}>
+            <div style={{ width: 26, height: 26, borderRadius: '50%', background: accentColor, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 800, flexShrink: 0 }}>
+              {cc.status === 'unmatched' ? '!' : '✓'}
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>
+                {cc.status === 'unmatched' ? 'Surcharge mapped — awaiting customer' : 'Pinned to billing tab'}
+              </div>
+              <div style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
+                {cc.customer_name || (cc.status === 'unmatched' ? 'No customer assigned — line stays visible as Unmatched' : 'Customer unresolved')}
+                {cc.surcharge_name && <span style={{ marginLeft: 6, color: '#79AAFF', fontWeight: 600 }}>{cc.surcharge_name}</span>}
+              </div>
+            </div>
+          </div>
+
+          {/* Full cost/sell ledger */}
+          <div style={{ ...card, padding: '12px 16px' }}>
+            {/* Column headers */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 80px', marginBottom: 6 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Line Item</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cost</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sell</span>
+            </div>
+
+            {cc.has_freight !== false && cc.freight_sell > 0 && (
+              <LedgerRow label="Base Freight" cost={cc.freight_cost ?? 0} sell={cc.freight_sell ?? 0} />
+            )}
+            <LedgerRow
+              label={cc.surcharge_name ? `Surcharge: ${cc.surcharge_name}` : 'Surcharge'}
+              cost={cc.carrier_cost ?? 0}
+              sell={cc.calculated_sell ?? cc.corrected_sell ?? 0}
+            />
+            {cc.parcel_count > 1 && (
+              <div style={{ fontSize: 10, color: '#64748B', textAlign: 'right', marginTop: -2, marginBottom: 2 }}>× {cc.parcel_count} parcels</div>
+            )}
+            {cc.has_freight !== false && cc.freight_sell > 0 && (
+              <LedgerRow label="Total to Client" cost={totalCost} sell={totalSell} bold topBorder />
+            )}
+            {cc.has_override && (
+              <div style={{ fontSize: 10, color: '#64748B', marginTop: 6 }}>✦ Using customer-specific rate override</div>
+            )}
+          </div>
+
+          {cc.bulk_applied > 0 && (
+            <div style={{ background: 'rgba(121,170,255,0.08)', border: '1px solid rgba(121,170,255,0.25)', borderRadius: 7, padding: '8px 12px', fontSize: 11, color: '#79AAFF', fontWeight: 600 }}>
+              ⚡ Rule applied to {cc.bulk_applied} additional matching line{cc.bulk_applied !== 1 ? 's' : ''} in this run
+            </div>
+          )}
+
+          <div style={{ flex: 1 }} />
+
+          <button
+            onClick={onClose}
+            style={{ ...btnGreen, width: '100%', justifyContent: 'center', padding: '10px 0', fontSize: 13 }}
+          >
+            Close & View Lines
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // Find the suggested service object for display
@@ -592,83 +709,83 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
                 </div>
               )}
 
-              {/* ── Charge preview — loads as soon as a surcharge is selected ── */}
+              {/* ── Live Ledger Preview — loads as soon as a surcharge is selected ── */}
               {selectedSurcharge && previewLoading && (
                 <div style={{ marginTop: 8, padding: '9px 12px', background: 'rgba(0,0,0,0.03)', borderRadius: 7, fontSize: 11, color: '#64748B' }}>
-                  Loading preview…
+                  Calculating…
                 </div>
               )}
               {selectedSurcharge && !previewLoading && chargePreview && (() => {
-                const hasCustomer = !!chargePreview.customer_id;
+                const cp          = chargePreview;
+                const hasCustomer = !!cp.customer_id;
                 const borderColor = hasCustomer ? 'rgba(0,200,83,0.3)'  : 'rgba(255,179,0,0.45)';
                 const bgColor     = hasCustomer ? 'rgba(0,200,83,0.05)' : 'rgba(255,179,0,0.07)';
-                return (
-                  <div style={{
-                    marginTop: 8, padding: '10px 13px',
-                    background: bgColor, border: `1px solid ${borderColor}`,
-                    borderRadius: 7, fontSize: 11,
-                  }}>
-                    {/* Carrier cost row */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                      <span style={{ color: '#64748B' }}>Carrier cost</span>
-                      <span style={{ fontWeight: 700, color: '#0F172A' }}>
-                        £{chargePreview.carrier_cost.toFixed(2)}
-                      </span>
-                    </div>
+                const sellColor   = hasCustomer ? '#00C853' : '#FFB300';
+                const totalSell   = (cp.freight_sell ?? 0) + (cp.calculated_sell ?? 0);
+                const totalCost   = (cp.freight_cost ?? 0) + (cp.carrier_cost ?? 0);
 
-                    {/* Assigned customer row */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                      <span style={{ color: '#64748B' }}>Assigned customer</span>
+                const LRow = ({ label, cost, sell, bold, topBorder }) => (
+                  <div style={{
+                    display: 'grid', gridTemplateColumns: '1fr 72px 72px',
+                    padding: '3px 0',
+                    ...(topBorder ? { borderTop: '1px solid rgba(0,0,0,0.08)', marginTop: 4, paddingTop: 6 } : {}),
+                  }}>
+                    <span style={{ fontSize: 11, color: bold ? '#0F172A' : '#64748B', fontWeight: bold ? 700 : 400 }}>{label}</span>
+                    <span style={{ fontSize: 11, fontFamily: 'monospace', textAlign: 'right', color: '#64748B' }}>
+                      {cost > 0 ? `£${cost.toFixed(2)}` : '—'}
+                    </span>
+                    <span style={{ fontSize: bold ? 13 : 11, fontFamily: 'monospace', textAlign: 'right', fontWeight: bold ? 700 : 600, color: bold ? sellColor : '#0F172A' }}>
+                      {sell > 0 ? `£${sell.toFixed(2)}` : '—'}
+                    </span>
+                  </div>
+                );
+
+                return (
+                  <div style={{ marginTop: 8, padding: '10px 13px', background: bgColor, border: `1px solid ${borderColor}`, borderRadius: 7 }}>
+                    {/* Customer attribution */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, paddingBottom: 7, borderBottom: '1px solid rgba(0,0,0,0.07)' }}>
+                      <span style={{ fontSize: 11, color: '#64748B' }}>Customer</span>
                       <div style={{ textAlign: 'right' }}>
                         {hasCustomer ? (
                           <>
-                            <span style={{ fontWeight: 700, color: '#0F172A' }}>{chargePreview.customer_name}</span>
-                            {chargePreview.customer_source !== 'direct' && (
-                              <div style={{ fontSize: 10, color: '#64748B' }}>({chargePreview.customer_source})</div>
+                            <span style={{ fontWeight: 700, color: '#0F172A', fontSize: 12 }}>{cp.customer_name}</span>
+                            {cp.customer_source !== 'direct' && (
+                              <div style={{ fontSize: 10, color: '#64748B' }}>{cp.customer_source}</div>
                             )}
                           </>
                         ) : (
-                          <>
-                            <span style={{ fontWeight: 700, color: '#FFB300' }}>UNRESOLVED</span>
-                            <div style={{ fontSize: 10, color: '#FFB300', marginTop: 2 }}>
-                              No customer linked to this tracking number
-                            </div>
-                          </>
+                          <span style={{ fontWeight: 700, color: '#FFB300', fontSize: 11 }}>UNRESOLVED</span>
                         )}
                       </div>
                     </div>
 
-                    {/* Divider */}
-                    <div style={{ borderTop: '1px solid rgba(0,0,0,0.07)', margin: '6px 0' }} />
-
-                    {/* Calculated sell row */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                      <div>
-                        <span style={{ color: '#0F172A', fontWeight: 700 }}>Calculated sell price</span>
-                        {chargePreview.has_override && (
-                          <span style={{ fontSize: 10, color: '#64748B', marginLeft: 5 }}>(customer override)</span>
-                        )}
-                        {chargePreview.parcel_count > 1 && (
-                          <div style={{ fontSize: 10, color: '#64748B', marginTop: 1 }}>
-                            {chargePreview.parcel_count} parcels
-                          </div>
-                        )}
-                      </div>
-                      <span style={{
-                        fontWeight: 700, fontSize: 14,
-                        color: hasCustomer ? '#00C853' : '#FFB300',
-                      }}>
-                        £{chargePreview.calculated_sell.toFixed(2)}
-                      </span>
+                    {/* Column headers */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 72px 72px', marginBottom: 2 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase' }} />
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textAlign: 'right', textTransform: 'uppercase' }}>Cost</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textAlign: 'right', textTransform: 'uppercase' }}>Sell</span>
                     </div>
+
+                    {/* Freight row — only when counterpart exists */}
+                    {cp.has_freight && <LRow label="Base Freight" cost={cp.freight_cost ?? 0} sell={cp.freight_sell ?? 0} />}
+
+                    {/* Surcharge row */}
+                    <LRow label={`${cp.surcharge_name || selectedSurcharge.name}`} cost={cp.carrier_cost ?? 0} sell={cp.calculated_sell ?? 0} />
+
+                    {cp.parcel_count > 1 && (
+                      <div style={{ fontSize: 10, color: '#64748B', textAlign: 'right', marginBottom: 2 }}>× {cp.parcel_count} parcels</div>
+                    )}
+                    {cp.has_override && (
+                      <div style={{ fontSize: 10, color: '#64748B', textAlign: 'right', marginBottom: 2 }}>✦ customer override rate</div>
+                    )}
+
+                    {/* Total row — only when freight data available */}
+                    {cp.has_freight && <LRow label="Total to Client" cost={totalCost} sell={totalSell} bold topBorder />}
 
                     {/* Warning when no customer */}
                     {!hasCustomer && (
-                      <div style={{
-                        marginTop: 8, padding: '6px 9px',
-                        background: 'rgba(255,179,0,0.12)', borderRadius: 5, fontSize: 10, color: '#B27800',
-                      }}>
-                        ⚠ Resolving without a customer will keep this line as Unmatched (unassigned_surcharge_customer) so it stays visible. Use Map to Customer first or check the freight counterpart line.
+                      <div style={{ marginTop: 8, padding: '6px 9px', background: 'rgba(255,179,0,0.12)', borderRadius: 5, fontSize: 10, color: '#B27800' }}>
+                        ⚠ No customer — line will stay Unmatched (visible on dashboard). Use Map to Customer first.
                       </div>
                     )}
                   </div>

@@ -1095,6 +1095,22 @@ router.get('/runs/:id/lines/:lineId/resolve-preview', async (req, res) => {
     if (!surchargeRes.rows.length) return res.status(404).json({ error: 'Surcharge not found' });
     const surcharge = surchargeRes.rows[0];
 
+    // Look up the freight counterpart line for this tracking number to provide
+    // the Base Freight Cost/Sell rows in the ledger preview.
+    const freightCounterpartRes = await query(
+      `SELECT corrected_sell_price, corrected_cost_price, carrier_amount
+       FROM   reconciliation_lines
+       WHERE  run_id          = $1
+         AND  tracking_number = $2
+         AND  surcharge_id   IS NULL
+       ORDER  BY id
+       LIMIT  1`,
+      [line.run_id, line.tracking_number]
+    );
+    const freightLine = freightCounterpartRes.rows[0] || null;
+    const freightSell = parseFloat(freightLine?.corrected_sell_price ?? 0);
+    const freightCost = parseFloat(freightLine?.corrected_cost_price ?? freightLine?.carrier_amount ?? 0);
+
     // Determine customer_id — direct or inherited from freight counterpart
     let customerId     = line.customer_id || null;
     let customerSource = 'direct';
@@ -1159,6 +1175,10 @@ router.get('/runs/:id/lines/:lineId/resolve-preview', async (req, res) => {
       parcel_count:    parcels,
       calculated_sell: calculatedSell,
       has_override:    hasOverride,
+      // Freight counterpart — for the full Base Freight / Surcharge / Total ledger
+      has_freight:     !!freightLine,
+      freight_sell:    freightSell,
+      freight_cost:    freightCost,
     });
   } catch (err) {
     console.error('[reconciliation/resolve-preview]', err);
@@ -1650,10 +1670,30 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
       WHERE  id = $1
     `, [line.run_id]);
 
+    // Build confirmed charge summary for post-resolve UI confirmation card.
+    // Only populated for map_to_surcharge resolutions where we know the sell price.
+    let confirmed = null;
+    if (resolution_type === 'map_to_surcharge' && resolvedSurchargeId && resolvedSell != null) {
+      const [surchargeNameRes, customerNameRes] = await Promise.all([
+        query(`SELECT name FROM surcharges WHERE id = $1 LIMIT 1`, [resolvedSurchargeId]),
+        resolvedCustomerId
+          ? query(`SELECT business_name FROM customers WHERE id = $1 LIMIT 1`, [resolvedCustomerId])
+          : Promise.resolve({ rows: [] }),
+      ]);
+      confirmed = {
+        status:         resolvedStatus,
+        surcharge_name: surchargeNameRes.rows[0]?.name || null,
+        customer_name:  customerNameRes.rows[0]?.business_name || null,
+        corrected_sell: resolvedSell,
+        carrier_cost:   parseFloat(line.carrier_amount || 0),
+      };
+    }
+
     return res.json({
       resolved:      true,
       mapping_id:    mappingId,
       bulk_applied:  bulkApplied,
+      confirmed,
       ...(resolvedSell != null && { corrected_sell_price: resolvedSell }),
     });
   } catch (err) {
