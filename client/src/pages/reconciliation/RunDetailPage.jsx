@@ -3106,6 +3106,8 @@ export default function RunDetailPage() {
   const [finalizeError,     setFinalizeError]     = useState('');
   const [unfinalizing,      setUnfinalizing]      = useState(false);
   const [raisingQueryLine,  setRaisingQueryLine]  = useState(null);
+  const [repairing,         setRepairing]         = useState(false);
+  const [repairMsg,         setRepairMsg]         = useState(null);
 
   const { data: run, isLoading: runLoading, refetch: refetchRun } = useQuery({
     queryKey: ['recon-run', id],
@@ -3141,6 +3143,30 @@ export default function RunDetailPage() {
       setFinalizeError(err.response?.data?.error || 'Finalization failed');
     } finally {
       setFinalizing(false);
+    }
+  }
+
+  async function handleRepairAndRefresh() {
+    setRepairing(true);
+    setRepairMsg(null);
+    try {
+      const res = await api.post('/reconciliation/backfill-carrier-direct-surcharges');
+      const { found, repriced, processed, errors } = res.data;
+      setRepairMsg(
+        repriced > 0 || processed > 0
+          ? `✓ ${repriced} repriced · ${processed} surcharges inserted`
+          : found === 0
+            ? '✓ No missing surcharges'
+            : errors > 0
+              ? `⚠ ${errors} error(s)`
+              : '✓ Already correct'
+      );
+      qc.invalidateQueries({ queryKey: ['recon-customers-preview', id] });
+      qc.invalidateQueries({ queryKey: ['recon-lines', id] });
+    } catch (err) {
+      setRepairMsg(`✗ ${err.response?.data?.error || err.message}`);
+    } finally {
+      setRepairing(false);
     }
   }
 
@@ -3237,6 +3263,33 @@ export default function RunDetailPage() {
           )}
           {!run.finalized && (run.unmatched_count || 0) === 0 && (run.warning_count || 0) > 0 && (
             <span style={{ color: '#FFB300', fontSize: 12, fontWeight: 700 }}>⚠ {run.warning_count} Unbilled Surcharge{(run.warning_count || 0) > 1 ? 's' : ''}</span>
+          )}
+          {!run.finalized && (
+            <>
+              {repairMsg && (
+                <span style={{
+                  fontSize: 11, fontWeight: 600,
+                  color: repairMsg.startsWith('✓') ? '#00C853' : repairMsg.startsWith('⚠') ? '#FFB300' : '#FF5252',
+                }}>
+                  {repairMsg}
+                </span>
+              )}
+              <button
+                onClick={handleRepairAndRefresh}
+                disabled={repairing}
+                title="Re-price and insert missing fuel & surcharges for carrier-direct multi-parcel shipments"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  fontSize: 11, fontWeight: 600, cursor: repairing ? 'default' : 'pointer',
+                  background: repairing ? 'rgba(0,0,0,0.04)' : 'rgba(59,130,246,0.08)',
+                  border: '1px solid rgba(59,130,246,0.3)',
+                  color: repairing ? '#94A3B8' : '#3B82F6',
+                  borderRadius: 5, padding: '5px 10px',
+                }}
+              >
+                {repairing ? '⟳ Repairing…' : '⟳ Repair & Refresh'}
+              </button>
+            </>
           )}
           {!run.finalized && run.unmatched_count === 0 && (run.status === 'complete' || run.status === 'needs_review') && (
             <button
