@@ -248,6 +248,26 @@ router.post('/:customerId/apply-markup', async (req, res, next) => {
       SELECT
         z.name  AS zone_name,
         CASE
+          -- Multi-band zone: always use computed label so every chip gets a unique
+          -- weight_class_name even when all bands share wb.name = 'Parcel'.
+          WHEN COUNT(*) OVER (PARTITION BY z.id) > 1 THEN
+            CASE
+              WHEN wb.max_weight_kg IS NOT NULL THEN
+                (CASE WHEN wb.min_weight_kg = floor(wb.min_weight_kg)
+                      THEN floor(wb.min_weight_kg)::int::text
+                      ELSE round(wb.min_weight_kg::numeric, 1)::text END)
+                || '-' ||
+                (CASE WHEN wb.max_weight_kg = floor(wb.max_weight_kg)
+                      THEN floor(wb.max_weight_kg)::int::text
+                      ELSE round(wb.max_weight_kg::numeric, 1)::text END)
+                || 'kg'
+              ELSE
+                (CASE WHEN wb.min_weight_kg = floor(wb.min_weight_kg)
+                      THEN floor(wb.min_weight_kg)::int::text
+                      ELSE round(wb.min_weight_kg::numeric, 1)::text END)
+                || 'kg+'
+            END
+          -- Single-band zone: keep wb.name when meaningful
           WHEN wb.name IS NOT NULL AND wb.name NOT IN ('None', '') THEN wb.name
           WHEN wb.max_weight_kg IS NOT NULL THEN
             (CASE WHEN wb.min_weight_kg = floor(wb.min_weight_kg)
@@ -400,33 +420,58 @@ router.get('/zones/:serviceCode', async (req, res, next) => {
     // POST resolution logic can always resolve min/max bounds from the band name.
     // Groups across all carrier rate cards so the template is card-agnostic.
     const weightBandResult = await query(`
+      -- Multi-band zones always use computed min–max labels, never wb.name.
+      -- The old MAX(wb.name) logic collapsed every chip to weight_class_name='Parcel'
+      -- when all bands in a zone shared the same name (e.g. from a rate-card import),
+      -- causing multiWeight=false in the UI and all chips sharing one customer_rates row.
+      WITH grouped_bands AS (
+        SELECT
+          z.id          AS zone_id,
+          z.name        AS zone_name,
+          wb.min_weight_kg,
+          wb.max_weight_kg,
+          MAX(wb.name)  AS band_name,
+          BOOL_OR(wb.price_sub IS NOT NULL) AS has_sub_price
+        FROM courier_services cs
+        JOIN zones       z  ON z.courier_service_id = cs.id
+        JOIN weight_bands wb ON wb.zone_id = z.id
+        WHERE cs.service_code ILIKE $1
+        GROUP BY z.id, z.name, wb.min_weight_kg, wb.max_weight_kg
+      ),
+      band_counts AS (
+        SELECT zone_id, COUNT(*) AS band_count
+        FROM grouped_bands
+        GROUP BY zone_id
+      )
       SELECT
-        z.name AS zone_name,
+        gb.zone_name,
         CASE
-          WHEN MAX(wb.name) IS NOT NULL AND MAX(wb.name) NOT IN ('None', '') THEN MAX(wb.name)
-          WHEN wb.max_weight_kg IS NOT NULL THEN
-            (CASE WHEN wb.min_weight_kg = floor(wb.min_weight_kg)
-                  THEN floor(wb.min_weight_kg)::int::text
-                  ELSE round(wb.min_weight_kg::numeric, 1)::text END)
+          -- Single-band zone: keep the name if meaningful ('Parcel', 'Small Bagit', etc.)
+          WHEN bc.band_count = 1
+               AND gb.band_name IS NOT NULL
+               AND gb.band_name NOT IN ('None', '')
+            THEN gb.band_name
+          -- Multi-band zone (or unnamed single-band): always use computed label
+          -- to guarantee distinct weight_class_name values per chip.
+          WHEN gb.max_weight_kg IS NOT NULL THEN
+            (CASE WHEN gb.min_weight_kg = floor(gb.min_weight_kg)
+                  THEN floor(gb.min_weight_kg)::int::text
+                  ELSE round(gb.min_weight_kg::numeric, 1)::text END)
             || '-' ||
-            (CASE WHEN wb.max_weight_kg = floor(wb.max_weight_kg)
-                  THEN floor(wb.max_weight_kg)::int::text
-                  ELSE round(wb.max_weight_kg::numeric, 1)::text END)
+            (CASE WHEN gb.max_weight_kg = floor(gb.max_weight_kg)
+                  THEN floor(gb.max_weight_kg)::int::text
+                  ELSE round(gb.max_weight_kg::numeric, 1)::text END)
             || 'kg'
           ELSE
-            (CASE WHEN wb.min_weight_kg = floor(wb.min_weight_kg)
-                  THEN floor(wb.min_weight_kg)::int::text
-                  ELSE round(wb.min_weight_kg::numeric, 1)::text END)
+            (CASE WHEN gb.min_weight_kg = floor(gb.min_weight_kg)
+                  THEN floor(gb.min_weight_kg)::int::text
+                  ELSE round(gb.min_weight_kg::numeric, 1)::text END)
             || 'kg+'
-        END                               AS weight_class_name,
-        BOOL_OR(wb.price_sub IS NOT NULL) AS has_sub_price,
-        MIN(wb.min_weight_kg)             AS sort_weight
-      FROM courier_services cs
-      JOIN zones      z  ON z.courier_service_id = cs.id
-      JOIN weight_bands wb ON wb.zone_id = z.id
-      WHERE cs.service_code ILIKE $1
-      GROUP BY z.name, wb.min_weight_kg, wb.max_weight_kg
-      ORDER BY z.name, MIN(wb.min_weight_kg)
+        END                       AS weight_class_name,
+        gb.has_sub_price
+      FROM grouped_bands gb
+      JOIN band_counts bc ON bc.zone_id = gb.zone_id
+      ORDER BY gb.zone_name, gb.min_weight_kg
     `, [serviceCode]);
 
     if (weightBandResult.rows.length > 0) {
