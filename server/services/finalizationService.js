@@ -357,7 +357,34 @@ async function buildSnapshot(line, run) {
   };
 
   // ── Enrich from our charges table + shipments ─────────────────────────────
-  if (line.charge_id) {
+  //
+  // For map_to_surcharge lines, charge_id was updated at resolve time to point
+  // to the newly created surcharge charge (not the original freight charge).
+  // Using that surcharge charge for enrichment would set sell_base_amount to the
+  // surcharge sell price and lose the real freight sell entirely.
+  //
+  // Fix: when the line has surcharge_id set (= map_to_surcharge resolved), find
+  // the freight charge by joining from the surcharge charge's shipment_id.
+  // corrected_sell_price on these lines = the surcharge sell, which is already
+  // captured via the surcharge_detail subquery — don't apply it as sell_base.
+  let enrichChargeId = line.charge_id;
+  if (line.surcharge_id && line.charge_id) {
+    try {
+      const fcRes = await query(`
+        SELECT c.id
+        FROM   charges c
+        JOIN   charges sc ON sc.shipment_id = c.shipment_id
+        WHERE  sc.id           = $1
+          AND  c.charge_type   = 'courier'
+          AND  c.cancelled     = false
+        ORDER  BY c.created_at DESC
+        LIMIT  1
+      `, [line.charge_id]);
+      if (fcRes.rows.length) enrichChargeId = fcRes.rows[0].id;
+    } catch (_) { /* non-fatal — fall back to line.charge_id */ }
+  }
+
+  if (enrichChargeId) {
     const enrichRes = await query(`
       SELECT
         c.shipment_id,
@@ -419,15 +446,21 @@ async function buildSnapshot(line, run) {
       LEFT JOIN courier_services cs ON cs.id = (
         SELECT id FROM courier_services WHERE service_code ILIKE s.dc_service_id LIMIT 1
       )
-      WHERE  c.id = $1
-    `, [line.charge_id]);
+      WHERE  c.id = $1  -- enrichChargeId (freight charge for surcharge lines, charge_id otherwise)
+    `, [enrichChargeId]);
 
     if (enrichRes.rows.length) {
       const d = enrichRes.rows[0];
       // corrected_sell_price: recomputed at billed weight by the reconciliation engine
       // for corrected (mapping-adjusted) pool-matched lines. Takes priority over
       // the booking-time charges.price so the snapshot reflects the reconciled sell.
-      const correctedSell = line.corrected_sell_price != null
+      //
+      // For map_to_surcharge lines (surcharge_id set), corrected_sell_price is the
+      // *surcharge* sell price — not the freight sell.  The surcharge sell is already
+      // captured via the surcharge_detail subquery below (shipment's surcharge charges),
+      // so we must NOT also apply it as sell_base here (that would double-count it and
+      // push the freight sell to zero).  Only apply correctedSell for freight lines.
+      const correctedSell = (line.corrected_sell_price != null && !line.surcharge_id)
         ? round4(parseFloat(line.corrected_sell_price))
         : null;
       const sellBase      = correctedSell ?? round4(parseFloat(d.sell_base || 0));
