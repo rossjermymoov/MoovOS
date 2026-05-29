@@ -345,6 +345,7 @@ async function buildSnapshot(line, run) {
     order_reference:         null,
     recipient_name:          null,
     recipient_postcode:      null,
+    parcel_count:            line.parcel_count || null,
     weight_kg:               line.carrier_billed_weight_kg || null,
     service_name:            null,
     service_code:            null,
@@ -573,19 +574,19 @@ async function insertSnapshot(runId, reconLineId, s) {
     INSERT INTO finalized_billing_lines (
       run_id, reconciliation_line_id, charge_id, customer_id, customer_name,
       tracking_number, order_reference, recipient_name, recipient_postcode,
-      weight_kg, service_name, service_code, despatch_date,
+      parcel_count, weight_kg, service_name, service_code, despatch_date,
       carrier_base_amount, carrier_fuel_amount, carrier_surcharge_amount, carrier_total_amount,
       sell_base_amount, sell_fuel_amount, sell_surcharge_amount, sell_total_amount,
       surcharge_detail, recon_status, corrected_by, source
     ) VALUES (
-      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,
-      $14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
+      $15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26
     )
     ON CONFLICT (reconciliation_line_id) DO NOTHING
   `, [
     runId, reconLineId, s.charge_id, s.customer_id, s.customer_name,
     s.tracking_number, s.order_reference, s.recipient_name, s.recipient_postcode,
-    s.weight_kg, s.service_name, s.service_code, s.despatch_date,
+    s.parcel_count || null, s.weight_kg, s.service_name, s.service_code, s.despatch_date,
     s.carrier_base_amount, s.carrier_fuel_amount, s.carrier_surcharge_amount, s.carrier_total_amount,
     s.sell_base_amount, s.sell_fuel_amount, s.sell_surcharge_amount, s.sell_total_amount,
     s.surcharge_detail ? JSON.stringify(s.surcharge_detail) : null,
@@ -734,6 +735,7 @@ export async function generateCustomerCSV(runId, customerId) {
     'Recipient Name',
     'Postcode',
     'Service',
+    'Parcels',
     'Weight (kg)',
     'Base Charge (£)',
     'Fuel Charge (£)',
@@ -772,6 +774,7 @@ export async function generateCustomerCSV(runId, customerId) {
       l.recipient_name        || '',
       l.recipient_postcode    || '',
       l.service_name          || '',
+      l.parcel_count != null  ? l.parcel_count : '',
       l.weight_kg != null     ? parseFloat(l.weight_kg).toFixed(3) : '',
       base.toFixed(2),
       fuel.toFixed(2),
@@ -801,8 +804,9 @@ export async function generateCustomerCSV(runId, customerId) {
       surcharge:      acc.surcharge + parseFloat(l.sell_surcharge_amount || 0),
       total:          acc.total     + parseFloat(l.sell_total_amount     || 0),
       surchargeByName: acc.surchargeByName,
+      parcelCount:    acc.parcelCount + (parseInt(l.parcel_count) || 0),
     };
-  }, { base: 0, fuel: 0, surcharge: 0, total: 0, surchargeByName: {} });
+  }, { base: 0, fuel: 0, surcharge: 0, total: 0, surchargeByName: {}, parcelCount: 0 });
 
   // Same logic as the per-row totals: sum from individual surcharge columns,
   // not from sell_surcharge_amount / sell_total_amount snapshot fields.
@@ -811,7 +815,9 @@ export async function generateCustomerCSV(runId, customerId) {
 
   rows.push([]); // blank separator
   rows.push([
-    'TOTAL', '', '', '', '', '', '',
+    'TOTAL', '', '', '', '', '',
+    totals.parcelCount > 0 ? totals.parcelCount : '',
+    '',
     totals.base.toFixed(2),
     totals.fuel.toFixed(2),
     ...surchargeNamesSorted.map(n => (totals.surchargeByName[n] || 0).toFixed(2)),

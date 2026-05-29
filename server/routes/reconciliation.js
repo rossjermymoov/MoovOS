@@ -3551,12 +3551,12 @@ router.get('/runs/:id/export/preview-csv', async (req, res) => {
 
     const headers = [
       'Tracking Number', 'Order Reference', 'Despatch Date',
-      'Recipient Name', 'Postcode', 'Service', 'Weight (kg)',
+      'Recipient Name', 'Postcode', 'Service', 'Parcels', 'Weight (kg)',
       'Base Charge (£)', 'Fuel Charge (£)',
       'Total Surcharges (£)', 'Line Total (£)', 'Status',
     ];
 
-    let totalBase = 0, totalFuel = 0, totalSurch = 0;
+    let totalBase = 0, totalFuel = 0, totalSurch = 0, totalParcels = 0;
 
     const rows = allLines.map(l => {
       const base  = parseFloat(l.sell_base         || 0);
@@ -3564,6 +3564,7 @@ router.get('/runs/:id/export/preview-csv', async (req, res) => {
       const surch = parseFloat(l.sell_surcharge_total || 0);
       const total = base + fuel + surch;
       totalBase  += base; totalFuel += fuel; totalSurch += surch;
+      totalParcels += (parseInt(l.parcel_count) || 0);
       return [
         l.tracking_number   || '',
         l.order_reference   || '',
@@ -3571,6 +3572,7 @@ router.get('/runs/:id/export/preview-csv', async (req, res) => {
         l.recipient_name    || '',
         l.postcode          || '',
         l.service_name      || '',
+        l.parcel_count != null ? l.parcel_count : '',
         l.weight_kg != null ? parseFloat(l.weight_kg).toFixed(3) : '',
         base.toFixed(2),
         fuel.toFixed(2),
@@ -3581,7 +3583,8 @@ router.get('/runs/:id/export/preview-csv', async (req, res) => {
     });
 
     rows.push([]);
-    rows.push(['TOTAL', '', '', '', '', '', '',
+    rows.push(['TOTAL', '', '', '', '', '',
+      totalParcels > 0 ? totalParcels : '', '',
       totalBase.toFixed(2), totalFuel.toFixed(2),
       totalSurch.toFixed(2),
       (totalBase + totalFuel + totalSurch).toFixed(2), '',
