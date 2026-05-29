@@ -1450,10 +1450,15 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
       console.warn(`[reconciliation/resolve] Surcharge mapped but no customer found for tracking=${line.tracking_number} — keeping line unmatched (unassigned_surcharge_customer)`);
     }
 
+    // Compute corrected_by in JS to avoid passing resolvedStatus ($10) into both
+    // a CASE WHEN comparison (text) and a SET status assignment (enum) in the same
+    // query — PostgreSQL throws "inconsistent types deduced for parameter $10".
+    const resolvedCorrectedBy = resolvedStatus === 'corrected' ? 'human' : null;
+
     await query(`
       UPDATE reconciliation_lines
       SET    status                = $10,
-             corrected_by          = CASE WHEN $10 = 'corrected' THEN 'human' ELSE corrected_by END,
+             corrected_by          = COALESCE($11, corrected_by),
              resolved_by           = $2,
              resolved_at           = NOW(),
              resolution_notes      = $3,
@@ -1473,7 +1478,8 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
         resolvedCustomerId,
         resolvedSurchargeId,
         resolvedUnmatchedReason,
-        resolvedStatus]);
+        resolvedStatus,
+        resolvedCorrectedBy]);
 
     // If scope = 'always', save a mapping rule
     let mappingId = null;
