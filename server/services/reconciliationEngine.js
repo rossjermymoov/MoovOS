@@ -1053,7 +1053,7 @@ async function handleCarrierDirect({
   let insertedId = newCharges[0]?.id || null;
   if (!insertedId) {
     const existing = await query(
-      `SELECT id, sell_price, status FROM charges
+      `SELECT id, sell_price, status, shipment_id FROM charges
        WHERE  tracking_code       = $1
          AND  courier_service_id  = $2
          AND  source              = 'carrier_direct'
@@ -1065,6 +1065,18 @@ async function handleCarrierDirect({
     insertedId = existing.rows[0]?.id || null;
     if (insertedId) {
       console.log(`[carrier-direct] reused existing charge id=${insertedId} for tracking=${trackingNumber}`);
+
+      // If the existing charge has shipment_id = NULL but we now have a real
+      // shipment, link it so that createCarrierDirectSurcharges and the preview
+      // SQL can join freight + fuel/GEC charges together correctly.
+      const prevShipmentId = existing.rows[0]?.shipment_id;
+      if (!prevShipmentId && cdShipmentId) {
+        await query(
+          `UPDATE charges SET shipment_id = $1, updated_at = NOW() WHERE id = $2`,
+          [cdShipmentId, insertedId]
+        );
+        console.log(`[carrier-direct] linked shipment_id=${cdShipmentId} to existing charge id=${insertedId}`);
+      }
 
       // If the existing charge was a pricing_error (sell_price null) but we now have
       // a valid sell price, repair it so fuel/surcharges can be created and the billing
