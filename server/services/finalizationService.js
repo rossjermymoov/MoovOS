@@ -357,33 +357,61 @@ async function buildSnapshot(line, run) {
     despatch_date:           line.shipment_date || null,
   };
 
+  // ── Fuel recon lines: carrier side only ──────────────────────────────────────
+  //
+  // is_fuel = true lines represent the carrier's fuel surcharge invoice line item.
+  // Their sell amounts are already captured in the FREIGHT recon line's snapshot
+  // via the per-shipment sell_fuel subquery.  Running enrichment here would
+  // duplicate those sell amounts in the customer CSV.
+  //
+  // Record only carrier_fuel_amount; zero all sell fields.
+  if (line.is_fuel) {
+    // carrier_fuel_amount is set correctly from line.carrier_amount in initialization
+    if (snapshot.customer_id) {
+      try {
+        const cRes = await query(
+          `SELECT business_name FROM customers WHERE id = $1`,
+          [snapshot.customer_id]
+        );
+        if (cRes.rows.length) snapshot.customer_name = cRes.rows[0].business_name;
+      } catch (_) { /* non-fatal */ }
+    }
+    return snapshot;  // sell amounts remain 0 — freight line captures sell_fuel
+  }
+
+  // ── Surcharge (map_to_surcharge) recon lines: carrier side only ───────────────
+  //
+  // Lines with surcharge_id set represent carrier invoice surcharge line items
+  // resolved via "Map to Surcharge".  Their sell amounts — including the named
+  // surcharge sell — are already captured in the FREIGHT recon line's snapshot
+  // via the per-shipment surcharge_detail and sell_surcharge subqueries.
+  //
+  // Running the freight-charge enrichment here (the migration 270 fix) caused the
+  // surcharge line to produce a complete duplicate of the freight row, inflating
+  // the customer CSV total by the full freight sell amount for every surcharge line.
+  //
+  // Record only carrier_surcharge_amount; zero all sell fields.
+  if (line.surcharge_id) {
+    snapshot.carrier_base_amount      = 0;
+    snapshot.carrier_surcharge_amount = round4(parseFloat(line.carrier_amount) || 0);
+    snapshot.carrier_fuel_amount      = 0;
+    snapshot.carrier_total_amount     = round4(parseFloat(line.carrier_amount) || 0);
+    if (snapshot.customer_id) {
+      try {
+        const cRes = await query(
+          `SELECT business_name FROM customers WHERE id = $1`,
+          [snapshot.customer_id]
+        );
+        if (cRes.rows.length) snapshot.customer_name = cRes.rows[0].business_name;
+      } catch (_) { /* non-fatal */ }
+    }
+    return snapshot;  // sell amounts remain 0 — freight line captures sell_surcharge
+  }
+
   // ── Enrich from our charges table + shipments ─────────────────────────────
   //
-  // For map_to_surcharge lines, charge_id was updated at resolve time to point
-  // to the newly created surcharge charge (not the original freight charge).
-  // Using that surcharge charge for enrichment would set sell_base_amount to the
-  // surcharge sell price and lose the real freight sell entirely.
-  //
-  // Fix: when the line has surcharge_id set (= map_to_surcharge resolved), find
-  // the freight charge by joining from the surcharge charge's shipment_id.
-  // corrected_sell_price on these lines = the surcharge sell, which is already
-  // captured via the surcharge_detail subquery — don't apply it as sell_base.
-  let enrichChargeId = line.charge_id;
-  if (line.surcharge_id && line.charge_id) {
-    try {
-      const fcRes = await query(`
-        SELECT c.id
-        FROM   charges c
-        JOIN   charges sc ON sc.shipment_id = c.shipment_id
-        WHERE  sc.id           = $1
-          AND  c.charge_type   = 'courier'
-          AND  c.cancelled     = false
-        ORDER  BY c.created_at DESC
-        LIMIT  1
-      `, [line.charge_id]);
-      if (fcRes.rows.length) enrichChargeId = fcRes.rows[0].id;
-    } catch (_) { /* non-fatal — fall back to line.charge_id */ }
-  }
+  // Only reaches here for freight (is_fuel=false, surcharge_id IS NULL) lines.
+  const enrichChargeId = line.charge_id;
 
   if (enrichChargeId) {
     const enrichRes = await query(`
@@ -696,12 +724,17 @@ export async function generateCustomerCSV(runId, customerId) {
   if (!runRes.rows.length) throw new Error('Run not found');
   const run = runRes.rows[0];
 
-  // Fetch lines for this customer
+  // Fetch freight lines for this customer.
+  // Fuel (is_fuel=true) and surcharge (surcharge_id IS NOT NULL) recon lines
+  // have sell_total_amount = 0 in the snapshot — their sell is captured in the
+  // freight line's breakdown.  Filtering to sell_total_amount > 0 keeps only
+  // the freight rows that customers are billed on.
   const linesRes = await query(`
     SELECT f.*
     FROM   finalized_billing_lines f
-    WHERE  f.run_id      = $1
-      AND  f.customer_id = $2
+    WHERE  f.run_id          = $1
+      AND  f.customer_id     = $2
+      AND  f.sell_total_amount > 0
     ORDER  BY f.despatch_date ASC, f.tracking_number ASC
   `, [runId, customerId]);
 
