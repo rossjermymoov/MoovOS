@@ -779,22 +779,51 @@ export async function generateCustomerCSV(runId, customerId) {
   if (!runRes.rows.length) throw new Error('Run not found');
   const run = runRes.rows[0];
 
-  // Fetch freight lines for this customer.
-  // Fuel (is_fuel=true) and surcharge (surcharge_id IS NOT NULL) recon lines
-  // have sell_total_amount = 0 in the snapshot — their sell is captured in the
-  // freight line's breakdown.  Filtering to sell_total_amount > 0 keeps only
-  // the freight rows that customers are billed on.
+  // Fetch freight lines only (surcharge_id IS NULL on the recon line).
+  // Corrected surcharge companion rows (map_to_surcharge resolutions) now carry
+  // sell_surcharge_amount > 0 after the buildSnapshot fix, so the old
+  // sell_total_amount > 0 filter would include them as orphan zero-column rows.
+  // We exclude them here and merge their sell amounts below via manualSurchargeMap.
   const linesRes = await query(`
     SELECT f.*
     FROM   finalized_billing_lines f
+    JOIN   reconciliation_lines   rl ON rl.id = f.reconciliation_line_id
     WHERE  f.run_id          = $1
       AND  f.customer_id     = $2
+      AND  rl.surcharge_id  IS NULL
       AND  f.sell_total_amount > 0
     ORDER  BY f.despatch_date ASC, f.tracking_number ASC
   `, [runId, customerId]);
 
   const lines = linesRes.rows;
   if (!lines.length) throw new Error('No finalized lines found for this customer in this run');
+
+  // Fetch corrected surcharge companion rows (map_to_surcharge resolutions).
+  // These have their own FBL row with sell_surcharge_amount = corrected_sell_price
+  // and must be merged into the freight row for the same tracking number.
+  const manualSurchargeRes = await query(`
+    SELECT f.tracking_number,
+           f.sell_surcharge_amount,
+           sx.name AS surcharge_name
+    FROM   finalized_billing_lines f
+    JOIN   reconciliation_lines   rl ON rl.id = f.reconciliation_line_id
+    JOIN   surcharges             sx ON sx.id = rl.surcharge_id
+    WHERE  f.run_id          = $1
+      AND  f.customer_id     = $2
+      AND  rl.surcharge_id  IS NOT NULL
+      AND  f.sell_surcharge_amount > 0
+  `, [runId, customerId]);
+
+  // Build tracking_number → [{ surcharge_name, sell_amount }] lookup
+  const manualSurchargeMap = {};
+  for (const r of manualSurchargeRes.rows) {
+    if (!manualSurchargeMap[r.tracking_number]) manualSurchargeMap[r.tracking_number] = [];
+    manualSurchargeMap[r.tracking_number].push({
+      surcharge_name: r.surcharge_name || 'Surcharge',
+      sell_amount:    parseFloat(r.sell_surcharge_amount || 0),
+      charge_type:    'surcharge',
+    });
+  }
 
   // Update CSV export timestamp
   await query(`
@@ -803,8 +832,9 @@ export async function generateCustomerCSV(runId, customerId) {
     WHERE run_id = $1 AND customer_id = $2
   `, [runId, customerId]);
 
-  // Collect all distinct surcharge names across this customer's lines so we
-  // can produce individual surcharge columns in the CSV.
+  // Collect all distinct surcharge names — from surcharge_detail JSONB on freight
+  // rows (EFS, HGV, etc.) AND from manually resolved surcharge companion rows
+  // (Long Length, etc.) merged via manualSurchargeMap.
   const surchargeNames = new Set();
   for (const l of lines) {
     const detail = Array.isArray(l.surcharge_detail)
@@ -812,6 +842,10 @@ export async function generateCustomerCSV(runId, customerId) {
       : (l.surcharge_detail ? JSON.parse(l.surcharge_detail) : []);
     for (const s of detail) {
       if (s.charge_type === 'surcharge') surchargeNames.add(s.surcharge_name);
+    }
+    // Also add names from manually resolved companion surcharge rows
+    for (const s of (manualSurchargeMap[l.tracking_number] || [])) {
+      surchargeNames.add(s.surcharge_name);
     }
   }
   const surchargeNamesSorted = [...surchargeNames].sort();
@@ -837,12 +871,16 @@ export async function generateCustomerCSV(runId, customerId) {
       ? l.surcharge_detail
       : (l.surcharge_detail ? JSON.parse(l.surcharge_detail) : []);
 
-    // Build per-named-surcharge sell amounts
+    // Build per-named-surcharge sell amounts from surcharge_detail (EFS, HGV, etc.)
+    // plus manually resolved companion surcharge rows (Long Length, etc.)
     const surchargeMap = {};
     for (const s of detail) {
       if (s.charge_type === 'surcharge') {
         surchargeMap[s.surcharge_name] = (surchargeMap[s.surcharge_name] || 0) + (s.sell_amount || 0);
       }
+    }
+    for (const s of (manualSurchargeMap[l.tracking_number] || [])) {
+      surchargeMap[s.surcharge_name] = (surchargeMap[s.surcharge_name] || 0) + s.sell_amount;
     }
 
     // Compute totals from the individual surcharge columns rather than the
@@ -882,6 +920,9 @@ export async function generateCustomerCSV(runId, customerId) {
       if (s.charge_type === 'surcharge') {
         surchargeMap[s.surcharge_name] = (surchargeMap[s.surcharge_name] || 0) + (s.sell_amount || 0);
       }
+    }
+    for (const s of (manualSurchargeMap[l.tracking_number] || [])) {
+      surchargeMap[s.surcharge_name] = (surchargeMap[s.surcharge_name] || 0) + s.sell_amount;
     }
     for (const n of surchargeNamesSorted) {
       acc.surchargeByName[n] = (acc.surchargeByName[n] || 0) + (surchargeMap[n] || 0);
