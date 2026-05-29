@@ -706,6 +706,53 @@ async function buildSnapshot(line, run, freightTrackingsInRun = new Set()) {
     }
   }
 
+  // ── Fuel guarantee — applies to every freight line ───────────────────────────
+  //
+  // Every shipment must show a fuel charge as a separate column.  If sell_fuel is
+  // still 0 after all enrichment (no fuel charges in the charges table, e.g. for
+  // external bookings, remap_service lines on unbooked shipments, or air waybills),
+  // split the current sell_base into base + fuel using the customer's fuel %.
+  //
+  // This is NOT applied to surcharge or fuel companion rows (surcharge_id / is_fuel).
+  if (
+    !line.surcharge_id &&
+    !line.is_fuel &&
+    snapshot.sell_base_amount > 0 &&
+    snapshot.sell_fuel_amount === 0
+  ) {
+    try {
+      const fuelPctRes = await query(`
+        SELECT COALESCE(cfgp.sell_pct, fg.standard_sell_pct, 0) AS sell_pct
+        FROM   courier_services cs
+        JOIN   fuel_groups fg ON fg.id = cs.fuel_group_id
+        LEFT JOIN customer_fuel_group_pricing cfgp
+                  ON cfgp.fuel_group_id = fg.id
+                 AND cfgp.customer_id   = $1
+        WHERE  cs.carrier_id = $2
+        ORDER  BY COALESCE(cfgp.sell_pct, fg.standard_sell_pct) DESC
+        LIMIT  1
+      `, [line.customer_id, run.carrier_id]);
+
+      const fuelPct = parseFloat(fuelPctRes.rows[0]?.sell_pct || 0);
+      if (fuelPct > 0) {
+        // sell_base already represents the all-in total for these lines;
+        // decompose: total = base × (1 + fuel%)  →  base = total / (1 + fuel%)
+        const total    = round4(snapshot.sell_base_amount + snapshot.sell_surcharge_amount);
+        const newBase  = round4(snapshot.sell_base_amount / (1 + fuelPct / 100));
+        const newFuel  = round4(snapshot.sell_base_amount - newBase);
+        snapshot.sell_base_amount  = newBase;
+        snapshot.sell_fuel_amount  = newFuel;
+        snapshot.sell_total_amount = round4(newBase + newFuel + snapshot.sell_surcharge_amount);
+        console.log(
+          `[buildSnapshot] Fuel guarantee applied: ${fuelPct}% → ` +
+          `base=£${newBase} fuel=£${newFuel} tracking=${line.tracking_number}`
+        );
+      }
+    } catch (fuelGErr) {
+      console.warn(`[buildSnapshot] Fuel guarantee lookup failed for tracking=${line.tracking_number}: ${fuelGErr.message}`);
+    }
+  }
+
   // If we still don't have a customer_name, fetch it directly
   if (!snapshot.customer_name && snapshot.customer_id) {
     const cRes = await query(
