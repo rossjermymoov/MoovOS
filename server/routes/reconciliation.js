@@ -5405,10 +5405,98 @@ router.post('/backfill-carrier-direct-surcharges', async (req, res) => {
 
     function round2(n) { return Math.round(n * 100) / 100; }
 
+    // ── Pre-pass: link null-shipment carrier_direct charges ───────────────────
+    // Charges created before the task-69 fix can have shipment_id = NULL because
+    // the fallback shipment lookup used event_type = 'carrier_direct' and missed
+    // OMS-originated shipments.  Without a shipment_id, createCarrierDirectSurcharges
+    // can never run, and the main loop below silently skips those charges.
+    // We link them here (to an existing shipment or a freshly-created one) so
+    // the main loop picks them up on this same run.
+    {
+      const ppParams = [];
+      let   ppFilter = `c.charge_type   = 'courier'
+        AND c.source        = 'carrier_direct'
+        AND c.shipment_id   IS NULL
+        AND c.cancelled     = false
+        AND c.tracking_code IS NOT NULL`;
+      if (customer_id) {
+        ppParams.push(customer_id);
+        ppFilter += ` AND c.customer_id = $${ppParams.length}`;
+      }
+
+      const { rows: nullRows } = await query(`
+        SELECT c.id, c.customer_id, c.tracking_code,
+               c.ship_to_postcode, c.ship_to_country_iso, c.ship_to_name,
+               c.despatch_date, c.parcel_count
+        FROM   charges c
+        WHERE  ${ppFilter}
+      `, ppParams);
+
+      let preLinked = 0;
+      for (const nr of nullRows) {
+        try {
+          // 1. Try to find an existing shipment for this tracking code (any event_type)
+          const { rows: found } = await query(
+            `SELECT id FROM shipments WHERE $1 = ANY(tracking_codes) ORDER BY created_at DESC LIMIT 1`,
+            [nr.tracking_code]
+          );
+          let shipmentId = found[0]?.id || null;
+
+          // 2. Create a new carrier_direct shipment if none exists
+          if (!shipmentId) {
+            const { rows: created } = await query(`
+              INSERT INTO shipments (
+                event_type, customer_id, tracking_codes,
+                ship_to_postcode, ship_to_country_iso, ship_to_name,
+                collection_date, parcel_count
+              ) VALUES ('carrier_direct', $1, $2, $3, $4, $5, $6, $7)
+              ON CONFLICT DO NOTHING RETURNING id
+            `, [
+              nr.customer_id,
+              [nr.tracking_code],
+              nr.ship_to_postcode    || null,
+              nr.ship_to_country_iso || 'GB',
+              nr.ship_to_name        || null,
+              nr.despatch_date       || null,
+              nr.parcel_count        || 1,
+            ]);
+            shipmentId = created[0]?.id;
+
+            // ON CONFLICT can fire if another process won the race — fetch it
+            if (!shipmentId) {
+              const { rows: lb } = await query(
+                `SELECT id FROM shipments WHERE $1 = ANY(tracking_codes) ORDER BY created_at DESC LIMIT 1`,
+                [nr.tracking_code]
+              );
+              shipmentId = lb[0]?.id;
+            }
+          }
+
+          if (shipmentId) {
+            await query(
+              `UPDATE charges SET shipment_id = $1, updated_at = NOW() WHERE id = $2`,
+              [shipmentId, nr.id]
+            );
+            preLinked++;
+          } else {
+            console.warn(`[backfill-cd-surcharges] pre-pass: no shipment found/created for charge ${nr.id} (tracking=${nr.tracking_code})`);
+          }
+        } catch (err) {
+          console.warn(`[backfill-cd-surcharges] pre-pass charge ${nr.id}:`, err.message);
+        }
+      }
+
+      if (nullRows.length > 0) {
+        console.log(`[backfill-cd-surcharges] pre-pass: ${nullRows.length} null-shipment charge(s) found, ${preLinked} linked`);
+      }
+    }
+
     // Find ALL carrier_direct freight charges missing a fuel charge.
     // This now includes sell_price = null charges (pricing_error) which
     // the old query excluded — those are the broken multi-parcel charges
     // that need re-pricing before surcharges can be inserted.
+    // The pre-pass above ensures null-shipment charges are now linked, so
+    // this query will pick them up too.
     const params  = [];
     let   where   = `c.charge_type = 'courier'
       AND c.cancelled          = false
@@ -5438,7 +5526,7 @@ router.post('/backfill-carrier-direct-surcharges', async (req, res) => {
              c.weight_charged_kg,
              c.ship_to_postcode, c.ship_to_country_iso,
              cs.courier_id,
-             COALESCE(s.parcel_count, 1) AS parcel_count
+             COALESCE(c.parcel_count, s.parcel_count, 1) AS parcel_count
       FROM   charges c
       JOIN   courier_services cs ON cs.id = c.courier_service_id
       LEFT JOIN shipments s ON s.id = c.shipment_id
