@@ -59,6 +59,16 @@ export async function finalizeRun(runId, staffId = null) {
     throw new Error('No matched or corrected lines to finalize');
   }
 
+  // Pre-build the set of tracking numbers that have a freight recon line in this
+  // run (is_fuel=false, surcharge_id IS NULL).  Used in buildSnapshot to reliably
+  // detect orphan surcharge lines — avoids a per-line async DB query and prevents
+  // false-negatives when tracking number formats differ slightly.
+  const freightTrackingsInRun = new Set(
+    lines
+      .filter(l => !l.surcharge_id && !l.is_fuel)
+      .map(l => l.tracking_number)
+  );
+
   let finalized = 0;
   let externalBalanceUpdates = 0;
 
@@ -226,7 +236,7 @@ export async function finalizeRun(runId, staffId = null) {
 
   for (const line of lines) {
     try {
-      const snapshot = await buildSnapshot(line, run);
+      const snapshot = await buildSnapshot(line, run, freightTrackingsInRun);
 
       // Guard: customer_id is NOT NULL in finalized_billing_lines.
       // If it is null here, the INSERT will fail with a constraint violation.
@@ -334,7 +344,7 @@ export async function finalizeRun(runId, staffId = null) {
 
 // ─── Build snapshot for a single reconciliation line ─────────────────────────
 
-async function buildSnapshot(line, run) {
+async function buildSnapshot(line, run, freightTrackingsInRun = new Set()) {
   // Start with what we know from the reconciliation line itself
   const snapshot = {
     charge_id:               line.charge_id || null,
@@ -427,15 +437,11 @@ async function buildSnapshot(line, run) {
     // invoiced the Long Length on a combined line without a separate freight
     // line), pull the freight + fuel sell from the charges table so the FBL row
     // captures the full billing and the margin calculation is correct.
+    // freightTrackingsInRun is pre-built in finalizeRun — no async query needed,
+    // and the Set uses exact tracking_number strings from the same loaded lines
+    // so there is no format-mismatch risk.
     try {
-      const freightCheck = await query(`
-        SELECT 1 FROM reconciliation_lines
-        WHERE run_id = $1 AND tracking_number = $2
-          AND surcharge_id IS NULL AND is_fuel = false
-        LIMIT 1
-      `, [line.run_id, line.tracking_number]);
-
-      if (!freightCheck.rows.length) {
+      if (!freightTrackingsInRun.has(line.tracking_number)) {
         // No freight counterpart in this run — enrich from charges table
         const orphanRes = await query(`
           SELECT c.price    AS freight_sell,
