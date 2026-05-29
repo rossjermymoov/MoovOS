@@ -510,14 +510,23 @@ router.get('/debug/boorieur', async (req, res) => {
   try {
     const tracking = req.query.tracking || '4652548311';
 
+    // Use ILIKE with wildcards so minor casing/spacing differences don't break lookup
     const runRes = await query(`
       SELECT id, invoice_ref, status, finalized, finalized_at,
              matched_count, corrected_count, unmatched_count, total_lines
       FROM   reconciliation_runs
-      WHERE  invoice_ref = 'BOORIEUR-270526'
+      WHERE  invoice_ref ILIKE '%BOORIEUR%270526%'
+         OR  invoice_ref ILIKE '%BOORI%EUR%270526%'
+      ORDER  BY id DESC
       LIMIT  1
     `);
-    if (!runRes.rows.length) return res.json({ error: 'Run BOORIEUR-270526 not found' });
+    if (!runRes.rows.length) {
+      // Last resort: return the 5 most recent runs so Ross can see what invoice_refs exist
+      const recentRuns = await query(
+        `SELECT id, invoice_ref, status, finalized FROM reconciliation_runs ORDER BY id DESC LIMIT 5`
+      );
+      return res.json({ error: 'Run BOORIEUR-270526 not found — check invoice_ref', recent_runs: recentRuns.rows });
+    }
     const run = runRes.rows[0];
 
     const rlRes = await query(`

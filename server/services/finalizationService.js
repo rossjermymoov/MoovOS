@@ -577,22 +577,49 @@ async function buildSnapshot(line, run) {
   // not booked through Moov OS — common for reseller accounts like Boori EUR
   // whose DHL shipments originate elsewhere).
   //
-  // In that case enrichChargeId is null, the block above never ran, and all sell
-  // amounts remain at their initial zero defaults.  Apply the human's corrected
-  // price here so the snapshot — and therefore the customer CSV — shows the
-  // correct sell value rather than £0.00.
-  //
-  // corrected_sell_price for manual_price = base + fuel (resolve endpoint adds
-  // the fuel surcharge % before storing).  We put the combined value into
-  // sell_base_amount with sell_fuel_amount = 0 (no per-component breakdown
-  // available without a shipment record).  The total is correct either way.
+  // corrected_sell_price = base * (1 + fuel%) — the resolve endpoint already
+  // applied the fuel surcharge % when the operator typed their base amount.
+  // We decompose it back into base + fuel here so the customer CSV shows the
+  // correct split rather than a combined lump in the Base column.
   if (snapshot.sell_base_amount === 0 && snapshot.sell_total_amount === 0 &&
       line.corrected_sell_price != null && !line.surcharge_id) {
-    const correctedSell = round4(parseFloat(line.corrected_sell_price));
-    if (correctedSell > 0) {
-      snapshot.sell_base_amount  = correctedSell;
-      snapshot.sell_total_amount = correctedSell;
-      console.log(`[buildSnapshot] Applied corrected_sell_price=£${correctedSell} as sell_base for line ${line.id} (no charge_id) tracking=${line.tracking_number}`);
+    const correctedTotal = round4(parseFloat(line.corrected_sell_price));
+    if (correctedTotal > 0) {
+      let sellBase = correctedTotal;
+      let sellFuel = 0;
+
+      // Look up the customer's sell fuel% for this carrier so we can reverse
+      // the fuel markup that was baked in at resolve time.
+      try {
+        const fuelPctRes = await query(`
+          SELECT COALESCE(cfgp.sell_pct, fg.standard_sell_pct, 0) AS sell_pct
+          FROM   courier_services cs
+          JOIN   fuel_groups fg ON fg.id = cs.fuel_group_id
+          LEFT JOIN customer_fuel_group_pricing cfgp
+                    ON cfgp.fuel_group_id = fg.id
+                   AND cfgp.customer_id   = $1
+          WHERE  cs.carrier_id = $2
+          ORDER  BY COALESCE(cfgp.sell_pct, fg.standard_sell_pct) DESC
+          LIMIT  1
+        `, [line.customer_id, run.carrier_id]);
+
+        const fuelPct = parseFloat(fuelPctRes.rows[0]?.sell_pct || 0);
+        if (fuelPct > 0) {
+          // correctedTotal = base * (1 + fuelPct/100)  →  base = total / (1 + fuelPct/100)
+          sellBase = round4(correctedTotal / (1 + fuelPct / 100));
+          sellFuel = round4(correctedTotal - sellBase);
+        }
+      } catch (fuelErr) {
+        console.warn(`[buildSnapshot] Could not look up fuel% for customer=${line.customer_id} carrier=${run.carrier_id}: ${fuelErr.message}`);
+      }
+
+      snapshot.sell_base_amount  = sellBase;
+      snapshot.sell_fuel_amount  = sellFuel;
+      snapshot.sell_total_amount = round4(sellBase + sellFuel);
+      console.log(
+        `[buildSnapshot] External booking fallback: corrected_sell_price=£${correctedTotal} ` +
+        `→ base=£${sellBase} fuel=£${sellFuel} for line ${line.id} tracking=${line.tracking_number}`
+      );
     }
   }
 
