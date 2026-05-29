@@ -545,9 +545,6 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
         display: 'flex', flexDirection: 'column', gap: 16,
       }}>
 
-        {/* DEBUG — remove once deployment confirmed */}
-        <div style={{ background: '#FF5252', color: '#fff', padding: '4px 8px', fontSize: 11, fontWeight: 700, borderRadius: 4, textAlign: 'center', margin: '-8px -8px 0' }}>DEBUG VERSION: MAY 29 - RUN 1</div>
-
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: 0 }}>Resolve Line</h3>
