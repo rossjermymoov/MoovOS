@@ -1097,19 +1097,44 @@ router.get('/runs/:id/lines/:lineId/resolve-preview', async (req, res) => {
 
     // Look up the freight counterpart line for this tracking number to provide
     // the Base Freight Cost/Sell rows in the ledger preview.
+    // JOIN to charges so we get the actual cost_price/sell_price split rather
+    // than carrier_amount (which for carrier_direct is the carrier invoice row total).
     const freightCounterpartRes = await query(
-      `SELECT corrected_sell_price, corrected_cost_price, carrier_amount
-       FROM   reconciliation_lines
-       WHERE  run_id          = $1
-         AND  tracking_number = $2
-         AND  surcharge_id   IS NULL
-       ORDER  BY id
+      `SELECT rl.corrected_sell_price, rl.corrected_cost_price, rl.carrier_amount,
+              ch.sell_price  AS charge_sell,
+              ch.cost_price  AS charge_cost
+       FROM   reconciliation_lines rl
+       LEFT   JOIN charges ch ON ch.id = rl.charge_id
+       WHERE  rl.run_id          = $1
+         AND  rl.tracking_number = $2
+         AND  rl.surcharge_id   IS NULL
+       ORDER  BY rl.id
        LIMIT  1`,
       [line.run_id, line.tracking_number]
     );
     const freightLine = freightCounterpartRes.rows[0] || null;
-    const freightSell = parseFloat(freightLine?.corrected_sell_price ?? 0);
-    const freightCost = parseFloat(freightLine?.corrected_cost_price ?? freightLine?.carrier_amount ?? 0);
+    const freightSell = parseFloat(freightLine?.corrected_sell_price ?? freightLine?.charge_sell ?? 0);
+    const freightCost = parseFloat(freightLine?.corrected_cost_price ?? freightLine?.charge_cost ?? freightLine?.carrier_amount ?? 0);
+
+    // For the surcharge being resolved, look up its existing charge record so
+    // we can show the real cost_price (e.g. £5.00 for Long Length) rather than
+    // the carrier invoice row total stored in carrier_amount on the reconciliation line.
+    const surchargeCostRes = await query(
+      `SELECT cost_price FROM charges
+       WHERE  surcharge_id  = $1
+         AND  (tracking_code = $2
+               OR shipment_id IN (
+                 SELECT id FROM shipments
+                 WHERE  $2 = ANY(tracking_codes)
+               ))
+         AND  cancelled = false
+       ORDER  BY created_at DESC
+       LIMIT  1`,
+      [value, line.tracking_number]
+    );
+    const actualSurchargeCost = surchargeCostRes.rows[0]?.cost_price != null
+      ? parseFloat(surchargeCostRes.rows[0].cost_price)
+      : parseFloat(line.carrier_amount || 0);
 
     // Determine customer_id — direct or inherited from freight counterpart
     let customerId     = line.customer_id || null;
@@ -1158,7 +1183,10 @@ router.get('/runs/:id/lines/:lineId/resolve-preview', async (req, res) => {
     const parcels = Math.max(1, parseInt(line.parcel_count || 1) || 1);
     let calculatedSell;
     if (surcharge.calc_type === 'percentage') {
-      calculatedSell = Math.round(parseFloat(line.carrier_amount || 0) * (sellValue / 100) * 100) / 100;
+      // Base the percentage on the freight sell price, not the carrier invoice row total.
+      // Fall back to carrier_amount if freight sell isn't available.
+      const pctBase = freightSell > 0 ? freightSell : parseFloat(line.carrier_amount || 0);
+      calculatedSell = Math.round(pctBase * (sellValue / 100) * 100) / 100;
     } else if (surcharge.charge_per === 'parcel') {
       calculatedSell = Math.round(sellValue * parcels * 100) / 100;
     } else {
@@ -1166,7 +1194,7 @@ router.get('/runs/:id/lines/:lineId/resolve-preview', async (req, res) => {
     }
 
     return res.json({
-      carrier_cost:    parseFloat(line.carrier_amount || 0),
+      carrier_cost:    actualSurchargeCost,
       customer_id:     customerId,
       customer_name:   customerName,
       customer_source: customerSource,
