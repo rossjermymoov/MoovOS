@@ -510,22 +510,35 @@ router.get('/debug/boorieur', async (req, res) => {
   try {
     const tracking = req.query.tracking || '4652548311';
 
-    // Use ILIKE with wildcards so minor casing/spacing differences don't break lookup
+    // ── Find the run that contains this tracking number ───────────────────────
+    // invoice_ref in the DB is the raw DHL invoice number (numeric), NOT the
+    // human-readable "BOORIEUR-270526" label.  Search by tracking number instead.
     const runRes = await query(`
-      SELECT id, invoice_ref, status, finalized, finalized_at,
-             matched_count, corrected_count, unmatched_count, total_lines
-      FROM   reconciliation_runs
-      WHERE  invoice_ref ILIKE '%BOORIEUR%270526%'
-         OR  invoice_ref ILIKE '%BOORI%EUR%270526%'
-      ORDER  BY id DESC
+      SELECT rr.id, rr.invoice_ref, rr.status, rr.finalized, rr.finalized_at,
+             rr.matched_count, rr.corrected_count, rr.unmatched_count, rr.total_lines,
+             cu.business_name AS customer_name
+      FROM   reconciliation_runs rr
+      JOIN   reconciliation_lines rl ON rl.run_id = rr.id
+      LEFT JOIN customers cu ON cu.id = rr.customer_id
+      WHERE  rl.tracking_number ILIKE $1
+      ORDER  BY rr.id DESC
       LIMIT  1
-    `);
+    `, [`%${tracking}%`]);
+
     if (!runRes.rows.length) {
-      // Last resort: return the 5 most recent runs so Ross can see what invoice_refs exist
-      const recentRuns = await query(
-        `SELECT id, invoice_ref, status, finalized FROM reconciliation_runs ORDER BY id DESC LIMIT 5`
-      );
-      return res.json({ error: 'Run BOORIEUR-270526 not found — check invoice_ref', recent_runs: recentRuns.rows });
+      // Nothing found — return Boori EUR runs by customer_id as fallback
+      const booriRuns = await query(`
+        SELECT rr.id, rr.invoice_ref, rr.status, rr.finalized, cu.business_name
+        FROM   reconciliation_runs rr
+        JOIN   customers cu ON cu.id = rr.customer_id
+        WHERE  rr.customer_id = '1b42c791-27e5-4f7d-9d6a-8f524bcad6b3'
+        ORDER  BY rr.id DESC
+        LIMIT  10
+      `);
+      return res.json({
+        error: `No run found containing tracking ${tracking}`,
+        boori_eur_runs: booriRuns.rows,
+      });
     }
     const run = runRes.rows[0];
 
