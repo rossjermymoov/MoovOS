@@ -258,10 +258,14 @@ async function buildServiceCodeMap(carrierId) {
   // product_code support: when a mapping has a product_code set, it is stored
   // under a composite key "SERVICE_CODE:PRODUCT_CODE" so the lookup can prefer
   // the specific combination over the generic catch-all.
+  // Exclude carrier_account_no rows — those go into accountServiceMap below.
   const explicit = await query(
     `SELECT courier_code, product_code, service_id, surcharge_id
      FROM   courier_service_code_mappings
-     WHERE  carrier_id = $1 AND is_active = true AND customer_id IS NULL`,
+     WHERE  carrier_id          = $1
+       AND  is_active            = true
+       AND  customer_id         IS NULL
+       AND  carrier_account_no  IS NULL`,
     [carrierId]
   );
   for (const row of explicit.rows) {
@@ -275,6 +279,35 @@ async function buildServiceCodeMap(carrierId) {
     } else if (row.service_id) {
       serviceMap[key] = row.service_id;
     }
+  }
+
+  // ── Account-specific overrides (applied pre-pool, highest priority) ────────
+  // When a mapping has carrier_account_no set, it applies only to invoice lines
+  // from that DPD billing account.  Example: account 118909 = DPD Drop Off —
+  // all lines from that account use DPD12-DROP regardless of service_code.
+  // These rows are intentionally excluded from the generic serviceMap above.
+  // Stored as: { [ACCOUNT_UPPER]: { [CODE_UPPER]: service_id } }
+  const accountServiceMap = {};
+  const acctMappings = await query(
+    `SELECT courier_code, carrier_account_no, service_id
+     FROM   courier_service_code_mappings
+     WHERE  carrier_id          = $1
+       AND  is_active            = true
+       AND  carrier_account_no  IS NOT NULL`,
+    [carrierId]
+  );
+  for (const row of acctMappings.rows) {
+    if (!row.service_id) continue;
+    const acct = row.carrier_account_no.trim().toUpperCase();
+    const code = row.courier_code.trim().toUpperCase();
+    if (!accountServiceMap[acct]) accountServiceMap[acct] = {};
+    accountServiceMap[acct][code] = row.service_id;
+  }
+  if (acctMappings.rows.length > 0) {
+    console.log(
+      `[recon engine] Account service code overrides for carrier ${carrierId}: ` +
+      `${acctMappings.rows.length} entries across ${Object.keys(accountServiceMap).length} account(s)`
+    );
   }
 
   // ── Customer-specific overrides (applied post pool-hit, highest priority) ─
@@ -308,7 +341,7 @@ async function buildServiceCodeMap(carrierId) {
   const impliedCount   = Object.keys(serviceMap).length - (explicit.rows.filter(r => r.service_id).length);
   console.log(`[recon engine] Code map for carrier ${carrierId}: ${explicit.rows.length} explicit (${surchargeCount} surcharge) + ${impliedCount} implied service entries`);
 
-  return { serviceMap, surchargeMap, serviceIdToCodeMap, customerServiceOverrides };
+  return { serviceMap, surchargeMap, serviceIdToCodeMap, customerServiceOverrides, accountServiceMap };
 }
 
 // ─── Sell-surcharge presence check ───────────────────────────────────────────
@@ -1366,7 +1399,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   );
 
   // ── Phase 1b: Build service code map ──────────────────────────────────────
-  const { serviceMap: serviceCodeMap, surchargeMap, serviceIdToCodeMap, customerServiceOverrides } = await buildServiceCodeMap(carrierId);
+  const { serviceMap: serviceCodeMap, surchargeMap, serviceIdToCodeMap, customerServiceOverrides, accountServiceMap } = await buildServiceCodeMap(carrierId);
 
   // ── Pre-condition: Build Verified Pool ────────────────────────────────────
   const { pool, poolSize, customerDatePool, cancelledPool } = await buildVerifiedPool(carrierId);
@@ -1415,6 +1448,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
     carrierId,
     serviceIdToCodeMap,
     customerServiceOverrides,
+    accountServiceMap,
     surchargeById,
     globallyExcludedColumns,
     surchargeOverrideCache: _surchargeOverrideCache,
@@ -1969,13 +2003,25 @@ function surchargeMeta(items) {
  *   product 1 (Parcel)       + service code 2 → DPD-12
  *   product 3 (Express Pack) + service code 2 → DPD-EXP or similar
  */
-function resolveServiceId(serviceMap, serviceCode, productCode) {
-  const svc = String(serviceCode || '').trim().toUpperCase();
+function resolveServiceId(serviceMap, serviceCode, productCode, accountNo, accountServiceMap) {
+  const svc  = String(serviceCode || '').trim().toUpperCase();
+  const acct = String(accountNo  || '').trim().toUpperCase();
+
+  // 1. Account-specific override (highest priority).
+  //    E.g. account 118909 + service '2' → DPD12-DROP instead of DPD-12.
+  if (acct && accountServiceMap) {
+    const acctOverrides = accountServiceMap[acct];
+    if (acctOverrides && acctOverrides[svc] !== undefined) return acctOverrides[svc];
+  }
+
+  // 2. Product-code composite key.
   const prd = String(productCode || '').trim().toUpperCase();
   if (prd) {
     const compositeKey = `${svc}:${prd}`;
     if (serviceMap[compositeKey] !== undefined) return serviceMap[compositeKey];
   }
+
+  // 3. Generic service code catch-all.
   return serviceMap[svc] ?? null;
 }
 
@@ -2031,11 +2077,12 @@ async function processTrackingGroup(group, trackKey, runId, carrierId, serviceCo
 
   // ── Continue with just the base/freight lines ─────────────────────────────
   const firstLine      = baseLines[0];
-  const rawServiceCode = String(firstLine.service_code || '').trim();
-  const rawProductCode = String(firstLine.product_code || '').trim();
+  const rawServiceCode = String(firstLine.service_code   || '').trim();
+  const rawProductCode = String(firstLine.product_code   || '').trim();
+  const rawAccountNo   = String(firstLine.account_number || '').trim();
   const mappedKey      = rawServiceCode.toUpperCase();
-  // Composite lookup: prefer "SERVICE:PRODUCT" key when product_code is present
-  const serviceId      = resolveServiceId(serviceCodeMap, rawServiceCode, rawProductCode);
+  // Account override first, then product-code composite, then generic catch-all.
+  const serviceId      = resolveServiceId(serviceCodeMap, rawServiceCode, rawProductCode, rawAccountNo, ctx.accountServiceMap);
 
   // ── Separate freight lines from unmapped orphan surcharge lines ───────────
   const freightLines = baseLines.filter(
@@ -2211,12 +2258,13 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   const trackKey       = trackingNumber.toUpperCase();
   const rawServiceCode = String(line.service_code   || '').trim();
   const rawProductCode = String(line.product_code   || '').trim();
+  const rawAccountNo   = String(line.account_number || '').trim();
   const carrierAmount  = round2(parseFloat(line.carrier_amount) || 0);
 
   // ── Phase 1b: Service code normalisation ──────────────────────────────────
-  // Composite lookup: prefer "SERVICE:PRODUCT" key when product_code is present
+  // Account override first, then product-code composite, then generic catch-all.
   const mappedKey = rawServiceCode.toUpperCase();
-  const serviceId = resolveServiceId(serviceCodeMap, rawServiceCode, rawProductCode);
+  const serviceId = resolveServiceId(serviceCodeMap, rawServiceCode, rawProductCode, rawAccountNo, ctx.accountServiceMap);
 
   // ── Surcharge mapping check ───────────────────────────────────────────────
   // If the raw carrier code maps to a known surcharge, auto-correct the cost
