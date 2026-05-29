@@ -1608,7 +1608,7 @@ function DeltaCell({ line, onResolveAsSurcharge }) {
         >
           {/* Arrow */}
           <div style={{
-            position: 'absolute', bottom: -6, left: '50%', transform: 'translateX(-50%)',
+            position: 'absolute', bottom: -6, left: '50%',
             width: 10, height: 10, background: '#0D1117',
             borderRight: '1px solid rgba(0,0,0,0.12)',
             borderBottom: '1px solid rgba(0,0,0,0.12)',
