@@ -44,14 +44,14 @@
 -- 4. Re-download the customer CSV and verify named surcharge columns appear.
 
 -- ── 1. Un-finalize the run ────────────────────────────────────────────────────
--- Identify run by invoice reference (unique per run).
+-- Identify run by invoice_ref (the carrier's invoice number stored at upload time).
 UPDATE reconciliation_runs
 SET    finalized    = false,
        finalized_at = NULL,
        finalized_by = NULL,
        status       = 'processing'
-WHERE  invoice_reference = 'BOORIEUR-270526'
-  AND  finalized         = true;
+WHERE  invoice_ref = 'BOORIEUR-270526'
+  AND  finalized   = true;
 
 -- ── 2. Delete the incorrectly snapshotted finalized_billing_lines rows ────────
 -- Only delete rows where the corresponding recon line had surcharge_id set
@@ -61,7 +61,7 @@ USING reconciliation_lines rl
 WHERE rl.id           = fbl.reconciliation_line_id
   AND rl.surcharge_id IS NOT NULL
   AND fbl.run_id = (
-    SELECT id FROM reconciliation_runs WHERE invoice_reference = 'BOORIEUR-270526'
+    SELECT id FROM reconciliation_runs WHERE invoice_ref = 'BOORIEUR-270526'
     LIMIT 1
   );
 
@@ -72,4 +72,4 @@ WHERE rl.id           = fbl.reconciliation_line_id
 --   FROM   finalized_billing_lines fbl
 --   JOIN   reconciliation_lines    rl  ON rl.id = fbl.reconciliation_line_id
 --   WHERE  rl.surcharge_id IS NOT NULL
---     AND  fbl.run_id = (SELECT id FROM reconciliation_runs WHERE invoice_reference='BOORIEUR-270526');
+--     AND  fbl.run_id = (SELECT id FROM reconciliation_runs WHERE invoice_ref='BOORIEUR-270526');
