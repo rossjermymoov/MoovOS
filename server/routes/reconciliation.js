@@ -17,7 +17,7 @@ import { query } from '../db/index.js';
 import { processReconciliationRun, ageUnmatchedLines, reprocessMappedLines, createCarrierDirectSurcharges } from '../services/reconciliationEngine.js';
 import { finalizeRun, reSnapshot, reSnapshotCustomer, getCustomerSummaries, generateCustomerCSV, getMarginReport } from '../services/finalizationService.js';
 import { fetchShipmentById, fetchShipmentByReference, fetchShipmentByReferenceAndTracking, probeShipmentRaw } from '../services/voilaClient.js';
-import { processShipment, insertCharges, computeGhostCharge } from '../services/pricingEngine.js';
+import { processShipment, insertCharges, computeGhostCharge, lookupCustomerSellPrice } from '../services/pricingEngine.js';
 
 const router = express.Router();
 
@@ -1059,20 +1059,122 @@ router.get('/runs/:id/lines/:lineId/fuel-rate', async (req, res) => {
 // ─── GET /api/reconciliation/runs/:id/lines/:lineId/resolve-preview ───────────
 // Returns a dry-run preview of the charge that would be created if the operator
 // resolves this line with the given surcharge mapping.
-// Query params: type=map_to_surcharge  value=<surchargeId UUID>
+// Query params:
+//   type=map_to_surcharge  value=<surchargeId UUID>
+//   type=remap_service     value=<serviceId integer>
 //
-// Response: {
+// Response (map_to_surcharge): {
 //   carrier_cost, customer_id, customer_name, customer_source,
 //   surcharge_name, surcharge_code, parcel_count,
-//   calculated_sell, has_override
+//   calculated_sell, has_override, has_freight, freight_sell, freight_cost
+// }
+// Response (remap_service): {
+//   carrier_cost, customer_id, customer_name,
+//   service_name, service_code, parcel_count, weight_kg,
+//   calculated_sell, zone_name, no_rate
 // }
 router.get('/runs/:id/lines/:lineId/resolve-preview', async (req, res) => {
   try {
     const lineId = parseInt(req.params.lineId);
     const { type, value } = req.query;
 
-    if (type !== 'map_to_surcharge' || !value) {
-      return res.status(400).json({ error: 'type=map_to_surcharge and value (surchargeId UUID) are required' });
+    if (!['map_to_surcharge', 'remap_service'].includes(type) || !value) {
+      return res.status(400).json({ error: 'type (map_to_surcharge or remap_service) and value are required' });
+    }
+
+    // ── remap_service preview ─────────────────────────────────────────────────
+    if (type === 'remap_service') {
+      const serviceId = parseInt(value);
+      if (!serviceId) return res.status(400).json({ error: 'remap_service requires a numeric serviceId' });
+
+      // Fetch the recon line
+      const lineRes = await query(
+        `SELECT rl.*, rr.carrier_id
+         FROM   reconciliation_lines rl
+         JOIN   reconciliation_runs  rr ON rr.id = rl.run_id
+         WHERE  rl.id = $1`,
+        [lineId]
+      );
+      if (!lineRes.rows.length) return res.status(404).json({ error: 'Line not found' });
+      const line = lineRes.rows[0];
+
+      // Fetch the target service
+      const svcRes = await query(
+        `SELECT id, service_code, name FROM courier_services WHERE id = $1`,
+        [serviceId]
+      );
+      if (!svcRes.rows.length) return res.status(404).json({ error: 'Service not found' });
+      const targetService = svcRes.rows[0];
+
+      // Determine zone name:
+      //   1. From the charge linked to this line (most accurate)
+      //   2. Fall back to the first zone of the target service (covers unmatched lines)
+      let zoneName = null;
+      if (line.charge_id) {
+        const zoneRes = await query(
+          `SELECT z.name
+           FROM   charges c
+           JOIN   zones   z ON z.id = c.zone_id
+           WHERE  c.id = $1`,
+          [line.charge_id]
+        );
+        zoneName = zoneRes.rows[0]?.name || null;
+      }
+      if (!zoneName) {
+        const fallbackZone = await query(
+          `SELECT z.name FROM zones z WHERE z.courier_service_id = $1 ORDER BY z.id LIMIT 1`,
+          [serviceId]
+        );
+        zoneName = fallbackZone.rows[0]?.name || 'Mainland';
+      }
+
+      // Compute per-parcel weight for the rate lookup
+      const totalWeightKg = parseFloat(line.carrier_billed_weight_kg || 0);
+      const parcelCount   = Math.max(1, parseInt(line.parcel_count || 1) || 1);
+      const perParcelKg   = totalWeightKg > 0 ? totalWeightKg / parcelCount : 0;
+
+      // Fetch customer name
+      let customerName = null;
+      if (line.customer_id) {
+        const custRes = await query(
+          `SELECT business_name FROM customers WHERE id = $1`,
+          [line.customer_id]
+        );
+        customerName = custRes.rows[0]?.business_name || null;
+      }
+
+      // Look up the customer sell price on the target service
+      let calculatedSell = null;
+      let noRate = false;
+      if (line.customer_id && perParcelKg > 0) {
+        const sellResult = await lookupCustomerSellPrice(
+          line.customer_id,
+          targetService.service_code,
+          perParcelKg,
+          zoneName,
+          null
+        );
+        if (sellResult?.sellPrice != null) {
+          calculatedSell = Math.round(sellResult.sellPrice * parcelCount * 100) / 100;
+        } else {
+          noRate = true;
+        }
+      } else if (!line.customer_id) {
+        noRate = true;
+      }
+
+      return res.json({
+        carrier_cost:    parseFloat(line.carrier_amount || 0),
+        customer_id:     line.customer_id || null,
+        customer_name:   customerName,
+        service_name:    targetService.name,
+        service_code:    targetService.service_code,
+        parcel_count:    parcelCount,
+        weight_kg:       totalWeightKg,
+        zone_name:       zoneName,
+        calculated_sell: calculatedSell,
+        no_rate:         noRate,
+      });
     }
 
     // Fetch the recon line
@@ -1395,6 +1497,67 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
       }
     }
 
+    // ── remap_service: recompute sell price from a different service's rate card ─
+    // resolution_value = service_id (integer). Used when a carrier invoices a line
+    // under the wrong service code and the operator wants to price it as a different
+    // service (e.g. DPD Drop Off Next Day misidentified as 2-day → reclassify as
+    // DPD-11DROP so the customer is charged the correct 2-day rate).
+    let remapServiceSell = null;
+    if (resolution_type === 'remap_service' && resolution_value) {
+      const targetServiceId = parseInt(resolution_value);
+      try {
+        // Fetch the target service code
+        const tSvcRes = await query(
+          `SELECT service_code FROM courier_services WHERE id = $1`,
+          [targetServiceId]
+        );
+        const targetServiceCode = tSvcRes.rows[0]?.service_code || null;
+
+        if (targetServiceCode && line.customer_id) {
+          // Determine zone name from the linked charge, or fall back to the first
+          // zone on the target service (covers unmatched lines with no charge_id).
+          let zoneName = null;
+          if (line.charge_id) {
+            const zRes = await query(
+              `SELECT z.name FROM charges c JOIN zones z ON z.id = c.zone_id WHERE c.id = $1`,
+              [line.charge_id]
+            );
+            zoneName = zRes.rows[0]?.name || null;
+          }
+          if (!zoneName) {
+            const fzRes = await query(
+              `SELECT z.name FROM zones z WHERE z.courier_service_id = $1 ORDER BY z.id LIMIT 1`,
+              [targetServiceId]
+            );
+            zoneName = fzRes.rows[0]?.name || 'Mainland';
+          }
+
+          const totalWeightKg = parseFloat(line.carrier_billed_weight_kg || 0);
+          const parcelCount   = Math.max(1, parseInt(line.parcel_count || 1) || 1);
+          const perParcelKg   = totalWeightKg > 0 ? totalWeightKg / parcelCount : 0;
+
+          if (perParcelKg > 0) {
+            const sellResult = await lookupCustomerSellPrice(
+              line.customer_id,
+              targetServiceCode,
+              perParcelKg,
+              zoneName,
+              null
+            );
+            if (sellResult?.sellPrice != null) {
+              remapServiceSell = Math.round(sellResult.sellPrice * parcelCount * 100) / 100;
+              console.log(`[reconciliation/resolve] remap_service: ${targetServiceCode} zone="${zoneName}" ${totalWeightKg}kg/${parcelCount}pcs → sell=£${remapServiceSell} for customer=${line.customer_id}`);
+            } else {
+              console.warn(`[reconciliation/resolve] remap_service: no customer rate found for ${targetServiceCode} zone="${zoneName}" ${perParcelKg}kg customer=${line.customer_id}`);
+            }
+          }
+        }
+      } catch (rsErr) {
+        console.warn(`[reconciliation/resolve] remap_service lookup failed:`, rsErr.message);
+        // Non-fatal — resolvedSell will be null, human can use manual_price as fallback
+      }
+    }
+
     // ── manual_price: set corrected_sell_price and link the charge ──────────────
     let manualSell = null;
     let manualChargeId = null;
@@ -1551,9 +1714,10 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
     // Zero out the delta — the human has accepted the carrier's charge as correct.
     // expected_amount is set to carrier_amount so the Corrected tab shows £0.00 delta.
     // Determine corrected_sell_price across all resolution types that set one
-    const resolvedSell = manualSell ?? surchargeSell ?? mappedSell ?? null;
-    // corrected_cost_price: for manual_price and map_to_surcharge, set to carrier_amount
-    const resolvedCost = (resolution_type === 'manual_price' || resolution_type === 'map_to_surcharge' || resolution_type === 'map_to_customer')
+    const resolvedSell = manualSell ?? surchargeSell ?? mappedSell ?? remapServiceSell ?? null;
+    // corrected_cost_price: for manual_price, map_to_surcharge, map_to_customer and
+    // remap_service — set to carrier_amount (we accept what the carrier billed)
+    const resolvedCost = (resolution_type === 'manual_price' || resolution_type === 'map_to_surcharge' || resolution_type === 'map_to_customer' || resolution_type === 'remap_service')
       ? parseFloat(line.carrier_amount || 0)
       : null;
     // Effective charge_id: manual_price, map_to_customer, or newly created surcharge charge

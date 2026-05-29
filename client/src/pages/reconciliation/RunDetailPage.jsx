@@ -306,6 +306,7 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
   const isSurchargeMapping  = resolutionType === 'map_to_surcharge';
   const isManualPrice       = resolutionType === 'manual_price';
   const isMapToCustomer     = resolutionType === 'map_to_customer';
+  const isRemapService      = resolutionType === 'remap_service';
 
   // Customer search for map_to_customer
   useEffect(() => {
@@ -328,19 +329,20 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
       .catch(() => setFuelRate({ fuel_pct: 0, fuel_group_name: null }));
   }, [isManualPrice, line.run_id, line.id]);
 
-  // Fetch resolve preview when a surcharge is selected — shows carrier cost,
-  // attributed customer, and calculated sell price before the operator commits.
+  // Fetch resolve preview when a surcharge or remap_service target is selected.
+  // Shows carrier cost, attributed customer, and calculated sell price before commit.
   useEffect(() => {
-    if (!isSurchargeMapping || !resolutionValue) { setChargePreview(null); return; }
+    if (!(isSurchargeMapping || isRemapService) || !resolutionValue) { setChargePreview(null); return; }
+    const previewType = isSurchargeMapping ? 'map_to_surcharge' : 'remap_service';
     setPreviewLoading(true);
     setChargePreview(null);
     api.get(`/reconciliation/runs/${line.run_id}/lines/${line.id}/resolve-preview`, {
-      params: { type: 'map_to_surcharge', value: resolutionValue }
+      params: { type: previewType, value: resolutionValue }
     })
       .then(r => setChargePreview(r.data))
       .catch(() => setChargePreview(null))
       .finally(() => setPreviewLoading(false));
-  }, [isSurchargeMapping, resolutionValue, line.run_id, line.id]);
+  }, [isSurchargeMapping, isRemapService, resolutionValue, line.run_id, line.id]);
 
   // Derived: total sell when manual_price is active
   const manualBase  = parseFloat(resolutionValue) || 0;
@@ -623,9 +625,10 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
         {isUnknownCode ? (
           <div>
             <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>RESOLUTION TYPE</label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {[
-                { val: 'map_to_service',   label: 'Delivery Service', desc: 'Map code to a service, price from rate card' },
+                { val: 'map_to_service',   label: 'Map Service Code', desc: 'Save a mapping rule; engine reprices on next run' },
+                { val: 'remap_service',    label: 'Change Service',   desc: 'Price this line from a different service rate card now' },
                 { val: 'map_to_surcharge', label: 'Surcharge',        desc: 'Named fee (e.g. congestion, remote area)' },
                 { val: 'manual_price',     label: 'Manual Price',     desc: 'Enter a sell price directly for this line' },
               ].map(opt => (
@@ -647,12 +650,13 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
         ) : (
           <div>
             <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>RESOLUTION TYPE</label>
-            <select style={inputSt} value={resolutionType} onChange={e => setResolutionType(e.target.value)}>
+            <select style={inputSt} value={resolutionType} onChange={e => { setResolutionType(e.target.value); setResolutionValue(''); }}>
               <option value=''>— Select type —</option>
               <option value='accept'>Accept charge as-is</option>
               <option value='accept_delta'>Accept delta as tolerance</option>
               <option value='manual_price'>Set manual sell price</option>
               <option value='credit_request'>Applying for credit with Courier</option>
+              <option value='remap_service'>Change Service (reprice from rate card)</option>
               <option value='map_to_surcharge'>Map to surcharge</option>
               <option value='map_to_service'>Map to internal service</option>
               <option value='map_to_customer'>Map account to customer</option>
@@ -680,6 +684,87 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
                 </option>
               ))}
             </select>
+          </div>
+        )}
+
+        {/* Change Service (remap_service) — service picker + live price preview */}
+        {isRemapService && (
+          <div>
+            <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>
+              REPRICE AS SERVICE *
+            </label>
+            <select
+              style={inputSt}
+              value={resolutionValue}
+              onChange={e => setResolutionValue(e.target.value)}
+              autoFocus
+            >
+              <option value=''>— Select target service —</option>
+              {services.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.name} ({s.service_code})
+                </option>
+              ))}
+            </select>
+            <div style={{ fontSize: 10, color: '#64748B', marginTop: 4 }}>
+              Carrier cost stays as invoiced. Sell price is recalculated from this service's rate card.
+            </div>
+
+            {/* Preview panel */}
+            {resolutionValue && previewLoading && (
+              <div style={{ marginTop: 8, padding: '9px 12px', background: 'rgba(0,0,0,0.03)', borderRadius: 7, fontSize: 11, color: '#64748B' }}>
+                Calculating…
+              </div>
+            )}
+            {resolutionValue && !previewLoading && chargePreview && (() => {
+              const cp = chargePreview;
+              return (
+                <div style={{
+                  marginTop: 8, padding: '12px 14px',
+                  background: cp.no_rate ? 'rgba(255,179,0,0.07)' : 'rgba(0,200,83,0.06)',
+                  border: `1px solid ${cp.no_rate ? 'rgba(255,179,0,0.35)' : 'rgba(0,200,83,0.2)'}`,
+                  borderRadius: 8,
+                }}>
+                  {cp.customer_name && (
+                    <div style={{ fontSize: 11, color: '#64748B', marginBottom: 8 }}>
+                      Customer: <span style={{ fontWeight: 700, color: '#0F172A' }}>{cp.customer_name}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
+                    <span style={{ color: '#64748B' }}>Carrier cost</span>
+                    <span style={{ color: '#0F172A', fontWeight: 600 }}>£{(cp.carrier_cost || 0).toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
+                    <span style={{ color: '#64748B' }}>Service</span>
+                    <span style={{ color: '#0F172A', fontWeight: 600 }}>{cp.service_name}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
+                    <span style={{ color: '#64748B' }}>Weight / parcels</span>
+                    <span style={{ color: '#0F172A' }}>{(cp.weight_kg || 0).toFixed(3)} kg / {cp.parcel_count || 1} pcs</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
+                    <span style={{ color: '#64748B' }}>Zone</span>
+                    <span style={{ color: '#0F172A' }}>{cp.zone_name || '—'}</span>
+                  </div>
+                  <div style={{
+                    display: 'flex', justifyContent: 'space-between',
+                    borderTop: '1px solid rgba(0,0,0,0.08)', paddingTop: 8, marginTop: 6, fontSize: 13,
+                  }}>
+                    <span style={{ color: '#0F172A', fontWeight: 700 }}>Calculated sell</span>
+                    {cp.no_rate ? (
+                      <span style={{ color: '#FFB300', fontWeight: 700 }}>No rate configured</span>
+                    ) : (
+                      <span style={{ color: '#00C853', fontWeight: 700 }}>£{(cp.calculated_sell || 0).toFixed(2)}</span>
+                    )}
+                  </div>
+                  {cp.no_rate && (
+                    <div style={{ fontSize: 10, color: '#FFB300', marginTop: 6 }}>
+                      Set up customer rates for {cp.service_code} first, then resolve — or use Manual Price instead.
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -911,7 +996,7 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
         )}
 
         {/* Generic value input for other types */}
-        {!isUnknownCode && !isMapToCustomer && resolutionType !== 'map_to_service' && resolutionType !== 'accept_delta' && resolutionType !== 'credit_request' && !isManualPrice && resolutionType && (
+        {!isUnknownCode && !isMapToCustomer && !isRemapService && resolutionType !== 'map_to_service' && resolutionType !== 'accept_delta' && resolutionType !== 'credit_request' && !isManualPrice && !isSurchargeMapping && resolutionType && (
           <div>
             <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>RESOLUTION VALUE *</label>
             <input
