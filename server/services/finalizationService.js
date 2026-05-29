@@ -422,6 +422,68 @@ async function buildSnapshot(line, run) {
       }
     }
 
+    // ── Orphan surcharge enrichment ───────────────────────────────────────────
+    // If no freight recon line exists for this tracking in the same run (DHL
+    // invoiced the Long Length on a combined line without a separate freight
+    // line), pull the freight + fuel sell from the charges table so the FBL row
+    // captures the full billing and the margin calculation is correct.
+    try {
+      const freightCheck = await query(`
+        SELECT 1 FROM reconciliation_lines
+        WHERE run_id = $1 AND tracking_number = $2
+          AND surcharge_id IS NULL AND is_fuel = false
+        LIMIT 1
+      `, [line.run_id, line.tracking_number]);
+
+      if (!freightCheck.rows.length) {
+        // No freight counterpart in this run — enrich from charges table
+        const orphanRes = await query(`
+          SELECT c.price    AS freight_sell,
+                 c.order_id AS order_reference,
+                 s.ship_to_name       AS recipient_name,
+                 s.ship_to_postcode   AS postcode,
+                 s.collection_date    AS despatch_date,
+                 s.dc_service_id      AS service_code,
+                 COALESCE((
+                   SELECT SUM(cf.price) FROM charges cf
+                   WHERE cf.shipment_id = c.shipment_id
+                     AND cf.charge_type = 'fuel'
+                     AND cf.cancelled   = false
+                 ), 0) AS fuel_sell
+          FROM   charges c
+          JOIN   shipments s ON s.id = c.shipment_id
+          WHERE  c.charge_type = 'courier'
+            AND  c.cancelled   = false
+            AND  $1 = ANY(s.tracking_codes)
+          ORDER  BY c.created_at DESC
+          LIMIT  1
+        `, [line.tracking_number]);
+
+        if (orphanRes.rows.length) {
+          const d = orphanRes.rows[0];
+          const freightSell = round4(parseFloat(d.freight_sell || 0));
+          const fuelSell    = round4(parseFloat(d.fuel_sell    || 0));
+          if (freightSell > 0 || fuelSell > 0) {
+            snapshot.sell_base_amount  = freightSell;
+            snapshot.sell_fuel_amount  = fuelSell;
+            snapshot.sell_total_amount = round4(freightSell + fuelSell + snapshot.sell_surcharge_amount);
+            // Enrich shipment metadata
+            if (!snapshot.order_reference)    snapshot.order_reference    = d.order_reference  || null;
+            if (!snapshot.recipient_name)     snapshot.recipient_name     = d.recipient_name   || null;
+            if (!snapshot.recipient_postcode) snapshot.recipient_postcode = d.postcode         || null;
+            if (!snapshot.despatch_date)      snapshot.despatch_date      = d.despatch_date    || null;
+            if (!snapshot.service_code)       snapshot.service_code       = d.service_code     || null;
+            console.log(
+              `[buildSnapshot] Orphan surcharge enriched from charges: ` +
+              `tracking=${line.tracking_number} freight=£${freightSell} fuel=£${fuelSell}`
+            );
+          }
+        }
+      }
+    } catch (orphanErr) {
+      console.warn(`[buildSnapshot] Orphan enrichment failed for tracking=${line.tracking_number}: ${orphanErr.message}`);
+    }
+
     if (snapshot.customer_id) {
       try {
         const cRes = await query(
