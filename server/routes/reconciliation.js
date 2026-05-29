@@ -1211,7 +1211,8 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
     // The charge must exist in the charges table right now so the customer record
     // shows it at once — before finalization. Step 0.5 in finalizationService will
     // detect the existing charge and skip re-creation (idempotent).
-    let surchargeChargeId = null;
+    let surchargeChargeId     = null;
+    let inheritedCustomerId   = null;  // set when customer_id is inherited from freight counterpart
     if (resolution_type === 'map_to_surcharge' && surchargeSell && surchargeSell > 0) {
       try {
         // Find shipment_id via the freight counterpart line in the same run
@@ -1263,6 +1264,7 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
           `, [line.run_id, line.tracking_number]);
           scCustomerId = custRes.rows[0]?.customer_id || null;
           if (scCustomerId) {
+            inheritedCustomerId = scCustomerId;
             console.log(`[reconciliation/resolve] Inherited customer_id=${scCustomerId} from freight line for tracking=${line.tracking_number}`);
           }
         }
@@ -1318,8 +1320,8 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
       : null;
     // Effective charge_id: manual_price, map_to_customer, or newly created surcharge charge
     const resolvedChargeId = manualChargeId || mappedChargeId || surchargeChargeId || null;
-    // Effective customer_id: from map_to_customer, or original line value
-    const resolvedCustomerId = mappedCustomerId || line.customer_id || null;
+    // Effective customer_id: from map_to_customer, inherited freight counterpart, or original line value
+    const resolvedCustomerId = mappedCustomerId || inheritedCustomerId || line.customer_id || null;
     // Effective surcharge_id: set on the recon line when map_to_surcharge so that
     // finalization Step 0.5 knows to skip/trace the surcharge charge for this line.
     const resolvedSurchargeId = resolution_type === 'map_to_surcharge' ? resolution_value : null;
