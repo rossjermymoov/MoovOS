@@ -513,25 +513,28 @@ router.get('/debug/boorieur', async (req, res) => {
     // ── Find the run that contains this tracking number ───────────────────────
     // invoice_ref in the DB is the raw DHL invoice number (numeric), NOT the
     // human-readable "BOORIEUR-270526" label.  Search by tracking number instead.
+    // reconciliation_runs has no customer_id — derive customer from the lines
     const runRes = await query(`
       SELECT rr.id, rr.invoice_ref, rr.status, rr.finalized, rr.finalized_at,
              rr.matched_count, rr.corrected_count, rr.unmatched_count, rr.total_lines,
              cu.business_name AS customer_name
       FROM   reconciliation_runs rr
       JOIN   reconciliation_lines rl ON rl.run_id = rr.id
-      LEFT JOIN customers cu ON cu.id = rr.customer_id
+      LEFT JOIN customers cu ON cu.id = rl.customer_id
       WHERE  rl.tracking_number ILIKE $1
       ORDER  BY rr.id DESC
       LIMIT  1
     `, [`%${tracking}%`]);
 
     if (!runRes.rows.length) {
-      // Nothing found — return Boori EUR runs by customer_id as fallback
+      // Nothing found — return runs that contain any Boori EUR line as fallback
       const booriRuns = await query(`
-        SELECT rr.id, rr.invoice_ref, rr.status, rr.finalized, cu.business_name
+        SELECT DISTINCT rr.id, rr.invoice_ref, rr.status, rr.finalized,
+               cu.business_name
         FROM   reconciliation_runs rr
-        JOIN   customers cu ON cu.id = rr.customer_id
-        WHERE  rr.customer_id = '1b42c791-27e5-4f7d-9d6a-8f524bcad6b3'
+        JOIN   reconciliation_lines rl ON rl.run_id = rr.id
+        JOIN   customers cu ON cu.id = rl.customer_id
+        WHERE  rl.customer_id = '1b42c791-27e5-4f7d-9d6a-8f524bcad6b3'
         ORDER  BY rr.id DESC
         LIMIT  10
       `);
