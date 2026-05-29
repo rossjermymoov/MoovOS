@@ -986,11 +986,15 @@ async function handleCarrierDirect({
     cdShipmentId = cdShipRes.rows[0]?.id || null;
 
     // ON CONFLICT DO NOTHING returns 0 rows — look up the existing record.
+    // NOTE: do NOT restrict to event_type = 'carrier_direct'.  Multi-parcel DPD
+    // shipments may have been booked through the OMS (event_type = 'shipment_created')
+    // and their tracking code already lives in a different shipment row.  Using
+    // ANY shipment that owns this tracking code lets us link fuel/surcharge charges
+    // correctly regardless of how the shipment was originally created.
     if (!cdShipmentId) {
       const existingShip = await query(
         `SELECT id FROM shipments
          WHERE  $1 = ANY(tracking_codes)
-           AND  event_type = 'carrier_direct'
          LIMIT  1`,
         [trackingNumber]
       );
@@ -2677,27 +2681,48 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
   // so surcharges are never checked/created. Catch them here: if a carrier_direct
   // charge has a valid sell price but no fuel charge, create the missing surcharges.
   // createCarrierDirectSurcharges is fully idempotent — safe to call every run.
-  if (charge.charge_id && charge.shipment_id && ctx?.carrierId) {
+  if (charge.charge_id && ctx?.carrierId) {
     try {
       const { rows: srcRows } = await query(
-        `SELECT source, sell_price FROM charges WHERE id = $1 LIMIT 1`,
+        `SELECT source, sell_price, shipment_id FROM charges WHERE id = $1 LIMIT 1`,
         [charge.charge_id]
       );
       const cdRow = srcRows[0];
       if (cdRow?.source === 'carrier_direct') {
         const cdSell = parseFloat(cdRow.sell_price);
         if (cdSell > 0) {
-          // Only attempt if we already have a valid sell price — surcharges depend on it.
-          // If sell_price is null, the backfill endpoint re-prices and inserts surcharges.
-          await createCarrierDirectSurcharges({
-            shipmentId:       charge.shipment_id,
-            customerId:       charge.customer_id,
-            carrierId:        ctx.carrierId,
-            serviceId:        effectiveServiceId,
-            freightSellPrice: cdSell,
-            freightCostPrice: parseFloat(charge.expected_cost || 0),
-            parcelCount:      Math.max(invoiceParcelCount, 1),
-          });
+          // Resolve the shipment_id: prefer what's already on the charge; if null
+          // (charge was created before the event_type-agnostic fallback fix), look up
+          // ANY shipment that owns this tracking code and link it to the charge so
+          // future previews can find the fuel/surcharge charges.
+          let repairShipId = cdRow.shipment_id || charge.shipment_id || null;
+          if (!repairShipId) {
+            const trackShipRes = await query(
+              `SELECT id FROM shipments WHERE $1 = ANY(tracking_codes) LIMIT 1`,
+              [trackingNumber]
+            );
+            repairShipId = trackShipRes.rows[0]?.id || null;
+            if (repairShipId) {
+              await query(
+                `UPDATE charges SET shipment_id = $1, updated_at = NOW()
+                 WHERE  id = $2 AND shipment_id IS NULL`,
+                [repairShipId, charge.charge_id]
+              );
+              console.log(`[recon engine] Repaired carrier_direct charge ${charge.charge_id}: shipment_id set to ${repairShipId} for tracking ${trackingNumber}`);
+            }
+          }
+          if (repairShipId) {
+            // Only attempt if we already have a valid sell price — surcharges depend on it.
+            await createCarrierDirectSurcharges({
+              shipmentId:       repairShipId,
+              customerId:       charge.customer_id,
+              carrierId:        ctx.carrierId,
+              serviceId:        effectiveServiceId,
+              freightSellPrice: cdSell,
+              freightCostPrice: parseFloat(charge.expected_cost || 0),
+              parcelCount:      Math.max(invoiceParcelCount, 1),
+            });
+          }
         }
       }
     } catch (cdRepairErr) {
