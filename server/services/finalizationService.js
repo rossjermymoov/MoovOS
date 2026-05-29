@@ -528,6 +528,32 @@ async function buildSnapshot(line, run) {
     }
   }
 
+  // ── Fallback: manually-corrected lines with no linked charge ─────────────
+  //
+  // manual_price and remap_service set corrected_sell_price but do NOT always
+  // link a charge_id (external bookings, unmatched lines where the shipment was
+  // not booked through Moov OS — common for reseller accounts like Boori EUR
+  // whose DHL shipments originate elsewhere).
+  //
+  // In that case enrichChargeId is null, the block above never ran, and all sell
+  // amounts remain at their initial zero defaults.  Apply the human's corrected
+  // price here so the snapshot — and therefore the customer CSV — shows the
+  // correct sell value rather than £0.00.
+  //
+  // corrected_sell_price for manual_price = base + fuel (resolve endpoint adds
+  // the fuel surcharge % before storing).  We put the combined value into
+  // sell_base_amount with sell_fuel_amount = 0 (no per-component breakdown
+  // available without a shipment record).  The total is correct either way.
+  if (snapshot.sell_base_amount === 0 && snapshot.sell_total_amount === 0 &&
+      line.corrected_sell_price != null && !line.surcharge_id) {
+    const correctedSell = round4(parseFloat(line.corrected_sell_price));
+    if (correctedSell > 0) {
+      snapshot.sell_base_amount  = correctedSell;
+      snapshot.sell_total_amount = correctedSell;
+      console.log(`[buildSnapshot] Applied corrected_sell_price=£${correctedSell} as sell_base for line ${line.id} (no charge_id) tracking=${line.tracking_number}`);
+    }
+  }
+
   // If we still don't have a customer_name, fetch it directly
   if (!snapshot.customer_name && snapshot.customer_id) {
     const cRes = await query(
