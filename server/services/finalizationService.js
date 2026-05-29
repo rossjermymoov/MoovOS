@@ -799,11 +799,16 @@ export async function generateCustomerCSV(runId, customerId) {
   if (!lines.length) throw new Error('No finalized lines found for this customer in this run');
 
   // Fetch corrected surcharge companion rows (map_to_surcharge resolutions).
-  // These have their own FBL row with sell_surcharge_amount = corrected_sell_price
-  // and must be merged into the freight row for the same tracking number.
+  // These have their own FBL row with sell_surcharge_amount = corrected_sell_price.
+  // They are either merged into a freight row (same tracking in this run) or, when
+  // the freight for that shipment was on a different DHL invoice, they appear as
+  // standalone surcharge-only rows in the CSV.
   const manualSurchargeRes = await query(`
     SELECT f.tracking_number,
            f.sell_surcharge_amount,
+           f.weight_kg,
+           f.parcel_count,
+           f.carrier_total_amount,
            sx.name AS surcharge_name
     FROM   finalized_billing_lines f
     JOIN   reconciliation_lines   rl ON rl.id = f.reconciliation_line_id
@@ -814,16 +819,25 @@ export async function generateCustomerCSV(runId, customerId) {
       AND  f.sell_surcharge_amount > 0
   `, [runId, customerId]);
 
-  // Build tracking_number → [{ surcharge_name, sell_amount }] lookup
+  // Build tracking_number → [{ surcharge_name, sell_amount, weight_kg, parcel_count }] lookup
   const manualSurchargeMap = {};
   for (const r of manualSurchargeRes.rows) {
-    if (!manualSurchargeMap[r.tracking_number]) manualSurchargeMap[r.tracking_number] = [];
-    manualSurchargeMap[r.tracking_number].push({
+    if (!manualSurchargeMap[r.tracking_number]) {
+      manualSurchargeMap[r.tracking_number] = {
+        surcharges:    [],
+        weight_kg:     r.weight_kg,
+        parcel_count:  r.parcel_count,
+      };
+    }
+    manualSurchargeMap[r.tracking_number].surcharges.push({
       surcharge_name: r.surcharge_name || 'Surcharge',
       sell_amount:    parseFloat(r.sell_surcharge_amount || 0),
       charge_type:    'surcharge',
     });
   }
+
+  // Tracking numbers that have a freight row in this run (used to detect orphans)
+  const freightTrackingSet = new Set(linesRes.rows.map(l => l.tracking_number));
 
   // Update CSV export timestamp
   await query(`
@@ -844,8 +858,14 @@ export async function generateCustomerCSV(runId, customerId) {
       if (s.charge_type === 'surcharge') surchargeNames.add(s.surcharge_name);
     }
     // Also add names from manually resolved companion surcharge rows
-    for (const s of (manualSurchargeMap[l.tracking_number] || [])) {
+    for (const s of (manualSurchargeMap[l.tracking_number]?.surcharges || [])) {
       surchargeNames.add(s.surcharge_name);
+    }
+  }
+  // Also collect surcharge names from orphan surcharge rows (no freight in this run)
+  for (const [tracking, entry] of Object.entries(manualSurchargeMap)) {
+    if (!freightTrackingSet.has(tracking)) {
+      for (const s of entry.surcharges) surchargeNames.add(s.surcharge_name);
     }
   }
   const surchargeNamesSorted = [...surchargeNames].sort();
@@ -879,7 +899,7 @@ export async function generateCustomerCSV(runId, customerId) {
         surchargeMap[s.surcharge_name] = (surchargeMap[s.surcharge_name] || 0) + (s.sell_amount || 0);
       }
     }
-    for (const s of (manualSurchargeMap[l.tracking_number] || [])) {
+    for (const s of (manualSurchargeMap[l.tracking_number]?.surcharges || [])) {
       surchargeMap[s.surcharge_name] = (surchargeMap[s.surcharge_name] || 0) + s.sell_amount;
     }
 
@@ -910,6 +930,28 @@ export async function generateCustomerCSV(runId, customerId) {
     ];
   });
 
+  // Orphan surcharge rows — surcharges where the freight for that shipment was on
+  // a different DHL invoice period.  Show as standalone rows with named columns.
+  for (const [tracking, entry] of Object.entries(manualSurchargeMap)) {
+    if (freightTrackingSet.has(tracking)) continue; // already merged into freight row
+    const surchargeMap = {};
+    for (const s of entry.surcharges) {
+      surchargeMap[s.surcharge_name] = (surchargeMap[s.surcharge_name] || 0) + s.sell_amount;
+    }
+    const namedSurchargeTotal = surchargeNamesSorted.reduce((sum, n) => sum + (surchargeMap[n] || 0), 0);
+    rows.push([
+      tracking,
+      '', '', '', '', '',
+      entry.parcel_count != null ? entry.parcel_count : '',
+      entry.weight_kg   != null ? parseFloat(entry.weight_kg).toFixed(3) : '',
+      '0.00', // no base freight on this invoice
+      '0.00', // no fuel on this invoice
+      ...surchargeNamesSorted.map(n => (surchargeMap[n] || 0).toFixed(2)),
+      namedSurchargeTotal.toFixed(2),
+      namedSurchargeTotal.toFixed(2),
+    ]);
+  }
+
   // Summary totals row
   const totals = lines.reduce((acc, l) => {
     const detail = Array.isArray(l.surcharge_detail)
@@ -921,7 +963,7 @@ export async function generateCustomerCSV(runId, customerId) {
         surchargeMap[s.surcharge_name] = (surchargeMap[s.surcharge_name] || 0) + (s.sell_amount || 0);
       }
     }
-    for (const s of (manualSurchargeMap[l.tracking_number] || [])) {
+    for (const s of (manualSurchargeMap[l.tracking_number]?.surcharges || [])) {
       surchargeMap[s.surcharge_name] = (surchargeMap[s.surcharge_name] || 0) + s.sell_amount;
     }
     for (const n of surchargeNamesSorted) {
