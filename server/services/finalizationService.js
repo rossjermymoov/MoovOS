@@ -227,6 +227,19 @@ export async function finalizeRun(runId, staffId = null) {
   for (const line of lines) {
     try {
       const snapshot = await buildSnapshot(line, run);
+
+      // Guard: customer_id is NOT NULL in finalized_billing_lines.
+      // If it is null here, the INSERT will fail with a constraint violation.
+      // Log a detailed warning so the issue is visible in Railway logs.
+      if (!snapshot.customer_id) {
+        console.error(
+          `[finalization] SKIPPING line ${line.id} (tracking=${line.tracking_number}): ` +
+          `customer_id is null — cannot insert into finalized_billing_lines. ` +
+          `Ensure the reconciliation_line has customer_id set before finalizing.`
+        );
+        continue;
+      }
+
       await insertSnapshot(runId, line.id, snapshot);
       finalized++;
 
@@ -248,7 +261,7 @@ export async function finalizeRun(runId, staffId = null) {
       }
 
     } catch (err) {
-      console.error(`[finalization] Failed to snapshot line ${line.id}:`, err.message);
+      console.error(`[finalization] Failed to snapshot line ${line.id} (tracking=${line.tracking_number}):`, err.message);
       // Continue — don't fail the whole run for one bad line
     }
   }

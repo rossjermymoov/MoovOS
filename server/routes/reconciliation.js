@@ -6321,4 +6321,81 @@ router.post('/repair-zero-fuel', async (req, res) => {
   }
 });
 
+// ─── GET /api/reconciliation/debug/boorieur ───────────────────────────────────
+// Diagnostic endpoint: returns the exact state of BOORIEUR-270526 reconciliation
+// lines and finalized_billing_lines for tracking 4652548311.
+// Used to diagnose why the freight FBL row is missing and margin is negative.
+
+router.get('/debug/boorieur', async (req, res) => {
+  try {
+    const tracking = req.query.tracking || '4652548311';
+
+    // Run state
+    const runRes = await query(`
+      SELECT id, invoice_ref, status, finalized, finalized_at,
+             matched_count, corrected_count, unmatched_count, total_lines
+      FROM   reconciliation_runs
+      WHERE  invoice_ref = 'BOORIEUR-270526'
+      LIMIT  1
+    `);
+
+    if (!runRes.rows.length) {
+      return res.json({ error: 'Run BOORIEUR-270526 not found' });
+    }
+    const run = runRes.rows[0];
+
+    // All reconciliation_lines for this tracking number
+    const rlRes = await query(`
+      SELECT rl.id, rl.tracking_number, rl.status, rl.corrected_by,
+             rl.customer_id, rl.corrected_sell_price, rl.corrected_cost_price,
+             rl.carrier_amount, rl.is_fuel, rl.surcharge_id,
+             rl.unmatched_reason, rl.source, rl.charge_id,
+             cu.business_name AS customer_name
+      FROM   reconciliation_lines rl
+      LEFT JOIN customers cu ON cu.id = rl.customer_id
+      WHERE  rl.run_id = $1
+        AND  rl.tracking_number ILIKE $2
+      ORDER  BY rl.id
+    `, [run.id, `%${tracking}%`]);
+
+    // Finalized billing lines for this tracking
+    const fblRes = await query(`
+      SELECT fbl.id, fbl.tracking_number, fbl.reconciliation_line_id,
+             fbl.customer_id, fbl.customer_name,
+             fbl.sell_base_amount, fbl.sell_fuel_amount,
+             fbl.sell_surcharge_amount, fbl.sell_total_amount,
+             fbl.carrier_base_amount, fbl.carrier_fuel_amount,
+             fbl.carrier_surcharge_amount, fbl.carrier_total_amount,
+             fbl.margin_amount, fbl.recon_status, fbl.source
+      FROM   finalized_billing_lines fbl
+      WHERE  fbl.run_id = $1
+        AND  fbl.tracking_number ILIKE $2
+      ORDER  BY fbl.id
+    `, [run.id, `%${tracking}%`]);
+
+    // Overall run FBL margin summary (to confirm negative margin)
+    const marginRes = await query(`
+      SELECT
+        COUNT(*) AS total_fbl_rows,
+        COUNT(*) FILTER (WHERE sell_total_amount > 0) AS freight_rows,
+        COUNT(*) FILTER (WHERE sell_total_amount = 0) AS zero_sell_rows,
+        ROUND(SUM(sell_total_amount)::numeric, 2)    AS total_sell,
+        ROUND(SUM(carrier_total_amount)::numeric, 2) AS total_carrier,
+        ROUND(SUM(margin_amount)::numeric, 2)        AS total_margin
+      FROM finalized_billing_lines
+      WHERE run_id = $1
+    `, [run.id]);
+
+    return res.json({
+      run,
+      recon_lines_for_tracking: rlRes.rows,
+      fbl_rows_for_tracking:    fblRes.rows,
+      run_margin_summary:       marginRes.rows[0],
+    });
+  } catch (err) {
+    console.error('[debug/boorieur] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
