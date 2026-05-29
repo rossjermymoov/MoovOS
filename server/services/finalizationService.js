@@ -931,24 +931,77 @@ export async function generateCustomerCSV(runId, customerId) {
   });
 
   // Orphan surcharge rows — surcharges where the freight for that shipment was on
-  // a different DHL invoice period.  Show as standalone rows with named columns.
+  // a different DHL invoice period.  Enrich with freight sell + shipment metadata
+  // from the charges table so the row is complete for the customer invoice.
   for (const [tracking, entry] of Object.entries(manualSurchargeMap)) {
     if (freightTrackingSet.has(tracking)) continue; // already merged into freight row
+
+    // Look up freight charge and shipment metadata from charges table
+    let enrichBase = 0, enrichFuel = 0, enrichEfs = 0, enrichHgv = 0;
+    let enrichRecipient = '', enrichPostcode = '', enrichService = '', enrichOrderRef = '', enrichDate = '';
+    try {
+      const enrichRes = await query(`
+        SELECT c.price      AS freight_sell,
+               c.order_id   AS order_ref,
+               s.ship_to_name        AS recipient,
+               s.ship_to_postcode    AS postcode,
+               s.collection_date     AS despatch_date,
+               cs.name               AS service_name,
+               COALESCE((
+                 SELECT SUM(cf.price) FROM charges cf
+                 WHERE cf.shipment_id = c.shipment_id AND cf.charge_type = 'fuel' AND cf.cancelled = false
+               ), 0) AS fuel_sell,
+               COALESCE((
+                 SELECT SUM(cf.price) FROM charges cf
+                 JOIN surcharges sx ON sx.id = cf.surcharge_id
+                 WHERE cf.shipment_id = c.shipment_id AND cf.charge_type = 'surcharge'
+                   AND cf.cancelled = false AND COALESCE(cf.source,'') != 'recon_surcharge'
+               ), 0) AS other_surcharge_sell
+        FROM   charges c
+        JOIN   shipments s  ON s.id = c.shipment_id
+        LEFT JOIN courier_services cs ON cs.id = (
+          SELECT id FROM courier_services WHERE service_code ILIKE s.dc_service_id LIMIT 1
+        )
+        WHERE  c.charge_type = 'courier'
+          AND  c.cancelled   = false
+          AND  $1 = ANY(s.tracking_codes)
+        ORDER  BY c.created_at DESC
+        LIMIT  1
+      `, [tracking]);
+
+      if (enrichRes.rows.length) {
+        const d = enrichRes.rows[0];
+        enrichBase      = round4(parseFloat(d.freight_sell   || 0));
+        enrichFuel      = round4(parseFloat(d.fuel_sell      || 0));
+        enrichOrderRef  = d.order_ref    || '';
+        enrichRecipient = d.recipient    || '';
+        enrichPostcode  = d.postcode     || '';
+        enrichService   = d.service_name || '';
+        enrichDate      = d.despatch_date ? new Date(d.despatch_date).toLocaleDateString('en-GB') : '';
+      }
+    } catch (_) { /* non-fatal — use zero enrichment */ }
+
     const surchargeMap = {};
     for (const s of entry.surcharges) {
       surchargeMap[s.surcharge_name] = (surchargeMap[s.surcharge_name] || 0) + s.sell_amount;
     }
     const namedSurchargeTotal = surchargeNamesSorted.reduce((sum, n) => sum + (surchargeMap[n] || 0), 0);
+    const lineTotal = enrichBase + enrichFuel + namedSurchargeTotal;
+
     rows.push([
       tracking,
-      '', '', '', '', '',
+      enrichOrderRef,
+      enrichDate,
+      enrichRecipient,
+      enrichPostcode,
+      enrichService,
       entry.parcel_count != null ? entry.parcel_count : '',
-      entry.weight_kg   != null ? parseFloat(entry.weight_kg).toFixed(3) : '',
-      '0.00', // no base freight on this invoice
-      '0.00', // no fuel on this invoice
+      entry.weight_kg    != null ? parseFloat(entry.weight_kg).toFixed(3) : '',
+      enrichBase.toFixed(2),
+      enrichFuel.toFixed(2),
       ...surchargeNamesSorted.map(n => (surchargeMap[n] || 0).toFixed(2)),
       namedSurchargeTotal.toFixed(2),
-      namedSurchargeTotal.toFixed(2),
+      lineTotal.toFixed(2),
     ]);
   }
 
