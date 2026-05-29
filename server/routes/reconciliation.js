@@ -1056,6 +1056,116 @@ router.get('/runs/:id/lines/:lineId/fuel-rate', async (req, res) => {
   }
 });
 
+// ─── GET /api/reconciliation/runs/:id/lines/:lineId/resolve-preview ───────────
+// Returns a dry-run preview of the charge that would be created if the operator
+// resolves this line with the given surcharge mapping.
+// Query params: type=map_to_surcharge  value=<surchargeId UUID>
+//
+// Response: {
+//   carrier_cost, customer_id, customer_name, customer_source,
+//   surcharge_name, surcharge_code, parcel_count,
+//   calculated_sell, has_override
+// }
+router.get('/runs/:id/lines/:lineId/resolve-preview', async (req, res) => {
+  try {
+    const lineId = parseInt(req.params.lineId);
+    const { type, value } = req.query;
+
+    if (type !== 'map_to_surcharge' || !value) {
+      return res.status(400).json({ error: 'type=map_to_surcharge and value (surchargeId UUID) are required' });
+    }
+
+    // Fetch the recon line
+    const lineRes = await query(
+      `SELECT rl.*, rr.carrier_id
+       FROM   reconciliation_lines rl
+       JOIN   reconciliation_runs  rr ON rr.id = rl.run_id
+       WHERE  rl.id = $1`,
+      [lineId]
+    );
+    if (!lineRes.rows.length) return res.status(404).json({ error: 'Line not found' });
+    const line = lineRes.rows[0];
+
+    // Fetch the surcharge
+    const surchargeRes = await query(
+      `SELECT id, name, code, default_value, calc_type, charge_per
+       FROM   surcharges WHERE id = $1`,
+      [value]
+    );
+    if (!surchargeRes.rows.length) return res.status(404).json({ error: 'Surcharge not found' });
+    const surcharge = surchargeRes.rows[0];
+
+    // Determine customer_id — direct or inherited from freight counterpart
+    let customerId     = line.customer_id || null;
+    let customerSource = 'direct';
+    if (!customerId) {
+      const custRes = await query(
+        `SELECT customer_id FROM reconciliation_lines
+         WHERE  run_id          = $1
+           AND  tracking_number = $2
+           AND  surcharge_id   IS NULL
+           AND  customer_id    IS NOT NULL
+         LIMIT 1`,
+        [line.run_id, line.tracking_number]
+      );
+      customerId = custRes.rows[0]?.customer_id || null;
+      if (customerId) customerSource = 'derived from tracking lookup';
+    }
+
+    // Fetch customer name
+    let customerName = null;
+    if (customerId) {
+      const custNameRes = await query(
+        `SELECT business_name FROM customers WHERE id = $1`,
+        [customerId]
+      );
+      customerName = custNameRes.rows[0]?.business_name || null;
+    }
+
+    // Check for customer override and resolve sell value
+    let hasOverride = false;
+    let sellValue   = parseFloat(surcharge.default_value || 0);
+    if (customerId) {
+      const overrideRes = await query(
+        `SELECT override_value FROM customer_surcharge_overrides
+         WHERE  surcharge_id = $1 AND customer_id = $2 AND active = true
+         LIMIT 1`,
+        [value, customerId]
+      );
+      if (overrideRes.rows.length) {
+        hasOverride = true;
+        sellValue   = parseFloat(overrideRes.rows[0].override_value);
+      }
+    }
+
+    // Calculate sell price
+    const parcels = Math.max(1, parseInt(line.parcel_count || 1) || 1);
+    let calculatedSell;
+    if (surcharge.calc_type === 'percentage') {
+      calculatedSell = Math.round(parseFloat(line.carrier_amount || 0) * (sellValue / 100) * 100) / 100;
+    } else if (surcharge.charge_per === 'parcel') {
+      calculatedSell = Math.round(sellValue * parcels * 100) / 100;
+    } else {
+      calculatedSell = sellValue;
+    }
+
+    return res.json({
+      carrier_cost:    parseFloat(line.carrier_amount || 0),
+      customer_id:     customerId,
+      customer_name:   customerName,
+      customer_source: customerSource,
+      surcharge_name:  surcharge.name,
+      surcharge_code:  surcharge.code,
+      parcel_count:    parcels,
+      calculated_sell: calculatedSell,
+      has_override:    hasOverride,
+    });
+  } catch (err) {
+    console.error('[reconciliation/resolve-preview]', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── POST /api/reconciliation/runs/:id/lines/:lineId/resolve ──────────────────
 // Human resolution of an Unmatched line.
 // Body: { resolution_type, resolution_value, scope: 'once'|'always', notes? }
@@ -1326,10 +1436,24 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
     // finalization Step 0.5 knows to skip/trace the surcharge charge for this line.
     const resolvedSurchargeId = resolution_type === 'map_to_surcharge' ? resolution_value : null;
 
+    // Never silently discard an unattributed surcharge — keep it visible on the dashboard
+    // with status = 'unmatched' and a specific reason so the operator can come back to it
+    // once the freight counterpart has been attributed (or use map_to_customer to assign).
+    const resolvedStatus = (resolution_type === 'map_to_surcharge' && !resolvedCustomerId)
+      ? 'unmatched'
+      : 'corrected';
+    const resolvedUnmatchedReason = resolvedStatus === 'unmatched'
+      ? 'unassigned_surcharge_customer'
+      : null;
+
+    if (resolvedStatus === 'unmatched') {
+      console.warn(`[reconciliation/resolve] Surcharge mapped but no customer found for tracking=${line.tracking_number} — keeping line unmatched (unassigned_surcharge_customer)`);
+    }
+
     await query(`
       UPDATE reconciliation_lines
-      SET    status                = 'corrected',
-             corrected_by          = 'human',
+      SET    status                = $10,
+             corrected_by          = CASE WHEN $10 = 'corrected' THEN 'human' ELSE corrected_by END,
              resolved_by           = $2,
              resolved_at           = NOW(),
              resolution_notes      = $3,
@@ -1339,14 +1463,17 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
              corrected_sell_price  = COALESCE($4, corrected_sell_price),
              corrected_cost_price  = COALESCE($5, corrected_cost_price),
              charge_id             = COALESCE($6, charge_id),
-             surcharge_id          = COALESCE($8, surcharge_id)
+             surcharge_id          = COALESCE($8, surcharge_id),
+             unmatched_reason      = COALESCE($9, unmatched_reason)
       WHERE  id = $1
     `, [lineId, req.user?.id || null, notes || null,
         resolvedSell,
         resolvedCost,
         resolvedChargeId,
         resolvedCustomerId,
-        resolvedSurchargeId]);
+        resolvedSurchargeId,
+        resolvedUnmatchedReason,
+        resolvedStatus]);
 
     // If scope = 'always', save a mapping rule
     let mappingId = null;

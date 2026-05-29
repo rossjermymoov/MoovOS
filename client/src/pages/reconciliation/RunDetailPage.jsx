@@ -261,9 +261,10 @@ function CorrectionDetail({ line, surchargeLookup }) {
 
 // ─── Resolve drawer ───────────────────────────────────────────────────────────
 function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolutionType }) {
-  const isUnknownCode        = line.unmatched_reason === 'unknown_service_code';
-  const isCancelledBooking   = line.unmatched_reason === 'cancelled_booking_invoiced';
-  const isNoAccountMapping   = line.unmatched_reason === 'no_account_mapping';
+  const isUnknownCode          = line.unmatched_reason === 'unknown_service_code';
+  const isCancelledBooking     = line.unmatched_reason === 'cancelled_booking_invoiced';
+  const isNoAccountMapping     = line.unmatched_reason === 'no_account_mapping';
+  const isUnassignedSurcharge  = line.unmatched_reason === 'unassigned_surcharge_customer';
 
   // For unknown service code lines default straight into the mapping flow.
   // defaultResolutionType lets callers (e.g. the DeltaCell tooltip) pre-select
@@ -273,16 +274,18 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
   const [ruleScope,       setRuleScope]       = useState('global');        // 'global' | 'customer'
   const [resolutionType,  setResolutionType]  = useState(
     defaultResolutionType
-    || (isUnknownCode    ? 'map_to_service'   : '')
-    || (isCancelledBooking ? 'credit_request' : '')
-    || (isNoAccountMapping ? 'map_to_customer': '')
+    || (isUnknownCode         ? 'map_to_service'   : '')
+    || (isCancelledBooking    ? 'credit_request'   : '')
+    || (isNoAccountMapping    ? 'map_to_customer'  : '')
+    || (isUnassignedSurcharge ? 'map_to_surcharge' : '')
   );
   const [resolutionValue, setResolutionValue] = useState(
     // Pre-populate with suggested service if the engine found one
     isUnknownCode && line.suggested_service_id
       ? String(line.suggested_service_id)
-      // Pre-populate surcharge for warning lines (sell_surcharge_missing) where we already know the surcharge
-      : (defaultResolutionType === 'map_to_surcharge' && line.surcharge_id)
+      // Pre-populate surcharge for warning lines (sell_surcharge_missing) and
+      // unassigned_surcharge_customer lines where the surcharge is already stored
+      : ((defaultResolutionType === 'map_to_surcharge' || isUnassignedSurcharge) && line.surcharge_id)
         ? String(line.surcharge_id)
         : ''
   );
@@ -295,6 +298,9 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
   const [custResults,     setCustResults]     = useState([]);
   const [custSearching,   setCustSearching]   = useState(false);
   const [selectedCust,    setSelectedCust]    = useState(null); // { id, business_name, account_number }
+  // Surcharge charge preview
+  const [chargePreview,   setChargePreview]   = useState(null);
+  const [previewLoading,  setPreviewLoading]  = useState(false);
 
   const isSurchargeMapping  = resolutionType === 'map_to_surcharge';
   const isManualPrice       = resolutionType === 'manual_price';
@@ -320,6 +326,20 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
       .then(r => setFuelRate(r.data))
       .catch(() => setFuelRate({ fuel_pct: 0, fuel_group_name: null }));
   }, [isManualPrice, line.run_id, line.id]);
+
+  // Fetch resolve preview when a surcharge is selected — shows carrier cost,
+  // attributed customer, and calculated sell price before the operator commits.
+  useEffect(() => {
+    if (!isSurchargeMapping || !resolutionValue) { setChargePreview(null); return; }
+    setPreviewLoading(true);
+    setChargePreview(null);
+    api.get(`/reconciliation/runs/${line.run_id}/lines/${line.id}/resolve-preview`, {
+      params: { type: 'map_to_surcharge', value: resolutionValue }
+    })
+      .then(r => setChargePreview(r.data))
+      .catch(() => setChargePreview(null))
+      .finally(() => setPreviewLoading(false));
+  }, [isSurchargeMapping, resolutionValue, line.run_id, line.id]);
 
   // Derived: total sell when manual_price is active
   const manualBase  = parseFloat(resolutionValue) || 0;
@@ -571,25 +591,89 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
                   No surcharges configured for this carrier yet. Add them in Carriers → Surcharges first.
                 </div>
               )}
-              {selectedSurcharge && (
-                <div style={{
-                  marginTop: 8, padding: '9px 12px',
-                  background: 'rgba(0,200,83,0.05)', border: '1px solid rgba(0,200,83,0.18)',
-                  borderRadius: 7, fontSize: 11,
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#64748B' }}>Standard sell price</span>
-                    <span style={{ fontWeight: 700, color: '#0F172A' }}>
-                      {selectedSurcharge.calc_type === 'percentage'
-                        ? `${parseFloat(selectedSurcharge.default_value).toFixed(2)}% of base`
-                        : `£${parseFloat(selectedSurcharge.default_value || 0).toFixed(2)} / ${selectedSurcharge.charge_per || 'shipment'}`}
-                    </span>
-                  </div>
-                  <div style={{ color: '#64748B', marginTop: 4 }}>
-                    Override this customer's sell price in their Pricing tab if needed.
-                  </div>
+
+              {/* ── Charge preview — loads as soon as a surcharge is selected ── */}
+              {selectedSurcharge && previewLoading && (
+                <div style={{ marginTop: 8, padding: '9px 12px', background: 'rgba(0,0,0,0.03)', borderRadius: 7, fontSize: 11, color: '#64748B' }}>
+                  Loading preview…
                 </div>
               )}
+              {selectedSurcharge && !previewLoading && chargePreview && (() => {
+                const hasCustomer = !!chargePreview.customer_id;
+                const borderColor = hasCustomer ? 'rgba(0,200,83,0.3)'  : 'rgba(255,179,0,0.45)';
+                const bgColor     = hasCustomer ? 'rgba(0,200,83,0.05)' : 'rgba(255,179,0,0.07)';
+                return (
+                  <div style={{
+                    marginTop: 8, padding: '10px 13px',
+                    background: bgColor, border: `1px solid ${borderColor}`,
+                    borderRadius: 7, fontSize: 11,
+                  }}>
+                    {/* Carrier cost row */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ color: '#64748B' }}>Carrier cost</span>
+                      <span style={{ fontWeight: 700, color: '#0F172A' }}>
+                        £{chargePreview.carrier_cost.toFixed(2)}
+                      </span>
+                    </div>
+
+                    {/* Assigned customer row */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                      <span style={{ color: '#64748B' }}>Assigned customer</span>
+                      <div style={{ textAlign: 'right' }}>
+                        {hasCustomer ? (
+                          <>
+                            <span style={{ fontWeight: 700, color: '#0F172A' }}>{chargePreview.customer_name}</span>
+                            {chargePreview.customer_source !== 'direct' && (
+                              <div style={{ fontSize: 10, color: '#64748B' }}>({chargePreview.customer_source})</div>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <span style={{ fontWeight: 700, color: '#FFB300' }}>UNRESOLVED</span>
+                            <div style={{ fontSize: 10, color: '#FFB300', marginTop: 2 }}>
+                              No customer linked to this tracking number
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Divider */}
+                    <div style={{ borderTop: '1px solid rgba(0,0,0,0.07)', margin: '6px 0' }} />
+
+                    {/* Calculated sell row */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <div>
+                        <span style={{ color: '#0F172A', fontWeight: 700 }}>Calculated sell price</span>
+                        {chargePreview.has_override && (
+                          <span style={{ fontSize: 10, color: '#64748B', marginLeft: 5 }}>(customer override)</span>
+                        )}
+                        {chargePreview.parcel_count > 1 && (
+                          <div style={{ fontSize: 10, color: '#64748B', marginTop: 1 }}>
+                            {chargePreview.parcel_count} parcels
+                          </div>
+                        )}
+                      </div>
+                      <span style={{
+                        fontWeight: 700, fontSize: 14,
+                        color: hasCustomer ? '#00C853' : '#FFB300',
+                      }}>
+                        £{chargePreview.calculated_sell.toFixed(2)}
+                      </span>
+                    </div>
+
+                    {/* Warning when no customer */}
+                    {!hasCustomer && (
+                      <div style={{
+                        marginTop: 8, padding: '6px 9px',
+                        background: 'rgba(255,179,0,0.12)', borderRadius: 5, fontSize: 10, color: '#B27800',
+                      }}>
+                        ⚠ Resolving without a customer will keep this line as Unmatched (unassigned_surcharge_customer) so it stays visible. Use Map to Customer first or check the freight counterpart line.
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           );
         })()}

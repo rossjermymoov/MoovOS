@@ -611,8 +611,11 @@ async function buildVerifiedPool(carrierId) {
 }
 
 // ─── Phase 2: Account number → customer lookup ────────────────────────────────
+// carrierId (optional): when provided, only matches links for that specific
+// courier, preventing a DHL account number from inadvertently matching a DPD
+// customer record (or vice-versa) when account numbers collide across carriers.
 
-async function lookupCustomerByAccount(accountNumber) {
+async function lookupCustomerByAccount(accountNumber, carrierId = null) {
   if (!accountNumber) return null;
   const acct = String(accountNumber).trim();
 
@@ -621,11 +624,14 @@ async function lookupCustomerByAccount(accountNumber) {
      FROM   customer_carrier_links ccl
      JOIN   customers              cu ON cu.id = ccl.customer_id
      WHERE  ccl.account_number = $1
+       AND  ($2::int IS NULL OR ccl.courier_id = $2)
      LIMIT  1`,
-    [acct]
+    [acct, carrierId || null]
   );
   if (res.rows.length) return res.rows[0];
 
+  // Fallback: direct customers table (no carrier column here — acceptable for
+  // dc_customer_id / legacy account_number that predates carrier links).
   const fallback = await query(
     `SELECT id AS customer_id, business_name,
             COALESCE(account_number, dc_customer_id) AS customer_account
@@ -1408,7 +1414,7 @@ export async function processReconciliationRun(runId, carrierId, lines) {
       if (!accountNumber) return null;
       const k = String(accountNumber).trim();
       if (_custCache.has(k)) return _custCache.get(k);
-      const r = await lookupCustomerByAccount(k);
+      const r = await lookupCustomerByAccount(k, carrierId);
       _custCache.set(k, r);
       return r;
     },
@@ -2280,7 +2286,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
       // IMPORTANT: still attribute to the correct customer so fuel lines appear
       // on their invoice — even for ghost/carrier_direct freight rows that weren't
       // in the pool.  Look up customer by DPD account number.
-      const fuelCustomer = await lookupCustomerByAccount(line.account_number);
+      const fuelCustomer = await lookupCustomerByAccount(line.account_number, carrierId);
       // Also try to link to the ghost charge for this tracking number so the
       // fuel line is visible in the Finance view alongside the freight charge.
       let fuelChargeId = null;
@@ -3431,7 +3437,7 @@ export async function reprocessMappedLines(runId, rawServiceCode, serviceId, car
 
     } else {
       // ── Pool MISS ─────────────────────────────────────────────────────────
-      const customer = await lookupCustomerByAccount(line.account_number);
+      const customer = await lookupCustomerByAccount(line.account_number, carrierId);
 
       if (!customer) {
         // Unknown account — cannot attribute.
