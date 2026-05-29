@@ -583,11 +583,45 @@ router.get('/debug/boorieur', async (req, res) => {
       WHERE run_id = $1
     `, [run.id]);
 
+    // ── Customer breakdown — how many recon lines per customer in this run ──
+    const customerBreakdownRes = await query(`
+      SELECT cu.business_name, rl.customer_id,
+             COUNT(*) FILTER (WHERE rl.is_fuel = false AND rl.surcharge_id IS NULL) AS freight_lines,
+             COUNT(*) AS total_lines,
+             SUM(CASE WHEN rl.is_fuel = false AND rl.surcharge_id IS NULL THEN 1 ELSE 0 END) AS recon_freight_lines
+      FROM   reconciliation_lines rl
+      LEFT JOIN customers cu ON cu.id = rl.customer_id
+      WHERE  rl.run_id = $1
+      GROUP  BY cu.business_name, rl.customer_id
+      ORDER  BY total_lines DESC
+    `, [run.id]);
+
+    // ── Nearby runs — helps spot if there's a separate Europa run ───────────
+    const nearbyRunsRes = await query(`
+      SELECT rr.id, rr.invoice_ref, rr.status, rr.finalized, rr.total_lines,
+        CASE
+          WHEN (SELECT COUNT(DISTINCT rl2.customer_id) FROM reconciliation_lines rl2
+                WHERE rl2.run_id = rr.id AND rl2.customer_id IS NOT NULL) = 1
+          THEN (SELECT cu2.business_name FROM reconciliation_lines rl2
+                JOIN customers cu2 ON cu2.id = rl2.customer_id
+                WHERE rl2.run_id = rr.id AND rl2.customer_id IS NOT NULL LIMIT 1)
+          WHEN (SELECT COUNT(DISTINCT rl2.customer_id) FROM reconciliation_lines rl2
+                WHERE rl2.run_id = rr.id AND rl2.customer_id IS NOT NULL) > 1
+          THEN 'Mixed'
+          ELSE 'Unknown'
+        END AS customer_display
+      FROM reconciliation_runs rr
+      WHERE rr.id BETWEEN $1 - 10 AND $1 + 10
+      ORDER BY rr.id DESC
+    `, [run.id]);
+
     return res.json({
       run,
       recon_lines_for_tracking: rlRes.rows,
       fbl_rows_for_tracking:    fblRes.rows,
       run_margin_summary:       marginRes.rows[0],
+      customer_breakdown:       customerBreakdownRes.rows,
+      nearby_runs:              nearbyRunsRes.rows,
     });
   } catch (err) {
     console.error('[debug/boorieur] error:', err.message);
