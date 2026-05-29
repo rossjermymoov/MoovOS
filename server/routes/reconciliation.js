@@ -1132,9 +1132,22 @@ router.get('/runs/:id/lines/:lineId/resolve-preview', async (req, res) => {
        LIMIT  1`,
       [value, line.tracking_number]
     );
-    const actualSurchargeCost = surchargeCostRes.rows[0]?.cost_price != null
-      ? parseFloat(surchargeCostRes.rows[0].cost_price)
-      : parseFloat(line.carrier_amount || 0);
+    // Derive the actual surcharge cost:
+    // 1. Use pre-existing surcharge charge cost_price (fuel/GEC charges created by engine)
+    // 2. If no charge exists (e.g. conditional surcharges like Long Length that aren't
+    //    auto-created), derive from the difference: carrier total − base freight cost.
+    //    DHL repeats the shipment total on every surcharge row, so line.carrier_amount
+    //    = full row total (e.g. £9.36) and freightCost = base only (£4.36) → diff = £5.00.
+    // 3. Final fallback: raw carrier_amount (covers cases where carrier does put per-item amounts)
+    const rawCarrierAmt = parseFloat(line.carrier_amount || 0);
+    let actualSurchargeCost;
+    if (surchargeCostRes.rows[0]?.cost_price != null) {
+      actualSurchargeCost = parseFloat(surchargeCostRes.rows[0].cost_price);
+    } else if (freightCost > 0 && rawCarrierAmt > freightCost) {
+      actualSurchargeCost = Math.round((rawCarrierAmt - freightCost) * 100) / 100;
+    } else {
+      actualSurchargeCost = rawCarrierAmt;
+    }
 
     // Determine customer_id — direct or inherited from freight counterpart
     let customerId     = line.customer_id || null;
