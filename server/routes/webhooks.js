@@ -57,7 +57,11 @@ async function createOrUpdateShipment(payload, customerId) {
   // consignment numbers (e.g. the 14-digit DPD consignment number). The pool
   // indexes by these so it can match invoice lines to our charge records.
   const clParcels    = ship.create_label_parcels || [];
-  const trackingCodes = clParcels.map(p => p.tracking_code).filter(Boolean);
+  // Deduplicate: DHL multi-parcel consignments share one master tracking code
+  // across all parcels — without dedup the array becomes {X,X,X} which breaks
+  // pool matching (adds no extra keys but wastes space and confuses diagnostics).
+  // For DPD each parcel has its own consignment number so dedup is a no-op.
+  const trackingCodes = [...new Set(clParcels.map(p => p.tracking_code).filter(Boolean))];
 
   // Total weight from parcels
   const totalWeightKg = clParcels.length
