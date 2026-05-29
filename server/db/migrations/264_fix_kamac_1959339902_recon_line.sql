@@ -16,8 +16,7 @@ SET
   corrected_sell_price = COALESCE(
     NULLIF(rl.corrected_sell_price, 0),
     ch.sell_price
-  ),
-  updated_at = NOW()
+  )
 FROM charges ch
 WHERE rl.tracking_number = '1959339902'
   AND rl.charge_id       = ch.id
