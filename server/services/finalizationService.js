@@ -392,23 +392,36 @@ async function buildSnapshot(line, run) {
     return snapshot;  // sell amounts remain 0 — freight line captures sell_fuel
   }
 
-  // ── Surcharge (map_to_surcharge) recon lines: carrier side only ───────────────
+  // ── Surcharge (map_to_surcharge) recon lines ─────────────────────────────────
   //
   // Lines with surcharge_id set represent carrier invoice surcharge line items
-  // resolved via "Map to Surcharge".  Their sell amounts — including the named
-  // surcharge sell — are already captured in the FREIGHT recon line's snapshot
-  // via the per-shipment surcharge_detail and sell_surcharge subqueries.
+  // resolved via "Map to Surcharge".
   //
-  // Running the freight-charge enrichment here (the migration 270 fix) caused the
-  // surcharge line to produce a complete duplicate of the freight row, inflating
-  // the customer CSV total by the full freight sell amount for every surcharge line.
+  // Sell amount: apply corrected_sell_price directly to this row's
+  // sell_surcharge_amount.  The freight enrichment subquery
+  // (WHERE sc.shipment_id = c.shipment_id AND sc.charge_type = 'surcharge')
+  // cannot reliably find these charges when the surcharge charge has
+  // shipment_id = NULL — which is common for external DHL bookings where the
+  // carrier tracking number is not in Moov's shipments table.  Trusting the
+  // freight chain silently produced £0 sell on every affected surcharge row.
   //
-  // Record only carrier_surcharge_amount; zero all sell fields.
+  // The freight enrichment subquery now excludes source='recon_surcharge'
+  // charges (see below) so there is no double-count.
   if (line.surcharge_id) {
     snapshot.carrier_base_amount      = 0;
     snapshot.carrier_surcharge_amount = round4(parseFloat(line.carrier_amount) || 0);
     snapshot.carrier_fuel_amount      = 0;
     snapshot.carrier_total_amount     = round4(parseFloat(line.carrier_amount) || 0);
+
+    // Apply corrected_sell_price directly — reliable for all booking types.
+    if (line.corrected_sell_price != null) {
+      const surchargesSell = round4(parseFloat(line.corrected_sell_price) || 0);
+      if (surchargesSell > 0) {
+        snapshot.sell_surcharge_amount = surchargesSell;
+        snapshot.sell_total_amount     = surchargesSell;
+      }
+    }
+
     if (snapshot.customer_id) {
       try {
         const cRes = await query(
@@ -418,7 +431,7 @@ async function buildSnapshot(line, run) {
         if (cRes.rows.length) snapshot.customer_name = cRes.rows[0].business_name;
       } catch (_) { /* non-fatal */ }
     }
-    return snapshot;  // sell amounts remain 0 — freight line captures sell_surcharge
+    return snapshot;
   }
 
   // ── Enrich from our charges table + shipments ─────────────────────────────
@@ -453,13 +466,15 @@ async function buildSnapshot(line, run) {
                 AND sx.reconciliation_excluded = true
             )
         ), 0)                              AS sell_fuel,
-        -- Surcharge sell (non-fuel, non-recon-excluded)
+        -- Surcharge sell (non-fuel, non-recon-excluded, excludes recon_surcharge
+        -- charges which are now captured directly in the surcharge FBL row)
         COALESCE((
           SELECT SUM(sc.price)
           FROM   charges sc
           WHERE  sc.shipment_id = c.shipment_id
             AND  sc.charge_type = 'surcharge'
             AND  sc.cancelled   = false
+            AND  COALESCE(sc.source, '') != 'recon_surcharge'
             AND  NOT EXISTS (
               SELECT 1 FROM surcharges sx
               WHERE sx.id = sc.surcharge_id
