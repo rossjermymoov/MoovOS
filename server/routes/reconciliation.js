@@ -1088,7 +1088,7 @@ router.get('/runs/:id/lines/:lineId/resolve-preview', async (req, res) => {
 
     // Fetch the surcharge
     const surchargeRes = await query(
-      `SELECT id, name, code, default_value, calc_type, charge_per
+      `SELECT id, name, code, default_value, calc_type, charge_per, cost_price
        FROM   surcharges WHERE id = $1`,
       [value]
     );
@@ -1192,8 +1192,20 @@ router.get('/runs/:id/lines/:lineId/resolve-preview', async (req, res) => {
       }
     }
 
-    // Calculate sell price
-    const parcels = Math.max(1, parseInt(line.parcel_count || 1) || 1);
+    // Calculate sell price.
+    // For per-parcel surcharges, infer the carrier-charged parcel count from
+    // actualSurchargeCost ÷ surcharge.cost_price (what the carrier charges per parcel).
+    // This handles DHL Long Length where the carrier may only charge for 2 of 3 parcels:
+    //   actualSurchargeCost=£10 / cost_price=£5 → inferredParcels=2 (not shipment parcel_count=3).
+    // Fall back to line.parcel_count when cost_price is 0 or not a per-parcel surcharge.
+    const surchargeCarrierCostPerUnit = parseFloat(surcharge.cost_price || 0);
+    let parcels;
+    if (surcharge.charge_per === 'parcel' && surchargeCarrierCostPerUnit > 0 && actualSurchargeCost > 0) {
+      parcels = Math.max(1, Math.round(actualSurchargeCost / surchargeCarrierCostPerUnit));
+    } else {
+      parcels = Math.max(1, parseInt(line.parcel_count || 1) || 1);
+    }
+
     let calculatedSell;
     if (surcharge.calc_type === 'percentage') {
       // Base the percentage on the freight sell price, not the carrier invoice row total.
@@ -1263,9 +1275,18 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
     if (!lineRes.rows.length) return res.status(404).json({ error: 'Line not found' });
 
     const line = lineRes.rows[0];
-    // Allow resolving both 'unmatched' lines (standard) and 'warning' lines
-    // (sell_surcharge_missing — carrier billed a surcharge we haven't charged the customer for).
-    if (!['unmatched', 'warning'].includes(line.status)) {
+    // Allow resolving:
+    //  • 'unmatched' lines — standard review queue
+    //  • 'warning' lines  — sell_surcharge_missing (carrier billed, customer not yet charged)
+    //  • 'corrected' carrier_direct surcharge lines — auto-corrected by the engine with the
+    //    right surcharge but wrong amounts (e.g. DHL repeating the total on every invoice row).
+    //    These can't be edited in the standard UI so re-resolving is the only path.
+    const isResolvable =
+      ['unmatched', 'warning'].includes(line.status) ||
+      (line.status === 'corrected' &&
+       line.source  === 'carrier_direct' &&
+       line.surcharge_id != null);
+    if (!isResolvable) {
       return res.status(400).json({ error: 'Line is not in a resolvable state (must be Unmatched or Warning)' });
     }
 
@@ -1273,12 +1294,16 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
     // When a human maps a reconciliation line to a surcharge, we need to know what
     // to charge the customer. Look up: customer override → surcharge default_value.
     let surchargeSell = null;
+    let resolvedSurchargeCost = null;   // actual surcharge cost (derived, not raw carrier_amount)
     if (resolution_type === 'map_to_surcharge' && resolution_value) {
       const surchargeId = resolution_value; // surcharge UUID
+
+      // Fetch surcharge including cost_price (carrier cost per unit) so we can
+      // infer how many parcels the carrier actually charged.
       const sellRes = await query(`
         SELECT COALESCE(cso.override_value, s.default_value) AS sell_price,
                s.calc_type, s.charge_per,
-               s.default_value
+               s.default_value, s.cost_price
         FROM   surcharges s
         LEFT JOIN customer_surcharge_overrides cso
                   ON cso.surcharge_id = s.id AND cso.customer_id = $2 AND cso.active = true
@@ -1287,13 +1312,51 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
 
       if (sellRes.rows.length) {
         const sp = sellRes.rows[0];
-        const sellVal = parseFloat(sp.sell_price || 0);
-        const parcels = Math.max(1, parseInt(line.parcel_count || 1) || 1);
+        const sellVal  = parseFloat(sp.sell_price  || 0);
+        const rawAmt   = parseFloat(line.carrier_amount || 0);
+
+        // Derive actual surcharge cost by subtracting the base freight cost
+        // (DHL repeats the shipment total on every invoice row, so carrier_amount
+        //  is the shipment total not just the surcharge).
+        let actualSurchargeCost = rawAmt;
+        if (sp.charge_per === 'parcel' || sp.calc_type === 'flat') {
+          const fcRes = await query(`
+            SELECT rl.corrected_cost_price,
+                   ch.cost_price AS charge_cost,
+                   rl.carrier_amount AS fc_carrier_amount
+            FROM   reconciliation_lines rl
+            LEFT   JOIN charges ch ON ch.id = rl.charge_id
+            WHERE  rl.run_id          = $1
+              AND  rl.tracking_number = $2
+              AND  rl.surcharge_id   IS NULL
+              AND  rl.source        != 'ddp_admin'
+            ORDER  BY rl.id
+            LIMIT  1
+          `, [line.run_id, line.tracking_number]);
+          const fcLine   = fcRes.rows[0];
+          const freightC = parseFloat(fcLine?.corrected_cost_price ?? fcLine?.charge_cost ?? 0);
+          if (freightC > 0 && rawAmt > freightC) {
+            actualSurchargeCost = Math.round((rawAmt - freightC) * 100) / 100;
+          }
+        }
+        resolvedSurchargeCost = actualSurchargeCost;
+
+        // For per-parcel surcharges, infer carrier-charged parcel count from
+        // actualSurchargeCost ÷ surcharge.cost_price (carrier cost per parcel).
+        // e.g. £10 ÷ £5/parcel = 2 parcels (not necessarily shipment parcel_count).
+        const surchargeCarrierCostPerUnit = parseFloat(sp.cost_price || 0);
+        let parcels;
+        if (sp.charge_per === 'parcel' && surchargeCarrierCostPerUnit > 0 && actualSurchargeCost > 0) {
+          parcels = Math.max(1, Math.round(actualSurchargeCost / surchargeCarrierCostPerUnit));
+        } else {
+          parcels = Math.max(1, parseInt(line.parcel_count || 1) || 1);
+        }
+
         if (sp.calc_type === 'percentage') {
           // % of the carrier_amount
-          surchargeSell = Math.round(parseFloat(line.carrier_amount || 0) * (sellVal / 100) * 100) / 100;
+          surchargeSell = Math.round(rawAmt * (sellVal / 100) * 100) / 100;
         } else if (sp.charge_per === 'parcel') {
-          // flat rate × parcel count (e.g. £5 × 2 parcels = £10)
+          // flat rate × inferred carrier-charged parcel count
           surchargeSell = Math.round(sellVal * parcels * 100) / 100;
         } else {
           surchargeSell = sellVal;
@@ -1401,7 +1464,11 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
 
         let scShipmentId   = freightRes.rows[0]?.shipment_id || null;
         let scDespatchDate = freightRes.rows[0]?.despatch_date || line.shipment_date || null;
-        const scCostAmt    = parseFloat(line.carrier_amount || 0);
+        // Use the derived surcharge cost (carrier_amount minus freight cost) rather than
+        // the raw carrier_amount, which for DHL is the shipment total repeated on every row.
+        const scCostAmt    = resolvedSurchargeCost != null
+          ? resolvedSurchargeCost
+          : parseFloat(line.carrier_amount || 0);
 
         // Fallback: if no freight line in this run has a charge_id, look up
         // the shipment directly by tracking number (handles unmatched freight lines).

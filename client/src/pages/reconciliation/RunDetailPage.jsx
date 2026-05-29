@@ -1927,6 +1927,22 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, onRai
                       Resolve
                     </button>
                   )}
+                  {/* Re-resolve button for auto-corrected carrier_direct surcharge lines.
+                      These are corrected by the engine but may have wrong amounts
+                      (e.g. DHL repeats the shipment total on every invoice row).
+                      The server now accepts re-resolution for these lines. */}
+                  {line.status === 'corrected' &&
+                   line.source   === 'carrier_direct' &&
+                   line.surcharge_id != null &&
+                   onResolveAsSurcharge && (
+                    <button
+                      style={{ ...btnGhost, padding: '4px 8px', fontSize: 10 }}
+                      title="Re-resolve this surcharge line (amend the amounts)"
+                      onClick={() => onResolveAsSurcharge(line)}
+                    >
+                      Re-resolve
+                    </button>
+                  )}
                   {line.status === 'corrected' && line.corrected_by === 'human' && runId && (
                     <ReopenButton lineId={line.id} runId={runId} />
                   )}
