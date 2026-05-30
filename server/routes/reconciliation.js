@@ -3569,8 +3569,23 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
               AND  wl.id              != rl.id
           ), 0)                                                          AS cost_total
       FROM   reconciliation_lines rl
-      LEFT JOIN courier_services cs   ON cs.id  = rl.service_id
-      LEFT JOIN charges          base ON base.id = rl.charge_id AND base.charge_type = 'courier' AND base.cancelled = false
+      LEFT JOIN courier_services cs ON cs.id = rl.service_id
+      -- Prefer the linked charge; fall back to most-recent carrier_direct courier
+      -- charge for this tracking when charge_id points to a deleted row (scorched-earth purge).
+      LEFT JOIN LATERAL (
+        SELECT c.id, c.sell_price, c.price, c.cost_price, c.shipment_id
+        FROM   charges c
+        WHERE  c.cancelled      = false
+          AND  c.charge_type    = 'courier'
+          AND  (
+            c.id = rl.charge_id
+            OR (rl.charge_id IS NULL OR NOT EXISTS (SELECT 1 FROM charges cx WHERE cx.id = rl.charge_id))
+               AND c.tracking_code = rl.tracking_number
+               AND c.source        = 'carrier_direct'
+          )
+        ORDER  BY CASE WHEN c.id = rl.charge_id THEN 0 ELSE 1 END, c.created_at DESC
+        LIMIT  1
+      ) base ON true
       WHERE  rl.run_id = $1
         AND  rl.status IN ('matched', 'corrected')
         AND  rl.is_fuel = false
