@@ -1263,8 +1263,9 @@ export async function createCarrierDirectSurcharges({
       SELECT s.id, s.name, s.calc_type, s.default_value, s.cost_price,
              s.charge_per, s.reconciliation_excluded
       FROM   surcharges s
-      WHERE  s.active       = true
-        AND  s.courier_id   = $1
+      WHERE  s.active                  = true
+        AND  s.courier_id              = $1
+        AND  s.reconciliation_excluded = false
         AND  (s.applies_when = 'always' OR s.applies_when IS NULL)
         AND  (s.effective_date IS NULL OR s.effective_date <= CURRENT_DATE)
         AND  NOT EXISTS (
