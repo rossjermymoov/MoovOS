@@ -849,6 +849,22 @@ async function handleCarrierDirect({
   weightKg, postcode, countryIso,
   rawServiceCode, runId, line, ctx,
 }) {
+  // Delete stale carrier_direct charges for this tracking so processShipment
+  // always writes 100% fresh rows. Only deletes charges not referenced by any
+  // finalized billing lines — finalized data is never touched.
+  try {
+    await query(`
+      DELETE FROM charges c
+      WHERE  c.tracking_code = $1
+        AND  c.source        = 'carrier_direct'
+        AND  c.cancelled     = false
+        AND  NOT EXISTS (
+          SELECT 1 FROM finalized_billing_lines fbl WHERE fbl.charge_id = c.id
+        )
+    `, [trackingNumber]);
+  } catch (delErr) {
+    console.warn(`[carrier-direct] pre-delete failed for tracking=${trackingNumber}: ${delErr.message}`);
+  }
   console.log('CLAUDE LIVE SNAPSHOT d63fdde — handleCarrierDirect fired for tracking=' + trackingNumber);
   const kg = parseFloat(weightKg) || 0;
 
