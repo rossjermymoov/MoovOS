@@ -3390,8 +3390,10 @@ export default function RunDetailPage() {
 
   const linesQuery = (status) => useQuery({
     queryKey: ['recon-lines', id, status],
-    queryFn:  () => api.get(`/reconciliation/runs/${id}/lines?${status ? `status=${status}&` : ''}limit=500`).then(r => r.data),
-    enabled:  activeTab !== 'overview',
+    queryFn:  () => api.get(`/reconciliation/runs/${id}/lines?${status ? `status=${status}&` : ''}limit=500&t=${Date.now()}`).then(r => r.data),
+    enabled:   activeTab !== 'overview',
+    staleTime: 0,
+    cacheTime: 0,
   });
 
   const allLines       = linesQuery('').data?.lines       || [];
