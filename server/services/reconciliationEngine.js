@@ -37,7 +37,7 @@
  */
 
 import { query } from '../db/index.js';
-import { computeGhostCharge, insertCharges, lookupCarrierBandCost, lookupCustomerSellPrice, matchZone } from './pricingEngine.js';
+import { computeGhostCharge, insertCharges, lookupCarrierBandCost, lookupCustomerSellPrice, matchZone, processShipment } from './pricingEngine.js';
 import { requestTrackingUpdate } from './voilaClient.js';
 import { normalisePayload, upsertEvent } from '../routes/tracking.js';
 
@@ -1162,21 +1162,55 @@ async function handleCarrierDirect({
 
   const cdParcels  = parcelCount > 1 ? parcelCount : 1;
 
-  // Create fuel and always-apply surcharges (GEC, EFS, HGV etc.) for this
-  // carrier_direct shipment — mirrors what billing.js does for OMS-booked shipments.
-  // Runs whenever we have a sell price and a carrier — no longer gated on shipmentId.
-  // When shipmentId is null, trackingNumber is used as the link key instead.
-  if (hasSellRate && serviceId && ctx?.carrierId) {
-    await createCarrierDirectSurcharges({
-      shipmentId:       cdShipmentId,
-      customerId:       customer.customer_id,
-      carrierId:        ctx.carrierId,
-      serviceId,
-      freightSellPrice: totalSellPrice,
-      freightCostPrice: totalCostPrice,
-      parcelCount:      cdParcels,
-      trackingCode:     trackingNumber,
-    });
+  // ── Price via the primary pricing engine (same path as webhooks) ─────────────
+  // A carrier-direct line is a retroactive webhook booking.
+  // Feed the invoice data straight into processShipment so it runs the full
+  // rate card + fuel % + ALL surcharge rules (EFS, HGV, congestion, etc.)
+  // identically to how a live booking is priced.  No special-case surcharge
+  // functions — just the engine, exactly once.
+  if (hasSellRate && serviceId) {
+    try {
+      // Look up the Moov service_code and customer account_number needed by processShipment
+      const svcRes = await query(
+        `SELECT cs.service_code, cu.account_number
+         FROM   courier_services cs, customers cu
+         WHERE  cs.id = $1 AND cu.id = $2`,
+        [serviceId, customer.customer_id]
+      );
+      if (svcRes.rows.length) {
+        const { service_code, account_number } = svcRes.rows[0];
+        const perParcelKg = cdParcels > 1 ? round2(kg / cdParcels) : kg;
+
+        const { charges: priceCharges } = await processShipment({
+          shipment: {
+            account_number,
+            dc_service_id:       service_code,
+            ship_to_postcode:    postcode     || null,
+            ship_to_country_iso: countryIso   || 'GB',
+            ship_to_name:        line.recipient_name || null,
+            reference:           line.sender_ref     || null,
+            collection_date:     line.shipment_date  || null,
+            create_label_parcels: Array.from({ length: cdParcels }, () => ({
+              weight: perParcelKg,
+            })),
+          },
+        });
+
+        // Stamp all charges as carrier_direct and write via insertCharges
+        // ON CONFLICT DO NOTHING handles idempotency across re-imports
+        const stampedCharges = priceCharges.map(c => ({
+          ...c,
+          source:      'carrier_direct',
+          status:      'verified',
+          shipment_id: cdShipmentId || c.shipment_id || null,
+          tracking_code: trackingNumber,
+        }));
+        await insertCharges(stampedCharges, cdShipmentId);
+        console.log(`[carrier-direct] processShipment wrote ${stampedCharges.length} charge(s) for tracking=${trackingNumber}`);
+      }
+    } catch (priceErr) {
+      console.warn(`[carrier-direct] processShipment failed for tracking=${trackingNumber}: ${priceErr.message}`);
+    }
   }
 
   const rollup     = await buildSurchargeRollup(
@@ -2843,17 +2877,37 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
               }
             }
           }
-          // Always create surcharges — trackingCode fallback handles null shipmentId
-          await createCarrierDirectSurcharges({
-            shipmentId:       repairShipId,
-            customerId:       charge.customer_id,
-            carrierId:        ctx.carrierId,
-            serviceId:        effectiveServiceId,
-            freightSellPrice: cdSell,
-            freightCostPrice: parseFloat(charge.expected_cost || 0),
-            parcelCount:      Math.max(invoiceParcelCount, 1),
-            trackingCode:     trackingNumber,
-          });
+          // Run through the primary pricing engine — same as handleCarrierDirect above
+          try {
+            const svcRepRes = await query(
+              `SELECT cs.service_code, cu.account_number
+               FROM   courier_services cs, customers cu
+               WHERE  cs.id = $1 AND cu.id = $2`,
+              [effectiveServiceId, charge.customer_id]
+            );
+            if (svcRepRes.rows.length) {
+              const { service_code: repSvc, account_number: repAcct } = svcRepRes.rows[0];
+              const repParcels = Math.max(invoiceParcelCount, 1);
+              const repKg = round2((charge.weight_kg || invoiceWeightKg || 0) / repParcels);
+              const { charges: repCharges } = await processShipment({
+                shipment: {
+                  account_number:      repAcct,
+                  dc_service_id:       repSvc,
+                  ship_to_postcode:    charge.ship_to_postcode || null,
+                  ship_to_country_iso: 'GB',
+                  create_label_parcels: Array.from({ length: repParcels }, () => ({ weight: repKg })),
+                },
+              });
+              const stampedRep = repCharges.map(c => ({
+                ...c, source: 'carrier_direct', status: 'verified',
+                shipment_id: repairShipId || null, tracking_code: trackingNumber,
+              }));
+              await insertCharges(stampedRep, repairShipId);
+              console.log(`[carrier-direct pool-hit] processShipment wrote ${stampedRep.length} charge(s) for tracking=${trackingNumber}`);
+            }
+          } catch (repErr) {
+            console.warn(`[carrier-direct pool-hit] processShipment failed for tracking=${trackingNumber}: ${repErr.message}`);
+          }
         }
       }
     } catch (cdRepairErr) {
