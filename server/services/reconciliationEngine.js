@@ -1198,20 +1198,30 @@ async function handleCarrierDirect({
           },
         };
         // Cancel any stale carrier_direct sub-charges so processShipment writes fresh ones
-        await query(`UPDATE charges SET cancelled = true, updated_at = NOW() WHERE tracking_code = $1 AND charge_type IN ('fuel','surcharge','congestion_surcharge') AND source = 'carrier_direct' AND cancelled = false`, [trackingNumber]);
+        await query(`UPDATE charges SET cancelled = true, updated_at = NOW() WHERE tracking_code = $1 AND charge_type IN ('fuel','surcharge') AND source = 'carrier_direct' AND cancelled = false`, [trackingNumber]);
         console.log(`[CARRIER-DIRECT] FEEDING ENGINE tracking=${trackingNumber} serviceCode=${service_code} parcels=${cdParcels} perParcelKg=${perParcelKg} customerId=${customer.customer_id}`);
         const { charges: priceCharges, errors: priceErrors } = await processShipment(cdPayload);
         console.log(`[CARRIER-DIRECT] ENGINE RESULT tracking=${trackingNumber} charges=${priceCharges.length} types=${priceCharges.map(c=>c.charge_type).join(',')} errors=${JSON.stringify(priceErrors)}`);
 
-        // Stamp all charges as carrier_direct and write via insertCharges
-        // ON CONFLICT DO NOTHING handles idempotency across re-imports
-        const stampedCharges = priceCharges.map(c => ({
-          ...c,
-          source:      'carrier_direct',
-          status:      'verified',
-          shipment_id: cdShipmentId || c.shipment_id || null,
-          tracking_code: trackingNumber,
-        }));
+        // Normalize charge_type to DB enum values before writing.
+        // The pricing engine returns rule.name (e.g. 'congestion_surcharge',
+        // 'hgv_surcharge') which are not valid enum values — map them to 'surcharge'
+        // and preserve the original name in service_name for display.
+        const DB_CHARGE_TYPES = new Set(['courier','fuel','surcharge','ddp_admin','rule','picking','packaging','return','ad_hoc','delivery','recurring','storage','assembly']);
+        const stampedCharges = priceCharges.map(c => {
+          const dbType = DB_CHARGE_TYPES.has(c.charge_type) ? c.charge_type : 'surcharge';
+          return {
+            ...c,
+            charge_type:   dbType,
+            service_name:  dbType === 'surcharge' && c.charge_type !== 'surcharge'
+                             ? (c.service_name || c.charge_type)
+                             : c.service_name,
+            source:        'carrier_direct',
+            status:        'verified',
+            shipment_id:   cdShipmentId || c.shipment_id || null,
+            tracking_code: trackingNumber,
+          };
+        });
         await insertCharges(stampedCharges, cdShipmentId);
         console.log(`[carrier-direct] processShipment wrote ${stampedCharges.length} charge(s) for tracking=${trackingNumber}`);
       }
@@ -2907,14 +2917,25 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
                 },
               };
               // Cancel stale sub-charges so fresh ones can be inserted
-              await query(`UPDATE charges SET cancelled = true, updated_at = NOW() WHERE tracking_code = $1 AND charge_type IN ('fuel','surcharge','congestion_surcharge') AND source = 'carrier_direct' AND cancelled = false`, [trackingNumber]);
+              await query(`UPDATE charges SET cancelled = true, updated_at = NOW() WHERE tracking_code = $1 AND charge_type IN ('fuel','surcharge') AND source = 'carrier_direct' AND cancelled = false`, [trackingNumber]);
               console.log(`[CARRIER-DIRECT POOL-HIT] FEEDING ENGINE tracking=${trackingNumber} serviceCode=${repSvc} parcels=${repParcels} perParcelKg=${repKg} customerId=${charge.customer_id}`);
               const { charges: repCharges, errors: repErrors } = await processShipment(repPayload);
               console.log(`[CARRIER-DIRECT POOL-HIT] ENGINE RESULT tracking=${trackingNumber} charges=${repCharges.length} types=${repCharges.map(c=>c.charge_type).join(',')} errors=${JSON.stringify(repErrors)}`);
-              const stampedRep = repCharges.map(c => ({
-                ...c, source: 'carrier_direct', status: 'verified',
-                shipment_id: repairShipId || null, tracking_code: trackingNumber,
-              }));
+              const DB_CHARGE_TYPES_REP = new Set(['courier','fuel','surcharge','ddp_admin','rule','picking','packaging','return','ad_hoc','delivery','recurring','storage','assembly']);
+              const stampedRep = repCharges.map(c => {
+                const dbType = DB_CHARGE_TYPES_REP.has(c.charge_type) ? c.charge_type : 'surcharge';
+                return {
+                  ...c,
+                  charge_type:   dbType,
+                  service_name:  dbType === 'surcharge' && c.charge_type !== 'surcharge'
+                                   ? (c.service_name || c.charge_type)
+                                   : c.service_name,
+                  source:        'carrier_direct',
+                  status:        'verified',
+                  shipment_id:   repairShipId || null,
+                  tracking_code: trackingNumber,
+                };
+              });
               await insertCharges(stampedRep, repairShipId);
               console.log(`[carrier-direct pool-hit] processShipment wrote ${stampedRep.length} charge(s) for tracking=${trackingNumber}`);
             }
