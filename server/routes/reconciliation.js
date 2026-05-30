@@ -3474,13 +3474,16 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
         )                                                                AS corrected_surcharge_names,
         -- sell_base: freight sell price
         COALESCE(rl.corrected_sell_price, base.sell_price, base.price, 0) AS sell_base,
-        -- sell_fuel
+        -- sell_fuel: standard path via shipment_id, fallback via tracking_code for carrier_direct
         COALESCE((
           SELECT SUM(sc.price)
           FROM   charges sc
-          WHERE  sc.shipment_id = base.shipment_id
-            AND  sc.charge_type = 'fuel'
+          WHERE  sc.charge_type = 'fuel'
             AND  sc.cancelled   = false
+            AND  (
+              (base.shipment_id IS NOT NULL AND sc.shipment_id = base.shipment_id)
+              OR (base.shipment_id IS NULL   AND sc.tracking_code = rl.tracking_number AND sc.shipment_id IS NULL)
+            )
         ), 0)                                                            AS sell_fuel,
         -- sell_surcharge: two paths to find the surcharge charge +
         -- a fallback for when no charge was created yet (charge_id IS NULL).
@@ -3494,6 +3497,7 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
             AND  sc.cancelled   = false
             AND  (
               (base.shipment_id IS NOT NULL AND sc.shipment_id = base.shipment_id)
+              OR (base.shipment_id IS NULL   AND sc.tracking_code = rl.tracking_number AND sc.shipment_id IS NULL)
               OR sc.id IN (
                 SELECT rl3.charge_id
                 FROM   reconciliation_lines rl3
@@ -3512,7 +3516,7 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
             AND  wl.tracking_number  = rl.tracking_number
             AND  wl.surcharge_id    IS NOT NULL
             AND  wl.status           = 'corrected'
-            AND  wl.charge_id       IS NULL   -- fallback: charge creation failed
+            AND  wl.charge_id       IS NULL
             AND  wl.id              != rl.id
         ), 0)                                                            AS sell_surcharge,
         -- sell_total

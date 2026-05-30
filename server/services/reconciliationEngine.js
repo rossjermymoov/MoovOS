@@ -1162,10 +1162,11 @@ async function handleCarrierDirect({
 
   const cdParcels  = parcelCount > 1 ? parcelCount : 1;
 
-  // Create fuel and always-apply surcharges (GEC etc.) for this carrier_direct
-  // shipment — mirrors what billing.js does for OMS-booked shipments.
-  // Only run when we have a real shipment row and a sell price to base % on.
-  if (cdShipmentId && hasSellRate && serviceId && ctx?.carrierId) {
+  // Create fuel and always-apply surcharges (GEC, EFS, HGV etc.) for this
+  // carrier_direct shipment — mirrors what billing.js does for OMS-booked shipments.
+  // Runs whenever we have a sell price and a carrier — no longer gated on shipmentId.
+  // When shipmentId is null, trackingNumber is used as the link key instead.
+  if (hasSellRate && serviceId && ctx?.carrierId) {
     await createCarrierDirectSurcharges({
       shipmentId:       cdShipmentId,
       customerId:       customer.customer_id,
@@ -1174,6 +1175,7 @@ async function handleCarrierDirect({
       freightSellPrice: totalSellPrice,
       freightCostPrice: totalCostPrice,
       parcelCount:      cdParcels,
+      trackingCode:     trackingNumber,
     });
   }
 
@@ -1276,8 +1278,11 @@ async function handleCarrierDirect({
 export async function createCarrierDirectSurcharges({
   shipmentId, customerId, carrierId, serviceId,
   freightSellPrice, freightCostPrice, parcelCount,
+  trackingCode,
 }) {
-  if (!shipmentId || !customerId || !carrierId) return;
+  if (!customerId || !carrierId) return;
+  // shipmentId may be null for external bookings — we still create sub-charges
+  // using trackingCode as the link key so the preview and buildSnapshot can find them.
   const baseSell = parseFloat(freightSellPrice) || 0;
   const baseCost = parseFloat(freightCostPrice) || 0;
   const qty      = parcelCount > 1 ? parcelCount : 1;
@@ -1308,10 +1313,12 @@ export async function createCarrierDirectSurcharges({
     `, [carrierId]);
 
     for (const s of surcharges) {
-      // Idempotency: skip if surcharge charge already exists for this shipment
+      // Idempotency: check by shipment_id when available, else by tracking_code
       const { rows: existing } = await query(
-        'SELECT id FROM charges WHERE shipment_id=$1 AND surcharge_id=$2 AND cancelled=false',
-        [shipmentId, s.id]
+        shipmentId
+          ? 'SELECT id FROM charges WHERE shipment_id=$1 AND surcharge_id=$2 AND cancelled=false'
+          : 'SELECT id FROM charges WHERE tracking_code=$1 AND surcharge_id=$2 AND cancelled=false AND shipment_id IS NULL',
+        [shipmentId || trackingCode, s.id]
       );
       if (existing.length) continue;
 
@@ -1350,10 +1357,10 @@ export async function createCarrierDirectSurcharges({
 
       await query(`
         INSERT INTO charges
-          (shipment_id, customer_id, charge_type, service_name, sell_price, price, cost_price,
+          (shipment_id, customer_id, tracking_code, charge_type, service_name, sell_price, price, cost_price,
            price_auto, surcharge_id, parcel_qty, verified, status, source)
-        VALUES ($1, $2, 'surcharge', $3, $4, $4, $5, true, $6, 1, true, 'verified', 'carrier_direct')
-      `, [shipmentId, customerId, s.name, sellPrice, costPrice, s.id]);
+        VALUES ($1, $2, $7, 'surcharge', $3, $4, $4, $5, true, $6, 1, true, 'verified', 'carrier_direct')
+      `, [shipmentId, customerId, s.name, sellPrice, costPrice, s.id, trackingCode || null]);
       console.log(`[carrier-direct surcharges] inserted surcharge "${s.name}" sell=£${sellPrice} cost=£${costPrice} shipment=${shipmentId}`);
     }
 
@@ -1375,20 +1382,22 @@ export async function createCarrierDirectSurcharges({
       const costPct = parseFloat(fg.carrier_pct ?? 0);
 
       if (sellPct > 0 && baseSell > 0) {
-        // Idempotency: one fuel charge per shipment
+        // Idempotency: one fuel charge per shipment (or per tracking when shipment_id is null)
         const { rows: existingFuel } = await query(
-          `SELECT id FROM charges WHERE shipment_id=$1 AND charge_type='fuel' AND cancelled=false`,
-          [shipmentId]
+          shipmentId
+            ? `SELECT id FROM charges WHERE shipment_id=$1 AND charge_type='fuel' AND cancelled=false`
+            : `SELECT id FROM charges WHERE tracking_code=$1 AND charge_type='fuel' AND cancelled=false AND shipment_id IS NULL`,
+          [shipmentId || trackingCode]
         );
         if (!existingFuel.length) {
           const fuelSell = round2(baseSell * sellPct / 100);
           const fuelCost = costPct > 0 ? round2(baseCost * costPct / 100) : null;
           await query(`
             INSERT INTO charges
-              (shipment_id, customer_id, charge_type, service_name, sell_price, price, cost_price,
+              (shipment_id, customer_id, tracking_code, charge_type, service_name, sell_price, price, cost_price,
                price_auto, parcel_qty, verified, status, source)
-            VALUES ($1, $2, 'fuel', $3, $4, $4, $5, true, 1, true, 'verified', 'carrier_direct')
-          `, [shipmentId, customerId, `${fg.name} Fuel`, fuelSell, fuelCost]);
+            VALUES ($1, $2, $6, 'fuel', $3, $4, $4, $5, true, 1, true, 'verified', 'carrier_direct')
+          `, [shipmentId, customerId, `${fg.name} Fuel`, fuelSell, fuelCost, trackingCode || null]);
           console.log(`[carrier-direct surcharges] inserted fuel "${fg.name}" sell=£${fuelSell} cost=${fuelCost != null ? `£${fuelCost}` : 'null'} shipment=${shipmentId}`);
         }
       }
@@ -2836,6 +2845,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
               freightSellPrice: cdSell,
               freightCostPrice: parseFloat(charge.expected_cost || 0),
               parcelCount:      Math.max(invoiceParcelCount, 1),
+              trackingCode:     trackingNumber,
             });
           }
         }
