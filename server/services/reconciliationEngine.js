@@ -1366,15 +1366,24 @@ export async function createCarrierDirectSurcharges({
         AND  (s.effective_date IS NULL OR s.effective_date <= CURRENT_DATE)
     `, [carrierId]);
 
+    console.log(`[carrier-direct surcharges] building for tracking=${trackingCode || '?'} shipment=${shipmentId || 'NULL'} carrier=${carrierId} surcharges=[${surcharges.map(s=>s.name).join(',')}]`);
+
     for (const s of surcharges) {
-      // Idempotency: check by shipment_id when available, else by tracking_code
+      // Idempotency: check by shipment_id when available, else by tracking_code.
+      // Only skip if an existing charge has price > 0 — zero-price OMS placeholder
+      // charges (e.g. EFS created with default_value=0 at booking time) must be
+      // overridden with the real calculated amount.
       const { rows: existing } = await query(
         shipmentId
-          ? 'SELECT id FROM charges WHERE shipment_id=$1 AND surcharge_id=$2 AND cancelled=false'
-          : 'SELECT id FROM charges WHERE tracking_code=$1 AND surcharge_id=$2 AND cancelled=false AND shipment_id IS NULL',
+          ? 'SELECT id FROM charges WHERE shipment_id=$1 AND surcharge_id=$2 AND cancelled=false AND price > 0'
+          : 'SELECT id FROM charges WHERE tracking_code=$1 AND surcharge_id=$2 AND cancelled=false AND shipment_id IS NULL AND price > 0',
         [shipmentId || trackingCode, s.id]
       );
-      if (existing.length) continue;
+      if (existing.length) {
+        console.log(`[carrier-direct surcharges] SKIP ${s.name} — existing charge found for shipment=${shipmentId}`);
+        continue;
+      }
+      console.log(`[carrier-direct surcharges] INSERT ${s.name} sell=£${s.default_value} for tracking=${trackingCode}`);
 
       // Customer override for sell price
       const { rows: overrides } = await query(
