@@ -849,19 +849,21 @@ async function handleCarrierDirect({
   weightKg, postcode, countryIso,
   rawServiceCode, runId, line, ctx,
 }) {
-  // Delete stale carrier_direct charges for this tracking so processShipment
-  // always writes 100% fresh rows. Only deletes charges not referenced by any
-  // finalized billing lines — finalized data is never touched.
+  // Scorched-earth purge: delete ALL carrier_direct charges for this tracking
+  // that are not locked into a finalized run. This makes reuse physically impossible.
   try {
     await query(`
       DELETE FROM charges c
       WHERE  c.tracking_code = $1
-        AND  c.source        = 'carrier_direct'
-        AND  c.cancelled     = false
         AND  NOT EXISTS (
-          SELECT 1 FROM finalized_billing_lines fbl WHERE fbl.charge_id = c.id
+          SELECT 1
+          FROM   finalized_billing_lines fbl
+          JOIN   reconciliation_runs rr ON rr.id = fbl.run_id
+          WHERE  fbl.charge_id = c.id
+            AND  rr.finalized  = true
         )
     `, [trackingNumber]);
+    console.log(`[recon-purge] Force-deleted old staging rows for tracking=${trackingNumber}`);
   } catch (delErr) {
     console.warn(`[carrier-direct] pre-delete failed for tracking=${trackingNumber}: ${delErr.message}`);
   }
