@@ -1414,6 +1414,7 @@ export async function createCarrierDirectSurcharges({
           (shipment_id, customer_id, tracking_code, charge_type, service_name, sell_price, price, cost_price,
            price_auto, surcharge_id, parcel_qty, verified, status, source)
         VALUES ($1, $2, $7, 'surcharge', $3, $4, $4, $5, true, $6, 1, true, 'verified', 'carrier_direct')
+        ON CONFLICT DO NOTHING
       `, [shipmentId, customerId, s.name, sellPrice, costPrice, s.id, trackingCode || null]);
       console.log(`[carrier-direct surcharges] inserted surcharge "${s.name}" sell=£${sellPrice} cost=£${costPrice} shipment=${shipmentId}`);
     }
@@ -1451,6 +1452,7 @@ export async function createCarrierDirectSurcharges({
               (shipment_id, customer_id, tracking_code, charge_type, service_name, sell_price, price, cost_price,
                price_auto, parcel_qty, verified, status, source)
             VALUES ($1, $2, $6, 'fuel', $3, $4, $4, $5, true, 1, true, 'verified', 'carrier_direct')
+            ON CONFLICT DO NOTHING
           `, [shipmentId, customerId, `${fg.name} Fuel`, fuelSell, fuelCost, trackingCode || null]);
           console.log(`[carrier-direct surcharges] inserted fuel "${fg.name}" sell=£${fuelSell} cost=${fuelCost != null ? `£${fuelCost}` : 'null'} shipment=${shipmentId}`);
         }
