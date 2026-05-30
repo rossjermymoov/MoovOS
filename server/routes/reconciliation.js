@@ -1060,7 +1060,31 @@ router.get('/runs/:id/lines', async (req, res) => {
           WHEN sur.charge_per = 'parcel'
             THEN ROUND(COALESCE(cso.override_value, sur.default_value, 0) * GREATEST(1, COALESCE(rl.parcel_count, 1)), 2)
           ELSE COALESCE(cso.override_value, sur.default_value)
-        END AS suggested_sell_price
+        END AS suggested_sell_price,
+        -- ── Enriched sell + PII from matched charge/shipment ─────────────────
+        -- Available immediately once charge_id is set — no finalization needed.
+        COALESCE(ch_direct.sell_price, ch_direct.price) AS enriched_sell_base,
+        sh.ship_to_name       AS enriched_recipient_name,
+        sh.ship_to_postcode   AS enriched_recipient_postcode,
+        COALESCE(ch_direct.despatch_date, sh.collection_date) AS enriched_despatch_date,
+        COALESCE((
+          SELECT SUM(cf.price)
+          FROM   charges cf
+          WHERE  cf.shipment_id = ch_direct.shipment_id
+            AND  cf.charge_type = 'fuel'
+            AND  cf.cancelled   = false
+            AND  ch_direct.shipment_id IS NOT NULL
+        ), 0) AS enriched_sell_fuel,
+        COALESCE((
+          SELECT SUM(cf.price)
+          FROM   charges cf
+          JOIN   surcharges sx ON sx.id = cf.surcharge_id
+          WHERE  cf.shipment_id = ch_direct.shipment_id
+            AND  cf.charge_type = 'surcharge'
+            AND  cf.cancelled   = false
+            AND  COALESCE(cf.source, '') != 'recon_surcharge'
+            AND  ch_direct.shipment_id IS NOT NULL
+        ), 0) AS enriched_sell_surcharge
       FROM   reconciliation_lines rl
       LEFT JOIN courier_services      cs     ON cs.id     = rl.service_id
       LEFT JOIN courier_services      cs_sug ON cs_sug.id = rl.suggested_service_id
