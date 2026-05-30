@@ -1016,7 +1016,7 @@ async function handleCarrierDirect({
       'DPD',
       rawServiceCode        || null,
       line.sender_ref       || null,
-      parcelCount > 1 ? parcelCount : null,
+      Math.max(parcelCount, 1),
       [trackingNumber],
       line.recipient_name   || null,
       postcode              || null,
