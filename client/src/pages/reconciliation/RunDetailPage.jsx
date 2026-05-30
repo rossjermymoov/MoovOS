@@ -2079,11 +2079,10 @@ function CustomerLinesDrilldown({ runId, customerId }) {
   const { data: lines = [], isLoading } = useQuery({
     queryKey: ['recon-preview-lines', runId, customerId],
     queryFn:  () => api.get(`/reconciliation/runs/${runId}/customers/preview/lines`, {
-      // Pass 'null' string explicitly so the backend knows to filter for unattributed lines,
-      // rather than omitting the param (which would return all lines with no filter).
-      params: { customer_id: customerId ?? 'null' },
+      params: { customer_id: customerId ?? 'null', t: Date.now() },
     }).then(r => r.data),
-    staleTime: 30_000,
+    staleTime: 0,
+    cacheTime: 0,
   });
 
   if (isLoading) return (
@@ -2184,8 +2183,9 @@ function CustomerPreviewPanel({ runId }) {
 
   const { data: customers = [], isLoading, refetch } = useQuery({
     queryKey: ['recon-customers-preview', runId],
-    queryFn:  () => api.get(`/reconciliation/runs/${runId}/customers/preview`).then(r => r.data),
-    staleTime: 30_000,
+    queryFn:  () => api.get(`/reconciliation/runs/${runId}/customers/preview?t=${Date.now()}`).then(r => r.data),
+    staleTime: 0,        // always fetch fresh — never serve 304 cached view
+    cacheTime: 0,
   });
 
   async function handleRepairAndRefresh() {

@@ -1476,8 +1476,9 @@ export default function ReconciliationPage() {
         const status = res.data?.run?.status || res.data?.status;
         if (!cancelled && status && status !== 'processing') {
           setPollingRunId(null);
-          qc.invalidateQueries({ queryKey: ['recon-runs'] });
-          navigate(`/reconciliation/${pollingRunId}`);
+          // Hard redirect with cache-bust — forces the browser to load a
+          // completely fresh page state, bypassing any 304 cached views.
+          window.location.href = `/reconciliation/${pollingRunId}?t=${Date.now()}`;
         } else if (!cancelled) {
           setTimeout(poll, 2000);
         }
