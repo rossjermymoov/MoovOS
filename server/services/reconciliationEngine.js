@@ -1049,16 +1049,17 @@ async function handleCarrierDirect({
       // buildSnapshot enrichment cannot find them (NULL = NULL is FALSE in SQL).
       try {
         const minShipRes = await query(`
-          INSERT INTO shipments (tracking_codes, courier, ship_to_postcode, ship_to_name, collection_date)
-          VALUES (ARRAY[$1::text], $2, $3, $4, $5)
+          INSERT INTO shipments (tracking_codes, courier, ship_to_postcode, ship_to_name, collection_date, parcel_count, event_type)
+          VALUES (ARRAY[$1::text], $2, $3, $4, $5, $6, 'carrier_direct')
           ON CONFLICT DO NOTHING
           RETURNING id
         `, [
           trackingNumber,
           line.carrier_name || 'DHL',
-          postcode          || null,
+          postcode            || null,
           line.recipient_name || null,
           line.shipment_date  ? line.shipment_date.split('T')[0] : null,
+          parcelCount > 1 ? parcelCount : 1,
         ]);
         cdShipmentId = minShipRes.rows[0]?.id || null;
         if (!cdShipmentId) {
@@ -1196,6 +1197,8 @@ async function handleCarrierDirect({
             })),
           },
         };
+        // Cancel any stale carrier_direct sub-charges so processShipment writes fresh ones
+        await query(`UPDATE charges SET cancelled = true, updated_at = NOW() WHERE tracking_code = $1 AND charge_type IN ('fuel','surcharge','congestion_surcharge') AND source = 'carrier_direct' AND cancelled = false`, [trackingNumber]);
         console.log(`[CARRIER-DIRECT] FEEDING ENGINE tracking=${trackingNumber} serviceCode=${service_code} parcels=${cdParcels} perParcelKg=${perParcelKg} customerId=${customer.customer_id}`);
         const { charges: priceCharges, errors: priceErrors } = await processShipment(cdPayload);
         console.log(`[CARRIER-DIRECT] ENGINE RESULT tracking=${trackingNumber} charges=${priceCharges.length} types=${priceCharges.map(c=>c.charge_type).join(',')} errors=${JSON.stringify(priceErrors)}`);
@@ -2903,6 +2906,8 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
                   create_label_parcels: Array.from({ length: repParcels }, () => ({ weight: repKg })),
                 },
               };
+              // Cancel stale sub-charges so fresh ones can be inserted
+              await query(`UPDATE charges SET cancelled = true, updated_at = NOW() WHERE tracking_code = $1 AND charge_type IN ('fuel','surcharge','congestion_surcharge') AND source = 'carrier_direct' AND cancelled = false`, [trackingNumber]);
               console.log(`[CARRIER-DIRECT POOL-HIT] FEEDING ENGINE tracking=${trackingNumber} serviceCode=${repSvc} parcels=${repParcels} perParcelKg=${repKg} customerId=${charge.customer_id}`);
               const { charges: repCharges, errors: repErrors } = await processShipment(repPayload);
               console.log(`[CARRIER-DIRECT POOL-HIT] ENGINE RESULT tracking=${trackingNumber} charges=${repCharges.length} types=${repCharges.map(c=>c.charge_type).join(',')} errors=${JSON.stringify(repErrors)}`);
