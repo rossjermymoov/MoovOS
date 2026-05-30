@@ -1414,9 +1414,10 @@ export async function createCarrierDirectSurcharges({
         costPrice = costRate;
       }
 
-      // reconciliation_excluded surcharges: keep cost_price but sell = 0
-      // (we pay the carrier but don't pass on to customer)
-      if (s.reconciliation_excluded) sellPrice = 0;
+      // Note: reconciliation_excluded=true means "skip in reconciliation comparison",
+      // NOT "zero the sell price". EFS is reconciliation_excluded but IS billed to
+      // customers at the calculated rate. Third/Fourth Party Collection (the original
+      // absorbed-cost surcharges) are now active=false and never reach this point.
 
       // Only set tracking_code when shipment_id is NULL (fallback lookup path).
       // When shipment_id is set, tracking_code on sub-charges would conflict with
