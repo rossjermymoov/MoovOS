@@ -1077,7 +1077,6 @@ export async function generateCustomerCSV(runId, customerId) {
                    AND  cf.charge_type  = 'surcharge'
                    AND  cf.cancelled    = false
                    AND  COALESCE(cf.source,'') != 'recon_surcharge'
-                   AND  sx.reconciliation_excluded = false
                ), '[]'::json) AS named_surcharges
         FROM   charges c
         JOIN   shipments s  ON s.id = c.shipment_id
