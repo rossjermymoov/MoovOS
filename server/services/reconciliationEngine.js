@@ -1352,13 +1352,16 @@ export async function createCarrierDirectSurcharges({
     // use standard services so always-applicable surcharges always apply.
     // reconciliation_excluded surcharges (absorbed carrier costs like 3PC/4PC)
     // are excluded — those are Moov costs, never passed to customers.
+    // Include ALL always-apply surcharges for this carrier — including those with
+    // reconciliation_excluded=true (like EFS). reconciliation_excluded only means
+    // "skip comparison in reconciliation", NOT "don't bill the customer".
+    // Third/Fourth Party Collection are excluded by active=false, not by this flag.
     const { rows: surcharges } = await query(`
       SELECT s.id, s.name, s.calc_type, s.default_value, s.cost_price,
              s.charge_per, s.reconciliation_excluded
       FROM   surcharges s
-      WHERE  s.active                  = true
-        AND  s.courier_id              = $1
-        AND  s.reconciliation_excluded = false
+      WHERE  s.active       = true
+        AND  s.courier_id   = $1
         AND  (s.applies_when = 'always' OR s.applies_when IS NULL)
         AND  (s.effective_date IS NULL OR s.effective_date <= CURRENT_DATE)
     `, [carrierId]);
