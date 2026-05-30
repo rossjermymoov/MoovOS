@@ -1297,6 +1297,11 @@ export async function createCarrierDirectSurcharges({
     // so we skip rule-gated surcharges entirely here.  They will only fire if
     // the carrier invoice actually billed them (csv_column path) or if the
     // shipment is manually resolved.
+    // Load all active, customer-billable surcharges for this carrier.
+    // Includes surcharges with rules (like EFS) — carrier_direct shipments
+    // use standard services so always-applicable surcharges always apply.
+    // reconciliation_excluded surcharges (absorbed carrier costs like 3PC/4PC)
+    // are excluded — those are Moov costs, never passed to customers.
     const { rows: surcharges } = await query(`
       SELECT s.id, s.name, s.calc_type, s.default_value, s.cost_price,
              s.charge_per, s.reconciliation_excluded
@@ -1306,10 +1311,6 @@ export async function createCarrierDirectSurcharges({
         AND  s.reconciliation_excluded = false
         AND  (s.applies_when = 'always' OR s.applies_when IS NULL)
         AND  (s.effective_date IS NULL OR s.effective_date <= CURRENT_DATE)
-        AND  NOT EXISTS (
-          SELECT 1 FROM surcharge_rules sr
-          WHERE  sr.surcharge_id = s.id AND sr.active = true
-        )
     `, [carrierId]);
 
     for (const s of surcharges) {
@@ -2827,12 +2828,19 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
             );
             repairShipId = trackShipRes.rows[0]?.id || null;
             if (repairShipId) {
-              await query(
-                `UPDATE charges SET shipment_id = $1, updated_at = NOW()
-                 WHERE  id = $2 AND shipment_id IS NULL`,
-                [repairShipId, charge.charge_id]
-              );
-              console.log(`[recon engine] Repaired carrier_direct charge ${charge.charge_id}: shipment_id set to ${repairShipId} for tracking ${trackingNumber}`);
+              try {
+                await query(
+                  `UPDATE charges SET shipment_id = $1, updated_at = NOW()
+                   WHERE  id = $2 AND shipment_id IS NULL`,
+                  [repairShipId, charge.charge_id]
+                );
+                console.log(`[recon engine] Repaired carrier_direct charge ${charge.charge_id}: shipment_id set to ${repairShipId}`);
+              } catch (linkErr) {
+                // Unique constraint: another courier charge already owns this shipment.
+                // Continue with repairShipId for fuel/surcharge creation — we can still
+                // use it even if we couldn't link the courier charge.
+                console.warn(`[recon engine] Could not link shipment_id to charge ${charge.charge_id}: ${linkErr.message} — continuing with surcharge creation`);
+              }
             }
           }
           // Always create surcharges — trackingCode fallback handles null shipmentId
