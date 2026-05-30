@@ -1181,8 +1181,8 @@ async function handleCarrierDirect({
         const { service_code, account_number } = svcRes.rows[0];
         const perParcelKg = cdParcels > 1 ? round2(kg / cdParcels) : kg;
 
-        const { charges: priceCharges } = await processShipment({
-          customerId: customer.customer_id,   // bypass account_number lookup
+        const cdPayload = {
+          customerId: customer.customer_id,
           shipment: {
             account_number,
             dc_service_id:       service_code,
@@ -1195,7 +1195,10 @@ async function handleCarrierDirect({
               weight: perParcelKg,
             })),
           },
-        });
+        };
+        console.log(`[CARRIER-DIRECT] FEEDING ENGINE tracking=${trackingNumber} serviceCode=${service_code} parcels=${cdParcels} perParcelKg=${perParcelKg} customerId=${customer.customer_id}`);
+        const { charges: priceCharges, errors: priceErrors } = await processShipment(cdPayload);
+        console.log(`[CARRIER-DIRECT] ENGINE RESULT tracking=${trackingNumber} charges=${priceCharges.length} types=${priceCharges.map(c=>c.charge_type).join(',')} errors=${JSON.stringify(priceErrors)}`);
 
         // Stamp all charges as carrier_direct and write via insertCharges
         // ON CONFLICT DO NOTHING handles idempotency across re-imports
@@ -2890,8 +2893,8 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
               const { service_code: repSvc, account_number: repAcct } = svcRepRes.rows[0];
               const repParcels = Math.max(invoiceParcelCount, 1);
               const repKg = round2((charge.weight_kg || invoiceWeightKg || 0) / repParcels);
-              const { charges: repCharges } = await processShipment({
-                customerId: charge.customer_id,   // bypass account_number lookup
+              const repPayload = {
+                customerId: charge.customer_id,
                 shipment: {
                   account_number:      repAcct,
                   dc_service_id:       repSvc,
@@ -2899,7 +2902,10 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
                   ship_to_country_iso: 'GB',
                   create_label_parcels: Array.from({ length: repParcels }, () => ({ weight: repKg })),
                 },
-              });
+              };
+              console.log(`[CARRIER-DIRECT POOL-HIT] FEEDING ENGINE tracking=${trackingNumber} serviceCode=${repSvc} parcels=${repParcels} perParcelKg=${repKg} customerId=${charge.customer_id}`);
+              const { charges: repCharges, errors: repErrors } = await processShipment(repPayload);
+              console.log(`[CARRIER-DIRECT POOL-HIT] ENGINE RESULT tracking=${trackingNumber} charges=${repCharges.length} types=${repCharges.map(c=>c.charge_type).join(',')} errors=${JSON.stringify(repErrors)}`);
               const stampedRep = repCharges.map(c => ({
                 ...c, source: 'carrier_direct', status: 'verified',
                 shipment_id: repairShipId || null, tracking_code: trackingNumber,
