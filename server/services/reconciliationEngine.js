@@ -868,6 +868,30 @@ async function handleCarrierDirect({
     console.warn(`[carrier-direct] pre-delete failed for tracking=${trackingNumber}: ${delErr.message}`);
   }
   console.log('CLAUDE LIVE SNAPSHOT d63fdde — handleCarrierDirect fired for tracking=' + trackingNumber);
+
+  // ── DB-first lookup: hydrate postcode + parcel_count from live shipment row ──
+  // DHL CSV splits postcode into OUTER/INNER columns so delivery_postcode is null
+  // in the parsed line. Query the shipments table first — if the booking exists
+  // the real postcode and parcel count are already stored there.
+  let dbPostcode    = postcode   || null;
+  let dbParcelCount = null;
+  try {
+    const shipLookup = await query(
+      `SELECT ship_to_postcode, parcel_count
+       FROM   shipments
+       WHERE  $1 = ANY(tracking_codes)
+       LIMIT  1`,
+      [trackingNumber]
+    );
+    if (shipLookup.rows.length) {
+      dbPostcode    = shipLookup.rows[0].ship_to_postcode || dbPostcode;
+      dbParcelCount = shipLookup.rows[0].parcel_count     || null;
+      console.log(`[carrier-direct] DB hydrate tracking=${trackingNumber} postcode=${dbPostcode} parcel_count=${dbParcelCount}`);
+    }
+  } catch (lookupErr) {
+    console.warn(`[carrier-direct] DB hydrate failed for tracking=${trackingNumber}: ${lookupErr.message}`);
+  }
+
   const kg = parseFloat(weightKg) || 0;
 
   // Parcel count: always take from the invoice line.
@@ -915,14 +939,19 @@ async function handleCarrierDirect({
   // the weight threshold is evaluated against individual parcels, not the full
   // consignment weight. A 2×17.5 kg shipment should hit the 20 kg band, not the
   // 35 kg band (which may not exist and returns no_cost_band).
+  // Use DB-hydrated values where available — postcode from shipment row is the
+  // real delivery postcode; parcel_count from DB beats the invoice line count.
+  const effectivePostcode    = dbPostcode    || postcode    || null;
+  const effectiveParcelCount = dbParcelCount || parcelCount || 1;
+
   const isAllSub    = ctx?.parcelPricing === 'all_sub';
-  const perParcelKg = (isAllSub && parcelCount > 1) ? round2(kg / parcelCount) : kg;
+  const perParcelKg = (isAllSub && effectiveParcelCount > 1) ? round2(kg / effectiveParcelCount) : kg;
 
   const pricing = await computeGhostCharge(
     serviceId,
     customer.customer_id,
-    perParcelKg,   // per-parcel weight for band lookup
-    postcode,
+    perParcelKg,
+    effectivePostcode,
     countryIso || 'GB'
   );
 
@@ -1182,71 +1211,22 @@ async function handleCarrierDirect({
 
   const cdParcels  = parcelCount > 1 ? parcelCount : 1;
 
-  // ── Price via the primary pricing engine (same path as webhooks) ─────────────
-  // A carrier-direct line is a retroactive webhook booking.
-  // Feed the invoice data straight into processShipment so it runs the full
-  // rate card + fuel % + ALL surcharge rules (EFS, HGV, congestion, etc.)
-  // identically to how a live booking is priced.  No special-case surcharge
-  // functions — just the engine, exactly once.
-  if (hasSellRate && serviceId) {
-    try {
-      // Look up the Moov service_code and customer account_number needed by processShipment
-      const svcRes = await query(
-        `SELECT cs.service_code, cu.account_number
-         FROM   courier_services cs, customers cu
-         WHERE  cs.id = $1 AND cu.id = $2`,
-        [serviceId, customer.customer_id]
-      );
-      if (svcRes.rows.length) {
-        const { service_code, account_number } = svcRes.rows[0];
-        const perParcelKg = cdParcels > 1 ? round2(kg / cdParcels) : kg;
-
-        const cdPayload = {
-          customerId: customer.customer_id,
-          shipment: {
-            account_number,
-            dc_service_id:       service_code,
-            ship_to_postcode:    postcode     || null,
-            ship_to_country_iso: countryIso   || 'GB',
-            ship_to_name:        line.recipient_name || null,
-            reference:           line.sender_ref     || null,
-            collection_date:     line.shipment_date  || null,
-            create_label_parcels: Array.from({ length: cdParcels }, () => ({
-              weight: perParcelKg,
-            })),
-          },
-        };
-        // Cancel any stale carrier_direct sub-charges so processShipment writes fresh ones
-        await query(`UPDATE charges SET cancelled = true, updated_at = NOW() WHERE tracking_code = $1 AND charge_type IN ('fuel','surcharge') AND source = 'carrier_direct' AND cancelled = false`, [trackingNumber]);
-        console.log(`[CARRIER-DIRECT] FEEDING ENGINE tracking=${trackingNumber} serviceCode=${service_code} parcels=${cdParcels} perParcelKg=${perParcelKg} customerId=${customer.customer_id}`);
-        const { charges: priceCharges, errors: priceErrors } = await processShipment(cdPayload);
-        console.log(`[CARRIER-DIRECT] ENGINE RESULT tracking=${trackingNumber} charges=${priceCharges.length} types=${priceCharges.map(c=>c.charge_type).join(',')} errors=${JSON.stringify(priceErrors)}`);
-
-        // Normalize charge_type to DB enum values before writing.
-        // The pricing engine returns rule.name (e.g. 'congestion_surcharge',
-        // 'hgv_surcharge') which are not valid enum values — map them to 'surcharge'
-        // and preserve the original name in service_name for display.
-        const DB_CHARGE_TYPES = new Set(['courier','fuel','surcharge','ddp_admin','rule','picking','packaging','return','ad_hoc','delivery','recurring','storage','assembly']);
-        const stampedCharges = priceCharges.map(c => {
-          const dbType = DB_CHARGE_TYPES.has(c.charge_type) ? c.charge_type : 'surcharge';
-          return {
-            ...c,
-            charge_type:   dbType,
-            service_name:  dbType === 'surcharge' && c.charge_type !== 'surcharge'
-                             ? (c.service_name || c.charge_type)
-                             : c.service_name,
-            source:        'carrier_direct',
-            status:        'verified',
-            shipment_id:   cdShipmentId || c.shipment_id || null,
-            tracking_code: trackingNumber,
-          };
-        });
-        await insertCharges(stampedCharges, cdShipmentId);
-        console.log(`[carrier-direct] processShipment wrote ${stampedCharges.length} charge(s) for tracking=${trackingNumber}`);
-      }
-    } catch (priceErr) {
-      console.warn(`[carrier-direct] processShipment failed for tracking=${trackingNumber}: ${priceErr.message}`);
-    }
+  // ── Create fuel + surcharges via the carrier's own definitions ───────────────
+  // Use createCarrierDirectSurcharges which applies the correct carrier's fuel %
+  // and surcharge rules (EFS, HGV etc.) directly from the surcharges table.
+  // This avoids processShipment which looks up the customer's rate card and may
+  // return the wrong carrier (DPD) if the customer's primary carrier differs.
+  if (hasSellRate && ctx?.carrierId) {
+    await createCarrierDirectSurcharges({
+      shipmentId:       cdShipmentId,
+      customerId:       customer.customer_id,
+      carrierId:        ctx.carrierId,
+      serviceId,
+      freightSellPrice: totalSellPrice,
+      freightCostPrice: totalCostPrice,
+      parcelCount:      effectiveParcelCount,
+      trackingCode:     trackingNumber,
+    });
   }
 
   const rollup     = await buildSurchargeRollup(
@@ -2913,54 +2893,18 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
               }
             }
           }
-          // Run through the primary pricing engine — same as handleCarrierDirect above
-          try {
-            const svcRepRes = await query(
-              `SELECT cs.service_code, cu.account_number
-               FROM   courier_services cs, customers cu
-               WHERE  cs.id = $1 AND cu.id = $2`,
-              [effectiveServiceId, charge.customer_id]
-            );
-            if (svcRepRes.rows.length) {
-              const { service_code: repSvc, account_number: repAcct } = svcRepRes.rows[0];
-              const repParcels = Math.max(invoiceParcelCount, 1);
-              const repKg = round2((parseFloat(line.billed_weight_kg) || charge.declared_weight_kg || 0) / repParcels);
-              const repPayload = {
-                customerId: charge.customer_id,
-                shipment: {
-                  account_number:      repAcct,
-                  dc_service_id:       repSvc,
-                  ship_to_postcode:    charge.ship_to_postcode || null,
-                  ship_to_country_iso: 'GB',
-                  create_label_parcels: Array.from({ length: repParcels }, () => ({ weight: repKg })),
-                },
-              };
-              // Cancel stale sub-charges so fresh ones can be inserted
-              await query(`UPDATE charges SET cancelled = true, updated_at = NOW() WHERE tracking_code = $1 AND charge_type IN ('fuel','surcharge') AND source = 'carrier_direct' AND cancelled = false`, [trackingNumber]);
-              console.log(`[CARRIER-DIRECT POOL-HIT] FEEDING ENGINE tracking=${trackingNumber} serviceCode=${repSvc} parcels=${repParcels} perParcelKg=${repKg} customerId=${charge.customer_id}`);
-              const { charges: repCharges, errors: repErrors } = await processShipment(repPayload);
-              console.log(`[CARRIER-DIRECT POOL-HIT] ENGINE RESULT tracking=${trackingNumber} charges=${repCharges.length} types=${repCharges.map(c=>c.charge_type).join(',')} errors=${JSON.stringify(repErrors)}`);
-              const DB_CHARGE_TYPES_REP = new Set(['courier','fuel','surcharge','ddp_admin','rule','picking','packaging','return','ad_hoc','delivery','recurring','storage','assembly']);
-              const stampedRep = repCharges.map(c => {
-                const dbType = DB_CHARGE_TYPES_REP.has(c.charge_type) ? c.charge_type : 'surcharge';
-                return {
-                  ...c,
-                  charge_type:   dbType,
-                  service_name:  dbType === 'surcharge' && c.charge_type !== 'surcharge'
-                                   ? (c.service_name || c.charge_type)
-                                   : c.service_name,
-                  source:        'carrier_direct',
-                  status:        'verified',
-                  shipment_id:   repairShipId || null,
-                  tracking_code: trackingNumber,
-                };
-              });
-              await insertCharges(stampedRep, repairShipId);
-              console.log(`[carrier-direct pool-hit] processShipment wrote ${stampedRep.length} charge(s) for tracking=${trackingNumber}`);
-            }
-          } catch (repErr) {
-            console.warn(`[carrier-direct pool-hit] processShipment failed for tracking=${trackingNumber}: ${repErr.message}`);
-          }
+          // Use createCarrierDirectSurcharges — applies the correct carrier's
+          // fuel % and surcharges (EFS, HGV) directly, no customer rate card lookup.
+          await createCarrierDirectSurcharges({
+            shipmentId:       repairShipId,
+            customerId:       charge.customer_id,
+            carrierId:        ctx.carrierId,
+            serviceId:        effectiveServiceId,
+            freightSellPrice: cdSell,
+            freightCostPrice: parseFloat(charge.expected_cost || 0),
+            parcelCount:      Math.max(invoiceParcelCount, 1),
+            trackingCode:     trackingNumber,
+          });
         }
       }
     } catch (cdRepairErr) {
