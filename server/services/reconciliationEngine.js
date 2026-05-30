@@ -849,6 +849,7 @@ async function handleCarrierDirect({
   weightKg, postcode, countryIso,
   rawServiceCode, runId, line, ctx,
 }) {
+  console.log('CLAUDE TEST DEPLOY e88a4a4 — handleCarrierDirect fired for tracking=' + trackingNumber);
   const kg = parseFloat(weightKg) || 0;
 
   // Parcel count: always take from the invoice line.
