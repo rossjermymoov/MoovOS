@@ -1067,11 +1067,18 @@ export async function generateCustomerCSV(runId, customerId) {
                  WHERE cf.shipment_id = c.shipment_id AND cf.charge_type = 'fuel' AND cf.cancelled = false
                ), 0) AS fuel_sell,
                COALESCE((
-                 SELECT SUM(cf.price) FROM charges cf
-                 JOIN surcharges sx ON sx.id = cf.surcharge_id
-                 WHERE cf.shipment_id = c.shipment_id AND cf.charge_type = 'surcharge'
-                   AND cf.cancelled = false AND COALESCE(cf.source,'') != 'recon_surcharge'
-               ), 0) AS other_surcharge_sell
+                 SELECT json_agg(json_build_object(
+                   'surcharge_name', sx.name,
+                   'sell_amount',    cf.price
+                 ))
+                 FROM   charges cf
+                 JOIN   surcharges sx ON sx.id = cf.surcharge_id
+                 WHERE  cf.shipment_id  = c.shipment_id
+                   AND  cf.charge_type  = 'surcharge'
+                   AND  cf.cancelled    = false
+                   AND  COALESCE(cf.source,'') != 'recon_surcharge'
+                   AND  sx.reconciliation_excluded = false
+               ), '[]'::json) AS named_surcharges
         FROM   charges c
         JOIN   shipments s  ON s.id = c.shipment_id
         LEFT JOIN courier_services cs ON cs.id = (
@@ -1093,12 +1100,22 @@ export async function generateCustomerCSV(runId, customerId) {
         enrichPostcode  = d.postcode     || '';
         enrichService   = d.service_name || '';
         enrichDate      = d.despatch_date ? new Date(d.despatch_date).toLocaleDateString('en-GB') : '';
+        // Store for use in surchargeMap below and in totals row
+        entry._enrichBase = enrichBase;
+        entry._enrichFuel = enrichFuel;
+        entry._enrichedSurcharges = Array.isArray(d.named_surcharges)
+          ? d.named_surcharges
+          : (d.named_surcharges ? JSON.parse(d.named_surcharges) : []);
       }
     } catch (_) { /* non-fatal — use zero enrichment */ }
 
     const surchargeMap = {};
     for (const s of entry.surcharges) {
       surchargeMap[s.surcharge_name] = (surchargeMap[s.surcharge_name] || 0) + s.sell_amount;
+    }
+    // Add booking-time named surcharges (EFS, HGV etc.) from the charges table
+    for (const sx of (entry._enrichedSurcharges || [])) {
+      surchargeMap[sx.surcharge_name] = (surchargeMap[sx.surcharge_name] || 0) + round4(parseFloat(sx.sell_amount || 0));
     }
     const namedSurchargeTotal = surchargeNamesSorted.reduce((sum, n) => sum + (surchargeMap[n] || 0), 0);
     const lineTotal = enrichBase + enrichFuel + namedSurchargeTotal;
@@ -1147,8 +1164,21 @@ export async function generateCustomerCSV(runId, customerId) {
     };
   }, { base: 0, fuel: 0, surcharge: 0, total: 0, surchargeByName: {}, parcelCount: 0 });
 
-  // Same logic as the per-row totals: sum from individual surcharge columns,
-  // not from sell_surcharge_amount / sell_total_amount snapshot fields.
+  // Add orphan row values into totals (freight rows reduction doesn't include them)
+  for (const [tracking, entry] of Object.entries(manualSurchargeMap)) {
+    if (freightTrackingSet.has(tracking)) continue;
+    totals.base       += entry._enrichBase || 0;
+    totals.fuel       += entry._enrichFuel || 0;
+    totals.parcelCount += (parseInt(entry.parcel_count) || 0);
+    for (const sx of (entry._enrichedSurcharges || [])) {
+      totals.surchargeByName[sx.surcharge_name] = (totals.surchargeByName[sx.surcharge_name] || 0) + round4(parseFloat(sx.sell_amount || 0));
+    }
+    for (const s of entry.surcharges) {
+      totals.surchargeByName[s.surcharge_name] = (totals.surchargeByName[s.surcharge_name] || 0) + s.sell_amount;
+    }
+  }
+
+  // Sum from individual surcharge columns — includes both freight and orphan rows
   const totalNamedSurcharge = surchargeNamesSorted.reduce((sum, n) => sum + (totals.surchargeByName[n] || 0), 0);
   const grandTotal = totals.base + totals.fuel + totalNamedSurcharge;
 
