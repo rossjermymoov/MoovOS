@@ -1043,7 +1043,40 @@ async function handleCarrierDirect({
     if (cdShipmentId) {
       console.log(`[carrier-direct] shipment id=${cdShipmentId} for tracking=${trackingNumber}`);
     } else {
-      console.warn(`[carrier-direct] could not obtain shipment for tracking=${trackingNumber} — fuel will be skipped`);
+      // No existing shipment found — create a minimal one from invoice data so
+      // fuel and surcharge sub-charges can be linked via shipment_id.
+      // Without this, sub-charges are inserted with shipment_id=NULL and the
+      // buildSnapshot enrichment cannot find them (NULL = NULL is FALSE in SQL).
+      try {
+        const minShipRes = await query(`
+          INSERT INTO shipments (tracking_codes, courier, ship_to_postcode, ship_to_name, collection_date)
+          VALUES (ARRAY[$1::text], $2, $3, $4, $5)
+          ON CONFLICT DO NOTHING
+          RETURNING id
+        `, [
+          trackingNumber,
+          line.carrier_name || 'DHL',
+          postcode          || null,
+          line.recipient_name || null,
+          line.shipment_date  ? line.shipment_date.split('T')[0] : null,
+        ]);
+        cdShipmentId = minShipRes.rows[0]?.id || null;
+        if (!cdShipmentId) {
+          // ON CONFLICT — re-lookup
+          const retry = await query(
+            `SELECT id FROM shipments WHERE $1 = ANY(tracking_codes) LIMIT 1`,
+            [trackingNumber]
+          );
+          cdShipmentId = retry.rows[0]?.id || null;
+        }
+        if (cdShipmentId) {
+          console.log(`[carrier-direct] created minimal shipment ${cdShipmentId} for tracking=${trackingNumber}`);
+        } else {
+          console.warn(`[carrier-direct] could not create/find shipment for tracking=${trackingNumber} — sub-charges will have null shipment_id`);
+        }
+      } catch (minShipErr) {
+        console.warn(`[carrier-direct] minimal shipment creation failed for ${trackingNumber}: ${minShipErr.message}`);
+      }
     }
   } catch (shipErr) {
     // Non-fatal — log with full message so we can diagnose any remaining issues.
