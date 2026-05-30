@@ -2892,7 +2892,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
             if (svcRepRes.rows.length) {
               const { service_code: repSvc, account_number: repAcct } = svcRepRes.rows[0];
               const repParcels = Math.max(invoiceParcelCount, 1);
-              const repKg = round2((charge.weight_kg || invoiceWeightKg || 0) / repParcels);
+              const repKg = round2((parseFloat(line.billed_weight_kg) || charge.declared_weight_kg || 0) / repParcels);
               const repPayload = {
                 customerId: charge.customer_id,
                 shipment: {
