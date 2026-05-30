@@ -1747,6 +1747,21 @@ export async function processReconciliationRun(runId, carrierId, lines) {
   const overallStatus = fin.status || ((dbUnmatched + dbWarnings) > 0 ? 'needs_review' : 'complete');
   const automationRate = parseFloat(fin.automation_rate) || 0;
 
+  // ── Backfill shipment_date from matched charges where CSV date was absent ────
+  // For shipments booked through Moov OS, the date is already in charges.despatch_date
+  // (backfilled by migration 281 from shipments.collection_date).  This is more
+  // reliable than the carrier CSV date column which may have a different name or
+  // format across invoice batches.
+  await query(`
+    UPDATE reconciliation_lines rl
+    SET    shipment_date = c.despatch_date
+    FROM   charges c
+    WHERE  rl.run_id         = $1
+      AND  rl.charge_id      = c.id
+      AND  rl.shipment_date IS NULL
+      AND  c.despatch_date  IS NOT NULL
+  `, [runId]);
+
   console.log(`[recon engine] Run ${runId} complete in ${Date.now() - startTime}ms — ` +
     `${dbMatched} matched, ${dbCorrected} corrected, ${dbUnmatched} unmatched, ${dbWarnings} warnings, ${dbIgnored} ignored, ` +
     `${skippedCount} aggregate skipped, automation: ${automationRate}% (in-memory: ${matched}m/${corrected}c/${unmatched}u/${warnings}w)`);
