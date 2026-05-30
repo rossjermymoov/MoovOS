@@ -3329,9 +3329,23 @@ export default function RunDetailPage() {
 
   const { data: run, isLoading: runLoading, refetch: refetchRun } = useQuery({
     queryKey: ['recon-run', id],
-    queryFn:  () => api.get(`/reconciliation/runs/${id}`).then(r => r.data),
-    refetchInterval: (data) => data?.status === 'processing' ? 3000 : false,
+    queryFn:  () => api.get(`/reconciliation/runs/${id}?t=${Date.now()}`).then(r => r.data),
+    refetchInterval: (data) => data?.status === 'processing' ? 2000 : false,
+    staleTime: 0,
   });
+
+  // When the run finishes processing, force-refresh all data views
+  const prevStatusRef = React.useRef(null);
+  React.useEffect(() => {
+    const prev = prevStatusRef.current;
+    const curr = run?.status;
+    if (prev === 'processing' && curr && curr !== 'processing') {
+      qc.invalidateQueries({ queryKey: ['recon-lines',             id] });
+      qc.invalidateQueries({ queryKey: ['recon-customers-preview', id] });
+      qc.invalidateQueries({ queryKey: ['recon-preview-lines',     id] });
+    }
+    prevStatusRef.current = curr;
+  }, [run?.status, id, qc]);
 
   async function handleUnfinalize() {
     if (!window.confirm('Reset this run back to editable? This will delete the billing snapshot so you can fix lines and re-finalize. Any Xero invoices already pushed will need to be voided in Xero manually.')) return;
@@ -3444,6 +3458,15 @@ export default function RunDetailPage() {
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+      {/* Processing banner — shown while background reconciliation thread is running */}
+      {run?.status === 'processing' && (
+        <div style={{ background: 'rgba(121,170,255,0.12)', border: '1px solid rgba(121,170,255,0.35)',
+          borderRadius: 8, padding: '12px 18px', marginBottom: 16,
+          display: 'flex', alignItems: 'center', gap: 10, color: '#79AAFF', fontWeight: 600, fontSize: 13 }}>
+          <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} />
+          Processing invoice… pricing engine is running. Results will appear automatically when complete.
+        </div>
+      )}
       {/* Back + header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24 }}>
         <button onClick={() => navigate('/reconciliation')} style={{ ...btnGhost, padding: '7px 10px' }}>
