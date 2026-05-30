@@ -536,6 +536,12 @@ export async function processShipment(payload) {
       multi_box_pricing = row.multi_box_pricing;
     };
 
+    // Direct override — carrier-direct path passes customer_id when already known
+    if (payload.customerId) {
+      const r = await query('SELECT id, multi_box_pricing FROM customers WHERE id = $1 LIMIT 1', [payload.customerId]);
+      if (r.rows.length) pickCustomer(r.rows[0]);
+    }
+
     // Step 1: account_number → customers.account_number
     if (accountNumber) {
       const r = await query(

@@ -1182,6 +1182,7 @@ async function handleCarrierDirect({
         const perParcelKg = cdParcels > 1 ? round2(kg / cdParcels) : kg;
 
         const { charges: priceCharges } = await processShipment({
+          customerId: customer.customer_id,   // bypass account_number lookup
           shipment: {
             account_number,
             dc_service_id:       service_code,
@@ -2890,6 +2891,7 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
               const repParcels = Math.max(invoiceParcelCount, 1);
               const repKg = round2((charge.weight_kg || invoiceWeightKg || 0) / repParcels);
               const { charges: repCharges } = await processShipment({
+                customerId: charge.customer_id,   // bypass account_number lookup
                 shipment: {
                   account_number:      repAcct,
                   dc_service_id:       repSvc,
