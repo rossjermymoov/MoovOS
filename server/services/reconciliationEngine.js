@@ -1409,13 +1409,17 @@ export async function createCarrierDirectSurcharges({
       // (we pay the carrier but don't pass on to customer)
       if (s.reconciliation_excluded) sellPrice = 0;
 
+      // Only set tracking_code when shipment_id is NULL (fallback lookup path).
+      // When shipment_id is set, tracking_code on sub-charges would conflict with
+      // the carrier_direct unique index that guards the courier charge.
+      const surchargeTrackingCode = shipmentId ? null : (trackingCode || null);
       await query(`
         INSERT INTO charges
           (shipment_id, customer_id, tracking_code, charge_type, service_name, sell_price, price, cost_price,
            price_auto, surcharge_id, parcel_qty, verified, status, source)
         VALUES ($1, $2, $7, 'surcharge', $3, $4, $4, $5, true, $6, 1, true, 'verified', 'carrier_direct')
         ON CONFLICT DO NOTHING
-      `, [shipmentId, customerId, s.name, sellPrice, costPrice, s.id, trackingCode || null]);
+      `, [shipmentId, customerId, s.name, sellPrice, costPrice, s.id, surchargeTrackingCode]);
       console.log(`[carrier-direct surcharges] inserted surcharge "${s.name}" sell=£${sellPrice} cost=£${costPrice} shipment=${shipmentId}`);
     }
 
@@ -1447,13 +1451,14 @@ export async function createCarrierDirectSurcharges({
         if (!existingFuel.length) {
           const fuelSell = round2(baseSell * sellPct / 100);
           const fuelCost = costPct > 0 ? round2(baseCost * costPct / 100) : null;
+          const fuelTrackingCode = shipmentId ? null : (trackingCode || null);
           await query(`
             INSERT INTO charges
               (shipment_id, customer_id, tracking_code, charge_type, service_name, sell_price, price, cost_price,
                price_auto, parcel_qty, verified, status, source)
             VALUES ($1, $2, $6, 'fuel', $3, $4, $4, $5, true, 1, true, 'verified', 'carrier_direct')
             ON CONFLICT DO NOTHING
-          `, [shipmentId, customerId, `${fg.name} Fuel`, fuelSell, fuelCost, trackingCode || null]);
+          `, [shipmentId, customerId, `${fg.name} Fuel`, fuelSell, fuelCost, fuelTrackingCode]);
           console.log(`[carrier-direct surcharges] inserted fuel "${fg.name}" sell=£${fuelSell} cost=${fuelCost != null ? `£${fuelCost}` : 'null'} shipment=${shipmentId}`);
         }
       }
