@@ -2835,19 +2835,17 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
               console.log(`[recon engine] Repaired carrier_direct charge ${charge.charge_id}: shipment_id set to ${repairShipId} for tracking ${trackingNumber}`);
             }
           }
-          if (repairShipId) {
-            // Only attempt if we already have a valid sell price — surcharges depend on it.
-            await createCarrierDirectSurcharges({
-              shipmentId:       repairShipId,
-              customerId:       charge.customer_id,
-              carrierId:        ctx.carrierId,
-              serviceId:        effectiveServiceId,
-              freightSellPrice: cdSell,
-              freightCostPrice: parseFloat(charge.expected_cost || 0),
-              parcelCount:      Math.max(invoiceParcelCount, 1),
-              trackingCode:     trackingNumber,
-            });
-          }
+          // Always create surcharges — trackingCode fallback handles null shipmentId
+          await createCarrierDirectSurcharges({
+            shipmentId:       repairShipId,
+            customerId:       charge.customer_id,
+            carrierId:        ctx.carrierId,
+            serviceId:        effectiveServiceId,
+            freightSellPrice: cdSell,
+            freightCostPrice: parseFloat(charge.expected_cost || 0),
+            parcelCount:      Math.max(invoiceParcelCount, 1),
+            trackingCode:     trackingNumber,
+          });
         }
       }
     } catch (cdRepairErr) {
