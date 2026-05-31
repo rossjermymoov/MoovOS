@@ -94,11 +94,14 @@ export async function finalizeRun(runId, staffId = null) {
     //   • sell_surcharge_missing warnings (carrier billed a surcharge we never charged)
     //   • manually resolved map_to_surcharge lines (operator mapped an unmatched line to a surcharge)
     if (!line.surcharge_id) continue;
-    if (line.status !== 'corrected' || !line.corrected_sell_price) continue;
+    if (line.status !== 'corrected') continue;
 
     try {
-      const sellAmt = round4(parseFloat(line.corrected_sell_price) || 0);
+      // Use corrected_sell_price when set; fall back to carrier_amount for pass-through
+      // surcharges (e.g. Congestion) where default_value=0 and operator accepted at £0.
+      const rawSell = parseFloat(line.corrected_sell_price) || 0;
       const costAmt = round4(parseFloat(line.carrier_amount) || 0);
+      const sellAmt = rawSell > 0 ? round4(rawSell) : round4(costAmt);
       if (sellAmt <= 0) continue;
 
       // Find shipment_id from the freight counterpart line (same run + tracking, no surcharge_id)

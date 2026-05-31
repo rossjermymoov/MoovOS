@@ -1053,14 +1053,20 @@ router.get('/runs/:id/lines', async (req, res) => {
         -- customer's configured sell price (override → default_value).
         -- Handles charge_per='parcel' by multiplying by parcel_count.
         sur.name AS surcharge_name,
-        CASE
-          WHEN sur.id IS NULL THEN NULL
-          WHEN sur.calc_type = 'percentage'
-            THEN ROUND(rl.carrier_amount * COALESCE(cso.override_value, sur.default_value) / 100, 2)
-          WHEN sur.charge_per = 'parcel'
-            THEN ROUND(COALESCE(cso.override_value, sur.default_value, 0) * GREATEST(1, COALESCE(rl.parcel_count, 1)), 2)
-          ELSE COALESCE(cso.override_value, sur.default_value)
-        END AS suggested_sell_price,
+        -- suggested_sell_price: computed from surcharge definition, with fallback to
+        -- carrier_amount when the result is 0 (covers pass-through surcharges like
+        -- Congestion where default_value=0 and no customer override exists).
+        COALESCE(
+          NULLIF(CASE
+            WHEN sur.id IS NULL THEN NULL
+            WHEN sur.calc_type = 'percentage'
+              THEN ROUND(rl.carrier_amount * COALESCE(cso.override_value, sur.default_value) / 100, 2)
+            WHEN sur.charge_per = 'parcel'
+              THEN ROUND(COALESCE(cso.override_value, sur.default_value, 0) * GREATEST(1, COALESCE(rl.parcel_count, 1)), 2)
+            ELSE COALESCE(cso.override_value, sur.default_value)
+          END, 0),
+          CASE WHEN sur.id IS NOT NULL AND rl.carrier_amount > 0 THEN rl.carrier_amount ELSE NULL END
+        ) AS suggested_sell_price,
         -- ── Enriched sell + PII from matched charge/shipment ─────────────────
         -- Available immediately once charge_id is set — no finalization needed.
         COALESCE(ch_direct.sell_price, ch_direct.price) AS enriched_sell_base,
