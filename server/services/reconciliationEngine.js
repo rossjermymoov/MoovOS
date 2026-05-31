@@ -904,6 +904,10 @@ async function handleCarrierDirect({
       dbRecipient   = r.ship_to_name     || dbRecipient;
       dbOrderRef    = r.reference        || dbOrderRef;
       dbServiceName = r.service_name     || null;
+      // Write back onto the line object so every downstream caller uses the real values
+      if (dbPostcode)  line.delivery_postcode = dbPostcode;
+      if (dbRecipient) line.recipient_name    = dbRecipient;
+      if (dbOrderRef)  line.sender_ref        = dbOrderRef;
       console.log(`[carrier-direct] DB hydrate tracking=${trackingNumber} postcode=${dbPostcode} recipient=${dbRecipient} service=${dbServiceName}`);
     }
   } catch (lookupErr) {
