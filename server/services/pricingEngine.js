@@ -1013,10 +1013,10 @@ export async function insertCharges(charges, shipmentId = null) {
          customer_id, voila_shipment_id, order_id, tracking_code,
          courier_service_id, zone_id, charge_type, parcel_number,
          weight_actual_kg, weight_dimensional_kg, weight_charged_kg,
-         cost_price, sell_price, price, status,
+         cost_price, sell_price, price, status, verified,
          despatch_date, ship_to_postcode, ship_to_country_iso, ship_to_name,
          parcel_count, raw_payload, pricing_logic_trace, shipment_id, source
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
        ON CONFLICT DO NOTHING
        RETURNING *`,
       [
@@ -1028,6 +1028,7 @@ export async function insertCharges(charges, shipmentId = null) {
         c.cost_price, c.sell_price,
         c.sell_price,            // price = sell_price — legacy column read by UI + billing engine
         c.status,
+        c.source === 'carrier_direct' ? true : (c.verified ?? false), // carrier_direct always verified
         c.despatch_date         || null,
         c.ship_to_postcode      || null,
         c.ship_to_country_iso   || null,
