@@ -1100,6 +1100,11 @@ async function handleCarrierDirect({
       const existingShip = await query(
         `SELECT id FROM shipments
          WHERE  $1 = ANY(tracking_codes)
+         ORDER  BY
+           (ship_to_name     IS NOT NULL) DESC,
+           (ship_to_postcode IS NOT NULL) DESC,
+           (collection_date  IS NOT NULL) DESC,
+           created_at ASC
          LIMIT  1`,
         [trackingNumber]
       );
@@ -2921,7 +2926,9 @@ async function processLine(line, runId, carrierId, serviceCodeMap, surchargeMap,
           let repairShipId = cdRow.shipment_id || charge.shipment_id || null;
           if (!repairShipId) {
             const trackShipRes = await query(
-              `SELECT id FROM shipments WHERE $1 = ANY(tracking_codes) LIMIT 1`,
+              `SELECT id FROM shipments WHERE $1 = ANY(tracking_codes)
+               ORDER BY (ship_to_name IS NOT NULL) DESC, (ship_to_postcode IS NOT NULL) DESC, created_at ASC
+               LIMIT 1`,
               [trackingNumber]
             );
             repairShipId = trackShipRes.rows[0]?.id || null;
