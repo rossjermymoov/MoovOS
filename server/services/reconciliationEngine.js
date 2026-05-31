@@ -873,20 +873,31 @@ async function handleCarrierDirect({
   // DHL CSV splits postcode into OUTER/INNER columns so delivery_postcode is null
   // in the parsed line. Query the shipments table first — if the booking exists
   // the real postcode and parcel count are already stored there.
-  let dbPostcode    = postcode   || null;
-  let dbParcelCount = null;
+  let dbPostcode     = postcode   || null;
+  let dbParcelCount  = null;
+  let dbRecipient    = line.recipient_name || null;
+  let dbOrderRef     = line.sender_ref     || null;
+  let dbServiceName  = null;
   try {
     const shipLookup = await query(
-      `SELECT ship_to_postcode, parcel_count
-       FROM   shipments
-       WHERE  $1 = ANY(tracking_codes)
+      `SELECT s.ship_to_postcode, s.parcel_count, s.ship_to_name, s.reference,
+              cs.name AS service_name
+       FROM   shipments s
+       LEFT JOIN courier_services cs ON cs.id = (
+         SELECT id FROM courier_services WHERE service_code ILIKE s.dc_service_id LIMIT 1
+       )
+       WHERE  $1 = ANY(s.tracking_codes)
        LIMIT  1`,
       [trackingNumber]
     );
     if (shipLookup.rows.length) {
-      dbPostcode    = shipLookup.rows[0].ship_to_postcode || dbPostcode;
-      dbParcelCount = shipLookup.rows[0].parcel_count     || null;
-      console.log(`[carrier-direct] DB hydrate tracking=${trackingNumber} postcode=${dbPostcode} parcel_count=${dbParcelCount}`);
+      const r = shipLookup.rows[0];
+      dbPostcode    = r.ship_to_postcode || dbPostcode;
+      dbParcelCount = r.parcel_count     || null;
+      dbRecipient   = r.ship_to_name     || dbRecipient;
+      dbOrderRef    = r.reference        || dbOrderRef;
+      dbServiceName = r.service_name     || null;
+      console.log(`[carrier-direct] DB hydrate tracking=${trackingNumber} postcode=${dbPostcode} recipient=${dbRecipient} service=${dbServiceName}`);
     }
   } catch (lookupErr) {
     console.warn(`[carrier-direct] DB hydrate failed for tracking=${trackingNumber}: ${lookupErr.message}`);
@@ -1298,10 +1309,12 @@ async function handleCarrierDirect({
     corrected_by:             cdCorrectedBy,
     unmatched_reason:         cdReason,
     source:                   'carrier_direct',
+    // Hydrated from live DB — gives real recipient, postcode, order ref, service
     shipment_date:            line.shipment_date     || null,
-    ship_to_postcode:         postcode               || null,
+    ship_to_postcode:         effectivePostcode      || null,
+    ship_to_name:             dbRecipient            || null,
     ship_to_country:          countryIso             || 'GB',
-    parcel_count:             parcelCount > 1 ? parcelCount : null,
+    parcel_count:             effectiveParcelCount   > 1 ? effectiveParcelCount : null,
     correction_metadata:      combinedMeta,
     corrected_sell_price:     finalSell,
     corrected_cost_price:     totalCarrierFull,
@@ -2096,6 +2109,14 @@ async function resolveSurchargeSells(items, freightSellPrice, invoiceParcels, ov
             : round2(pct * (perParcel ? invoiceParcels : 1));
         }
       }
+    }
+
+    // Fallback: if sell resolves to 0 but the carrier actually billed an amount,
+    // pass through at carrier cost. This covers surcharges like Congestion where
+    // default_value=0 and no customer override exists — the invoice amount is the
+    // correct sell (we pass through what DHL charged us).
+    if (sellPrice === 0 && item.carrierAmt > 0 && !item.isAbsorbed) {
+      sellPrice = round2(item.carrierAmt);
     }
 
     item.sellPrice = sellPrice;
