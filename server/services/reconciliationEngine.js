@@ -1392,12 +1392,7 @@ export async function createCarrierDirectSurcharges({
       FROM   surcharges s
       WHERE  s.active       = true
         AND  s.courier_id   = $1
-        AND  (
-          s.applies_when = 'always'
-          OR s.applies_when IS NULL
-          OR s.name ILIKE '%congestion%'
-          OR s.name ILIKE '%congestion_surcharge%'
-        )
+        AND  (s.applies_when = 'always' OR s.applies_when IS NULL)
         AND  (s.effective_date IS NULL OR s.effective_date <= CURRENT_DATE)
     `, [carrierId]);
 
