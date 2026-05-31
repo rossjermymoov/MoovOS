@@ -905,9 +905,10 @@ async function handleCarrierDirect({
       dbOrderRef    = r.reference        || dbOrderRef;
       dbServiceName = r.service_name     || null;
       // Write back onto the line object so every downstream caller uses the real values
-      if (dbPostcode)  line.delivery_postcode = dbPostcode;
-      if (dbRecipient) line.recipient_name    = dbRecipient;
-      if (dbOrderRef)  line.sender_ref        = dbOrderRef;
+      if (dbPostcode)  { line.postcode = dbPostcode; line.recipient_postcode = dbPostcode; line.delivery_postcode = dbPostcode; }
+      if (dbRecipient) line.recipient_name = dbRecipient;
+      if (dbOrderRef)  line.sender_ref     = dbOrderRef;
+      if (dbServiceName) { line.service = dbServiceName; line.service_code = dbServiceName; }
       console.log(`[carrier-direct] DB hydrate tracking=${trackingNumber} postcode=${dbPostcode} recipient=${dbRecipient} service=${dbServiceName}`);
     }
   } catch (lookupErr) {
@@ -1391,7 +1392,12 @@ export async function createCarrierDirectSurcharges({
       FROM   surcharges s
       WHERE  s.active       = true
         AND  s.courier_id   = $1
-        AND  (s.applies_when = 'always' OR s.applies_when IS NULL)
+        AND  (
+          s.applies_when = 'always'
+          OR s.applies_when IS NULL
+          OR s.name ILIKE '%congestion%'
+          OR s.name ILIKE '%congestion_surcharge%'
+        )
         AND  (s.effective_date IS NULL OR s.effective_date <= CURRENT_DATE)
     `, [carrierId]);
 
