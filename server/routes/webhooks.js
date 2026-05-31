@@ -80,9 +80,12 @@ async function createOrUpdateShipment(payload, customerId) {
         tracking_codes, raw_payload
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
       ON CONFLICT (platform_shipment_id) DO UPDATE SET
-        customer_id    = COALESCE(EXCLUDED.customer_id,    shipments.customer_id),
-        tracking_codes = COALESCE(EXCLUDED.tracking_codes, shipments.tracking_codes),
-        dc_service_id  = COALESCE(EXCLUDED.dc_service_id,  shipments.dc_service_id),
+        customer_id      = COALESCE(EXCLUDED.customer_id,      shipments.customer_id),
+        tracking_codes   = COALESCE(EXCLUDED.tracking_codes,   shipments.tracking_codes),
+        dc_service_id    = COALESCE(EXCLUDED.dc_service_id,    shipments.dc_service_id),
+        ship_to_name     = COALESCE(EXCLUDED.ship_to_name,     shipments.ship_to_name),
+        ship_to_postcode = COALESCE(EXCLUDED.ship_to_postcode, shipments.ship_to_postcode),
+        collection_date  = COALESCE(EXCLUDED.collection_date,  shipments.collection_date),
         updated_at     = NOW()
       RETURNING id
     `, [

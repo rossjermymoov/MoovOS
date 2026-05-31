@@ -849,12 +849,14 @@ async function handleCarrierDirect({
   weightKg, postcode, countryIso,
   rawServiceCode, runId, line, ctx,
 }) {
-  // Scorched-earth purge: delete ALL carrier_direct charges for this tracking
-  // that are not locked into a finalized run. This makes reuse physically impossible.
+  // Purge stale carrier_direct charges for this tracking only.
+  // CRITICAL: must NOT touch OMS booking charges (source IS NULL) — deleting those
+  // removes the charge from the pool, causing permanent pool misses on every future run.
   try {
     await query(`
       DELETE FROM charges c
       WHERE  c.tracking_code = $1
+        AND  c.source        = 'carrier_direct'
         AND  NOT EXISTS (
           SELECT 1
           FROM   finalized_billing_lines fbl
