@@ -889,6 +889,11 @@ async function handleCarrierDirect({
          SELECT id FROM courier_services WHERE service_code ILIKE s.dc_service_id LIMIT 1
        )
        WHERE  $1 = ANY(s.tracking_codes)
+       ORDER  BY
+         (s.ship_to_name     IS NOT NULL) DESC,
+         (s.ship_to_postcode IS NOT NULL) DESC,
+         (s.collection_date  IS NOT NULL) DESC,
+         s.created_at ASC
        LIMIT  1`,
       [trackingNumber]
     );
