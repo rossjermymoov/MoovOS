@@ -26,12 +26,12 @@ const api = axios.create({ baseURL: '/api' });
 
 // ─── Design tokens — light mode ───────────────────────────────────────────────
 const C = {
-  bg:       '#F8FAFC',
+  bg:       '#FAFAFA',
   header:   '#FFFFFF',
-  surface:  '#F8FAFC',
+  surface:  '#FAFAFA',
   card:     '#FFFFFF',
-  hover:    '#F1F5F9',
-  border:   'rgba(0,0,0,0.08)',
+  hover:    '#F5F7FA',
+  border:   'rgba(0,0,0,0.06)',
   green:    '#166534',
   amber:    '#92400E',
   red:      '#991B1B',
@@ -117,12 +117,22 @@ function SlaChip({ sla_due_at, sla_breached, sla_mins_remaining }) {
 
 function PropRow({ icon: Icon, label, children }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '7px 0', borderBottom: `1px solid ${C.border}` }}>
-      <Icon size={12} color={C.muted} style={{ marginTop: 2, flexShrink: 0 }} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>{label}</div>
-        {children}
-      </div>
+    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, padding: '5px 0' }}>
+      <span style={{ fontSize: 11, color: C.muted, flexShrink: 0, paddingTop: 1 }}>{label}</span>
+      <div style={{ minWidth: 0, textAlign: 'right' }}>{children}</div>
+    </div>
+  );
+}
+
+function SbCard({ title, children }) {
+  return (
+    <div style={{ background: C.bg, borderRadius: 10, padding: '10px 12px', marginBottom: 10 }}>
+      {title && (
+        <div style={{ fontSize: 10, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+          {title}
+        </div>
+      )}
+      {children}
     </div>
   );
 }
@@ -827,71 +837,79 @@ export default function TicketDetailPage() {
     <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden' }}>
 
       {/* ── Header ── */}
-      <div style={{ flexShrink: 0, background: C.header, borderBottom: `1px solid ${C.border}` }}>
-        {/* Row 1: back · customer name · type badge · status */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px 8px' }}>
+      <div style={{ flexShrink: 0, background: C.header, borderBottom: `0.5px solid ${C.border}`, padding: '12px 18px' }}>
+        {/* Breadcrumb */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
           <button onClick={() => navigate('/queries')} style={{
-            width: 26, height: 26, borderRadius: 6, border: 'none',
-            background: 'rgba(0,0,0,0.04)', color: C.sub,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', flexShrink: 0,
+            display: 'flex', alignItems: 'center', gap: 5,
+            background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 0, fontSize: 13,
           }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.08)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0.04)'}
+            onMouseEnter={e => e.currentTarget.style.color = C.sub}
+            onMouseLeave={e => e.currentTarget.style.color = C.muted}
           >
-            <ArrowLeft size={13} />
+            <ArrowLeft size={13} /> Queries
           </button>
-          <span style={{ fontSize: 17, fontWeight: 800, color: C.text, letterSpacing: '-0.02em',
-            flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ color: C.muted, fontSize: 13 }}>›</span>
+          <span style={{ fontSize: 13, color: C.sub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {ticket.customer_name || ticket.subject}
           </span>
-          {ticket.query_type && (
-            <span style={{ fontSize: 11, fontWeight: 700, color: C.amber,
-              background: C.amberDim, border: `1px solid ${C.amber}33`,
-              padding: '3px 10px', borderRadius: 5, flexShrink: 0,
-              textTransform: 'capitalize', letterSpacing: '0.01em' }}>
-              {ticket.query_type.replace(/_/g, ' ')}
-            </span>
-          )}
-          <span style={{ fontSize: 11, fontWeight: 700, color: status.color,
-            background: `${status.color}18`, border: `1px solid ${status.color}33`,
-            padding: '3px 10px', borderRadius: 5, flexShrink: 0, marginLeft: 'auto' }}>
-            {status.label}
-          </span>
         </div>
-        {/* Row 2: courier logo · consignment · parcel status · divider · ticket# */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px 10px', paddingLeft: 52 }}>
-          {courierLogo && (
-            <div style={{ background: '#fff', borderRadius: 3, padding: '2px 5px', display: 'flex', alignItems: 'center', height: 18 }}>
-              <img src={courierLogo} alt="" style={{ height: 12, objectFit: 'contain' }} />
+        {/* Title row */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 17, fontWeight: 500, color: C.text, marginBottom: 6,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {ticket.subject || ticket.customer_name}
             </div>
-          )}
-          {consignment && (
-            <span style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: 700,
-              background: '#F1F5F9', border: '1px solid rgba(0,0,0,0.08)',
-              borderRadius: 6, padding: '2px 8px', color: '#475569', letterSpacing: '0.03em' }}>
-              {consignment}
-            </span>
-          )}
-          {parcel?.status && (() => {
-            const ps = TRACK_STATUS[parcel.status] || TRACK_STATUS.unknown;
-            return (
-              <span style={{ fontSize: 12, fontWeight: 700, color: ps.color }}>{ps.label}</span>
-            );
-          })()}
-          {(consignment || courierLogo) && ticket.ticket_number && (
-            <div style={{ width: 1, height: 12, background: C.border, marginLeft: 2 }} />
-          )}
-          {ticket.ticket_number && (
-            <span style={{ fontSize: 11, color: C.muted, fontFamily: 'monospace', fontWeight: 700 }}>
-              #{ticket.ticket_number}
-            </span>
-          )}
-          {ticket.requires_attention && (
-            <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, color: C.red,
-              background: C.redDim, border: `1px solid ${C.red}33`,
-              padding: '2px 7px', borderRadius: 4 }}>⚠ NEEDS ATTENTION</span>
-          )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, fontWeight: 500, color: status.color,
+                background: `${status.color}18`, borderRadius: 20, padding: '3px 10px' }}>
+                {status.label}
+              </span>
+              {ticket.group_name && (
+                <span style={{ fontSize: 11, color: C.muted,
+                  background: 'rgba(0,0,0,0.04)', borderRadius: 20, padding: '3px 9px' }}>
+                  {ticket.group_name}
+                </span>
+              )}
+              {ticket.customer_name && (
+                <span style={{ fontSize: 12, color: C.sub }}>{ticket.customer_name}</span>
+              )}
+              {courierLogo && (
+                <div style={{ width: 28, height: 28, borderRadius: 6, border: `0.5px solid ${C.border}`,
+                  background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                  <img src={courierLogo} alt="" style={{ width: '100%', objectFit: 'contain', padding: 4 }} />
+                </div>
+              )}
+              {consignment && (
+                <span style={{ fontFamily: 'monospace', fontSize: 11, color: C.muted }}>{consignment}</span>
+              )}
+              {ticket.requires_attention && (
+                <span style={{ fontSize: 11, fontWeight: 500, color: C.red,
+                  background: C.redDim, borderRadius: 20, padding: '3px 9px' }}>
+                  ⚠ Needs attention
+                </span>
+              )}
+            </div>
+          </div>
+          {/* Action buttons */}
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
+            {consignment && (
+              <button onClick={() => navigate(`/tracking?q=${encodeURIComponent(consignment)}`)}
+                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px',
+                  borderRadius: 8, border: `0.5px solid ${C.border}`, background: 'transparent',
+                  color: C.muted, fontSize: 12, cursor: 'pointer' }}>
+                <ExternalLink size={12} /> Track
+              </button>
+            )}
+            <button
+              onClick={() => patch.mutate({ status: 'resolved' })}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px',
+                borderRadius: 8, border: `0.5px solid ${C.border}`, background: C.bg,
+                color: C.text, fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
+              <CheckCircle2 size={13} /> Resolve
+            </button>
+          </div>
         </div>
       </div>
 
@@ -917,178 +935,165 @@ export default function TicketDetailPage() {
 
         {/* ── Right sidebar ─────────────────────────────────────── */}
         <div style={{
-          width: 196, flexShrink: 0,
-          background: C.bg, borderLeft: `1px solid ${C.border}`,
-          overflowY: 'auto', padding: '14px 14px 32px',
+          width: 220, flexShrink: 0,
+          background: C.card, borderLeft: `0.5px solid ${C.border}`,
+          overflowY: 'auto', padding: '14px 12px 32px',
         }}>
-          {/* SLA */}
-          <SlaChip
-            sla_due_at={ticket.sla_due_at}
-            sla_breached={ticket.sla_breached}
-            sla_mins_remaining={ticket.sla_mins_remaining}
-          />
-          {ticket.sla_due_at && <div style={{ marginBottom: 12 }} />}
 
-          {/* Ticket section */}
-          <div style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase',
-            letterSpacing: '0.08em', marginBottom: 8 }}>Ticket</div>
-
-          <PropRow icon={AlertTriangle} label="Priority">
-            <InlineSelect
-              value={ticket.priority || 'medium'}
-              onChange={v => patch.mutate({ priority: v })}
-              options={Object.entries(PRIORITY_CFG).map(([k, v]) => ({ value: k, label: v.label }))}
-              colorMap={PRIORITY_CFG}
-            />
-          </PropRow>
-
-          <PropRow icon={Tag} label="Status">
-            <InlineSelect
-              value={ticket.status}
-              onChange={v => patch.mutate({ status: v })}
-              options={Object.entries(STATUS_CFG).map(([k, v]) => ({ value: k, label: v.label }))}
-              colorMap={STATUS_CFG}
-            />
-          </PropRow>
-
-          <PropRow icon={Users} label="Group">
-            <InlineSelect
-              value={ticket.group_name || ''}
-              onChange={v => patch.mutate({ group_name: v || null })}
-              options={[{ value: '', label: '— Unassigned —' }, ...GROUPS.map(g => ({ value: g, label: g }))]}
-            />
-          </PropRow>
-
-          <PropRow icon={User} label="Assignee">
-            <InlineSelect
-              value={ticket.assigned_to || ''}
-              onChange={v => patch.mutate({ assigned_to: v || null })}
-              options={[
-                { value: '', label: '— Unassigned —' },
-                ...staffList.map(s => ({ value: s.id, label: s.full_name || s.name })),
-              ]}
-            />
-          </PropRow>
-
-          <PropRow icon={Clock} label="Opened">
-            <div style={{ fontSize: 11, color: C.sub }}>{fmtDate(ticket.created_at)}</div>
-            <div style={{ fontSize: 10, color: C.muted }}>{timeAgo(ticket.created_at)}</div>
-          </PropRow>
-
-          {ticket.query_type && (
-            <PropRow icon={FileText} label="Type">
-              <div style={{ fontSize: 11, color: C.sub, textTransform: 'capitalize' }}>
-                {ticket.query_type.replace(/_/g, ' ')}
-              </div>
+          {/* SLA card */}
+          <SbCard title="SLA">
+            <PropRow label="Created">
+              <div style={{ fontSize: 11, color: C.sub }}>{timeAgo(ticket.created_at)}</div>
             </PropRow>
-          )}
+            <PropRow label="First response">
+              <SlaChip
+                sla_due_at={ticket.sla_due_at}
+                sla_breached={ticket.sla_breached}
+                sla_mins_remaining={ticket.sla_mins_remaining}
+              />
+            </PropRow>
+            {ticket.claim_deadline_at && (
+              <PropRow label="Claim deadline">
+                {(() => {
+                  const days = Math.ceil((new Date(ticket.claim_deadline_at) - Date.now()) / 86400000);
+                  const col  = days < 0 ? C.red : days < 3 ? C.amber : C.green;
+                  return <span style={{ fontSize: 11, fontWeight: 500, color: col }}>
+                    {days < 0 ? 'Overdue' : days === 0 ? 'Today' : `${days}d left`}
+                  </span>;
+                })()}
+              </PropRow>
+            )}
+          </SbCard>
+
+          {/* Ticket card */}
+          <SbCard title="Ticket">
+            <PropRow label="Status">
+              <InlineSelect
+                value={ticket.status}
+                onChange={v => patch.mutate({ status: v })}
+                options={Object.entries(STATUS_CFG).map(([k, v]) => ({ value: k, label: v.label }))}
+                colorMap={STATUS_CFG}
+              />
+            </PropRow>
+            <PropRow label="Group">
+              <InlineSelect
+                value={ticket.group_name || ''}
+                onChange={v => patch.mutate({ group_name: v || null })}
+                options={[{ value: '', label: '— None —' }, ...GROUPS.map(g => ({ value: g, label: g }))]}
+              />
+            </PropRow>
+            <PropRow label="Assigned to">
+              <InlineSelect
+                value={ticket.assigned_to || ''}
+                onChange={v => patch.mutate({ assigned_to: v || null })}
+                options={[
+                  { value: '', label: '— Unassigned —' },
+                  ...staffList.map(s => ({ value: s.id, label: s.full_name || s.name })),
+                ]}
+              />
+            </PropRow>
+            <PropRow label="Priority">
+              <InlineSelect
+                value={ticket.priority || 'medium'}
+                onChange={v => patch.mutate({ priority: v })}
+                options={Object.entries(PRIORITY_CFG).map(([k, v]) => ({ value: k, label: v.label }))}
+                colorMap={PRIORITY_CFG}
+              />
+            </PropRow>
+            {ticket.query_type && (
+              <PropRow label="Type">
+                <span style={{ fontSize: 11, color: C.sub, textTransform: 'capitalize' }}>
+                  {ticket.query_type.replace(/_/g, ' ')}
+                </span>
+              </PropRow>
+            )}
+          </SbCard>
 
           {/* Attention */}
           {ticket.requires_attention && ticket.attention_reason && (
-            <div style={{ margin: '10px 0', padding: '8px 10px', borderRadius: 6,
-              background: C.amberDim, border: `1px solid ${C.amber}33`,
-              fontSize: 11, color: C.amber, lineHeight: 1.45 }}>
+            <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 8,
+              background: C.amberDim, fontSize: 11, color: C.amber, lineHeight: 1.45 }}>
               ⚠ {ticket.attention_reason}
             </div>
           )}
 
-          {/* Customer section */}
+          {/* Customer card */}
           {(ticket.customer_name || ticket.sender_email) && (
-            <>
-              <div style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase',
-                letterSpacing: '0.08em', margin: '14px 0 8px' }}>Customer</div>
-
+            <SbCard title="Customer">
               {ticket.customer_name && (
-                <PropRow icon={Building2} label="Account">
+                <PropRow label="Account">
                   <button
                     onClick={() => ticket.customer_id && navigate(`/customers/${ticket.customer_id}`)}
-                    style={{ background: 'none', border: 'none', color: C.blue, fontSize: 12,
-                      fontWeight: 600, cursor: 'pointer', padding: 0, textAlign: 'left' }}>
+                    style={{ background: 'none', border: 'none', color: C.blue, fontSize: 11,
+                      fontWeight: 500, cursor: 'pointer', padding: 0, textAlign: 'right' }}>
                     {ticket.customer_name}
                   </button>
                 </PropRow>
               )}
-
               {ticket.sender_email && (
-                <PropRow icon={Mail} label="Email">
+                <PropRow label="Email">
                   <div style={{ fontSize: 11, color: C.sub, wordBreak: 'break-all' }}>{ticket.sender_email}</div>
                 </PropRow>
               )}
-            </>
+            </SbCard>
           )}
 
-          {/* Parcel + tracking section */}
+          {/* Parcel card */}
           {consignment && (
-            <>
-              <div style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase',
-                letterSpacing: '0.08em', margin: '14px 0 8px' }}>
-                Parcel
-                <a
-                  href={`/tracking?q=${encodeURIComponent(consignment)}`}
-                  onClick={e => { e.preventDefault(); navigate(`/tracking?q=${encodeURIComponent(consignment)}`); }}
-                  style={{ marginLeft: 6, color: C.blue, fontSize: 9, cursor: 'pointer', textDecoration: 'none' }}>
-                  <ExternalLink size={9} style={{ display: 'inline' }} />
-                </a>
-              </div>
-
+            <SbCard title="Parcel">
               {courierLogo && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <div style={{ width: 28, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: '#fff', borderRadius: 3, padding: 2, flexShrink: 0 }}>
-                    <img src={courierLogo} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                  <div style={{ width: 28, height: 28, borderRadius: 6, border: `0.5px solid ${C.border}`,
+                    background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                    <img src={courierLogo} alt="" style={{ width: '100%', objectFit: 'contain', padding: 4 }} />
                   </div>
-                  <span style={{ fontSize: 11, color: C.sub }}>{ticket.courier_name}</span>
+                  <span style={{ fontSize: 12, color: C.sub }}>{ticket.courier_name}</span>
                 </div>
               )}
-
-              <div style={{ fontFamily: 'monospace', fontSize: 10, fontWeight: 700, color: C.text,
-                background: C.card, border: `1px solid ${C.border}`, borderRadius: 4,
-                padding: '4px 8px', marginBottom: 8, wordBreak: 'break-all' }}>
-                {consignment}
-              </div>
-
+              <PropRow label="Tracking">
+                <span style={{ fontFamily: 'monospace', fontSize: 10, color: C.text }}>{consignment}</span>
+              </PropRow>
               {parcel?.status && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: 10, color: C.muted }}>Status</span>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: C.sub, textTransform: 'capitalize' }}>
+                <PropRow label="Status">
+                  <span style={{ fontSize: 11, color: C.sub, textTransform: 'capitalize' }}>
                     {parcel.status.replace(/_/g, ' ')}
                   </span>
-                </div>
+                </PropRow>
               )}
               {parcel?.recipient_postcode && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: 10, color: C.muted }}>Postcode</span>
+                <PropRow label="Postcode">
                   <span style={{ fontSize: 11, color: C.sub }}>{parcel.recipient_postcode}</span>
-                </div>
+                </PropRow>
               )}
               {parcel?.estimated_delivery && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: 10, color: C.muted }}>Est. delivery</span>
+                <PropRow label="Est. delivery">
                   <span style={{ fontSize: 11, color: C.sub }}>
                     {new Date(parcel.estimated_delivery).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                   </span>
-                </div>
+                </PropRow>
               )}
               {parcel?.delivered_at && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: 10, color: C.muted }}>Delivered</span>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: C.green }}>
+                <PropRow label="Delivered">
+                  <span style={{ fontSize: 11, fontWeight: 500, color: C.green }}>
                     {new Date(parcel.delivered_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </span>
-                </div>
+                </PropRow>
               )}
+              <div style={{ marginTop: 8 }}>
+                <button onClick={() => navigate(`/tracking?q=${encodeURIComponent(consignment)}`)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none',
+                    border: 'none', color: C.blue, fontSize: 11, cursor: 'pointer', padding: 0 }}>
+                  <ExternalLink size={10} /> Full tracking
+                </button>
+              </div>
+            </SbCard>
+          )}
 
-              {/* Mini tracking timeline */}
-              {trackEvents.length > 0 && (
-                <>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase',
-                    letterSpacing: '0.08em', margin: '12px 0 8px' }}>
-                    Tracking ({trackEvents.length} events)
-                  </div>
-                  <TrackingMiniTimeline events={trackEvents} />
-                </>
-              )}
-            </>
+          {/* Mini tracking timeline */}
+          {trackEvents.length > 0 && (
+            <SbCard title={`Tracking · ${trackEvents.length} events`}>
+              <TrackingMiniTimeline events={trackEvents} />
+            </SbCard>
           )}
         </div>
       </div>

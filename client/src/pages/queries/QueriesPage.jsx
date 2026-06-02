@@ -1639,117 +1639,59 @@ export default function QueriesPage() {
     <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: C.bg, color: C.text, overflow: 'hidden' }}>
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 18px', borderBottom: `1px solid ${C.border}`, background: C.surface, flexShrink: 0 }}>
-        <MessageSquare size={15} style={{ color: C.blue }} />
-        <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Queries &amp; Claims</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 18px', borderBottom: `0.5px solid ${C.border}`, background: C.surface, flexShrink: 0 }}>
+        <span style={{ fontSize: 18, fontWeight: 500, color: C.text }}>Queries</span>
+        {stats?.total_open > 0 && (
+          <span style={{ fontSize: 12, color: C.muted, background: C.hover,
+            border: `0.5px solid ${C.border}`, borderRadius: 20, padding: '2px 9px' }}>
+            {stats.total_open} open
+          </span>
+        )}
         <div style={{ flex: 1 }} />
-
         {/* Search */}
         <div style={{ position: 'relative' }}>
-          <Search size={12} style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: C.muted }} />
+          <Search size={12} style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: C.muted, pointerEvents: 'none' }} />
           <input
             placeholder="Search consignment, customer…"
             value={filters.search}
             onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
-            style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, color: C.text,
-              fontSize: 12, padding: '6px 10px 6px 28px', width: 200, outline: 'none' }}
+            style={{ background: C.card, border: `0.5px solid ${C.border}`, borderRadius: 8, color: C.text,
+              fontSize: 12, padding: '7px 10px 7px 28px', width: 220, outline: 'none' }}
           />
         </div>
-
-        {/* Filter toggle */}
-        <button
-          onClick={() => setShowFilters(f => !f)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 5,
-            padding: '6px 11px', borderRadius: 7, cursor: 'pointer',
-            border: `1px solid ${showFilters || panelFilterCount > 0 ? C.blue : C.border}`,
-            background: showFilters || panelFilterCount > 0 ? `${C.blue}15` : 'transparent',
-            color: showFilters || panelFilterCount > 0 ? C.blue : C.muted,
-            fontSize: 12, fontWeight: 600,
-          }}
-        >
-          <SlidersHorizontal size={12} />
-          Filters
-          {panelFilterCount > 0 && (
-            <span style={{ background: C.blue, color: '#0F172A', borderRadius: 10, padding: '1px 5px', fontSize: 9, fontWeight: 800 }}>
-              {panelFilterCount}
-            </span>
-          )}
+        {/* Sort indicator */}
+        <span style={{ fontSize: 12, color: C.muted, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <RefreshCw size={11} style={{ cursor: 'pointer' }} onClick={refresh} />
+          Last activity
+        </span>
+        {/* New query */}
+        <button style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '7px 14px', borderRadius: 8, cursor: 'pointer',
+          border: `0.5px solid ${C.border}`, background: C.card,
+          color: C.text, fontSize: 13, fontWeight: 400,
+        }}>
+          <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> New query
         </button>
-
-        {/* Auto-Draft All */}
-        <button
-          onClick={async () => {
-            if (autoDrafting) return;
-            setAutoDrafting(true);
-            setAutoDraftResult(null);
-            try {
-              const r = await fetch('/api/queries/auto-draft-all', { method: 'POST' });
-              const d = await r.json();
-              setAutoDraftResult(d);
-              refresh();
-            } catch (e) {
-              setAutoDraftResult({ error: e.message });
-            } finally {
-              setAutoDrafting(false);
-            }
-          }}
-          disabled={autoDrafting}
-          title="Auto-generate AI draft responses for all open tickets without a pending draft"
-          style={{
-            display: 'flex', alignItems: 'center', gap: 5,
-            padding: '6px 11px', borderRadius: 7, cursor: autoDrafting ? 'not-allowed' : 'pointer',
-            border: `1px solid ${autoDraftResult?.drafted > 0 ? C.green : autoDraftResult?.error ? C.red : `${C.blue}44`}`,
-            background: autoDrafting ? `${C.blue}10` : autoDraftResult?.drafted > 0 ? `${C.green}12` : 'transparent',
-            color: autoDraftResult?.drafted > 0 ? C.green : autoDraftResult?.error ? C.red : C.blue,
-            fontSize: 12, fontWeight: 600, transition: 'all 0.15s',
-          }}
-        >
-          <Sparkles size={12} />
-          {autoDrafting ? 'Drafting…'
-            : autoDraftResult?.drafted > 0 ? `✓ ${autoDraftResult.drafted} drafted`
-            : autoDraftResult?.error ? 'Error'
-            : 'Auto-Draft All'}
-        </button>
-
-        <button onClick={() => setShowUnmatched(true)} style={{ padding: '6px 11px', borderRadius: 7, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
-          <User size={12} />
-          {stats?.unmatched_emails > 0 && (
-            <span style={{ background: C.amber, color: '#000', borderRadius: 10, padding: '1px 5px', fontSize: 9, fontWeight: 700 }}>
-              {stats.unmatched_emails}
-            </span>
-          )}
-          Unmatched
-        </button>
-
-        <button onClick={refresh} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 5 }}>
-          <RefreshCw size={14} />
-        </button>
-
-        <SeedButton onDone={refresh} />
       </div>
 
-      {/* ── KPI strip ──────────────────────────────────────────────────────── */}
-      <div style={{ flexShrink: 0, padding: '10px 18px', borderBottom: `1px solid ${C.border}`, background: C.bg }}>
-        <div style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
-          <KpiCard label="Open" value={stats?.total_open ?? '—'} color={C.blue} icon={Inbox}
-            active={!filters.attention && !filters.pending_draft && !filters.claim_deadline && !filters.sla_breached && !filters.status}
-            onClick={() => setFilters(f => ({ ...f, status: '', attention: false, pending_draft: false, claim_deadline: false, sla_breached: false }))} />
-          <KpiCard label="Needs Attention" value={stats?.requires_attention ?? '—'} color={C.red} icon={AlertTriangle} warn
-            active={filters.attention}
-            onClick={() => setFilters(f => ({ ...f, attention: !f.attention, pending_draft: false, claim_deadline: false, sla_breached: false, status: '' }))} />
-          <KpiCard label="SLA Breached" value={stats?.sla_breached ?? '—'} color={C.amber} icon={Clock} warn
-            active={filters.sla_breached}
-            onClick={() => setFilters(f => ({ ...f, sla_breached: !f.sla_breached, attention: false, pending_draft: false, claim_deadline: false, status: '' }))} />
-          <KpiCard label="To Verify" value={stats?.tickets_to_verify ?? '—'} color={C.green} icon={Sparkles} warn
-            sub="AI drafts awaiting approval"
-            active={filters.pending_draft}
-            onClick={() => setFilters(f => ({ ...f, pending_draft: !f.pending_draft, attention: false, sla_breached: false, claim_deadline: false, status: '' }))} />
-          <KpiCard label="Claim Deadlines" value={stats?.claim_deadlines_7d ?? '—'} color={C.amber} icon={AlertCircle} warn sub="due in 7 days"
-            active={filters.claim_deadline}
-            onClick={() => setFilters(f => ({ ...f, claim_deadline: !f.claim_deadline, attention: false, pending_draft: false, sla_breached: false, status: '' }))} />
-          <KpiCard label="Total" value={stats?.total_queries ?? '—'} color={C.muted} icon={MessageSquare} />
-        </div>
+      {/* ── Summary stat row ───────────────────────────────────────────────── */}
+      <div style={{ flexShrink: 0, padding: '10px 18px', borderBottom: `0.5px solid ${C.border}`, background: C.bg, display: 'flex', gap: 10 }}>
+        {[
+          { label: 'Overdue chase',    value: stats?.requires_attention ?? '—', color: C.red,   filter: () => setFilters(f => ({ ...f, attention: !f.attention, sla_breached: false, pending_draft: false })), active: filters.attention },
+          { label: 'Awaiting customer',value: stats?.tickets_to_verify  ?? '—', color: C.amber, filter: () => setFilters(f => ({ ...f, status: f.status === 'awaiting_customer' ? '' : 'awaiting_customer', attention: false })), active: filters.status === 'awaiting_customer' },
+          { label: 'With courier',     value: stats?.sla_breached       ?? '—', color: C.text,  filter: () => setFilters(f => ({ ...f, status: f.status === 'awaiting_courier' ? '' : 'awaiting_courier', attention: false })), active: filters.status === 'awaiting_courier' },
+          { label: 'Claim deadlines',  value: stats?.claim_deadlines_7d ?? '—', color: C.text,  filter: () => setFilters(f => ({ ...f, claim_deadline: !f.claim_deadline, attention: false })), active: filters.claim_deadline },
+        ].map(s => (
+          <button key={s.label} onClick={s.filter} style={{
+            flex: 1, background: s.active ? `${s.color}08` : C.hover,
+            border: `0.5px solid ${s.active ? s.color + '33' : C.border}`,
+            borderRadius: 10, padding: '10px 14px', cursor: 'pointer', textAlign: 'left',
+          }}>
+            <div style={{ fontSize: 22, fontWeight: 500, color: s.active ? s.color : s.value !== '—' && s.label === 'Overdue chase' ? C.red : s.label === 'Awaiting customer' ? C.amber : C.text, lineHeight: 1.1 }}>{s.value}</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>{s.label}</div>
+          </button>
+        ))}
       </div>
 
       {/* ── Group tabs ──────────────────────────────────────────────────────── */}
