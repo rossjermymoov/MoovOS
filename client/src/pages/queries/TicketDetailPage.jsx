@@ -18,9 +18,9 @@ const api = axios.create({ baseURL: '/api' });
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const C = {
-  bg:       '#FAFAFA',
+  bg:       '#F2F0EB',  // warm beige — sidebar cards, compose tab bar
   card:     '#FFFFFF',
-  border:   'rgba(0,0,0,0.06)',
+  border:   'rgba(0,0,0,0.08)',
   green:    '#166534',
   amber:    '#92400E',
   red:      '#991B1B',
@@ -482,16 +482,18 @@ function ComposeBar({ queryId, courierName, onSent }) {
 
   return (
     <div style={{ flexShrink: 0, borderTop: `0.5px solid ${C.border}`, background: C.card }}>
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 2, padding: '0 20px', borderBottom: `0.5px solid ${C.border}` }}>
+      {/* Tabs — beige background, active tab pops white */}
+      <div style={{ display: 'flex', background: C.bg, borderBottom: `0.5px solid ${C.border}` }}>
         {tabs.map(t => (
           <button key={t.key} onClick={() => switchTab(t.key)} style={{
-            padding: '9px 14px', border: 'none', background: 'none',
+            padding: '9px 14px', border: 'none',
             borderBottom: `2px solid ${active === t.key ? C.text : 'transparent'}`,
+            background: active === t.key ? C.card : 'transparent',
             color: active === t.key ? C.text : C.muted,
-            fontSize: 13, fontWeight: active === t.key ? 500 : 400,
+            fontSize: 12, fontWeight: active === t.key ? 500 : 400,
             cursor: 'pointer', marginBottom: -0.5,
             display: 'flex', alignItems: 'center', gap: 6,
+            transition: 'background 0.1s',
           }}>
             <t.icon size={12} />
             {t.label}
@@ -531,16 +533,25 @@ function ComposeBar({ queryId, courierName, onSent }) {
             onKeyDown={e => { if (e.key === 'Enter' && e.metaKey) send(); }}
           />
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
-            {active !== 'note' ? (
-              <button onClick={generateDraft} disabled={generating} style={{
-                display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px',
-                borderRadius: 8, border: `0.5px solid ${C.border}`, background: 'transparent',
-                color: C.sub, fontSize: 12, cursor: generating ? 'not-allowed' : 'pointer',
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {active !== 'note' && (
+                <button onClick={generateDraft} disabled={generating} style={{
+                  display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px',
+                  borderRadius: 6, border: `0.5px solid ${C.border}`, background: 'transparent',
+                  color: C.sub, fontSize: 12, cursor: generating ? 'not-allowed' : 'pointer',
+                }}>
+                  <Sparkles size={12} />
+                  {generating ? 'Generating…' : drafted ? 'Regenerate' : 'AI draft'}
+                </button>
+              )}
+              <button style={{
+                padding: '5px 10px', borderRadius: 6,
+                border: 'none', background: C.blueDim,
+                color: C.blue, fontSize: 12, cursor: 'pointer',
               }}>
-                <Sparkles size={12} />
-                {generating ? 'Generating…' : drafted ? 'Regenerate draft' : 'AI draft'}
+                Use template
               </button>
-            ) : <div />}
+            </div>
             <button onClick={send} disabled={sending || !text.trim()} style={{
               display: 'flex', alignItems: 'center', gap: 5, padding: '7px 16px',
               borderRadius: 8, border: 'none',
@@ -751,12 +762,12 @@ export default function TicketDetailPage() {
 
         {/* ── Right sidebar ── */}
         <div style={{
-          width: 224, flexShrink: 0, background: C.bg,
+          width: 224, flexShrink: 0, background: C.card,
           borderLeft: `0.5px solid ${C.border}`,
           overflowY: 'auto', padding: '14px 12px 32px',
         }}>
 
-          {/* SLA */}
+          {/* 1. SLA */}
           <SbCard title="SLA">
             <SbRow label="Created">
               <span style={{ fontSize: 11, color: C.sub }}>{timeAgo(ticket.created_at)}</span>
@@ -768,93 +779,20 @@ export default function TicketDetailPage() {
                 sla_mins_remaining={ticket.sla_mins_remaining}
               />
             </SbRow>
-            {ticket.claim_deadline_at && (
-              <SbRow label="Claim deadline">
-                {(() => {
-                  const days = Math.ceil((new Date(ticket.claim_deadline_at) - Date.now()) / 86400000);
-                  const col  = days < 0 ? C.red : days < 3 ? C.amber : C.green;
-                  return (
-                    <span style={{ fontSize: 11, fontWeight: 500, color: col }}>
-                      {days < 0 ? 'Overdue' : days === 0 ? 'Today' : `${days}d left`}
-                    </span>
-                  );
-                })()}
-              </SbRow>
-            )}
+            {ticket.claim_deadline_at && (() => {
+              const days = Math.ceil((new Date(ticket.claim_deadline_at) - Date.now()) / 86400000);
+              const col  = days < 0 ? C.red : days < 3 ? C.amber : C.green;
+              return (
+                <SbRow label="Claim deadline">
+                  <span style={{ fontSize: 11, fontWeight: 500, color: col }}>
+                    {days < 0 ? 'Overdue' : days === 0 ? 'Today' : `${days}d left`}
+                  </span>
+                </SbRow>
+              );
+            })()}
           </SbCard>
 
-          {/* Ticket */}
-          <SbCard title="Ticket">
-            <SbRow label="Status">
-              <InlineSelect
-                value={ticket.status}
-                onChange={v => patch.mutate({ status: v })}
-                options={Object.entries(STATUS_CFG).map(([k, v]) => ({ value: k, label: v.label }))}
-                colorMap={STATUS_CFG}
-              />
-            </SbRow>
-            <SbRow label="Group">
-              <InlineSelect
-                value={ticket.group_name || ''}
-                onChange={v => patch.mutate({ group_name: v || null })}
-                options={[{ value: '', label: '— None —' }, ...GROUPS.map(g => ({ value: g, label: g }))]}
-              />
-            </SbRow>
-            <SbRow label="Assigned to">
-              <InlineSelect
-                value={ticket.assigned_to || ''}
-                onChange={v => patch.mutate({ assigned_to: v || null })}
-                options={[
-                  { value: '', label: '— Unassigned —' },
-                  ...staffList.map(s => ({ value: s.id, label: s.full_name || s.name })),
-                ]}
-              />
-            </SbRow>
-            <SbRow label="Priority">
-              <InlineSelect
-                value={ticket.priority || 'medium'}
-                onChange={v => patch.mutate({ priority: v })}
-                options={Object.entries(PRIORITY_CFG).map(([k, v]) => ({ value: k, label: v.label }))}
-                colorMap={PRIORITY_CFG}
-              />
-            </SbRow>
-            {ticket.query_type && (
-              <SbRow label="Type">
-                <span style={{ fontSize: 11, color: C.sub, textTransform: 'capitalize' }}>
-                  {ticket.query_type.replace(/_/g, ' ')}
-                </span>
-              </SbRow>
-            )}
-          </SbCard>
-
-          {/* Attention warning */}
-          {ticket.requires_attention && ticket.attention_reason && (
-            <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 8, background: C.amberDim, fontSize: 11, color: C.amber, lineHeight: 1.45 }}>
-              ⚠ {ticket.attention_reason}
-            </div>
-          )}
-
-          {/* Customer */}
-          {(ticket.customer_name || ticket.sender_email) && (
-            <SbCard title="Customer">
-              {ticket.customer_name && (
-                <SbRow label="Account">
-                  <button
-                    onClick={() => ticket.customer_id && navigate(`/customers/${ticket.customer_id}`)}
-                    style={{ background: 'none', border: 'none', color: C.blue, fontSize: 11, fontWeight: 500, cursor: 'pointer', padding: 0 }}>
-                    {ticket.customer_name}
-                  </button>
-                </SbRow>
-              )}
-              {ticket.sender_email && (
-                <SbRow label="Email">
-                  <span style={{ fontSize: 11, color: C.sub, wordBreak: 'break-all' }}>{ticket.sender_email}</span>
-                </SbRow>
-              )}
-            </SbCard>
-          )}
-
-          {/* Parcel */}
+          {/* 2. Parcel */}
           {consignment && (
             <SbCard title="Parcel">
               {courierLogo && (
@@ -868,6 +806,11 @@ export default function TicketDetailPage() {
               <SbRow label="Tracking">
                 <span style={{ fontFamily: 'monospace', fontSize: 10, color: C.text }}>{consignment}</span>
               </SbRow>
+              {ticket.service_name && (
+                <SbRow label="Service">
+                  <span style={{ fontSize: 11, color: C.sub }}>{ticket.service_name}</span>
+                </SbRow>
+              )}
               {parcel?.status && (
                 <SbRow label="Status">
                   <span style={{ fontSize: 11, color: C.sub, textTransform: 'capitalize' }}>
@@ -888,14 +831,99 @@ export default function TicketDetailPage() {
                 </SbRow>
               )}
               <div style={{ marginTop: 8 }}>
-                <button
-                  onClick={() => navigate(`/tracking?q=${encodeURIComponent(consignment)}`)}
+                <button onClick={() => navigate(`/tracking?q=${encodeURIComponent(consignment)}`)}
                   style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', color: C.blue, fontSize: 11, cursor: 'pointer', padding: 0 }}>
-                  <ExternalLink size={10} /> Full tracking
+                  <ExternalLink size={10} /> View tracking
                 </button>
               </div>
             </SbCard>
           )}
+
+          {/* 3. Customer */}
+          {(ticket.customer_name || ticket.sender_email) && (
+            <SbCard title="Customer">
+              {ticket.customer_name && (
+                <SbRow label="Account">
+                  <button onClick={() => ticket.customer_id && navigate(`/customers/${ticket.customer_id}`)}
+                    style={{ background: 'none', border: 'none', color: C.blue, fontSize: 11, fontWeight: 500, cursor: 'pointer', padding: 0 }}>
+                    {ticket.customer_name}
+                  </button>
+                </SbRow>
+              )}
+              {ticket.sender_email && (
+                <SbRow label="Contact">
+                  <span style={{ fontSize: 11, color: C.sub, wordBreak: 'break-all' }}>{ticket.sender_email}</span>
+                </SbRow>
+              )}
+            </SbCard>
+          )}
+
+          {/* 4. Claim */}
+          <SbCard title="Claim">
+            <SbRow label="Claim no.">
+              <span style={{ fontSize: 11, color: ticket.claim_number ? C.text : C.muted }}>
+                {ticket.claim_number || 'Not yet raised'}
+              </span>
+            </SbRow>
+            <SbRow label="Claim amount">
+              <span style={{ fontSize: 11, color: ticket.claim_amount ? C.text : C.muted }}>
+                {ticket.claim_amount ? `£${Number(ticket.claim_amount).toFixed(2)}` : '—'}
+              </span>
+            </SbRow>
+            <SbRow label="Evidence">
+              {(ticket.evidence_count > 0) ? (
+                <span style={{ fontSize: 11, fontWeight: 500, color: C.green }}>
+                  {ticket.evidence_count} {ticket.evidence_count === 1 ? 'file' : 'files'}
+                </span>
+              ) : (
+                <span style={{ fontSize: 11, color: C.muted }}>None yet</span>
+              )}
+            </SbRow>
+          </SbCard>
+
+          {/* Attention warning */}
+          {ticket.requires_attention && ticket.attention_reason && (
+            <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 8, background: C.amberDim, fontSize: 11, color: C.amber, lineHeight: 1.45 }}>
+              ⚠ {ticket.attention_reason}
+            </div>
+          )}
+
+          {/* 5. Assignment */}
+          <SbCard title="Assignment">
+            <SbRow label="Assigned to">
+              <InlineSelect
+                value={ticket.assigned_to || ''}
+                onChange={v => patch.mutate({ assigned_to: v || null })}
+                options={[
+                  { value: '', label: '— Unassigned —' },
+                  ...staffList.map(s => ({ value: s.id, label: s.full_name || s.name })),
+                ]}
+              />
+            </SbRow>
+            <SbRow label="Group">
+              <InlineSelect
+                value={ticket.group_name || ''}
+                onChange={v => patch.mutate({ group_name: v || null })}
+                options={[{ value: '', label: '— None —' }, ...GROUPS.map(g => ({ value: g, label: g }))]}
+              />
+            </SbRow>
+            <SbRow label="Status">
+              <InlineSelect
+                value={ticket.status}
+                onChange={v => patch.mutate({ status: v })}
+                options={Object.entries(STATUS_CFG).map(([k, v]) => ({ value: k, label: v.label }))}
+                colorMap={STATUS_CFG}
+              />
+            </SbRow>
+            <SbRow label="Priority">
+              <InlineSelect
+                value={ticket.priority || 'medium'}
+                onChange={v => patch.mutate({ priority: v })}
+                options={Object.entries(PRIORITY_CFG).map(([k, v]) => ({ value: k, label: v.label }))}
+                colorMap={PRIORITY_CFG}
+              />
+            </SbRow>
+          </SbCard>
 
           {/* Tracking timeline */}
           {trackEvents.length > 0 && (
