@@ -23,12 +23,12 @@ const api = axios.create({ baseURL: '/api' });
 const _BUILD = '2026-05-23-filter-fixes'; // cache bust — fix claim deadline filter + sla breached clickable
 
 const C = {
-  bg:       '#F8FAFC',
-  surface:  '#F8FAFC',
+  bg:       '#FAFAFA',
+  surface:  '#FAFAFA',
   card:     '#FFFFFF',
-  hover:    '#F1F5F9',
+  hover:    '#F5F7FA',
   selected: '#EFF6FF',
-  border:   'rgba(0,0,0,0.08)',
+  border:   'rgba(0,0,0,0.06)',
   green:    '#166534',
   amber:    '#92400E',
   red:      '#991B1B',
@@ -366,238 +366,139 @@ function TicketPopup({ q, pos, logoUrl, assigneeName }) {
 }
 
 function InboxRow({ q, onClick, staffList = [], onUpdate }) {
-  const [statusSaving,   setStatusSaving]   = useState(false);
-  const [assigneeSaving, setAssigneeSaving] = useState(false);
-
-  const hasAttention   = q.requires_attention;
-  const hasSlaBreached = q.sla_breached;
-  const isClaim        = CLAIM_STATUSES.has(q.status);
-  const unread         = parseInt(q.unread_emails) || 0;
-  const hasNewReply    = q.has_new_reply;
-  const slaMins        = q.sla_mins_remaining !== null && q.sla_mins_remaining !== undefined
-                           ? parseFloat(q.sla_mins_remaining) : null;
-
-  const barColor = hasAttention   ? '#EF4444'
-                 : hasNewReply    ? '#3B82F6'
-                 : hasSlaBreached ? '#F97316'
-                 : PRIORITY_BAR[q.priority] || '#3B82F6';
-
   const logoUrl      = q.courier_code ? getCourierLogo(q.courier_code) : null;
-  const statusCfg    = STATUS_CFG[q.status] || { label: q.status, color: C.muted };
+  const statusCfg    = STATUS_CFG[q.status] || { label: q.status, color: C.muted, bg: 'rgba(148,163,184,0.1)' };
   const assigneeName = staffList.find(s => s.id === q.assigned_to)?.full_name;
+  const initials     = assigneeName ? assigneeName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : null;
+  const unread       = parseInt(q.unread_emails) || 0;
+  const hasNewReply  = q.has_new_reply;
 
-  async function handleStatusChange(e) {
-    e.stopPropagation();
-    const newStatus = e.target.value;
-    if (newStatus === q.status) return;
-    setStatusSaving(true);
-    try { await updateQuery(q.id, { status: newStatus }); onUpdate?.(); }
-    catch { /* silently ignore */ }
-    finally { setStatusSaving(false); }
+  // SLA label
+  let slaLabel = null, slaColor = C.muted, slaType = '';
+  if (q.claim_deadline_at) {
+    const days = Math.ceil((new Date(q.claim_deadline_at) - Date.now()) / 86400000);
+    slaLabel = days < 0 ? 'Claim overdue' : days === 0 ? 'Due today' : `${days}d left`;
+    slaColor = days < 0 ? C.red : days < 3 ? C.amber : C.green;
+    slaType  = 'Claim deadline';
+  } else if (q.sla_breached) {
+    slaLabel = 'Overdue'; slaColor = C.red; slaType = 'Response SLA';
+  } else if (q.sla_mins_remaining != null) {
+    const mins = parseFloat(q.sla_mins_remaining);
+    if (mins < 0)    { slaLabel = 'Overdue';                                    slaColor = C.red;   }
+    else if (mins < 240) { slaLabel = `${Math.round(mins / 60)}h left`;         slaColor = C.amber; }
+    else             { slaLabel = 'On track';                                    slaColor = C.green; }
+    slaType = 'First response';
   }
 
-  async function handleAssigneeChange(e) {
-    e.stopPropagation();
-    const newAssignee = e.target.value || null;
-    if (newAssignee === (q.assigned_to || '')) return;
-    setAssigneeSaving(true);
-    try { await updateQuery(q.id, { assigned_to: newAssignee }); onUpdate?.(); }
-    catch { /* silently ignore */ }
-    finally { setAssigneeSaving(false); }
-  }
+  // Activity
+  const actTime  = q.latest_email_at || q.created_at;
+  const actLabel = hasNewReply ? 'Customer replied'
+                 : q.latest_email_at ? 'You replied'
+                 : 'Opened';
+  const actColor = hasNewReply ? C.blue : C.muted;
 
   return (
     <div
       onClick={onClick}
       style={{
-        display: 'flex', alignItems: 'stretch',
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '10px 18px',
+        borderTop: `0.5px solid ${C.border}`,
         cursor: 'pointer',
-        borderBottom: `1px solid ${C.border}`,
-        background: hasAttention
-          ? `linear-gradient(90deg, rgba(239,68,68,0.07) 0%, transparent 340px)`
-          : hasNewReply ? `rgba(59,130,246,0.04)` : 'transparent',
-        transition: 'background 0.1s',
+        background: 'transparent',
+        transition: 'background 0.08s',
       }}
       onMouseOver={e => { e.currentTarget.style.background = C.hover; }}
-      onMouseOut={e => { e.currentTarget.style.background = hasAttention
-        ? `linear-gradient(90deg, rgba(239,68,68,0.07) 0%, transparent 340px)`
-        : hasNewReply ? `rgba(59,130,246,0.04)` : 'transparent'; }}
+      onMouseOut={e => { e.currentTarget.style.background = 'transparent'; }}
     >
-      {/* Left accent bar */}
-      <div style={{ width: 5, flexShrink: 0, background: barColor, borderRadius: '2px 0 0 2px' }} />
+      {/* Courier logo */}
+      <div style={{
+        width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+        border: `0.5px solid ${C.border}`, background: '#FFFFFF',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+      }}>
+        {logoUrl
+          ? <img src={logoUrl} alt={q.courier_name || ''} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 4 }} />
+          : <span style={{ fontSize: 10, fontWeight: 600, color: C.muted }}>{(q.courier_code || '?').slice(0, 3).toUpperCase()}</span>
+        }
+      </div>
 
-      {/* ── Main content ── */}
-      <div style={{ flex: 1, minWidth: 0, padding: '12px 14px 11px 14px' }}>
-
-        {/* Row 1: customer name · topic · consignment · ticket# */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5, overflow: 'hidden' }}>
+      {/* Subject + customer + tracking */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>
+          {(hasNewReply || unread > 0) && (
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.blue, flexShrink: 0 }} />
+          )}
           <span style={{
-            fontSize: 15, fontWeight: 800, letterSpacing: '-0.02em',
-            color: '#0F172A',
-            flexShrink: 0, maxWidth: '36%',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            fontSize: 13, fontWeight: hasNewReply ? 600 : 400,
+            color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
-            {q.customer_name || '—'}
+            {q.subject || q.customer_name || '(no subject)'}
           </span>
-
-          {q.query_type && (
-            <>
-              <span style={{ color: C.muted, fontSize: 12, flexShrink: 0 }}>·</span>
-              <TypeBadge type={q.query_type} small />
-            </>
-          )}
-
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12, color: C.sub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>
+            {q.customer_name}
+          </span>
           {q.consignment_number && (
-            <>
-              <span style={{ color: C.muted, fontSize: 12, flexShrink: 0 }}>·</span>
-              <span style={{
-                fontSize: 12, fontFamily: 'monospace', fontWeight: 700,
-                color: '#6A8BAA',
-                background: '#F1F5F9',
-                border: '1px solid rgba(0,0,0,0.08)',
-                borderRadius: 6,
-                padding: '1px 6px',
-                flexShrink: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                letterSpacing: '0.01em',
-              }}>
-                {q.consignment_number}
-              </span>
-            </>
-          )}
-
-          {logoUrl && (
-            <img src={logoUrl} alt="" style={{ width: 16, height: 12, objectFit: 'contain', flexShrink: 0, opacity: 0.75 }} />
-          )}
-
-          {q.ticket_number && (
-            <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: C.muted, flexShrink: 0 }}>
-              #{q.ticket_number}
-            </span>
-          )}
-        </div>
-
-        {/* Row 2: subject */}
-        <div style={{
-          fontSize: 13, fontWeight: hasNewReply ? 600 : 400,
-          color: hasNewReply ? C.sub : '#64748B',
-          marginBottom: 6,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
-          {q.subject || '(no subject)'}
-        </div>
-
-        {/* Row 3+: preview — expanded to show more */}
-        {q.latest_email_preview && (
-          <div style={{
-            fontSize: 12, color: '#475569', lineHeight: 1.6, marginBottom: 8,
-            display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-          }}>
-            {q.latest_email_preview}
-          </div>
-        )}
-
-        {/* Attention banner — amber flag, distinct from red CLAIM */}
-        {hasAttention && (
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 5,
-            fontSize: 11, fontWeight: 700,
-            color: '#92400E',
-            background: '#FEF3C7',
-            border: '1px solid #D97706',
-            borderRadius: 5,
-            padding: '3px 9px',
-            marginBottom: 7,
-          }}>
-            <Flag size={11} strokeWidth={2.5} />
-            Flagged — needs attention
-            {q.attention_reason ? `: ${q.attention_reason}` : ''}
-          </div>
-        )}
-
-        {/* Footer meta row: raised date · SLA breach */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 2, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 11, color: C.muted, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Clock size={11} />
-            Raised {timeAgo(q.created_at)}
-          </span>
-          {slaMins !== null && (
-            <SlaChip mins={slaMins} policyName={q.sla_policy_name} />
-          )}
-          {hasSlaBreached && slaMins === null && (
-            <span style={{ fontSize: 11, fontWeight: 700, color: C.red,
-              background: C.redDim, padding: '1px 6px', borderRadius: 3,
-              border: `1px solid ${C.red}33` }}>
-              ⏱ SLA Breached
+            <span style={{ fontFamily: 'monospace', fontSize: 11, color: C.muted, flexShrink: 0 }}>
+              {q.consignment_number}
             </span>
           )}
         </div>
       </div>
 
-      {/* ── Right: controls + meta ── */}
-      <div
-        style={{ flexShrink: 0, display: 'flex', flexDirection: 'column',
-          alignItems: 'flex-end', justifyContent: 'center',
-          gap: 5, padding: '10px 14px 10px 10px', minWidth: 175 }}
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Time + unread */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 1 }}>
-          <span style={{ fontSize: 11, color: hasNewReply ? C.blue : C.muted, fontWeight: hasNewReply ? 700 : 400 }}>
-            {timeAgo(q.latest_email_at || q.created_at)}
+      {/* Group */}
+      <div style={{ width: 100, flexShrink: 0 }}>
+        {q.group_name ? (
+          <span style={{
+            fontSize: 11, color: C.muted,
+            background: 'rgba(0,0,0,0.04)', border: `0.5px solid ${C.border}`,
+            borderRadius: 20, padding: '3px 8px',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block',
+          }}>
+            {q.group_name}
           </span>
-          {unread > 0 && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              minWidth: 18, height: 18, borderRadius: 9999,
-              background: C.blue, color: '#FFFFFF', fontSize: 10, fontWeight: 800, padding: '0 5px' }}>
-              {unread}
-            </span>
-          )}
-        </div>
+        ) : null}
+      </div>
 
-        {/* Status dropdown */}
-        <div style={{ position: 'relative', width: '100%' }}>
-          <select value={q.status || ''} onChange={handleStatusChange} disabled={statusSaving}
-            style={{ width: '100%', appearance: 'none',
-              background: `${statusCfg.color}18`, border: `1px solid ${statusCfg.color}44`,
-              borderRadius: 5, color: statusCfg.color, fontSize: 11, fontWeight: 700,
-              padding: '4px 22px 4px 8px', cursor: 'pointer', outline: 'none',
-              opacity: statusSaving ? 0.6 : 1 }}>
-            {Object.entries(STATUS_CFG).map(([k, v]) => (
-              <option key={k} value={k} style={{ background: '#FFFFFF', color: '#0F172A', fontWeight: 400 }}>{v.label}</option>
-            ))}
-          </select>
-          <ChevronDown size={11} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', color: statusCfg.color, pointerEvents: 'none' }} />
-        </div>
+      {/* Status */}
+      <div style={{ width: 120, flexShrink: 0 }}>
+        <span style={{
+          fontSize: 11, fontWeight: 500, borderRadius: 20,
+          padding: '3px 9px', display: 'inline-block', whiteSpace: 'nowrap',
+          background: statusCfg.bg || `${statusCfg.color}18`,
+          color: statusCfg.color,
+        }}>
+          {statusCfg.label}
+        </span>
+      </div>
 
-        {/* Assignee dropdown */}
-        <div style={{ position: 'relative', width: '100%' }}>
-          <select value={q.assigned_to || ''} onChange={handleAssigneeChange} disabled={assigneeSaving}
-            style={{ width: '100%', appearance: 'none',
-              background: '#F1F5F9', border: `1px solid ${C.border}`,
-              borderRadius: 5, color: assigneeName ? C.sub : C.muted,
-              fontSize: 11, fontWeight: assigneeName ? 600 : 400,
-              padding: '4px 22px 4px 8px', cursor: 'pointer', outline: 'none',
-              opacity: assigneeSaving ? 0.6 : 1 }}>
-            <option value="" style={{ background: '#FFFFFF', color: '#94A3B8' }}>Unassigned</option>
-            {staffList.map(s => (
-              <option key={s.id} value={s.id} style={{ background: '#FFFFFF', color: '#0F172A' }}>{s.full_name}</option>
-            ))}
-          </select>
-          <ChevronDown size={11} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', color: C.muted, pointerEvents: 'none' }} />
-        </div>
+      {/* SLA */}
+      <div style={{ width: 110, flexShrink: 0 }}>
+        {slaLabel && (
+          <>
+            <div style={{ fontSize: 12, fontWeight: 500, color: slaColor, lineHeight: 1.3 }}>{slaLabel}</div>
+            <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>{slaType}</div>
+          </>
+        )}
+      </div>
 
-        {/* Alert chips */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          {hasNewReply && (
-            <span style={{ fontSize: 9, fontWeight: 700, color: C.blue,
-              background: 'rgba(30,64,175,0.08)', padding: '1px 6px',
-              borderRadius: 3, border: `1px solid ${C.blue}44` }}>↩ REPLY</span>
-          )}
-          {isClaim && (
-            <span style={{ fontSize: 9, fontWeight: 700, color: C.red, background: C.redDim,
-              padding: '1px 6px', borderRadius: 3, border: `1px solid ${C.red}33` }}>CLAIM</span>
-          )}
-        </div>
+      {/* Activity */}
+      <div style={{ width: 90, flexShrink: 0, textAlign: 'right' }}>
+        <div style={{ fontSize: 12, color: actColor, fontWeight: hasNewReply ? 500 : 400 }}>{timeAgo(actTime)}</div>
+        <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>{actLabel}</div>
+      </div>
+
+      {/* Avatar */}
+      <div style={{
+        width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
+        background: initials ? 'rgba(99,102,241,0.12)' : 'rgba(0,0,0,0.04)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 10, fontWeight: 500,
+        color: initials ? '#4F46E5' : C.muted,
+      }}>
+        {initials || <User size={12} color={C.muted} />}
       </div>
     </div>
   );
@@ -1512,6 +1413,14 @@ const STATUS_FILTERS = [
   { value: 'resolved',               label: 'Resolved' },
 ];
 
+const GROUP_TABS = [
+  { key: 'all',       label: 'All',       group: '' },
+  { key: 'claims',    label: 'Claims',    group: 'Claims' },
+  { key: 'queries',   label: 'Queries',   group: 'Queries' },
+  { key: 'billing',   label: 'Billing',   group: 'Billing' },
+  { key: 'technical', label: 'Technical', group: 'Technical' },
+];
+
 function FilterPill({ active, color, onClick, children }) {
   return (
     <button onClick={onClick} style={{
@@ -1843,25 +1752,43 @@ export default function QueriesPage() {
         </div>
       </div>
 
-      {/* ── Filter bar ─────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 5, alignItems: 'center', padding: '7px 18px', borderBottom: `1px solid ${C.border}`, background: C.bg, flexShrink: 0, flexWrap: 'wrap' }}>
-        <Filter size={11} style={{ color: C.muted, flexShrink: 0 }} />
-        {STATUS_FILTERS.map(f => (
-          <FilterPill key={f.value} color={C.blue}
-            active={filters.status === f.value && !filters.attention}
-            onClick={() => setFilters(p => ({ ...p, status: f.value, attention: false }))}>
-            {f.label}
+      {/* ── Group tabs ──────────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'center', borderBottom: `0.5px solid ${C.border}`, background: C.bg, flexShrink: 0, padding: '0 18px', gap: 2 }}>
+        {GROUP_TABS.map(t => {
+          const isActive = t.group === '' ? !filters.group_name : filters.group_name === t.group;
+          return (
+            <button key={t.key} onClick={() => setFilters(f => ({ ...f, group_name: t.group, attention: false, status: '' }))}
+              style={{
+                padding: '9px 14px', border: 'none', background: 'none',
+                borderBottom: `2px solid ${isActive ? C.text : 'transparent'}`,
+                color: isActive ? C.text : C.muted,
+                fontSize: 13, fontWeight: isActive ? 500 : 400,
+                cursor: 'pointer', marginBottom: -0.5, whiteSpace: 'nowrap',
+                transition: 'color 0.1s',
+              }}
+              onMouseOver={e => { if (!isActive) e.currentTarget.style.color = C.sub; }}
+              onMouseOut={e => { if (!isActive) e.currentTarget.style.color = C.muted; }}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+        <div style={{ flex: 1 }} />
+        {/* Status sub-filters as smaller pills */}
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center', padding: '6px 0' }}>
+          <FilterPill color={C.red} active={filters.attention}
+            onClick={() => setFilters(p => ({ ...p, attention: !p.attention, pending_draft: false }))}>
+            ⚠ Attention
           </FilterPill>
-        ))}
-        <div style={{ width: 1, height: 14, background: C.border, flexShrink: 0, margin: '0 2px' }} />
-        <FilterPill color={C.red} active={filters.attention}
-          onClick={() => setFilters(p => ({ ...p, attention: !p.attention, pending_draft: false }))}>
-          ⚠ Attention Only
-        </FilterPill>
-        <FilterPill color={C.green} active={filters.pending_draft}
-          onClick={() => setFilters(p => ({ ...p, pending_draft: !p.pending_draft, attention: false }))}>
-          ✦ To Verify
-        </FilterPill>
+          <FilterPill color={C.green} active={filters.pending_draft}
+            onClick={() => setFilters(p => ({ ...p, pending_draft: !p.pending_draft, attention: false }))}>
+            ✦ To verify
+          </FilterPill>
+          <FilterPill color={C.blue} active={filters.status === 'resolved'}
+            onClick={() => setFilters(p => ({ ...p, status: p.status === 'resolved' ? '' : 'resolved', attention: false }))}>
+            Resolved
+          </FilterPill>
+        </div>
       </div>
 
       {/* ── Body: list + filter panel ────────────────────────────────────── */}
@@ -1877,42 +1804,27 @@ export default function QueriesPage() {
               <div style={{ fontSize: 12, color: C.muted }}>Try a different filter or check back later</div>
             </div>
           )}
-          {(() => {
-  const attention = displayQueries.filter(q => q.requires_attention || q.has_new_reply);
-  const normal    = displayQueries.filter(q => !q.requires_attention && !q.has_new_reply);
-  return (
-    <>
-      {attention.length > 0 && (
-        <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8,
-            padding: '7px 16px 5px', background: '#F8FAFC', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#EF4444', flexShrink: 0 }} />
-            <span style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              Needs attention · {attention.length}
-            </span>
-          </div>
-          {attention.map(q => (
-            <InboxRow key={q.id} q={q} onClick={() => navigate(`/queries/${q.id}`)} staffList={staffList} onUpdate={refresh} />
-          ))}
-        </>
-      )}
-      {normal.length > 0 && (
-        <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8,
-            padding: '7px 16px 5px', background: '#F8FAFC', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#3B82F6', flexShrink: 0 }} />
-            <span style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              Open · {normal.length}
-            </span>
-          </div>
-          {normal.map(q => (
-            <InboxRow key={q.id} q={q} onClick={() => navigate(`/queries/${q.id}`)} staffList={staffList} onUpdate={refresh} />
-          ))}
-        </>
-      )}
-    </>
-  );
-})()}
+          {!loading && displayQueries.length > 0 && (
+            <>
+              {/* Column headers */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 18px', borderBottom: `0.5px solid ${C.border}` }}>
+                <div style={{ width: 36, flexShrink: 0 }} />
+                <div style={{ flex: 1, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Subject</div>
+                <div style={{ width: 100, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Group</div>
+                <div style={{ width: 120, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</div>
+                <div style={{ width: 110, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>SLA</div>
+                <div style={{ width: 90, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Activity</div>
+                <div style={{ width: 26, flexShrink: 0 }} />
+              </div>
+              {/* Rows sorted by last activity */}
+              {[...displayQueries]
+                .sort((a, b) => new Date(b.latest_email_at || b.created_at) - new Date(a.latest_email_at || a.created_at))
+                .map(q => (
+                  <InboxRow key={q.id} q={q} onClick={() => navigate(`/queries/${q.id}`)} staffList={staffList} onUpdate={refresh} />
+                ))
+              }
+            </>
+          )}
         </div>
 
         {/* Right filter panel */}
