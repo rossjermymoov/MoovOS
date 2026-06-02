@@ -1,25 +1,25 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   Users, Tag, Truck, BarChart2, FileText,
-  AlertTriangle, BookOpen, Settings, LayoutDashboard, UserCheck, LogOut, GitCompare,
+  AlertTriangle, BookOpen, Settings, LayoutDashboard,
+  UserCheck, LogOut, GitCompare, MessageSquare,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
-// page_key must match what's stored in staff.page_permissions[]
 export const NAV_ITEMS = [
-  { to: '/',             icon: LayoutDashboard, label: 'Dashboard',  key: 'dashboard' },
-  { to: '/customers',    icon: Users,           label: 'Customers',  key: 'customers' },
-  { to: '/pricing',      icon: Tag,             label: 'Pricing',    key: 'pricing' },
-  { to: '/tracking',     icon: Truck,           label: 'Tracking',   key: 'tracking' },
-  { to: '/finance',      icon: FileText,        label: 'Finance',    key: 'finance' },
-  { to: '/reconciliation', icon: GitCompare,   label: 'Reconcile',  key: 'reconciliation' },
-  { to: '/queries',      icon: AlertTriangle,   label: 'Queries',    key: 'queries' },
-  { to: '/customer-sim', icon: UserCheck,       label: 'Cust. Sim',  key: 'customer_sim' },
-  { to: '/carriers',     icon: Truck,           label: 'Carriers',   key: 'carriers' },
-  { to: '/reports',      icon: BarChart2,       label: 'Reports',    key: 'reports' },
-  { to: '/knowledge',    icon: BookOpen,        label: 'Knowledge',  key: 'knowledge' },
-  { to: '/settings',     icon: Settings,        label: 'Settings',   key: 'settings' },
+  { to: '/',             icon: LayoutDashboard, label: 'Dashboard',  key: 'dashboard'      },
+  { to: '/customers',    icon: Users,           label: 'Customers',  key: 'customers'      },
+  { to: '/tracking',     icon: Truck,           label: 'Tracking',   key: 'tracking'       },
+  { to: '/queries',      icon: MessageSquare,   label: 'Queries',    key: 'queries'        },
+  { to: '/carriers',     icon: Truck,           label: 'Carriers',   key: 'carriers'       },
+  { to: '/settings',     icon: Settings,        label: 'Settings',   key: 'settings'       },
 ];
+
+const MUTED = '#94A3B8';
+const TEXT  = '#0F172A';
+const HOVER = 'rgba(0,0,0,0.04)';
+const ACTIVE_BG = 'rgba(0,0,0,0.06)';
+const BORDER = 'rgba(0,0,0,0.06)';
 
 export default function Sidebar() {
   const { user, bypass, canAccess, logout } = useAuth();
@@ -33,79 +33,102 @@ export default function Sidebar() {
   }
 
   return (
-    <aside
-      style={{
-        width: 140,
-        height: '100vh',
-        position: 'sticky',
-        top: 0,
-        background: '#FFFFFF',
-        borderRight: '1px solid rgba(0,0,0,0.08)',
-        display: 'flex',
-        flexDirection: 'column',
-        flexShrink: 0,
-        overflow: 'hidden',
-      }}
-      className="py-6"
-    >
+    <aside style={{
+      width: 200,
+      height: '100vh',
+      position: 'sticky',
+      top: 0,
+      background: '#FFFFFF',
+      borderRight: `0.5px solid ${BORDER}`,
+      display: 'flex',
+      flexDirection: 'column',
+      flexShrink: 0,
+      overflow: 'hidden',
+    }}>
+
       {/* Logo */}
-      <div className="px-4 mb-6" style={{ flexShrink: 0 }}>
-        <span style={{ color: '#00C853', fontSize: 20, fontWeight: 700, letterSpacing: '-0.5px' }}>
-          MOOV<span style={{ color: '#0F172A' }}> OS</span>
+      <div style={{ padding: '24px 20px 20px', flexShrink: 0 }}>
+        <span style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.3px', color: TEXT }}>
+          Moov<span style={{ color: MUTED, fontWeight: 400 }}> OS</span>
         </span>
       </div>
 
-      {/* Nav items — scrollable when content exceeds viewport */}
-      <div className="flex flex-col gap-1" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+      {/* Nav */}
+      <nav style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '0 8px' }}>
         {visibleItems.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
             to={to}
             end={to === '/'}
-            className={({ isActive }) =>
-              `flex flex-col items-center gap-1 py-3 px-2 mx-2 rounded-xl text-center transition-all ${
-                isActive
-                  ? 'bg-[rgba(0,200,83,0.10)]'
-                  : 'hover:bg-[rgba(0,0,0,0.04)]'
-              }`
-            }
-            style={{ textDecoration: 'none' }}
+            style={{ textDecoration: 'none', display: 'block', marginBottom: 2 }}
           >
             {({ isActive }) => (
-              <>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '8px 12px',
+                borderRadius: 8,
+                background: isActive ? ACTIVE_BG : 'transparent',
+                transition: 'background 0.1s',
+                cursor: 'pointer',
+              }}
+                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = HOVER; }}
+                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+              >
                 <Icon
-                  size={20}
-                  style={{ color: isActive ? '#00C853' : '#64748B' }}
+                  size={16}
+                  strokeWidth={isActive ? 2 : 1.5}
+                  style={{ color: isActive ? TEXT : MUTED, flexShrink: 0 }}
                 />
-                <span style={{ fontSize: 11, fontWeight: 600, color: isActive ? '#00A843' : '#64748B' }}>{label}</span>
-              </>
+                <span style={{
+                  fontSize: 13,
+                  fontWeight: isActive ? 500 : 400,
+                  color: isActive ? TEXT : MUTED,
+                }}>
+                  {label}
+                </span>
+              </div>
             )}
           </NavLink>
         ))}
-      </div>
+      </nav>
 
-      {/* User info + logout — only shown when actually logged in */}
+      {/* User + logout */}
       {!bypass && user && (
-        <div className="mx-2 mt-2">
-          <div
-            style={{
-              borderTop: '1px solid rgba(0,0,0,0.08)',
-              paddingTop: 12,
-            }}
-          >
-            <div style={{ color: '#64748B', fontSize: 10, fontWeight: 600, textAlign: 'center', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 4px' }}>
-              {user.full_name?.split(' ')[0]}
+        <div style={{ padding: '8px 8px 20px', borderTop: `0.5px solid ${BORDER}`, flexShrink: 0 }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '8px 12px',
+            borderRadius: 8,
+            marginBottom: 2,
+          }}>
+            <div style={{
+              width: 26, height: 26, borderRadius: '50%',
+              background: 'rgba(0,0,0,0.06)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 11, fontWeight: 500, color: TEXT, flexShrink: 0,
+            }}>
+              {user.full_name?.charAt(0).toUpperCase()}
             </div>
-            <button
-              onClick={handleLogout}
-              className="flex flex-col items-center gap-1 py-2 px-2 w-full rounded-xl text-center transition-all hover:bg-[rgba(0,0,0,0.04)]"
-              style={{ border: 'none', background: 'transparent', cursor: 'pointer', width: '100%', color: '#64748B' }}
-              title="Sign out"
-            >
-              <LogOut size={18} />
-              <span style={{ fontSize: 10, fontWeight: 600 }}>Sign out</span>
-            </button>
+            <span style={{ fontSize: 12, color: TEXT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {user.full_name?.split(' ')[0]}
+            </span>
           </div>
+          <button onClick={handleLogout} style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '8px 12px', width: '100%', borderRadius: 8,
+            border: 'none', background: 'transparent', cursor: 'pointer',
+            textAlign: 'left',
+          }}
+            onMouseEnter={e => e.currentTarget.style.background = HOVER}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
+            <LogOut size={16} strokeWidth={1.5} style={{ color: MUTED, flexShrink: 0 }} />
+            <span style={{ fontSize: 13, color: MUTED }}>Sign out</span>
+          </button>
         </div>
       )}
     </aside>

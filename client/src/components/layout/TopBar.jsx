@@ -1,100 +1,114 @@
 import { useState, useEffect } from 'react';
-import { Search, Bell, Calendar, Settings } from 'lucide-react';
+import { Search, Bell, Settings } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 
-export default function TopBar({ userName = 'Ross' }) {
-  const [search, setSearch] = useState('');
-  const [now, setNow] = useState(new Date());
-
-  useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-  const dateStr = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
-
-  return (
-    <header
-      style={{
-        background: '#FFFFFF',
-        borderBottom: '1px solid rgba(0,0,0,0.08)',
-        height: 64,
-        display: 'flex',
-        alignItems: 'center',
-        padding: '0 24px',
-        gap: 24,
-        position: 'sticky',
-        top: 0,
-        zIndex: 50,
-      }}
-    >
-      {/* Welcome */}
-      <div style={{ flex: 1 }}>
-        <span style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>
-          Good {getGreeting()}, {userName}
-        </span>
-        <span style={{ fontSize: 13, color: '#64748B', marginLeft: 12 }}>
-          {dateStr} · {timeStr}
-        </span>
-      </div>
-
-      {/* Global search — pill style */}
-      <div className="pill-input-wrap" style={{ width: 280 }}>
-        <Search size={14} style={{ marginLeft: 14, color: '#64748B', flexShrink: 0 }} />
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search customers, accounts…"
-          style={{ paddingLeft: 8 }}
-        />
-        <div className="green-cap" style={{ fontSize: 12 }}>⌘K</div>
-      </div>
-
-      {/* Utility icons */}
-      <div style={{ display: 'flex', gap: 8 }}>
-        {[Bell, Calendar, Settings].map((Icon, i) => (
-          <button
-            key={i}
-            style={{
-              background: 'rgba(0,0,0,0.04)',
-              border: 'none',
-              borderRadius: '50%',
-              width: 36,
-              height: 36,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: '#64748B',
-              transition: 'background 0.15s',
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.08)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0.04)'}
-          >
-            <Icon size={16} />
-          </button>
-        ))}
-      </div>
-
-      {/* Avatar */}
-      <div
-        style={{
-          width: 36, height: 36,
-          borderRadius: '50%',
-          background: 'linear-gradient(135deg, #00C853, #7B2FBE)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: 700, fontSize: 13, color: '#0F172A', cursor: 'pointer',
-        }}
-      >
-        {userName.charAt(0).toUpperCase()}
-      </div>
-    </header>
-  );
-}
+const BORDER = 'rgba(0,0,0,0.06)';
+const MUTED  = '#94A3B8';
+const TEXT   = '#0F172A';
 
 function getGreeting() {
   const h = new Date().getHours();
   if (h < 12) return 'morning';
   if (h < 17) return 'afternoon';
   return 'evening';
+}
+
+export default function TopBar() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [search, setSearch] = useState('');
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+
+  const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const dateStr = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+  const firstName = user?.full_name?.split(' ')[0] || 'Ross';
+  const initials  = user?.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'R';
+
+  return (
+    <header style={{
+      background: '#FFFFFF',
+      borderBottom: `0.5px solid ${BORDER}`,
+      height: 56,
+      display: 'flex',
+      alignItems: 'center',
+      padding: '0 24px',
+      gap: 20,
+      flexShrink: 0,
+      zIndex: 50,
+    }}>
+
+      {/* Greeting */}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 10 }}>
+        <span style={{ fontSize: 14, fontWeight: 500, color: TEXT }}>
+          Good {getGreeting()}, {firstName}
+        </span>
+        <span style={{ fontSize: 12, color: MUTED }}>
+          {dateStr} · {timeStr}
+        </span>
+      </div>
+
+      {/* Search */}
+      <div style={{ position: 'relative', width: 240 }}>
+        <Search size={13} style={{
+          position: 'absolute', left: 10, top: '50%',
+          transform: 'translateY(-50%)', color: MUTED, pointerEvents: 'none',
+        }} />
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search customers, accounts…"
+          style={{
+            width: '100%', boxSizing: 'border-box',
+            background: '#F2F0EB', border: `0.5px solid ${BORDER}`,
+            borderRadius: 8, padding: '7px 10px 7px 30px',
+            fontSize: 12, color: TEXT, outline: 'none',
+          }}
+        />
+        <div style={{
+          position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+          fontSize: 10, color: MUTED, background: 'rgba(0,0,0,0.06)',
+          borderRadius: 4, padding: '1px 5px',
+        }}>
+          ⌘K
+        </div>
+      </div>
+
+      {/* Utility icons */}
+      <div style={{ display: 'flex', gap: 6 }}>
+        {[
+          { Icon: Bell, action: null },
+          { Icon: Settings, action: () => navigate('/settings') },
+        ].map(({ Icon, action }, i) => (
+          <button key={i} onClick={action} style={{
+            width: 32, height: 32, borderRadius: 8,
+            background: 'transparent', border: 'none',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', color: MUTED,
+          }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.04)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
+            <Icon size={16} strokeWidth={1.5} />
+          </button>
+        ))}
+      </div>
+
+      {/* User avatar */}
+      <div style={{
+        width: 30, height: 30, borderRadius: '50%',
+        background: 'rgba(0,0,0,0.08)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 11, fontWeight: 500, color: TEXT, cursor: 'pointer',
+        flexShrink: 0,
+      }}>
+        {initials}
+      </div>
+    </header>
+  );
 }

@@ -17,7 +17,7 @@ export default function AppShell() {
   }, [location.pathname]);
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#F8FAFC' }}>
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#F2F0EB' }}>
       <Sidebar />
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <TopBar />
