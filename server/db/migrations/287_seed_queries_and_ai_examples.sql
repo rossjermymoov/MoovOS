@@ -57,16 +57,16 @@ BEGIN
   SELECT id INTO v_ross    FROM staff WHERE email = 'ross.sterling@moov.co.uk'   LIMIT 1;
 
   -- ── Resolve customer IDs ───────────────────────────────────────────────────
-  SELECT id INTO v_boori       FROM customers WHERE name ILIKE '%boori%'         LIMIT 1;
-  SELECT id INTO v_kammac      FROM customers WHERE name ILIKE '%kammac%'        LIMIT 1;
-  SELECT id INTO v_wine_buffs  FROM customers WHERE name ILIKE '%wine buffs%'    LIMIT 1;
-  SELECT id INTO v_barry       FROM customers WHERE name ILIKE '%barry carter%'  LIMIT 1;
-  SELECT id INTO v_cranswick   FROM customers WHERE name ILIKE '%cranswick%'     LIMIT 1;
-  SELECT id INTO v_work_wear   FROM customers WHERE name ILIKE '%work%n%wear%' OR name ILIKE '%work and wear%' LIMIT 1;
-  SELECT id INTO v_hof         FROM customers WHERE name ILIKE '%house of fraser%' OR account_number ILIKE 'HOF%' LIMIT 1;
-  SELECT id INTO v_london_grow FROM customers WHERE name ILIKE '%london grow%'   LIMIT 1;
-  SELECT id INTO v_fight_outlet FROM customers WHERE name ILIKE '%fight outlet%' LIMIT 1;
-  SELECT id INTO v_europa      FROM customers WHERE name ILIKE '%europa%' OR name ILIKE '%bessette%' LIMIT 1;
+  SELECT id INTO v_boori       FROM customers WHERE business_name ILIKE '%boori%'         LIMIT 1;
+  SELECT id INTO v_kammac      FROM customers WHERE business_name ILIKE '%kammac%'        LIMIT 1;
+  SELECT id INTO v_wine_buffs  FROM customers WHERE business_name ILIKE '%wine buffs%'    LIMIT 1;
+  SELECT id INTO v_barry       FROM customers WHERE business_name ILIKE '%barry carter%'  LIMIT 1;
+  SELECT id INTO v_cranswick   FROM customers WHERE business_name ILIKE '%cranswick%'     LIMIT 1;
+  SELECT id INTO v_work_wear   FROM customers WHERE business_name ILIKE '%work%n%wear%' OR business_name ILIKE '%work and wear%' LIMIT 1;
+  SELECT id INTO v_hof         FROM customers WHERE business_name ILIKE '%house of fraser%' OR account_number ILIKE 'HOF%' LIMIT 1;
+  SELECT id INTO v_london_grow FROM customers WHERE business_name ILIKE '%london grow%'   LIMIT 1;
+  SELECT id INTO v_fight_outlet FROM customers WHERE business_name ILIKE '%fight outlet%' LIMIT 1;
+  SELECT id INTO v_europa      FROM customers WHERE business_name ILIKE '%europa%' OR business_name ILIKE '%bessette%' LIMIT 1;
 
   -- ── 10 Queries ────────────────────────────────────────────────────────────
 
