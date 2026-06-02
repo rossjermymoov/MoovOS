@@ -220,85 +220,61 @@ function TrackingMiniTimeline({ events }) {
   );
 }
 
-// ─── Message bubble ───────────────────────────────────────────────────────────
+// ─── Message thread item (replaces bubble layout) ────────────────────────────
 function MessageBubble({ email, queryId, courierName, courierCode, approving, onApproved }) {
-  const [expanded,    setExpanded]    = useState(true);
-  const [editMode,    setEditMode]    = useState(false);
-  const [editBody,    setEditBody]    = useState(email.body_text || '');
-  const [localApproving, setLocalApp] = useState(false);
-  const [reviseMode,  setReviseMode]  = useState(false);
-  const [reviseText,  setReviseText]  = useState('');
+  const [editMode,       setEditMode]   = useState(false);
+  const [editBody,       setEditBody]   = useState(email.body_text || '');
+  const [localApproving, setLocalApp]   = useState(false);
+  const [reviseMode,     setReviseMode] = useState(false);
+  const [reviseText,     setReviseText] = useState('');
   const reviseRef = useRef('');
-  const [revising,    setRevising]    = useState(false);
+  const [revising,       setRevising]   = useState(false);
   const qc = useQueryClient();
 
   function updateRevise(val) {
     if (typeof val === 'function') {
       setReviseText(prev => { const next = val(prev); reviseRef.current = next; return next; });
-    } else {
-      reviseRef.current = val; setReviseText(val);
-    }
+    } else { reviseRef.current = val; setReviseText(val); }
   }
   const speech = useSpeechInput(updateRevise);
 
-  const dir       = email.direction;
-  const isDraft   = email.is_ai_draft && !email.sent_at && !email.ai_draft_approved_by;
-  const isInbound = dir === 'inbound_customer' || dir === 'inbound_courier';
-  const isCourier = dir === 'inbound_courier'  || dir === 'outbound_courier';
-  const isNote    = dir === 'note';
-
-  // Bubble styling
-  let bubbleBg, bubbleBorderStyle, accentColor, bubbleRadius, maxW, align;
-  if (isNote) {
-    bubbleBg = 'rgba(234,179,8,0.07)';
-    bubbleBorderStyle = `1px solid rgba(234,179,8,0.18)`;
-    accentColor = '#EAB308';
-    bubbleRadius = 8;
-    align = 'center';
-    maxW = '100%';
-  } else if (dir === 'inbound_customer') {
-    bubbleBg = '#F1F5F9';
-    bubbleBorderStyle = `1px solid rgba(0,0,0,0.07)`;
-    accentColor = C.blue;
-    bubbleRadius = '2px 10px 10px 10px';
-    align = 'left';
-    maxW = '76%';
-  } else if (dir === 'outbound_customer') {
-    bubbleBg = isDraft ? '#F0FDF4' : '#EFF6FF';
-    bubbleBorderStyle = isDraft ? `1px solid rgba(22,101,52,0.2)` : `1px solid rgba(30,64,175,0.18)`;
-    accentColor = isDraft ? C.green : C.blue;
-    bubbleRadius = '10px 2px 10px 10px';
-    align = 'right';
-    maxW = '76%';
-  } else if (dir === 'inbound_courier') {
-    bubbleBg = '#FFFBEB';
-    bubbleBorderStyle = `1px solid rgba(146,64,14,0.15)`;
-    accentColor = C.amber;
-    bubbleRadius = '2px 10px 10px 10px';
-    align = 'left';
-    maxW = '76%';
-  } else {
-    bubbleBg = 'rgba(249,115,22,0.10)';
-    bubbleBorderStyle = `1px solid rgba(249,115,22,0.18)`;
-    accentColor = C.amber;
-    bubbleRadius = '10px 2px 10px 10px';
-    align = 'right';
-    maxW = '76%';
-  }
+  const dir      = email.direction;
+  const isDraft  = email.is_ai_draft && !email.sent_at && !email.ai_draft_approved_by;
+  const isCourier = dir === 'inbound_courier' || dir === 'outbound_courier';
+  const isNote   = dir === 'note';
 
   const logoUrl = isCourier && courierCode ? getCourierLogo(courierCode) : null;
-  const senderLabel = isNote
-    ? 'Internal Note'
-    : dir === 'inbound_customer'  ? (email.from_address || 'Customer')
-    : dir === 'outbound_customer' ? 'You → Customer'
-    : dir === 'inbound_courier'   ? (courierName || 'Courier')
-    :                               `You → ${courierName || 'Courier'}`;
 
-  const bodyLines = (email.body_text || '').split('\n');
-  const cutoff = bodyLines.findIndex(l => l.startsWith('On ') && l.includes('wrote:'));
+  // Avatar appearance
+  const avBg = isNote              ? 'rgba(234,179,8,0.12)'
+    : dir === 'inbound_customer'   ? 'rgba(30,64,175,0.10)'
+    : dir === 'inbound_courier'    ? 'rgba(146,64,14,0.10)'
+    : 'rgba(99,102,241,0.12)';
+  const avColor = isNote           ? C.amber
+    : dir === 'inbound_customer'   ? C.blue
+    : dir === 'inbound_courier'    ? C.amber
+    : '#4F46E5';
+  const avInitials = isNote        ? '—'
+    : dir === 'inbound_customer'   ? 'C'
+    : dir === 'inbound_courier'    ? (courierName?.[0]?.toUpperCase() || 'C')
+    : 'Y';
+
+  // Sender label
+  const senderLabel = isNote              ? 'Internal note'
+    : dir === 'inbound_customer'          ? (email.from_address || 'Customer')
+    : dir === 'outbound_customer'         ? 'You → Customer'
+    : dir === 'inbound_courier'           ? (courierName || 'Courier')
+    :                                       `You → ${courierName || 'Courier'}`;
+
+  // Body — strip quoted reply text
+  const bodyLines  = (email.body_text || '').split('\n');
+  const cutoff     = bodyLines.findIndex(l => l.startsWith('On ') && l.includes('wrote:'));
   const displayBody = cutoff > 0
     ? bodyLines.slice(0, cutoff).join('\n').trim()
     : (email.body_text || '').trim();
+
+  const ts   = email.sent_at || email.received_at || email.created_at;
+  const busy = localApproving || approving;
 
   async function doApprove(bodyOverride) {
     setLocalApp(true);
@@ -308,9 +284,8 @@ function MessageBubble({ email, queryId, courierName, courierCode, approving, on
       });
       qc.invalidateQueries(['ticket', queryId]);
       onApproved?.();
-    } catch (e) {
-      alert('Approval failed: ' + (e.response?.data?.error || e.message));
-    } finally { setLocalApp(false); }
+    } catch (e) { alert('Approval failed: ' + (e.response?.data?.error || e.message)); }
+    finally { setLocalApp(false); }
   }
 
   async function submitRevision() {
@@ -319,189 +294,148 @@ function MessageBubble({ email, queryId, courierName, courierCode, approving, on
     setRevising(true);
     try {
       const resp = await fetch(`/api/queries/${queryId}/revise-draft`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email_id: email.id, feedback }),
       });
-      if (!resp.ok) {
-        const d = await resp.json().catch(() => ({}));
-        throw new Error(d.error || `Server error ${resp.status}`);
-      }
+      if (!resp.ok) { const d = await resp.json().catch(() => ({})); throw new Error(d.error || `Server error ${resp.status}`); }
       setReviseMode(false); reviseRef.current = ''; setReviseText('');
       qc.invalidateQueries(['ticket', queryId]);
-    } catch (e) {
-      alert('Revision failed: ' + e.message);
-    } finally { setRevising(false); }
+    } catch (e) { alert('Revision failed: ' + e.message); }
+    finally { setRevising(false); }
   }
 
-  const busy = localApproving || approving;
-
   return (
-    <div style={{ display: 'flex', justifyContent: align === 'right' ? 'flex-end' : align === 'center' ? 'center' : 'flex-start', marginBottom: 10 }}>
-      <div style={{ maxWidth: maxW, minWidth: isNote ? 0 : 200, width: isNote ? '100%' : undefined }}>
+    <div style={{ display: 'flex', gap: 12, padding: '14px 0', borderTop: `0.5px solid ${C.border}` }}>
 
-        {/* Sender + time */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3,
-          justifyContent: isNote ? 'center' : (isInbound ? 'flex-start' : 'flex-end'),
-        }}>
-          {logoUrl && <img src={logoUrl} alt="" style={{ width: 14, height: 10, objectFit: 'contain' }} />}
-          <span style={{ fontSize: 10, fontWeight: 700, color: accentColor }}>{senderLabel}</span>
-          {isDraft && (
-            <span style={{ fontSize: 9, fontWeight: 700, color: C.green, background: C.greenDim,
-              padding: '1px 5px', borderRadius: 3, border: `1px solid ${C.green}33` }}>
-              AI Draft
-            </span>
-          )}
-          <span style={{ fontSize: 10, color: C.muted }}>
-            {email.sent_at ? fmtDate(email.sent_at) : fmtDate(email.received_at || email.created_at)}
+      {/* Avatar */}
+      <div style={{
+        width: 30, height: 30, borderRadius: '50%', flexShrink: 0, marginTop: 2,
+        background: logoUrl ? '#fff' : avBg,
+        border: `0.5px solid ${C.border}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+      }}>
+        {logoUrl
+          ? <img src={logoUrl} alt="" style={{ width: '100%', objectFit: 'contain', padding: 3 }} />
+          : <span style={{ fontSize: 10, fontWeight: 500, color: avColor }}>{avInitials}</span>
+        }
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {/* Header row */}
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 5 }}>
+          <span style={{ fontSize: 13, fontWeight: 500, color: C.text }}>
+            {senderLabel}
+            {isDraft && (
+              <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 500, color: C.green,
+                background: C.greenDim, borderRadius: 20, padding: '2px 7px' }}>
+                AI draft
+              </span>
+            )}
           </span>
+          <span style={{ fontSize: 11, color: C.muted, flexShrink: 0, marginLeft: 12 }}>{fmtDate(ts)}</span>
         </div>
 
-        {/* Bubble */}
-        <div style={{
-          background: bubbleBg,
-          border: bubbleBorderStyle,
-          borderLeft: isNote ? `3px solid rgba(234,179,8,0.5)` : undefined,
-          borderRadius: bubbleRadius,
-          overflow: 'hidden',
-          cursor: 'pointer',
-        }}
-          onClick={() => setExpanded(e => !e)}
-        >
-          {email.subject && !isNote && (
-            <div style={{ padding: '6px 12px 5px', fontSize: 10, fontWeight: 700, color: C.muted,
-              borderBottom: `1px solid ${C.border}` }}>
-              {email.subject}
-            </div>
-          )}
+        {/* Body */}
+        {editMode ? (
+          <textarea value={editBody} onChange={e => setEditBody(e.target.value)}
+            style={{ width: '100%', minHeight: 120, background: C.card,
+              border: `0.5px solid ${C.border}`, borderRadius: 8,
+              color: C.text, fontSize: 13, padding: 10, resize: 'vertical',
+              fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none', lineHeight: 1.65 }}
+          />
+        ) : (
+          <pre style={{
+            margin: 0, fontSize: 13, color: C.sub, whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word', lineHeight: 1.7, fontFamily: 'inherit',
+            background: isNote ? 'rgba(234,179,8,0.05)' : 'transparent',
+            borderLeft: isNote ? `3px solid rgba(234,179,8,0.35)` : 'none',
+            padding: isNote ? '8px 12px' : 0,
+            borderRadius: isNote ? '0 6px 6px 0' : 0,
+          }}>
+            {displayBody || <span style={{ color: C.muted, fontStyle: 'italic' }}>No content</span>}
+          </pre>
+        )}
 
-          {expanded && (
-            <div style={{ padding: isNote ? '8px 12px' : '10px 12px' }}
-              onClick={e => editMode && e.stopPropagation()}
-            >
-              {editMode ? (
-                <textarea value={editBody} onChange={e => setEditBody(e.target.value)}
-                  onClick={e => e.stopPropagation()}
-                  style={{
-                    width: '100%', minHeight: 110, background: C.surface,
-                    border: `1px solid ${C.green}44`, borderRadius: 5,
-                    color: C.text, fontSize: 12, padding: 8, resize: 'vertical',
-                    fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none',
-                  }}
+        {/* AI draft actions */}
+        {isDraft && (
+          <div style={{ marginTop: 12 }}>
+            {reviseMode ? (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                <textarea value={reviseText} onChange={e => updateRevise(e.target.value)}
+                  autoFocus rows={2}
+                  placeholder="Tell it what to change… e.g. 'be more apologetic, mention the deadline'"
+                  style={{ flex: 1, background: C.card, border: `0.5px solid ${C.border}`,
+                    borderRadius: 8, padding: '8px 10px', fontSize: 12, color: C.text,
+                    lineHeight: 1.55, resize: 'none', outline: 'none', fontFamily: 'inherit' }}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitRevision(); } }}
                 />
-              ) : (
-                <pre style={{
-                  margin: 0, fontSize: 12, color: C.sub, whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word', lineHeight: 1.65, maxHeight: 200,
-                  overflow: 'auto', fontFamily: 'inherit',
-                }}>
-                  {displayBody || <span style={{ color: C.muted, fontStyle: 'italic' }}>No body</span>}
-                </pre>
-              )}
-            </div>
-          )}
-
-          {/* AI draft action bar */}
-          {isDraft && expanded && (
-            <div style={{ borderTop: `1px solid ${C.border}` }} onClick={e => e.stopPropagation()}>
-
-              {/* Revise panel */}
-              {reviseMode && (
-                <div style={{ padding: '10px 12px', background: 'rgba(210,153,34,0.04)', borderBottom: `1px solid ${C.amber}22` }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: C.amber, marginBottom: 6 }}>
-                    Tell Katana why you'd change this
-                  </div>
-                  <div style={{ display: 'flex', gap: 5, alignItems: 'flex-end' }}>
-                    <textarea
-                      value={reviseText}
-                      onChange={e => updateRevise(e.target.value)}
-                      placeholder="e.g. Too formal, customer is upset — be more apologetic…"
-                      rows={2}
-                      autoFocus
-                      style={{
-                        flex: 1, background: C.card, border: `1px solid ${C.amber}33`,
-                        borderRadius: 5, padding: '6px 8px', color: C.text,
-                        fontSize: 11, lineHeight: 1.5, resize: 'none',
-                        outline: 'none', fontFamily: 'inherit',
-                      }}
-                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitRevision(); } }}
-                    />
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <button onClick={speech.toggle} title={speech.listening ? 'Listening…' : 'Dictate'}
-                        style={{
-                          width: 28, height: 28, borderRadius: 5, border: 'none',
-                          background: speech.listening ? C.amber : `${C.amber}18`,
-                          color: speech.listening ? '#000' : C.amber,
-                          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
-                          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                          <line x1="12" y1="19" x2="12" y2="22"/>
-                        </svg>
-                      </button>
-                      <button onClick={submitRevision} disabled={revising} title="Send (Enter)"
-                        style={{
-                          width: 28, height: 28, borderRadius: 5, border: 'none',
-                          background: revising ? `${C.amber}18` : C.amber,
-                          color: revising ? C.muted : '#000',
-                          cursor: revising ? 'default' : 'pointer',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>
-                        {revising
-                          ? <RefreshCw size={11} style={{ animation: 'spin 1s linear infinite' }} />
-                          : <Send size={11} />}
-                      </button>
-                    </div>
-                  </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={speech.toggle}
+                    style={{ width: 32, height: 32, borderRadius: 8, border: `0.5px solid ${C.border}`,
+                      background: speech.listening ? C.blue : C.card,
+                      color: speech.listening ? '#fff' : C.muted,
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/>
+                    </svg>
+                  </button>
+                  <button onClick={submitRevision} disabled={revising}
+                    style={{ padding: '0 14px', height: 32, borderRadius: 8, border: 'none',
+                      background: C.blue, color: '#fff', fontSize: 12, fontWeight: 500,
+                      cursor: revising ? 'not-allowed' : 'pointer',
+                      display: 'flex', alignItems: 'center', gap: 5 }}>
+                    {revising ? <RefreshCw size={11} /> : <Send size={11} />}
+                    {revising ? 'Rewriting…' : 'Rewrite'}
+                  </button>
+                  <button onClick={() => setReviseMode(false)}
+                    style={{ padding: '0 12px', height: 32, borderRadius: 8, border: `0.5px solid ${C.border}`,
+                      background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer' }}>
+                    Cancel
+                  </button>
                 </div>
-              )}
-
-              {/* Approve / Edit / Revise buttons */}
-              <div style={{ display: 'flex', gap: 6, padding: '8px 12px', flexWrap: 'wrap' }}>
-                {editMode ? (
-                  <>
-                    <button onClick={() => { doApprove(editBody); setEditMode(false); }} disabled={busy}
-                      style={{ padding: '5px 12px', borderRadius: 5, border: 'none', background: C.green,
-                        color: '#000', fontSize: 11, fontWeight: 700, cursor: busy ? 'default' : 'pointer',
-                        display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <CheckCircle2 size={11} /> {busy ? 'Saving…' : 'Save & Approve'}
-                    </button>
-                    <button onClick={() => { setEditMode(false); setEditBody(email.body_text || ''); }}
-                      style={{ padding: '5px 10px', borderRadius: 5, border: `1px solid ${C.border}`,
-                        background: 'transparent', color: C.muted, fontSize: 11, cursor: 'pointer' }}>
-                      Cancel
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button onClick={() => doApprove()} disabled={busy}
-                      style={{ padding: '5px 12px', borderRadius: 5, border: 'none', background: C.green,
-                        color: '#000', fontSize: 11, fontWeight: 700, cursor: busy ? 'default' : 'pointer',
-                        opacity: busy ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <CheckCircle2 size={11} /> {busy ? 'Sending…' : 'Approve & Send'}
-                    </button>
-                    <button onClick={() => { setReviseMode(r => !r); reviseRef.current = ''; setReviseText(''); }}
-                      style={{ padding: '5px 10px', borderRadius: 5,
-                        border: `1px solid ${C.amber}44`, background: reviseMode ? `${C.amber}10` : 'transparent',
-                        color: C.amber, fontSize: 11, cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Sparkles size={11} /> {reviseMode ? 'Cancel' : 'Ask Katana to revise'}
-                    </button>
-                    <button onClick={() => setEditMode(true)}
-                      style={{ padding: '5px 10px', borderRadius: 5,
-                        border: `1px solid ${C.border}`, background: 'transparent',
-                        color: C.muted, fontSize: 11, cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Edit2 size={10} /> Edit
-                    </button>
-                  </>
-                )}
               </div>
-            </div>
-          )}
-        </div>
+            ) : editMode ? (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => { doApprove(editBody); setEditMode(false); }} disabled={busy}
+                  style={{ padding: '6px 14px', borderRadius: 8, border: 'none',
+                    background: C.green, color: '#fff', fontSize: 12, fontWeight: 500,
+                    cursor: busy ? 'not-allowed' : 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <CheckCircle2 size={11} /> {busy ? 'Saving…' : 'Approve & send'}
+                </button>
+                <button onClick={() => { setEditMode(false); setEditBody(email.body_text || ''); }}
+                  style={{ padding: '6px 12px', borderRadius: 8, border: `0.5px solid ${C.border}`,
+                    background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer' }}>
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => doApprove()} disabled={busy}
+                  style={{ padding: '6px 14px', borderRadius: 8, border: 'none',
+                    background: C.green, color: '#fff', fontSize: 12, fontWeight: 500,
+                    cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1,
+                    display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <CheckCircle2 size={11} /> {busy ? 'Sending…' : 'Approve & send'}
+                </button>
+                <button onClick={() => setReviseMode(true)}
+                  style={{ padding: '6px 12px', borderRadius: 8, border: `0.5px solid ${C.border}`,
+                    background: 'transparent', color: C.sub, fontSize: 12, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Sparkles size={11} /> Refine
+                </button>
+                <button onClick={() => setEditMode(true)}
+                  style={{ padding: '6px 12px', borderRadius: 8, border: `0.5px solid ${C.border}`,
+                    background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Edit2 size={11} /> Edit
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -539,27 +473,29 @@ function ThreadArea({ emails, queryId, courierName, courierCode, approving, onAp
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       {/* Tab bar */}
-      <div style={{ display: 'flex', flexShrink: 0, borderBottom: `1px solid ${C.border}`, background: C.surface }}>
+      <div style={{ display: 'flex', flexShrink: 0, borderBottom: `0.5px solid ${C.border}`, background: C.card, padding: '0 18px', gap: 2 }}>
         {tabs.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
-            padding: '9px 16px', border: 'none',
-            borderBottom: `2px solid ${tab === t.key ? t.color : 'transparent'}`,
+            padding: '9px 14px', border: 'none',
+            borderBottom: `2px solid ${tab === t.key ? C.text : 'transparent'}`,
             background: 'transparent',
-            color: tab === t.key ? t.color : C.muted,
-            fontSize: 12, fontWeight: tab === t.key ? 700 : 400,
-            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, transition: 'color 0.1s',
+            color: tab === t.key ? C.text : C.muted,
+            fontSize: 13, fontWeight: tab === t.key ? 500 : 400,
+            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+            marginBottom: -0.5, transition: 'color 0.1s',
           }}>
             {t.logo ? (
-              <div style={{ background: '#fff', borderRadius: 2, padding: '1px 3px', display: 'flex', alignItems: 'center' }}>
-                <img src={t.logo} alt="" style={{ height: 11, objectFit: 'contain' }} />
+              <div style={{ width: 18, height: 18, background: '#fff', borderRadius: 4, border: `0.5px solid ${C.border}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                <img src={t.logo} alt="" style={{ width: '100%', objectFit: 'contain' }} />
               </div>
             ) : null}
             {t.label}
             {t.count > 0 && (
               <span style={{
-                fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8,
-                background: tab === t.key ? `${t.color}22` : C.card,
-                color: tab === t.key ? t.color : C.muted,
+                fontSize: 11, padding: '0 6px', borderRadius: 20,
+                background: tab === t.key ? C.hover : 'transparent',
+                color: C.muted,
               }}>{t.count}</span>
             )}
           </button>
@@ -567,10 +503,10 @@ function ThreadArea({ emails, queryId, courierName, courierCode, approving, onAp
       </div>
 
       {/* Messages */}
-      <div ref={messagesRef} style={{ flex: 1, overflowY: 'auto', padding: '14px 18px 6px' }}>
+      <div ref={messagesRef} style={{ flex: 1, overflowY: 'auto', padding: '0 20px 20px' }}>
         {visible.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '48px 20px', color: C.muted }}>
-            <Mail size={28} style={{ marginBottom: 10, opacity: 0.25 }} />
+            <Mail size={24} style={{ marginBottom: 10, opacity: 0.2 }} />
             <div style={{ fontSize: 13 }}>No messages in this thread yet</div>
           </div>
         ) : (
@@ -653,21 +589,19 @@ function UnifiedComposeBar({ queryId, courierName, onSent }) {
   return (
     <div style={{ flexShrink: 0, borderTop: `1px solid ${C.border}`, background: '#FFFFFF' }}>
       {/* Tab bar */}
-      <div style={{ display: 'flex', borderBottom: active ? `1px solid ${C.border}` : 'none' }}>
+      <div style={{ display: 'flex', gap: 2, padding: '0 16px', borderBottom: `0.5px solid ${C.border}`, background: C.bg }}>
         {tabs.map(t => (
           <button key={t.key}
             onClick={() => switchTab(t.key)}
             style={{
-              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-              padding: '8px 6px', border: 'none',
-              borderTop: `2px solid ${active === t.key ? t.color : 'transparent'}`,
-              background: active === t.key ? `${t.color}10` : 'transparent',
-              color: active === t.key ? t.color : C.muted,
-              fontSize: 11, fontWeight: active === t.key ? 700 : 500,
-              cursor: 'pointer', transition: 'all 0.1s',
-              borderRight: t.key !== 'note' ? `1px solid ${C.border}` : 'none',
+              padding: '8px 14px', border: 'none', background: 'none',
+              borderBottom: `2px solid ${active === t.key ? C.text : 'transparent'}`,
+              color: active === t.key ? C.text : C.muted,
+              fontSize: 13, fontWeight: active === t.key ? 500 : 400,
+              cursor: 'pointer', marginBottom: -0.5,
+              display: 'flex', alignItems: 'center', gap: 6,
             }}>
-            <t.icon size={11} />
+            <t.icon size={12} />
             {t.label}
           </button>
         ))}
