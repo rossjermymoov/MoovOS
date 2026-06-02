@@ -280,7 +280,13 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
   }
 
   return (
-    <div style={{ display: 'flex', gap: 14, padding: '16px 0', borderTop: `0.5px solid ${C.border}` }}>
+    <div style={{
+      display: 'flex', gap: 14,
+      padding: '14px 16px',
+      background: C.card,
+      border: `0.5px solid ${C.border}`,
+      borderRadius: 10,
+    }}>
 
       {/* Avatar */}
       <div style={{
@@ -734,10 +740,10 @@ export default function TicketDetailPage() {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden', background: C.card }}>
 
           {/* Thread */}
-          <div ref={messagesRef} style={{ flex: 1, overflowY: 'auto', padding: '0 22px 24px' }}>
+          <div ref={messagesRef} style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 24px', display: 'flex', flexDirection: 'column', gap: 8 }}>
             {allEmails.length === 0 ? (
-              <div style={{ padding: '48px 0', textAlign: 'center', color: C.muted }}>
-                <Mail size={24} style={{ marginBottom: 10, opacity: 0.2 }} />
+              <div style={{ padding: '48px 0', textAlign: 'center', color: C.muted, alignSelf: 'center', width: '100%' }}>
+                <Mail size={24} style={{ marginBottom: 10, opacity: 0.2, display: 'block', margin: '0 auto 10px' }} />
                 <div style={{ fontSize: 13 }}>No messages yet</div>
               </div>
             ) : allEmails.map(email => (

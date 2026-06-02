@@ -15,11 +15,11 @@ export const NAV_ITEMS = [
   { to: '/settings',     icon: Settings,        label: 'Settings',   key: 'settings'       },
 ];
 
-const MUTED = '#94A3B8';
-const TEXT  = '#0F172A';
-const HOVER = 'rgba(0,0,0,0.04)';
-const ACTIVE_BG = 'rgba(0,0,0,0.06)';
-const BORDER = 'rgba(0,0,0,0.06)';
+const MUTED     = 'rgba(255,255,255,0.40)';
+const TEXT      = '#FFFFFF';
+const HOVER     = 'rgba(255,255,255,0.06)';
+const ACTIVE_BG = 'rgba(255,255,255,0.10)';
+const BORDER    = 'rgba(255,255,255,0.06)';
 
 export default function Sidebar() {
   const { user, bypass, canAccess, logout } = useAuth();
@@ -38,8 +38,8 @@ export default function Sidebar() {
       height: '100vh',
       position: 'sticky',
       top: 0,
-      background: '#FFFFFF',
-      borderRight: `0.5px solid ${BORDER}`,
+      background: '#18181B',
+      borderRight: 'none',
       display: 'flex',
       flexDirection: 'column',
       flexShrink: 0,
@@ -48,8 +48,8 @@ export default function Sidebar() {
 
       {/* Logo */}
       <div style={{ padding: '24px 20px 20px', flexShrink: 0 }}>
-        <span style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.3px', color: TEXT }}>
-          Moov<span style={{ color: MUTED, fontWeight: 400 }}> OS</span>
+        <span style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.3px', color: '#FFFFFF' }}>
+          Moov<span style={{ color: 'rgba(255,255,255,0.35)', fontWeight: 400 }}> OS</span>
         </span>
       </div>
 
@@ -107,9 +107,9 @@ export default function Sidebar() {
           }}>
             <div style={{
               width: 26, height: 26, borderRadius: '50%',
-              background: 'rgba(0,0,0,0.06)',
+              background: 'rgba(255,255,255,0.10)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 11, fontWeight: 500, color: TEXT, flexShrink: 0,
+              fontSize: 11, fontWeight: 500, color: '#fff', flexShrink: 0,
             }}>
               {user.full_name?.charAt(0).toUpperCase()}
             </div>
