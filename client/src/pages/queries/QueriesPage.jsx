@@ -496,6 +496,24 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
         ) : null}
       </div>
 
+      {/* Happiness score */}
+      <div style={{ width: 52, flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
+        {q.customer_happiness_score != null && (() => {
+          const score = parseInt(q.customer_happiness_score);
+          const isGreen = score >= 71;
+          const isAmber = score >= 41 && score < 71;
+          const bg    = isGreen ? 'rgba(0,200,83,0.10)'  : isAmber ? 'rgba(245,158,11,0.10)' : 'rgba(239,68,68,0.10)';
+          const color = isGreen ? '#059669'               : isAmber ? '#D97706'               : '#DC2626';
+          const dot   = isGreen ? '#00C853'               : isAmber ? '#F59E0B'               : '#EF4444';
+          return (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 20, background: bg, color, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: dot, display: 'inline-block', flexShrink: 0 }} />
+              {score}
+            </span>
+          );
+        })()}
+      </div>
+
       {/* Status */}
       <div style={{ width: 110, flexShrink: 0 }}>
         <span style={{
@@ -1828,6 +1846,7 @@ export default function QueriesPage() {
                 <div style={{ flex: 1, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Subject</div>
                 <div style={{ width: 160, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Summary</div>
                 <div style={{ width: 88, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Group</div>
+                <div style={{ width: 52, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Health</div>
                 <div style={{ width: 110, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</div>
                 <div style={{ width: 100, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>SLA</div>
                 <div style={{ width: 80, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Activity</div>
