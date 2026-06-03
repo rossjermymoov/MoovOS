@@ -5,7 +5,7 @@ import {
   ArrowLeft, AlertTriangle, Phone, Mail, MapPin, Building2,
   Users, MessageSquare, TrendingUp, DollarSign, Zap, Info,
   Pencil, X, Check, ShieldCheck, Trash2, Bug, ChevronDown, ChevronRight, RefreshCw,
-  ToggleLeft, ToggleRight, Plus, FlaskConical,
+  ToggleLeft, ToggleRight, Plus, FlaskConical, Heart,
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -14,6 +14,7 @@ import { customersApi } from '../../api/customers';
 import { customerRateCardsApi } from '../../api/customerRateCards';
 import { HealthBadge, AccountStatusBadge, TierBadge, CreditUtilisationBar } from '../../components/ui/StatusBadge';
 import CustomerPricingTab from './tabs/CustomerPricingTab';
+import HappinessScore from './tabs/HappinessScore';
 import { format } from 'date-fns';
 
 const TABS = [
@@ -23,6 +24,7 @@ const TABS = [
   { key: 'volume',    label: 'Performance',      icon: TrendingUp },
   { key: 'financial', label: 'Financial',        icon: DollarSign },
   { key: 'pricing',   label: 'Pricing',          icon: Zap },
+  { key: 'happiness', label: 'Happiness',        icon: Heart },
 ];
 
 const COMPANY_TYPE_LABELS = {
@@ -1755,6 +1757,7 @@ export default function CustomerRecord() {
       {activeTab === 'volume'    && <PerformanceTab customerId={c.id} />}
       {activeTab === 'financial' && <FinancialTab c={c} />}
       {activeTab === 'comms'     && <CustomerCommsTab customerId={id} />}
+      {activeTab === 'happiness' && <HappinessScore />}
       {activeTab === 'pricing'   && (
         <CustomerPricingTab customer={c}
           onCustomerUpdate={(updated) => queryClient.setQueryData(['customer', id], d => ({ ...d, customer: { ...d.customer, ...updated } }))}
