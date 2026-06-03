@@ -1757,7 +1757,7 @@ export default function CustomerRecord() {
       {activeTab === 'volume'    && <PerformanceTab customerId={c.id} />}
       {activeTab === 'financial' && <FinancialTab c={c} />}
       {activeTab === 'comms'     && <CustomerCommsTab customerId={id} />}
-      {activeTab === 'happiness' && <HappinessScore />}
+      {activeTab === 'happiness' && <HappinessScore customer={c} />}
       {activeTab === 'pricing'   && (
         <CustomerPricingTab customer={c}
           onCustomerUpdate={(updated) => queryClient.setQueryData(['customer', id], d => ({ ...d, customer: { ...d.customer, ...updated } }))}
