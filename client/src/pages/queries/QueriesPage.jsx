@@ -365,13 +365,32 @@ function TicketPopup({ q, pos, logoUrl, assigneeName }) {
   );
 }
 
+// ─── AI summary helper ────────────────────────────────────────────────────────
+function getAiSummary(q) {
+  if (q.requires_attention && q.attention_reason)
+    return { text: q.attention_reason.slice(0, 80), color: C.red };
+  if (q.claim_deadline_at) {
+    const days = Math.ceil((new Date(q.claim_deadline_at) - Date.now()) / 86400000);
+    if (days <= 3)
+      return { text: days <= 0 ? 'Claim deadline today' : `Claim deadline in ${days}d`, color: C.amber };
+  }
+  if (q.sla_breached)
+    return { text: 'SLA overdue — needs response', color: C.red };
+  const raw = q.description || q.subject || '';
+  return { text: raw.slice(0, 80) + (raw.length > 80 ? '…' : ''), color: C.muted };
+}
+
 function InboxRow({ q, onClick, staffList = [], onUpdate }) {
+  const [hoverPos, setHoverPos] = useState(null);
+
   const logoUrl      = q.courier_code ? getCourierLogo(q.courier_code) : null;
   const statusCfg    = STATUS_CFG[q.status] || { label: q.status, color: C.muted, bg: 'rgba(148,163,184,0.1)' };
   const assigneeName = staffList.find(s => s.id === q.assigned_to)?.full_name;
   const initials     = assigneeName ? assigneeName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : null;
   const unread       = parseInt(q.unread_emails) || 0;
   const hasNewReply  = q.has_new_reply;
+  const aiSummary    = getAiSummary(q);
+  const preview      = q.latest_email_preview || q.description || '';
 
   // SLA label
   let slaLabel = null, slaColor = C.muted, slaType = '';
@@ -400,6 +419,8 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   return (
     <div
       onClick={onClick}
+      onMouseMove={e => setHoverPos({ x: e.clientX, y: e.clientY })}
+      onMouseLeave={() => setHoverPos(null)}
       style={{
         display: 'flex', alignItems: 'center', gap: 12,
         padding: '10px 18px',
@@ -407,6 +428,7 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
         cursor: 'pointer',
         background: 'transparent',
         transition: 'background 0.08s',
+        position: 'relative',
       }}
       onMouseOver={e => { e.currentTarget.style.background = C.hover; }}
       onMouseOut={e => { e.currentTarget.style.background = 'transparent'; }}
@@ -437,7 +459,7 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 12, color: C.sub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>
+          <span style={{ fontSize: 12, color: C.sub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180 }}>
             {q.customer_name}
           </span>
           {q.consignment_number && (
@@ -448,8 +470,20 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
         </div>
       </div>
 
+      {/* AI summary */}
+      <div style={{ width: 160, flexShrink: 0 }}>
+        {aiSummary.text && (
+          <span style={{
+            fontSize: 11, color: aiSummary.color, lineHeight: 1.4,
+            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+          }}>
+            {aiSummary.text}
+          </span>
+        )}
+      </div>
+
       {/* Group */}
-      <div style={{ width: 100, flexShrink: 0 }}>
+      <div style={{ width: 88, flexShrink: 0 }}>
         {q.group_name ? (
           <span style={{
             fontSize: 11, color: C.muted,
@@ -463,7 +497,7 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
       </div>
 
       {/* Status */}
-      <div style={{ width: 120, flexShrink: 0 }}>
+      <div style={{ width: 110, flexShrink: 0 }}>
         <span style={{
           fontSize: 11, fontWeight: 500, borderRadius: 20,
           padding: '3px 9px', display: 'inline-block', whiteSpace: 'nowrap',
@@ -475,7 +509,7 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
       </div>
 
       {/* SLA */}
-      <div style={{ width: 110, flexShrink: 0 }}>
+      <div style={{ width: 100, flexShrink: 0 }}>
         {slaLabel && (
           <>
             <div style={{ fontSize: 12, fontWeight: 500, color: slaColor, lineHeight: 1.3 }}>{slaLabel}</div>
@@ -485,7 +519,7 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
       </div>
 
       {/* Activity */}
-      <div style={{ width: 90, flexShrink: 0, textAlign: 'right' }}>
+      <div style={{ width: 80, flexShrink: 0, textAlign: 'right' }}>
         <div style={{ fontSize: 12, color: actColor, fontWeight: hasNewReply ? 500 : 400 }}>{timeAgo(actTime)}</div>
         <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>{actLabel}</div>
       </div>
@@ -500,6 +534,46 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
       }}>
         {initials || <User size={12} color={C.muted} />}
       </div>
+
+      {/* Hover popup — last message preview */}
+      {hoverPos && preview && (
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{
+            position: 'fixed',
+            left: Math.min(hoverPos.x + 18, window.innerWidth - 340),
+            top: Math.max(12, Math.min(hoverPos.y - 12, window.innerHeight - 220)),
+            width: 320,
+            background: '#FFFFFF',
+            border: '0.5px solid rgba(0,0,0,0.12)',
+            borderRadius: 10,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.10)',
+            padding: '12px 14px',
+            zIndex: 9999,
+            pointerEvents: 'none',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 500, color: C.sub }}>
+              {q.customer_name}
+            </span>
+            <span style={{ fontSize: 10, color: C.muted }}>
+              {timeAgo(q.latest_email_at || q.created_at)}
+            </span>
+          </div>
+          {q.has_new_reply && (
+            <div style={{ fontSize: 10, color: C.blue, marginBottom: 5, fontWeight: 500 }}>
+              ↩ Customer replied
+            </div>
+          )}
+          <div style={{
+            fontSize: 12, color: C.sub, lineHeight: 1.65,
+            display: '-webkit-box', WebkitLineClamp: 5, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+          }}>
+            {preview}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1752,10 +1826,11 @@ export default function QueriesPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 18px', borderBottom: `0.5px solid ${C.border}` }}>
                 <div style={{ width: 36, flexShrink: 0 }} />
                 <div style={{ flex: 1, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Subject</div>
-                <div style={{ width: 100, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Group</div>
-                <div style={{ width: 120, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</div>
-                <div style={{ width: 110, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>SLA</div>
-                <div style={{ width: 90, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Activity</div>
+                <div style={{ width: 160, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Summary</div>
+                <div style={{ width: 88, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Group</div>
+                <div style={{ width: 110, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</div>
+                <div style={{ width: 100, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>SLA</div>
+                <div style={{ width: 80, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Activity</div>
                 <div style={{ width: 26, flexShrink: 0 }} />
               </div>
               {/* Rows sorted by last activity */}

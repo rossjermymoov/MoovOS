@@ -221,6 +221,18 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
 
   const logoUrl = isCourier && courierCode ? getCourierLogo(courierCode) : null;
 
+  // Card background + accent per direction
+  const cardBg = isNote             ? 'rgba(234,179,8,0.05)'
+    : dir === 'inbound_customer'     ? '#FFFFFF'
+    : dir === 'outbound_customer'    ? 'rgba(30,64,175,0.03)'
+    : dir === 'inbound_courier'      ? 'rgba(217,119,6,0.06)'
+    :                                  'rgba(217,119,6,0.03)';
+
+  const cardBorderLeft = isNote             ? '3px solid rgba(234,179,8,0.45)'
+    : dir === 'inbound_customer'             ? '3px solid rgba(30,64,175,0.35)'
+    : dir === 'inbound_courier'              ? '3px solid rgba(217,119,6,0.50)'
+    :                                          'none';
+
   // Avatar colour
   const avBg = isNote    ? 'rgba(234,179,8,0.10)'
     : isOut              ? 'rgba(99,102,241,0.10)'
@@ -283,8 +295,9 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
     <div style={{
       display: 'flex', gap: 14,
       padding: '14px 16px',
-      background: C.card,
+      background: cardBg,
       border: `0.5px solid ${C.border}`,
+      borderLeft: cardBorderLeft,
       borderRadius: 10,
     }}>
 
@@ -305,18 +318,30 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
       <div style={{ flex: 1, minWidth: 0 }}>
 
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
-          <span style={{ fontSize: 13, fontWeight: 500, color: C.text }}>
-            {senderLabel}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* Courier logo chip — shown on any courier direction */}
+            {isCourier && logoUrl && (
+              <div style={{
+                width: 22, height: 22, borderRadius: 5,
+                border: `0.5px solid ${C.border}`, background: '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0,
+              }}>
+                <img src={logoUrl} alt={courierName || ''} style={{ width: '100%', objectFit: 'contain', padding: 2 }} />
+              </div>
+            )}
+            <span style={{ fontSize: 13, fontWeight: 500, color: C.text }}>
+              {senderLabel}
+            </span>
             {isDraft && (
               <span style={{
-                marginLeft: 8, fontSize: 10, fontWeight: 500, color: C.green,
+                fontSize: 10, fontWeight: 500, color: C.green,
                 background: C.greenDim, borderRadius: 20, padding: '2px 8px',
               }}>
                 AI draft
               </span>
             )}
-          </span>
+          </div>
           <span style={{ fontSize: 11, color: C.muted, flexShrink: 0, marginLeft: 16 }}>{fmtDate(ts)}</span>
         </div>
 
