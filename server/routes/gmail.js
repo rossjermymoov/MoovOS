@@ -75,6 +75,26 @@ router.get('/debug', async (req, res, next) => {
   }
 });
 
+// Test endpoint — inserts one dummy ticket directly to verify the view works
+router.post('/test-insert', async (req, res, next) => {
+  try {
+    const { query: dbQuery } = await import('../db/index.js');
+    const qRes = await dbQuery(`
+      INSERT INTO queries (customer_name, sender_email, sender_matched, subject, status, query_type, trigger)
+      VALUES ('Test Customer', 'test@example.com', false, 'Test ticket from Gmail sync debug', 'open', 'other', 'customer_email')
+      RETURNING id, ticket_number
+    `);
+    const q = qRes.rows[0];
+    await dbQuery(`
+      INSERT INTO query_emails (query_id, direction, from_address, subject, body_text, received_at, is_ai_draft)
+      VALUES ($1, 'inbound_customer', 'test@example.com', 'Test ticket from Gmail sync debug', 'This is a test email body.', NOW(), false)
+    `, [q.id]);
+    res.json({ ok: true, id: q.id, ticket_number: q.ticket_number });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.delete('/disconnect', async (req, res, next) => {
   try { await disconnect(); res.json({ ok: true }); }
   catch (err) { next(err); }
