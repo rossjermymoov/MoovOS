@@ -95,6 +95,33 @@ router.post('/test-insert', async (req, res, next) => {
   }
 });
 
+// Force regenerate ALL summaries regardless of existing description
+router.post('/regenerate-summaries', async (req, res, next) => {
+  try {
+    const { query: dbQuery } = await import('../db/index.js');
+    const { generateSummary } = await import('../services/gmailSync.js');
+
+    // Get all tickets with their first inbound email body
+    const rows = await dbQuery(`
+      SELECT DISTINCT ON (q.id) q.id, q.subject, qe.body_text
+      FROM queries q
+      LEFT JOIN query_emails qe ON qe.query_id = q.id AND qe.direction = 'inbound_customer'
+      ORDER BY q.id, qe.received_at ASC
+    `);
+
+    const results = [];
+    for (const row of rows.rows) {
+      const summary = await generateSummary(row.subject, row.body_text || '');
+      await dbQuery(`UPDATE queries SET description = $1 WHERE id = $2`, [summary, row.id]);
+      results.push({ id: row.id, subject: row.subject, summary });
+    }
+    res.json({ updated: results.length, results });
+  } catch (err) {
+    console.error('[regenerate-summaries]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.delete('/disconnect', async (req, res, next) => {
   try { await disconnect(); res.json({ ok: true }); }
   catch (err) { next(err); }

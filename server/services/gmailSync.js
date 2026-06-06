@@ -5,7 +5,7 @@
 
 import { google } from 'googleapis';
 // ─── AI summary via Claude Haiku ─────────────────────────────────────────────
-async function generateSummary(subject, body) {
+export async function generateSummary(subject, body) {
   const snippet = ((body || '')).slice(0, 500);
   const prompt = `You are summarising a support email for a parcel courier reseller's inbox.
 
