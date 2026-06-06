@@ -18,7 +18,7 @@ const api = axios.create({ baseURL: '/api' });
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const C = {
-  bg:       '#F2F0EB',  // warm beige — sidebar cards, compose tab bar
+  bg:       '#E3DDD5',  // warm beige — sidebar cards, compose tab bar
   card:     '#FFFFFF',
   border:   'rgba(0,0,0,0.08)',
   green:    '#166534',

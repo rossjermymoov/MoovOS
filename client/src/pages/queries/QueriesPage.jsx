@@ -23,10 +23,10 @@ const api = axios.create({ baseURL: '/api' });
 const _BUILD = '2026-05-23-filter-fixes'; // cache bust — fix claim deadline filter + sla breached clickable
 
 const C = {
-  bg:       '#FAFAFA',
-  surface:  '#FAFAFA',
+  bg:       '#E3DDD5',
+  surface:  '#EAE5DD',
   card:     '#FFFFFF',
-  hover:    '#F5F7FA',
+  hover:    '#F5F2ED',
   selected: '#EFF6FF',
   border:   'rgba(0,0,0,0.06)',
   green:    '#166534',
@@ -386,6 +386,18 @@ function getAiSummary(q) {
   return { text: '', color: C.muted };
 }
 
+function rowAccentColor(q) {
+  if (q.requires_attention) return '#EF4444';
+  if (['claim_raised','awaiting_claim_docs','escalated','resolved_claim_rejected'].includes(q.status)) return '#EF4444';
+  if (['awaiting_courier','courier_investigating','claim_submitted'].includes(q.status)) return '#F59E0B';
+  if (['resolved','resolved_claim_approved'].includes(q.status)) return '#00C853';
+  const d = (q.description || '').toLowerCase();
+  if (/very angry|furious|outrageous|unacceptable/.test(d)) return '#EF4444';
+  if (/frustrated|angry/.test(d)) return '#F59E0B';
+  if (q.has_new_reply) return '#3B82F6';
+  return 'rgba(0,0,0,0.10)';
+}
+
 function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   const [hoverPos,   setHoverPos]   = useState(null);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -444,8 +456,9 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
       onMouseLeave={() => { setHoverPos(null); setAssignOpen(false); }}
       style={{
         display: 'flex', alignItems: 'center', gap: 12,
-        padding: '10px 18px',
+        padding: '10px 16px 10px 14px',
         borderTop: `0.5px solid ${C.border}`,
+        borderLeft: `3px solid ${rowAccentColor(q)}`,
         cursor: 'pointer',
         background: 'transparent',
         transition: 'background 0.08s',

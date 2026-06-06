@@ -3,9 +3,9 @@
 @tailwind utilities;
 
 :root {
-  --bg-primary:     #F2F0EB;   /* warm beige — page background */
+  --bg-primary:     #E3DDD5;   /* deeper warm beige — page background */
   --bg-secondary:   #FFFFFF;   /* white — cards */
-  --bg-surface:     #F2F0EB;   /* same as primary */
+  --bg-surface:     #E3DDD5;   /* same as primary */
   --accent-green:   #00C853;   /* brand green — keep for status indicators */
   --accent-purple:  #7B2FBE;
   --accent-magenta: #E91E8C;
@@ -50,7 +50,7 @@ body {
 .moov-table { width: 100%; border-collapse: collapse; }
 
 .moov-table thead tr {
-  background: #F2F0EB;
+  background: #E3DDD5;
   border-bottom: 0.5px solid rgba(0,0,0,0.08);
 }
 .moov-table thead th {
