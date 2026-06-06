@@ -148,8 +148,13 @@ export async function syncGmail() {
       if (r.status === 'imported') results.imported++;
       else results.skipped++;
     } catch (e) {
+      console.error('[Gmail upsertTicket]', e.message);
       results.errors.push({ id, error: e.message });
     }
+  }
+  // If every message errored, surface the first error clearly
+  if (results.errors.length > 0 && results.imported === 0) {
+    results.first_error = results.errors[0]?.error;
   }
 
   const profileRes = await gmail.users.getProfile({ userId: 'me' });

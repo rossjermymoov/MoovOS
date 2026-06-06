@@ -35,9 +35,11 @@ router.get('/callback', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// Returns actual sync results including counts and any errors
+// Manual sync — always resets historyId so it rescans the last 7 days in full
 router.post('/sync', async (req, res, next) => {
   try {
+    const { query: dbQuery } = await import('../db/index.js');
+    await dbQuery('UPDATE gmail_oauth_config SET last_history_id = NULL WHERE id = 1');
     const result = await syncGmail();
     res.json(result);
   } catch (err) {

@@ -38,6 +38,7 @@ export default function GmailSettings() {
     try {
       const { data } = await api.post('/gmail/sync');
       if (data.error) setSyncMsg('Error: ' + data.error);
+      else if (data.first_error) setSyncMsg(`Import error: ${data.first_error}`);
       else setSyncMsg(`Done — ${data.fetched} found, ${data.imported} imported, ${data.skipped} already existed${data.errors?.length ? ', ' + data.errors.length + ' errors' : ''}`);
       qc.invalidateQueries(['gmail-status']);
     } catch (e) {
