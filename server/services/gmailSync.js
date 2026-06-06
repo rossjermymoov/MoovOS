@@ -84,8 +84,8 @@ async function upsertTicket(msg) {
 
   if (!queryId) {
     const ticketRes = await query(`
-      INSERT INTO queries (customer_id, customer_name, sender_email, sender_matched, subject, status, query_type, trigger)
-      VALUES ($1, $2, $3, $4, $5, 'open', 'other', 'customer_email')
+      INSERT INTO queries (customer_id, customer_name, sender_email, sender_matched, subject, status, query_type, trigger, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, 'open', 'other', 'customer_email', $6, $6)
       RETURNING id
     `, [
       customer?.id || null,
@@ -93,6 +93,7 @@ async function upsertTicket(msg) {
       senderEmail,
       customer != null,
       subject,
+      receivedAt,
     ]);
     queryId = ticketRes.rows[0].id;
   }
