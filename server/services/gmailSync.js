@@ -114,8 +114,8 @@ async function upsertTicket(msg, auth) {
     const ticketRes = await query(`
       INSERT INTO queries (
         customer_id, customer_name, sender_email, sender_matched,
-        subject, status, query_type, trigger, source
-      ) VALUES ($1, $2, $3, $4, $5, 'open', 'other', 'email', 'gmail_sync')
+        subject, status, query_type, trigger
+      ) VALUES ($1, $2, $3, $4, $5, 'open', 'other', 'customer_email')
       RETURNING id
     `, [
       customer?.id || null,
