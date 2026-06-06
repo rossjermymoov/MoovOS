@@ -36,10 +36,13 @@ export default function GmailSettings() {
   async function handleSync() {
     setSyncing(true); setSyncMsg('');
     try {
-      await api.post('/gmail/sync');
-      setSyncMsg('Sync complete');
+      const { data } = await api.post('/gmail/sync');
+      if (data.error) setSyncMsg('Error: ' + data.error);
+      else setSyncMsg(`Done — ${data.fetched} found, ${data.imported} imported, ${data.skipped} already existed${data.errors?.length ? ', ' + data.errors.length + ' errors' : ''}`);
       qc.invalidateQueries(['gmail-status']);
-    } catch { setSyncMsg('Sync failed — check server logs'); }
+    } catch (e) {
+      setSyncMsg('Error: ' + (e.response?.data?.error || e.message));
+    }
     finally { setSyncing(false); }
   }
 
