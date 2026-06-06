@@ -4,6 +4,28 @@
  */
 
 import { google } from 'googleapis';
+// ─── Intent + tone summary from subject/body ─────────────────────────────────
+function generateSummary(subject, body) {
+  const text = ((subject || '') + ' ' + (body || '')).toLowerCase().slice(0, 600);
+  const intent =
+    /missing|not arrived|not received|where is|whereabouts|wismo|lost|cannot find/.test(text) ? 'Missing parcel' :
+    /damaged|broken|smashed|crushed|torn|dented|shattered/.test(text)                          ? 'Damaged goods' :
+    /wrong item|wrong product|incorrect item|not what i ordered|different item/.test(text)      ? 'Wrong item delivered' :
+    /not delivered|failed delivery|attempted delivery|no card|could not deliver/.test(text)     ? 'Failed delivery' :
+    /returned|return to sender|rts|sent back/.test(text)                                        ? 'Parcel returned' :
+    /claim|compensation|refund|reimburse/.test(text)                                            ? 'Claim / compensation' :
+    /delay|late|overdue|still waiting|expected|should have arrived/.test(text)                  ? 'Delayed delivery' :
+    /invoice|billing|charge|payment|overcharged/.test(text)                                     ? 'Billing query' :
+    /investigation|looking into|update on|progress|chasing/.test(text)                         ? 'Courier update' :
+    'General query';
+  const angry      = /furious|disgusting|appalling|disgrace|unacceptable|outrageous|escalat|legal|solicitor|trading standards|!!|urgent|immediately/.test(text);
+  const frustrated = /frustrated|disappointed|again|still|weeks|days|been waiting|no response|ignored|useless/.test(text);
+  const positive   = /thank|thanks|great|perfect|happy|pleased|resolved|sorted/.test(text);
+  const tone = angry ? ', customer very angry' : frustrated ? ', customer frustrated' : positive ? ', resolved positively' : '';
+  return intent + tone;
+}
+
+
 import { getAuthedClient, getConfig, updateLastSync } from './gmailService.js';
 import { query } from '../db/index.js';
 
