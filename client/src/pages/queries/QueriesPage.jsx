@@ -23,10 +23,10 @@ const api = axios.create({ baseURL: '/api' });
 const _BUILD = '2026-05-23-filter-fixes'; // cache bust — fix claim deadline filter + sla breached clickable
 
 const C = {
-  bg:       '#E3DDD5',
-  surface:  '#EAE5DD',
+  bg:       '#F1F5F9',
+  surface:  '#F8FAFC',
   card:     '#FFFFFF',
-  hover:    '#F5F2ED',
+  hover:    '#F8FAFC',
   selected: '#EFF6FF',
   border:   'rgba(0,0,0,0.06)',
   green:    '#166534',
@@ -43,21 +43,21 @@ const C = {
 };
 
 const STATUS_CFG = {
-  open:                    { label: 'Open',              color: C.blue,  bg: C.blueDim },
-  awaiting_customer_info:  { label: 'Awaiting Customer', color: C.amber, bg: C.amberDim },
-  info_received:           { label: 'Info Received',     color: C.green, bg: C.greenDim },
-  drafting:                { label: 'Drafting',          color: C.green, bg: C.greenDim },
-  awaiting_courier:        { label: 'Awaiting Courier',  color: C.amber, bg: C.amberDim },
-  courier_replied:         { label: 'Courier Replied',   color: C.green, bg: C.greenDim },
-  courier_investigating:   { label: 'Investigating',     color: C.amber, bg: C.amberDim },
-  awaiting_customer:       { label: 'Awaiting Customer', color: C.amber, bg: C.amberDim },
-  claim_raised:            { label: 'Claim Raised',      color: C.red,   bg: C.redDim },
-  awaiting_claim_docs:     { label: 'Awaiting Docs',     color: C.red,   bg: C.redDim },
-  claim_submitted:         { label: 'Claim Submitted',   color: C.amber, bg: C.amberDim },
-  resolved:                { label: 'Resolved',          color: C.green, bg: C.greenDim },
-  resolved_claim_approved: { label: 'Claim Approved',    color: C.green, bg: C.greenDim },
-  resolved_claim_rejected: { label: 'Claim Rejected',    color: C.red,   bg: C.redDim },
-  escalated:               { label: 'Escalated',         color: C.red,   bg: C.redDim },
+  open:                    { label: 'Open',              color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' },
+  awaiting_customer_info:  { label: 'Awaiting customer', color: '#92400E', bg: '#FFFBEB', border: '#FDE68A' },
+  info_received:           { label: 'Info received',     color: '#166534', bg: '#F0FDF4', border: '#BBF7D0' },
+  drafting:                { label: 'Drafting',          color: '#166534', bg: '#F0FDF4', border: '#BBF7D0' },
+  awaiting_courier:        { label: 'Awaiting courier',  color: '#92400E', bg: '#FFFBEB', border: '#FDE68A' },
+  courier_replied:         { label: 'Courier replied',   color: '#166534', bg: '#F0FDF4', border: '#BBF7D0' },
+  courier_investigating:   { label: 'Investigating',     color: '#1E40AF', bg: '#EFF6FF', border: '#BFDBFE' },
+  awaiting_customer:       { label: 'Awaiting customer', color: '#92400E', bg: '#FFFBEB', border: '#FDE68A' },
+  claim_raised:            { label: 'Claim raised',      color: '#991B1B', bg: '#FEF2F2', border: '#FECACA' },
+  awaiting_claim_docs:     { label: 'Awaiting docs',     color: '#991B1B', bg: '#FEF2F2', border: '#FECACA' },
+  claim_submitted:         { label: 'Claim submitted',   color: '#92400E', bg: '#FFFBEB', border: '#FDE68A' },
+  resolved:                { label: 'Resolved',          color: '#166534', bg: '#F0FDF4', border: '#BBF7D0' },
+  resolved_claim_approved: { label: 'Claim approved',    color: '#166534', bg: '#F0FDF4', border: '#BBF7D0' },
+  resolved_claim_rejected: { label: 'Claim rejected',    color: '#991B1B', bg: '#FEF2F2', border: '#FECACA' },
+  escalated:               { label: 'Escalated',         color: '#991B1B', bg: '#FEF2F2', border: '#FECACA' },
 };
 
 const TYPE_CFG = {
@@ -91,8 +91,22 @@ function Badge({ label, color, bg, small }) {
 }
 
 function StatusBadge({ status, small }) {
-  const cfg = STATUS_CFG[status] || { label: status, color: C.muted, bg: 'rgba(125,133,144,0.1)' };
-  return <Badge label={cfg.label} color={cfg.color} bg={cfg.bg} small={small} />;
+  const cfg = STATUS_CFG[status] || { label: status, color: '#64748B', bg: '#F8FAFC', border: '#E2E8F0' };
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      fontSize: small ? 10 : 11, fontWeight: 600,
+      padding: small ? '2px 7px' : '3px 9px',
+      borderRadius: 20,
+      background: cfg.bg,
+      color: cfg.color,
+      border: `1px solid ${cfg.border}`,
+      whiteSpace: 'nowrap',
+    }}>
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: cfg.color, display: 'inline-block', flexShrink: 0 }} />
+      {cfg.label}
+    </span>
+  );
 }
 
 function TypeBadge({ type, small }) {
@@ -386,6 +400,30 @@ function getAiSummary(q) {
   return { text: '', color: C.muted };
 }
 
+
+// ─── Type icon well ───────────────────────────────────────────────────────────
+const TYPE_ICON_CFG = {
+  whereabouts:    { Icon: Package,       bg: '#EFF6FF', color: '#2563EB' },
+  not_delivered:  { Icon: PackageX,      bg: '#FEF2F2', color: '#DC2626' },
+  wrong_address:  { Icon: MapPin,        bg: '#FFFBEB', color: '#D97706' },
+  damaged:        { Icon: AlertTriangle, bg: '#FEF2F2', color: '#DC2626' },
+  missing_items:  { Icon: PackageCheck,  bg: '#FFFBEB', color: '#D97706' },
+  failed_delivery:{ Icon: Truck,         bg: '#FEF2F2', color: '#DC2626' },
+  returned:       { Icon: RotateCcw,     bg: '#FFFBEB', color: '#D97706' },
+  delay:          { Icon: Clock,         bg: '#EFF6FF', color: '#2563EB' },
+  other:          { Icon: MessageSquare, bg: '#F8FAFC', color: '#94A3B8' },
+};
+
+function TypeIconWell({ type }) {
+  const cfg = TYPE_ICON_CFG[type] || TYPE_ICON_CFG.other;
+  const { Icon, bg, color } = cfg;
+  return (
+    <div style={{ width: 36, height: 36, borderRadius: 10, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      <Icon size={16} style={{ color }} strokeWidth={1.8} />
+    </div>
+  );
+}
+
 function rowAccentColor(q) {
   if (q.requires_attention) return '#EF4444';
   if (['claim_raised','awaiting_claim_docs','escalated','resolved_claim_rejected'].includes(q.status)) return '#EF4444';
@@ -456,30 +494,22 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
       onMouseLeave={() => { setHoverPos(null); setAssignOpen(false); }}
       style={{
         display: 'flex', alignItems: 'center', gap: 12,
-        padding: '10px 16px 10px 14px',
-        border: `0.5px solid rgba(0,0,0,0.08)`,
-        borderLeft: `3px solid ${rowAccentColor(q)}`,
-        borderRadius: 8,
-        marginBottom: 4,
+        padding: '11px 16px 11px 14px',
+        border: `1px solid rgba(0,0,0,0.07)`,
+        borderLeft: `4px solid ${rowAccentColor(q)}`,
+        borderRadius: 12,
+        marginBottom: 6,
         cursor: 'pointer',
         background: C.card,
-        transition: 'background 0.08s',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
+        transition: 'box-shadow 0.15s, background 0.08s',
         position: 'relative',
       }}
-      onMouseOver={e => { e.currentTarget.style.background = C.hover; }}
-      onMouseOut={e => { e.currentTarget.style.background = C.card; }}
+      onMouseOver={e => { e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.10)'; e.currentTarget.style.background = C.hover; }}
+      onMouseOut={e => { e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)'; e.currentTarget.style.background = C.card; }}
     >
-      {/* Courier logo */}
-      <div style={{
-        width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-        border: `0.5px solid ${C.border}`, background: '#FFFFFF',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-      }}>
-        {logoUrl
-          ? <img src={logoUrl} alt={q.courier_name || ''} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 4 }} />
-          : <span style={{ fontSize: 10, fontWeight: 600, color: C.muted }}>{(q.courier_code || '?').slice(0, 3).toUpperCase()}</span>
-        }
-      </div>
+      {/* Type icon */}
+      <TypeIconWell type={q.query_type} />
 
       {/* Subject + customer + tracking — hover here shows preview popup */}
       <div
@@ -491,7 +521,9 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
           )}
           <span style={{
             fontSize: 13, fontWeight: hasNewReply ? 600 : 400,
-            color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            color: ['resolved','resolved_claim_approved','resolved_claim_rejected'].includes(q.status) ? C.muted : C.text,
+            textDecoration: ['resolved','resolved_claim_approved','resolved_claim_rejected'].includes(q.status) ? 'line-through' : 'none',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
             {q.subject || q.customer_name || '(no subject)'}
           </span>
@@ -1872,23 +1904,36 @@ export default function QueriesPage() {
         </button>
       </div>
 
-      {/* ── Summary stat row ───────────────────────────────────────────────── */}
-      <div style={{ flexShrink: 0, padding: '10px 18px', borderBottom: `0.5px solid ${C.border}`, background: C.bg, display: 'flex', gap: 10 }}>
+      {/* ── KPI cards ──────────────────────────────────────────────────────── */}
+      <div style={{ flexShrink: 0, padding: '14px 18px 12px', background: C.bg, display: 'flex', gap: 10 }}>
         {[
-          { label: 'Overdue chase',    value: stats?.requires_attention ?? '—', color: C.red,   filter: () => setFilters(f => ({ ...f, attention: !f.attention, sla_breached: false, pending_draft: false })), active: filters.attention },
-          { label: 'Awaiting customer',value: stats?.tickets_to_verify  ?? '—', color: C.amber, filter: () => setFilters(f => ({ ...f, status: f.status === 'awaiting_customer' ? '' : 'awaiting_customer', attention: false })), active: filters.status === 'awaiting_customer' },
-          { label: 'With courier',     value: stats?.sla_breached       ?? '—', color: C.text,  filter: () => setFilters(f => ({ ...f, status: f.status === 'awaiting_courier' ? '' : 'awaiting_courier', attention: false })), active: filters.status === 'awaiting_courier' },
-          { label: 'Claim deadlines',  value: stats?.claim_deadlines_7d ?? '—', color: C.text,  filter: () => setFilters(f => ({ ...f, claim_deadline: !f.claim_deadline, attention: false })), active: filters.claim_deadline },
-        ].map(s => (
-          <button key={s.label} onClick={s.filter} style={{
-            flex: 1, background: s.active ? `${s.color}08` : C.hover,
-            border: `0.5px solid ${s.active ? s.color + '33' : C.border}`,
-            borderRadius: 10, padding: '10px 14px', cursor: 'pointer', textAlign: 'left',
-          }}>
-            <div style={{ fontSize: 22, fontWeight: 500, color: s.active ? s.color : s.value !== '—' && s.label === 'Overdue chase' ? C.red : s.label === 'Awaiting customer' ? C.amber : C.text, lineHeight: 1.1 }}>{s.value}</div>
-            <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>{s.label}</div>
-          </button>
-        ))}
+          { label: 'Overdue chase',    value: stats?.requires_attention ?? '—', accent: '#EF4444', barBg: '#FCA5A5', filter: () => setFilters(f => ({ ...f, attention: !f.attention, sla_breached: false, pending_draft: false })), active: filters.attention },
+          { label: 'Awaiting customer',value: stats?.tickets_to_verify  ?? '—', accent: '#F59E0B', barBg: '#FDE68A', filter: () => setFilters(f => ({ ...f, status: f.status === 'awaiting_customer' ? '' : 'awaiting_customer', attention: false })), active: filters.status === 'awaiting_customer' },
+          { label: 'With courier',     value: stats?.sla_breached       ?? '—', accent: '#3B82F6', barBg: '#BFDBFE', filter: () => setFilters(f => ({ ...f, status: f.status === 'awaiting_courier' ? '' : 'awaiting_courier', attention: false })), active: filters.status === 'awaiting_courier' },
+          { label: 'Claim deadlines',  value: stats?.claim_deadlines_7d ?? '—', accent: '#10B981', barBg: '#A7F3D0', filter: () => setFilters(f => ({ ...f, claim_deadline: !f.claim_deadline, attention: false })), active: filters.claim_deadline },
+        ].map(s => {
+          const num = typeof s.value === 'number' ? s.value : 0;
+          const maxVal = 20;
+          const barPct = Math.min(100, Math.round((num / maxVal) * 100));
+          return (
+            <button key={s.label} onClick={s.filter} style={{
+              flex: 1, background: s.active ? `${s.accent}10` : '#FFFFFF',
+              border: `1px solid ${s.active ? s.accent + '40' : 'rgba(0,0,0,0.07)'}`,
+              borderRadius: 12, padding: '14px 16px', cursor: 'pointer', textAlign: 'left',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
+              transition: 'box-shadow 0.15s',
+            }}
+              onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.10)'; }}
+              onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)'; }}
+            >
+              <div style={{ fontSize: 26, fontWeight: 700, color: s.value !== '—' && num > 0 ? s.accent : C.muted, lineHeight: 1, marginBottom: 4 }}>{s.value}</div>
+              <div style={{ fontSize: 11, color: C.muted, fontWeight: 500, marginBottom: 10 }}>{s.label}</div>
+              <div style={{ height: 3, borderRadius: 2, background: '#F1F5F9', overflow: 'hidden' }}>
+                <div style={{ height: '100%', borderRadius: 2, width: `${barPct}%`, background: s.barBg, transition: 'width 0.8s ease' }} />
+              </div>
+            </button>
+          );
+        })}
       </div>
 
       {/* ── Group tabs ──────────────────────────────────────────────────────── */}
