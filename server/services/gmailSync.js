@@ -4,25 +4,52 @@
  */
 
 import { google } from 'googleapis';
-// ─── Intent + tone summary from subject/body ─────────────────────────────────
-function generateSummary(subject, body) {
-  const text = ((subject || '') + ' ' + (body || '')).toLowerCase().slice(0, 600);
+// ─── AI summary via Claude Haiku ─────────────────────────────────────────────
+async function generateSummary(subject, body) {
+  const snippet = ((body || '')).slice(0, 500);
+  const prompt = `You are summarising a support email for a parcel courier reseller's inbox.
+
+Subject: ${subject || '(none)'}
+Body: ${snippet}
+
+Write 2 sentences max. Cover: what the issue is, who sent it (customer or courier), and how urgent or emotional it feels. Be direct and specific — mention tracking numbers, courier names, or key facts if present. Do not start with "The email" or "This email".`;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 120,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+    if (resp.ok) {
+      const json = await resp.json();
+      const text = (json.content?.[0]?.text || '').trim();
+      if (text) return text;
+    }
+  } catch (e) {
+    console.error('[Gmail sync] AI summary failed:', e.message);
+  }
+
+  // Fallback: rule-based
+  const text = ((subject || '') + ' ' + (body || '')).toLowerCase().slice(0, 400);
   const intent =
-    /missing|not arrived|not received|where is|whereabouts|wismo|lost|cannot find/.test(text) ? 'Missing parcel' :
-    /damaged|broken|smashed|crushed|torn|dented|shattered/.test(text)                          ? 'Damaged goods' :
-    /wrong item|wrong product|incorrect item|not what i ordered|different item/.test(text)      ? 'Wrong item delivered' :
-    /not delivered|failed delivery|attempted delivery|no card|could not deliver/.test(text)     ? 'Failed delivery' :
-    /returned|return to sender|rts|sent back/.test(text)                                        ? 'Parcel returned' :
-    /claim|compensation|refund|reimburse/.test(text)                                            ? 'Claim / compensation' :
-    /delay|late|overdue|still waiting|expected|should have arrived/.test(text)                  ? 'Delayed delivery' :
-    /invoice|billing|charge|payment|overcharged/.test(text)                                     ? 'Billing query' :
-    /investigation|looking into|update on|progress|chasing/.test(text)                         ? 'Courier update' :
+    /missing|not arrived|not received|where is|lost/.test(text) ? 'Missing parcel' :
+    /damaged|broken|smashed|crushed/.test(text)                  ? 'Damaged goods' :
+    /wrong item|incorrect item/.test(text)                       ? 'Wrong item delivered' :
+    /not delivered|failed delivery/.test(text)                   ? 'Failed delivery' :
+    /returned|return to sender/.test(text)                       ? 'Parcel returned' :
+    /claim|compensation|refund/.test(text)                       ? 'Claim / compensation' :
+    /delay|late|overdue|still waiting/.test(text)                ? 'Delayed delivery' :
+    /investigation|update on|progress|chasing/.test(text)        ? 'Courier update' :
     'General query';
-  const angry      = /furious|disgusting|appalling|disgrace|unacceptable|outrageous|escalat|legal|solicitor|trading standards|!!|urgent|immediately/.test(text);
-  const frustrated = /frustrated|disappointed|again|still|weeks|days|been waiting|no response|ignored|useless/.test(text);
-  const positive   = /thank|thanks|great|perfect|happy|pleased|resolved|sorted/.test(text);
-  const tone = angry ? ', customer very angry' : frustrated ? ', customer frustrated' : positive ? ', resolved positively' : '';
-  return intent + tone;
+  return intent;
 }
 
 
@@ -115,7 +142,7 @@ async function upsertTicket(msg) {
       senderEmail,
       customer != null,
       subject,
-      generateSummary(subject, body),
+      await generateSummary(subject, body),
       receivedAt,
     ]);
     queryId = ticketRes.rows[0].id;
@@ -206,7 +233,7 @@ export async function backfillSummaries() {
   for (const row of res.rows) {
     if (seen.has(row.id)) continue;
     seen.add(row.id);
-    const summary = generateSummary(row.subject, row.body_text);
+    const summary = await generateSummary(row.subject, row.body_text);
     await query(`UPDATE queries SET description = $1 WHERE id = $2 AND description IS NULL`, [summary, row.id]);
   }
   if (seen.size) console.log(`[Gmail sync] Backfilled summaries for ${seen.size} tickets`);
