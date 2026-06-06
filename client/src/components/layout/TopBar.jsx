@@ -3,9 +3,9 @@ import { Search, Bell, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
-const BORDER = 'rgba(0,0,0,0.06)';
-const MUTED  = '#94A3B8';
-const TEXT   = '#0F172A';
+const BORDER = 'rgba(255,255,255,0.08)';
+const MUTED  = 'rgba(255,255,255,0.40)';
+const TEXT   = '#FFFFFF';
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -32,7 +32,7 @@ export default function TopBar() {
 
   return (
     <header style={{
-      background: '#FFFFFF',
+      background: '#1A1A1F',
       borderBottom: `0.5px solid ${BORDER}`,
       height: 56,
       display: 'flex',
@@ -65,9 +65,9 @@ export default function TopBar() {
           placeholder="Search customers, accounts…"
           style={{
             width: '100%', boxSizing: 'border-box',
-            background: '#F2F0EB', border: `0.5px solid ${BORDER}`,
+            background: 'rgba(255,255,255,0.08)', border: `0.5px solid rgba(255,255,255,0.12)`,
             borderRadius: 8, padding: '7px 10px 7px 30px',
-            fontSize: 12, color: TEXT, outline: 'none',
+            fontSize: 12, color: '#FFFFFF', outline: 'none',
           }}
         />
         <div style={{
@@ -91,7 +91,7 @@ export default function TopBar() {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer', color: MUTED,
           }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.04)'}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.10)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
             <Icon size={16} strokeWidth={1.5} />
@@ -102,7 +102,7 @@ export default function TopBar() {
       {/* User avatar */}
       <div style={{
         width: 30, height: 30, borderRadius: '50%',
-        background: 'rgba(0,0,0,0.08)',
+        background: 'rgba(255,255,255,0.12)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 11, fontWeight: 500, color: TEXT, cursor: 'pointer',
         flexShrink: 0,

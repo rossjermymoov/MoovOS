@@ -457,15 +457,15 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
       style={{
         display: 'flex', alignItems: 'center', gap: 12,
         padding: '10px 16px 10px 14px',
-        borderTop: `0.5px solid ${C.border}`,
         borderLeft: `3px solid ${rowAccentColor(q)}`,
+        borderTop: `0.5px solid ${C.border}`,
         cursor: 'pointer',
-        background: 'transparent',
+        background: C.card,
         transition: 'background 0.08s',
         position: 'relative',
       }}
       onMouseOver={e => { e.currentTarget.style.background = C.hover; }}
-      onMouseOut={e => { e.currentTarget.style.background = 'transparent'; }}
+      onMouseOut={e => { e.currentTarget.style.background = C.card; }}
     >
       {/* Courier logo */}
       <div style={{
@@ -536,7 +536,7 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
 
       {/* Happiness score */}
       <div style={{ width: 52, flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
-        {q.customer_happiness_score != null && (() => {
+        {q.customer_happiness_score != null && !isNaN(parseInt(q.customer_happiness_score)) && (() => {
           const score = parseInt(q.customer_happiness_score);
           const isGreen = score >= 71;
           const isAmber = score >= 41 && score < 71;
