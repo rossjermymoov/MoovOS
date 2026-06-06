@@ -24,6 +24,7 @@ export function SettingsNav() {
     { to: '/settings/billing',     label: 'Billing' },
     { to: '/settings/xero',        label: 'Xero' },
     { to: '/settings/email',       label: 'Email' },
+    { to: '/settings/gmail',       label: 'Gmail' },
   ];
   return (
     <div style={{ display: 'flex', gap: 0, marginBottom: 28, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>

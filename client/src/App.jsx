@@ -12,6 +12,7 @@ import BillingSettings from './pages/settings/BillingSettings';
 import XeroSettings from './pages/settings/XeroSettings';
 import VolumetricSettings from './pages/settings/VolumetricSettings';
 import EmailSettings from './pages/settings/EmailSettings';
+import GmailSettings from './pages/settings/GmailSettings';
 import CarrierManagement from './pages/carriers/CarrierManagement';
 import TrackingPage from './pages/tracking/TrackingPage';
 import FinancePage from './pages/finance/FinancePage';
@@ -112,6 +113,7 @@ function AppRoutes() {
           <Route path="billing"     element={<BillingSettings />} />
           <Route path="xero"        element={<XeroSettings />} />
           <Route path="email"       element={<EmailSettings />} />
+          <Route path="gmail"       element={<GmailSettings />} />
         </Route>
         <Route path="*"         element={<Navigate to="/" replace />} />
       </Route>

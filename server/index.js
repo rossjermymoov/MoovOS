@@ -31,6 +31,8 @@ import authRouter from './routes/auth.js';
 import reconciliationRouter from './routes/reconciliation.js';
 import emailRouter from './routes/email.js';
 import { sendAlert } from './services/emailService.js';
+import gmailRouter from './routes/gmail.js';
+import { startGmailSync } from './services/gmailSync.js';
 
 dotenv.config();
 
@@ -72,6 +74,7 @@ app.use('/api/xero',                  xeroRouter);
 app.use('/api/moov-charges',          billingRouter);
 app.use('/api/reconciliation',        reconciliationRouter);
 app.use('/api/email',                 emailRouter);
+app.use('/api/gmail',                 gmailRouter);
 
 // ─── Health check ────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'moov-os' }));
@@ -116,6 +119,7 @@ async function start() {
     startBillingScheduler();
     // Webhook health monitor — checks every 5 minutes during UK business hours
     startWebhookHealthMonitor();
+    startGmailSync(3 * 60 * 1000); // poll every 3 minutes
   } catch (err) {
     console.error('❌ Migration failed — server will not start.');
     console.error('   Error code:   ', err.code    || 'unknown');
