@@ -221,22 +221,20 @@ export async function syncGmail() {
 // ─── Backfill missing summaries on existing tickets ──────────────────────────
 export async function backfillSummaries() {
   const res = await query(`
-    SELECT q.id, q.subject, qe.body_text
+    SELECT DISTINCT ON (q.id) q.id, q.subject, qe.body_text
     FROM queries q
     LEFT JOIN query_emails qe ON qe.query_id = q.id
       AND qe.direction = 'inbound_customer'
     WHERE q.description IS NULL
-    ORDER BY q.created_at DESC
+    ORDER BY q.id, qe.received_at ASC
   `);
 
-  const seen = new Set();
+  console.log(`[Gmail sync] Backfilling summaries for ${res.rows.length} tickets...`);
   for (const row of res.rows) {
-    if (seen.has(row.id)) continue;
-    seen.add(row.id);
-    const summary = await generateSummary(row.subject, row.body_text);
-    await query(`UPDATE queries SET description = $1 WHERE id = $2 AND description IS NULL`, [summary, row.id]);
+    const summary = await generateSummary(row.subject, row.body_text || '');
+    await query(`UPDATE queries SET description = $1 WHERE id = $2`, [summary, row.id]);
   }
-  if (seen.size) console.log(`[Gmail sync] Backfilled summaries for ${seen.size} tickets`);
+  if (res.rows.length) console.log(`[Gmail sync] Backfill complete — ${res.rows.length} tickets updated`);
 }
 
 export function startGmailSync(intervalMs = 3 * 60 * 1000) {
