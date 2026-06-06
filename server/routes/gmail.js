@@ -61,7 +61,10 @@ router.post('/sync', async (req, res, next) => {
   try {
     await syncGmail();
     res.json({ ok: true });
-  } catch (err) { next(err); }
+  } catch (err) {
+    console.error('[Gmail sync route] Error:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 router.delete('/disconnect', async (req, res, next) => {

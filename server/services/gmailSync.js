@@ -127,18 +127,18 @@ async function upsertTicket(msg, auth) {
     queryId = ticketRes.rows[0].id;
   }
 
-  // Insert email
+  // Insert email — columns match query_emails schema exactly
   await query(`
     INSERT INTO query_emails (
-      query_id, direction, from_address, from_name,
+      query_id, direction, from_address,
       subject, body_text, received_at,
-      gmail_message_id, gmail_thread_id, message_id, in_reply_to,
+      gmail_message_id, gmail_thread_id, in_reply_to,
       is_ai_draft, sent_at
-    ) VALUES ($1,'inbound_customer',$2,$3,$4,$5,$6,$7,$8,$9,$10,false,NULL)
+    ) VALUES ($1,'inbound_customer',$2,$3,$4,$5,$6,$7,$8,false,NULL)
   `, [
-    queryId, senderEmail, senderName,
+    queryId, senderEmail,
     subject, body.slice(0, 50000), receivedAt,
-    gmailMsgId, gmailThreadId, messageId || null, inReplyTo || null,
+    gmailMsgId, gmailThreadId, inReplyTo || null,
   ]);
 
   // Update query latest activity
