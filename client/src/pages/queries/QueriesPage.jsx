@@ -457,8 +457,10 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
       style={{
         display: 'flex', alignItems: 'center', gap: 12,
         padding: '10px 16px 10px 14px',
+        border: `0.5px solid rgba(0,0,0,0.08)`,
         borderLeft: `3px solid ${rowAccentColor(q)}`,
-        borderTop: `0.5px solid ${C.border}`,
+        borderRadius: 8,
+        marginBottom: 4,
         cursor: 'pointer',
         background: C.card,
         transition: 'background 0.08s',
@@ -1932,7 +1934,7 @@ export default function QueriesPage() {
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
         {/* Ticket list */}
-        <div style={{ flex: 1, overflow: 'auto' }}>
+        <div style={{ flex: 1, overflow: 'auto', padding: '8px 12px 16px' }}>
           {loading && <div style={{ padding: 40, textAlign: 'center', color: C.muted, fontSize: 12 }}>Loading…</div>}
           {!loading && displayQueries.length === 0 && (
             <div style={{ padding: 60, textAlign: 'center' }}>
@@ -1944,7 +1946,7 @@ export default function QueriesPage() {
           {!loading && displayQueries.length > 0 && (
             <>
               {/* Column headers */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 18px', borderBottom: `0.5px solid ${C.border}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '4px 16px 8px 16px' }}>
                 <div style={{ width: 36, flexShrink: 0 }} />
                 <div style={{ flex: 1, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Subject</div>
                 <div style={{ width: 160, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Summary</div>
