@@ -38,13 +38,13 @@ function parseFrom(fromHeader) {
 }
 
 async function resolveCustomer(senderEmail) {
-  let res = await query(`SELECT id, company_name FROM customers WHERE lower(primary_email) = $1 LIMIT 1`, [senderEmail.toLowerCase()]);
+  let res = await query(`SELECT id, business_name FROM customers WHERE lower(primary_email) = $1 LIMIT 1`, [senderEmail.toLowerCase()]);
   if (res.rows[0]) return res.rows[0];
-  res = await query(`SELECT id, company_name FROM customers WHERE lower(accounts_email) = $1 LIMIT 1`, [senderEmail.toLowerCase()]);
+  res = await query(`SELECT id, business_name FROM customers WHERE lower(accounts_email) = $1 LIMIT 1`, [senderEmail.toLowerCase()]);
   if (res.rows[0]) return res.rows[0];
   const domain = senderEmail.split('@')[1];
   if (domain && !['gmail.com','hotmail.com','outlook.com','yahoo.com','yahoo.co.uk','icloud.com'].includes(domain)) {
-    res = await query(`SELECT id, company_name FROM customers WHERE primary_email ILIKE $1 LIMIT 1`, [`%@${domain}`]);
+    res = await query(`SELECT id, business_name FROM customers WHERE primary_email ILIKE $1 LIMIT 1`, [`%@${domain}`]);
     if (res.rows[0]) return res.rows[0];
   }
   return null;
@@ -89,7 +89,7 @@ async function upsertTicket(msg) {
       RETURNING id
     `, [
       customer?.id || null,
-      customer?.company_name || senderName || senderEmail,
+      customer?.business_name || senderName || senderEmail,
       senderEmail,
       customer != null,
       subject,
