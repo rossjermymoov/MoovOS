@@ -162,8 +162,32 @@ export async function syncGmail() {
   const profileRes = await gmail.users.getProfile({ userId: 'me' });
   await updateLastSync(profileRes.data.historyId);
 
+  // Backfill any tickets that are missing summaries
+  await backfillSummaries();
+
   console.log(`[Gmail sync] ${fetchMethod} — fetched ${results.fetched}, imported ${results.imported}, skipped ${results.skipped}, errors ${results.errors.length}`);
   return results;
+}
+
+// ─── Backfill missing summaries on existing tickets ──────────────────────────
+export async function backfillSummaries() {
+  const res = await query(`
+    SELECT q.id, q.subject, qe.body_text
+    FROM queries q
+    LEFT JOIN query_emails qe ON qe.query_id = q.id
+      AND qe.direction = 'inbound_customer'
+    WHERE q.description IS NULL
+    ORDER BY q.created_at DESC
+  `);
+
+  const seen = new Set();
+  for (const row of res.rows) {
+    if (seen.has(row.id)) continue;
+    seen.add(row.id);
+    const summary = generateSummary(row.subject, row.body_text);
+    await query(`UPDATE queries SET description = $1 WHERE id = $2 AND description IS NULL`, [summary, row.id]);
+  }
+  if (seen.size) console.log(`[Gmail sync] Backfilled summaries for ${seen.size} tickets`);
 }
 
 export function startGmailSync(intervalMs = 3 * 60 * 1000) {
