@@ -387,7 +387,23 @@ function getAiSummary(q) {
 }
 
 function InboxRow({ q, onClick, staffList = [], onUpdate }) {
-  const [hoverPos, setHoverPos] = useState(null);
+  const [hoverPos,   setHoverPos]   = useState(null);
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assigning,  setAssigning]  = useState(false);
+
+  async function handleAssign(staffId) {
+    setAssigning(true);
+    setAssignOpen(false);
+    try {
+      await fetch(`/api/queries/${q.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assigned_to: staffId || null }),
+      });
+      onUpdate && onUpdate();
+    } catch (e) { console.error('Assign failed', e); }
+    finally { setAssigning(false); }
+  }
 
   const logoUrl      = q.courier_code ? getCourierLogo(q.courier_code) : null;
   const statusCfg    = STATUS_CFG[q.status] || { label: q.status, color: C.muted, bg: 'rgba(148,163,184,0.1)' };
@@ -425,7 +441,7 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   return (
     <div
       onClick={onClick}
-      onMouseLeave={() => setHoverPos(null)}
+      onMouseLeave={() => { setHoverPos(null); setAssignOpen(false); }}
       style={{
         display: 'flex', alignItems: 'center', gap: 12,
         padding: '10px 18px',
@@ -551,15 +567,80 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
         <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>{actLabel}</div>
       </div>
 
-      {/* Avatar */}
-      <div style={{
-        width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
-        background: initials ? 'rgba(99,102,241,0.12)' : 'rgba(0,0,0,0.04)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 10, fontWeight: 500,
-        color: initials ? '#4F46E5' : C.muted,
-      }}>
-        {initials || <User size={12} color={C.muted} />}
+      {/* Avatar — click to assign */}
+      <div style={{ position: 'relative', flexShrink: 0 }}>
+        <div
+          onClick={e => { e.stopPropagation(); setAssignOpen(v => !v); }}
+          title={assigneeName ? `Assigned to ${assigneeName}` : 'Assign ticket'}
+          style={{
+            width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
+            background: initials ? 'rgba(99,102,241,0.12)' : 'rgba(0,0,0,0.04)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 10, fontWeight: 500,
+            color: initials ? '#4F46E5' : C.muted,
+            cursor: 'pointer',
+            outline: assignOpen ? '2px solid #6366F1' : 'none',
+            transition: 'outline 0.1s',
+          }}>
+          {assigning ? '…' : (initials || <User size={12} color={C.muted} />)}
+        </div>
+
+        {assignOpen && (
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: 'fixed',
+              right: 'auto',
+              zIndex: 9999,
+              background: '#FFFFFF',
+              border: '1px solid rgba(0,0,0,0.10)',
+              borderRadius: 8,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+              minWidth: 180,
+              padding: '4px 0',
+            }}
+            ref={el => {
+              if (el) {
+                const rect = el.previousSibling?.getBoundingClientRect?.() || {};
+                el.style.top  = (rect.bottom + 4) + 'px';
+                el.style.left = Math.min(rect.left, window.innerWidth - 190) + 'px';
+              }
+            }}
+          >
+            <div style={{ padding: '6px 12px 4px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#94A3B8' }}>
+              Assign to
+            </div>
+            {staffList.map(s => (
+              <div
+                key={s.id}
+                onClick={() => handleAssign(s.id)}
+                style={{
+                  padding: '7px 12px', fontSize: 13, color: s.id === q.assigned_to ? '#4F46E5' : '#0F172A',
+                  background: s.id === q.assigned_to ? 'rgba(99,102,241,0.06)' : 'transparent',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                }}
+                onMouseOver={e => { if (s.id !== q.assigned_to) e.currentTarget.style.background = '#F8FAFC'; }}
+                onMouseOut={e => { if (s.id !== q.assigned_to) e.currentTarget.style.background = 'transparent'; }}
+              >
+                <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(99,102,241,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 600, color: '#4F46E5', flexShrink: 0 }}>
+                  {s.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                </div>
+                <span>{s.full_name}</span>
+                {s.id === q.assigned_to && <span style={{ marginLeft: 'auto', fontSize: 11, color: '#4F46E5' }}>✓</span>}
+              </div>
+            ))}
+            {q.assigned_to && (
+              <div
+                onClick={() => handleAssign(null)}
+                style={{ padding: '7px 12px', fontSize: 12, color: '#94A3B8', cursor: 'pointer', borderTop: '1px solid rgba(0,0,0,0.06)', marginTop: 2 }}
+                onMouseOver={e => e.currentTarget.style.background = '#F8FAFC'}
+                onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+              >
+                Unassign
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Hover popup — last message preview */}
