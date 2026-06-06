@@ -376,8 +376,14 @@ function getAiSummary(q) {
   }
   if (q.sla_breached)
     return { text: 'SLA overdue — needs response', color: C.red };
-  const raw = q.description || q.subject || '';
-  return { text: raw.slice(0, 80) + (raw.length > 80 ? '…' : ''), color: C.muted };
+  // Use description as AI-generated intent summary when available
+  if (q.description) {
+    const angry = /angry|very angry/.test(q.description);
+    const frustrated = /frustrated/.test(q.description);
+    const color = angry ? C.red : frustrated ? C.amber : C.blue;
+    return { text: q.description.slice(0, 80), color };
+  }
+  return { text: '', color: C.muted };
 }
 
 function InboxRow({ q, onClick, staffList = [], onUpdate }) {
@@ -419,7 +425,6 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   return (
     <div
       onClick={onClick}
-      onMouseMove={e => setHoverPos({ x: e.clientX, y: e.clientY })}
       onMouseLeave={() => setHoverPos(null)}
       style={{
         display: 'flex', alignItems: 'center', gap: 12,
@@ -445,8 +450,10 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
         }
       </div>
 
-      {/* Subject + customer + tracking */}
-      <div style={{ flex: 1, minWidth: 0 }}>
+      {/* Subject + customer + tracking — hover here shows preview popup */}
+      <div
+        onMouseMove={e => { e.stopPropagation(); setHoverPos({ x: e.clientX, y: e.clientY }); }}
+        style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>
           {(hasNewReply || unread > 0) && (
             <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.blue, flexShrink: 0 }} />
@@ -470,8 +477,10 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
         </div>
       </div>
 
-      {/* AI summary */}
-      <div style={{ width: 160, flexShrink: 0 }}>
+      {/* AI summary — hover here also shows preview popup */}
+      <div
+        onMouseMove={e => { e.stopPropagation(); setHoverPos({ x: e.clientX, y: e.clientY }); }}
+        style={{ width: 160, flexShrink: 0 }}>
         {aiSummary.text && (
           <span style={{
             fontSize: 11, color: aiSummary.color, lineHeight: 1.4,
