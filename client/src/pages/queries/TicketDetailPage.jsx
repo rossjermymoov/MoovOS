@@ -818,8 +818,31 @@ export default function TicketDetailPage() {
 
           {/* 1. SLA */}
           <SbSection title="SLA">
+            {/* SLA urgency chip */}
+            {ticket.sla_breached ? (
+              <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 9,
+                padding: '10px 12px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444',
+                  boxShadow: '0 0 0 3px #FEE2E2', flexShrink: 0 }} />
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#991B1B' }}>SLA Overdue</span>
+              </div>
+            ) : ticket.sla_mins_remaining != null && ticket.sla_mins_remaining < 240 ? (
+              <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 9,
+                padding: '10px 12px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#F59E0B',
+                  boxShadow: '0 0 0 3px #FEF3C7', flexShrink: 0 }} />
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#92400E' }}>SLA At Risk</span>
+              </div>
+            ) : ticket.sla_mins_remaining != null ? (
+              <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 9,
+                padding: '10px 12px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#10B981',
+                  boxShadow: '0 0 0 3px #D1FAE5', flexShrink: 0 }} />
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#166534' }}>SLA On Track</span>
+              </div>
+            ) : null}
             <SbRow label="Opened">
-              <span style={{ fontSize: 11.5, color: C.sub, fontVariantNumeric: 'tabular-nums' }}>{timeAgo(ticket.created_at)}</span>
+              <span style={{ fontSize: 12, color: C.sub, fontVariantNumeric: 'tabular-nums' }}>{timeAgo(ticket.created_at)}</span>
             </SbRow>
             <SbRow label="Resolution">
               <SlaValue
@@ -859,9 +882,13 @@ export default function TicketDetailPage() {
                   <span style={{ fontSize: 12, color: C.sub }}>{ticket.courier_name}</span>
                 </div>
               )}
-              <SbRow label="Tracking">
-                <span style={{ fontFamily: 'monospace', fontSize: 10, color: C.text }}>{consignment}</span>
-              </SbRow>
+              <div style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700,
+                color: '#0F172A', background: '#F8FAFC', border: '1px solid #E2E8F0',
+                borderRadius: 7, padding: '6px 10px', marginBottom: 10, letterSpacing: '0.02em',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span>{consignment}</span>
+                <span style={{ fontSize: 10, color: '#94A3B8', fontFamily: 'inherit', fontWeight: 400 }}>ref</span>
+              </div>
               {ticket.service_name && (
                 <SbRow label="Service">
                   <span style={{ fontSize: 11, color: C.sub }}>{ticket.service_name}</span>
@@ -898,18 +925,35 @@ export default function TicketDetailPage() {
           {/* 3. Customer */}
           {(ticket.customer_name || ticket.sender_email) && (
             <SbSection title="Customer">
-              {ticket.customer_name && (
-                <SbRow label="Account">
-                  <button onClick={() => ticket.customer_id && navigate(`/customers/${ticket.customer_id}`)}
-                    style={{ background: 'none', border: 'none', color: C.blue, fontSize: 11, fontWeight: 500, cursor: 'pointer', padding: 0 }}>
-                    {ticket.customer_name}
-                  </button>
-                </SbRow>
-              )}
-              {ticket.sender_email && (
-                <SbRow label="Contact">
-                  <span style={{ fontSize: 11, color: C.sub, wordBreak: 'break-all' }}>{ticket.sender_email}</span>
-                </SbRow>
+              {/* Avatar + name card */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14,
+                padding: '10px 12px', background: '#F8FAFC', borderRadius: 10, border: '1px solid #E2E8F0' }}>
+                <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#DBEAFE',
+                  border: '2px solid #BFDBFE', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 14, fontWeight: 800, color: '#1D4ED8', flexShrink: 0, letterSpacing: '-0.02em' }}>
+                  {(ticket.customer_name || ticket.sender_email || '?')[0].toUpperCase()}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', margin: 0,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {ticket.customer_name || ticket.sender_email}
+                  </p>
+                  {ticket.customer_name && ticket.sender_email && (
+                    <p style={{ fontSize: 11, color: '#94A3B8', margin: '2px 0 0',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {ticket.sender_email}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {ticket.customer_id && (
+                <button onClick={() => navigate(`/customers/${ticket.customer_id}`)}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    gap: 5, padding: '7px 0', borderRadius: 8, border: '1px solid #C7D2FE',
+                    background: '#EEF2FF', color: '#4338CA', fontSize: 12, fontWeight: 600,
+                    cursor: 'pointer' }}>
+                  View account →
+                </button>
               )}
             </SbSection>
           )}
@@ -917,25 +961,50 @@ export default function TicketDetailPage() {
           {/* 4. Claim — only shown when this is a Claims ticket */}
           {(ticket.group_name === 'Claims' || ticket.claim_number || ticket.claim_amount) && (
           <SbSection title="Claim">
-            <SbRow label="Claim no.">
-              <span style={{ fontSize: 11, color: ticket.claim_number ? C.text : C.muted }}>
-                {ticket.claim_number || 'Not yet raised'}
-              </span>
-            </SbRow>
-            <SbRow label="Claim amount">
-              <span style={{ fontSize: 11, color: ticket.claim_amount ? C.text : C.muted }}>
+            {/* Alert when no formal claim yet */}
+            {!ticket.claim_number && (
+              <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 10,
+                padding: '10px 12px', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <svg width="13" height="13" fill="none" viewBox="0 0 14 14">
+                    <path d="M7 2v4.5M7 9.5v.5" stroke="#C2410C" strokeWidth="1.5" strokeLinecap="round"/>
+                    <circle cx="7" cy="7" r="6" stroke="#C2410C" strokeWidth="1.4"/>
+                  </svg>
+                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.07em',
+                    textTransform: 'uppercase', color: '#C2410C' }}>No claim raised yet</span>
+                </div>
+                {ticket.claim_amount && (
+                  <p style={{ fontSize: 11.5, color: '#9A3412', margin: 0, lineHeight: 1.5 }}>
+                    Indicated value: <strong>£{Number(ticket.claim_amount).toFixed(2)}</strong>
+                  </p>
+                )}
+              </div>
+            )}
+            {ticket.claim_number && <SbRow label="Claim no.">
+              <span style={{ fontSize: 12, color: C.text, fontWeight: 600 }}>{ticket.claim_number}</span>
+            </SbRow>}
+            <SbRow label="Amount">
+              <span style={{ fontSize: 12, color: ticket.claim_amount ? '#0F172A' : C.muted, fontWeight: ticket.claim_amount ? 700 : 400 }}>
                 {ticket.claim_amount ? `£${Number(ticket.claim_amount).toFixed(2)}` : '—'}
               </span>
             </SbRow>
             <SbRow label="Evidence">
               {(ticket.evidence_count > 0) ? (
-                <span style={{ fontSize: 11, fontWeight: 500, color: C.green }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: C.green }}>
                   {ticket.evidence_count} {ticket.evidence_count === 1 ? 'file' : 'files'}
                 </span>
               ) : (
                 <span style={{ fontSize: 11, color: C.muted }}>None yet</span>
               )}
             </SbRow>
+            {!ticket.claim_number && (
+              <button style={{ width: '100%', marginTop: 12, display: 'flex', alignItems: 'center',
+                justifyContent: 'center', gap: 6, padding: '8px 0', borderRadius: 9,
+                fontSize: 12.5, fontWeight: 700, color: '#C2410C', background: '#FFF7ED',
+                border: '1.5px solid #FED7AA', cursor: 'pointer' }}>
+                + Raise Formal Claim
+              </button>
+            )}
           </SbSection>
           )}
 
@@ -966,20 +1035,36 @@ export default function TicketDetailPage() {
               />
             </SbRow>
             <SbRow label="Status">
-              <InlineSelect
-                value={ticket.status}
-                onChange={v => patch.mutate({ status: v })}
-                options={Object.entries(STATUS_CFG).map(([k, v]) => ({ value: k, label: v.label }))}
-                colorMap={STATUS_CFG}
-              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4,
+                  fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 99,
+                  background: STATUS_CFG[ticket.status]?.bg || '#F8FAFC',
+                  color: STATUS_CFG[ticket.status]?.color || C.muted,
+                  border: `1px solid ${STATUS_CFG[ticket.status]?.border || '#E2E8F0'}` }}>
+                  <span style={{ width: 5, height: 5, borderRadius: '50%',
+                    background: STATUS_CFG[ticket.status]?.color || C.muted }} />
+                  {STATUS_CFG[ticket.status]?.label || ticket.status}
+                </span>
+                <InlineSelect
+                  value={ticket.status}
+                  onChange={v => patch.mutate({ status: v })}
+                  options={Object.entries(STATUS_CFG).map(([k, v]) => ({ value: k, label: '✎' }))}
+                />
+              </div>
             </SbRow>
             <SbRow label="Priority">
-              <InlineSelect
-                value={ticket.priority || 'medium'}
-                onChange={v => patch.mutate({ priority: v })}
-                options={Object.entries(PRIORITY_CFG).map(([k, v]) => ({ value: k, label: v.label }))}
-                colorMap={PRIORITY_CFG}
-              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 600,
+                  color: PRIORITY_CFG[ticket.priority || 'medium']?.color || C.muted }}>
+                  {PRIORITY_CFG[ticket.priority || 'medium']?.label || ticket.priority}
+                </span>
+                <InlineSelect
+                  value={ticket.priority || 'medium'}
+                  onChange={v => patch.mutate({ priority: v })}
+                  options={Object.entries(PRIORITY_CFG).map(([k, v]) => ({ value: k, label: '✎' }))}
+                  colorMap={PRIORITY_CFG}
+                />
+              </div>
             </SbRow>
           </SbSection>
 
