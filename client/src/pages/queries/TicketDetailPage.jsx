@@ -249,7 +249,7 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
   const avInitial = isNote ? '—'
     : isOut              ? 'Y'
     : isCourier          ? (courierName?.[0]?.toUpperCase() || 'C')
-    :                      'C';
+    : (email.from_address?.[0]?.toUpperCase() || '?');
 
   const senderLabel = isNote             ? 'Internal note'
     : dir === 'inbound_customer'         ? (email.from_address || 'Customer')
@@ -257,12 +257,8 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
     : dir === 'inbound_courier'          ? (courierName || 'Courier')
     :                                      `You → ${courierName || 'Courier'}`;
 
-  // Strip quoted reply text
-  const bodyLines  = (email.body_text || '').split('\n');
-  const cutoff     = bodyLines.findIndex(l => l.startsWith('On ') && l.includes('wrote:'));
-  const displayBody = cutoff > 0
-    ? bodyLines.slice(0, cutoff).join('\n').trim()
-    : (email.body_text || '').trim();
+  // Show full email body — quoted text gets dimmed via sigCutoff below
+  const displayBody = (email.body_text || '').trim();
 
   const ts = email.sent_at || email.received_at || email.created_at;
 
@@ -298,7 +294,13 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
   // Detect signature (lines after -- or standard sig patterns)
   const sigCutoff = (() => {
     const lines = displayBody.split('\n');
-    const i = lines.findIndex(l => /^--\s*$|^_{3,}|^Regards,|^Kind regards|^Thanks,|^Best,|^Best regards/i.test(l.trim()));
+    const i = lines.findIndex(l => {
+      const t = l.trim();
+      return /^--\s*$|^_{3,}|^Regards,|^Kind regards|^Thanks,|^Best,|^Best regards/i.test(t)
+        || (l.startsWith('On ') && l.includes('wrote:'))
+        || /^-{5,}\s*(Original|Forwarded)/i.test(t)
+        || /^From:\s/.test(t) && lines.indexOf(l) > 2;
+    });
     return i > 1 ? i : -1;
   })();
   const mainBody = sigCutoff > 0 ? displayBody.split('\n').slice(0, sigCutoff).join('\n').trim() : displayBody;
@@ -377,14 +379,14 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
             <pre style={{
               margin: 0, fontSize: 13, color: '#334155', whiteSpace: 'pre-wrap',
               overflowWrap: 'break-word', lineHeight: 1.8, fontFamily: 'inherit',
-              minHeight: 60,
+              minHeight: 40,
             }}>
               {mainBody || <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>No content</span>}
             </pre>
             {sigBody && (
               <>
                 <div style={{ margin: '16px 0 10px', borderTop: '1px dashed #E2E8F0', position: 'relative' }}><span style={{ position: 'absolute', top: -8, left: 0, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#CBD5E1', background: '#fff', paddingRight: 8 }}>Signature</span></div>
-                <pre style={{ margin: 0, fontSize: 10.5, color: '#D1D5DB', whiteSpace: 'pre-wrap', overflowWrap: 'break-word', lineHeight: 1.55, fontFamily: 'inherit', opacity: 0.7 }}>{sigBody}</pre>
+                <pre style={{ margin: 0, fontSize: 10.5, color: '#D1D5DB', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.55, fontFamily: 'inherit', opacity: 0.7 }}>{sigBody}</pre>
               </>
             )}
           </>
