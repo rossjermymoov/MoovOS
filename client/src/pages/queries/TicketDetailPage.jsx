@@ -238,10 +238,10 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
     :                                          'none';
 
   // Avatar colour
-  const avBg = isNote    ? 'rgba(234,179,8,0.10)'
-    : isOut              ? 'rgba(99,102,241,0.10)'
-    : isCourier          ? 'rgba(146,64,14,0.08)'
-    :                      'rgba(30,64,175,0.08)';
+  const avBg = isNote    ? '#FEF9C3'
+    : isOut              ? '#EDE9FE'
+    : isCourier          ? '#FEF3C7'
+    :                      '#DBEAFE';
   const avColor = isNote ? C.amber
     : isOut              ? '#4F46E5'
     : isCourier          ? C.amber
@@ -304,11 +304,11 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
   const mainBody = sigCutoff > 0 ? displayBody.split('\n').slice(0, sigCutoff).join('\n').trim() : displayBody;
   const sigBody  = sigCutoff > 0 ? displayBody.split('\n').slice(sigCutoff).join('\n').trim() : null;
 
-  const dirBadge = isNote ? { label: 'Note', bg: '#FFFBEB', color: '#92400E' }
-    : dir === 'inbound_customer'  ? { label: 'Customer', bg: '#EFF6FF', color: '#1D4ED8' }
-    : dir === 'outbound_customer' ? { label: 'Sent', bg: '#F0FDF4', color: '#166534' }
-    : dir === 'inbound_courier'   ? { label: 'Courier', bg: '#FFFBEB', color: '#92400E' }
-    :                               { label: 'Sent to courier', bg: '#F0FDF4', color: '#166534' };
+  const dirBadge = isNote ? { label: 'Note', bg: '#FEF9C3', color: '#854D0E', border: '#FDE047' }
+    : dir === 'inbound_customer'  ? { label: 'Inbound', bg: '#DBEAFE', color: '#1D4ED8', border: '#93C5FD' }
+    : dir === 'outbound_customer' ? { label: 'Sent', bg: '#DCFCE7', color: '#166534', border: '#86EFAC' }
+    : dir === 'inbound_courier'   ? { label: 'Courier', bg: '#FEF3C7', color: '#92400E', border: '#FDE68A' }
+    :                               { label: 'To courier', bg: '#DCFCE7', color: '#166534', border: '#86EFAC' };
 
   return (
     <div style={{
@@ -317,7 +317,7 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
       borderLeft: cardBorderLeft.replace('0.35', '1').replace('0.50', '1').replace('0.45', '1'),
       borderRadius: 12,
       overflow: 'hidden',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+      boxShadow: '0 1px 4px rgba(0,0,0,0.06), 0 2px 12px rgba(0,0,0,0.04)',
     }}>
 
       {/* Card header */}
@@ -329,14 +329,15 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
       }}>
         {/* Avatar */}
         <div style={{
-          width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+          width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
           background: logoUrl ? '#fff' : avBg,
-          border: logoUrl ? `1px solid ${C.border}` : 'none',
+          border: logoUrl ? `1px solid ${C.border}` : `2px solid white`,
+          boxShadow: logoUrl ? 'none' : `0 0 0 2px ${avBg}`,
           display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
         }}>
           {logoUrl
             ? <img src={logoUrl} alt="" style={{ width: '100%', objectFit: 'contain', padding: 4 }} />
-            : <span style={{ fontSize: 11, fontWeight: 700, color: avColor }}>{avInitial}</span>
+            : <span style={{ fontSize: 14, fontWeight: 800, color: avColor, letterSpacing: '-0.01em' }}>{avInitial}</span>
           }
         </div>
         {/* Sender info */}
@@ -354,12 +355,12 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
         {/* Timestamp + direction badge */}
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
           <p style={{ fontSize: 11, color: '#94A3B8', margin: 0, whiteSpace: 'nowrap' }}>{fmtDate(ts)}</p>
-          <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 4, background: dirBadge.bg, color: dirBadge.color, marginTop: 2, display: 'inline-block' }}>{dirBadge.label}</span>
+          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 5, background: dirBadge.bg, color: dirBadge.color, border: `1px solid ${dirBadge.border || dirBadge.bg}`, marginTop: 3, display: 'inline-block', letterSpacing: '0.02em' }}>{dirBadge.label}</span>
         </div>
       </div>
 
       {/* Body */}
-      <div style={{ padding: '18px 22px' }}>
+      <div style={{ padding: '18px 22px', overflow: 'hidden' }}>
         {editMode ? (
           <textarea
             value={editBody}
@@ -375,14 +376,16 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
           <>
             <pre style={{
               margin: 0, fontSize: 13, color: '#334155', whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word', lineHeight: 1.75, fontFamily: 'inherit',
+              wordBreak: 'break-all', overflowWrap: 'anywhere',
+              lineHeight: 1.8, fontFamily: 'inherit',
+              maxHeight: 520, overflowY: 'auto',
             }}>
               {mainBody || <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>No content</span>}
             </pre>
             {sigBody && (
               <>
                 <div style={{ margin: '16px 0 10px', borderTop: '1px dashed #E2E8F0', position: 'relative' }}><span style={{ position: 'absolute', top: -8, left: 0, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#CBD5E1', background: '#fff', paddingRight: 8 }}>Signature</span></div>
-                <pre style={{ margin: 0, fontSize: 10.5, color: '#D1D5DB', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.55, fontFamily: 'inherit', opacity: 0.7 }}>{sigBody}</pre>
+                <pre style={{ margin: 0, fontSize: 10.5, color: '#D1D5DB', whiteSpace: 'pre-wrap', wordBreak: 'break-all', overflowWrap: 'anywhere', lineHeight: 1.55, fontFamily: 'inherit', opacity: 0.7 }}>{sigBody}</pre>
               </>
             )}
           </>
@@ -783,7 +786,7 @@ export default function TicketDetailPage() {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden', background: '#F8FAFC' }}>
 
           {/* Thread */}
-          <div ref={messagesRef} style={{ flex: 1, overflowY: 'auto', padding: '20px 24px 28px', display: 'flex', flexDirection: 'column', gap: 10, background: '#F8FAFC' }}>
+          <div ref={messagesRef} style={{ flex: 1, overflowY: 'auto', padding: '24px 28px 32px', display: 'flex', flexDirection: 'column', gap: 16, background: '#F8FAFC' }}>
             {allEmails.length === 0 ? (
               <div style={{ padding: '48px 0', textAlign: 'center', color: C.muted, alignSelf: 'center', width: '100%' }}>
                 <Mail size={24} style={{ marginBottom: 10, opacity: 0.2, display: 'block', margin: '0 auto 10px' }} />
