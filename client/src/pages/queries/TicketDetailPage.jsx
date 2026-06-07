@@ -864,63 +864,94 @@ export default function TicketDetailPage() {
             })()}
           </SbSection>
 
-          {/* 2. Parcel */}
-          {consignment && (
-            <SbSection title="Parcel" action={
+          {/* 2. Parcel — always shown */}
+          <SbSection title="Parcel" action={
+            consignment ? (
               <button onClick={() => navigate(`/tracking?q=${encodeURIComponent(consignment)}`)}
                 style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700,
                   color: '#6366F1', background: '#EEF2FF', border: '1px solid #C7D2FE',
                   borderRadius: 6, padding: '3px 9px', cursor: 'pointer' }}>
                 <ExternalLink size={10} /> Track
               </button>
-            }>
-              {courierLogo && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <div style={{ width: 26, height: 26, borderRadius: 6, border: `0.5px solid ${C.border}`, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                    <img src={courierLogo} alt="" style={{ width: '100%', objectFit: 'contain', padding: 3 }} />
+            ) : null
+          }>
+            {consignment ? (
+              <>
+                {/* Carrier + parcel status */}
+                {(courierLogo || ticket.courier_name) && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    {courierLogo && (
+                      <div style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid #E2E8F0',
+                        background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        overflow: 'hidden', flexShrink: 0 }}>
+                        <img src={courierLogo} alt="" style={{ width: '100%', objectFit: 'contain', padding: 3 }} />
+                      </div>
+                    )}
+                    <span style={{ fontSize: 12.5, fontWeight: 600, color: '#0F172A' }}>{ticket.courier_name}</span>
+                    {parcel?.status && (
+                      <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, textTransform: 'capitalize',
+                        color: parcel.status === 'delivered' ? '#166534' : '#92400E',
+                        background: parcel.status === 'delivered' ? '#F0FDF4' : '#FFFBEB',
+                        padding: '2px 8px', borderRadius: 20, border: '1px solid transparent', flexShrink: 0 }}>
+                        {parcel.status.replace(/_/g, ' ')}
+                      </span>
+                    )}
                   </div>
-                  <span style={{ fontSize: 12, color: C.sub }}>{ticket.courier_name}</span>
+                )}
+                {/* Consignment chip */}
+                <div style={{ fontFamily: 'monospace', fontSize: 12.5, fontWeight: 700, color: '#0F172A',
+                  background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8,
+                  padding: '8px 12px', marginBottom: 10, letterSpacing: '0.03em',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span>{consignment}</span>
+                  <span style={{ fontSize: 10, color: '#94A3B8', fontWeight: 400, cursor: 'pointer' }}
+                    onClick={() => navigator.clipboard?.writeText(consignment)}
+                    title="Copy to clipboard">copy</span>
                 </div>
-              )}
-              <div style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700,
-                color: '#0F172A', background: '#F8FAFC', border: '1px solid #E2E8F0',
-                borderRadius: 7, padding: '6px 10px', marginBottom: 10, letterSpacing: '0.02em',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span>{consignment}</span>
-                <span style={{ fontSize: 10, color: '#94A3B8', fontFamily: 'inherit', fontWeight: 400 }}>ref</span>
+                {ticket.service_name && (
+                  <SbRow label="Service">
+                    <span style={{ fontSize: 12, color: C.sub }}>{ticket.service_name}</span>
+                  </SbRow>
+                )}
+                {parcel?.recipient_postcode && (
+                  <SbRow label="Postcode">
+                    <span style={{ fontSize: 12, color: C.sub }}>{parcel.recipient_postcode}</span>
+                  </SbRow>
+                )}
+                {parcel?.delivered_at && (
+                  <SbRow label="Delivered">
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#166534' }}>
+                      {new Date(parcel.delivered_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </span>
+                  </SbRow>
+                )}
+                {/* Tracking timeline — appears automatically when events exist */}
+                {trackEvents.length > 0 && (
+                  <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #F1F5F9' }}>
+                    <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
+                      textTransform: 'uppercase', color: '#94A3B8', marginBottom: 12 }}>
+                      {trackEvents.length} event{trackEvents.length !== 1 ? 's' : ''}
+                    </p>
+                    <TrackingTimeline events={trackEvents} />
+                  </div>
+                )}
+                {trackEvents.length === 0 && (
+                  <div style={{ marginTop: 10, padding: '8px 10px', background: '#F8FAFC',
+                    borderRadius: 7, border: '1px solid #F1F5F9', textAlign: 'center' }}>
+                    <p style={{ fontSize: 11, color: '#CBD5E1', margin: 0 }}>No tracking events yet</p>
+                  </div>
+                )}
+              </>
+            ) : (
+              /* No consignment linked */
+              <div style={{ padding: '16px 12px', background: '#F8FAFC', borderRadius: 10,
+                border: '1px dashed #E2E8F0', textAlign: 'center' }}>
+                <div style={{ fontSize: 24, marginBottom: 8 }}>📦</div>
+                <p style={{ fontSize: 12, fontWeight: 600, color: '#94A3B8', margin: '0 0 3px' }}>No parcel linked</p>
+                <p style={{ fontSize: 11, color: '#CBD5E1', margin: 0 }}>No consignment number on this ticket</p>
               </div>
-              {ticket.service_name && (
-                <SbRow label="Service">
-                  <span style={{ fontSize: 11, color: C.sub }}>{ticket.service_name}</span>
-                </SbRow>
-              )}
-              {parcel?.status && (
-                <SbRow label="Status">
-                  <span style={{ fontSize: 11, color: C.sub, textTransform: 'capitalize' }}>
-                    {parcel.status.replace(/_/g, ' ')}
-                  </span>
-                </SbRow>
-              )}
-              {parcel?.recipient_postcode && (
-                <SbRow label="Postcode">
-                  <span style={{ fontSize: 11, color: C.sub }}>{parcel.recipient_postcode}</span>
-                </SbRow>
-              )}
-              {parcel?.delivered_at && (
-                <SbRow label="Delivered">
-                  <span style={{ fontSize: 11, fontWeight: 500, color: C.green }}>
-                    {new Date(parcel.delivered_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </span>
-                </SbRow>
-              )}
-              <div style={{ marginTop: 8 }}>
-                <button onClick={() => navigate(`/tracking?q=${encodeURIComponent(consignment)}`)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', color: C.blue, fontSize: 11, cursor: 'pointer', padding: 0 }}>
-                  <ExternalLink size={10} /> View tracking
-                </button>
-              </div>
-            </SbSection>
-          )}
+            )}
+          </SbSection>
 
           {/* 3. Customer */}
           {(ticket.customer_name || ticket.sender_email) && (
