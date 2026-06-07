@@ -101,10 +101,13 @@ function useSpeechInput(setText) {
 }
 
 // ── Sidebar card ──────────────────────────────────────────────────────────────
-function SbSection({ title, children }) {
+function SbSection({ title, action, children }) {
   return (
-    <div style={{ padding: '14px 18px', borderBottom: '1px solid #F1F5F9' }}>
-      <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#94A3B8', marginBottom: 10 }}>{title}</p>
+    <div style={{ padding: '18px 20px', borderBottom: '1px solid #F1F5F9' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#94A3B8', margin: 0 }}>{title}</p>
+        {action}
+      </div>
       {children}
     </div>
   );
@@ -112,9 +115,9 @@ function SbSection({ title, children }) {
 
 function SbRow({ label, children }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, padding: '4px 0' }}>
-      <span style={{ fontSize: 11, color: '#94A3B8', flexShrink: 0 }}>{label}</span>
-      <span style={{ fontSize: 11, color: '#1E293B', fontWeight: 500, textAlign: 'right' }}>{children}</span>
+    <div style={{ display: 'flex', alignItems: 'flex-start', padding: '5px 0' }}>
+      <span style={{ fontSize: 11.5, color: '#94A3B8', fontWeight: 500, width: 90, flexShrink: 0, paddingTop: 1 }}>{label}</span>
+      <span style={{ fontSize: 12, color: '#1E293B', fontWeight: 500, flex: 1, textAlign: 'right', lineHeight: 1.4 }}>{children}</span>
     </div>
   );
 }
@@ -160,25 +163,36 @@ function SlaValue({ sla_due_at, sla_breached, sla_mins_remaining }) {
 
 // ── Tracking mini-timeline ────────────────────────────────────────────────────
 function TrackingTimeline({ events }) {
-  if (!events?.length) return <div style={{ fontSize: 11, color: C.muted }}>No events yet</div>;
+  if (!events?.length) return (
+    <div style={{ fontSize: 11, color: C.muted, padding: '4px 0', fontStyle: 'italic' }}>No tracking events yet</div>
+  );
   const recent = [...events]
     .sort((a, b) => new Date(b.event_at) - new Date(a.event_at))
-    .slice(0, 5);
+    .slice(0, 6);
   return (
-    <div>
+    <div style={{ position: 'relative', paddingLeft: 22 }}>
+      {/* Vertical connecting line */}
+      <div style={{
+        position: 'absolute', left: 5, top: 7,
+        width: 1.5, height: `calc(100% - 14px)`,
+        background: 'linear-gradient(to bottom, #6366F1, #10B981 40%, #E2E8F0)',
+        borderRadius: 2,
+      }} />
       {recent.map((ev, i) => (
-        <div key={ev.id || i} style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'flex-start' }}>
+        <div key={ev.id || i} style={{ position: 'relative', marginBottom: i < recent.length - 1 ? 13 : 0 }}>
+          {/* Dot */}
           <div style={{
-            width: 7, height: 7, borderRadius: '50%', flexShrink: 0, marginTop: 3,
-            background: i === 0 ? C.blue : C.muted,
+            position: 'absolute', left: -22, top: 2,
+            width: 12, height: 12, borderRadius: '50%',
+            background: i === 0 ? '#6366F1' : i === 1 ? '#10B981' : '#E2E8F0',
+            border: `2px solid #fff`,
+            boxShadow: i === 0 ? '0 0 0 2.5px #C7D2FE' : i === 1 ? '0 0 0 2px #D1FAE5' : 'none',
           }} />
-          <div>
-            <div style={{ fontSize: 11, fontWeight: i === 0 ? 500 : 400, color: i === 0 ? C.text : C.sub, lineHeight: 1.4 }}>
-              {ev.description || ev.status?.replace(/_/g, ' ')}
-            </div>
-            <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>
-              {timeAgo(ev.event_at)}{ev.location ? ` · ${ev.location}` : ''}
-            </div>
+          <div style={{ fontSize: 12, fontWeight: i === 0 ? 600 : 400, color: i === 0 ? '#0F172A' : '#475569', lineHeight: 1.3 }}>
+            {ev.description || ev.status?.replace(/_/g, ' ')}
+          </div>
+          <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+            {timeAgo(ev.event_at)}{ev.location ? ` · ${ev.location}` : ''}
           </div>
         </div>
       ))}
@@ -309,7 +323,7 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
       {/* Card header */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
-        padding: '12px 16px 10px',
+        padding: '16px 22px 14px',
         borderBottom: '1px solid #F8FAFC',
         background: isNote ? '#FFFBEB20' : C.card,
       }}>
@@ -328,13 +342,13 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
         {/* Sender info */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>{senderLabel}</span>
+            <span style={{ fontSize: 13.5, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.01em' }}>{senderLabel}</span>
             {isDraft && (
               <span style={{ fontSize: 10, fontWeight: 600, color: '#166534', background: '#F0FDF4', borderRadius: 20, padding: '2px 8px', border: '1px solid #BBF7D0' }}>AI draft</span>
             )}
           </div>
           {email.from_address && !isOut && (
-            <p style={{ fontSize: 11, color: '#94A3B8', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email.from_address}</p>
+            <p style={{ fontSize: 11.5, color: '#94A3B8', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email.from_address}</p>
           )}
         </div>
         {/* Timestamp + direction badge */}
@@ -345,7 +359,7 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
       </div>
 
       {/* Body */}
-      <div style={{ padding: '14px 16px' }}>
+      <div style={{ padding: '18px 22px' }}>
         {editMode ? (
           <textarea
             value={editBody}
@@ -367,8 +381,8 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
             </pre>
             {sigBody && (
               <>
-                <div style={{ margin: '12px 0 8px', borderTop: '1px dashed #E2E8F0' }} />
-                <pre style={{ margin: 0, fontSize: 11, color: '#CBD5E1', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.6, fontFamily: 'inherit' }}>{sigBody}</pre>
+                <div style={{ margin: '16px 0 10px', borderTop: '1px dashed #E2E8F0', position: 'relative' }}><span style={{ position: 'absolute', top: -8, left: 0, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#CBD5E1', background: '#fff', paddingRight: 8 }}>Signature</span></div>
+                <pre style={{ margin: 0, fontSize: 10.5, color: '#D1D5DB', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.55, fontFamily: 'inherit', opacity: 0.7 }}>{sigBody}</pre>
               </>
             )}
           </>
@@ -525,12 +539,12 @@ function ComposeBar({ queryId, courierName, onSent }) {
           <button key={t.key} onClick={() => switchTab(t.key)} style={{
             padding: '6px 12px',
             border: active === t.key ? '1px solid #E2E8F0' : 'none',
-            borderBottom: active === t.key ? '1px solid #fff' : 'none',
-            borderRadius: '6px 6px 0 0',
-            background: active === t.key ? '#fff' : 'transparent',
+            borderBottom: active === t.key ? '2px solid #0F172A' : '2px solid transparent',
+            borderRadius: 0,
+            background: 'transparent',
             color: active === t.key ? '#0F172A' : '#94A3B8',
-            fontSize: 12, fontWeight: active === t.key ? 500 : 400,
-            cursor: 'pointer', marginBottom: active === t.key ? -1 : 0,
+            fontSize: 12.5, fontWeight: active === t.key ? 700 : 500,
+            cursor: 'pointer', marginBottom: 0,
             display: 'flex', alignItems: 'center', gap: 6,
             transition: 'all 0.1s', fontFamily: 'inherit',
           }}
@@ -797,17 +811,17 @@ export default function TicketDetailPage() {
 
         {/* ── Right sidebar ── */}
         <div style={{
-          width: 252, flexShrink: 0, background: '#fff',
+          width: 264, flexShrink: 0, background: '#fff',
           borderLeft: '1px solid #E2E8F0',
           overflowY: 'auto', padding: 0,
         }}>
 
           {/* 1. SLA */}
           <SbSection title="SLA">
-            <SbRow label="Created">
-              <span style={{ fontSize: 11, color: C.sub }}>{timeAgo(ticket.created_at)}</span>
+            <SbRow label="Opened">
+              <span style={{ fontSize: 11.5, color: C.sub, fontVariantNumeric: 'tabular-nums' }}>{timeAgo(ticket.created_at)}</span>
             </SbRow>
-            <SbRow label="First response">
+            <SbRow label="Resolution">
               <SlaValue
                 sla_due_at={ticket.sla_due_at}
                 sla_breached={ticket.sla_breached}
@@ -829,7 +843,14 @@ export default function TicketDetailPage() {
 
           {/* 2. Parcel */}
           {consignment && (
-            <SbSection title="Parcel">
+            <SbSection title="Parcel" action={
+              <button onClick={() => navigate(`/tracking?q=${encodeURIComponent(consignment)}`)}
+                style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700,
+                  color: '#6366F1', background: '#EEF2FF', border: '1px solid #C7D2FE',
+                  borderRadius: 6, padding: '3px 9px', cursor: 'pointer' }}>
+                <ExternalLink size={10} /> Track
+              </button>
+            }>
               {courierLogo && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                   <div style={{ width: 26, height: 26, borderRadius: 6, border: `0.5px solid ${C.border}`, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
@@ -893,7 +914,8 @@ export default function TicketDetailPage() {
             </SbSection>
           )}
 
-          {/* 4. Claim */}
+          {/* 4. Claim — only shown when this is a Claims ticket */}
+          {(ticket.group_name === 'Claims' || ticket.claim_number || ticket.claim_amount) && (
           <SbSection title="Claim">
             <SbRow label="Claim no.">
               <span style={{ fontSize: 11, color: ticket.claim_number ? C.text : C.muted }}>
@@ -915,6 +937,7 @@ export default function TicketDetailPage() {
               )}
             </SbRow>
           </SbSection>
+          )}
 
           {/* Attention warning */}
           {ticket.requires_attention && ticket.attention_reason && (

@@ -23,10 +23,10 @@ const api = axios.create({ baseURL: '/api' });
 const _BUILD = '2026-05-23-filter-fixes'; // cache bust — fix claim deadline filter + sla breached clickable
 
 const C = {
-  bg:       '#F1F5F9',
+  bg:       '#F8FAFC',
   surface:  '#F8FAFC',
   card:     '#FFFFFF',
-  hover:    '#F8FAFC',
+  hover:    '#F4F6FA',
   selected: '#EFF6FF',
   border:   'rgba(0,0,0,0.06)',
   green:    '#166534',
@@ -112,6 +112,30 @@ function StatusBadge({ status, small }) {
 function TypeBadge({ type, small }) {
   const cfg = TYPE_CFG[type] || { label: type, color: C.muted };
   return <Badge label={cfg.label} color={cfg.color} small={small} />;
+}
+
+const GROUP_BADGE_CFG = {
+  'Claims':    { bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
+  'Billing':   { bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
+  'Technical': { bg: '#F5F3FF', color: '#4C1D95', border: '#DDD6FE' },
+  'Queries':   { bg: '#EFF6FF', color: '#1E3A8A', border: '#BFDBFE' },
+};
+
+function GroupBadge({ group }) {
+  if (!group) return null;
+  const cfg = GROUP_BADGE_CFG[group] || { bg: '#F8FAFC', color: '#475569', border: '#E2E8F0' };
+  return (
+    <span style={{
+      display: 'inline-block',
+      fontSize: 11, fontWeight: 600,
+      padding: '3px 9px',
+      borderRadius: 6,
+      background: cfg.bg,
+      color: cfg.color,
+      border: `1px solid ${cfg.border}`,
+      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+    }}>{group}</span>
+  );
 }
 
 function timeAgo(ts) {
@@ -502,11 +526,11 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
         cursor: 'pointer',
         background: C.card,
         boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
-        transition: 'box-shadow 0.15s, background 0.08s',
+        transition: 'box-shadow 0.12s ease, background 0.08s ease, transform 0.08s ease',
         position: 'relative',
       }}
-      onMouseOver={e => { e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.10)'; e.currentTarget.style.background = C.hover; }}
-      onMouseOut={e => { e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)'; e.currentTarget.style.background = C.card; }}
+      onMouseOver={e => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.10)'; e.currentTarget.style.background = C.hover; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+      onMouseOut={e => { e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)'; e.currentTarget.style.background = C.card; e.currentTarget.style.transform = 'translateY(0)'; }}
     >
       {/* Type icon */}
       <TypeIconWell type={q.query_type} />
@@ -556,16 +580,7 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
 
       {/* Group */}
       <div style={{ width: 88, flexShrink: 0 }}>
-        {q.group_name ? (
-          <span style={{
-            fontSize: 11, color: C.muted,
-            background: 'rgba(0,0,0,0.04)', border: `0.5px solid ${C.border}`,
-            borderRadius: 20, padding: '3px 8px',
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block',
-          }}>
-            {q.group_name}
-          </span>
-        ) : null}
+        <GroupBadge group={q.group_name} />
       </div>
 
       {/* Happiness score */}
@@ -1285,8 +1300,8 @@ function QueryDetail({ queryId, onUpdated }) {
         <div style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
 
           {/* ── Ticket ── */}
-          <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
-            letterSpacing: '0.08em', marginBottom: 10 }}>Ticket</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase',
+            letterSpacing: '0.1em', marginBottom: 12, paddingTop: 4 }}>Ticket</div>
 
           {/* Status */}
           <div style={{ marginBottom: 10 }}>
@@ -1344,8 +1359,8 @@ function QueryDetail({ queryId, onUpdated }) {
           {/* ── Parcel ── */}
           {(q.consignment_number || parcel) && (
             <div>
-              <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
-                letterSpacing: '0.08em', marginBottom: 10 }}>Parcel</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase',
+                letterSpacing: '0.1em', marginBottom: 12 }}>Parcel</div>
 
               {logoUrl && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -1385,7 +1400,7 @@ function QueryDetail({ queryId, onUpdated }) {
           {trackingEvents.length > 0 && (
             <div style={{ marginBottom: 4 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                   Tracking
                 </div>
                 {q.consignment_number && (
@@ -1403,14 +1418,16 @@ function QueryDetail({ queryId, onUpdated }) {
                   const cfg = TRACK_STATUS[ev.status] || TRACK_STATUS.unknown;
                   return (
                     <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'flex-start' }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, marginTop: 4,
-                        background: i === 0 ? cfg.color : C.muted }} />
+                      <div style={{ width: 10, height: 10, borderRadius: '50%', flexShrink: 0, marginTop: 2,
+                        background: i === 0 ? cfg.color : '#E2E8F0',
+                        border: `2px solid ${i === 0 ? cfg.color + '44' : '#F1F5F9'}`,
+                        boxShadow: i === 0 ? `0 0 0 3px ${cfg.color}22` : 'none' }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 11, fontWeight: i === 0 ? 700 : 400,
-                          color: i === 0 ? C.text : C.sub, lineHeight: 1.3, marginBottom: 2 }}>
+                        <div style={{ fontSize: 11.5, fontWeight: i === 0 ? 600 : 400,
+                          color: i === 0 ? '#0F172A' : '#64748B', lineHeight: 1.3, marginBottom: 2 }}>
                           {ev.description || cfg.label}
                         </div>
-                        <div style={{ fontSize: 10, color: C.muted }}>
+                        <div style={{ fontSize: 10, color: '#94A3B8' }}>
                           {timeAgo(ev.event_at || ev.event_datetime || ev.created_at)}
                           {ev.location && ` · ${ev.location}`}
                         </div>
@@ -1869,12 +1886,18 @@ export default function QueriesPage() {
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 18px', borderBottom: `0.5px solid ${C.border}`, background: C.surface, flexShrink: 0 }}>
-        <span style={{ fontSize: 18, fontWeight: 500, color: C.text }}>Queries</span>
+        <span style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.03em' }}>Queries</span>
         {stats?.total_open > 0 && (
-          <span style={{ fontSize: 12, color: C.muted, background: C.hover,
-            border: `0.5px solid ${C.border}`, borderRadius: 20, padding: '2px 9px' }}>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            background: '#0F172A', color: '#F8FAFC',
+            borderRadius: 99, padding: '4px 12px',
+            fontSize: 12, fontWeight: 700,
+            boxShadow: '0 1px 3px rgba(15,23,42,0.25), 0 0 0 3px rgba(99,102,241,0.12)',
+          }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#F59E0B', boxShadow: '0 0 0 2px rgba(251,191,36,0.3)', flexShrink: 0 }} />
             {stats.total_open} open
-          </span>
+          </div>
         )}
         <div style={{ flex: 1 }} />
         {/* Search */}
@@ -1896,11 +1919,16 @@ export default function QueriesPage() {
         {/* New query */}
         <button style={{
           display: 'flex', alignItems: 'center', gap: 6,
-          padding: '7px 14px', borderRadius: 8, cursor: 'pointer',
-          border: `0.5px solid ${C.border}`, background: C.card,
-          color: C.text, fontSize: 13, fontWeight: 400,
-        }}>
-          <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> New query
+          padding: '7px 16px', borderRadius: 8, cursor: 'pointer',
+          border: 'none', background: '#0F172A',
+          color: '#F8FAFC', fontSize: 12, fontWeight: 700,
+          letterSpacing: '0.01em',
+          transition: 'background 0.12s, box-shadow 0.12s',
+        }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#1E293B'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(15,23,42,0.22)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = '#0F172A'; e.currentTarget.style.boxShadow = 'none'; }}
+        >
+          <span style={{ fontSize: 15, lineHeight: 1, fontWeight: 400 }}>+</span> New query
         </button>
       </div>
 
@@ -1944,9 +1972,13 @@ export default function QueriesPage() {
             <button key={t.key} onClick={() => setFilters(f => ({ ...f, group_name: t.group, attention: false, status: '' }))}
               style={{
                 padding: '9px 14px', border: 'none', background: 'none',
-                borderBottom: `2px solid ${isActive ? C.text : 'transparent'}`,
-                color: isActive ? C.text : C.muted,
-                fontSize: 13, fontWeight: isActive ? 500 : 400,
+                borderBottom: `2px solid ${isActive
+                  ? (t.group === 'Claims' ? '#D97706' : t.group === 'Billing' ? '#059669' : t.group === 'Technical' ? '#7C3AED' : t.group === 'Queries' ? '#2563EB' : '#0F172A')
+                  : 'transparent'}`,
+                color: isActive
+                  ? (t.group === 'Claims' ? '#D97706' : t.group === 'Billing' ? '#059669' : t.group === 'Technical' ? '#7C3AED' : t.group === 'Queries' ? '#2563EB' : '#0F172A')
+                  : C.muted,
+                fontSize: 13, fontWeight: isActive ? 600 : 400,
                 cursor: 'pointer', marginBottom: -0.5, whiteSpace: 'nowrap',
                 transition: 'color 0.1s',
               }}
@@ -1991,15 +2023,15 @@ export default function QueriesPage() {
           {!loading && displayQueries.length > 0 && (
             <>
               {/* Column headers */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '4px 16px 8px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '2px 16px 8px 16px' }}>
                 <div style={{ width: 36, flexShrink: 0 }} />
-                <div style={{ flex: 1, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Subject</div>
-                <div style={{ width: 160, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Summary</div>
-                <div style={{ width: 88, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Group</div>
-                <div style={{ width: 52, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Health</div>
-                <div style={{ width: 110, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</div>
-                <div style={{ width: 100, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>SLA</div>
-                <div style={{ width: 80, flexShrink: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Activity</div>
+                <div style={{ flex: 1, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Subject</div>
+                <div style={{ width: 160, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Summary</div>
+                <div style={{ width: 88, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Group</div>
+                <div style={{ width: 52, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Health</div>
+                <div style={{ width: 110, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Status</div>
+                <div style={{ width: 100, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>SLA</div>
+                <div style={{ width: 80, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: 'right' }}>Activity</div>
                 <div style={{ width: 26, flexShrink: 0 }} />
               </div>
               {/* Rows sorted by last activity */}
