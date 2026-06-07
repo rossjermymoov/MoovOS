@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Moov OS – Queries</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['-apple-system','BlinkMacSystemFont','Inter','Segoe UI','system-ui','sans-serif'] },
+          boxShadow: {
+            'card': '0 1px 3px 0 rgba(0,0,0,0.06), 0 1px 2px -1px rgba(0,0,0,0.04)',
+            'panel': '0 24px 80px -12px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.06)',
+          },
+          borderRadius: { '12': '12px', '14': '14px', '16': '16px' }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif; }
+
+    /* ── NAV ── */
+    .nav-item { transition: background 0.1s ease, color 0.1s ease; }
+    .nav-item:hover { background: rgba(15,23,42,0.06); }
+    .nav-item.active { background: rgba(15,23,42,0.08); color: #0f172a; }
+
+    /* ── ROWS ── */
+    .ticket-row {
+      transition: background 0.08s ease, box-shadow 0.08s ease, transform 0.08s ease;
+      cursor: pointer; position: relative;
+    }
+    .ticket-row:hover {
+      background: #f8fafc;
+      box-shadow: 0 0 0 1.5px #e2e8f0, 0 2px 8px rgba(0,0,0,0.05);
+      transform: translateY(-1px);
+    }
+    .ticket-row.selected {
+      background: #f0f7ff !important;
+      box-shadow: 0 0 0 1.5px #bfdbfe, 0 2px 12px rgba(99,102,241,0.08) !important;
+      transform: translateY(-1px);
+    }
+
+    /* ── TABS ── */
+    .tab-btn { transition: color 0.12s, border-color 0.12s; }
+    .tab-btn.active { color: #0f172a; border-bottom: 2px solid #0f172a; }
+    .tab-btn:not(.active) { border-bottom: 2px solid transparent; }
+
+    /* ── STATUS DOTS ── */
+    .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .status-open      { background: #f59e0b; box-shadow: 0 0 0 2px #fef3c7; }
+    .status-progress  { background: #6366f1; box-shadow: 0 0 0 2px #e0e7ff; }
+    .status-pending   { background: #94a3b8; box-shadow: 0 0 0 2px #f1f5f9; }
+    .status-resolved  { background: #10b981; box-shadow: 0 0 0 2px #d1fae5; }
+
+    /* ── AVATARS ── */
+    .avatar {
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-weight: 600; letter-spacing: 0.02em; flex-shrink: 0;
+    }
+
+    /* ── SLIDE-OVER OVERLAY ── */
+    #overlay {
+      position: fixed; inset: 0; background: rgba(15,23,42,0.35);
+      backdrop-filter: blur(2px);
+      z-index: 40; opacity: 0; pointer-events: none;
+      transition: opacity 0.22s ease;
+    }
+    #overlay.visible { opacity: 1; pointer-events: all; }
+
+    /* ── SLIDE-OVER PANEL ── */
+    #panel {
+      position: fixed; top: 0; right: 0; height: 100vh; width: 680px; max-width: 92vw;
+      background: #fff; z-index: 50;
+      box-shadow: -24px 0 80px -12px rgba(0,0,0,0.16), 0 0 0 1px rgba(0,0,0,0.06);
+      display: flex; flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+    }
+    #panel.open { transform: translateX(0); }
+
+    /* ── PANEL INTERNALS ── */
+    .panel-header {
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid #f1f5f9;
+      flex-shrink: 0;
+    }
+    .panel-body {
+      flex: 1; overflow-y: auto; display: flex; gap: 0;
+    }
+    .panel-main { flex: 1; min-width: 0; padding: 24px; overflow-y: auto; border-right: 1px solid #f1f5f9; }
+    .panel-meta { width: 200px; flex-shrink: 0; padding: 24px 20px; overflow-y: auto; }
+
+    .panel-footer {
+      padding: 16px 24px;
+      border-top: 1px solid #f1f5f9;
+      flex-shrink: 0;
+      background: #fafafa;
+    }
+
+    /* ── CONVERSATION THREAD ── */
+    .msg-bubble { border-radius: 12px; }
+
+    /* ── COMPOSE BOX ── */
+    .compose-box {
+      border: 1.5px solid #e2e8f0; border-radius: 12px;
+      background: #fff; transition: border-color 0.15s;
+    }
+    .compose-box:focus-within { border-color: #818cf8; box-shadow: 0 0 0 3px rgba(129,140,248,0.12); }
+    .compose-box textarea { resize: none; outline: none; width: 100%; background: transparent; }
+
+    /* ── SCROLLBARS ── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+
+    /* ── MISC ── */
+    .meta-label { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: #94a3b8; margin-bottom: 5px; }
+    .kbd { display: inline-flex; align-items: center; justify-content: center; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 5px; padding: 1px 5px; font-size: 10px; font-weight: 600; color: #64748b; font-family: monospace; }
+
+    /* ── CHECKBOX ── */
+    input[type="checkbox"] {
+      width: 15px; height: 15px; border-radius: 4px;
+      border: 1.5px solid #cbd5e1; cursor: pointer; flex-shrink: 0;
+      accent-color: #6366f1;
+    }
+
+    /* ── TOOLTIP ── */
+    [data-tip] { position: relative; }
+    [data-tip]:hover::after {
+      content: attr(data-tip);
+      position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+      background: #0f172a; color: #f8fafc; font-size: 11px; font-weight: 500;
+      padding: 4px 8px; border-radius: 6px; white-space: nowrap; pointer-events: none; z-index: 999;
+    }
+
+    /* ── PRIORITY COLOURS ── */
+    .pri-high   { color: #dc2626; }
+    .pri-medium { color: #d97706; }
+    .pri-low    { color: #94a3b8; }
+
+    /* ── ACTION BTNS ── */
+    .action-btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 600;
+      transition: background 0.1s, box-shadow 0.1s, transform 0.1s;
+      cursor: pointer; border: none;
+    }
+    .action-btn:hover { transform: translateY(-1px); }
+    .action-btn:active { transform: translateY(0); }
+
+    .btn-primary   { background: #0f172a; color: #fff; }
+    .btn-primary:hover { background: #1e293b; box-shadow: 0 4px 12px rgba(15,23,42,0.25); }
+    .btn-secondary { background: #fff; color: #374151; border: 1.5px solid #e2e8f0; }
+    .btn-secondary:hover { background: #f8fafc; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .btn-success   { background: #ecfdf5; color: #065f46; border: 1.5px solid #a7f3d0; }
+    .btn-success:hover { background: #d1fae5; box-shadow: 0 2px 8px rgba(16,185,129,0.12); }
+    .btn-danger    { background: #fff1f2; color: #be123c; border: 1.5px solid #fecdd3; }
+    .btn-danger:hover { background: #ffe4e6; }
+
+    /* ── TIMELINE ── */
+    .timeline-line { position: absolute; left: 11px; top: 24px; bottom: 0; width: 1px; background: #f1f5f9; }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen flex" style="color:#1e293b;">
+
+<!-- ══════════════════════════════════════════
+     SLIDE-OVER OVERLAY + PANEL
+════════════════════════════════════════════ -->
+<div id="overlay" onclick="closePanel()"></div>
+
+<div id="panel" role="dialog" aria-modal="true" aria-label="Query detail">
+
+  <!-- Panel Header -->
+  <div class="panel-header">
+    <div class="flex items-start justify-between gap-3">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 mb-1.5">
+          <span id="p-id" class="text-xs font-mono text-slate-400 font-medium"></span>
+          <span id="p-cat-badge" class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold border"></span>
+          <span id="p-status-badge" class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
+            <span id="p-status-dot" class="status-dot"></span>
+            <span id="p-status-text"></span>
+          </span>
+        </div>
+        <h2 id="p-title" class="text-base font-bold text-slate-900 leading-snug pr-4"></h2>
+      </div>
+      <div class="flex items-center gap-1 flex-shrink-0">
+        <button class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors" data-tip="Copy link">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 16 16"><path d="M6.5 9.5a3 3 0 004.2-4.2L9.3 4l-1.4 1.4 1.4 1.4a1 1 0 01-1.4 1.4L6.5 6.8 5.1 8.2a3 3 0 001.4 1.3zM9.5 6.5a3 3 0 00-4.2 4.2l1.4 1.3 1.4-1.4-1.4-1.3a1 1 0 011.4-1.4l1.4 1.4 1.4-1.4a3 3 0 00-1.4-1.4z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        </button>
+        <button class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors" data-tip="More options">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 16 16"><circle cx="8" cy="4" r="1.2" fill="currentColor"/><circle cx="8" cy="8" r="1.2" fill="currentColor"/><circle cx="8" cy="12" r="1.2" fill="currentColor"/></svg>
+        </button>
+        <div class="w-px h-5 bg-slate-200 mx-0.5"></div>
+        <button onclick="closePanel()" class="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors" data-tip="Close (Esc)">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Quick action bar -->
+    <div class="flex items-center gap-2 mt-3 flex-wrap">
+      <button class="action-btn btn-primary">
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 14 14"><path d="M2 7h10M7 2l5 5-5 5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Reply
+      </button>
+      <button class="action-btn btn-success" onclick="resolveTicket()">
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 14 14"><path d="M2 7l4 4 6-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Resolve
+      </button>
+      <button class="action-btn btn-secondary">
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 14 14"><path d="M7 2v5l3 2M13 7A6 6 0 111 7a6 6 0 0112 0z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Snooze
+      </button>
+      <button class="action-btn btn-secondary">
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 14 14"><path d="M2 4l5 4 5-4M2 4h10v7a1 1 0 01-1 1H3a1 1 0 01-1-1V4z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Reassign
+      </button>
+      <button class="action-btn btn-danger ml-auto">
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 14 14"><path d="M7 1l1.5 3 3.5.5-2.5 2.5.5 3.5L7 9l-3 1.5.5-3.5L2 4.5 5.5 4z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Escalate
+      </button>
+    </div>
+  </div>
+
+  <!-- Panel Body -->
+  <div class="panel-body">
+
+    <!-- Main: conversation thread + compose -->
+    <div class="panel-main flex flex-col gap-0">
+
+      <!-- Description block -->
+      <div class="mb-6">
+        <p class="meta-label mb-3">Description</p>
+        <div class="bg-slate-50 rounded-12 p-4 border border-slate-100">
+          <p id="p-desc" class="text-sm text-slate-700 leading-relaxed"></p>
+        </div>
+      </div>
+
+      <!-- Thread -->
+      <div class="mb-5">
+        <p class="meta-label mb-4">Conversation</p>
+        <div class="space-y-5" id="p-thread">
+          <!-- injected by JS -->
+        </div>
+      </div>
+
+      <!-- Compose -->
+      <div class="mt-auto pt-2">
+        <div class="compose-box">
+          <div class="flex items-center gap-2 px-3 pt-2.5 pb-1 border-b border-slate-100">
+            <button class="text-xs font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200">Reply</button>
+            <button class="text-xs font-medium text-slate-400 hover:text-slate-700 px-2 py-0.5 rounded-md transition-colors">Note</button>
+            <button class="text-xs font-medium text-slate-400 hover:text-slate-700 px-2 py-0.5 rounded-md transition-colors">Forward</button>
+          </div>
+          <textarea class="px-3 pt-3 pb-2 text-sm text-slate-700 placeholder-slate-400 min-h-20" placeholder="Type a reply…"></textarea>
+          <div class="flex items-center justify-between px-3 pb-2.5 pt-1">
+            <div class="flex items-center gap-1">
+              <button class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors" data-tip="Attach file">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 16 16"><path d="M13.5 7.5l-5.5 5.5a4 4 0 01-5.6-5.7l5.5-5.5a2.5 2.5 0 013.6 3.5L6 11a1 1 0 01-1.4-1.4l5.5-5.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+              </button>
+              <button class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors" data-tip="Emoji">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/><path d="M5.5 9.5s.8 1.5 2.5 1.5 2.5-1.5 2.5-1.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="5.8" cy="6.5" r="0.8" fill="currentColor"/><circle cx="10.2" cy="6.5" r="0.8" fill="currentColor"/></svg>
+              </button>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-slate-400"><span class="kbd">⌘</span><span class="kbd ml-0.5">↵</span> to send</span>
+              <button class="action-btn btn-primary" style="padding: 5px 14px;">Send Reply</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar: metadata -->
+    <div class="panel-meta">
+
+      <div class="space-y-5">
+
+        <div>
+          <p class="meta-label">Assignee</p>
+          <div id="p-assignee" class="flex items-center gap-2">
+            <div id="p-av" class="avatar" style="width:26px;height:26px;font-size:10px;"></div>
+            <span id="p-av-name" class="text-sm font-medium text-slate-700"></span>
+          </div>
+        </div>
+
+        <div>
+          <p class="meta-label">Customer</p>
+          <p id="p-customer" class="text-sm font-medium text-slate-700"></p>
+        </div>
+
+        <div>
+          <p class="meta-label">Priority</p>
+          <div id="p-priority-block" class="flex items-center gap-1.5 text-sm font-semibold"></div>
+        </div>
+
+        <div>
+          <p class="meta-label">Category</p>
+          <span id="p-cat-meta" class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold border"></span>
+        </div>
+
+        <div>
+          <p class="meta-label">SLA</p>
+          <div id="p-sla" class="flex items-center gap-1.5">
+            <div class="w-full bg-slate-100 rounded-full h-1.5">
+              <div id="p-sla-bar" class="h-1.5 rounded-full"></div>
+            </div>
+            <span id="p-sla-label" class="text-xs font-semibold whitespace-nowrap"></span>
+          </div>
+        </div>
+
+        <div class="pt-1 border-t border-slate-100">
+          <p class="meta-label">Created</p>
+          <p id="p-created" class="text-xs text-slate-600 font-medium"></p>
+        </div>
+
+        <div>
+          <p class="meta-label">Updated</p>
+          <p id="p-updated" class="text-xs text-slate-600 font-medium"></p>
+        </div>
+
+        <div>
+          <p class="meta-label">Tags</p>
+          <div id="p-tags" class="flex flex-wrap gap-1.5"></div>
+        </div>
+
+        <!-- Activity timeline -->
+        <div class="pt-1 border-t border-slate-100">
+          <p class="meta-label mb-3">Activity</p>
+          <div id="p-timeline" class="relative space-y-4">
+            <div class="timeline-line"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- / PANEL -->
+
+
+<!-- ══════════════════════════════════════════
+     SIDEBAR
+════════════════════════════════════════════ -->
+<aside class="w-56 bg-white border-r border-slate-100 flex flex-col fixed top-0 left-0 h-full z-20" style="box-shadow: 1px 0 0 #f1f5f9;">
+  <div class="px-5 py-4 flex items-center gap-2.5 border-b border-slate-100">
+    <div class="w-7 h-7 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg,#0f172a 60%,#334155);">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 3.5L7 1L12 3.5V7C12 9.8 9.8 12.4 7 13C4.2 12.4 2 9.8 2 7V3.5Z" fill="white" opacity="0.9"/><path d="M5 7L6.5 8.5L9 5.5" stroke="white" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <span class="font-semibold text-slate-900 tracking-tight" style="font-size:14.5px;">Moov OS</span>
+    <div class="ml-auto"><span class="text-xs text-slate-400 font-medium bg-slate-100 px-1.5 py-0.5 rounded-md">v2</span></div>
+  </div>
+  <nav class="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
+    <p class="px-2.5 pt-1 pb-1.5 text-xs font-semibold text-slate-400 uppercase tracking-widest" style="font-size:10px;">Operations</p>
+    <a href="#" class="nav-item flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-slate-500 text-sm">
+      <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="5" rx="1.2" stroke="currentColor" stroke-width="1.4"/><rect x="9" y="2" width="5" height="5" rx="1.2" stroke="currentColor" stroke-width="1.4"/><rect x="2" y="9" width="5" height="5" rx="1.2" stroke="currentColor" stroke-width="1.4"/><rect x="9" y="9" width="5" height="5" rx="1.2" stroke="currentColor" stroke-width="1.4"/></svg>
+      <span>Overview</span>
+    </a>
+    <a href="#" class="nav-item active flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-slate-800 text-sm font-medium">
+      <svg class="w-4 h-4 flex-shrink-0 text-indigo-600" fill="none" viewBox="0 0 16 16"><path d="M13 2H3a1 1 0 00-1 1v10a1 1 0 001 1h10a1 1 0 001-1V3a1 1 0 00-1-1zM5 6h6M5 9h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      <span>Queries</span>
+      <span class="ml-auto text-xs font-semibold text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded-md">24</span>
+    </a>
+    <a href="#" class="nav-item flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-slate-500 text-sm">
+      <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      <span>Shipments</span>
+      <span class="ml-auto text-xs font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-md">8</span>
+    </a>
+    <a href="#" class="nav-item flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-slate-500 text-sm">
+      <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/><path d="M8 5.5v3l2 1.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Tracking</span>
+    </a>
+    <a href="#" class="nav-item flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-slate-500 text-sm">
+      <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 16 16"><path d="M2 4a1 1 0 011-1h10a1 1 0 011 1v2a1 1 0 01-1 1H3a1 1 0 01-1-1V4z" stroke="currentColor" stroke-width="1.4"/><path d="M4 7v5M8 7v5M12 7v5M2 12h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      <span>Claims</span>
+      <span class="ml-auto text-xs font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md">5</span>
+    </a>
+    <p class="px-2.5 pt-3 pb-1.5 text-xs font-semibold text-slate-400 uppercase tracking-widest" style="font-size:10px;">Finance</p>
+    <a href="#" class="nav-item flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-slate-500 text-sm">
+      <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 16 16"><path d="M8 2v12M4 6h7a2 2 0 010 4H4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Billing</span>
+    </a>
+    <a href="#" class="nav-item flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-slate-500 text-sm">
+      <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 16 16"><path d="M2 11l4-4 3 3 5-6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Reports</span>
+    </a>
+    <p class="px-2.5 pt-3 pb-1.5 text-xs font-semibold text-slate-400 uppercase tracking-widest" style="font-size:10px;">Settings</p>
+    <a href="#" class="nav-item flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-slate-500 text-sm">
+      <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.4"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      <span>Preferences</span>
+    </a>
+  </nav>
+  <div class="px-3 py-3 border-t border-slate-100">
+    <div class="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
+      <div class="avatar flex-shrink-0" style="background:linear-gradient(135deg,#6366f1,#818cf8);color:white;width:28px;height:28px;font-size:11px;">RJ</div>
+      <div class="min-w-0">
+        <p class="text-xs font-semibold text-slate-800 truncate">Ross Jermy</p>
+        <p class="text-xs text-slate-400 truncate">Admin</p>
+      </div>
+      <svg class="ml-auto w-3.5 h-3.5 text-slate-400 flex-shrink-0" fill="none" viewBox="0 0 14 14"><path d="M2 5l5 4 5-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+  </div>
+</aside>
+
+
+<!-- ══════════════════════════════════════════
+     MAIN CONTENT
+════════════════════════════════════════════ -->
+<main class="flex-1 ml-56 min-h-screen flex flex-col">
+
+  <!-- Top bar -->
+  <div class="bg-white border-b border-slate-100 sticky top-0 z-10" style="box-shadow:0 1px 0 #f1f5f9;">
+    <div class="flex items-center justify-between px-8 py-3.5">
+      <div class="flex items-center gap-2 text-xs text-slate-400">
+        <span>Operations</span>
+        <svg class="w-3 h-3" fill="none" viewBox="0 0 12 12"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="text-slate-700 font-medium">Queries</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors" data-tip="Search">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.4"/><path d="M11 11l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        </button>
+        <button class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors" data-tip="Notifications">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 16 16"><path d="M13 5H3M11 8H5M9 11H7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        </button>
+        <div class="w-px h-5 bg-slate-200 mx-1"></div>
+        <button class="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors" style="letter-spacing:0.01em;">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 14 14"><path d="M7 2v10M2 7h10" stroke="white" stroke-width="1.6" stroke-linecap="round"/></svg>
+          New Query
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page Header -->
+  <div class="px-8 pt-8 pb-5">
+    <div class="flex items-start justify-between">
+      <div>
+        <div class="flex items-center gap-3 mb-1.5">
+          <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Queries</h1>
+          <div class="flex items-center gap-1.5 px-3 py-1 rounded-full font-bold text-sm" style="background:#0f172a;color:#f8fafc;letter-spacing:0.01em;box-shadow:0 1px 3px rgba(15,23,42,0.25),0 0 0 3px rgba(99,102,241,0.15);">
+            <div class="w-2 h-2 rounded-full bg-amber-400" style="box-shadow:0 0 0 2px rgba(251,191,36,0.35);"></div>
+            24 open
+          </div>
+        </div>
+        <p class="text-sm text-slate-500">All inbound customer and operations queries.</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="text-center px-4 py-2.5 bg-white rounded-12 border border-slate-100" style="box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+          <p class="text-lg font-bold text-slate-900">12</p>
+          <p class="text-xs text-slate-400 font-medium mt-0.5">In progress</p>
+        </div>
+        <div class="text-center px-4 py-2.5 bg-white rounded-12 border border-slate-100" style="box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+          <p class="text-lg font-bold text-amber-600">5</p>
+          <p class="text-xs text-slate-400 font-medium mt-0.5">Pending</p>
+        </div>
+        <div class="text-center px-4 py-2.5 bg-white rounded-12 border border-slate-100" style="box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+          <p class="text-lg font-bold text-emerald-600">48</p>
+          <p class="text-xs text-slate-400 font-medium mt-0.5">Resolved (30d)</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filter Tabs -->
+  <div class="px-8 border-b border-slate-100 bg-white sticky" style="top:53px;z-index:9;">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center">
+        <button class="tab-btn active px-4 py-3 text-sm font-semibold text-slate-900" onclick="setTab(this)">All <span class="ml-1.5 text-xs font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-md">41</span></button>
+        <button class="tab-btn px-4 py-3 text-sm font-medium text-slate-500" onclick="setTab(this)">Open <span class="ml-1.5 text-xs font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md">24</span></button>
+        <button class="tab-btn px-4 py-3 text-sm font-medium text-slate-500" onclick="setTab(this)">In Progress <span class="ml-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-md">12</span></button>
+        <button class="tab-btn px-4 py-3 text-sm font-medium text-slate-500" onclick="setTab(this)">Pending <span class="ml-1.5 text-xs font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-md">5</span></button>
+        <button class="tab-btn px-4 py-3 text-sm font-medium text-slate-500" onclick="setTab(this)">Resolved</button>
+      </div>
+      <div class="flex items-center gap-2 py-2">
+        <button class="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 transition-colors border border-slate-200">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 14 14"><path d="M1.5 3.5h11M4 7h6M6 10.5h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          Filter
+        </button>
+        <button class="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 transition-colors border border-slate-200">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 14 14"><path d="M2 4l5 5 5-5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Sort: Newest
+        </button>
+        <button class="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 transition-colors border border-slate-200">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 14 14"><path d="M1 7h12M1 3.5h12M1 10.5h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          Group
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Column Headers -->
+  <div class="px-8 pt-4 pb-0">
+    <div class="flex items-center gap-3 px-4 pb-2 text-xs font-semibold text-slate-400 uppercase tracking-widest select-none" style="font-size:10.5px;">
+      <div class="w-4 flex-shrink-0"><input type="checkbox" /></div>
+      <div class="w-20 flex-shrink-0">ID</div>
+      <div class="flex-1 min-w-0">Subject</div>
+      <div class="w-28 flex-shrink-0">Customer</div>
+      <div class="w-24 flex-shrink-0">Category</div>
+      <div class="w-20 flex-shrink-0">Priority</div>
+      <div class="w-24 flex-shrink-0">Status</div>
+      <div class="w-28 flex-shrink-0">Assignee</div>
+      <div class="w-20 flex-shrink-0 text-right">Updated</div>
+    </div>
+  </div>
+
+  <!-- Rows -->
+  <div class="px-8 pb-8 space-y-1.5" id="ticket-list">
+    <!-- Rendered by JS -->
+  </div>
+
+</main>
+
+
+<!-- ══════════════════════════════════════════
+     DATA + LOGIC
+════════════════════════════════════════════ -->
+<script>
+// ── DATA ──────────────────────────────────────────────
+const TICKETS = [
+  {
+    id:'QRY-1042', title:'Shipment delay on parcel EU-8823 — customer escalation',
+    desc:'Customer reported a 4-day delay originating from the Manchester depot. The parcel was last scanned on 2 June at 07:42 and has not moved since. SLA breach is confirmed — next-day guaranteed service now on day 5. Customer is threatening chargeback.',
+    customer:'TechStart Ltd', category:'Claims', priority:'High',
+    status:'Open', assignee:'Sarah Chen', av:'SC', avStyle:'background:#fce7f3;color:#be185d;',
+    updated:'2h ago', created:'5 Jun 2026, 09:14',
+    tags:['SLA breach','Depot hold','Manchester'],
+    sla:{pct:88,label:'4h left',color:'#ef4444'},
+    thread:[
+      {from:'TechStart Ltd',initials:'TL',style:'background:#e0e7ff;color:#3730a3;',time:'5 Jun, 09:14',side:'customer',
+       body:"Hi, our parcel EU-8823 was supposed to arrive yesterday but it's still not here. Our client is furious. Please can you look into this urgently?"},
+      {from:'Sarah Chen',initials:'SC',style:'background:#fce7f3;color:#be185d;',time:'5 Jun, 10:02',side:'agent',
+       body:"Hi, I've raised this with our Manchester depot team and flagged it as a priority trace. I'll update you within 2 hours. Apologies for the delay — I can see this has now breached our SLA."},
+      {from:'TechStart Ltd',initials:'TL',style:'background:#e0e7ff;color:#3730a3;',time:'5 Jun, 10:45',side:'customer',
+       body:"Thank you. We need this resolved today. Can you confirm if compensation applies under our contract?"},
+    ],
+    activity:[
+      {label:'SLA breach flagged',time:'3h ago'},
+      {label:'Assigned to Sarah Chen',time:'5h ago'},
+      {label:'Ticket created',time:'6 Jun'},
+    ]
+  },
+  {
+    id:'QRY-1041', title:'Invoice discrepancy for order #44821 — double charge',
+    desc:'The August invoice shows £240 for order #44821 when the contracted rate is £120. This appears to be a system duplication error. Finance have been notified and a credit note is being prepared.',
+    customer:'Apex Retail plc', category:'Billing', priority:'Medium',
+    status:'In Progress', assignee:'James Parker', av:'JP', avStyle:'background:#dbeafe;color:#1e40af;',
+    updated:'4h ago', created:'5 Jun 2026, 07:50',
+    tags:['Invoice','Credit note','Finance'],
+    sla:{pct:45,label:'8h left',color:'#f59e0b'},
+    thread:[
+      {from:'Apex Retail plc',initials:'AR',style:'background:#f0fdf4;color:#166534;',time:'5 Jun, 07:50',side:'customer',
+       body:"We've just reviewed our invoice and it looks like we've been charged twice for order #44821. Can you look into this?"},
+      {from:'James Parker',initials:'JP',style:'background:#dbeafe;color:#1e40af;',time:'5 Jun, 08:30',side:'agent',
+       body:"Hi, confirmed — I can see the duplicate charge on our system. I've raised a credit note request with Finance. Expected resolution within 24 hours."},
+    ],
+    activity:[
+      {label:'Credit note raised',time:'3h ago'},
+      {label:'Assigned to James Parker',time:'4h ago'},
+      {label:'Ticket created',time:'5 Jun'},
+    ]
+  },
+  {
+    id:'QRY-1040', title:'API webhook not firing on delivery status update',
+    desc:'POST to /webhook/delivery-confirmed returns HTTP 200 but the event is never received client-side. Issue first reported at 02:18 BST. Affects all accounts using the v2 delivery webhook. Dev team investigating queue processor.',
+    customer:'ShipFast API', category:'Technical', priority:'High',
+    status:'Open', assignee:'Dev Support', av:'DS', avStyle:'background:#ede9fe;color:#6d28d9;',
+    updated:'5h ago', created:'5 Jun 2026, 02:18',
+    tags:['Webhook','API v2','P1'],
+    sla:{pct:92,label:'1h left',color:'#ef4444'},
+    thread:[
+      {from:'ShipFast API',initials:'SF',style:'background:#f5f3ff;color:#5b21b6;',time:'5 Jun, 02:18',side:'customer',
+       body:"Our webhook endpoint isn't receiving any events despite your API returning 200. This is breaking our real-time tracking integration. P1 for us."},
+      {from:'Dev Support',initials:'DS',style:'background:#ede9fe;color:#6d28d9;',time:'5 Jun, 02:55',side:'agent',
+       body:"Confirmed P1 and escalated to our platform engineering team. We can reproduce the issue on our end — it appears the event queue processor is dropping events after the HTTP response. Working on a hotfix now."},
+    ],
+    activity:[
+      {label:'Escalated to engineering',time:'4h ago'},
+      {label:'P1 raised',time:'5h ago'},
+      {label:'Ticket created',time:'5 Jun'},
+    ]
+  },
+  {
+    id:'QRY-1039', title:'Tracking page showing stale location for 3 parcels',
+    desc:'Last known scan for parcels BH-2201, BH-2202, BH-2203 is Birmingham depot at 36 hours ago. The tracking page has not refreshed since. Customer has sent two follow-up emails. Investigating whether this is a scan upload failure.',
+    customer:'Bloom & Co', category:'Queries', priority:'Medium',
+    status:'Open', assignee:'Mike Ross', av:'MR', avStyle:'background:#d1fae5;color:#065f46;',
+    updated:'Yesterday', created:'4 Jun 2026, 14:20',
+    tags:['Tracking','Scan failure'],
+    sla:{pct:30,label:'18h left',color:'#10b981'},
+    thread:[
+      {from:'Bloom & Co',initials:'BC',style:'background:#ecfdf5;color:#065f46;',time:'4 Jun, 14:20',side:'customer',
+       body:"We have 3 parcels that haven't updated on the tracking page in 36 hours. BH-2201, 2202 and 2203. Our end customer is getting concerned."},
+      {from:'Mike Ross',initials:'MR',style:'background:#d1fae5;color:#065f46;',time:'4 Jun, 15:10',side:'agent',
+       body:"Looking into this now. I can see the last depot scan at Birmingham. I'll liaise with the depot to confirm whether the parcels are still there or in transit."},
+    ],
+    activity:[
+      {label:'Depot contacted',time:'22h ago'},
+      {label:'Assigned to Mike Ross',time:'Yesterday'},
+      {label:'Ticket created',time:'4 Jun'},
+    ]
+  },
+  {
+    id:'QRY-1038', title:'Request for bulk rate card — Q3 contract renewal',
+    desc:'NovaCorp Group is approaching their Q3 renewal and want updated pricing for 500+ consignments per month. This has been forwarded to the Sales team for rate modelling. No urgency but needs a response within 5 business days.',
+    customer:'NovaCorp Group', category:'Queries', priority:'Low',
+    status:'Pending', assignee:'Emma Walsh', av:'EW', avStyle:'background:#fef3c7;color:#92400e;',
+    updated:'Yesterday', created:'4 Jun 2026, 11:05',
+    tags:['Contract','Sales','Q3'],
+    sla:{pct:15,label:'4d left',color:'#10b981'},
+    thread:[
+      {from:'NovaCorp Group',initials:'NG',style:'background:#fffbeb;color:#78350f;',time:'4 Jun, 11:05',side:'customer',
+       body:"We're coming up to our Q3 renewal and would like to explore volume pricing for 500+ shipments per month. Could you send us an updated rate card?"},
+      {from:'Emma Walsh',initials:'EW',style:'background:#fef3c7;color:#92400e;',time:'4 Jun, 12:00',side:'agent',
+       body:"Thanks for reaching out. I've passed this to our commercial team — someone from Sales will be in touch within 2 business days with a tailored rate card."},
+    ],
+    activity:[
+      {label:'Passed to Sales',time:'23h ago'},
+      {label:'Ticket created',time:'4 Jun'},
+    ]
+  },
+  {
+    id:'QRY-1037', title:'Missing item from consolidated pallet — insurance required',
+    desc:'1 of 12 parcels is missing from EU-7701 consolidation pallet. The item is valued at £1,800. A formal claim has been raised and insurance documentation is being prepared. Depot CCTV footage has been requested.',
+    customer:'GlobalGoods EU', category:'Claims', priority:'High',
+    status:'In Progress', assignee:'Sarah Chen', av:'SC', avStyle:'background:#fce7f3;color:#be185d;',
+    updated:'2d ago', created:'3 Jun 2026, 09:30',
+    tags:['Missing parcel','Insurance','CCTV'],
+    sla:{pct:60,label:'12h left',color:'#f59e0b'},
+    thread:[
+      {from:'GlobalGoods EU',initials:'GG',style:'background:#fef3c7;color:#78350f;',time:'3 Jun, 09:30',side:'customer',
+       body:"We received pallet EU-7701 with only 11 of 12 parcels. The missing item is high value (£1,800). We need to submit an insurance claim immediately."},
+      {from:'Sarah Chen',initials:'SC',style:'background:#fce7f3;color:#be185d;',time:'3 Jun, 10:15',side:'agent',
+       body:"I've raised a formal missing item claim and requested CCTV footage from the departure depot. The claim reference is CLM-4421. Insurance documentation will be sent within 24 hours."},
+    ],
+    activity:[
+      {label:'CCTV requested',time:'1d ago'},
+      {label:'Claim CLM-4421 opened',time:'2d ago'},
+      {label:'Ticket created',time:'3 Jun'},
+    ]
+  },
+  {
+    id:'QRY-1036', title:'Auto-billing charged twice this month — urgent reversal',
+    desc:'Meridian Brands had £3,420 taken twice via direct debit on 1st June due to a billing system error. Finance has been alerted and the reversal is awaiting sign-off. The duplicate transaction has been identified in the payment processor.',
+    customer:'Meridian Brands', category:'Billing', priority:'High',
+    status:'Open', assignee:'James Parker', av:'JP', avStyle:'background:#dbeafe;color:#1e40af;',
+    updated:'2d ago', created:'3 Jun 2026, 08:00',
+    tags:['Double charge','Direct debit','Urgent'],
+    sla:{pct:75,label:'6h left',color:'#ef4444'},
+    thread:[
+      {from:'Meridian Brands',initials:'MB',style:'background:#eff6ff;color:#1e40af;',time:'3 Jun, 08:00',side:'customer',
+       body:"We've just seen that £3,420 has been taken twice from our account this morning. This is a serious error. Please reverse the duplicate immediately."},
+      {from:'James Parker',initials:'JP',style:'background:#dbeafe;color:#1e40af;',time:'3 Jun, 08:45',side:'agent',
+       body:"I can confirm this is a billing system error and I've escalated to Finance as P1. A reversal has been initiated and will reflect within 2-3 business days. I sincerely apologise for the inconvenience."},
+    ],
+    activity:[
+      {label:'Reversal initiated',time:'2d ago'},
+      {label:'Finance alerted',time:'2d ago'},
+      {label:'Ticket created',time:'3 Jun'},
+    ]
+  },
+  {
+    id:'QRY-1035', title:'Export CSV format issue — encoding breaks on special chars',
+    desc:'UTF-8 BOM was missing from CSV exports, causing special characters (accents, em-dashes) to render incorrectly in Excel. Fixed in platform v2.3.1, deployed 2 June. Resolved.',
+    customer:'Internal', category:'Technical', priority:'Low',
+    status:'Resolved', assignee:'Dev Support', av:'DS', avStyle:'background:#ede9fe;color:#6d28d9;',
+    updated:'3d ago', created:'2 Jun 2026, 11:00',
+    tags:['CSV','Bug fix','v2.3.1'],
+    sla:{pct:100,label:'Resolved',color:'#10b981'},
+    thread:[
+      {from:'Ops Team',initials:'OT',style:'background:#f1f5f9;color:#475569;',time:'2 Jun, 11:00',side:'customer',
+       body:"The CSV export is producing garbled text for any special characters when opened in Excel. Affects accent marks, em-dashes, etc."},
+      {from:'Dev Support',initials:'DS',style:'background:#ede9fe;color:#6d28d9;',time:'2 Jun, 14:30',side:'agent',
+       body:"Confirmed bug — missing BOM header in CSV output. Patch merged and deployed in v2.3.1 at 16:00 today. Please retry export and confirm it's working."},
+      {from:'Ops Team',initials:'OT',style:'background:#f1f5f9;color:#475569;',time:'2 Jun, 16:45',side:'customer',
+       body:"Confirmed — working correctly now. Thanks for the quick fix!"},
+    ],
+    activity:[
+      {label:'Resolved — v2.3.1',time:'3d ago'},
+      {label:'Patch deployed',time:'3d ago'},
+      {label:'Bug confirmed',time:'3d ago'},
+    ]
+  },
+  {
+    id:'QRY-1034', title:'SLA breach on express delivery — compensation requested',
+    desc:'Swift Trade Co used our next-day express service for a time-critical shipment which arrived on day 3. Under contract clause 8.2, a £150 compensation payment is applicable. Awaiting customer sign-off on compensation offer.',
+    customer:'Swift Trade Co', category:'Claims', priority:'Medium',
+    status:'Pending', assignee:'Emma Walsh', av:'EW', avStyle:'background:#fef3c7;color:#92400e;',
+    updated:'3d ago', created:'2 Jun 2026, 09:00',
+    tags:['SLA','Express','Compensation'],
+    sla:{pct:20,label:'2d left',color:'#10b981'},
+    thread:[
+      {from:'Swift Trade Co',initials:'ST',style:'background:#fff7ed;color:#9a3412;',time:'2 Jun, 09:00',side:'customer',
+       body:"Our express parcel arrived 2 days late. We specifically chose next-day for a time-sensitive delivery and this cost us £300 in re-scheduling fees. What compensation can you offer?"},
+      {from:'Emma Walsh',initials:'EW',style:'background:#fef3c7;color:#92400e;',time:'2 Jun, 10:30',side:'agent',
+       body:"I've reviewed your contract and can confirm an SLA breach applies. Under clause 8.2, you're entitled to a £150 credit. I can apply this to your next invoice — please confirm if you'd like to proceed."},
+    ],
+    activity:[
+      {label:'Compensation offered',time:'3d ago'},
+      {label:'SLA breach confirmed',time:'3d ago'},
+      {label:'Ticket created',time:'2 Jun'},
+    ]
+  },
+  {
+    id:'QRY-1033', title:'Account tier upgrade eligibility — volume threshold query',
+    desc:'Peak Solutions shipped 480 consignments in May, just under the 500 threshold for Tier 2 pricing. Client is asking whether a discretionary upgrade is possible or if June volume counts towards retroactive qualification.',
+    customer:'Peak Solutions', category:'Queries', priority:'Low',
+    status:'Open', assignee:'Mike Ross', av:'MR', avStyle:'background:#d1fae5;color:#065f46;',
+    updated:'4d ago', created:'1 Jun 2026, 15:00',
+    tags:['Pricing','Tier 2','Volume'],
+    sla:{pct:10,label:'6d left',color:'#10b981'},
+    thread:[
+      {from:'Peak Solutions',initials:'PS',style:'background:#f0fdf4;color:#166534;',time:'1 Jun, 15:00',side:'customer',
+       body:"We shipped 480 consignments in May. We're very close to Tier 2 — is there any discretion on the threshold? Or can June volume count retroactively?"},
+      {from:'Mike Ross',initials:'MR',style:'background:#d1fae5;color:#065f46;',time:'1 Jun, 16:00',side:'agent',
+       body:"Great question — I've checked with our commercial team. The 500 threshold is firm for the current period, but I'm exploring whether a discretionary upgrade can be applied. I'll have a definitive answer by end of week."},
+    ],
+    activity:[
+      {label:'Commercial team consulted',time:'4d ago'},
+      {label:'Ticket created',time:'1 Jun'},
+    ]
+  },
+];
+
+// ── CATEGORY STYLES ──
+const CAT = {
+  'Claims':   {bg:'#fffbeb',color:'#92400e',border:'#fde68a'},
+  'Billing':  {bg:'#ecfdf5',color:'#065f46',border:'#a7f3d0'},
+  'Technical':{bg:'#f5f3ff',color:'#4c1d95',border:'#ddd6fe'},
+  'Queries':  {bg:'#eff6ff',color:'#1e3a8a',border:'#bfdbfe'},
+};
+
+// ── STATUS STYLES ──
+const STATUS_DOT = {
+  'Open':'status-open', 'In Progress':'status-progress',
+  'Pending':'status-pending', 'Resolved':'status-resolved'
+};
+
+// ── PRIORITY ──
+const PRI_ICON = (p) => {
+  const cls = p==='High'?'#dc2626':p==='Medium'?'#d97706':'#94a3b8';
+  return `<svg width="12" height="12" viewBox="0 0 12 12" fill="${cls}"><path d="M6 1l1.5 3 3.5.5-2.5 2.5.5 3.5L6 9l-3 1.5.5-3.5L1 4.5 4.5 4z"/></svg>`;
+};
+const PRI_CLR  = {High:'#dc2626',Medium:'#d97706',Low:'#94a3b8'};
+
+// ── RENDER ROW ──
+function renderRows(data) {
+  const list = document.getElementById('ticket-list');
+  list.innerHTML = '';
+  data.forEach((t,i) => {
+    const c = CAT[t.category];
+    const sdot = STATUS_DOT[t.status];
+    const strikeClass = t.status==='Resolved'?'line-through opacity-60':'';
+    const resolvedOpacity = t.status==='Resolved'?' opacity-60':'';
+
+    const div = document.createElement('div');
+    div.className = `ticket-row bg-white border border-slate-100 rounded-12 flex items-center gap-3 px-4 py-3.5${resolvedOpacity}`;
+    div.style.cssText = 'box-shadow:0 1px 2px rgba(0,0,0,0.04);';
+    div.dataset.idx = i;
+    div.innerHTML = `
+      <div class="w-4 flex-shrink-0"><input type="checkbox" onclick="event.stopPropagation()" /></div>
+      <div class="w-20 flex-shrink-0"><span class="text-xs font-mono text-slate-400 font-medium">${t.id}</span></div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-semibold text-slate-900 truncate ${strikeClass}">${t.title}</p>
+        <p class="text-xs text-slate-400 mt-0.5 truncate">${t.desc.substring(0,90)}…</p>
+      </div>
+      <div class="w-28 flex-shrink-0"><span class="text-xs text-slate-600 font-medium">${t.customer}</span></div>
+      <div class="w-24 flex-shrink-0">
+        <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold border"
+          style="background:${c.bg};color:${c.color};border-color:${c.border};">${t.category}</span>
+      </div>
+      <div class="w-20 flex-shrink-0">
+        <span class="inline-flex items-center gap-1 text-xs font-semibold" style="color:${PRI_CLR[t.priority]};">
+          ${PRI_ICON(t.priority)} ${t.priority}
+        </span>
+      </div>
+      <div class="w-24 flex-shrink-0 flex items-center gap-1.5">
+        <span class="status-dot ${sdot}"></span>
+        <span class="text-xs font-medium text-slate-600">${t.status}</span>
+      </div>
+      <div class="w-28 flex-shrink-0 flex items-center gap-2">
+        <div class="avatar" style="${t.avStyle}width:26px;height:26px;font-size:10px;">${t.av}</div>
+        <span class="text-xs text-slate-600 font-medium truncate">${t.assignee}</span>
+      </div>
+      <div class="w-20 flex-shrink-0 text-right"><span class="text-xs text-slate-400">${t.updated}</span></div>
+    `;
+    div.addEventListener('click', () => openPanel(i));
+    list.appendChild(div);
+  });
+}
+
+// ── OPEN PANEL ──
+let currentIdx = null;
+
+function openPanel(idx) {
+  const t = TICKETS[idx];
+  currentIdx = idx;
+
+  // highlight row
+  document.querySelectorAll('.ticket-row').forEach(r => r.classList.remove('selected'));
+  document.querySelector(`[data-idx="${idx}"]`)?.classList.add('selected');
+
+  const c = CAT[t.category];
+
+  // id + title
+  document.getElementById('p-id').textContent = t.id;
+  document.getElementById('p-title').textContent = t.title;
+
+  // cat badge (header + meta sidebar)
+  ['p-cat-badge','p-cat-meta'].forEach(id => {
+    const el = document.getElementById(id);
+    el.textContent = t.category;
+    el.style.background = c.bg; el.style.color = c.color; el.style.borderColor = c.border;
+  });
+
+  // status
+  const sdot = document.getElementById('p-status-dot');
+  sdot.className = 'status-dot ' + STATUS_DOT[t.status];
+  document.getElementById('p-status-text').textContent = t.status;
+
+  // description
+  document.getElementById('p-desc').textContent = t.desc;
+
+  // metadata
+  document.getElementById('p-av').textContent = t.av;
+  document.getElementById('p-av').style.cssText = t.avStyle + 'width:26px;height:26px;font-size:10px;';
+  document.getElementById('p-av-name').textContent = t.assignee;
+  document.getElementById('p-customer').textContent = t.customer;
+  document.getElementById('p-created').textContent = t.created;
+  document.getElementById('p-updated').textContent = t.updated;
+
+  // priority
+  const pb = document.getElementById('p-priority-block');
+  pb.innerHTML = `${PRI_ICON(t.priority)} <span style="color:${PRI_CLR[t.priority]}">${t.priority}</span>`;
+
+  // SLA bar
+  const bar = document.getElementById('p-sla-bar');
+  bar.style.width = t.sla.pct + '%';
+  bar.style.background = t.sla.color;
+  document.getElementById('p-sla-label').textContent = t.sla.label;
+  document.getElementById('p-sla-label').style.color = t.sla.color;
+
+  // tags
+  const tagsEl = document.getElementById('p-tags');
+  tagsEl.innerHTML = t.tags.map(tag =>
+    `<span class="text-xs font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200">${tag}</span>`
+  ).join('');
+
+  // thread
+  const thread = document.getElementById('p-thread');
+  thread.innerHTML = t.thread.map(msg => {
+    const isAgent = msg.side === 'agent';
+    return `
+      <div class="flex gap-3 ${isAgent?'':''}">
+        <div class="avatar flex-shrink-0" style="${msg.style}width:32px;height:32px;font-size:11px;">${msg.initials}</div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-baseline gap-2 mb-1.5">
+            <span class="text-xs font-semibold text-slate-800">${msg.from}</span>
+            <span class="text-xs text-slate-400">${msg.time}</span>
+            ${isAgent ? '<span class="text-xs font-medium text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-md border border-indigo-200" style="font-size:10px;">Agent</span>' : ''}
+          </div>
+          <div class="msg-bubble px-3.5 py-3 text-sm text-slate-700 leading-relaxed border"
+            style="${isAgent
+              ? 'background:#f8f8ff;border-color:#e0e7ff;'
+              : 'background:#f8fafc;border-color:#e2e8f0;'}">
+            ${msg.body}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // timeline
+  const tl = document.getElementById('p-timeline');
+  // Keep the line div, replace events
+  const lineDiv = tl.querySelector('.timeline-line');
+  tl.innerHTML = '<div class="timeline-line"></div>';
+  t.activity.forEach(a => {
+    const item = document.createElement('div');
+    item.className = 'relative flex items-start gap-3 pl-7';
+    item.innerHTML = `
+      <div class="absolute left-0 top-1.5 w-5 h-5 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0">
+        <div class="w-1.5 h-1.5 rounded-full bg-slate-400"></div>
+      </div>
+      <div>
+        <p class="text-xs font-medium text-slate-700">${a.label}</p>
+        <p class="text-xs text-slate-400 mt-0.5">${a.time}</p>
+      </div>
+    `;
+    tl.appendChild(item);
+  });
+
+  // show
+  document.getElementById('overlay').classList.add('visible');
+  document.getElementById('panel').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closePanel() {
+  document.getElementById('overlay').classList.remove('visible');
+  document.getElementById('panel').classList.remove('open');
+  document.body.style.overflow = '';
+  document.querySelectorAll('.ticket-row').forEach(r => r.classList.remove('selected'));
+  currentIdx = null;
+}
+
+function resolveTicket() {
+  if (currentIdx === null) return;
+  TICKETS[currentIdx].status = 'Resolved';
+  renderRows(TICKETS);
+  closePanel();
+}
+
+// ── TABS ──
+function setTab(el) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ── KEYBOARD ──
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closePanel();
+  if (e.key === 'ArrowDown' && currentIdx !== null) {
+    e.preventDefault();
+    openPanel(Math.min(currentIdx + 1, TICKETS.length - 1));
+  }
+  if (e.key === 'ArrowUp' && currentIdx !== null) {
+    e.preventDefault();
+    openPanel(Math.max(currentIdx - 1, 0));
+  }
+});
+
+// ── INIT ──
+renderRows(TICKETS);
+</script>
+</body>
+</html>
