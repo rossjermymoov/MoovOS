@@ -317,7 +317,7 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
       borderLeft: cardBorderLeft.replace('0.35', '1').replace('0.50', '1').replace('0.45', '1'),
       borderRadius: 12,
       overflow: 'hidden',
-      boxShadow: '0 1px 4px rgba(0,0,0,0.06), 0 2px 12px rgba(0,0,0,0.04)',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
     }}>
 
       {/* Card header */}
@@ -360,7 +360,7 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
       </div>
 
       {/* Body */}
-      <div style={{ padding: '18px 22px', overflow: 'hidden' }}>
+      <div style={{ padding: '20px 24px', overflowX: 'hidden' }}>
         {editMode ? (
           <textarea
             value={editBody}
@@ -376,16 +376,15 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
           <>
             <pre style={{
               margin: 0, fontSize: 13, color: '#334155', whiteSpace: 'pre-wrap',
-              wordBreak: 'break-all', overflowWrap: 'anywhere',
-              lineHeight: 1.8, fontFamily: 'inherit',
-              maxHeight: 520, overflowY: 'auto',
+              overflowWrap: 'break-word', lineHeight: 1.8, fontFamily: 'inherit',
+              minHeight: 60,
             }}>
               {mainBody || <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>No content</span>}
             </pre>
             {sigBody && (
               <>
                 <div style={{ margin: '16px 0 10px', borderTop: '1px dashed #E2E8F0', position: 'relative' }}><span style={{ position: 'absolute', top: -8, left: 0, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#CBD5E1', background: '#fff', paddingRight: 8 }}>Signature</span></div>
-                <pre style={{ margin: 0, fontSize: 10.5, color: '#D1D5DB', whiteSpace: 'pre-wrap', wordBreak: 'break-all', overflowWrap: 'anywhere', lineHeight: 1.55, fontFamily: 'inherit', opacity: 0.7 }}>{sigBody}</pre>
+                <pre style={{ margin: 0, fontSize: 10.5, color: '#D1D5DB', whiteSpace: 'pre-wrap', overflowWrap: 'break-word', lineHeight: 1.55, fontFamily: 'inherit', opacity: 0.7 }}>{sigBody}</pre>
               </>
             )}
           </>
