@@ -18,7 +18,7 @@ const api = axios.create({ baseURL: '/api' });
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const C = {
-  bg:       '#E3DDD5',  // warm beige — sidebar cards, compose tab bar
+  bg:       '#F8FAFC',  // crisp slate
   card:     '#FFFFFF',
   border:   'rgba(0,0,0,0.08)',
   green:    '#166534',
@@ -101,17 +101,10 @@ function useSpeechInput(setText) {
 }
 
 // ── Sidebar card ──────────────────────────────────────────────────────────────
-function SbCard({ title, children }) {
+function SbSection({ title, children }) {
   return (
-    <div style={{ background: C.bg, borderRadius: 10, padding: '10px 12px', marginBottom: 10 }}>
-      {title && (
-        <div style={{
-          fontSize: 10, fontWeight: 500, color: C.muted,
-          textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8,
-        }}>
-          {title}
-        </div>
-      )}
+    <div style={{ padding: '14px 18px', borderBottom: '1px solid #F1F5F9' }}>
+      <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#94A3B8', marginBottom: 10 }}>{title}</p>
       {children}
     </div>
   );
@@ -119,12 +112,9 @@ function SbCard({ title, children }) {
 
 function SbRow({ label, children }) {
   return (
-    <div style={{
-      display: 'flex', alignItems: 'flex-start',
-      justifyContent: 'space-between', gap: 8, padding: '4px 0',
-    }}>
-      <span style={{ fontSize: 11, color: C.muted, flexShrink: 0, paddingTop: 1 }}>{label}</span>
-      <div style={{ minWidth: 0, textAlign: 'right' }}>{children}</div>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, padding: '4px 0' }}>
+      <span style={{ fontSize: 11, color: '#94A3B8', flexShrink: 0 }}>{label}</span>
+      <span style={{ fontSize: 11, color: '#1E293B', fontWeight: 500, textAlign: 'right' }}>{children}</span>
     </div>
   );
 }
@@ -291,81 +281,97 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
     finally { setRevising(false); }
   }
 
+  // Detect signature (lines after -- or standard sig patterns)
+  const sigCutoff = (() => {
+    const lines = displayBody.split('\n');
+    const i = lines.findIndex(l => /^--\s*$|^_{3,}|^Regards,|^Kind regards|^Thanks,|^Best,|^Best regards/i.test(l.trim()));
+    return i > 1 ? i : -1;
+  })();
+  const mainBody = sigCutoff > 0 ? displayBody.split('\n').slice(0, sigCutoff).join('\n').trim() : displayBody;
+  const sigBody  = sigCutoff > 0 ? displayBody.split('\n').slice(sigCutoff).join('\n').trim() : null;
+
+  const dirBadge = isNote ? { label: 'Note', bg: '#FFFBEB', color: '#92400E' }
+    : dir === 'inbound_customer'  ? { label: 'Customer', bg: '#EFF6FF', color: '#1D4ED8' }
+    : dir === 'outbound_customer' ? { label: 'Sent', bg: '#F0FDF4', color: '#166534' }
+    : dir === 'inbound_courier'   ? { label: 'Courier', bg: '#FFFBEB', color: '#92400E' }
+    :                               { label: 'Sent to courier', bg: '#F0FDF4', color: '#166534' };
+
   return (
     <div style={{
-      display: 'flex', gap: 14,
-      padding: '14px 16px',
-      background: cardBg,
-      border: `0.5px solid ${C.border}`,
-      borderLeft: cardBorderLeft,
-      borderRadius: 10,
+      background: C.card,
+      border: '1px solid #E2E8F0',
+      borderLeft: cardBorderLeft.replace('0.35', '1').replace('0.50', '1').replace('0.45', '1'),
+      borderRadius: 12,
+      overflow: 'hidden',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
     }}>
 
-      {/* Avatar */}
+      {/* Card header */}
       <div style={{
-        width: 32, height: 32, borderRadius: '50%', flexShrink: 0, marginTop: 1,
-        background: logoUrl ? '#fff' : avBg,
-        border: `0.5px solid ${C.border}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '12px 16px 10px',
+        borderBottom: '1px solid #F8FAFC',
+        background: isNote ? '#FFFBEB20' : C.card,
       }}>
-        {logoUrl
-          ? <img src={logoUrl} alt="" style={{ width: '100%', objectFit: 'contain', padding: 4 }} />
-          : <span style={{ fontSize: 11, fontWeight: 500, color: avColor }}>{avInitial}</span>
-        }
-      </div>
-
-      {/* Content */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {/* Courier logo chip — shown on any courier direction */}
-            {isCourier && logoUrl && (
-              <div style={{
-                width: 22, height: 22, borderRadius: 5,
-                border: `0.5px solid ${C.border}`, background: '#fff',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0,
-              }}>
-                <img src={logoUrl} alt={courierName || ''} style={{ width: '100%', objectFit: 'contain', padding: 2 }} />
-              </div>
-            )}
-            <span style={{ fontSize: 13, fontWeight: 500, color: C.text }}>
-              {senderLabel}
-            </span>
+        {/* Avatar */}
+        <div style={{
+          width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+          background: logoUrl ? '#fff' : avBg,
+          border: logoUrl ? `1px solid ${C.border}` : 'none',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+        }}>
+          {logoUrl
+            ? <img src={logoUrl} alt="" style={{ width: '100%', objectFit: 'contain', padding: 4 }} />
+            : <span style={{ fontSize: 11, fontWeight: 700, color: avColor }}>{avInitial}</span>
+          }
+        </div>
+        {/* Sender info */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>{senderLabel}</span>
             {isDraft && (
-              <span style={{
-                fontSize: 10, fontWeight: 500, color: C.green,
-                background: C.greenDim, borderRadius: 20, padding: '2px 8px',
-              }}>
-                AI draft
-              </span>
+              <span style={{ fontSize: 10, fontWeight: 600, color: '#166534', background: '#F0FDF4', borderRadius: 20, padding: '2px 8px', border: '1px solid #BBF7D0' }}>AI draft</span>
             )}
           </div>
-          <span style={{ fontSize: 11, color: C.muted, flexShrink: 0, marginLeft: 16 }}>{fmtDate(ts)}</span>
+          {email.from_address && !isOut && (
+            <p style={{ fontSize: 11, color: '#94A3B8', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email.from_address}</p>
+          )}
         </div>
+        {/* Timestamp + direction badge */}
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          <p style={{ fontSize: 11, color: '#94A3B8', margin: 0, whiteSpace: 'nowrap' }}>{fmtDate(ts)}</p>
+          <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 4, background: dirBadge.bg, color: dirBadge.color, marginTop: 2, display: 'inline-block' }}>{dirBadge.label}</span>
+        </div>
+      </div>
 
-        {/* Body */}
+      {/* Body */}
+      <div style={{ padding: '14px 16px' }}>
         {editMode ? (
           <textarea
             value={editBody}
             onChange={e => setEditBody(e.target.value)}
             style={{
-              width: '100%', minHeight: 120, background: C.card,
-              border: `0.5px solid ${C.border}`, borderRadius: 8,
-              color: C.text, fontSize: 13, padding: 10, resize: 'vertical',
+              width: '100%', minHeight: 120, background: '#FAFAFA',
+              border: '1px solid #E2E8F0', borderRadius: 8,
+              color: '#334155', fontSize: 13, padding: 10, resize: 'vertical',
               fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none', lineHeight: 1.65,
             }}
           />
         ) : (
-          <pre style={{
-            margin: 0, fontSize: 13, color: C.sub, whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word', lineHeight: 1.7, fontFamily: 'inherit',
-            borderLeft: isNote ? `3px solid rgba(234,179,8,0.4)` : 'none',
-            paddingLeft: isNote ? 10 : 0,
-          }}>
-            {displayBody || <span style={{ color: C.muted, fontStyle: 'italic' }}>No content</span>}
-          </pre>
+          <>
+            <pre style={{
+              margin: 0, fontSize: 13, color: '#334155', whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word', lineHeight: 1.75, fontFamily: 'inherit',
+            }}>
+              {mainBody || <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>No content</span>}
+            </pre>
+            {sigBody && (
+              <>
+                <div style={{ margin: '12px 0 8px', borderTop: '1px dashed #E2E8F0' }} />
+                <pre style={{ margin: 0, fontSize: 11, color: '#CBD5E1', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.6, fontFamily: 'inherit' }}>{sigBody}</pre>
+              </>
+            )}
+          </>
         )}
 
         {/* AI draft actions */}
@@ -512,20 +518,25 @@ function ComposeBar({ queryId, courierName, onSent }) {
   }
 
   return (
-    <div style={{ flexShrink: 0, borderTop: `0.5px solid ${C.border}`, background: C.card }}>
-      {/* Tabs — beige background, active tab pops white */}
-      <div style={{ display: 'flex', background: C.bg, borderBottom: `0.5px solid ${C.border}` }}>
+    <div style={{ flexShrink: 0, borderTop: '1px solid #E2E8F0', background: '#fff' }}>
+      {/* Premium tab bar */}
+      <div style={{ display: 'flex', padding: '10px 16px 0', gap: 2, borderBottom: '1px solid #E2E8F0', background: '#fff' }}>
         {tabs.map(t => (
           <button key={t.key} onClick={() => switchTab(t.key)} style={{
-            padding: '9px 14px', border: 'none',
-            borderBottom: `2px solid ${active === t.key ? C.text : 'transparent'}`,
-            background: active === t.key ? C.card : 'transparent',
-            color: active === t.key ? C.text : C.muted,
+            padding: '6px 12px',
+            border: active === t.key ? '1px solid #E2E8F0' : 'none',
+            borderBottom: active === t.key ? '1px solid #fff' : 'none',
+            borderRadius: '6px 6px 0 0',
+            background: active === t.key ? '#fff' : 'transparent',
+            color: active === t.key ? '#0F172A' : '#94A3B8',
             fontSize: 12, fontWeight: active === t.key ? 500 : 400,
-            cursor: 'pointer', marginBottom: -0.5,
+            cursor: 'pointer', marginBottom: active === t.key ? -1 : 0,
             display: 'flex', alignItems: 'center', gap: 6,
-            transition: 'background 0.1s',
-          }}>
+            transition: 'all 0.1s', fontFamily: 'inherit',
+          }}
+            onMouseEnter={e => { if (active !== t.key) e.currentTarget.style.color = '#64748B'; }}
+            onMouseLeave={e => { if (active !== t.key) e.currentTarget.style.color = '#94A3B8'; }}
+          >
             <t.icon size={12} />
             {t.label}
           </button>
@@ -563,32 +574,33 @@ function ComposeBar({ queryId, courierName, onSent }) {
             }}
             onKeyDown={e => { if (e.key === 'Enter' && e.metaKey) send(); }}
           />
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               {active !== 'note' && (
                 <button onClick={generateDraft} disabled={generating} style={{
-                  display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px',
-                  borderRadius: 6, border: `0.5px solid ${C.border}`, background: 'transparent',
-                  color: C.sub, fontSize: 12, cursor: generating ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px',
+                  borderRadius: 6, border: '1px solid #E2E8F0', background: '#fff',
+                  color: generating ? '#94A3B8' : '#6366F1', fontSize: 12,
+                  cursor: generating ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
                 }}>
                   <Sparkles size={12} />
                   {generating ? 'Generating…' : drafted ? 'Regenerate' : 'AI draft'}
                 </button>
               )}
               <button style={{
-                padding: '5px 10px', borderRadius: 6,
-                border: 'none', background: C.blueDim,
-                color: C.blue, fontSize: 12, cursor: 'pointer',
+                padding: '5px 11px', borderRadius: 6,
+                border: '1px solid #E2E8F0', background: '#fff',
+                color: '#64748B', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
               }}>
-                Use template
+                Template
               </button>
             </div>
             <button onClick={send} disabled={sending || !text.trim()} style={{
-              display: 'flex', alignItems: 'center', gap: 5, padding: '7px 16px',
-              borderRadius: 8, border: 'none',
-              background: text.trim() ? C.text : C.muted,
-              color: '#fff', fontSize: 13, fontWeight: 500,
-              cursor: sending || !text.trim() ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', gap: 5, padding: '7px 18px',
+              borderRadius: 7, border: 'none',
+              background: text.trim() ? '#0F172A' : '#CBD5E1',
+              color: '#fff', fontSize: 12, fontWeight: 600,
+              cursor: sending || !text.trim() ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
             }}>
               <Send size={12} />
               {sending ? 'Sending…' : active === 'note' ? 'Save note' : 'Send'}
@@ -684,76 +696,68 @@ export default function TicketDetailPage() {
     <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden' }}>
 
       {/* ── Header ── */}
-      <div style={{ flexShrink: 0, background: C.card, borderBottom: `0.5px solid ${C.border}`, padding: '12px 20px' }}>
+      <div style={{ flexShrink: 0 }}>
 
-        {/* Breadcrumb */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+        {/* Dark breadcrumb bar */}
+        <div style={{ background: '#1A1C20', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           <button onClick={() => navigate('/queries')} style={{
             display: 'flex', alignItems: 'center', gap: 5, background: 'none',
-            border: 'none', color: C.muted, cursor: 'pointer', padding: 0, fontSize: 13,
+            border: 'none', color: 'rgba(255,255,255,0.45)', cursor: 'pointer', padding: 0, fontSize: 12, fontFamily: 'inherit',
           }}
-            onMouseEnter={e => e.currentTarget.style.color = C.sub}
-            onMouseLeave={e => e.currentTarget.style.color = C.muted}
+            onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.75)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.45)'}
           >
-            <ArrowLeft size={13} /> Queries
+            <ArrowLeft size={12} /> Queries
           </button>
-          <span style={{ color: C.muted, fontSize: 13 }}>›</span>
-          <span style={{ fontSize: 13, color: C.sub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 320 }}>
-            {ticket.customer_name || ticket.subject}
+          <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 14 }}>›</span>
+          {ticket.customer_name && <>
+            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', fontWeight: 500 }}>{ticket.customer_name}</span>
+            <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 14 }}>›</span>
+          </>}
+          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 340 }}>
+            #{ticket.ticket_number} — {ticket.subject || 'No subject'}
           </span>
-        </div>
-
-        {/* Title + actions */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 17, fontWeight: 500, color: C.text, marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {ticket.subject || ticket.customer_name}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 11, fontWeight: 500, color: status.color, background: status.bg, borderRadius: 20, padding: '3px 10px' }}>
-                {status.label}
-              </span>
-              {ticket.group_name && (
-                <span style={{ fontSize: 11, color: C.muted, background: 'rgba(0,0,0,0.04)', borderRadius: 20, padding: '3px 9px' }}>
-                  {ticket.group_name}
-                </span>
-              )}
-              {ticket.customer_name && (
-                <span style={{ fontSize: 12, color: C.sub }}>{ticket.customer_name}</span>
-              )}
-              {courierLogo && (
-                <div style={{ width: 26, height: 26, borderRadius: 6, border: `0.5px solid ${C.border}`, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                  <img src={courierLogo} alt="" style={{ width: '100%', objectFit: 'contain', padding: 4 }} />
-                </div>
-              )}
-              {consignment && (
-                <span style={{ fontFamily: 'monospace', fontSize: 11, color: C.muted }}>{consignment}</span>
-              )}
-              {ticket.requires_attention && (
-                <span style={{ fontSize: 11, fontWeight: 500, color: C.red, background: C.redDim, borderRadius: 20, padding: '3px 9px' }}>
-                  ⚠ Needs attention
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0, alignItems: 'center' }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
             {consignment && (
               <button onClick={() => navigate(`/tracking?q=${encodeURIComponent(consignment)}`)} style={{
-                display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px',
-                borderRadius: 8, border: `0.5px solid ${C.border}`, background: 'transparent',
-                color: C.muted, fontSize: 12, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px',
+                borderRadius: 7, border: '1px solid rgba(255,255,255,0.12)', background: 'transparent',
+                color: 'rgba(255,255,255,0.55)', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
               }}>
-                <ExternalLink size={12} /> Track
+                <ExternalLink size={11} /> Track
               </button>
             )}
             <button onClick={() => patch.mutate({ status: 'resolved' })} style={{
-              display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px',
-              borderRadius: 8, border: `0.5px solid ${C.border}`, background: C.bg,
-              color: C.text, fontSize: 12, fontWeight: 500, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 5, padding: '5px 14px',
+              borderRadius: 7, border: 'none', background: '#10B981',
+              color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
             }}>
-              <CheckCircle2 size={13} /> Resolve
+              <CheckCircle2 size={12} /> Resolve
             </button>
+          </div>
+        </div>
+
+        {/* Title strip */}
+        <div style={{ background: C.card, borderBottom: `1px solid #E2E8F0`, padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', marginBottom: 7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {ticket.subject || ticket.customer_name}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: status.bg, color: status.color, border: `1px solid ${status.border || status.bg}` }}>
+                <span style={{ width: 5, height: 5, borderRadius: '50%', background: status.color, display: 'inline-block' }} />
+                {status.label}
+              </span>
+              {ticket.requires_attention && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: '#FEF2F2', color: '#991B1B', border: '1px solid #FECACA' }}>⚠ Needs attention</span>
+              )}
+              {ticket.group_name && (
+                <span style={{ fontSize: 11, color: '#94A3B8', background: '#F8FAFC', borderRadius: 20, padding: '2px 9px', border: '1px solid #E2E8F0' }}>{ticket.group_name}</span>
+              )}
+              {consignment && (
+                <span style={{ fontFamily: 'monospace', fontSize: 10, color: '#64748B', background: '#F8FAFC', padding: '2px 7px', borderRadius: 5, border: '1px solid #E2E8F0' }}>{consignment}</span>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -762,10 +766,10 @@ export default function TicketDetailPage() {
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
         {/* ── Left: thread + compose ── */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden', background: C.card }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden', background: '#F8FAFC' }}>
 
           {/* Thread */}
-          <div ref={messagesRef} style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 24px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div ref={messagesRef} style={{ flex: 1, overflowY: 'auto', padding: '20px 24px 28px', display: 'flex', flexDirection: 'column', gap: 10, background: '#F8FAFC' }}>
             {allEmails.length === 0 ? (
               <div style={{ padding: '48px 0', textAlign: 'center', color: C.muted, alignSelf: 'center', width: '100%' }}>
                 <Mail size={24} style={{ marginBottom: 10, opacity: 0.2, display: 'block', margin: '0 auto 10px' }} />
@@ -793,13 +797,13 @@ export default function TicketDetailPage() {
 
         {/* ── Right sidebar ── */}
         <div style={{
-          width: 224, flexShrink: 0, background: C.card,
-          borderLeft: `0.5px solid ${C.border}`,
-          overflowY: 'auto', padding: '14px 12px 32px',
+          width: 252, flexShrink: 0, background: '#fff',
+          borderLeft: '1px solid #E2E8F0',
+          overflowY: 'auto', padding: 0,
         }}>
 
           {/* 1. SLA */}
-          <SbCard title="SLA">
+          <SbSection title="SLA">
             <SbRow label="Created">
               <span style={{ fontSize: 11, color: C.sub }}>{timeAgo(ticket.created_at)}</span>
             </SbRow>
@@ -821,11 +825,11 @@ export default function TicketDetailPage() {
                 </SbRow>
               );
             })()}
-          </SbCard>
+          </SbSection>
 
           {/* 2. Parcel */}
           {consignment && (
-            <SbCard title="Parcel">
+            <SbSection title="Parcel">
               {courierLogo && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                   <div style={{ width: 26, height: 26, borderRadius: 6, border: `0.5px solid ${C.border}`, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
@@ -867,12 +871,12 @@ export default function TicketDetailPage() {
                   <ExternalLink size={10} /> View tracking
                 </button>
               </div>
-            </SbCard>
+            </SbSection>
           )}
 
           {/* 3. Customer */}
           {(ticket.customer_name || ticket.sender_email) && (
-            <SbCard title="Customer">
+            <SbSection title="Customer">
               {ticket.customer_name && (
                 <SbRow label="Account">
                   <button onClick={() => ticket.customer_id && navigate(`/customers/${ticket.customer_id}`)}
@@ -886,11 +890,11 @@ export default function TicketDetailPage() {
                   <span style={{ fontSize: 11, color: C.sub, wordBreak: 'break-all' }}>{ticket.sender_email}</span>
                 </SbRow>
               )}
-            </SbCard>
+            </SbSection>
           )}
 
           {/* 4. Claim */}
-          <SbCard title="Claim">
+          <SbSection title="Claim">
             <SbRow label="Claim no.">
               <span style={{ fontSize: 11, color: ticket.claim_number ? C.text : C.muted }}>
                 {ticket.claim_number || 'Not yet raised'}
@@ -910,7 +914,7 @@ export default function TicketDetailPage() {
                 <span style={{ fontSize: 11, color: C.muted }}>None yet</span>
               )}
             </SbRow>
-          </SbCard>
+          </SbSection>
 
           {/* Attention warning */}
           {ticket.requires_attention && ticket.attention_reason && (
@@ -920,7 +924,7 @@ export default function TicketDetailPage() {
           )}
 
           {/* 5. Assignment */}
-          <SbCard title="Assignment">
+          <SbSection title="Assignment">
             <SbRow label="Assigned to">
               <InlineSelect
                 value={ticket.assigned_to || ''}
@@ -954,13 +958,13 @@ export default function TicketDetailPage() {
                 colorMap={PRIORITY_CFG}
               />
             </SbRow>
-          </SbCard>
+          </SbSection>
 
           {/* Tracking timeline */}
           {trackEvents.length > 0 && (
-            <SbCard title={`Tracking · ${trackEvents.length} events`}>
+            <SbSection title={`Tracking · ${trackEvents.length} events`}>
               <TrackingTimeline events={trackEvents} />
-            </SbCard>
+            </SbSection>
           )}
 
         </div>
