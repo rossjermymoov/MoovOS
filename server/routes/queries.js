@@ -7,9 +7,26 @@
  */
 
 import express from 'express';
+import { google } from 'googleapis';
 import { query } from '../db/index.js';
+import { getAuthedClient } from '../services/gmailService.js';
+import { extractBody, hydratePayload } from '../services/gmailSync.js';
 
 const router = express.Router();
+
+// Flatten a Gmail MIME payload into a list describing where each part's body
+// actually lives (inline vs by-reference). Used by the debug route below.
+function describeParts(payload) {
+  if (!payload) return [];
+  const arr = [{
+    mime:          payload.mimeType,
+    hasInlineData: !!payload.body?.data,
+    byReference:   !!payload.body?.attachmentId,
+    size:          payload.body?.size,
+  }];
+  if (payload.parts) for (const p of payload.parts) arr.push(...describeParts(p));
+  return arr;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/queries
@@ -1488,6 +1505,57 @@ router.post('/map-sender', async (req, res, next) => {
 
     res.json({ ok: true, domain });
   } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/queries/:id/debug-bodies   (TEMPORARY diagnostic — safe to remove)
+// Shows, per message: what's stored vs. the live Gmail MIME structure and what
+// the current parser recovers. Accepts a query UUID or a ticket_number.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/:id/debug-bodies', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const isUuid = /^[0-9a-f-]{36}$/i.test(id);
+    const tRes = await query(
+      isUuid ? `SELECT id FROM queries WHERE id = $1`
+             : `SELECT id FROM queries WHERE ticket_number = $1`,
+      [id]
+    );
+    if (!tRes.rows.length) return res.status(404).json({ error: 'ticket not found' });
+    const queryId = tRes.rows[0].id;
+
+    const { rows } = await query(
+      `SELECT id, direction, from_address, gmail_message_id, received_at,
+              length(COALESCE(body_text,'')) AS stored_len,
+              LEFT(COALESCE(body_text,''), 160) AS stored_preview
+         FROM query_emails WHERE query_id = $1 ORDER BY received_at`,
+      [queryId]
+    );
+
+    let gmail = null;
+    try { const auth = await getAuthedClient(); if (auth) gmail = google.gmail({ version: 'v1', auth }); } catch {}
+
+    const emails = [];
+    for (const r of rows) {
+      const o = {
+        direction: r.direction, from: r.from_address, received_at: r.received_at,
+        stored_len: Number(r.stored_len), stored_preview: r.stored_preview,
+        has_gmail_id: !!r.gmail_message_id,
+      };
+      if (gmail && r.gmail_message_id) {
+        try {
+          const msg = await gmail.users.messages.get({ userId: 'me', id: r.gmail_message_id, format: 'full' });
+          o.mime_parts = describeParts(msg.data.payload);
+          await hydratePayload(gmail, r.gmail_message_id, msg.data.payload);
+          const reparsed = (extractBody(msg.data.payload) || '').trim();
+          o.reparsed_len = reparsed.length;
+          o.reparsed_preview = reparsed.slice(0, 160);
+        } catch (e) { o.gmail_error = e.message; }
+      }
+      emails.push(o);
+    }
+    res.json({ query_id: queryId, gmail_connected: !!gmail, emails });
+  } catch (e) { next(e); }
 });
 
 export default router;
