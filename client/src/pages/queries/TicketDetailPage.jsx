@@ -200,6 +200,40 @@ function TrackingTimeline({ events }) {
   );
 }
 
+// Separate a message's own content (shown in full) from the quoted reply
+// history beneath it (collapsed behind a toggle). Outlook embeds the entire
+// prior thread in every reply, so without this each card shows the whole
+// conversation repeated. Conservative: only splits on clear quote markers,
+// and never blanks a card — if unsure, the whole body is shown.
+function splitMessage(body) {
+  const clean = (body || '').replace(/\r\n/g, '\n');
+  const lines = clean.split('\n');
+  const stripCid = s => s.replace(/\[cid:[^\]]+\]/gi, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+
+  const isQuoteStart = (t, idx) => {
+    if (/^_{10,}$/.test(t)) return true;                                   // Outlook divider line
+    if (/^-{2,}\s*(Original|Forwarded) Message\s*-{2,}/i.test(t)) return true;
+    if (/^On\b.+\bwrote:$/.test(t)) return true;                           // "On <date> X wrote:"
+    if (/^>{1,}/.test(t)) return true;                                     // ">" quoted lines
+    if (/^From:\s?\S/i.test(t)) {                                          // Outlook header block
+      const ahead = lines.slice(idx + 1, idx + 6).map(l => l.trim());
+      if (ahead.some(l => /^(Sent|Date|To|Cc|Subject):/i.test(l))) return true;
+    }
+    return false;
+  };
+
+  let cut = -1;
+  for (let i = 1; i < lines.length; i++) {
+    if (isQuoteStart(lines[i].trim(), i)) { cut = i; break; }
+  }
+  if (cut < 1) return { main: stripCid(clean), quoted: '' };
+
+  const main   = stripCid(lines.slice(0, cut).join('\n'));
+  const quoted = lines.slice(cut).join('\n').trim();
+  if (!main) return { main: stripCid(clean), quoted: '' }; // safety: never blank a card
+  return { main, quoted };
+}
+
 // ── Thread item ───────────────────────────────────────────────────────────────
 function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
   const [editMode,   setEditMode]   = useState(false);
@@ -208,6 +242,7 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
   const [reviseMode, setReviseMode] = useState(false);
   const [reviseText, setReviseText] = useState('');
   const [revising,   setRevising]   = useState(false);
+  const [showQuoted, setShowQuoted] = useState(false);
   const reviseRef = useRef('');
   const qc = useQueryClient();
 
@@ -257,7 +292,7 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
     : dir === 'inbound_courier'          ? (courierName || 'Courier')
     :                                      `You → ${courierName || 'Courier'}`;
 
-  // Show full email body — quoted text gets dimmed via sigCutoff below
+  // Full stored body; splitMessage() separates the new content from quoted history.
   const displayBody = (email.body_text || '').trim();
 
   const ts = email.sent_at || email.received_at || email.created_at;
@@ -291,20 +326,8 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
     finally { setRevising(false); }
   }
 
-  // Detect signature (lines after -- or standard sig patterns)
-  const sigCutoff = (() => {
-    const lines = displayBody.split('\n');
-    const i = lines.findIndex(l => {
-      const t = l.trim();
-      return /^--\s*$|^_{3,}|^Regards,|^Kind regards|^Thanks,|^Best,|^Best regards/i.test(t)
-        || (l.startsWith('On ') && l.includes('wrote:'))
-        || /^-{5,}\s*(Original|Forwarded)/i.test(t)
-        || /^From:\s/.test(t) && lines.indexOf(l) > 2;
-    });
-    return i > 1 ? i : -1;
-  })();
-  const mainBody = sigCutoff > 0 ? displayBody.split('\n').slice(0, sigCutoff).join('\n').trim() : displayBody;
-  const sigBody  = sigCutoff > 0 ? displayBody.split('\n').slice(sigCutoff).join('\n').trim() : null;
+  // Show this message's own content in full; collapse the quoted reply history.
+  const { main: mainBody, quoted: quotedBody } = splitMessage(displayBody);
 
   const dirBadge = isNote ? { label: 'Note', bg: '#FEF9C3', color: '#854D0E', border: '#FDE047' }
     : dir === 'inbound_customer'  ? { label: 'Inbound', bg: '#DBEAFE', color: '#1D4ED8', border: '#93C5FD' }
@@ -383,11 +406,23 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
             }}>
               {mainBody || <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>No content</span>}
             </pre>
-            {sigBody && (
-              <>
-                <div style={{ margin: '16px 0 10px', borderTop: '1px dashed #E2E8F0', position: 'relative' }}><span style={{ position: 'absolute', top: -8, left: 0, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#CBD5E1', background: '#fff', paddingRight: 8 }}>Signature</span></div>
-                <pre style={{ margin: 0, fontSize: 10.5, color: '#D1D5DB', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.55, fontFamily: 'inherit', opacity: 0.7 }}>{sigBody}</pre>
-              </>
+            {quotedBody && (
+              <div style={{ marginTop: 12 }}>
+                <button onClick={() => setShowQuoted(v => !v)} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px',
+                  fontSize: 12, color: '#64748B', background: '#F8FAFC',
+                  border: '1px solid #E2E8F0', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit',
+                }}>
+                  {showQuoted ? 'Hide earlier messages' : 'Show earlier messages'}
+                </button>
+                {showQuoted && (
+                  <pre style={{
+                    margin: '10px 0 0', padding: '10px 12px', fontSize: 12, color: '#64748B',
+                    whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.6,
+                    fontFamily: 'inherit', background: '#F8FAFC', borderRadius: 8, borderLeft: '2px solid #E2E8F0',
+                  }}>{quotedBody}</pre>
+                )}
+              </div>
             )}
           </>
         )}
