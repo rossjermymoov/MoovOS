@@ -126,6 +126,45 @@ export async function hydratePayload(gmail, messageId, payload) {
   return payload;
 }
 
+function partHeader(part, name) {
+  return (part.headers || []).find(h => h.name.toLowerCase() === name.toLowerCase())?.value || '';
+}
+
+// Walk the tree collecting inline images keyed by their Content-ID, fetching
+// by-reference parts as needed. Returns { cid: 'data:...' }.
+async function collectInlineImages(gmail, messageId, payload, map) {
+  if (!payload) return map;
+  const mt = payload.mimeType || '';
+  if (mt.startsWith('image/')) {
+    let cid = (partHeader(payload, 'Content-ID') || '').replace(/^<|>$/g, '').trim();
+    let data = payload.body?.data;
+    if (!data && payload.body?.attachmentId) {
+      try {
+        const a = await gmail.users.messages.attachments.get({ userId: 'me', messageId, id: payload.body.attachmentId });
+        data = a.data?.data;
+      } catch { /* skip image we can't fetch */ }
+    }
+    if (cid && data) map[cid] = `data:${mt};base64,${data.replace(/-/g, '+').replace(/_/g, '/')}`;
+  }
+  if (payload.parts) for (const p of payload.parts) await collectInlineImages(gmail, messageId, p, map);
+  return map;
+}
+
+// Build a self-contained HTML body: the text/html part with all cid: image
+// references swapped for inline data URIs, so it renders standalone.
+export async function buildInlineHtml(gmail, messageId, payload) {
+  await hydratePayload(gmail, messageId, payload);
+  const acc = collectParts(payload, { plain: [], html: [], other: [] });
+  if (!acc.html.length) return '';
+  let html = acc.html.join('\n');
+  const images = await collectInlineImages(gmail, messageId, payload, {});
+  html = html.replace(/(src\s*=\s*["']?)cid:([^"'>\s]+)(["']?)/gi, (m, pre, cid, post) => {
+    const uri = images[cid.trim()];
+    return uri ? `${pre}${uri}${post}` : m;
+  });
+  return html;
+}
+
 function parseFrom(fromHeader) {
   const match = fromHeader.match(/^(.*?)\s*<([^>]+)>$/);
   if (match) return { name: match[1].trim().replace(/^"|"$/g, ''), email: match[2].trim().toLowerCase() };
@@ -145,13 +184,15 @@ async function resolveCustomer(senderEmail) {
   return null;
 }
 
-async function upsertTicket(msg) {
+async function upsertTicket(msg, gmail = null) {
   const { id: gmailMsgId, threadId: gmailThreadId, payload, internalDate } = msg;
+  if (gmail) await hydratePayload(gmail, gmailMsgId, payload);
   const headers    = payload?.headers || [];
   const subject    = extractHeader(headers, 'subject') || '(no subject)';
   const fromHeader = extractHeader(headers, 'from');
   const inReplyTo  = extractHeader(headers, 'in-reply-to');
   const body       = extractBody(payload) || '(no body)';
+  const bodyHtml   = gmail ? await buildInlineHtml(gmail, gmailMsgId, payload).catch(() => '') : '';
   const { name: senderName, email: senderEmail } = parseFrom(fromHeader);
   const receivedAt = internalDate ? new Date(parseInt(internalDate)) : new Date();
 
@@ -195,9 +236,9 @@ async function upsertTicket(msg) {
   }
 
   await query(`
-    INSERT INTO query_emails (query_id, direction, from_address, subject, body_text, received_at, gmail_message_id, gmail_thread_id, in_reply_to, is_ai_draft, sent_at)
-    VALUES ($1, 'inbound_customer', $2, $3, $4, $5, $6, $7, $8, false, NULL)
-  `, [queryId, senderEmail, subject, body.slice(0, 50000), receivedAt, gmailMsgId, gmailThreadId || null, inReplyTo || null]);
+    INSERT INTO query_emails (query_id, direction, from_address, subject, body_text, body_html, received_at, gmail_message_id, gmail_thread_id, in_reply_to, is_ai_draft, sent_at)
+    VALUES ($1, 'inbound_customer', $2, $3, $4, $5, $6, $7, $8, $9, false, NULL)
+  `, [queryId, senderEmail, subject, body.slice(0, 50000), bodyHtml ? bodyHtml.slice(0, 2000000) : null, receivedAt, gmailMsgId, gmailThreadId || null, inReplyTo || null]);
 
   await query(`UPDATE queries SET updated_at = NOW() WHERE id = $1`, [queryId]);
   return { status: 'imported', queryId };
@@ -241,8 +282,7 @@ export async function syncGmail() {
   for (const id of messageIds) {
     try {
       const msgRes = await gmail.users.messages.get({ userId: 'me', id, format: 'full' });
-      await hydratePayload(gmail, id, msgRes.data.payload);
-      const r = await upsertTicket(msgRes.data);
+      const r = await upsertTicket(msgRes.data, gmail);
       if (r.status === 'imported') results.imported++;
       else results.skipped++;
     } catch (e) {
@@ -288,7 +328,7 @@ export async function backfillSummaries() {
 // Re-fetches already-imported Gmail messages and re-parses them with the
 // corrected extractBody(). Guarded by a marker row so it runs once, ever.
 // Safe by design: only overwrites a body when more content is recovered.
-const EMAIL_BACKFILL_KEY = 'email_bodies_html_v2';
+const EMAIL_BACKFILL_KEY = 'email_bodies_html_v3';
 
 export async function backfillEmailBodiesOnce() {
   // Marker table — created on demand so no migration is needed.
@@ -305,12 +345,12 @@ export async function backfillEmailBodiesOnce() {
   if (!auth) { console.log('[Email backfill] Gmail not connected — will retry on next deploy.'); return; }
   const gmail = google.gmail({ version: 'v1', auth });
 
-  // Short bodies are the tell-tale of the old sparse-plain-text bug.
+  // Backfill any email missing its rendered HTML (and repair short text bodies).
   const { rows } = await query(`
     SELECT id, gmail_message_id, body_text
       FROM query_emails
      WHERE gmail_message_id IS NOT NULL
-       AND length(COALESCE(body_text, '')) < 400
+       AND (body_html IS NULL OR length(COALESCE(body_text, '')) < 400)
      ORDER BY received_at DESC
   `);
   console.log(`[Email backfill] Checking ${rows.length} email(s)…`);
@@ -322,8 +362,16 @@ export async function backfillEmailBodiesOnce() {
       await hydratePayload(gmail, row.gmail_message_id, res.data.payload);
       const fresh   = (extractBody(res.data.payload) || '').trim();
       const current = (row.body_text || '').trim();
-      if (fresh && fresh.length > current.length) {
-        await query(`UPDATE query_emails SET body_text = $1 WHERE id = $2`, [fresh.slice(0, 50000), row.id]);
+      const html    = await buildInlineHtml(gmail, row.gmail_message_id, res.data.payload).catch(() => '');
+      const newText = (fresh && fresh.length > current.length) ? fresh.slice(0, 50000) : null;
+      if (newText !== null || html) {
+        await query(
+          `UPDATE query_emails
+              SET body_text = COALESCE($1, body_text),
+                  body_html = COALESCE($2, body_html)
+            WHERE id = $3`,
+          [newText, html ? html.slice(0, 2000000) : null, row.id]
+        );
         updated++;
       }
     } catch (e) {
