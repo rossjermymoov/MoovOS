@@ -32,7 +32,7 @@ import reconciliationRouter from './routes/reconciliation.js';
 import emailRouter from './routes/email.js';
 import { sendAlert } from './services/emailService.js';
 import gmailRouter from './routes/gmail.js';
-import { startGmailSync } from './services/gmailSync.js';
+import { startGmailSync, backfillEmailBodiesOnce } from './services/gmailSync.js';
 
 dotenv.config();
 
@@ -120,6 +120,9 @@ async function start() {
     // Webhook health monitor — checks every 5 minutes during UK business hours
     startWebhookHealthMonitor();
     startGmailSync(3 * 60 * 1000); // poll every 3 minutes
+    // One-time repair of emails imported before the body-parsing fix.
+    // Fire-and-forget so it can never delay or crash startup.
+    backfillEmailBodiesOnce().catch(e => console.warn('[Email backfill] skipped:', e.message));
   } catch (err) {
     console.error('❌ Migration failed — server will not start.');
     console.error('   Error code:   ', err.code    || 'unknown');

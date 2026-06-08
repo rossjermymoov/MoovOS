@@ -265,6 +265,62 @@ export async function backfillSummaries() {
   if (res.rows.length) console.log(`[Gmail sync] Backfill complete — ${res.rows.length} tickets updated`);
 }
 
+// ─── One-time repair of emails imported before the body-parsing fix ──────────
+// Re-fetches already-imported Gmail messages and re-parses them with the
+// corrected extractBody(). Guarded by a marker row so it runs once, ever.
+// Safe by design: only overwrites a body when more content is recovered.
+const EMAIL_BACKFILL_KEY = 'email_bodies_html_v1';
+
+export async function backfillEmailBodiesOnce() {
+  // Marker table — created on demand so no migration is needed.
+  await query(`
+    CREATE TABLE IF NOT EXISTS app_backfill_markers (
+      key          TEXT PRIMARY KEY,
+      completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  const done = await query(`SELECT 1 FROM app_backfill_markers WHERE key = $1`, [EMAIL_BACKFILL_KEY]);
+  if (done.rows.length) return; // already repaired — skip silently
+
+  const auth = await getAuthedClient();
+  if (!auth) { console.log('[Email backfill] Gmail not connected — will retry on next deploy.'); return; }
+  const gmail = google.gmail({ version: 'v1', auth });
+
+  // Short bodies are the tell-tale of the old sparse-plain-text bug.
+  const { rows } = await query(`
+    SELECT id, gmail_message_id, body_text
+      FROM query_emails
+     WHERE gmail_message_id IS NOT NULL
+       AND length(COALESCE(body_text, '')) < 400
+     ORDER BY received_at DESC
+  `);
+  console.log(`[Email backfill] Checking ${rows.length} email(s)…`);
+
+  let updated = 0;
+  for (const row of rows) {
+    try {
+      const res     = await gmail.users.messages.get({ userId: 'me', id: row.gmail_message_id, format: 'full' });
+      const fresh   = (extractBody(res.data.payload) || '').trim();
+      const current = (row.body_text || '').trim();
+      if (fresh && fresh.length > current.length) {
+        await query(`UPDATE query_emails SET body_text = $1 WHERE id = $2`, [fresh.slice(0, 50000), row.id]);
+        updated++;
+      }
+    } catch (e) {
+      if (!(e?.code === 404 || e?.response?.status === 404)) {
+        console.warn(`[Email backfill] ${row.id}: ${e.message}`);
+      }
+    }
+    await new Promise(r => setTimeout(r, 120)); // stay under Gmail rate limits
+  }
+
+  await query(
+    `INSERT INTO app_backfill_markers (key) VALUES ($1) ON CONFLICT (key) DO NOTHING`,
+    [EMAIL_BACKFILL_KEY]
+  );
+  console.log(`[Email backfill] Done — ${updated} email(s) repaired.`);
+}
+
 export function startGmailSync(intervalMs = 3 * 60 * 1000) {
   syncGmail().catch(e => console.error('[Gmail sync] Startup error:', e.message));
   setInterval(() => syncGmail().catch(e => console.error('[Gmail sync] Interval error:', e.message)), intervalMs);
