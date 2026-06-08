@@ -108,6 +108,24 @@ export function extractBody(payload) {
   return plain || acc.other.join('\n').trim() || '';
 }
 
+// Gmail returns larger MIME parts by reference (body.attachmentId) instead of
+// inline (body.data) — common for rich HTML bodies with images/long signatures.
+// Fetch those text parts so extractBody() can see the real content.
+export async function hydratePayload(gmail, messageId, payload) {
+  if (!payload) return payload;
+  const mt = payload.mimeType || '';
+  if ((mt === 'text/plain' || mt === 'text/html') && !payload.body?.data && payload.body?.attachmentId) {
+    try {
+      const att = await gmail.users.messages.attachments.get({
+        userId: 'me', messageId, id: payload.body.attachmentId,
+      });
+      if (att.data?.data) payload.body.data = att.data.data;
+    } catch { /* leave the part as-is if it can't be fetched */ }
+  }
+  if (payload.parts) for (const p of payload.parts) await hydratePayload(gmail, messageId, p);
+  return payload;
+}
+
 function parseFrom(fromHeader) {
   const match = fromHeader.match(/^(.*?)\s*<([^>]+)>$/);
   if (match) return { name: match[1].trim().replace(/^"|"$/g, ''), email: match[2].trim().toLowerCase() };
@@ -223,6 +241,7 @@ export async function syncGmail() {
   for (const id of messageIds) {
     try {
       const msgRes = await gmail.users.messages.get({ userId: 'me', id, format: 'full' });
+      await hydratePayload(gmail, id, msgRes.data.payload);
       const r = await upsertTicket(msgRes.data);
       if (r.status === 'imported') results.imported++;
       else results.skipped++;
@@ -269,7 +288,7 @@ export async function backfillSummaries() {
 // Re-fetches already-imported Gmail messages and re-parses them with the
 // corrected extractBody(). Guarded by a marker row so it runs once, ever.
 // Safe by design: only overwrites a body when more content is recovered.
-const EMAIL_BACKFILL_KEY = 'email_bodies_html_v1';
+const EMAIL_BACKFILL_KEY = 'email_bodies_html_v2';
 
 export async function backfillEmailBodiesOnce() {
   // Marker table — created on demand so no migration is needed.
@@ -300,6 +319,7 @@ export async function backfillEmailBodiesOnce() {
   for (const row of rows) {
     try {
       const res     = await gmail.users.messages.get({ userId: 'me', id: row.gmail_message_id, format: 'full' });
+      await hydratePayload(gmail, row.gmail_message_id, res.data.payload);
       const fresh   = (extractBody(res.data.payload) || '').trim();
       const current = (row.body_text || '').trim();
       if (fresh && fresh.length > current.length) {

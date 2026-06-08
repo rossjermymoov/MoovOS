@@ -25,7 +25,7 @@ try { await import('dotenv/config'); } catch { /* env already present (e.g. Rail
 import { google } from 'googleapis';
 import { query } from '../db/index.js';
 import { getAuthedClient } from '../services/gmailService.js';
-import { extractBody } from '../services/gmailSync.js';
+import { extractBody, hydratePayload } from '../services/gmailSync.js';
 
 const ALL     = process.argv.includes('--all');
 const DRY_RUN = process.argv.includes('--dry-run');
@@ -58,6 +58,7 @@ async function main() {
   for (const row of rows) {
     try {
       const res     = await gmail.users.messages.get({ userId: 'me', id: row.gmail_message_id, format: 'full' });
+      await hydratePayload(gmail, row.gmail_message_id, res.data.payload);
       const fresh   = (extractBody(res.data.payload) || '').trim();
       const current = (row.body_text || '').trim();
 
