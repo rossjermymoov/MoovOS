@@ -64,20 +64,48 @@ function extractHeader(headers, name) {
   return headers.find(h => h.name.toLowerCase() === name.toLowerCase())?.value || '';
 }
 
-function extractBody(payload) {
-  if (!payload) return '';
-  if (payload.body?.data) return decodeBase64(payload.body.data);
-  if (payload.parts) {
-    const plain = payload.parts.find(p => p.mimeType === 'text/plain');
-    if (plain?.body?.data) return decodeBase64(plain.body.data);
-    const html = payload.parts.find(p => p.mimeType === 'text/html');
-    if (html?.body?.data) return decodeBase64(html.body.data).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-    for (const part of payload.parts) {
-      const body = extractBody(part);
-      if (body) return body;
-    }
+// Convert an HTML email body into readable plain text, preserving line breaks
+// (so signatures/quoted sections still detect correctly downstream).
+function htmlToText(html) {
+  return html
+    .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|tr|li|h[1-6]|table)>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0?39;|&apos;/gi, "'")
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+// Recursively gather every text/plain and text/html part in the MIME tree.
+function collectParts(payload, acc) {
+  if (!payload) return acc;
+  const mt = payload.mimeType || '';
+  if (payload.body?.data) {
+    if (mt === 'text/plain')      acc.plain.push(decodeBase64(payload.body.data));
+    else if (mt === 'text/html')  acc.html.push(decodeBase64(payload.body.data));
+    else if (!mt.startsWith('multipart/')) acc.other.push(decodeBase64(payload.body.data));
   }
-  return '';
+  if (payload.parts) for (const p of payload.parts) collectParts(p, acc);
+  return acc;
+}
+
+export function extractBody(payload) {
+  if (!payload) return '';
+  const acc      = collectParts(payload, { plain: [], html: [], other: [] });
+  const plain    = acc.plain.join('\n').trim();
+  const htmlText = acc.html.length ? htmlToText(acc.html.join('\n')) : '';
+  // Prefer the part with real content. Sparse plain-text alternatives (common
+  // from Outlook — sometimes just a greeting) lose to the full HTML body.
+  if (plain && (!htmlText || plain.length >= htmlText.length * 0.6)) return plain;
+  if (htmlText) return htmlText;
+  return plain || acc.other.join('\n').trim() || '';
 }
 
 function parseFrom(fromHeader) {
