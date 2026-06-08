@@ -2008,10 +2008,10 @@ export default function QueriesPage() {
       </div>
 
       {/* ── Body: list + filter panel ────────────────────────────────────── */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
 
         {/* Ticket list */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '8px 12px 16px' }}>
+        <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '8px 12px 16px' }}>
           {loading && <div style={{ padding: 40, textAlign: 'center', color: C.muted, fontSize: 12 }}>Loading…</div>}
           {!loading && displayQueries.length === 0 && (
             <div style={{ padding: 60, textAlign: 'center' }}>
