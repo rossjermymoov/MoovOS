@@ -223,19 +223,45 @@ function EmailHtml({ html }) {
     `font-size:13px;color:#334155;line-height:1.6;word-break:break-word;overflow-wrap:break-word}` +
     `img{max-width:100%;height:auto}table{max-width:100%!important}a{color:#1d4ed8}</style></head>` +
     `<body>${html}</body></html>`;
-  const resize = () => {
-    try {
-      const doc = ref.current?.contentDocument;
-      if (doc?.body) setHeight(Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight) + 16);
-    } catch { /* cross-origin guard — ignore */ }
-  };
+
+  useEffect(() => {
+    const iframe = ref.current;
+    if (!iframe) return;
+    let observer;
+    const measure = () => {
+      try {
+        const doc = iframe.contentDocument;
+        if (doc?.body) setHeight(Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight) + 16);
+      } catch { /* ignore */ }
+    };
+    const onLoad = () => {
+      measure();
+      try {
+        const doc = iframe.contentDocument;
+        if (doc?.body && 'ResizeObserver' in window) {
+          observer = new ResizeObserver(measure);
+          observer.observe(doc.body);
+        }
+        // Re-measure once each inline image finishes decoding (the race that
+        // clipped frames when several loaded at once).
+        doc?.querySelectorAll('img')?.forEach(img => {
+          if (!img.complete) { img.addEventListener('load', measure); img.addEventListener('error', measure); }
+        });
+      } catch { /* ignore */ }
+      setTimeout(measure, 400);
+      setTimeout(measure, 1500);
+    };
+    iframe.addEventListener('load', onLoad);
+    if (iframe.contentDocument?.readyState === 'complete') onLoad();
+    return () => { iframe.removeEventListener('load', onLoad); observer?.disconnect(); };
+  }, [html]);
+
   return (
     <iframe
       ref={ref}
       title="Email content"
       sandbox="allow-same-origin allow-popups"
       srcDoc={srcDoc}
-      onLoad={() => { resize(); setTimeout(resize, 250); setTimeout(resize, 800); }}
       style={{ width: '100%', height, border: 'none', display: 'block' }}
     />
   );
