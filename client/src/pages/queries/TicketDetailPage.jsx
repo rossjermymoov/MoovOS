@@ -219,7 +219,8 @@ function EmailHtml({ html }) {
   const [height, setHeight] = useState(140);
   const srcDoc =
     `<!doctype html><html><head><meta charset="utf-8"><base target="_blank">` +
-    `<style>html,body{margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;` +
+    `<style>html,body{margin:0;padding:0;height:auto!important;min-height:0!important;` +
+    `font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;` +
     `font-size:13px;color:#334155;line-height:1.6;word-break:break-word;overflow-wrap:break-word}` +
     `img{max-width:100%;height:auto}table{max-width:100%!important}a{color:#1d4ed8}</style></head>` +
     `<body>${html}</body></html>`;
@@ -227,33 +228,34 @@ function EmailHtml({ html }) {
   useEffect(() => {
     const iframe = ref.current;
     if (!iframe) return;
+    let maxH = 0;
     let observer;
+    // Grow to the tallest height we ever observe and never shrink, so an early
+    // measurement taken before images decode can't lock in a clipped height.
     const measure = () => {
       try {
         const doc = iframe.contentDocument;
-        if (doc?.body) setHeight(Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight) + 16);
+        if (!doc?.body) return;
+        const h = Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight);
+        if (h > maxH) { maxH = h; setHeight(h + 16); }
       } catch { /* ignore */ }
     };
-    const onLoad = () => {
-      measure();
-      try {
-        const doc = iframe.contentDocument;
-        if (doc?.body && 'ResizeObserver' in window) {
-          observer = new ResizeObserver(measure);
-          observer.observe(doc.body);
-        }
-        // Re-measure once each inline image finishes decoding (the race that
-        // clipped frames when several loaded at once).
-        doc?.querySelectorAll('img')?.forEach(img => {
-          if (!img.complete) { img.addEventListener('load', measure); img.addEventListener('error', measure); }
-        });
-      } catch { /* ignore */ }
-      setTimeout(measure, 400);
-      setTimeout(measure, 1500);
+    measure();
+    // Poll for a few seconds to catch late image/layout settling.
+    const interval = setInterval(measure, 200);
+    const stop = setTimeout(() => clearInterval(interval), 4000);
+    try {
+      if ('ResizeObserver' in window && iframe.contentDocument?.body) {
+        observer = new ResizeObserver(measure);
+        observer.observe(iframe.contentDocument.body);
+      }
+    } catch { /* ignore */ }
+    iframe.addEventListener('load', measure);
+    return () => {
+      clearInterval(interval); clearTimeout(stop);
+      observer?.disconnect();
+      iframe.removeEventListener('load', measure);
     };
-    iframe.addEventListener('load', onLoad);
-    if (iframe.contentDocument?.readyState === 'complete') onLoad();
-    return () => { iframe.removeEventListener('load', onLoad); observer?.disconnect(); };
   }, [html]);
 
   return (
