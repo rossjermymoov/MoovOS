@@ -211,6 +211,64 @@ function stripCidTokens(body) {
     .trim();
 }
 
+// Keep only the NEW message text — cut at the first quoted-history marker
+// (">" lines, "On <date> … wrote:", Outlook "From:/Sent:/To:" header blocks,
+// or divider lines). Never returns blank; falls back to the full body.
+function trimQuotedText(body) {
+  const lines = (body || '').replace(/\r\n/g, '\n').split('\n');
+  const isQuoteStart = (raw, i) => {
+    const t = raw.trim();
+    if (/^>{1,}/.test(t)) return true;
+    if (/^On\b.+\bwrote:$/.test(t)) return true;
+    if (/^_{10,}$/.test(t)) return true;
+    if (/^-{2,}\s*(Original|Forwarded) Message\s*-{2,}/i.test(t)) return true;
+    if (/^From:\s?\S/i.test(t)) {
+      const ahead = lines.slice(i + 1, i + 6).map(l => l.trim());
+      if (ahead.some(l => /^(Sent|Date|To|Cc|Subject):/i.test(l))) return true;
+    }
+    return false;
+  };
+  let cut = -1;
+  for (let i = 1; i < lines.length; i++) { if (isQuoteStart(lines[i], i)) { cut = i; break; } }
+  if (cut < 1) return (body || '').trim();
+  const main = lines.slice(0, cut).join('\n').trim();
+  return main || (body || '').trim();
+}
+
+// Keep only the NEW message of an HTML email — remove Gmail/Apple/Outlook
+// quoted-reply containers and any trailing "From: …" header block. Runs in the
+// browser via DOMParser; never returns blank.
+function trimQuotedHtml(html) {
+  try {
+    const doc = new DOMParser().parseFromString(html || '', 'text/html');
+    const body = doc.body;
+    if (!body) return html;
+    body.querySelectorAll(
+      '.gmail_quote, .gmail_quote_container, blockquote[type="cite"], ' +
+      '#divRplyFwdMsg, #appendonsend, #x_appendonsend, #mail-editor-reference-message-container'
+    ).forEach(n => n.remove());
+    // Outlook desktop wraps the reply in a divider div (border-top). Remove it
+    // and everything after it.
+    for (const div of body.querySelectorAll('div')) {
+      const s = (div.getAttribute('style') || '').replace(/\s+/g, '').toLowerCase();
+      if (s.includes('border-top:solid') || s.includes('border-top:1pt') || s.includes('border-top:1px')) {
+        let n = div; while (n) { const next = n.nextSibling; n.remove(); n = next; }
+        break;
+      }
+    }
+    // Fallback: a block whose text is a quoted "From: … Sent: …" header.
+    for (const el of body.querySelectorAll('div, p, table')) {
+      const t = (el.textContent || '').trim();
+      if (/^From:\s/i.test(t) && /(Sent|Date|To|Subject):/i.test(t)) {
+        let n = el; while (n) { const next = n.nextSibling; n.remove(); n = next; }
+        break;
+      }
+    }
+    const out = body.innerHTML.trim();
+    return out || html;
+  } catch { return html; }
+}
+
 // Renders an email's HTML body inside a Shadow DOM. The host element grows to
 // its content naturally (no height is ever measured, so it cannot clip), while
 // the shadow root isolates the email's CSS from the rest of the app. Scripts
@@ -222,7 +280,7 @@ function EmailHtml({ html }) {
     const host = hostRef.current;
     if (!host) return;
     const root = host.shadowRoot || host.attachShadow({ mode: 'open' });
-    const safe = (html || '')
+    const safe = trimQuotedHtml(html || '')
       .replace(/<\s*script[\s\S]*?<\s*\/\s*script\s*>/gi, '')
       .replace(/<\s*script[^>]*>/gi, '')
       .replace(/\son\w+\s*=\s*"[^"]*"/gi, '')
@@ -330,7 +388,17 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
   }
 
   // Prefer the rendered HTML body; fall back to plain text when absent.
-  const plainFallback = stripCidTokens(displayBody);
+  // Either way, show only the new message — strip the quoted reply history.
+  const plainFallback = stripCidTokens(trimQuotedText(displayBody));
+  const isInbound = dir.startsWith('inbound');
+  const stepBadge = isNote
+    ? { label: 'Note',     cls: 'bg-amber-50 text-amber-700' }
+    : isInbound
+      ? { label: 'Inbound',  cls: 'bg-blue-50 text-blue-700' }
+      : { label: 'Outbound', cls: 'bg-slate-100 text-slate-600' };
+  const rowClass = (!isInbound && !isNote)
+    ? 'my-4 rounded-2xl border border-slate-100 bg-slate-50/80 px-6 py-8'
+    : 'border-b border-slate-100 py-10 last:border-b-0';
 
   const dirBadge = isNote ? { label: 'Note', bg: '#FEF9C3', color: '#854D0E', border: '#FDE047' }
     : dir === 'inbound_customer'  ? { label: 'Inbound', bg: '#DBEAFE', color: '#1D4ED8', border: '#93C5FD' }
@@ -339,7 +407,7 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
     :                               { label: 'To courier', bg: '#DCFCE7', color: '#166534', border: '#86EFAC' };
 
   return (
-    <article className="w-full max-w-none border-b border-slate-100 py-10 last:border-b-0">
+    <article className={`w-full max-w-none ${rowClass}`}>
 
       {/* Minimalist header */}
       <header className="mb-5 flex items-center gap-3">
@@ -366,11 +434,8 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
           )}
         </div>
         {/* Direction badge + timestamp */}
-        <span
-          className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium"
-          style={{ background: dirBadge.bg, color: dirBadge.color }}
-        >
-          {dirBadge.label}
+        <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${stepBadge.cls}`}>
+          {stepBadge.label}
         </span>
         <time className="shrink-0 text-xs text-slate-400">{fmtDate(ts)}</time>
       </header>
