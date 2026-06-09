@@ -211,62 +211,31 @@ function stripCidTokens(body) {
     .trim();
 }
 
-// Renders an email's HTML body in a sandboxed, auto-height iframe so its own
-// styling and inline images render, but scripts can't execute (no allow-scripts)
-// and its CSS can't leak into the app.
+// Renders an email's HTML body inside a Shadow DOM. The host element grows to
+// its content naturally (no height is ever measured, so it cannot clip), while
+// the shadow root isolates the email's CSS from the rest of the app. Scripts
+// inserted via innerHTML never execute; we also strip inline event handlers and
+// javascript: URLs as a safety net.
 function EmailHtml({ html }) {
-  const ref = useRef(null);
-  const [height, setHeight] = useState(140);
-  const srcDoc =
-    `<!doctype html><html><head><meta charset="utf-8"><base target="_blank">` +
-    `<style>html,body{margin:0;padding:0;height:auto!important;min-height:0!important;` +
-    `font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;` +
-    `font-size:13px;color:#334155;line-height:1.6;word-break:break-word;overflow-wrap:break-word}` +
-    `img{max-width:100%;height:auto}table{max-width:100%!important}a{color:#1d4ed8}</style></head>` +
-    `<body>${html}</body></html>`;
-
+  const hostRef = useRef(null);
   useEffect(() => {
-    const iframe = ref.current;
-    if (!iframe) return;
-    let maxH = 0;
-    let observer;
-    // Grow to the tallest height we ever observe and never shrink, so an early
-    // measurement taken before images decode can't lock in a clipped height.
-    const measure = () => {
-      try {
-        const doc = iframe.contentDocument;
-        if (!doc?.body) return;
-        const h = Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight);
-        if (h > maxH) { maxH = h; setHeight(h + 16); }
-      } catch { /* ignore */ }
-    };
-    measure();
-    // Poll for a few seconds to catch late image/layout settling.
-    const interval = setInterval(measure, 200);
-    const stop = setTimeout(() => clearInterval(interval), 4000);
-    try {
-      if ('ResizeObserver' in window && iframe.contentDocument?.body) {
-        observer = new ResizeObserver(measure);
-        observer.observe(iframe.contentDocument.body);
-      }
-    } catch { /* ignore */ }
-    iframe.addEventListener('load', measure);
-    return () => {
-      clearInterval(interval); clearTimeout(stop);
-      observer?.disconnect();
-      iframe.removeEventListener('load', measure);
-    };
+    const host = hostRef.current;
+    if (!host) return;
+    const root = host.shadowRoot || host.attachShadow({ mode: 'open' });
+    const safe = (html || '')
+      .replace(/<\s*script[\s\S]*?<\s*\/\s*script\s*>/gi, '')
+      .replace(/<\s*script[^>]*>/gi, '')
+      .replace(/\son\w+\s*=\s*"[^"]*"/gi, '')
+      .replace(/\son\w+\s*=\s*'[^']*'/gi, '')
+      .replace(/\son\w+\s*=\s*[^\s>]+/gi, '')
+      .replace(/(href|src)\s*=\s*(["'])\s*javascript:[^"']*\2/gi, '$1="#"');
+    root.innerHTML =
+      `<style>:host{display:block}` +
+      `img{max-width:100%!important;height:auto}table{max-width:100%!important}` +
+      `a{color:#1d4ed8}*{word-break:break-word;overflow-wrap:break-word}</style>` +
+      `<div style="font:13px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#334155">${safe}</div>`;
   }, [html]);
-
-  return (
-    <iframe
-      ref={ref}
-      title="Email content"
-      sandbox="allow-same-origin allow-popups"
-      srcDoc={srcDoc}
-      style={{ width: '100%', height, border: 'none', display: 'block' }}
-    />
-  );
+  return <div ref={hostRef} />;
 }
 
 // ── Thread item ───────────────────────────────────────────────────────────────
