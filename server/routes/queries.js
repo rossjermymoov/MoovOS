@@ -12,37 +12,45 @@ import { query } from '../db/index.js';
 import { getAuthedClient } from '../services/gmailService.js';
 import { extractBody, hydratePayload } from '../services/gmailSync.js';
 import EmailReplyParser from 'email-reply-parser';
-import * as cheerio from 'cheerio';
+import { parse as parseHtml } from 'node-html-parser';
 
 const router = express.Router();
 
 // HTML-aware reply splitter — keeps only the NEW message's markup (images,
 // inline styles, tables intact) by removing the quoted-history containers.
-// Returns '' when there's no HTML to work with so the caller can fall back.
+// Uses node-html-parser (zero-undici, Node-18 safe). Returns '' when there's no
+// HTML so the caller can fall back to text.
 function splitHtmlNewMessage(html) {
   if (!html) return '';
   try {
-    const $ = cheerio.load(html, null, false);
+    const root = parseHtml(html);
     // Gmail / Apple Mail quote containers
-    $('.gmail_quote, .gmail_quote_container, blockquote[type="cite"], #divRplyFwdMsg, #appendonsend, #x_appendonsend, #mail-editor-reference-message-container').remove();
-    // Outlook desktop: reply lives in a border-top divider div — drop it and all after
-    let stopped = false;
-    $('div').each((i, el) => {
-      if (stopped) return;
-      const s = ($(el).attr('style') || '').replace(/\s+/g, '').toLowerCase();
+    root.querySelectorAll('.gmail_quote, .gmail_quote_container, blockquote[type="cite"], #divRplyFwdMsg, #appendonsend, #x_appendonsend, #mail-editor-reference-message-container')
+      .forEach(n => n.remove());
+    // Remove an element and every sibling that follows it.
+    const removeFromHere = (el) => {
+      const parent = el.parentNode;
+      if (!parent) { el.remove(); return; }
+      const kids = parent.childNodes;
+      const idx = kids.indexOf(el);
+      if (idx >= 0) for (let i = kids.length - 1; i >= idx; i--) kids[i].remove();
+    };
+    // Outlook desktop: reply lives in a border-top divider div — drop it and all after.
+    let done = false;
+    for (const div of root.querySelectorAll('div')) {
+      const s = (div.getAttribute('style') || '').replace(/\s+/g, '').toLowerCase();
       if (s.includes('border-top:solid') || s.includes('border-top:1pt') || s.includes('border-top:1px')) {
-        $(el).nextAll().remove(); $(el).remove(); stopped = true;
+        removeFromHere(div); done = true; break;
       }
-    });
-    // Fallback: a block whose text is a quoted "From: … Sent: …" header
-    let cutEl = null;
-    $('div, p, table').each((i, el) => {
-      if (cutEl) return;
-      const t = $(el).text().trim();
-      if (/^From:\s/i.test(t) && /(Sent|Date|To|Subject):/i.test(t)) cutEl = el;
-    });
-    if (cutEl) { $(cutEl).nextAll().remove(); $(cutEl).remove(); }
-    return ($.html() || '').trim();
+    }
+    // Fallback: a block whose text is a quoted "From: … Sent: …" header.
+    if (!done) {
+      for (const el of root.querySelectorAll('div, p, table')) {
+        const t = (el.text || '').trim();
+        if (/^From:\s/i.test(t) && /(Sent|Date|To|Subject):/i.test(t)) { removeFromHere(el); break; }
+      }
+    }
+    return (root.toString() || '').trim();
   } catch { return html; }
 }
 
