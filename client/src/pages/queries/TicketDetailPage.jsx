@@ -339,56 +339,44 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
     :                               { label: 'To courier', bg: '#DCFCE7', color: '#166534', border: '#86EFAC' };
 
   return (
-    <div style={{
-      background: C.card,
-      border: '1px solid #E2E8F0',
-      borderLeft: cardBorderLeft.replace('0.35', '1').replace('0.50', '1').replace('0.45', '1'),
-      borderRadius: 12,
-      overflow: 'hidden',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-    }}>
+    <article className="w-full max-w-none border-b border-slate-100 py-10 last:border-b-0">
 
-      {/* Card header */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        padding: '16px 22px 14px',
-        borderBottom: '1px solid #F8FAFC',
-        background: isNote ? '#FFFBEB20' : C.card,
-      }}>
+      {/* Minimalist header */}
+      <header className="mb-5 flex items-center gap-3">
         {/* Avatar */}
-        <div style={{
-          width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
-          background: logoUrl ? '#fff' : avBg,
-          border: logoUrl ? `1px solid ${C.border}` : `2px solid white`,
-          boxShadow: logoUrl ? 'none' : `0 0 0 2px ${avBg}`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-        }}>
+        <div
+          className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full"
+          style={{ background: logoUrl ? '#fff' : avBg, border: logoUrl ? `1px solid ${C.border}` : 'none' }}
+        >
           {logoUrl
             ? <img src={logoUrl} alt="" style={{ width: '100%', objectFit: 'contain', padding: 4 }} />
-            : <span style={{ fontSize: 14, fontWeight: 800, color: avColor, letterSpacing: '-0.01em' }}>{avInitial}</span>
+            : <span className="text-sm font-semibold" style={{ color: avColor }}>{avInitial}</span>
           }
         </div>
         {/* Sender info */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <span style={{ fontSize: 13.5, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.01em' }}>{senderLabel}</span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-sm font-semibold text-slate-800">{senderLabel}</span>
             {isDraft && (
-              <span style={{ fontSize: 10, fontWeight: 600, color: '#166534', background: '#F0FDF4', borderRadius: 20, padding: '2px 8px', border: '1px solid #BBF7D0' }}>AI draft</span>
+              <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">AI draft</span>
             )}
           </div>
           {email.from_address && !isOut && (
-            <p style={{ fontSize: 11.5, color: '#94A3B8', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email.from_address}</p>
+            <p className="truncate text-xs text-slate-400">{email.from_address}</p>
           )}
         </div>
-        {/* Timestamp + direction badge */}
-        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          <p style={{ fontSize: 11, color: '#94A3B8', margin: 0, whiteSpace: 'nowrap' }}>{fmtDate(ts)}</p>
-          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 5, background: dirBadge.bg, color: dirBadge.color, border: `1px solid ${dirBadge.border || dirBadge.bg}`, marginTop: 3, display: 'inline-block', letterSpacing: '0.02em' }}>{dirBadge.label}</span>
-        </div>
-      </div>
+        {/* Direction badge + timestamp */}
+        <span
+          className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium"
+          style={{ background: dirBadge.bg, color: dirBadge.color }}
+        >
+          {dirBadge.label}
+        </span>
+        <time className="shrink-0 text-xs text-slate-400">{fmtDate(ts)}</time>
+      </header>
 
-      {/* Body */}
-      <div style={{ padding: '20px 24px', overflowX: 'hidden' }}>
+      {/* Body — full width, no fixed height, no inner scroll */}
+      <div className="w-full max-w-none">
         {editMode ? (
           <textarea
             value={editBody}
@@ -405,12 +393,8 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
             {email.body_html ? (
               <EmailHtml html={email.body_html} />
             ) : (
-              <pre style={{
-                margin: 0, fontSize: 13, color: '#334155', whiteSpace: 'pre-wrap',
-                overflowWrap: 'break-word', lineHeight: 1.8, fontFamily: 'inherit',
-                minHeight: 40,
-              }}>
-                {plainFallback || <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>No content</span>}
+              <pre className="m-0 h-auto w-full max-w-none whitespace-pre-wrap break-words font-sans text-base leading-relaxed text-slate-800">
+                {plainFallback || <span className="italic text-slate-400">No content</span>}
               </pre>
             )}
           </>
@@ -507,7 +491,7 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
           </div>
         )}
       </div>
-    </div>
+    </article>
   );
 }
 
@@ -811,7 +795,7 @@ export default function TicketDetailPage() {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, overflow: 'hidden', background: '#F8FAFC' }}>
 
           {/* Thread */}
-          <div ref={messagesRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '24px 28px 32px', display: 'flex', flexDirection: 'column', gap: 16, background: '#F8FAFC' }}>
+          <div ref={messagesRef} className="min-h-0 flex-1 overflow-y-auto bg-white p-8">
             {allEmails.length === 0 ? (
               <div style={{ padding: '48px 0', textAlign: 'center', color: C.muted, alignSelf: 'center', width: '100%' }}>
                 <Mail size={24} style={{ marginBottom: 10, opacity: 0.2, display: 'block', margin: '0 auto 10px' }} />
