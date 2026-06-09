@@ -12,8 +12,39 @@ import { query } from '../db/index.js';
 import { getAuthedClient } from '../services/gmailService.js';
 import { extractBody, hydratePayload } from '../services/gmailSync.js';
 import EmailReplyParser from 'email-reply-parser';
+import * as cheerio from 'cheerio';
 
 const router = express.Router();
+
+// HTML-aware reply splitter — keeps only the NEW message's markup (images,
+// inline styles, tables intact) by removing the quoted-history containers.
+// Returns '' when there's no HTML to work with so the caller can fall back.
+function splitHtmlNewMessage(html) {
+  if (!html) return '';
+  try {
+    const $ = cheerio.load(html, null, false);
+    // Gmail / Apple Mail quote containers
+    $('.gmail_quote, .gmail_quote_container, blockquote[type="cite"], #divRplyFwdMsg, #appendonsend, #x_appendonsend, #mail-editor-reference-message-container').remove();
+    // Outlook desktop: reply lives in a border-top divider div — drop it and all after
+    let stopped = false;
+    $('div').each((i, el) => {
+      if (stopped) return;
+      const s = ($(el).attr('style') || '').replace(/\s+/g, '').toLowerCase();
+      if (s.includes('border-top:solid') || s.includes('border-top:1pt') || s.includes('border-top:1px')) {
+        $(el).nextAll().remove(); $(el).remove(); stopped = true;
+      }
+    });
+    // Fallback: a block whose text is a quoted "From: … Sent: …" header
+    let cutEl = null;
+    $('div, p, table').each((i, el) => {
+      if (cutEl) return;
+      const t = $(el).text().trim();
+      if (/^From:\s/i.test(t) && /(Sent|Date|To|Subject):/i.test(t)) cutEl = el;
+    });
+    if (cutEl) { $(cutEl).nextAll().remove(); $(cutEl).remove(); }
+    return ($.html() || '').trim();
+  } catch { return html; }
+}
 
 // ── Reply-chain parsing ──────────────────────────────────────────────────────
 // Reduce a raw email body to just the NEW message: email-reply-parser strips
@@ -52,11 +83,14 @@ function cleanReplyBody(text) {
 }
 
 // Shape each stored email into a clean conversation fragment for the timeline.
+// `html_body` keeps the new message's rich markup (images/styles); `body` is the
+// plain-text equivalent used as a fallback when there's no HTML.
 function toMessageFragment(e) {
   const isInbound = (e.direction || '').startsWith('inbound');
   return {
     ...e,
     is_inbound: isInbound,
+    html_body: splitHtmlNewMessage(e.body_html),
     body: cleanReplyBody(e.body_text),
   };
 }

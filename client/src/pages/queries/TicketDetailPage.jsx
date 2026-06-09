@@ -457,6 +457,10 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
               fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none', lineHeight: 1.65,
             }}
           />
+        ) : email.html_body ? (
+          <div className="prose prose-slate max-w-none">
+            <EmailHtml html={email.html_body} />
+          </div>
         ) : (
           <pre className="m-0 h-auto w-full max-w-none whitespace-pre-wrap break-words font-sans text-base leading-relaxed text-slate-800">
             {bodyText || <span className="italic text-slate-400">No content</span>}
