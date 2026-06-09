@@ -146,6 +146,10 @@ router.get('/', async (req, res, next) => {
       const statuses = status.split(',').map(s => s.trim());
       conditions.push(`status = ANY($${idx++}::query_status[])`);
       values.push(statuses);
+    } else {
+      // Default inbox view = open work only, so the list (and its `total`)
+      // matches the "open" count shown in the header/stats.
+      conditions.push(`status NOT IN ('resolved', 'resolved_claim_approved', 'resolved_claim_rejected')`);
     }
     if (courier_code) {
       conditions.push(`courier_code = $${idx++}`);

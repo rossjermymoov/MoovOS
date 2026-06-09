@@ -1822,6 +1822,8 @@ function FilterPanel({ filters, setFilters, staffList, onClose }) {
 export default function QueriesPage() {
   const navigate = useNavigate();
   const [queries,       setQueries]       = useState([]);
+  const [total,         setTotal]         = useState(0);
+  const [loadingMore,   setLoadingMore]   = useState(false);
   const [stats,         setStats]         = useState(null);
   const [loading,       setLoading]       = useState(true);
   const [showUnmatched, setShowUnmatched] = useState(false);
@@ -1844,26 +1846,43 @@ export default function QueriesPage() {
     api.get('/staff').then(r => setStaffList(r.data)).catch(() => {});
   }, []);
 
+  const PAGE_SIZE = 50;
+
+  const paramsFromFilters = useCallback(() => {
+    const params = {};
+    if (filters.status)          params.status              = filters.status;
+    if (filters.attention)       params.attention           = true;
+    if (filters.pending_draft)   params.pending_draft       = true;
+    if (filters.claim_deadline)  params.claim_deadline_days = 7;
+    if (filters.sla_breached)    params.sla_breached        = true;
+    if (filters.search)          params.search              = filters.search;
+    if (filters.assigned_to)     params.assigned_to         = filters.assigned_to;
+    if (filters.query_type)      params.query_type          = filters.query_type;
+    if (filters.priority)        params.priority            = filters.priority;
+    if (filters.group_name)      params.group_name          = filters.group_name;
+    if (filters.courier)         params.courier             = filters.courier;
+    return params;
+  }, [filters]);
+
   const loadInbox = useCallback(async () => {
     setLoading(true);
     try {
-      const params = {};
-      if (filters.status)          params.status              = filters.status;
-      if (filters.attention)       params.attention           = true;
-      if (filters.pending_draft)   params.pending_draft       = true;
-      if (filters.claim_deadline)  params.claim_deadline_days = 7;
-      if (filters.sla_breached)    params.sla_breached        = true;
-      if (filters.search)          params.search              = filters.search;
-      if (filters.assigned_to)     params.assigned_to         = filters.assigned_to;
-      if (filters.query_type)      params.query_type          = filters.query_type;
-      if (filters.priority)        params.priority            = filters.priority;
-      if (filters.group_name)      params.group_name          = filters.group_name;
-      if (filters.courier)         params.courier             = filters.courier;
-      const d = await fetchInbox(params);
+      const d = await fetchInbox({ ...paramsFromFilters(), limit: PAGE_SIZE, offset: 0 });
       setQueries(d.queries || []);
+      setTotal(d.total ?? (d.queries || []).length);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
-  }, [filters]);
+  }, [paramsFromFilters]);
+
+  const loadMore = useCallback(async () => {
+    setLoadingMore(true);
+    try {
+      const d = await fetchInbox({ ...paramsFromFilters(), limit: PAGE_SIZE, offset: queries.length });
+      setQueries(prev => [...prev, ...(d.queries || [])]);
+      setTotal(d.total ?? (queries.length + (d.queries || []).length));
+    } catch (err) { console.error(err); }
+    finally { setLoadingMore(false); }
+  }, [paramsFromFilters, queries.length]);
 
   useEffect(() => { loadInbox(); }, [loadInbox]);
 
@@ -2041,6 +2060,26 @@ export default function QueriesPage() {
                   <InboxRow key={q.id} q={q} onClick={() => navigate(`/queries/${q.id}`)} staffList={staffList} onUpdate={refresh} />
                 ))
               }
+              {/* Pagination footer */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, padding: '16px 0 8px' }}>
+                <span style={{ fontSize: 12, color: C.muted }}>
+                  Showing {displayQueries.length} of {total}
+                </span>
+                {queries.length < total && (
+                  <button
+                    onClick={loadMore}
+                    disabled={loadingMore}
+                    style={{
+                      fontSize: 12, fontWeight: 600, color: '#1D4ED8',
+                      background: '#EFF6FF', border: '1px solid #BFDBFE',
+                      borderRadius: 8, padding: '6px 14px',
+                      cursor: loadingMore ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {loadingMore ? 'Loading…' : `Load ${Math.min(PAGE_SIZE, total - queries.length)} more`}
+                  </button>
+                )}
+              </div>
             </>
           )}
         </div>
