@@ -676,11 +676,11 @@ export default function TicketDetailPage() {
     if (ticket?.id) api.post(`/queries/${ticket.id}/mark-read`).catch(() => {});
   }, [ticket?.id]);
 
-  // Scroll to bottom when emails load
+  // Newest message is at the top, so start the view scrolled to the top.
   const emails = ticket?.emails || [];
   useEffect(() => {
     if (messagesRef.current) {
-      messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
+      messagesRef.current.scrollTop = 0;
     }
   }, [emails.length]);
 
@@ -714,7 +714,7 @@ export default function TicketDetailPage() {
   const parcel      = trackingData?.parcel || null;
 
   // Single merged chronological thread
-  const allEmails = [...emails].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  const allEmails = [...emails].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
