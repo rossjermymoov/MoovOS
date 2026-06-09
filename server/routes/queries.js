@@ -11,8 +11,55 @@ import { google } from 'googleapis';
 import { query } from '../db/index.js';
 import { getAuthedClient } from '../services/gmailService.js';
 import { extractBody, hydratePayload } from '../services/gmailSync.js';
+import EmailReplyParser from 'email-reply-parser';
 
 const router = express.Router();
+
+// ── Reply-chain parsing ──────────────────────────────────────────────────────
+// Reduce a raw email body to just the NEW message: email-reply-parser strips
+// Gmail-style quotes ("> …", "On <date> … wrote:"), and we additionally strip
+// Outlook header blocks ("From:/Sent:/To:/Subject:") and divider lines, which
+// the library leaves behind. Never returns blank — falls back to the full body.
+const _erp = new EmailReplyParser();
+
+function stripOutlookHistory(text) {
+  const lines = (text || '').replace(/\r\n/g, '\n').split('\n');
+  const isCut = (raw, i) => {
+    const t = raw.trim();
+    if (/^_{10,}$/.test(t)) return true;
+    if (/^-{2,}\s*(Original|Forwarded) Message\s*-{2,}/i.test(t)) return true;
+    if (/^From:\s?\S/i.test(t)) {
+      const ahead = lines.slice(i + 1, i + 6).map(l => l.trim());
+      if (ahead.some(l => /^(Sent|Date|To|Cc|Subject):/i.test(l))) return true;
+    }
+    return false;
+  };
+  let cut = -1;
+  for (let i = 1; i < lines.length; i++) { if (isCut(lines[i], i)) { cut = i; break; } }
+  if (cut < 1) return (text || '').trim();
+  const main = lines.slice(0, cut).join('\n').trim();
+  return main || (text || '').trim();
+}
+
+function cleanReplyBody(text) {
+  let visible;
+  try { visible = _erp.read(text || '').getVisibleText(); }
+  catch { visible = text || ''; }
+  return stripOutlookHistory(visible)
+    .replace(/\[cid:[^\]]+\]/gi, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+// Shape each stored email into a clean conversation fragment for the timeline.
+function toMessageFragment(e) {
+  const isInbound = (e.direction || '').startsWith('inbound');
+  return {
+    ...e,
+    is_inbound: isInbound,
+    body: cleanReplyBody(e.body_text),
+  };
+}
 
 // Flatten a Gmail MIME payload into a list describing where each part's body
 // actually lives (inline vs by-reference). Used by the debug route below.
@@ -612,7 +659,7 @@ router.get('/:id', async (req, res, next) => {
 
     res.json({
       ...queryRes.rows[0],
-      emails:        emailsRes.rows,
+      emails:        emailsRes.rows.map(toMessageFragment),
       evidence:      evidenceRes.rows,
       notifications: notificationsRes.rows,
     });

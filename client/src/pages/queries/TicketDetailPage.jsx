@@ -400,6 +400,10 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
     ? 'my-4 rounded-2xl border border-slate-100 bg-slate-50/80 px-6 py-8'
     : 'border-b border-slate-100 py-10 last:border-b-0';
 
+  // The server returns `body` already parsed down to just the new message.
+  // Fall back to client-side trimming for older payloads.
+  const bodyText = (email.body && email.body.trim()) ? email.body.trim() : plainFallback;
+
   const dirBadge = isNote ? { label: 'Note', bg: '#FEF9C3', color: '#854D0E', border: '#FDE047' }
     : dir === 'inbound_customer'  ? { label: 'Inbound', bg: '#DBEAFE', color: '#1D4ED8', border: '#93C5FD' }
     : dir === 'outbound_customer' ? { label: 'Sent', bg: '#DCFCE7', color: '#166534', border: '#86EFAC' }
@@ -454,15 +458,9 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
             }}
           />
         ) : (
-          <>
-            {email.body_html ? (
-              <EmailHtml html={email.body_html} />
-            ) : (
-              <pre className="m-0 h-auto w-full max-w-none whitespace-pre-wrap break-words font-sans text-base leading-relaxed text-slate-800">
-                {plainFallback || <span className="italic text-slate-400">No content</span>}
-              </pre>
-            )}
-          </>
+          <pre className="m-0 h-auto w-full max-w-none whitespace-pre-wrap break-words font-sans text-base leading-relaxed text-slate-800">
+            {bodyText || <span className="italic text-slate-400">No content</span>}
+          </pre>
         )}
 
         {/* AI draft actions */}
