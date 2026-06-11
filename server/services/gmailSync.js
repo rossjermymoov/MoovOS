@@ -212,30 +212,25 @@ async function upsertTicket(msg, gmail = null) {
 
   const customer = await resolveCustomer(senderEmail);
 
-  // Find an existing ticket for this Gmail thread (prefer an open one).
+  // Find the ticket this Gmail thread belongs to.
+  //  • Our own reply (outbound) attaches to its thread under ANY status —
+  //    open, pending, resolved or closed — so sent replies are never dropped.
+  //  • An inbound customer message prefers an open ticket; a brand-new message
+  //    on a long-resolved thread is allowed to spin up a fresh ticket below.
   let queryId = null;
   if (gmailThreadId) {
-    const open = await query(
-      `SELECT q.id FROM queries q
-       JOIN query_emails qe ON qe.query_id = q.id
-       WHERE qe.gmail_thread_id = $1
-         AND q.status NOT IN ('resolved','resolved_claim_approved','resolved_claim_rejected')
-       ORDER BY q.created_at DESC LIMIT 1`,
-      [gmailThreadId]
-    );
-    if (open.rows[0]) queryId = open.rows[0].id;
-    // Our own reply must still attach to its thread even after it's resolved —
-    // otherwise sent replies on closed tickets get dropped entirely.
-    else if (isOurs) {
-      const any = await query(
-        `SELECT q.id FROM queries q
+    const sql = isOurs
+      ? `SELECT q.id FROM queries q
          JOIN query_emails qe ON qe.query_id = q.id
          WHERE qe.gmail_thread_id = $1
-         ORDER BY q.created_at DESC LIMIT 1`,
-        [gmailThreadId]
-      );
-      if (any.rows[0]) queryId = any.rows[0].id;
-    }
+         ORDER BY q.created_at DESC LIMIT 1`
+      : `SELECT q.id FROM queries q
+         JOIN query_emails qe ON qe.query_id = q.id
+         WHERE qe.gmail_thread_id = $1
+           AND q.status NOT IN ('resolved','resolved_claim_approved','resolved_claim_rejected')
+         ORDER BY q.created_at DESC LIMIT 1`;
+    const match = await query(sql, [gmailThreadId]);
+    if (match.rows[0]) queryId = match.rows[0].id;
   }
 
   if (!queryId) {
@@ -275,30 +270,25 @@ export async function syncGmail() {
   const auth = await getAuthedClient();
   const gmail = google.gmail({ version: 'v1', auth });
 
+  // Always poll messages.list for BOTH inbox and sent. We deliberately no longer
+  // rely on history.list: Google does not raise a reliable messageAdded event
+  // for messages sent through an external SMTP client, so those replies were
+  // being missed entirely. A direct query catches both sides every run.
+  const fetchMethod = 'list (in:inbox OR in:sent, last 7 days)';
+  const since = Math.floor((Date.now() - 7 * 86400000) / 1000);
+
   let messageIds = [];
-  let fetchMethod = 'incremental';
-
-  if (config.last_history_id) {
-    try {
-      const histRes = await gmail.users.history.list({
-        userId: 'me', startHistoryId: config.last_history_id,
-        historyTypes: ['messageAdded'],   // no label filter → captures INBOX and SENT
-      });
-      const records = histRes.data.history || [];
-      records.forEach(h => (h.messagesAdded || []).forEach(m => messageIds.push(m.message.id)));
-    } catch (e) {
-      config.last_history_id = null; // expired, fall through to full sync
-    }
-  }
-
-  if (!config.last_history_id) {
-    fetchMethod = 'full (last 7 days, inbox + sent)';
-    const since = Math.floor((Date.now() - 7 * 86400000) / 1000);
+  let pageToken;
+  do {
     const listRes = await gmail.users.messages.list({
-      userId: 'me', q: `(in:inbox OR in:sent) after:${since}`, maxResults: 200,
+      userId: 'me',
+      q: `(in:inbox OR in:sent) after:${since}`,
+      maxResults: 200,
+      pageToken,
     });
-    messageIds = (listRes.data.messages || []).map(m => m.id);
-  }
+    (listRes.data.messages || []).forEach(m => messageIds.push(m.id));
+    pageToken = listRes.data.nextPageToken;
+  } while (pageToken && messageIds.length < 1000);   // hard cap for safety
 
   const results = { fetched: messageIds.length, imported: 0, skipped: 0, errors: [], fetchMethod };
 
@@ -309,8 +299,9 @@ export async function syncGmail() {
     try {
       const msgRes = await gmail.users.messages.get({ userId: 'me', id, format: 'full' });
       const labels = msgRes.data.labelIds || [];
-      // Only ingest real inbox/sent mail — skip drafts, chats, spam, trash.
-      if (!labels.includes('INBOX') && !labels.includes('SENT')) { results.skipped++; continue; }
+      // Allow anything carrying the INBOX or SENT label through to processing.
+      const isValidLabel = labels.some(l => ['INBOX', 'SENT'].includes(l));
+      if (!isValidLabel) { results.skipped++; continue; }
       fetchedMsgs.push(msgRes.data);
     } catch (e) {
       console.error('[Gmail fetch]', e.message);
@@ -334,8 +325,12 @@ export async function syncGmail() {
     results.first_error = results.errors[0]?.error;
   }
 
-  const profileRes = await gmail.users.getProfile({ userId: 'me' });
-  await updateLastSync(profileRes.data.historyId);
+  // Keep the historyId fresh for other consumers, but the sync no longer
+  // depends on it — non-fatal if it fails.
+  try {
+    const profileRes = await gmail.users.getProfile({ userId: 'me' });
+    await updateLastSync(profileRes.data.historyId);
+  } catch (e) { console.warn('[Gmail sync] historyId update skipped:', e.message); }
 
   // Backfill any tickets that are missing summaries
   await backfillSummaries();
