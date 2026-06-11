@@ -279,10 +279,10 @@ export async function syncGmail() {
   // for messages sent through an external SMTP client, so those replies were
   // being missed entirely. A direct query catches both sides every run.
   const fetchMethod = 'list (in:inbox OR in:sent)';
-  // Rolling 7-day window, but never reach back before `sync_after` — the floor
-  // set when the data is wiped for a clean baseline, so we only ingest mail from
-  // that moment forward. Once the floor is older than 7 days the window governs.
-  const windowSec = Math.floor((Date.now() - 7 * 86400000) / 1000);
+  // Tight 1-hour rolling window so a wipe can never re-import old mail. The sync
+  // polls every few minutes, so an hour is ample overlap to catch new arrivals.
+  // We also never reach back before `sync_after` (the floor set on wipe).
+  const windowSec = Math.floor((Date.now() - 1 * 3600000) / 1000);
   const floorSec  = config.sync_after ? Math.floor(new Date(config.sync_after).getTime() / 1000) : 0;
   const since = Math.max(windowSec, floorSec);
 
