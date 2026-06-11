@@ -1677,6 +1677,76 @@ router.post('/map-sender', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/queries/:id/debug-customer   (TEMPORARY diagnostic — safe to remove)
+// Searches the WHOLE connected mailbox for every message to/from this ticket's
+// customer (across all threads), showing each message's threadId, labels and
+// whether Moov stored it — plus which mailbox the sync is connected to.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/:id/debug-customer', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const isUuid = /^[0-9a-f-]{36}$/i.test(id);
+    const tRes = await query(
+      isUuid ? `SELECT id, sender_email FROM queries WHERE id = $1`
+             : `SELECT id, sender_email FROM queries WHERE ticket_number = $1`,
+      [id]
+    );
+    if (!tRes.rows.length) return res.status(404).json({ error: 'ticket not found' });
+    const queryId = tRes.rows[0].id;
+
+    const inb = await query(
+      `SELECT from_address FROM query_emails
+        WHERE query_id = $1 AND direction IN ('inbound_customer','inbound_courier') AND from_address IS NOT NULL
+        ORDER BY received_at ASC LIMIT 1`,
+      [queryId]
+    );
+    const email = (inb.rows[0]?.from_address || tRes.rows[0].sender_email || '').toLowerCase();
+    if (!email) return res.json({ error: 'no customer email found on ticket' });
+
+    let gmail = null;
+    try { const auth = await getAuthedClient(); if (auth) gmail = google.gmail({ version: 'v1', auth }); } catch {}
+    if (!gmail) return res.json({ error: 'gmail not connected', customer_email: email });
+
+    const profile = await gmail.users.getProfile({ userId: 'me' });
+    const list = await gmail.users.messages.list({
+      userId: 'me', q: `from:${email} OR to:${email}`, maxResults: 30,
+    });
+    const ids = (list.data.messages || []).map(m => m.id);
+    const storedRes = ids.length
+      ? await query(`SELECT gmail_message_id FROM query_emails WHERE gmail_message_id = ANY($1)`, [ids])
+      : { rows: [] };
+    const storedSet = new Set(storedRes.rows.map(r => r.gmail_message_id));
+    const hdr = (hs, n) => (hs.find(h => h.name.toLowerCase() === n.toLowerCase())?.value) || '';
+
+    const messages = [];
+    for (const mid of ids) {
+      const m = await gmail.users.messages.get({
+        userId: 'me', id: mid, format: 'metadata',
+        metadataHeaders: ['From', 'To', 'Subject', 'Date'],
+      });
+      const h = m.data.payload?.headers || [];
+      messages.push({
+        id:             mid,
+        threadId:       m.data.threadId,
+        date:           m.data.internalDate ? new Date(parseInt(m.data.internalDate)).toISOString() : null,
+        from:           hdr(h, 'From'),
+        to:             hdr(h, 'To'),
+        subject:        hdr(h, 'Subject'),
+        labels:         m.data.labelIds || [],
+        stored_in_moov: storedSet.has(mid),
+      });
+    }
+    messages.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    res.json({
+      connected_account: profile.data.emailAddress,
+      customer_email:    email,
+      count:             messages.length,
+      messages,
+    });
+  } catch (e) { next(e); }
+});
+
 // GET /api/queries/:id/debug-thread   (TEMPORARY diagnostic — safe to remove)
 // Lists EVERY message in the ticket's Gmail thread with its labels/date, and
 // whether Moov stored it — so we can see exactly which messages were missed.
