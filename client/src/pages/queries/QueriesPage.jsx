@@ -510,10 +510,15 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   const happiness    = q.customer_happiness_score != null && !isNaN(parseInt(q.customer_happiness_score)) ? parseInt(q.customer_happiness_score) : null;
   const sentiment    = q.sentiment || (happiness == null ? null : happiness < 41 ? 'Frustrated customer' : happiness < 71 ? 'Neutral tone' : 'Positive');
   const ticketId     = q.ticket_number != null ? `Moov-${q.ticket_number}` : null;
-  const riskText     = isScreamer ? 'High-risk screamer — prioritise immediately.'
-                     : q.sla_breached ? 'SLA breached — response overdue.'
-                     : (happiness != null && happiness < 41) ? 'Unhappy customer — handle with care.'
-                     : 'Standard priority, no escalation flagged.';
+  // Full AI summary for the hover card (getAiSummary truncates to 80 chars).
+  const fullSummary  = q.description || q.attention_reason || preview || '';
+  // Dynamic colour scheme for the hover card — red urgent / amber medium / blue standard.
+  const cardUrgent   = isScreamer || q.sla_breached;
+  const cardTone     = cardUrgent
+    ? { header: 'text-red-600',   topBorder: 'border-t-4 border-t-red-500',   footer: '🚨 URGENT: Action Required.',                 footerCls: 'font-semibold text-red-600' }
+    : priority === 'medium'
+      ? { header: 'text-amber-600', topBorder: 'border-t-4 border-t-amber-500', footer: '⚠️ Medium priority, monitor closely.',         footerCls: 'text-amber-600' }
+      : { header: 'text-blue-600',  topBorder: 'border-t-4 border-t-blue-400',  footer: '✓ Standard priority, no escalation flagged.', footerCls: 'text-slate-500' };
 
   // SLA label
   let slaLabel = null, slaColor = C.muted, slaType = '';
@@ -601,28 +606,25 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
           {isScreamer ? 'Urgent risk' : 'AI summary'}
         </span>
 
-        {/* Floating hover card */}
-        <div className="hidden group-hover:block absolute z-50 right-0 top-8 min-w-[24rem] max-w-md rounded-xl border border-slate-100 bg-white px-4 pt-4 pb-4 text-left shadow-xl">
-          <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-indigo-600">
+        {/* Floating hover card — h-auto, colour adapts to priority/sentiment */}
+        <div className={`hidden group-hover:block absolute z-50 right-0 top-8 h-auto min-w-[24rem] max-w-md rounded-xl border border-slate-100 bg-white px-4 pt-4 pb-4 text-left shadow-xl ${cardTone.topBorder}`}>
+          <div className={`mb-2 flex items-center gap-1.5 text-xs font-semibold ${cardTone.header}`}>
             <Sparkles size={12} /> AI overview
           </div>
           <p className="whitespace-normal break-words text-sm leading-relaxed text-slate-700">
-            {mdLite(aiSummary.text || preview || 'No AI summary yet for this ticket.')}
+            {mdLite(fullSummary || 'No AI summary yet for this ticket.')}
           </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {sentiment && (
+          {sentiment && (
+            <div className="mt-3 flex flex-wrap gap-2">
               <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                isScreamer || (happiness != null && happiness < 41) ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
-                {sentiment}{isScreamer ? ' / high risk' : ''}
+                cardUrgent || (happiness != null && happiness < 41) ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
+                {sentiment}{cardUrgent ? ' / high risk' : ''}
               </span>
-            )}
-          </div>
-          {isScreamer && (
-            <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
-              ⚠ Screamer · escalation risk — prioritise immediately.
-            </p>
+            </div>
           )}
-          <p className="mt-3 whitespace-normal break-words text-xs leading-relaxed text-slate-400">{riskText}</p>
+          <p className={`mt-3 whitespace-normal break-words text-xs leading-relaxed ${cardTone.footerCls}`}>
+            {cardTone.footer}
+          </p>
         </div>
       </div>
 
