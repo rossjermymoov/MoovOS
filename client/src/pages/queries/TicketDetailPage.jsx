@@ -397,7 +397,7 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
       ? { label: 'Inbound',  cls: 'bg-blue-50 text-blue-700' }
       : { label: 'Outbound', cls: 'bg-slate-100 text-slate-600' };
   const rowClass = (!isInbound && !isNote)
-    ? 'my-4 rounded-2xl border border-slate-100 bg-slate-50/80 px-6 py-8'
+    ? 'my-4 rounded-2xl border border-slate-100 bg-slate-50/70 px-6 py-8'
     : 'border-b border-slate-100 py-10 last:border-b-0';
 
   // The server returns `body` already parsed down to just the new message.
@@ -781,7 +781,12 @@ export default function TicketDetailPage() {
   const parcel      = trackingData?.parcel || null;
 
   // Single merged chronological thread
-  const allEmails = [...emails].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  // Chronological (oldest → newest) so each reply sits directly beneath the
+  // message it answers; the server already orders them, this is a safety net.
+  const allEmails = [...emails].sort((a, b) =>
+    new Date(a.sent_at || a.received_at || a.created_at) -
+    new Date(b.sent_at || b.received_at || b.created_at)
+  );
 
   // ── Render ─────────────────────────────────────────────────────────────────
 

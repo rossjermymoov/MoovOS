@@ -10,7 +10,7 @@ import express from 'express';
 import { google } from 'googleapis';
 import { query } from '../db/index.js';
 import { getAuthedClient } from '../services/gmailService.js';
-import { extractBody, hydratePayload } from '../services/gmailSync.js';
+import { extractBody, hydratePayload, buildInlineHtml } from '../services/gmailSync.js';
 import EmailReplyParser from 'email-reply-parser';
 import { parse as parseHtml } from 'node-html-parser';
 
@@ -94,13 +94,68 @@ function cleanReplyBody(text) {
 // `html_body` keeps the new message's rich markup (images/styles); `body` is the
 // plain-text equivalent used as a fallback when there's no HTML.
 function toMessageFragment(e) {
-  const isInbound = (e.direction || '').startsWith('inbound');
+  // is_inbound = the message did NOT come from our support domain.
+  const fromOurs = SUPPORT_DOMAINS.test(e.from_address || '');
+  const isInbound = e.direction ? e.direction.startsWith('inbound') : !fromOurs;
   return {
     ...e,
     is_inbound: isInbound,
     html_body: splitHtmlNewMessage(e.body_html),
     body: cleanReplyBody(e.body_text),
   };
+}
+
+// Our support domains — a sender on one of these is treated as "our reply".
+const SUPPORT_DOMAINS = /@(moovparcel\.co\.uk|moov-os\.com|moovparcel\.com)$/i;
+
+// Pull the FULL Gmail thread (inbox + sent) and stitch in any messages — chiefly
+// our SENT replies — that aren't already stored, so the timeline is two-sided.
+async function stitchThreadReplies(storedRows) {
+  const threadId = storedRows.find(r => r.gmail_thread_id)?.gmail_thread_id;
+  if (!threadId) return storedRows;
+
+  let auth = null;
+  try { auth = await getAuthedClient(); } catch { return storedRows; }
+  if (!auth) return storedRows;
+
+  let thread;
+  try {
+    const gmail = google.gmail({ version: 'v1', auth });
+    thread = await gmail.users.threads.get({ userId: 'me', id: threadId, format: 'full' });
+    const known = new Set(storedRows.map(r => r.gmail_message_id).filter(Boolean));
+    const hdr = (headers, name) => (headers.find(h => h.name.toLowerCase() === name.toLowerCase())?.value) || '';
+    const emailOf = (from) => { const m = (from || '').match(/<([^>]+)>/); return (m ? m[1] : from || '').trim().toLowerCase(); };
+
+    const extra = [];
+    for (const m of (thread.data.messages || [])) {
+      if (known.has(m.id)) continue;
+      const headers   = m.payload?.headers || [];
+      const fromEmail = emailOf(hdr(headers, 'from'));
+      const isOurs    = SUPPORT_DOMAINS.test(fromEmail);
+      const ts        = m.internalDate ? new Date(parseInt(m.internalDate)) : new Date();
+      let bodyHtml = '';
+      try { await hydratePayload(gmail, m.id, m.payload); } catch { /* ignore */ }
+      try { bodyHtml = await buildInlineHtml(gmail, m.id, m.payload); } catch { /* ignore */ }
+      extra.push({
+        id:               `gmail-${m.id}`,
+        direction:        isOurs ? 'outbound_customer' : 'inbound_customer',
+        subject:          hdr(headers, 'subject'),
+        body_text:        extractBody(m.payload) || '',
+        body_html:        bodyHtml || null,
+        from_address:     fromEmail,
+        to_address:       hdr(headers, 'to'),
+        cc_address:       hdr(headers, 'cc'),
+        is_ai_draft:      false,
+        sent_at:          isOurs ? ts : null,
+        received_at:      ts,
+        read_at:          null,
+        created_at:       ts,
+        gmail_message_id: m.id,
+        gmail_thread_id:  threadId,
+      });
+    }
+    return [...storedRows, ...extra];
+  } catch { return storedRows; }
 }
 
 // Flatten a Gmail MIME payload into a list describing where each part's body
@@ -692,7 +747,8 @@ router.get('/:id', async (req, res, next) => {
         SELECT id, direction, subject, body_text, body_html,
                from_address, to_address, cc_address,
                is_ai_draft, ai_draft_approved_by, ai_draft_approved_at, ai_draft_edited,
-               sent_at, received_at, read_at, created_at
+               sent_at, received_at, read_at, created_at,
+               gmail_message_id, gmail_thread_id
         FROM query_emails
         WHERE query_id = $1
         ORDER BY created_at DESC
@@ -716,9 +772,17 @@ router.get('/:id', async (req, res, next) => {
 
     if (!queryRes.rows.length) return res.status(404).json({ error: 'Query not found' });
 
+    // Stitch our SENT replies in from the Gmail thread, then order strictly by
+    // timestamp (ascending) so the conversation reads as a two-sided exchange.
+    const stitched = await stitchThreadReplies(emailsRes.rows);
+    stitched.sort((a, b) =>
+      new Date(a.sent_at || a.received_at || a.created_at) -
+      new Date(b.sent_at || b.received_at || b.created_at)
+    );
+
     res.json({
       ...queryRes.rows[0],
-      emails:        emailsRes.rows.map(toMessageFragment),
+      emails:        stitched.map(toMessageFragment),
       evidence:      evidenceRes.rows,
       notifications: notificationsRes.rows,
     });
