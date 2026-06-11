@@ -8,21 +8,38 @@ import { query } from '../db/index.js';
 
 const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'];
 
+// Read an OAuth env var, trimmed — a stray space/newline in a hosting dashboard
+// is a classic cause of redirect_uri / client mismatches.
+function oauthEnv(name) {
+  const v = (process.env[name] || '').trim();
+  if (!v) throw new Error(`Gmail OAuth misconfigured: missing env var ${name}`);
+  return v;
+}
+
 export function createOAuthClient() {
   return new google.auth.OAuth2(
-    process.env.GMAIL_CLIENT_ID,
-    process.env.GMAIL_CLIENT_SECRET,
-    process.env.GMAIL_REDIRECT_URI
+    oauthEnv('GMAIL_CLIENT_ID'),
+    oauthEnv('GMAIL_CLIENT_SECRET'),
+    // Must match an "Authorized redirect URI" on the OAuth client EXACTLY —
+    // same scheme (https), same path, and no extra/missing trailing slash.
+    oauthEnv('GMAIL_REDIRECT_URI'),
   );
 }
 
 export function getAuthUrl() {
+  const redirectUri = oauthEnv('GMAIL_REDIRECT_URI');
   const oauth2Client = createOAuthClient();
-  return oauth2Client.generateAuthUrl({
+  const url = oauth2Client.generateAuthUrl({
     access_type: 'offline',
-    scope: SCOPES,
     prompt: 'consent',
+    scope: SCOPES,
+    include_granted_scopes: true,
   });
+  // Surface exactly what we send Google so a 400 (redirect_uri/scope mismatch)
+  // is obvious from the logs — compare these to the Google console line-for-line.
+  console.log('[Gmail OAuth] redirect_uri =', JSON.stringify(redirectUri));
+  console.log('[Gmail OAuth] scopes       =', SCOPES.join(' '));
+  return url;
 }
 
 export async function exchangeCodeForTokens(code) {
