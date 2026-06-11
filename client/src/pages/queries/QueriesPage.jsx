@@ -578,16 +578,38 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
         </div>
       </div>
 
-      {/* AI summary — clean hover anchor reveals the floating insight card */}
-      <div
-        onMouseMove={e => { e.stopPropagation(); setHoverPos({ x: e.clientX, y: e.clientY }); }}
-        className="flex w-[140px] shrink-0 justify-start"
-      >
-        <span className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium ${
+      {/* AI summary — relative group; hover reveals the floating insight card */}
+      <div className="group relative flex w-[140px] shrink-0 justify-start" onClick={e => e.stopPropagation()}>
+        <span className={`inline-flex cursor-default items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium ${
           isScreamer ? 'border-red-200 bg-red-50 text-red-700' : 'border-slate-200 bg-white text-slate-500'}`}>
           <Sparkles size={12} />
           {isScreamer ? 'Urgent risk' : 'AI summary'}
         </span>
+
+        {/* Floating hover card */}
+        <div className="hidden group-hover:block absolute z-50 right-0 top-8 w-80 rounded-xl border border-slate-100 bg-white p-4 text-left shadow-xl">
+          <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-indigo-600">
+            <Sparkles size={12} /> AI overview
+          </div>
+          <p className="text-sm leading-relaxed text-slate-700"
+             style={{ display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {aiSummary.text || preview || 'No AI summary yet for this ticket.'}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {sentiment && (
+              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                isScreamer || (happiness != null && happiness < 41) ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
+                {sentiment}{isScreamer ? ' / high risk' : ''}
+              </span>
+            )}
+          </div>
+          {isScreamer && (
+            <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+              ⚠ Screamer · escalation risk — prioritise immediately.
+            </p>
+          )}
+          <p className="mt-3 text-xs leading-relaxed text-slate-400">{riskText}</p>
+        </div>
       </div>
 
       {/* Group */}
@@ -717,51 +739,6 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
         )}
       </div>
 
-      {/* Hover popup — AI insight card (overview + sentiment + risk) */}
-      {hoverPos && (aiSummary.text || preview) && (
-        <div
-          onClick={e => e.stopPropagation()}
-          style={{
-            position: 'fixed',
-            left: Math.min(hoverPos.x + 18, window.innerWidth - 360),
-            top: Math.max(12, Math.min(hoverPos.y - 12, window.innerHeight - 240)),
-            width: 340,
-            background: 'rgba(255,255,255,0.92)',
-            backdropFilter: 'blur(10px)',
-            WebkitBackdropFilter: 'blur(10px)',
-            border: '1px solid rgba(15,23,42,0.10)',
-            borderRadius: 14,
-            boxShadow: '0 12px 32px rgba(15,23,42,0.16)',
-            padding: '14px 16px',
-            zIndex: 9999,
-            pointerEvents: 'none',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: '#4F46E5' }}>
-              <Sparkles size={12} /> AI overview
-            </span>
-            <span style={{ fontSize: 10, color: C.muted }}>{timeAgo(q.latest_email_at || q.created_at)}</span>
-          </div>
-          <p style={{ margin: 0, fontSize: 13, color: '#334155', lineHeight: 1.6,
-            display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-            {aiSummary.text || preview}
-          </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
-            {sentiment && (
-              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
-                {sentiment}
-              </span>
-            )}
-            <span className={isScreamer
-              ? 'rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700'
-              : 'rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600'}>
-              {isScreamer ? 'Screamer · urgent risk' : 'Risk: standard'}
-            </span>
-          </div>
-          <p style={{ margin: '10px 0 0', fontSize: 11.5, color: C.muted, lineHeight: 1.5 }}>{riskText}</p>
-        </div>
-      )}
     </div>
   );
 }
@@ -1677,12 +1654,23 @@ const STATUS_FILTERS = [
   { value: 'resolved',               label: 'Resolved' },
 ];
 
+// ── Dynamic group configuration ──────────────────────────────────────────────
+// Foundation for the settings-driven groups: add a string here (or, later, load
+// this array from /settings) and a colour-coded tab appears automatically.
+const userDefinedGroups = ['Claims', 'Queries', 'Billing', 'Technical'];
+
+const GROUP_COLORS = {
+  Claims:    '#D97706',
+  Queries:   '#2563EB',
+  Billing:   '#059669',
+  Technical: '#7C3AED',
+};
+const DEFAULT_GROUP_COLOR = '#0F172A';
+const groupColor = (group) => GROUP_COLORS[group] || DEFAULT_GROUP_COLOR;
+
 const GROUP_TABS = [
-  { key: 'all',       label: 'All',       group: '' },
-  { key: 'claims',    label: 'Claims',    group: 'Claims' },
-  { key: 'queries',   label: 'Queries',   group: 'Queries' },
-  { key: 'billing',   label: 'Billing',   group: 'Billing' },
-  { key: 'technical', label: 'Technical', group: 'Technical' },
+  { key: 'all', label: 'All', group: '' },
+  ...userDefinedGroups.map(g => ({ key: g.toLowerCase(), label: g, group: g })),
 ];
 
 function FilterPill({ active, color, onClick, children }) {
@@ -1842,7 +1830,7 @@ export default function QueriesPage() {
   const { user } = useAuth();
   const [queries,       setQueries]       = useState([]);
   const [total,         setTotal]         = useState(0);
-  const [loadingMore,   setLoadingMore]   = useState(false);
+  const [page,          setPage]          = useState(1);
   const [stats,         setStats]         = useState(null);
   const [loading,       setLoading]       = useState(true);
   const [showUnmatched, setShowUnmatched] = useState(false);
@@ -1896,28 +1884,36 @@ export default function QueriesPage() {
   const loadInbox = useCallback(async () => {
     setLoading(true);
     try {
-      const d = await fetchInbox({ ...paramsFromFilters(), limit: PAGE_SIZE, offset: 0 });
+      const d = await fetchInbox({ ...paramsFromFilters(), limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
       setQueries(d.queries || []);
       setTotal(d.total ?? (d.queries || []).length);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
-  }, [paramsFromFilters]);
+  }, [paramsFromFilters, page]);
 
-  const loadMore = useCallback(async () => {
-    setLoadingMore(true);
-    try {
-      const d = await fetchInbox({ ...paramsFromFilters(), limit: PAGE_SIZE, offset: queries.length });
-      setQueries(prev => [...prev, ...(d.queries || [])]);
-      setTotal(d.total ?? (queries.length + (d.queries || []).length));
-    } catch (err) { console.error(err); }
-    finally { setLoadingMore(false); }
-  }, [paramsFromFilters, queries.length]);
+  // Any filter change resets to the first page.
+  useEffect(() => { setPage(1); }, [filters]);
 
   useEffect(() => { loadInbox(); }, [loadInbox]);
 
   useEffect(() => {
     if (refreshKey > 0) loadInbox();
   }, [refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Pagination maths + a windowed list of page numbers.
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const startIdx   = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const endIdx     = Math.min(page * PAGE_SIZE, total);
+  const pageNumbers = (() => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const out = [1];
+    const lo = Math.max(2, page - 1), hi = Math.min(totalPages - 1, page + 1);
+    if (lo > 2) out.push('…');
+    for (let i = lo; i <= hi; i++) out.push(i);
+    if (hi < totalPages - 1) out.push('…');
+    out.push(totalPages);
+    return out;
+  })();
 
   const refresh = useCallback(() => setRefreshKey(k => k + 1), []);
 
@@ -2021,16 +2017,14 @@ export default function QueriesPage() {
       <div style={{ display: 'flex', alignItems: 'center', borderBottom: `0.5px solid ${C.border}`, background: C.bg, flexShrink: 0, padding: '0 18px', gap: 2 }}>
         {GROUP_TABS.map(t => {
           const isActive = t.group === '' ? !filters.group_name : filters.group_name === t.group;
+          const color = groupColor(t.group);
           return (
             <button key={t.key} onClick={() => setFilters(f => ({ ...f, group_name: t.group, attention: false, status: '' }))}
               style={{
+                display: 'flex', alignItems: 'center', gap: 6,
                 padding: '9px 14px', border: 'none', background: 'none',
-                borderBottom: `2px solid ${isActive
-                  ? (t.group === 'Claims' ? '#D97706' : t.group === 'Billing' ? '#059669' : t.group === 'Technical' ? '#7C3AED' : t.group === 'Queries' ? '#2563EB' : '#0F172A')
-                  : 'transparent'}`,
-                color: isActive
-                  ? (t.group === 'Claims' ? '#D97706' : t.group === 'Billing' ? '#059669' : t.group === 'Technical' ? '#7C3AED' : t.group === 'Queries' ? '#2563EB' : '#0F172A')
-                  : C.muted,
+                borderBottom: `2px solid ${isActive ? color : 'transparent'}`,
+                color: isActive ? color : C.muted,
                 fontSize: 13, fontWeight: isActive ? 600 : 400,
                 cursor: 'pointer', marginBottom: -0.5, whiteSpace: 'nowrap',
                 transition: 'color 0.1s',
@@ -2038,6 +2032,10 @@ export default function QueriesPage() {
               onMouseOver={e => { if (!isActive) e.currentTarget.style.color = C.sub; }}
               onMouseOut={e => { if (!isActive) e.currentTarget.style.color = C.muted; }}
             >
+              {t.group !== '' && (
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0,
+                  opacity: isActive ? 1 : 0.5 }} />
+              )}
               {t.label}
             </button>
           );
@@ -2094,26 +2092,6 @@ export default function QueriesPage() {
                   <InboxRow key={q.id} q={q} onClick={() => navigate(`/queries/${q.id}`)} staffList={staffList} onUpdate={refresh} />
                 ))
               }
-              {/* Pagination footer */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, padding: '16px 0 8px' }}>
-                <span style={{ fontSize: 12, color: C.muted }}>
-                  Showing {displayQueries.length} of {total}
-                </span>
-                {queries.length < total && (
-                  <button
-                    onClick={loadMore}
-                    disabled={loadingMore}
-                    style={{
-                      fontSize: 12, fontWeight: 600, color: '#1D4ED8',
-                      background: '#EFF6FF', border: '1px solid #BFDBFE',
-                      borderRadius: 8, padding: '6px 14px',
-                      cursor: loadingMore ? 'not-allowed' : 'pointer',
-                    }}
-                  >
-                    {loadingMore ? 'Loading…' : `Load ${Math.min(PAGE_SIZE, total - queries.length)} more`}
-                  </button>
-                )}
-              </div>
             </>
           )}
         </div>
@@ -2128,6 +2106,49 @@ export default function QueriesPage() {
           />
         )}
       </div>
+
+      {/* ── Pagination footer ──────────────────────────────────────────────── */}
+      {total > 0 && (
+        <div className="flex shrink-0 items-center justify-between border-t border-slate-200 bg-white px-5 py-3">
+          <span className="text-sm text-slate-500">
+            Showing {startIdx}-{endIdx} of {total} entries
+          </span>
+          <div className="inline-flex items-center gap-1">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600
+                         transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Previous
+            </button>
+            {pageNumbers.map((n, i) =>
+              n === '…' ? (
+                <span key={`e${i}`} className="px-2 text-sm text-slate-400">…</span>
+              ) : (
+                <button
+                  key={n}
+                  onClick={() => setPage(n)}
+                  className={`min-w-[36px] rounded-lg border px-3 py-1.5 text-sm font-medium transition
+                    ${n === page
+                      ? 'border-slate-900 bg-slate-900 text-white'
+                      : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                >
+                  {n}
+                </button>
+              )
+            )}
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600
+                         transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {showUnmatched && <UnmatchedPanel onClose={() => setShowUnmatched(false)} />}
     </div>
