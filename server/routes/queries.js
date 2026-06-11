@@ -1677,6 +1677,57 @@ router.post('/map-sender', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/queries/:id/debug-thread   (TEMPORARY diagnostic — safe to remove)
+// Lists EVERY message in the ticket's Gmail thread with its labels/date, and
+// whether Moov stored it — so we can see exactly which messages were missed.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/:id/debug-thread', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const isUuid = /^[0-9a-f-]{36}$/i.test(id);
+    const tRes = await query(
+      isUuid ? `SELECT id FROM queries WHERE id = $1` : `SELECT id FROM queries WHERE ticket_number = $1`,
+      [id]
+    );
+    if (!tRes.rows.length) return res.status(404).json({ error: 'ticket not found' });
+    const queryId = tRes.rows[0].id;
+
+    const stored = await query(
+      `SELECT gmail_message_id, gmail_thread_id, direction FROM query_emails WHERE query_id = $1`,
+      [queryId]
+    );
+    const threadId  = stored.rows.find(r => r.gmail_thread_id)?.gmail_thread_id || null;
+    const storedIds = new Set(stored.rows.map(r => r.gmail_message_id).filter(Boolean));
+
+    let gmail = null;
+    try { const auth = await getAuthedClient(); if (auth) gmail = google.gmail({ version: 'v1', auth }); } catch {}
+    if (!gmail)   return res.json({ error: 'gmail not connected', moov_stored: stored.rows });
+    if (!threadId) return res.json({ error: 'ticket has no gmail_thread_id stored', moov_stored: stored.rows });
+
+    const thread = await gmail.users.threads.get({
+      userId: 'me', id: threadId, format: 'metadata',
+      metadataHeaders: ['From', 'To', 'Subject', 'Date'],
+    });
+    const hdr = (hs, n) => (hs.find(h => h.name.toLowerCase() === n.toLowerCase())?.value) || '';
+    const messages = (thread.data.messages || []).map(m => ({
+      id:             m.id,
+      threadId:       m.threadId,
+      date:           m.internalDate ? new Date(parseInt(m.internalDate)).toISOString() : null,
+      from:           hdr(m.payload?.headers || [], 'From'),
+      labels:         m.labelIds || [],
+      stored_in_moov: storedIds.has(m.id),
+    }));
+
+    res.json({
+      ticket: id,
+      gmail_thread_id:     threadId,
+      gmail_message_count: messages.length,
+      moov_stored_count:   stored.rows.length,
+      messages,
+    });
+  } catch (e) { next(e); }
+});
+
 // GET /api/queries/:id/debug-bodies   (TEMPORARY diagnostic — safe to remove)
 // Shows, per message: what's stored vs. the live Gmail MIME structure and what
 // the current parser recovers. Accepts a query UUID or a ticket_number.
