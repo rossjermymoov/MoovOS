@@ -170,7 +170,9 @@ router.get('/', async (req, res, next) => {
     if (requires_attention === 'true' || attention === 'true') {
       conditions.push(`requires_attention = true`);
     }
-    if (assigned_to) {
+    if (assigned_to === 'unassigned') {
+      conditions.push(`assigned_to IS NULL`);
+    } else if (assigned_to) {
       conditions.push(`assigned_to = $${idx++}::uuid`);
       values.push(assigned_to);
     }
@@ -531,6 +533,8 @@ async function seedNowHandler(req, res, next) {
 router.get('/stats', async (req, res, next) => {
   try {
     const RESOLVED = `('resolved','resolved_claim_approved','resolved_claim_rejected')`;
+    // Current user (for the "Assigned to me" count) — validated as a UUID.
+    const me = /^[0-9a-f-]{36}$/i.test(req.query.assigned_to || '') ? req.query.assigned_to : null;
 
     const [overview, byStatus, byType, claimDeadlines, unmatched] = await Promise.all([
 
@@ -548,9 +552,14 @@ router.get('/stats', async (req, res, next) => {
               AND claim_deadline_at BETWEEN NOW() AND NOW() + INTERVAL '7 days'
               AND status NOT IN ${RESOLVED}
           )                                                                          AS claim_deadlines_7d,
+          COUNT(*) FILTER (WHERE assigned_to IS NULL AND status NOT IN ${RESOLVED}) AS unassigned,
+          COUNT(*) FILTER (WHERE status = 'open')                                   AS awaiting_us,
+          COUNT(*) FILTER (WHERE status = 'awaiting_customer')                      AS awaiting_customer,
+          COUNT(*) FILTER (WHERE assigned_to = $1::uuid
+                             AND status NOT IN ${RESOLVED})                          AS assigned_to_me,
           COUNT(*)                                                                   AS total_queries
         FROM queries_inbox_view
-      `),
+      `, [me]),
 
       // By status (open only)
       query(`
@@ -593,6 +602,10 @@ router.get('/stats', async (req, res, next) => {
       sla_breached:             parseInt(o.sla_breached)          || 0,
       tickets_to_verify:        parseInt(o.tickets_to_verify)     || 0,
       claim_deadlines_7d:       parseInt(o.claim_deadlines_7d)    || 0,
+      unassigned:               parseInt(o.unassigned)            || 0,
+      awaiting_us:              parseInt(o.awaiting_us)           || 0,
+      awaiting_customer:        parseInt(o.awaiting_customer)     || 0,
+      assigned_to_me:           parseInt(o.assigned_to_me)        || 0,
       autopilot_sent:           0,                                        // future
       total_queries:            parseInt(o.total_queries)         || 0,
       unmatched_emails:         parseInt(unmatched.rows[0].count) || 0,

@@ -23,8 +23,9 @@ export async function fetchInbox(params = {}) {
   return r.json();
 }
 
-export async function fetchStats() {
-  const r = await fetch(`${BASE}/stats`);
+export async function fetchStats(assignedTo) {
+  const qs = assignedTo ? `?assigned_to=${encodeURIComponent(assignedTo)}` : '';
+  const r = await fetch(`${BASE}/stats${qs}`);
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }

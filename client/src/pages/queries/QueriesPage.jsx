@@ -14,6 +14,7 @@ import {
   fetchSenderSuggestions,
 } from '../../api/queries';
 import { getCourierLogo } from '../../utils/courierLogos';
+import { useAuth } from '../../context/AuthContext';
 import axios from 'axios';
 
 const api = axios.create({ baseURL: '/api' });
@@ -488,6 +489,18 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   const aiSummary    = getAiSummary(q);
   const preview      = q.latest_email_preview || q.description || '';
 
+  // Priority → left-edge indicator (red urgent / amber medium / blue standard)
+  const priority     = (q.priority || '').toLowerCase();
+  const isScreamer   = priority === 'urgent' || q.is_screamer === true;
+  const priorityBar  = isScreamer ? '#EF4444' : priority === 'medium' ? '#F59E0B' : '#3B82F6';
+  const happiness    = q.customer_happiness_score != null && !isNaN(parseInt(q.customer_happiness_score)) ? parseInt(q.customer_happiness_score) : null;
+  const sentiment    = q.sentiment || (happiness == null ? null : happiness < 41 ? 'Frustrated customer' : happiness < 71 ? 'Neutral tone' : 'Positive');
+  const ticketId     = q.ticket_number != null ? `Moov-${q.ticket_number}` : null;
+  const riskText     = isScreamer ? 'High-risk screamer — prioritise immediately.'
+                     : q.sla_breached ? 'SLA breached — response overdue.'
+                     : (happiness != null && happiness < 41) ? 'Unhappy customer — handle with care.'
+                     : 'Standard priority, no escalation flagged.';
+
   // SLA label
   let slaLabel = null, slaColor = C.muted, slaType = '';
   if (q.claim_deadline_at) {
@@ -518,11 +531,11 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
       onMouseLeave={() => { setHoverPos(null); setAssignOpen(false); }}
       style={{
         display: 'flex', alignItems: 'center', gap: 12,
-        padding: '11px 16px 11px 14px',
+        padding: '16px 16px 16px 16px',
         border: `1px solid rgba(0,0,0,0.07)`,
-        borderLeft: `4px solid ${rowAccentColor(q)}`,
+        borderLeft: `4px solid ${priorityBar}`,
         borderRadius: 12,
-        marginBottom: 6,
+        marginBottom: 8,
         cursor: 'pointer',
         background: C.card,
         boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
@@ -535,47 +548,46 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
       {/* Type icon */}
       <TypeIconWell type={q.query_type} />
 
-      {/* Subject + customer + tracking — hover here shows preview popup */}
-      <div
-        onMouseMove={e => { e.stopPropagation(); setHoverPos({ x: e.clientX, y: e.clientY }); }}
-        style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>
+      {/* Subject + customer + ticket id */}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
           {(hasNewReply || unread > 0) && (
-            <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.blue, flexShrink: 0 }} />
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
           )}
-          <span style={{
-            fontSize: 13, fontWeight: hasNewReply ? 600 : 400,
-            color: ['resolved','resolved_claim_approved','resolved_claim_rejected'].includes(q.status) ? C.muted : C.text,
-            textDecoration: ['resolved','resolved_claim_approved','resolved_claim_rejected'].includes(q.status) ? 'line-through' : 'none',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>
+          <span className={`truncate text-[15px] font-semibold ${
+            ['resolved','resolved_claim_approved','resolved_claim_rejected'].includes(q.status)
+              ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
             {q.subject || q.customer_name || '(no subject)'}
           </span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 12, color: C.sub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180 }}>
-            {q.customer_name}
-          </span>
-          {q.consignment_number && (
-            <span style={{ fontFamily: 'monospace', fontSize: 11, color: C.muted, flexShrink: 0 }}>
-              {q.consignment_number}
+          {isScreamer && (
+            <span className="shrink-0 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
+              Urgent
             </span>
+          )}
+        </div>
+        <div className="mt-1 flex items-center gap-2 text-sm text-slate-500">
+          {ticketId && <span className="font-mono text-xs text-slate-400">{ticketId}</span>}
+          {ticketId && <span className="text-slate-300">·</span>}
+          <span className="truncate">{q.customer_name}</span>
+          {q.consignment_number && (
+            <>
+              <span className="text-slate-300">·</span>
+              <span className="font-mono text-xs text-slate-400">{q.consignment_number}</span>
+            </>
           )}
         </div>
       </div>
 
-      {/* AI summary — hover here also shows preview popup */}
+      {/* AI summary — clean hover anchor reveals the floating insight card */}
       <div
         onMouseMove={e => { e.stopPropagation(); setHoverPos({ x: e.clientX, y: e.clientY }); }}
-        style={{ width: 160, flexShrink: 0 }}>
-        {aiSummary.text && (
-          <span style={{
-            fontSize: 11, color: aiSummary.color, lineHeight: 1.4,
-            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-          }}>
-            {aiSummary.text}
-          </span>
-        )}
+        className="flex w-[140px] shrink-0 justify-start"
+      >
+        <span className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium ${
+          isScreamer ? 'border-red-200 bg-red-50 text-red-700' : 'border-slate-200 bg-white text-slate-500'}`}>
+          <Sparkles size={12} />
+          {isScreamer ? 'Urgent risk' : 'AI summary'}
+        </span>
       </div>
 
       {/* Group */}
@@ -705,43 +717,49 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
         )}
       </div>
 
-      {/* Hover popup — last message preview */}
-      {hoverPos && preview && (
+      {/* Hover popup — AI insight card (overview + sentiment + risk) */}
+      {hoverPos && (aiSummary.text || preview) && (
         <div
           onClick={e => e.stopPropagation()}
           style={{
             position: 'fixed',
-            left: Math.min(hoverPos.x + 18, window.innerWidth - 340),
-            top: Math.max(12, Math.min(hoverPos.y - 12, window.innerHeight - 220)),
-            width: 320,
-            background: '#FFFFFF',
-            border: '0.5px solid rgba(0,0,0,0.12)',
-            borderRadius: 10,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.10)',
-            padding: '12px 14px',
+            left: Math.min(hoverPos.x + 18, window.innerWidth - 360),
+            top: Math.max(12, Math.min(hoverPos.y - 12, window.innerHeight - 240)),
+            width: 340,
+            background: 'rgba(255,255,255,0.92)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            border: '1px solid rgba(15,23,42,0.10)',
+            borderRadius: 14,
+            boxShadow: '0 12px 32px rgba(15,23,42,0.16)',
+            padding: '14px 16px',
             zIndex: 9999,
             pointerEvents: 'none',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-            <span style={{ fontSize: 11, fontWeight: 500, color: C.sub }}>
-              {q.customer_name}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: '#4F46E5' }}>
+              <Sparkles size={12} /> AI overview
             </span>
-            <span style={{ fontSize: 10, color: C.muted }}>
-              {timeAgo(q.latest_email_at || q.created_at)}
+            <span style={{ fontSize: 10, color: C.muted }}>{timeAgo(q.latest_email_at || q.created_at)}</span>
+          </div>
+          <p style={{ margin: 0, fontSize: 13, color: '#334155', lineHeight: 1.6,
+            display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {aiSummary.text || preview}
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
+            {sentiment && (
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                {sentiment}
+              </span>
+            )}
+            <span className={isScreamer
+              ? 'rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700'
+              : 'rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600'}>
+              {isScreamer ? 'Screamer · urgent risk' : 'Risk: standard'}
             </span>
           </div>
-          {q.has_new_reply && (
-            <div style={{ fontSize: 10, color: C.blue, marginBottom: 5, fontWeight: 500 }}>
-              ↩ Customer replied
-            </div>
-          )}
-          <div style={{
-            fontSize: 12, color: C.sub, lineHeight: 1.65,
-            display: '-webkit-box', WebkitLineClamp: 5, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-          }}>
-            {preview}
-          </div>
+          <p style={{ margin: '10px 0 0', fontSize: 11.5, color: C.muted, lineHeight: 1.5 }}>{riskText}</p>
         </div>
       )}
     </div>
@@ -1821,6 +1839,7 @@ function FilterPanel({ filters, setFilters, staffList, onClose }) {
 
 export default function QueriesPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [queries,       setQueries]       = useState([]);
   const [total,         setTotal]         = useState(0);
   const [loadingMore,   setLoadingMore]   = useState(false);
@@ -1839,8 +1858,18 @@ export default function QueriesPage() {
   const [autoDraftResult, setAutoDraftResult] = useState(null);
 
   useEffect(() => {
-    fetchStats().then(setStats).catch(console.error);
-  }, [refreshKey]);
+    fetchStats(user?.id).then(setStats).catch(console.error);
+  }, [refreshKey, user?.id]);
+
+  // Active workspace derives from the assigned_to filter.
+  const workspace = filters.assigned_to === 'unassigned' ? 'unassigned'
+    : (user?.id && filters.assigned_to === user.id) ? 'mine'
+    : 'all';
+  const setWorkspace = (key) => setFilters(f => ({
+    ...f,
+    status: '',
+    assigned_to: key === 'unassigned' ? 'unassigned' : key === 'mine' ? (user?.id || '') : '',
+  }));
 
   useEffect(() => {
     api.get('/staff').then(r => setStaffList(r.data)).catch(() => {});
@@ -1906,18 +1935,33 @@ export default function QueriesPage() {
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 18px', borderBottom: `0.5px solid ${C.border}`, background: C.surface, flexShrink: 0 }}>
         <span style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.03em' }}>Queries</span>
-        {stats?.total_open > 0 && (
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            background: '#0F172A', color: '#F8FAFC',
-            borderRadius: 99, padding: '4px 12px',
-            fontSize: 12, fontWeight: 700,
-            boxShadow: '0 1px 3px rgba(15,23,42,0.25), 0 0 0 3px rgba(99,102,241,0.12)',
-          }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#F59E0B', boxShadow: '0 0 0 2px rgba(251,191,36,0.3)', flexShrink: 0 }} />
-            {stats.total_open} open
-          </div>
-        )}
+
+        {/* Workspace switcher — Unassigned / Assigned to me / All open */}
+        <div className="ml-2 inline-flex items-center gap-1 rounded-xl bg-slate-100 p-1">
+          {[
+            { key: 'unassigned', label: 'Unassigned',      count: stats?.unassigned },
+            { key: 'mine',       label: 'Assigned to me',  count: stats?.assigned_to_me },
+            { key: 'all',        label: 'All open',        count: stats?.total_open },
+          ].map(w => {
+            const active = workspace === w.key;
+            return (
+              <button
+                key={w.key}
+                onClick={() => setWorkspace(w.key)}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition
+                  ${active ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                {w.label}
+                {w.count != null && (
+                  <span className={`rounded-full px-1.5 text-xs font-semibold
+                    ${active ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                    {w.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
         <div style={{ flex: 1 }} />
         {/* Search */}
         <div style={{ position: 'relative' }}>
@@ -1951,36 +1995,26 @@ export default function QueriesPage() {
         </button>
       </div>
 
-      {/* ── KPI cards ──────────────────────────────────────────────────────── */}
-      <div style={{ flexShrink: 0, padding: '14px 18px 12px', background: C.bg, display: 'flex', gap: 10 }}>
+      {/* ── KPI cards — active workload triage ─────────────────────────────── */}
+      <div className="flex shrink-0 gap-3 bg-slate-50 px-[18px] pb-3 pt-3.5">
         {[
-          { label: 'Overdue chase',    value: stats?.requires_attention ?? '—', accent: '#EF4444', barBg: '#FCA5A5', filter: () => setFilters(f => ({ ...f, attention: !f.attention, sla_breached: false, pending_draft: false })), active: filters.attention },
-          { label: 'Awaiting customer',value: stats?.tickets_to_verify  ?? '—', accent: '#F59E0B', barBg: '#FDE68A', filter: () => setFilters(f => ({ ...f, status: f.status === 'awaiting_customer' ? '' : 'awaiting_customer', attention: false })), active: filters.status === 'awaiting_customer' },
-          { label: 'With courier',     value: stats?.sla_breached       ?? '—', accent: '#3B82F6', barBg: '#BFDBFE', filter: () => setFilters(f => ({ ...f, status: f.status === 'awaiting_courier' ? '' : 'awaiting_courier', attention: false })), active: filters.status === 'awaiting_courier' },
-          { label: 'Claim deadlines',  value: stats?.claim_deadlines_7d ?? '—', accent: '#10B981', barBg: '#A7F3D0', filter: () => setFilters(f => ({ ...f, claim_deadline: !f.claim_deadline, attention: false })), active: filters.claim_deadline },
-        ].map(s => {
-          const num = typeof s.value === 'number' ? s.value : 0;
-          const maxVal = 20;
-          const barPct = Math.min(100, Math.round((num / maxVal) * 100));
-          return (
-            <button key={s.label} onClick={s.filter} style={{
-              flex: 1, background: s.active ? `${s.accent}10` : '#FFFFFF',
-              border: `1px solid ${s.active ? s.accent + '40' : 'rgba(0,0,0,0.07)'}`,
-              borderRadius: 12, padding: '14px 16px', cursor: 'pointer', textAlign: 'left',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
-              transition: 'box-shadow 0.15s',
-            }}
-              onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.10)'; }}
-              onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)'; }}
-            >
-              <div style={{ fontSize: 26, fontWeight: 700, color: s.value !== '—' && num > 0 ? s.accent : C.muted, lineHeight: 1, marginBottom: 4 }}>{s.value}</div>
-              <div style={{ fontSize: 11, color: C.muted, fontWeight: 500, marginBottom: 10 }}>{s.label}</div>
-              <div style={{ height: 3, borderRadius: 2, background: '#F1F5F9', overflow: 'hidden' }}>
-                <div style={{ height: '100%', borderRadius: 2, width: `${barPct}%`, background: s.barBg, transition: 'width 0.8s ease' }} />
-              </div>
-            </button>
-          );
-        })}
+          { label: 'Unassigned',            value: stats?.unassigned,        tone: '#4F46E5', onClick: () => setWorkspace('unassigned'),                                                         active: workspace === 'unassigned' },
+          { label: 'SLA breached / urgent', value: stats?.sla_breached,      tone: '#DC2626', onClick: () => setFilters(f => ({ ...f, sla_breached: !f.sla_breached, attention: false })),       active: filters.sla_breached },
+          { label: 'Awaiting us',           value: stats?.awaiting_us,       tone: '#D97706', onClick: () => setFilters(f => ({ ...f, status: f.status === 'open' ? '' : 'open', attention: false })),                 active: filters.status === 'open' },
+          { label: 'Awaiting customer',     value: stats?.awaiting_customer, tone: '#475569', onClick: () => setFilters(f => ({ ...f, status: f.status === 'awaiting_customer' ? '' : 'awaiting_customer', attention: false })), active: filters.status === 'awaiting_customer' },
+        ].map(k => (
+          <button
+            key={k.label}
+            onClick={k.onClick}
+            className={`flex flex-1 flex-col items-start rounded-2xl border bg-white p-4 text-left transition hover:shadow-sm
+              ${k.active ? 'border-slate-300 shadow-sm' : 'border-slate-100 hover:border-slate-200'}`}
+          >
+            <span className="text-3xl font-semibold leading-none" style={{ color: (k.value ?? 0) > 0 ? k.tone : '#94A3B8' }}>
+              {k.value ?? '—'}
+            </span>
+            <span className="mt-2 text-xs font-medium uppercase tracking-wide text-slate-400">{k.label}</span>
+          </button>
+        ))}
       </div>
 
       {/* ── Group tabs ──────────────────────────────────────────────────────── */}
