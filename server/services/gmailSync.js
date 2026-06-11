@@ -311,6 +311,11 @@ export async function syncGmail() {
       // Allow anything carrying the INBOX or SENT label through to processing.
       const isValidLabel = labels.some(l => ['INBOX', 'SENT'].includes(l));
       if (!isValidLabel) { results.skipped++; continue; }
+      // Gmail's `after:` is only day-granular, so enforce the precise cutoff
+      // here with the message's exact timestamp — this is what actually limits
+      // us to the rolling window / post-wipe floor.
+      const internalMs = parseInt(msgRes.data.internalDate || '0', 10);
+      if (internalMs < since * 1000) { results.skipped++; continue; }
       fetchedMsgs.push(msgRes.data);
     } catch (e) {
       console.error('[Gmail fetch]', e.message);
