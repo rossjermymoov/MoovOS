@@ -236,7 +236,10 @@ async function upsertTicket(msg, gmail = null) {
   if (!queryId) {
     // Only skip an outbound message when the thread has NO ticket at all (e.g. a
     // cold outbound we initiated) — never create a ticket from our own reply.
-    if (isOurs) return { status: 'skipped', reason: 'outbound with no existing thread' };
+    if (isOurs) {
+      console.warn(`[Gmail sync] Outbound reply NOT stored — no ticket for thread ${gmailThreadId} (from ${senderEmail})`);
+      return { status: 'skipped', reason: 'outbound with no existing thread' };
+    }
     const ticketRes = await query(`
       INSERT INTO queries (customer_id, customer_name, sender_email, sender_matched, subject, description, status, query_type, trigger, created_at, updated_at)
       VALUES ($1, $2, $3, $4, $5, $6, 'open', 'other', 'customer_email', $7, $7)
@@ -259,6 +262,7 @@ async function upsertTicket(msg, gmail = null) {
   `, [queryId, direction, senderEmail, subject, body.slice(0, 50000), bodyHtml ? bodyHtml.slice(0, 2000000) : null, receivedAt, gmailMsgId, gmailThreadId || null, inReplyTo || null, isOurs ? receivedAt : null]);
 
   await query(`UPDATE queries SET updated_at = NOW() WHERE id = $1`, [queryId]);
+  if (isOurs) console.log(`[Gmail sync] Stored OUTBOUND reply on ticket ${queryId} (thread ${gmailThreadId}, from ${senderEmail})`);
   return { status: 'imported', queryId };
 }
 
