@@ -212,24 +212,36 @@ async function upsertTicket(msg, gmail = null) {
 
   const customer = await resolveCustomer(senderEmail);
 
-  // Find existing open ticket for this Gmail thread
+  // Find an existing ticket for this Gmail thread (prefer an open one).
   let queryId = null;
   if (gmailThreadId) {
-    const threadMatch = await query(
+    const open = await query(
       `SELECT q.id FROM queries q
        JOIN query_emails qe ON qe.query_id = q.id
        WHERE qe.gmail_thread_id = $1
-       AND q.status NOT IN ('resolved','resolved_claim_approved','resolved_claim_rejected')
+         AND q.status NOT IN ('resolved','resolved_claim_approved','resolved_claim_rejected')
        ORDER BY q.created_at DESC LIMIT 1`,
       [gmailThreadId]
     );
-    if (threadMatch.rows[0]) queryId = threadMatch.rows[0].id;
+    if (open.rows[0]) queryId = open.rows[0].id;
+    // Our own reply must still attach to its thread even after it's resolved —
+    // otherwise sent replies on closed tickets get dropped entirely.
+    else if (isOurs) {
+      const any = await query(
+        `SELECT q.id FROM queries q
+         JOIN query_emails qe ON qe.query_id = q.id
+         WHERE qe.gmail_thread_id = $1
+         ORDER BY q.created_at DESC LIMIT 1`,
+        [gmailThreadId]
+      );
+      if (any.rows[0]) queryId = any.rows[0].id;
+    }
   }
 
   if (!queryId) {
-    // Don't open a brand-new ticket from one of our own sent messages — an
-    // outbound reply only belongs to an already-existing thread.
-    if (isOurs) return { status: 'skipped', reason: 'outbound with no open thread' };
+    // Only skip an outbound message when the thread has NO ticket at all (e.g. a
+    // cold outbound we initiated) — never create a ticket from our own reply.
+    if (isOurs) return { status: 'skipped', reason: 'outbound with no existing thread' };
     const ticketRes = await query(`
       INSERT INTO queries (customer_id, customer_name, sender_email, sender_matched, subject, description, status, query_type, trigger, created_at, updated_at)
       VALUES ($1, $2, $3, $4, $5, $6, 'open', 'other', 'customer_email', $7, $7)
@@ -290,18 +302,31 @@ export async function syncGmail() {
 
   const results = { fetched: messageIds.length, imported: 0, skipped: 0, errors: [], fetchMethod };
 
+  // Fetch everything first, then process strictly oldest → newest so a thread's
+  // inbound message creates the ticket before its outbound reply is attached.
+  const fetchedMsgs = [];
   for (const id of messageIds) {
     try {
       const msgRes = await gmail.users.messages.get({ userId: 'me', id, format: 'full' });
       const labels = msgRes.data.labelIds || [];
       // Only ingest real inbox/sent mail — skip drafts, chats, spam, trash.
       if (!labels.includes('INBOX') && !labels.includes('SENT')) { results.skipped++; continue; }
-      const r = await upsertTicket(msgRes.data, gmail);
+      fetchedMsgs.push(msgRes.data);
+    } catch (e) {
+      console.error('[Gmail fetch]', e.message);
+      results.errors.push({ id, error: e.message });
+    }
+  }
+  fetchedMsgs.sort((a, b) => parseInt(a.internalDate || 0) - parseInt(b.internalDate || 0));
+
+  for (const data of fetchedMsgs) {
+    try {
+      const r = await upsertTicket(data, gmail);
       if (r.status === 'imported') results.imported++;
       else results.skipped++;
     } catch (e) {
       console.error('[Gmail upsertTicket]', e.message);
-      results.errors.push({ id, error: e.message });
+      results.errors.push({ id: data.id, error: e.message });
     }
   }
   // If every message errored, surface the first error clearly
@@ -405,7 +430,7 @@ export async function backfillEmailBodiesOnce() {
 
 // One-time backfill: walk every existing thread and import the SENT replies that
 // the old inbox-only sync never captured, so existing tickets become two-sided.
-const SENT_BACKFILL_KEY = 'sent_replies_v1';
+const SENT_BACKFILL_KEY = 'sent_replies_v2';
 
 export async function backfillSentRepliesOnce() {
   await query(`
