@@ -461,6 +461,20 @@ function rowAccentColor(q) {
   return 'rgba(0,0,0,0.10)';
 }
 
+// Render light markdown (**bold**) as clean JSX — strips the raw asterisks and
+// maps emphasis to <strong>, no dangerouslySetInnerHTML.
+function mdLite(text) {
+  if (!text) return null;
+  return String(text)
+    .split(/(\*\*[^*]+\*\*)/g)
+    .filter(Boolean)
+    .map((part, i) =>
+      /^\*\*[^*]+\*\*$/.test(part)
+        ? <strong key={i} className="font-semibold text-slate-900">{part.slice(2, -2)}</strong>
+        : <span key={i}>{part.replace(/\*\*/g, '')}</span>
+    );
+}
+
 function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   const [hoverPos,   setHoverPos]   = useState(null);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -588,13 +602,12 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
         </span>
 
         {/* Floating hover card */}
-        <div className="hidden group-hover:block absolute z-50 right-0 top-8 w-80 rounded-xl border border-slate-100 bg-white p-4 text-left shadow-xl">
+        <div className="hidden group-hover:block absolute z-50 right-0 top-8 min-w-[24rem] max-w-md rounded-xl border border-slate-100 bg-white px-4 pt-4 pb-4 text-left shadow-xl">
           <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-indigo-600">
             <Sparkles size={12} /> AI overview
           </div>
-          <p className="text-sm leading-relaxed text-slate-700"
-             style={{ display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-            {aiSummary.text || preview || 'No AI summary yet for this ticket.'}
+          <p className="whitespace-normal break-words text-sm leading-relaxed text-slate-700">
+            {mdLite(aiSummary.text || preview || 'No AI summary yet for this ticket.')}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {sentiment && (
@@ -609,7 +622,7 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
               ⚠ Screamer · escalation risk — prioritise immediately.
             </p>
           )}
-          <p className="mt-3 text-xs leading-relaxed text-slate-400">{riskText}</p>
+          <p className="mt-3 whitespace-normal break-words text-xs leading-relaxed text-slate-400">{riskText}</p>
         </div>
       </div>
 
