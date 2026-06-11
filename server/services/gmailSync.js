@@ -165,6 +165,9 @@ export async function buildInlineHtml(gmail, messageId, payload) {
   return html;
 }
 
+// Senders on one of our support domains are treated as outbound ("our reply").
+const SUPPORT_DOMAINS = /@(moovparcel\.co\.uk|moov-os\.com|moovparcel\.com)$/i;
+
 function parseFrom(fromHeader) {
   const match = fromHeader.match(/^(.*?)\s*<([^>]+)>$/);
   if (match) return { name: match[1].trim().replace(/^"|"$/g, ''), email: match[2].trim().toLowerCase() };
@@ -185,7 +188,12 @@ async function resolveCustomer(senderEmail) {
 }
 
 async function upsertTicket(msg, gmail = null) {
-  const { id: gmailMsgId, threadId: gmailThreadId, payload, internalDate } = msg;
+  const { id: gmailMsgId, threadId: gmailThreadId, payload, internalDate, labelIds = [] } = msg;
+
+  // Skip if already imported — before any expensive parsing/HTML work.
+  const exists = await query(`SELECT id FROM query_emails WHERE gmail_message_id = $1 LIMIT 1`, [gmailMsgId]);
+  if (exists.rows.length) return { status: 'skipped', reason: 'already imported' };
+
   if (gmail) await hydratePayload(gmail, gmailMsgId, payload);
   const headers    = payload?.headers || [];
   const subject    = extractHeader(headers, 'subject') || '(no subject)';
@@ -198,9 +206,9 @@ async function upsertTicket(msg, gmail = null) {
 
   if (!senderEmail) return { status: 'skipped', reason: 'no sender email' };
 
-  // Skip if already imported
-  const exists = await query(`SELECT id FROM query_emails WHERE gmail_message_id = $1 LIMIT 1`, [gmailMsgId]);
-  if (exists.rows.length) return { status: 'skipped', reason: 'already imported' };
+  // Our own SENT messages (or anything from a support domain) are outbound.
+  const isOurs    = labelIds.includes('SENT') || SUPPORT_DOMAINS.test(senderEmail);
+  const direction = isOurs ? 'outbound_customer' : 'inbound_customer';
 
   const customer = await resolveCustomer(senderEmail);
 
@@ -219,6 +227,9 @@ async function upsertTicket(msg, gmail = null) {
   }
 
   if (!queryId) {
+    // Don't open a brand-new ticket from one of our own sent messages — an
+    // outbound reply only belongs to an already-existing thread.
+    if (isOurs) return { status: 'skipped', reason: 'outbound with no open thread' };
     const ticketRes = await query(`
       INSERT INTO queries (customer_id, customer_name, sender_email, sender_matched, subject, description, status, query_type, trigger, created_at, updated_at)
       VALUES ($1, $2, $3, $4, $5, $6, 'open', 'other', 'customer_email', $7, $7)
@@ -237,8 +248,8 @@ async function upsertTicket(msg, gmail = null) {
 
   await query(`
     INSERT INTO query_emails (query_id, direction, from_address, subject, body_text, body_html, received_at, gmail_message_id, gmail_thread_id, in_reply_to, is_ai_draft, sent_at)
-    VALUES ($1, 'inbound_customer', $2, $3, $4, $5, $6, $7, $8, $9, false, NULL)
-  `, [queryId, senderEmail, subject, body.slice(0, 50000), bodyHtml ? bodyHtml.slice(0, 2000000) : null, receivedAt, gmailMsgId, gmailThreadId || null, inReplyTo || null]);
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11)
+  `, [queryId, direction, senderEmail, subject, body.slice(0, 50000), bodyHtml ? bodyHtml.slice(0, 2000000) : null, receivedAt, gmailMsgId, gmailThreadId || null, inReplyTo || null, isOurs ? receivedAt : null]);
 
   await query(`UPDATE queries SET updated_at = NOW() WHERE id = $1`, [queryId]);
   return { status: 'imported', queryId };
@@ -259,7 +270,7 @@ export async function syncGmail() {
     try {
       const histRes = await gmail.users.history.list({
         userId: 'me', startHistoryId: config.last_history_id,
-        historyTypes: ['messageAdded'], labelId: 'INBOX',
+        historyTypes: ['messageAdded'],   // no label filter → captures INBOX and SENT
       });
       const records = histRes.data.history || [];
       records.forEach(h => (h.messagesAdded || []).forEach(m => messageIds.push(m.message.id)));
@@ -269,10 +280,10 @@ export async function syncGmail() {
   }
 
   if (!config.last_history_id) {
-    fetchMethod = 'full (last 7 days)';
+    fetchMethod = 'full (last 7 days, inbox + sent)';
     const since = Math.floor((Date.now() - 7 * 86400000) / 1000);
     const listRes = await gmail.users.messages.list({
-      userId: 'me', labelIds: ['INBOX'], q: `after:${since}`, maxResults: 100,
+      userId: 'me', q: `(in:inbox OR in:sent) after:${since}`, maxResults: 200,
     });
     messageIds = (listRes.data.messages || []).map(m => m.id);
   }
@@ -282,6 +293,9 @@ export async function syncGmail() {
   for (const id of messageIds) {
     try {
       const msgRes = await gmail.users.messages.get({ userId: 'me', id, format: 'full' });
+      const labels = msgRes.data.labelIds || [];
+      // Only ingest real inbox/sent mail — skip drafts, chats, spam, trash.
+      if (!labels.includes('INBOX') && !labels.includes('SENT')) { results.skipped++; continue; }
       const r = await upsertTicket(msgRes.data, gmail);
       if (r.status === 'imported') results.imported++;
       else results.skipped++;
@@ -387,6 +401,42 @@ export async function backfillEmailBodiesOnce() {
     [EMAIL_BACKFILL_KEY]
   );
   console.log(`[Email backfill] Done — ${updated} email(s) repaired.`);
+}
+
+// One-time backfill: walk every existing thread and import the SENT replies that
+// the old inbox-only sync never captured, so existing tickets become two-sided.
+const SENT_BACKFILL_KEY = 'sent_replies_v1';
+
+export async function backfillSentRepliesOnce() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS app_backfill_markers (
+      key TEXT PRIMARY KEY, completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  const done = await query(`SELECT 1 FROM app_backfill_markers WHERE key = $1`, [SENT_BACKFILL_KEY]);
+  if (done.rows.length) return;
+
+  const auth = await getAuthedClient();
+  if (!auth) { console.log('[Sent backfill] Gmail not connected — will retry on next deploy.'); return; }
+  const gmail = google.gmail({ version: 'v1', auth });
+
+  const { rows } = await query(`SELECT DISTINCT gmail_thread_id FROM query_emails WHERE gmail_thread_id IS NOT NULL`);
+  console.log(`[Sent backfill] Scanning ${rows.length} thread(s) for missing replies…`);
+
+  let imported = 0;
+  for (const { gmail_thread_id } of rows) {
+    try {
+      const thread = await gmail.users.threads.get({ userId: 'me', id: gmail_thread_id, format: 'full' });
+      for (const m of (thread.data.messages || [])) {
+        const r = await upsertTicket(m, gmail);   // dedups + stores outbound on existing thread
+        if (r.status === 'imported') imported++;
+      }
+    } catch { /* skip this thread on error */ }
+    await new Promise(r => setTimeout(r, 150));   // stay under Gmail rate limits
+  }
+
+  await query(`INSERT INTO app_backfill_markers (key) VALUES ($1) ON CONFLICT (key) DO NOTHING`, [SENT_BACKFILL_KEY]);
+  console.log(`[Sent backfill] Done — ${imported} reply(ies) imported.`);
 }
 
 export function startGmailSync(intervalMs = 3 * 60 * 1000) {

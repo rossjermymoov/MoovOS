@@ -772,17 +772,16 @@ router.get('/:id', async (req, res, next) => {
 
     if (!queryRes.rows.length) return res.status(404).json({ error: 'Query not found' });
 
-    // Stitch our SENT replies in from the Gmail thread, then order strictly by
-    // timestamp (ascending) so the conversation reads as a two-sided exchange.
-    const stitched = await stitchThreadReplies(emailsRes.rows);
-    stitched.sort((a, b) =>
+    // Replies are ingested into the DB by the Gmail sync worker (inbox + sent),
+    // so page load just orders the stored thread chronologically — no live fetch.
+    const ordered = [...emailsRes.rows].sort((a, b) =>
       new Date(a.sent_at || a.received_at || a.created_at) -
       new Date(b.sent_at || b.received_at || b.created_at)
     );
 
     res.json({
       ...queryRes.rows[0],
-      emails:        stitched.map(toMessageFragment),
+      emails:        ordered.map(toMessageFragment),
       evidence:      evidenceRes.rows,
       notifications: notificationsRes.rows,
     });

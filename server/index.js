@@ -32,7 +32,7 @@ import reconciliationRouter from './routes/reconciliation.js';
 import emailRouter from './routes/email.js';
 import { sendAlert } from './services/emailService.js';
 import gmailRouter from './routes/gmail.js';
-import { startGmailSync, backfillEmailBodiesOnce } from './services/gmailSync.js';
+import { startGmailSync, backfillEmailBodiesOnce, backfillSentRepliesOnce } from './services/gmailSync.js';
 
 dotenv.config();
 
@@ -123,6 +123,8 @@ async function start() {
     // One-time repair of emails imported before the body-parsing fix.
     // Fire-and-forget so it can never delay or crash startup.
     backfillEmailBodiesOnce().catch(e => console.warn('[Email backfill] skipped:', e.message));
+    // One-time: pull SENT replies into existing threads so they become two-sided.
+    backfillSentRepliesOnce().catch(e => console.warn('[Sent backfill] skipped:', e.message));
   } catch (err) {
     console.error('❌ Migration failed — server will not start.');
     console.error('   Error code:   ', err.code    || 'unknown');

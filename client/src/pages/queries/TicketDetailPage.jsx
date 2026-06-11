@@ -743,12 +743,17 @@ export default function TicketDetailPage() {
     if (ticket?.id) api.post(`/queries/${ticket.id}/mark-read`).catch(() => {});
   }, [ticket?.id]);
 
-  // Newest message is at the top, so start the view scrolled to the top.
+  // Chronological order (newest at the bottom) → smoothly scroll to the latest
+  // message the moment the thread loads. Re-runs catch late-rendering HTML/images.
   const emails = ticket?.emails || [];
   useEffect(() => {
-    if (messagesRef.current) {
-      messagesRef.current.scrollTop = 0;
-    }
+    const el = messagesRef.current;
+    if (!el) return;
+    const toBottom = () => el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    toBottom();
+    const t1 = setTimeout(toBottom, 300);
+    const t2 = setTimeout(toBottom, 900);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [emails.length]);
 
   // ── Loading / error states ─────────────────────────────────────────────────
