@@ -529,6 +529,7 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
     <div
       onClick={onClick}
       onMouseLeave={() => { setHoverPos(null); setAssignOpen(false); }}
+      className="relative overflow-visible hover:z-10"
       style={{
         display: 'flex', alignItems: 'center', gap: 12,
         padding: '16px 16px 16px 16px',
