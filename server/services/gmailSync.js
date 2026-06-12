@@ -4,53 +4,92 @@
  */
 
 import { google } from 'googleapis';
-// ─── AI summary via Claude Haiku ─────────────────────────────────────────────
-export async function generateSummary(subject, body) {
-  const snippet = ((body || '')).slice(0, 500);
-  const prompt = `You are summarising a support email for a parcel courier reseller's inbox.
 
-Subject: ${subject || '(none)'}
-Body: ${snippet}
+// ─── AI triage + summary via Gemini 1.5 Flash (REST — Node-18 safe) ──────────
+// Returns strict JSON: { ticket_type, summary, courier, tracking_number }.
+// ticket_type ∈ ['query','claim','billing','technical']. Falls back to regex
+// heuristics if the API key is missing or the call fails, so the sync never
+// hard-crashes.
+const GEMINI_GENERATE_URL =
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
-Write 2 sentences max. Cover: what the issue is, who sent it (customer or courier), and how urgent or emotional it feels. Be direct and specific — mention tracking numbers, courier names, or key facts if present. Do not start with "The email" or "This email".`;
+function triageFallback(subject, body) {
+  const text = `${subject || ''} ${body || ''}`.toLowerCase();
+  const ticket_type =
+    /claim|compensation|refund|damaged|lost/.test(text)        ? 'claim' :
+    /invoice|billing|statement|payment|account|charge/.test(text) ? 'billing' :
+    /login|error|bug|portal|dashboard|api|technical|access/.test(text) ? 'technical' :
+    'query';
+  const courier =
+    /\bdpd\b/.test(text)            ? 'DPD' :
+    /\bdhl\b/.test(text)            ? 'DHL' :
+    /\bevri|hermes\b/.test(text)    ? 'Evri' :
+    /royal mail/.test(text)         ? 'Royal Mail' :
+    /\byodel\b/.test(text)          ? 'Yodel' :
+    null;
+  const track = (body || '').match(/\b([A-Z0-9]{8,30})\b/);
+  return {
+    ticket_type,
+    summary: (subject || 'Customer enquiry').slice(0, 200),
+    courier,
+    tracking_number: track ? track[1] : null,
+    source: 'regex_fallback',
+  };
+}
+
+export async function triageAndSummarize(subject, body) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return triageFallback(subject, body);
+
+  const prompt =
+    `You are triaging a parcel-courier support email. Return STRICT JSON only with keys:\n` +
+    `- ticket_type: exactly one of ["query","claim","billing","technical"].\n` +
+    `- summary: max 2 sentences describing the core issue (no "The email"/"This email").\n` +
+    `- courier: the courier name (e.g. "DPD","DHL","Evri") or null if none mentioned.\n` +
+    `- tracking_number: the tracking/consignment number if present, else null.\n\n` +
+    `Subject: ${subject || '(none)'}\nBody: ${(body || '').slice(0, 2000)}`;
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch(`${GEMINI_GENERATE_URL}?key=${encodeURIComponent(apiKey)}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 120,
-        messages: [{ role: 'user', content: prompt }],
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0, responseMimeType: 'application/json' },
       }),
     });
-    if (resp.ok) {
-      const json = await resp.json();
-      const text = (json.content?.[0]?.text || '').trim();
-      if (text) return text;
-    }
+    if (!resp.ok) { console.warn('[Gemini triage] non-OK:', resp.status); return triageFallback(subject, body); }
+    const json = await resp.json();
+    const parsed = JSON.parse(json.candidates?.[0]?.content?.parts?.[0]?.text || '{}');
+    const allowed = ['query', 'claim', 'billing', 'technical'];
+    return {
+      ticket_type: allowed.includes(parsed.ticket_type) ? parsed.ticket_type : 'query',
+      summary: (parsed.summary || subject || 'Customer enquiry').toString().slice(0, 400),
+      courier: parsed.courier || null,
+      tracking_number: parsed.tracking_number || null,
+      source: 'gemini-1.5-flash',
+    };
   } catch (e) {
-    console.error('[Gmail sync] AI summary failed:', e.message);
+    console.warn('[Gemini triage] failed:', e.message);
+    return triageFallback(subject, body);
   }
-
-  // Fallback: rule-based
-  const text = ((subject || '') + ' ' + (body || '')).toLowerCase().slice(0, 400);
-  const intent =
-    /missing|not arrived|not received|where is|lost/.test(text) ? 'Missing parcel' :
-    /damaged|broken|smashed|crushed/.test(text)                  ? 'Damaged goods' :
-    /wrong item|incorrect item/.test(text)                       ? 'Wrong item delivered' :
-    /not delivered|failed delivery/.test(text)                   ? 'Failed delivery' :
-    /returned|return to sender/.test(text)                       ? 'Parcel returned' :
-    /claim|compensation|refund/.test(text)                       ? 'Claim / compensation' :
-    /delay|late|overdue|still waiting/.test(text)                ? 'Delayed delivery' :
-    /investigation|update on|progress|chasing/.test(text)        ? 'Courier update' :
-    'General query';
-  return intent;
 }
+
+// Backward-compatible: existing callers that only need the summary string.
+export async function generateSummary(subject, body) {
+  return (await triageAndSummarize(subject, body)).summary;
+}
+
+// ticket_type ('query'/'claim'/'billing'/'technical') routes to the group_name
+// column — the Claims/Queries/Billing/Technical taxonomy the inbox tabs use.
+// (query_type is a separate, fixed enum of parcel issue types, so it isn't used
+// for this.)
+const GROUP_BY_TICKET_TYPE = {
+  query:     'Queries',
+  claim:     'Claims',
+  billing:   'Billing',
+  technical: 'Technical',
+};
 
 
 import { getAuthedClient, getConfig, updateLastSync } from './gmailService.js';
@@ -240,9 +279,19 @@ async function upsertTicket(msg, gmail = null) {
       console.warn(`[Gmail sync] Outbound reply NOT stored — no ticket for thread ${gmailThreadId} (from ${senderEmail})`);
       return { status: 'skipped', reason: 'outbound with no existing thread' };
     }
+    // Gemini triage — drives group routing, summary, courier and tracking.
+    const triage      = await triageAndSummarize(subject, body);
+    const groupName   = GROUP_BY_TICKET_TYPE[triage.ticket_type] || 'Queries';
+    const courierName = triage.courier || null;
+    const courierCode = courierName ? courierName.toLowerCase().replace(/\s+/g, '_') : null;
+    const tracking    = triage.tracking_number || null;
+
     const ticketRes = await query(`
-      INSERT INTO queries (customer_id, customer_name, sender_email, sender_matched, subject, description, status, query_type, trigger, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, 'open', 'other', 'customer_email', $7, $7)
+      INSERT INTO queries
+        (customer_id, customer_name, sender_email, sender_matched, subject, description,
+         status, query_type, group_name, courier_name, courier_code, consignment_number,
+         trigger, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, 'open', 'other', $7, $8, $9, $10, 'customer_email', $11, $11)
       RETURNING id
     `, [
       customer?.id || null,
@@ -250,7 +299,11 @@ async function upsertTicket(msg, gmail = null) {
       senderEmail,
       customer != null,
       subject,
-      await generateSummary(subject, body),
+      triage.summary,
+      groupName,
+      courierName,
+      courierCode,
+      tracking,
       receivedAt,
     ]);
     queryId = ticketRes.rows[0].id;

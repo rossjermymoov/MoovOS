@@ -798,7 +798,11 @@ export default function TicketDetailPage() {
   const isCourierDir = e => String(e.direction || '').includes('courier');
   const customerEmails = allEmails.filter(e => !isCourierDir(e));
   const courierEmails  = allEmails.filter(e => isCourierDir(e));
-  const visibleEmails  = convTab === 'courier' ? courierEmails : customerEmails;
+  // Courier tabs only make sense for parcel-led work (Queries/Claims). Billing &
+  // Technical tickets render as a clean internal CRM view with no courier track.
+  const showCourierTab = !['Billing', 'Technical'].includes(ticket?.group_name);
+  const effectiveTab   = showCourierTab ? convTab : 'customer';
+  const visibleEmails  = effectiveTab === 'courier' ? courierEmails : customerEmails;
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -878,7 +882,9 @@ export default function TicketDetailPage() {
         {/* ── Left: thread + compose ── */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, overflow: 'hidden', background: '#F8FAFC' }}>
 
-          {/* Split-timeline tabs — customer vs courier, visually separated */}
+          {/* Split-timeline tabs — only for parcel-led tickets (Queries/Claims).
+              Billing/Technical hide the courier track for a clean CRM view. */}
+          {showCourierTab && (
           <div className="flex shrink-0 items-center gap-2 border-b border-slate-100 bg-white px-8 pt-4">
             {[
               { key: 'customer', label: 'Customer Conversation', count: customerEmails.length, active: 'border-blue-500 text-blue-700',  badge: 'bg-blue-50 text-blue-700' },
@@ -900,6 +906,7 @@ export default function TicketDetailPage() {
               );
             })}
           </div>
+          )}
 
           {/* Thread */}
           <div ref={messagesRef} className="min-h-0 flex-1 overflow-y-auto bg-white p-8">
