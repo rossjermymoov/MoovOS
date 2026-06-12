@@ -584,6 +584,11 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
               Urgent
             </span>
           )}
+          {q.courier_sla_breached && (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-red-300 bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
+              <AlertTriangle size={11} /> Awaiting Courier — SLA Breached
+            </span>
+          )}
         </div>
         <div className="mt-1 flex items-center gap-2 text-sm text-slate-500">
           {ticketId && <span className="font-mono text-xs text-slate-400">{ticketId}</span>}

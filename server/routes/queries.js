@@ -13,6 +13,7 @@ import { getAuthedClient } from '../services/gmailService.js';
 import { extractBody, hydratePayload, buildInlineHtml } from '../services/gmailSync.js';
 import EmailReplyParser from 'email-reply-parser';
 import { parse as parseHtml } from 'node-html-parser';
+import { processCustomerEmail, recordCourierReply } from '../services/courierAutomation.js';
 
 const router = express.Router();
 
@@ -1845,6 +1846,33 @@ router.get('/:id/debug-bodies', async (req, res, next) => {
       emails.push(o);
     }
     res.json({ query_id: queryId, gmail_connected: !!gmail, emails });
+  } catch (e) { next(e); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/queries/:id/simulate   (Closed-Loop Testing Simulator)
+// Run the automation state loop against a ticket WITHOUT touching real email.
+//   body: { role: 'customer' | 'courier', subject?, body }
+//   - role 'customer' → triage + draft customer confirmation & courier inquiry + set SLA
+//   - role 'courier'  → record an inbound_courier reply + flip state to action_required
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:id/simulate', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const isUuid = /^[0-9a-f-]{36}$/i.test(id);
+    const t = await query(
+      isUuid ? `SELECT id FROM queries WHERE id = $1` : `SELECT id FROM queries WHERE ticket_number = $1`,
+      [id],
+    );
+    if (!t.rows.length) return res.status(404).json({ error: 'ticket not found' });
+    const queryId = t.rows[0].id;
+
+    const { role = 'customer', subject = '', body = '' } = req.body || {};
+    const result = role === 'courier'
+      ? await recordCourierReply(queryId, { subject, body })
+      : await processCustomerEmail(queryId, { subject, body });
+
+    res.json({ ok: true, role, ...result });
   } catch (e) { next(e); }
 });
 

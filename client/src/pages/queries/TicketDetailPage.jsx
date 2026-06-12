@@ -711,6 +711,7 @@ export default function TicketDetailPage() {
   const navigate = useNavigate();
   const qc       = useQueryClient();
   const messagesRef = useRef(null);
+  const [convTab, setConvTab] = useState('customer');  // 'customer' | 'courier'
 
   const { data: ticket, isLoading, error } = useQuery({
     queryKey: ['ticket', id],
@@ -793,6 +794,12 @@ export default function TicketDetailPage() {
     new Date(b.sent_at || b.received_at || b.created_at)
   );
 
+  // Split timeline — customers never see courier correspondence and vice versa.
+  const isCourierDir = e => String(e.direction || '').includes('courier');
+  const customerEmails = allEmails.filter(e => !isCourierDir(e));
+  const courierEmails  = allEmails.filter(e => isCourierDir(e));
+  const visibleEmails  = convTab === 'courier' ? courierEmails : customerEmails;
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -871,14 +878,39 @@ export default function TicketDetailPage() {
         {/* ── Left: thread + compose ── */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, overflow: 'hidden', background: '#F8FAFC' }}>
 
+          {/* Split-timeline tabs — customer vs courier, visually separated */}
+          <div className="flex shrink-0 items-center gap-2 border-b border-slate-100 bg-white px-8 pt-4">
+            {[
+              { key: 'customer', label: 'Customer Conversation', count: customerEmails.length, active: 'border-blue-500 text-blue-700',  badge: 'bg-blue-50 text-blue-700' },
+              { key: 'courier',  label: 'Courier Correspondence', count: courierEmails.length,  active: 'border-amber-500 text-amber-700', badge: 'bg-amber-50 text-amber-700' },
+            ].map(t => {
+              const on = convTab === t.key;
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => setConvTab(t.key)}
+                  className={`flex items-center gap-2 border-b-2 px-3 pb-3 text-sm font-medium transition
+                    ${on ? t.active : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                >
+                  {t.label}
+                  <span className={`rounded-full px-2 text-xs font-semibold ${on ? t.badge : 'bg-slate-100 text-slate-500'}`}>
+                    {t.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
           {/* Thread */}
           <div ref={messagesRef} className="min-h-0 flex-1 overflow-y-auto bg-white p-8">
-            {allEmails.length === 0 ? (
+            {visibleEmails.length === 0 ? (
               <div style={{ padding: '48px 0', textAlign: 'center', color: C.muted, alignSelf: 'center', width: '100%' }}>
                 <Mail size={24} style={{ marginBottom: 10, opacity: 0.2, display: 'block', margin: '0 auto 10px' }} />
-                <div style={{ fontSize: 13 }}>No messages yet</div>
+                <div style={{ fontSize: 13 }}>
+                  {convTab === 'courier' ? 'No courier correspondence yet' : 'No customer messages yet'}
+                </div>
               </div>
-            ) : allEmails.map(email => (
+            ) : visibleEmails.map(email => (
               <ThreadItem
                 key={email.id}
                 email={email}
