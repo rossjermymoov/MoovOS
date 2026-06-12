@@ -370,6 +370,14 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
     finally { setApproving(false); }
   }
 
+  async function discardDraft() {
+    if (!window.confirm('Discard this AI draft? You can then type a manual reply.')) return;
+    try {
+      await api.delete(`/queries/${queryId}/emails/${email.id}`);
+      qc.invalidateQueries(['ticket', queryId]);
+    } catch (e) { alert('Discard failed: ' + (e.response?.data?.error || e.message)); }
+  }
+
   async function submitRevision() {
     const fb = reviseRef.current.trim();
     if (!fb || revising) return;
@@ -476,7 +484,7 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
                   value={reviseText}
                   onChange={e => { reviseRef.current = e.target.value; setReviseText(e.target.value); }}
                   autoFocus rows={2}
-                  placeholder="Tell it what to change… e.g. 'be more apologetic, mention the deadline'"
+                  placeholder="What would you like to change or teach the AI? (e.g., make it shorter, add specific instructions…)"
                   style={{
                     flex: 1, background: C.card, border: `0.5px solid ${C.border}`,
                     borderRadius: 8, padding: '8px 10px', fontSize: 12, color: C.text,
@@ -552,6 +560,13 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
                   display: 'flex', alignItems: 'center', gap: 5,
                 }}>
                   <Edit2 size={11} /> Edit
+                </button>
+                <button onClick={discardDraft} style={{
+                  padding: '6px 12px', borderRadius: 8, border: '0.5px solid #FCA5A5',
+                  background: 'transparent', color: '#DC2626', fontSize: 12, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 5, marginLeft: 'auto',
+                }}>
+                  🗑️ Discard Draft
                 </button>
               </div>
             )}

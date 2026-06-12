@@ -1537,6 +1537,16 @@ router.post('/:id/revise-draft', async (req, res, next) => {
     const draft      = emailRes.rows[0];
     const isCustomer = draft.direction === 'outbound_customer';
 
+    // Adaptive learning — recall past refinement instructions for this courier
+    // (and general rules) so the model applies the team's standing preferences.
+    const rulesRes = await query(
+      `SELECT user_feedback FROM ai_learning_rules
+        WHERE courier_code IS NOT DISTINCT FROM $1 OR courier_code IS NULL
+        ORDER BY created_at DESC LIMIT 10`,
+      [q.courier_code || null],
+    );
+    const learned = rulesRes.rows.map(r => `- ${r.user_feedback}`).join('\n');
+
     const emailThread = threadRes.rows
       .filter(e => e.id !== email_id)
       .map(e => `[${e.direction.replace(/_/g, ' ')}]\nFrom: ${e.from_address}\n\n${e.body_text}`)
@@ -1562,6 +1572,9 @@ Courier: ${q.courier_name}
 
 EMAIL THREAD (for context):
 ${emailThread || '(no prior thread)'}
+
+LEARNED TEAM PREFERENCES (apply these standing instructions):
+${learned || '(none yet)'}
 
 Please rewrite the draft email incorporating the feedback. Output ONLY the revised email text — no preamble, no explanation, no JSON.`;
 
@@ -1596,6 +1609,13 @@ Please rewrite the draft email incorporating the feedback. Output ONLY the revis
     const updated = await query(
       `UPDATE query_emails SET body_text = $1 WHERE id = $2 RETURNING *`,
       [newText, email_id]
+    );
+
+    // Persist the instruction so the AI keeps applying it in future revisions.
+    await query(
+      `INSERT INTO ai_learning_rules (courier_code, issue_type, user_feedback)
+       VALUES ($1, $2, $3)`,
+      [q.courier_code || null, q.query_type || null, feedback.trim()],
     );
 
     res.json({ email: updated.rows[0], revised_text: newText });
@@ -1873,6 +1893,24 @@ router.post('/:id/simulate', async (req, res, next) => {
       : await processCustomerEmail(queryId, { subject, body });
 
     res.json({ ok: true, role, ...result });
+  } catch (e) { next(e); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE /api/queries/:id/emails/:emailId — discard an AI draft.
+// Guarded to is_ai_draft = true so a real sent/received email can never be
+// deleted. The agent can then compose a fully manual reply from scratch.
+// ─────────────────────────────────────────────────────────────────────────────
+router.delete('/:id/emails/:emailId', async (req, res, next) => {
+  try {
+    const r = await query(
+      `DELETE FROM query_emails
+        WHERE id = $1 AND query_id = $2 AND is_ai_draft = true
+        RETURNING id`,
+      [req.params.emailId, req.params.id],
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'AI draft not found' });
+    res.json({ ok: true, deleted: r.rows[0].id });
   } catch (e) { next(e); }
 });
 
