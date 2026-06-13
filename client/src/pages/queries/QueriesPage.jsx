@@ -475,6 +475,20 @@ function mdLite(text) {
     );
 }
 
+// High-contrast ticket-number badge colour by state (Freshdesk-style).
+//  Green = resolved · Red = urgent/attention/SLA-breached · Amber = awaiting
+//  courier/customer · Blue = open/normal.
+function rowBadgeClasses(q) {
+  const s = (q.status || '').toLowerCase();
+  const resolved = ['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'].includes(s);
+  const danger   = q.courier_sla_breached || q.priority === 'urgent' || q.requires_attention || s === 'escalated';
+  const awaiting = q.internal_automation_state === 'awaiting_courier_response' || s.startsWith('awaiting');
+  if (resolved) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  if (danger)   return 'bg-red-50 text-red-700 border-red-200';
+  if (awaiting) return 'bg-amber-50 text-amber-700 border-amber-200';
+  return 'bg-blue-50 text-blue-700 border-blue-200';
+}
+
 function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   const [hoverPos,   setHoverPos]   = useState(null);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -574,6 +588,11 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
           {(hasNewReply || unread > 0) && (
             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
           )}
+          {q.ticket_number != null && (
+            <span className={`inline-flex shrink-0 items-center justify-center min-w-[70px] rounded border px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide shadow-sm ${rowBadgeClasses(q)}`}>
+              M-{q.ticket_number}
+            </span>
+          )}
           <span className={`truncate text-[15px] font-semibold ${
             ['resolved','resolved_claim_approved','resolved_claim_rejected'].includes(q.status)
               ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
@@ -591,8 +610,6 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
           )}
         </div>
         <div className="mt-1 flex items-center gap-2 text-sm text-slate-500">
-          {ticketId && <span className="font-mono text-xs text-slate-400">{ticketId}</span>}
-          {ticketId && <span className="text-slate-300">·</span>}
           <span className="truncate">{q.customer_name}</span>
           {q.consignment_number && (
             <>
