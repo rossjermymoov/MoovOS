@@ -65,15 +65,18 @@ const GROUPS = ['Claims', 'Queries', 'Billing', 'Technical'];
 // Map a ticket's state to a premium, contextual badge style (Freshdesk-like).
 //  Green = resolved/closed · Red = urgent/escalated/SLA-breached · Amber =
 //  needs attention/awaiting · Blue = normal/open.
+// Badge colour driven strictly by the priority spectrum (matching the queue's
+// left-hand indicator strip), with completed tickets overriding to green.
+//   Closed/Resolved → green · Urgent → red · High → amber · Medium → yellow · Low → blue
 function ticketBadgeClasses(ticket) {
   const s = (ticket?.status || '').toLowerCase();
-  const resolved  = ['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'].includes(s);
-  const danger    = ticket?.priority === 'urgent' || ticket?.courier_sla_breached || s === 'escalated' || s === 'claim_raised';
-  const attention = ticket?.requires_attention || s.startsWith('awaiting') || s.includes('claim');
-  if (resolved)  return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-  if (danger)    return 'bg-red-50 text-red-700 border-red-200';
-  if (attention) return 'bg-amber-50 text-amber-700 border-amber-200';
-  return 'bg-blue-50 text-blue-700 border-blue-200';
+  const p = (ticket?.priority || '').toLowerCase();
+  if (['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'].includes(s))
+    return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  if (p === 'urgent') return 'bg-red-50 text-red-700 border-red-200 font-bold';
+  if (p === 'high')   return 'bg-amber-50 text-amber-700 border-amber-200 font-bold';
+  if (p === 'medium') return 'bg-yellow-50 text-yellow-700 border-yellow-200 font-bold';
+  return 'bg-blue-50 text-blue-700 border-blue-200'; // low / default
 }
 
 // Dynamic SLA countdown string from courier_sla_expires_at.

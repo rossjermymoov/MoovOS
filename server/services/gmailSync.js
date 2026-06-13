@@ -95,6 +95,7 @@ const GROUP_BY_TICKET_TYPE = {
 import { getAuthedClient, getConfig, updateLastSync } from './gmailService.js';
 import { query } from '../db/index.js';
 import { applySlaTriggers } from './slaEngine.js';
+import { triagePriority } from './triageEngine.js';
 
 function decodeBase64(str) {
   return Buffer.from(str.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8');
@@ -310,10 +311,23 @@ async function upsertTicket(msg, gmail = null) {
     queryId = ticketRes.rows[0].id;
 
     // IF/THEN SLA triggers — may override priority and start the SLA clock.
+    let triggerPriority = null;
     try {
-      await applySlaTriggers(queryId, { subject, senderEmail, courierCode, body, customerTier: customer?.tier });
+      const sla = await applySlaTriggers(queryId, { subject, senderEmail, courierCode, body, customerTier: customer?.tier });
+      triggerPriority = sla.priority;
     } catch (e) {
       console.warn('[Gmail sync] SLA trigger evaluation failed:', e.message);
+    }
+
+    // Hybrid triage — only when no hard SLA trigger already forced a priority.
+    // Phase 1 hard rules (P1 → urgent) then Phase 2 Gemini grader (high/medium/low).
+    if (!triggerPriority) {
+      try {
+        const { priority } = await triagePriority({ subject, body });
+        await query(`UPDATE queries SET priority = $1 WHERE id = $2`, [priority, queryId]);
+      } catch (e) {
+        console.warn('[Gmail sync] Hybrid triage failed:', e.message);
+      }
     }
   }
 

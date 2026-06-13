@@ -477,33 +477,32 @@ function mdLite(text) {
 
 // High-contrast ticket-number badge colour driven by the dynamic tracking
 // states (not just status), so rows differentiate at a glance.
-//  Red    = SLA breached / urgent / escalated
-//  Green  = resolved / closed   (checked before amber so a resolved Queries
-//           ticket still reads as done)
-//  Amber  = awaiting courier response, or a Queries-group ticket
-//  Blue   = everything else (open / normal)
-// Pure, dynamic badge styling — evaluated per-row from live operational state.
-// No hardcoded ticket IDs, no group_name blanket-colouring.
+// Badge colour is driven strictly by the priority spectrum (matching the
+// left-hand indicator strip), with completed tickets overriding to green.
+// Nothing tied to group_name / assigned_to / operational state.
+//   Closed/Resolved → green · Urgent → red · High → amber · Medium → yellow · Low → blue
 function rowBadgeClasses(q) {
-  const s     = (q.status || '').toLowerCase();
-  const state = (q.internal_automation_state || '').toLowerCase();
+  const s = (q.status || '').toLowerCase();
+  const p = (q.priority || '').toLowerCase();
 
-  // GREEN — terminal: completed / resolved / closed (checked first so a done
-  // ticket never reads amber just because it happens to be unassigned).
   if (['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'].includes(s))
     return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-
-  // RED — active SLA breach, urgent, or escalated (needs immediate attention).
-  if (q.courier_sla_breached || q.priority === 'urgent' || s === 'urgent' || s === 'escalated')
-    return 'bg-red-50 text-red-700 border-red-200 font-extrabold';
-
-  // AMBER — the ball is in OUR court: unassigned, awaiting us, or action required.
-  if (!q.assigned_to || s === 'awaiting_us' || state === 'action_required')
-    return 'bg-amber-50 text-amber-700 border-amber-200 font-extrabold';
-
-  // BLUE — assigned and waiting on an external party (courier / customer),
-  // or a standard open ticket — open, but not bottlenecking our team.
+  if (p === 'urgent') return 'bg-red-50 text-red-700 border-red-200 font-bold';
+  if (p === 'high')   return 'bg-amber-50 text-amber-700 border-amber-200 font-bold';
+  if (p === 'medium') return 'bg-yellow-50 text-yellow-700 border-yellow-200 font-bold';
+  if (p === 'low')    return 'bg-blue-50 text-blue-700 border-blue-200';
   return 'bg-blue-50 text-blue-700 border-blue-200';
+}
+
+// Left-edge indicator strip — same spectrum, returned as a hex colour.
+function priorityStripColor(q) {
+  const s = (q.status || '').toLowerCase();
+  const p = (q.priority || '').toLowerCase();
+  if (['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'].includes(s)) return '#10B981';
+  if (p === 'urgent') return '#EF4444';
+  if (p === 'high')   return '#F59E0B';
+  if (p === 'medium') return '#EAB308';
+  return '#3B82F6'; // low / default
 }
 
 function InboxRow({ q, onClick, staffList = [], onUpdate }) {
@@ -534,10 +533,10 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   const aiSummary    = getAiSummary(q);
   const preview      = q.latest_email_preview || q.description || '';
 
-  // Priority → left-edge indicator (red urgent / amber medium / blue standard)
+  // Priority → left-edge indicator (full spectrum, matches the ticket badge)
   const priority     = (q.priority || '').toLowerCase();
   const isScreamer   = priority === 'urgent' || q.is_screamer === true;
-  const priorityBar  = isScreamer ? '#EF4444' : priority === 'medium' ? '#F59E0B' : '#3B82F6';
+  const priorityBar  = priorityStripColor(q);
   const happiness    = q.customer_happiness_score != null && !isNaN(parseInt(q.customer_happiness_score)) ? parseInt(q.customer_happiness_score) : null;
   const sentiment    = q.sentiment || (happiness == null ? null : happiness < 41 ? 'Frustrated customer' : happiness < 71 ? 'Neutral tone' : 'Positive');
   const ticketId     = q.ticket_number != null ? `Moov-${q.ticket_number}` : null;

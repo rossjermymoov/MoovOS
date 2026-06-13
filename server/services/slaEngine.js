@@ -72,7 +72,7 @@ export async function applySlaTriggers(queryId, ctx = {}) {
     }
 
     console.log(`[SLA] trigger "${t.name}" matched ticket ${queryId} → priority=${t.set_priority || '—'}, policy=${t.policy_name || '—'}`);
-    return { matched: true, rule: t.name };
+    return { matched: true, rule: t.name, priority: t.set_priority || null };
   }
-  return { matched: false };
+  return { matched: false, priority: null };
 }
