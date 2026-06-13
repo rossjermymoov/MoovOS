@@ -62,6 +62,20 @@ const PRIORITY_CFG = {
 
 const GROUPS = ['Claims', 'Queries', 'Billing', 'Technical'];
 
+// Map a ticket's state to a premium, contextual badge style (Freshdesk-like).
+//  Green = resolved/closed · Red = urgent/escalated/SLA-breached · Amber =
+//  needs attention/awaiting · Blue = normal/open.
+function ticketBadgeClasses(ticket) {
+  const s = (ticket?.status || '').toLowerCase();
+  const resolved  = ['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'].includes(s);
+  const danger    = ticket?.priority === 'urgent' || ticket?.courier_sla_breached || s === 'escalated' || s === 'claim_raised';
+  const attention = ticket?.requires_attention || s.startsWith('awaiting') || s.includes('claim');
+  if (resolved)  return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  if (danger)    return 'bg-red-50 text-red-700 border-red-200';
+  if (attention) return 'bg-amber-50 text-amber-700 border-amber-200';
+  return 'bg-blue-50 text-blue-700 border-blue-200';
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmtDate(ts) {
   if (!ts) return '—';
@@ -870,26 +884,31 @@ export default function TicketDetailPage() {
         </div>
 
         {/* Title strip */}
-        <div style={{ background: C.card, borderBottom: `1px solid #E2E8F0`, padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', marginBottom: 7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ background: C.card, borderBottom: `1px solid #E2E8F0`, padding: '12px 20px' }}>
+          {/* Subject line — colour-coded ticket number badge + subject */}
+          <div className="flex items-center gap-3 flex-wrap pb-4 border-b border-slate-100">
+            <span className={`inline-flex items-center rounded-md border px-3 py-1 text-sm font-semibold tracking-wide ${ticketBadgeClasses(ticket)}`}>
+              Moov-{ticket.ticket_number}
+            </span>
+            <h1 className="min-w-0 flex-1 truncate text-lg font-semibold text-slate-900">
               {ticket.subject || ticket.customer_name}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: status.bg, color: status.color, border: `1px solid ${status.border || status.bg}` }}>
-                <span style={{ width: 5, height: 5, borderRadius: '50%', background: status.color, display: 'inline-block' }} />
-                {status.label}
-              </span>
-              {ticket.requires_attention && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: '#FEF2F2', color: '#991B1B', border: '1px solid #FECACA' }}>⚠ Needs attention</span>
-              )}
-              {ticket.group_name && (
-                <span style={{ fontSize: 11, color: '#94A3B8', background: '#F8FAFC', borderRadius: 20, padding: '2px 9px', border: '1px solid #E2E8F0' }}>{ticket.group_name}</span>
-              )}
-              {consignment && (
-                <span style={{ fontFamily: 'monospace', fontSize: 10, color: '#64748B', background: '#F8FAFC', padding: '2px 7px', borderRadius: 5, border: '1px solid #E2E8F0' }}>{consignment}</span>
-              )}
-            </div>
+            </h1>
+          </div>
+          {/* Status / attention / group / consignment chips */}
+          <div className="flex flex-wrap items-center gap-2 pt-3">
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: status.bg, color: status.color, border: `1px solid ${status.border || status.bg}` }}>
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: status.color, display: 'inline-block' }} />
+              {status.label}
+            </span>
+            {ticket.requires_attention && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: '#FEF2F2', color: '#991B1B', border: '1px solid #FECACA' }}>⚠ Needs attention</span>
+            )}
+            {ticket.group_name && (
+              <span style={{ fontSize: 11, color: '#94A3B8', background: '#F8FAFC', borderRadius: 20, padding: '2px 9px', border: '1px solid #E2E8F0' }}>{ticket.group_name}</span>
+            )}
+            {consignment && (
+              <span style={{ fontFamily: 'monospace', fontSize: 10, color: '#64748B', background: '#F8FAFC', padding: '2px 7px', borderRadius: 5, border: '1px solid #E2E8F0' }}>{consignment}</span>
+            )}
           </div>
         </div>
       </div>
