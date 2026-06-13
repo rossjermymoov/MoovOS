@@ -59,10 +59,17 @@ const PRIORITIES = [
 const PRI = Object.fromEntries(PRIORITIES.map(p => [p.value, p]));
 
 const CONDITION_FIELDS = [
-  { value: 'subject',      label: 'Subject' },
-  { value: 'sender_email', label: 'Sender Email' },
-  { value: 'courier_code', label: 'Courier Code' },
-  { value: 'body_text',    label: 'Body Text' },
+  { value: 'subject',       label: 'Subject' },
+  { value: 'sender_email',  label: 'Sender Email' },
+  { value: 'courier_code',  label: 'Courier Code' },
+  { value: 'body_text',     label: 'Body Text' },
+  { value: 'customer_tier', label: 'Customer Tier' },
+];
+const CUSTOMER_TIERS = [
+  { value: 'bronze',     label: 'Bronze' },
+  { value: 'silver',     label: 'Silver' },
+  { value: 'gold',       label: 'Gold' },
+  { value: 'enterprise', label: 'Enterprise' },
 ];
 const OPERATORS = [
   { value: 'contains',    label: 'Contains' },
@@ -210,7 +217,22 @@ function TriggerForm({ initial = {}, policies = [], onSave, onCancel, saving }) 
     priority:        initial.priority        ?? 0,
   });
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
+  const isTier = f.condition_field === 'customer_tier';
   const valid = f.name.trim() && f.match_value.trim();
+
+  // Switching to/from Customer Tier swaps the free-text value for a bounded list.
+  function changeCondition(v) {
+    setF(p => {
+      const next = { ...p, condition_field: v };
+      if (v === 'customer_tier') {
+        next.operator = 'equals';
+        if (!CUSTOMER_TIERS.some(t => t.value === p.match_value)) next.match_value = 'bronze';
+      } else if (p.condition_field === 'customer_tier') {
+        next.match_value = '';
+      }
+      return next;
+    });
+  }
 
   return (
     <div style={{ padding: '18px 20px' }}>
@@ -235,7 +257,7 @@ function TriggerForm({ initial = {}, policies = [], onSave, onCancel, saving }) 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.4fr', gap: 12 }}>
           <div>
             <label style={labelSt}>Condition</label>
-            <select value={f.condition_field} onChange={e => set('condition_field', e.target.value)} style={inputSt}>
+            <select value={f.condition_field} onChange={e => changeCondition(e.target.value)} style={inputSt}>
               {CONDITION_FIELDS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
             </select>
           </div>
@@ -247,7 +269,13 @@ function TriggerForm({ initial = {}, policies = [], onSave, onCancel, saving }) 
           </div>
           <div>
             <label style={labelSt}>Value *</label>
-            <input value={f.match_value} onChange={e => set('match_value', e.target.value)} placeholder="P1 · claims · @dpd.co.uk" style={inputSt} />
+            {isTier ? (
+              <select value={f.match_value || 'bronze'} onChange={e => set('match_value', e.target.value)} style={inputSt}>
+                {CUSTOMER_TIERS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            ) : (
+              <input value={f.match_value} onChange={e => set('match_value', e.target.value)} placeholder="P1 · claims · @dpd.co.uk" style={inputSt} />
+            )}
           </div>
         </div>
       </div>

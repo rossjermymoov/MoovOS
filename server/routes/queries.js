@@ -15,6 +15,7 @@ import EmailReplyParser from 'email-reply-parser';
 import { parse as parseHtml } from 'node-html-parser';
 import { processCustomerEmail, recordCourierReply } from '../services/courierAutomation.js';
 import { geminiGenerate } from '../services/geminiService.js';
+import { applySlaTriggers } from '../services/slaEngine.js';
 
 const router = express.Router();
 
@@ -842,31 +843,51 @@ router.post('/', async (req, res, next) => {
 
     const newQuery = result.rows[0];
 
-    // ── Auto-assign SLA policy ──────────────────────────────────────────────
-    // Match most specific policy: courier+type > type-only > catch-all
+    // ── SLA routing ─────────────────────────────────────────────────────────
+    // Same engine as Gmail ingest: run IF/THEN triggers first (may override
+    // priority + start the SLA clock). If nothing matches, fall back to the
+    // legacy most-specific policy auto-assign (courier+type > type > catch-all)
+    // so manually-created tickets still receive a default SLA clock.
     try {
-      const policyRes = await query(`
-        SELECT id, name, duration_hours
-        FROM sla_policies
-        WHERE is_active = true
-          AND (courier_code = $1 OR courier_code IS NULL)
-          AND (query_type  = $2::query_type OR query_type IS NULL)
-        ORDER BY
-          (CASE WHEN courier_code IS NOT NULL THEN 2 ELSE 0 END) +
-          (CASE WHEN query_type  IS NOT NULL THEN 1 ELSE 0 END) DESC,
-          priority DESC
-        LIMIT 1
-      `, [courier_code, query_type || 'other']);
-
-      if (policyRes.rows.length) {
-        const p = policyRes.rows[0];
-        await query(`
-          INSERT INTO query_sla_assignments
-            (query_id, policy_id, policy_name, duration_hours, due_at, triggered_by)
-          VALUES ($1, $2, $3, $4, NOW() + ($4 || ' hours')::INTERVAL, 'auto_policy')
-        `, [newQuery.id, p.id, p.name, p.duration_hours]);
+      // Resolve the customer's loyalty/contract tier for tier-based triggers.
+      let customerTier = null;
+      if (customer_id) {
+        const cr = await query(`SELECT tier FROM customers WHERE id = $1`, [customer_id]);
+        customerTier = cr.rows[0]?.tier || null;
       }
-    } catch (_) { /* SLA table may not exist on older DBs — non-fatal */ }
+
+      const { matched } = await applySlaTriggers(newQuery.id, {
+        subject,
+        senderEmail: sender_email,
+        courierCode: courier_code,
+        body: description || subject,
+        customerTier,
+      });
+
+      if (!matched) {
+        const policyRes = await query(`
+          SELECT id, name, duration_hours
+          FROM sla_policies
+          WHERE is_active = true
+            AND (courier_code = $1 OR courier_code IS NULL)
+            AND (query_type  = $2::query_type OR query_type IS NULL)
+          ORDER BY
+            (CASE WHEN courier_code IS NOT NULL THEN 2 ELSE 0 END) +
+            (CASE WHEN query_type  IS NOT NULL THEN 1 ELSE 0 END) DESC,
+            priority DESC
+          LIMIT 1
+        `, [courier_code, query_type || 'other']);
+
+        if (policyRes.rows.length && policyRes.rows[0].duration_hours) {
+          const p = policyRes.rows[0];
+          await query(`
+            INSERT INTO query_sla_assignments
+              (query_id, policy_id, policy_name, duration_hours, due_at, triggered_by)
+            VALUES ($1, $2, $3, $4, NOW() + ($4 || ' hours')::INTERVAL, 'auto_policy')
+          `, [newQuery.id, p.id, p.name, p.duration_hours]);
+        }
+      }
+    } catch (_) { /* SLA tables may not exist on older DBs — non-fatal */ }
 
     res.status(201).json(newQuery);
   } catch (err) { next(err); }
