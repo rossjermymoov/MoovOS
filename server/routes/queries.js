@@ -870,7 +870,11 @@ router.get('/drafts', async (req, res, next) => {
         qe.created_at  AS draft_created_at,
         q.ticket_number, q.priority, q.status, q.subject,
         q.customer_name, q.group_name, q.courier_name, q.description,
-        q.consecutive_approvals
+        q.consecutive_approvals,
+        (SELECT qe2.body_text FROM query_emails qe2
+          WHERE qe2.query_id = q.id
+            AND qe2.direction IN ('inbound_customer','inbound_courier')
+          ORDER BY COALESCE(qe2.received_at, qe2.created_at) DESC LIMIT 1) AS incoming_text
       FROM query_emails qe
       JOIN queries q ON q.id = qe.query_id
       WHERE qe.is_ai_draft = true
@@ -894,7 +898,11 @@ router.get('/drafts', async (req, res, next) => {
         q.updated_at   AS draft_created_at,
         q.ticket_number, q.priority, q.status, q.subject,
         q.customer_name, q.group_name, q.courier_name, q.description,
-        q.consecutive_approvals
+        q.consecutive_approvals,
+        (SELECT qe2.body_text FROM query_emails qe2
+          WHERE qe2.query_id = q.id
+            AND qe2.direction IN ('inbound_customer','inbound_courier')
+          ORDER BY COALESCE(qe2.received_at, qe2.created_at) DESC LIMIT 1) AS incoming_text
       FROM queries q
       WHERE q.internal_automation_state = 'action_required'
         AND q.status NOT IN ${RESOLVED}

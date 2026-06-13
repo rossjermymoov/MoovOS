@@ -1798,6 +1798,71 @@ function priRank(q) { return PRI_RANK[(q.priority || '').toLowerCase()] ?? 4; }
 // Consecutive untouched approvals before a template path is deemed autopilot-ready.
 const AUTOPILOT_THRESHOLD = 20;
 
+// ─── Quick View — full-screen split-panel auditing modal ──────────────────────
+function QuickViewModal({ draft, onClose, onConfirm, sending }) {
+  const [editBody, setEditBody] = useState(draft.body_text || draft.description || '');
+  const pchip = priorityChip(draft);
+
+  return (
+    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-900/60 p-6 backdrop-blur-sm" onClick={onClose}>
+      <div className="flex h-[80vh] w-full max-w-5xl flex-col rounded-xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className={`inline-flex shrink-0 items-center justify-center rounded-md border px-2.5 py-1 text-xs font-bold uppercase tracking-wide ${rowBadgeClasses(draft)}`}>
+              #M-{draft.ticket_number}
+            </span>
+            <span className="truncate text-base font-bold tracking-tight text-slate-800">
+              {draft.customer_name || draft.subject || 'Ticket'}
+            </span>
+            {pchip && (
+              <span className={`shrink-0 rounded-md border px-2 py-0.5 text-xs font-bold ${pchip[1]}`}>{pchip[0]}</span>
+            )}
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">✕</button>
+        </div>
+
+        {/* Split panels */}
+        <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-2">
+          {/* Left — incoming context */}
+          <div className="flex min-h-0 flex-col border-r border-slate-100">
+            <div className="border-b border-slate-100 px-5 py-2.5 text-xs font-bold uppercase tracking-wide text-slate-400">
+              📥 Incoming message
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap p-5 text-sm leading-relaxed text-slate-700">
+              {draft.incoming_text || draft.subject || 'No incoming message text on file for this ticket.'}
+            </div>
+          </div>
+
+          {/* Right — editable draft */}
+          <div className="flex min-h-0 flex-col">
+            <div className="border-b border-slate-100 px-5 py-2.5 text-xs font-bold uppercase tracking-wide text-slate-400">
+              ✨ Gemini draft response (editable)
+            </div>
+            <textarea
+              value={editBody}
+              onChange={e => setEditBody(e.target.value)}
+              className="min-h-0 flex-1 resize-none p-5 text-sm leading-relaxed text-slate-800 outline-none"
+            />
+          </div>
+        </div>
+
+        {/* Footer actions */}
+        <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-4">
+          <button onClick={onClose}
+            className="rounded-lg border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+            Cancel / Close
+          </button>
+          <button onClick={() => onConfirm(editBody)} disabled={sending}
+            className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:opacity-50">
+            {sending ? 'Sending…' : '✓ Confirm & Send Outbound'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Autopilot QA Bay — pending AI drafts awaiting human approval ─────────────
 function AutopilotQABay({ refreshKey, onChanged }) {
   const navigate = useNavigate();
@@ -1807,6 +1872,8 @@ function AutopilotQABay({ refreshKey, onChanged }) {
   const [refiningId, setRefiningId] = useState(null);   // which card's refine panel is open
   const [feedback,   setFeedback]   = useState('');
   const [refineBusy, setRefineBusy] = useState(false);
+  const [viewing,    setViewing]    = useState(null);    // draft open in Quick View modal
+  const [sending,    setSending]    = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -1834,6 +1901,20 @@ function AutopilotQABay({ refreshKey, onChanged }) {
   function openRefine(d) {
     setRefiningId(prev => prev === d.email_id ? null : d.email_id);
     setFeedback('');
+  }
+
+  // Confirm & Send from the Quick View modal — approves with any edits applied.
+  async function confirmSend(d, editedBody) {
+    setSending(true);
+    try {
+      await api.patch(`/queries/${d.query_id}/emails/${d.email_id}/approve?sandbox=true`, { body_text: editedBody });
+      setDrafts(list => list.filter(x => x.email_id !== d.email_id));
+      setViewing(null);
+      onChanged?.();
+      setTimeout(load, 6000);   // catch the sandbox loop-back draft
+    } catch (e) {
+      alert('Send failed: ' + (e.response?.data?.error || e.message));
+    } finally { setSending(false); }
   }
 
   async function executeCorrection(d) {
@@ -1924,9 +2005,17 @@ function AutopilotQABay({ refreshKey, onChanged }) {
                 </div>
               )}
 
-              <p className="mb-3 line-clamp-3 text-sm leading-snug text-slate-700">{intentLine(d)}</p>
+              {/* Draft preview — hover reveals the full draft in a floating tooltip */}
+              <div className="group relative mb-3">
+                <p className="line-clamp-3 text-sm leading-snug text-slate-700">{intentLine(d)}</p>
+                {(d.body_text || d.description) && (
+                  <div className="pointer-events-none absolute left-0 right-0 top-full z-[999] mt-1 hidden max-h-72 overflow-y-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 text-xs leading-relaxed text-slate-700 shadow-2xl group-hover:block">
+                    {d.body_text || d.description}
+                  </div>
+                )}
+              </div>
 
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => quickApprove(d)}
                   disabled={busyId === d.email_id}
@@ -1942,6 +2031,12 @@ function AutopilotQABay({ refreshKey, onChanged }) {
                       : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
                 >
                   🛠️ Refine / Train
+                </button>
+                <button
+                  onClick={() => setViewing(d)}
+                  className="flex items-center gap-1 rounded-md bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+                >
+                  👁️ Quick View
                 </button>
               </div>
 
@@ -1977,6 +2072,15 @@ function AutopilotQABay({ refreshKey, onChanged }) {
           )
         ))}
       </div>
+
+      {viewing && (
+        <QuickViewModal
+          draft={viewing}
+          sending={sending}
+          onClose={() => setViewing(null)}
+          onConfirm={(editedBody) => confirmSend(viewing, editedBody)}
+        />
+      )}
     </div>
   );
 }
