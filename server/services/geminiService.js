@@ -9,8 +9,9 @@
 
 import { ISSUE_TYPES } from './courierTemplates.js';
 
+// Locked to the stable v1 API version.
 const GEMINI_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+  'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent';
 
 // Generic Gemini 1.5 Flash text generation (REST — Node-18 safe). Replaces the
 // legacy Anthropic /v1/messages calls. Throws if the key is missing or the call
@@ -31,7 +32,13 @@ export async function geminiGenerate(prompt, { system = '', json = false, maxTok
       },
     }),
   });
-  if (!resp.ok) throw new Error(`Gemini API error ${resp.status}: ${await resp.text()}`);
+  if (!resp.ok) {
+    const bodyText = await resp.text();
+    const e = new Error(`Gemini API error ${resp.status}: ${bodyText}`);
+    e.status = resp.status;           // e.g. 429 rate limit, 503 overloaded
+    e.body = bodyText;
+    throw e;
+  }
   const j = await resp.json();
   return (j.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
 }
