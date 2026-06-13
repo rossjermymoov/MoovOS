@@ -58,6 +58,7 @@ function regexFallback(subject, body) {
     tracking_code: trackMatch ? trackMatch[1] : null,
     issue_type: issue,
     needs_human: !courier,
+    needs_human_triage: !courier,
     reason: courier ? null : 'Courier could not be identified from the email.',
     source: 'regex_fallback',
   };
@@ -74,6 +75,7 @@ export async function extractTriage(subject, body) {
     `- tracking_code: the consignment/tracking number if present, else null.\n` +
     `- issue_type: one of ${ISSUE_TYPES.join(', ')}.\n` +
     `- needs_human: true if a human agent is required (no courier, unclear, complaint/escalation), else false.\n` +
+    `  Set this to true whenever you cannot confidently categorise the email or map it to a structured rule.\n` +
     `- reason: short string when needs_human is true, else null.\n\n` +
     `Subject: ${subject || '(none)'}\nBody: ${(body || '').slice(0, 2000)}`;
 
@@ -99,6 +101,7 @@ export async function extractTriage(subject, body) {
       tracking_code: parsed.tracking_code || null,
       issue_type: ISSUE_TYPES.includes(parsed.issue_type) ? parsed.issue_type : 'GENERAL',
       needs_human: !!parsed.needs_human || !parsed.courier_code,
+      needs_human_triage: !!parsed.needs_human || !!parsed.needs_human_triage || !parsed.courier_code,
       reason: parsed.reason || (parsed.courier_code ? null : 'Courier not identified.'),
       source: 'gemini-1.5-flash',
     };

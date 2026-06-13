@@ -494,6 +494,18 @@ function rowBadgeClasses(q) {
   return 'bg-blue-50 text-blue-700 border-blue-200';
 }
 
+// Compact priority chip (label + tailwind classes), same spectrum as the badge.
+function priorityChip(q) {
+  const p = (q.priority || '').toLowerCase();
+  const map = {
+    urgent: ['Urgent', 'bg-red-50 text-red-700 border-red-200'],
+    high:   ['High',   'bg-amber-50 text-amber-700 border-amber-200'],
+    medium: ['Medium', 'bg-yellow-50 text-yellow-700 border-yellow-200'],
+    low:    ['Low',    'bg-blue-50 text-blue-700 border-blue-200'],
+  };
+  return map[p] || null;
+}
+
 // Left-edge indicator strip — same spectrum, returned as a hex colour.
 function priorityStripColor(q) {
   const s = (q.status || '').toLowerCase();
@@ -537,6 +549,7 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   const priority     = (q.priority || '').toLowerCase();
   const isScreamer   = priority === 'urgent' || q.is_screamer === true;
   const priorityBar  = priorityStripColor(q);
+  const pchip        = priorityChip(q);
   const happiness    = q.customer_happiness_score != null && !isNaN(parseInt(q.customer_happiness_score)) ? parseInt(q.customer_happiness_score) : null;
   const sentiment    = q.sentiment || (happiness == null ? null : happiness < 41 ? 'Frustrated customer' : happiness < 71 ? 'Neutral tone' : 'Positive');
   const ticketId     = q.ticket_number != null ? `Moov-${q.ticket_number}` : null;
@@ -598,15 +611,20 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
       {/* Type icon */}
       <TypeIconWell type={q.query_type} />
 
-      {/* Subject + customer + ticket id */}
+      {/* Subject · ticket id · priority · sender — single rigid baseline-locked line */}
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
+        <div className="flex h-full max-w-xl items-center gap-3 min-w-0">
           {(hasNewReply || unread > 0) && (
             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
           )}
           {q.ticket_number != null && (
-            <span className={`inline-flex shrink-0 items-center justify-center min-w-[70px] rounded border px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide shadow-sm ${rowBadgeClasses(q)}`}>
+            <span className={`inline-flex shrink-0 items-center justify-center min-w-[64px] rounded border px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide shadow-sm ${rowBadgeClasses(q)}`}>
               M-{q.ticket_number}
+            </span>
+          )}
+          {pchip && (
+            <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${pchip[1]}`}>
+              {pchip[0]}
             </span>
           )}
           <span className={`truncate text-[15px] font-semibold ${
@@ -614,35 +632,22 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
               ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
             {q.subject || q.customer_name || '(no subject)'}
           </span>
-          {isScreamer && (
-            <span className="shrink-0 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
-              Urgent
-            </span>
+          {q.customer_name && q.subject && (
+            <span className="shrink-0 max-w-[160px] truncate text-sm text-slate-400">· {q.customer_name}</span>
           )}
           {q.courier_sla_breached && (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-red-300 bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
-              <AlertTriangle size={11} /> Awaiting Courier — SLA Breached
+              <AlertTriangle size={11} /> SLA Breached
             </span>
-          )}
-        </div>
-        <div className="mt-1 flex items-center gap-2 text-sm text-slate-500">
-          <span className="truncate">{q.customer_name}</span>
-          {q.consignment_number && (
-            <>
-              <span className="text-slate-300">·</span>
-              <span className="font-mono text-xs text-slate-400">{q.consignment_number}</span>
-            </>
           )}
         </div>
       </div>
 
-      {/* AI summary — relative group; hover reveals the floating insight card */}
-      <div className="group relative flex w-[140px] shrink-0 justify-start" onClick={e => e.stopPropagation()}>
-        <span className={`inline-flex cursor-default items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium ${
-          isScreamer ? 'border-red-200 bg-red-50 text-red-700' : 'border-slate-200 bg-white text-slate-500'}`}>
-          <Sparkles size={12} />
-          {isScreamer ? 'Urgent risk' : 'AI summary'}
-        </span>
+      {/* Summary — Gemini summary text under the Summary column; hover reveals full card */}
+      <div className="group relative w-[160px] shrink-0">
+        <p className={`line-clamp-2 text-xs leading-snug ${isScreamer ? 'text-red-700' : 'text-slate-500'}`}>
+          {getAiSummary(q) || '—'}
+        </p>
 
         {/* Floating hover card — h-auto, colour adapts to priority/sentiment */}
         <div className={`hidden group-hover:block absolute z-50 right-0 top-8 h-auto min-w-[24rem] max-w-md rounded-xl border border-slate-100 bg-white px-4 pt-4 pb-4 text-left shadow-xl ${cardTone.topBorder}`}>
@@ -1974,33 +1979,56 @@ function AutopilotQABay({ refreshKey, onChanged }) {
           </div>
         )}
         {drafts.map(d => (
-          <div key={d.email_id} className="mb-3 rounded-xl border border-slate-200 p-3 last:mb-0">
-            <div className="mb-2 flex items-center gap-2">
+          d.kind === 'paused' ? (
+            <div key={`p-${d.query_id}`} className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 last:mb-0">
+              <div className="mb-2 flex items-center gap-2">
+                <button
+                  onClick={() => navigate(`/queries/${d.query_id}`)}
+                  className={`inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase ${rowBadgeClasses(d)}`}
+                >
+                  M-{d.ticket_number}
+                </button>
+                <span className="truncate text-xs font-medium text-amber-700">{d.customer_name || d.subject}</span>
+              </div>
+              <p className="mb-3 text-sm font-semibold leading-snug text-amber-800">
+                🤖 Autopilot Paused: Manual review required for this complex query.
+              </p>
               <button
                 onClick={() => navigate(`/queries/${d.query_id}`)}
-                className={`inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase ${rowBadgeClasses(d)}`}
+                className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-bold text-amber-800 transition hover:bg-amber-100"
               >
-                M-{d.ticket_number}
-              </button>
-              <span className="truncate text-xs font-medium text-slate-500">{d.customer_name || d.subject}</span>
-            </div>
-            <p className="mb-3 line-clamp-2 text-sm leading-snug text-slate-700">{intentLine(d)}</p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => quickApprove(d)}
-                disabled={busyId === d.email_id}
-                className="flex-1 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:opacity-50"
-              >
-                {busyId === d.email_id ? 'Sending…' : '✓ Quick Approve'}
-              </button>
-              <button
-                onClick={() => setRefineFor(d)}
-                className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
-              >
-                🛠️ Refine / Train
+                Open &amp; review →
               </button>
             </div>
-          </div>
+          ) : (
+            <div key={d.email_id} className="mb-3 rounded-xl border border-slate-200 p-3 last:mb-0">
+              <div className="mb-2 flex items-center gap-2">
+                <button
+                  onClick={() => navigate(`/queries/${d.query_id}`)}
+                  className={`inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase ${rowBadgeClasses(d)}`}
+                >
+                  M-{d.ticket_number}
+                </button>
+                <span className="truncate text-xs font-medium text-slate-500">{d.customer_name || d.subject}</span>
+              </div>
+              <p className="mb-3 line-clamp-2 text-sm leading-snug text-slate-700">{intentLine(d)}</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => quickApprove(d)}
+                  disabled={busyId === d.email_id}
+                  className="flex-1 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  {busyId === d.email_id ? 'Sending…' : '✓ Quick Approve'}
+                </button>
+                <button
+                  onClick={() => setRefineFor(d)}
+                  className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
+                >
+                  🛠️ Refine / Train
+                </button>
+              </div>
+            </div>
+          )
         ))}
       </div>
 

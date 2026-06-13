@@ -813,8 +813,12 @@ router.get('/backfill-triage',  backfillTriageHandler);
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/drafts', async (req, res, next) => {
   try {
-    const result = await query(`
+    const RESOLVED = `('resolved','resolved_claim_approved','resolved_claim_rejected')`;
+
+    // 1. Pending AI drafts awaiting human QA → kind 'draft'.
+    const drafts = await query(`
       SELECT
+        'draft'        AS kind,
         qe.id          AS email_id,
         qe.query_id    AS query_id,
         qe.body_text   AS body_text,
@@ -827,13 +831,39 @@ router.get('/drafts', async (req, res, next) => {
       WHERE qe.is_ai_draft = true
         AND qe.sent_at IS NULL
         AND qe.ai_draft_approved_by IS NULL
-        AND q.status NOT IN ('resolved','resolved_claim_approved','resolved_claim_rejected')
+        AND q.status NOT IN ${RESOLVED}
       ORDER BY
         CASE q.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
         qe.created_at DESC
       LIMIT 50
     `);
-    res.json(result.rows);
+
+    // 2. Autopilot-paused tickets (needs manual triage, no pending draft) → kind 'paused'.
+    const paused = await query(`
+      SELECT
+        'paused'       AS kind,
+        NULL           AS email_id,
+        q.id           AS query_id,
+        NULL           AS body_text,
+        NULL           AS direction,
+        q.updated_at   AS draft_created_at,
+        q.ticket_number, q.priority, q.status, q.subject,
+        q.customer_name, q.group_name, q.courier_name, q.description
+      FROM queries q
+      WHERE q.internal_automation_state = 'action_required'
+        AND q.status NOT IN ${RESOLVED}
+        AND NOT EXISTS (
+          SELECT 1 FROM query_emails qe
+          WHERE qe.query_id = q.id AND qe.is_ai_draft = true
+            AND qe.sent_at IS NULL AND qe.ai_draft_approved_by IS NULL
+        )
+      ORDER BY
+        CASE q.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
+        q.updated_at DESC
+      LIMIT 50
+    `);
+
+    res.json([...paused.rows, ...drafts.rows]);
   } catch (err) { next(err); }
 });
 
