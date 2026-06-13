@@ -54,6 +54,8 @@ export function isLikelyTracking(s) {
   if (!/^[A-Za-z0-9]+$/.test(t)) return false;
   if (/^0\d{9,10}$/.test(t)) return false;        // UK landline/mobile shape
   if (/^\+?44\d{9,10}$/.test(t)) return false;     // +44 international form
+  // Tracking refs are digit-heavy; this rejects ordinary words like "apologise".
+  if ((t.match(/\d/g) || []).length < 4) return false;
   return true;
 }
 
