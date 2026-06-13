@@ -790,16 +790,17 @@ export default function TicketDetailPage() {
     if (ticket?.id) api.post(`/queries/${ticket.id}/mark-read`).catch(() => {});
   }, [ticket?.id]);
 
-  // Chronological order (newest at the bottom) → smoothly scroll to the latest
-  // message the moment the thread loads. Re-runs catch late-rendering HTML/images.
+  // Newest reply sits at the TOP → open scrolled to the top so the latest message
+  // is the first thing you see. Re-runs catch late-rendering HTML/images that
+  // would otherwise nudge the scroll position.
   const emails = ticket?.emails || [];
   useEffect(() => {
     const el = messagesRef.current;
     if (!el) return;
-    const toBottom = () => el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-    toBottom();
-    const t1 = setTimeout(toBottom, 300);
-    const t2 = setTimeout(toBottom, 900);
+    const toTop = () => el.scrollTo({ top: 0, behavior: 'auto' });
+    toTop();
+    const t1 = setTimeout(toTop, 300);
+    const t2 = setTimeout(toTop, 900);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [emails.length]);
 
@@ -833,12 +834,10 @@ export default function TicketDetailPage() {
   const trackEvents = trackingData?.events || trackingData?.parcel?.events || [];
   const parcel      = trackingData?.parcel || null;
 
-  // Single merged chronological thread
-  // Chronological (oldest → newest) so each reply sits directly beneath the
-  // message it answers; the server already orders them, this is a safety net.
+  // Newest → oldest so the latest reply is at the top of the thread.
   const allEmails = [...emails].sort((a, b) =>
-    new Date(a.sent_at || a.received_at || a.created_at) -
-    new Date(b.sent_at || b.received_at || b.created_at)
+    new Date(b.sent_at || b.received_at || b.created_at) -
+    new Date(a.sent_at || a.received_at || a.created_at)
   );
 
   // Split timeline — customers never see courier correspondence and vice versa.
