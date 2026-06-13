@@ -21,8 +21,12 @@ const CLAIM_ISSUES = new Set(['DAMAGED', 'LOST', 'RETURN_TO_SENDER']);
 async function insertDraft(queryId, direction, subject, body, toAddress = null) {
   await query(
     `INSERT INTO query_emails
-       (query_id, direction, subject, body_text, from_address, to_address, is_ai_draft, created_at)
-     VALUES ($1, $2::email_direction, $3, $4, $5, $6, true, NOW())`,
+       (query_id, direction, subject, body_text, from_address, to_address, is_ai_draft, reply_to_message_id, created_at)
+     VALUES ($1, $2::email_direction, $3, $4, $5, $6, true,
+       (SELECT id FROM query_emails
+         WHERE query_id = $1 AND direction IN ('inbound_customer','inbound_courier')
+         ORDER BY COALESCE(received_at, created_at) DESC LIMIT 1),
+       NOW())`,
     [queryId, direction, subject, body, SUPPORT_FROM, toAddress],
   );
 }

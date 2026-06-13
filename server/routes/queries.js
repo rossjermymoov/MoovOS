@@ -885,10 +885,13 @@ router.get('/drafts', async (req, res, next) => {
         q.ticket_number, q.priority, q.status, q.subject,
         q.customer_name, q.group_name, q.courier_name, q.description,
         q.consecutive_approvals,
-        (SELECT qe2.body_text FROM query_emails qe2
-          WHERE qe2.query_id = q.id
-            AND qe2.direction IN ('inbound_customer','inbound_courier')
-          ORDER BY COALESCE(qe2.received_at, qe2.created_at) DESC LIMIT 1) AS incoming_text
+        COALESCE(
+          (SELECT rep.body_text FROM query_emails rep WHERE rep.id = qe.reply_to_message_id),
+          (SELECT qe2.body_text FROM query_emails qe2
+            WHERE qe2.query_id = q.id
+              AND qe2.direction IN ('inbound_customer','inbound_courier')
+            ORDER BY COALESCE(qe2.received_at, qe2.created_at) DESC LIMIT 1)
+        ) AS incoming_text
       FROM query_emails qe
       JOIN queries q ON q.id = qe.query_id
       WHERE qe.is_ai_draft = true
@@ -1578,9 +1581,13 @@ For ALL other cases — standard queries, delayed parcels, missing items, genera
 
         await query(`
           INSERT INTO query_emails
-            (query_id, direction, subject, body_text, from_address, to_address, is_ai_draft, created_at)
+            (query_id, direction, subject, body_text, from_address, to_address, is_ai_draft, reply_to_message_id, created_at)
           VALUES ($1, 'outbound_customer'::email_direction, $2, $3,
-                  'queries@moovparcel.co.uk', $4, true, NOW())
+                  'queries@moovparcel.co.uk', $4, true,
+                  (SELECT id FROM query_emails
+                    WHERE query_id = $1 AND direction IN ('inbound_customer','inbound_courier')
+                    ORDER BY COALESCE(received_at, created_at) DESC LIMIT 1),
+                  NOW())
         `, [ticket.id, subject, draftText, toAddress]);
 
         if (phoneCall) {
@@ -1720,8 +1727,12 @@ Instructions:
     const toAddress  = isCustomer ? (q.sender_email || null) : null;
 
     const savedEmail = await query(`
-      INSERT INTO query_emails (query_id, direction, subject, body_text, from_address, to_address, is_ai_draft, created_at)
-      VALUES ($1, $2::email_direction, $3::varchar, $4::text, 'queries@moovparcel.co.uk'::varchar, $5, true, NOW())
+      INSERT INTO query_emails (query_id, direction, subject, body_text, from_address, to_address, is_ai_draft, reply_to_message_id, created_at)
+      VALUES ($1, $2::email_direction, $3::varchar, $4::text, 'queries@moovparcel.co.uk'::varchar, $5, true,
+        (SELECT id FROM query_emails
+          WHERE query_id = $1 AND direction IN ('inbound_customer','inbound_courier')
+          ORDER BY COALESCE(received_at, created_at) DESC LIMIT 1),
+        NOW())
       RETURNING id
     `, [req.params.id, direction, subject, draftText, toAddress]);
 
