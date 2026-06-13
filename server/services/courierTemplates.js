@@ -57,9 +57,11 @@ const issueBlock = (only) => {
 
 // ── Courier Rules Matrix ─────────────────────────────────────────────────────
 export const COURIER_RULES = {
-  dpd:  { name: 'DPD',  courierEmail: 'TODO-dpd-disputes@example.com',  issues: issueBlock() },
-  dhl:  { name: 'DHL',  courierEmail: 'TODO-dhl-claims@example.com',    issues: issueBlock() },
-  evri: { name: 'Evri', courierEmail: 'TODO-evri-support@example.com',  issues: issueBlock() },
+  dpd:   { name: 'DPD',   courierEmail: 'TODO-dpd-disputes@example.com',  issues: issueBlock() },
+  dhl:   { name: 'DHL',   courierEmail: 'TODO-dhl-claims@example.com',    issues: issueBlock() },
+  evri:      { name: 'Evri',      courierEmail: 'TODO-evri-support@example.com',  issues: issueBlock() },
+  yodel:     { name: 'Yodel',     courierEmail: 'TODO-yodel-support@example.com', issues: issueBlock() },
+  yodel_c2c: { name: 'Yodel C2C', courierEmail: 'TODO-yodel-c2c@example.com',     issues: issueBlock() },
 };
 
 // Resolve a template for a courier + issue type, with safe fallbacks so the loop
