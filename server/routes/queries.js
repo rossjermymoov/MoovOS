@@ -934,7 +934,34 @@ router.get('/drafts', async (req, res, next) => {
       LIMIT 50
     `);
 
-    res.json([...paused.rows, ...drafts.rows]);
+    // Group pending drafts → ONE card per ticket, carrying both the customer and
+    // courier draft (whichever exist).
+    const byTicket = new Map();
+    for (const r of drafts.rows) {
+      let card = byTicket.get(r.query_id);
+      if (!card) {
+        card = {
+          kind: 'draft',
+          query_id: r.query_id,
+          ticket_number: r.ticket_number, priority: r.priority, status: r.status,
+          subject: r.subject, customer_name: r.customer_name, group_name: r.group_name,
+          courier_name: r.courier_name, description: r.description,
+          consecutive_approvals: r.consecutive_approvals,
+          incoming_text: r.incoming_text,
+          customer_email_id: null, customer_body: null,
+          courier_email_id:  null, courier_body:  null,
+        };
+        byTicket.set(r.query_id, card);
+      }
+      if (r.direction === 'outbound_courier') {
+        card.courier_email_id = r.email_id; card.courier_body = r.body_text;
+      } else {
+        card.customer_email_id = r.email_id; card.customer_body = r.body_text;
+        card.incoming_text = r.incoming_text;  // prefer the customer draft's paired trigger
+      }
+    }
+
+    res.json([...paused.rows, ...byTicket.values()]);
   } catch (err) { next(err); }
 });
 
@@ -1331,6 +1358,65 @@ function scheduleSandboxLoopback(queryId) {
     }
   }, 5000);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/queries/:id/approve-strategy
+// Dual-approval dispatch: approve BOTH the pending customer + courier drafts for
+// a ticket in one shot. Applies any edits, marks them sent (is_ai_draft=false),
+// flips the ticket to awaiting external response, and clears the parent QA card.
+// Sandbox by default — no real mail transport is wired in yet.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:id/approve-strategy', async (req, res, next) => {
+  try {
+    const queryId = req.params.id;
+    const { customer_body, courier_body } = req.body || {};
+
+    const pending = await query(
+      `SELECT id, direction, body_text FROM query_emails
+        WHERE query_id = $1 AND is_ai_draft = true
+          AND sent_at IS NULL AND ai_draft_approved_by IS NULL`,
+      [queryId],
+    );
+    if (!pending.rows.length) return res.status(404).json({ error: 'No pending drafts on this ticket' });
+
+    const dispatched = [];
+    let anyCourier = false, anyEdited = false;
+
+    for (const d of pending.rows) {
+      const isCourier = d.direction === 'outbound_courier';
+      const override  = isCourier ? courier_body : customer_body;
+      const finalBody = (override != null && override !== '') ? override : d.body_text;
+      const wasEdited = finalBody.trim() !== (d.body_text || '').trim();
+      if (wasEdited) anyEdited = true;
+      if (isCourier) anyCourier = true;
+
+      await query(`
+        UPDATE query_emails SET
+          body_text            = $1,
+          is_ai_draft          = false,
+          ai_draft_edited      = $2,
+          ai_draft_approved_at = NOW(),
+          sent_at              = NOW()
+        WHERE id = $3
+      `, [finalBody, wasEdited, d.id]);
+      dispatched.push({ email_id: d.id, direction: d.direction, edited: wasEdited });
+    }
+
+    // Flip ticket to "awaiting external response" + update the trust streak.
+    const nextStatus = anyCourier ? 'awaiting_courier' : 'awaiting_customer';
+    await query(
+      `UPDATE queries
+          SET status = $2::query_status,
+              internal_automation_state = 'awaiting_courier_response',
+              consecutive_approvals = CASE WHEN $3 THEN 0 ELSE consecutive_approvals + 1 END,
+              updated_at = NOW()
+        WHERE id = $1`,
+      [queryId, nextStatus, anyEdited],
+    );
+
+    res.json({ ok: true, dispatched, status: nextStatus });
+  } catch (err) { next(err); }
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/queries/triage-all

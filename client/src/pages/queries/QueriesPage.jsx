@@ -1815,64 +1815,134 @@ function priRank(q) { return PRI_RANK[(q.priority || '').toLowerCase()] ?? 4; }
 // Consecutive untouched approvals before a template path is deemed autopilot-ready.
 const AUTOPILOT_THRESHOLD = 20;
 
-// ─── Quick View — full-screen split-panel auditing modal ──────────────────────
-function QuickViewModal({ draft, onClose, onConfirm, sending }) {
-  const [editBody, setEditBody] = useState(draft.body_text || draft.description || '');
-  const pchip = priorityChip(draft);
+// ─── Quick View — three-panel Unified Command Cockpit ─────────────────────────
+function QuickViewModal({ card, onClose, onDispatched }) {
+  const [custBody, setCustBody]   = useState(card.customer_body || '');
+  const [courBody, setCourBody]   = useState(card.courier_body || '');
+  const [custFb,   setCustFb]     = useState('');
+  const [courFb,   setCourFb]     = useState('');
+  const [refining, setRefining]   = useState(null);  // 'customer' | 'courier'
+  const [sending,  setSending]    = useState(false);
+  const pchip = priorityChip(card);
+  const hasCourier = !!card.courier_email_id;
+
+  async function refine(side) {
+    const email_id = side === 'courier' ? card.courier_email_id : card.customer_email_id;
+    const prompt   = (side === 'courier' ? courFb : custFb).trim();
+    if (!email_id || !prompt) return;
+    setRefining(side);
+    try {
+      const r = await api.post(`/queries/${card.query_id}/refine-draft`, { email_id, prompt });
+      if (side === 'courier') { setCourBody(r.data.revised_text); setCourFb(''); }
+      else                    { setCustBody(r.data.revised_text); setCustFb(''); }
+    } catch (e) {
+      alert('Refine failed: ' + (e.response?.data?.error || e.message));
+    } finally { setRefining(null); }
+  }
+
+  async function dispatch() {
+    setSending(true);
+    try {
+      await api.post(`/queries/${card.query_id}/approve-strategy`, {
+        customer_body: card.customer_email_id ? custBody : undefined,
+        courier_body:  card.courier_email_id  ? courBody : undefined,
+      });
+      onDispatched?.();
+    } catch (e) {
+      alert('Dispatch failed: ' + (e.response?.data?.error || e.message));
+    } finally { setSending(false); }
+  }
+
+  const panel = 'flex min-h-0 flex-col rounded-xl border border-slate-200 bg-white overflow-hidden';
+  const head  = 'border-b border-slate-100 px-4 py-2.5 text-xs font-extrabold uppercase tracking-wide';
 
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-900/60 p-6 backdrop-blur-sm" onClick={onClose}>
-      <div className="flex h-[80vh] w-full max-w-5xl flex-col rounded-xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="flex max-h-[88vh] w-full max-w-7xl flex-col rounded-xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
           <div className="flex min-w-0 items-center gap-3">
-            <span className={`inline-flex shrink-0 items-center justify-center rounded-md border px-2.5 py-1 text-xs font-bold uppercase tracking-wide ${rowBadgeClasses(draft)}`}>
-              #M-{draft.ticket_number}
+            <span className={`inline-flex shrink-0 items-center justify-center rounded-md border px-2.5 py-1 text-xs font-bold uppercase tracking-wide ${rowBadgeClasses(card)}`}>
+              #M-{card.ticket_number}
             </span>
             <span className="truncate text-base font-bold tracking-tight text-slate-800">
-              {draft.customer_name || draft.subject || 'Ticket'}
+              {card.customer_name || card.subject || 'Ticket'}
             </span>
-            {pchip && (
-              <span className={`shrink-0 rounded-md border px-2 py-0.5 text-xs font-bold ${pchip[1]}`}>{pchip[0]}</span>
-            )}
+            {pchip && <span className={`shrink-0 rounded-md border px-2 py-0.5 text-xs font-bold ${pchip[1]}`}>{pchip[0]}</span>}
           </div>
           <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">✕</button>
         </div>
 
-        {/* Split panels — twin scroll containers for side-by-side comparison */}
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 overflow-hidden md:grid-cols-2">
-          {/* Left — the exact inbound message this draft is responding to */}
-          <div className="flex min-h-0 flex-col border-r border-slate-100">
-            <div className="border-b border-slate-100 px-5 py-2.5 text-xs font-extrabold uppercase tracking-wide text-red-600">
-              📥 Inbound Message Requiring Response
-            </div>
-            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto whitespace-pre-wrap p-5 pr-4 text-sm leading-relaxed text-slate-700">
-              {cleanIncoming(draft.incoming_text) || draft.subject || 'No incoming message text on file for this ticket.'}
+        {/* Three-panel cockpit */}
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden p-4 lg:grid-cols-3">
+          {/* Panel 1 — inbound trigger */}
+          <div className={panel}>
+            <div className={`${head} text-red-600`}>📥 Inbound Trigger</div>
+            <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap p-4 text-sm leading-relaxed text-slate-700">
+              {cleanIncoming(card.incoming_text) || card.subject || 'No incoming message text on file.'}
             </div>
           </div>
 
-          {/* Right — editable draft */}
-          <div className="flex min-h-0 flex-col">
-            <div className="border-b border-slate-100 px-5 py-2.5 text-xs font-bold uppercase tracking-wide text-slate-400">
-              ✨ Gemini draft response (editable)
-            </div>
-            <textarea
-              value={editBody}
-              onChange={e => setEditBody(e.target.value)}
-              className="min-h-0 flex-1 resize-none p-5 text-sm leading-relaxed text-slate-800 outline-none"
-            />
+          {/* Panel 2 — customer response draft */}
+          <div className={panel}>
+            <div className={`${head} text-blue-600`}>👤 Customer Response Draft</div>
+            {card.customer_email_id ? (
+              <>
+                <textarea value={custBody} onChange={e => setCustBody(e.target.value)}
+                  className="min-h-0 flex-1 resize-none p-4 text-sm leading-relaxed text-slate-800 outline-none" />
+                <div className="border-t border-slate-100 p-3">
+                  <div className="flex gap-2">
+                    <input value={custFb} onChange={e => setCustFb(e.target.value)}
+                      placeholder="🛠️ Refine the customer voice…"
+                      className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-xs outline-none focus:border-slate-400" />
+                    <button onClick={() => refine('customer')} disabled={!custFb.trim() || refining === 'customer'}
+                      className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-40">
+                      {refining === 'customer' ? '…' : 'Refine'}
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-slate-400">No customer draft on this ticket.</div>
+            )}
+          </div>
+
+          {/* Panel 3 — courier inquiry draft (conditional) */}
+          <div className={panel}>
+            <div className={`${head} text-amber-600`}>🚚 Courier Inquiry Draft</div>
+            {hasCourier ? (
+              <>
+                <textarea value={courBody} onChange={e => setCourBody(e.target.value)}
+                  className="min-h-0 flex-1 resize-none p-4 text-sm leading-relaxed text-slate-800 outline-none" />
+                <div className="border-t border-slate-100 p-3">
+                  <div className="flex gap-2">
+                    <input value={courFb} onChange={e => setCourFb(e.target.value)}
+                      placeholder="🛠️ Refine the courier urgency…"
+                      className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-xs outline-none focus:border-slate-400" />
+                    <button onClick={() => refine('courier')} disabled={!courFb.trim() || refining === 'courier'}
+                      className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-40">
+                      {refining === 'courier' ? '…' : 'Refine'}
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-1 items-center justify-center bg-slate-50/60 p-6 text-center text-sm font-medium text-slate-400">
+                No carrier outreach required for this query type.
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Footer actions */}
+        {/* Footer — single dual-dispatch action */}
         <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-4">
           <button onClick={onClose}
             className="rounded-lg border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">
             Cancel / Close
           </button>
-          <button onClick={() => onConfirm(editBody)} disabled={sending}
-            className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:opacity-50">
-            {sending ? 'Sending…' : '✓ Confirm & Send Outbound'}
+          <button onClick={dispatch} disabled={sending}
+            className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm shadow-emerald-100 transition hover:bg-emerald-700 disabled:opacity-50">
+            {sending ? 'Dispatching…' : '✓ Approve & Send Balanced Strategy'}
           </button>
         </div>
       </div>
@@ -1883,81 +1953,45 @@ function QuickViewModal({ draft, onClose, onConfirm, sending }) {
 // ─── Autopilot QA Bay — pending AI drafts awaiting human approval ─────────────
 function AutopilotQABay({ refreshKey, onChanged }) {
   const navigate = useNavigate();
-  const [drafts,  setDrafts]  = useState([]);
+  const [cards,   setCards]   = useState([]);
   const [loading, setLoading] = useState(true);
-  const [busyId,  setBusyId]  = useState(null);
-  const [refiningId, setRefiningId] = useState(null);   // which card's refine panel is open
-  const [feedback,   setFeedback]   = useState('');
-  const [refineBusy, setRefineBusy] = useState(false);
-  const [viewing,    setViewing]    = useState(null);    // draft open in Quick View modal
-  const [sending,    setSending]    = useState(false);
+  const [busyId,  setBusyId]  = useState(null);    // query_id mid-dispatch
+  const [viewing, setViewing] = useState(null);    // grouped card open in cockpit
 
   const load = useCallback(() => {
     setLoading(true);
     api.get('/queries/drafts')
-      .then(r => setDrafts(r.data || []))
-      .catch(() => setDrafts([]))
+      .then(r => setCards(r.data || []))
+      .catch(() => setCards([]))
       .finally(() => setLoading(false));
   }, []);
   useEffect(() => { load(); }, [load, refreshKey]);
 
-  async function quickApprove(d) {
-    setBusyId(d.email_id);
+  // One-click dual dispatch straight from the card (no edits).
+  async function quickApprove(c) {
+    setBusyId(c.query_id);
     try {
-      // Sandbox mode: no real mail is sent; the backend fabricates an inbound
-      // courier reply ~5s later, so reload shortly after to catch the new card.
-      await api.patch(`/queries/${d.query_id}/emails/${d.email_id}/approve?sandbox=true`, {});
-      setDrafts(list => list.filter(x => x.email_id !== d.email_id));
+      await api.post(`/queries/${c.query_id}/approve-strategy`, {});
+      setCards(list => list.filter(x => x.query_id !== c.query_id));
       onChanged?.();
-      setTimeout(load, 6000);   // pick up the sandbox loop-back draft
+      setTimeout(load, 6000);   // catch any sandbox loop-back drafts
     } catch (e) {
       alert('Approve failed: ' + (e.response?.data?.error || e.message));
     } finally { setBusyId(null); }
   }
 
-  function openRefine(d) {
-    setRefiningId(prev => prev === d.email_id ? null : d.email_id);
-    setFeedback('');
+  // Dispatch came from inside the cockpit modal → clear card + refresh.
+  function onDispatched() {
+    if (viewing) setCards(list => list.filter(x => x.query_id !== viewing.query_id));
+    setViewing(null);
+    onChanged?.();
+    setTimeout(load, 6000);
   }
 
-  // Confirm & Send from the Quick View modal — approves with any edits applied.
-  async function confirmSend(d, editedBody) {
-    setSending(true);
-    try {
-      await api.patch(`/queries/${d.query_id}/emails/${d.email_id}/approve?sandbox=true`, { body_text: editedBody });
-      setDrafts(list => list.filter(x => x.email_id !== d.email_id));
-      setViewing(null);
-      onChanged?.();
-      setTimeout(load, 6000);   // catch the sandbox loop-back draft
-    } catch (e) {
-      alert('Send failed: ' + (e.response?.data?.error || e.message));
-    } finally { setSending(false); }
-  }
-
-  async function executeCorrection(d) {
-    if (!feedback.trim() || refineBusy) return;
-    setRefineBusy(true);
-    try {
-      const r = await api.post(`/queries/${d.query_id}/refine-draft`, {
-        email_id: d.email_id,
-        prompt: feedback.trim(),
-      });
-      // Show the corrected text instantly + reset the approval streak locally.
-      setDrafts(list => list.map(x => x.email_id === d.email_id
-        ? { ...x, body_text: r.data.revised_text, description: r.data.revised_text, consecutive_approvals: 0 }
-        : x));
-      setRefiningId(null);
-      setFeedback('');
-      onChanged?.();
-    } catch (e) {
-      alert('Refine failed: ' + (e.response?.data?.error || e.message));
-    } finally { setRefineBusy(false); }
-  }
-
-  function intentLine(d) {
-    if (d.description) return d.description;
-    const what = d.group_name ? d.group_name.toLowerCase() : 'reply';
-    return `Drafting ${what}${d.courier_name ? ` to ${d.courier_name}` : ''} for ${d.customer_name || 'customer'}`;
+  function intentLine(c) {
+    if (c.description) return c.description;
+    const what = c.group_name ? c.group_name.toLowerCase() : 'reply';
+    return `Drafting ${what}${c.courier_name ? ` to ${c.courier_name}` : ''} for ${c.customer_name || 'customer'}`;
   }
 
   return (
@@ -1968,123 +2002,68 @@ function AutopilotQABay({ refreshKey, onChanged }) {
           <span className="text-sm font-bold text-slate-900">Autopilot QA Guardrails</span>
         </div>
         <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">
-          {drafts.length} pending
+          {cards.length} ticket{cards.length === 1 ? '' : 's'}
         </span>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {loading && <div className="p-6 text-center text-xs text-slate-400">Loading drafts…</div>}
-        {!loading && drafts.length === 0 && (
+        {!loading && cards.length === 0 && (
           <div className="p-8 text-center">
             <div className="mb-2 text-3xl">✓</div>
             <div className="text-sm font-semibold text-slate-600">Queue clear</div>
-            <div className="text-xs text-slate-400">No AI drafts waiting for QA.</div>
+            <div className="text-xs text-slate-400">No tickets waiting for QA.</div>
           </div>
         )}
-        {drafts.map(d => (
-          d.kind === 'paused' ? (
-            <div key={`p-${d.query_id}`} className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 last:mb-0">
+        {cards.map(c => (
+          c.kind === 'paused' ? (
+            <div key={`p-${c.query_id}`} className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 last:mb-0">
               <div className="mb-2 flex items-center gap-2">
-                <button
-                  onClick={() => navigate(`/queries/${d.query_id}`)}
-                  className={`inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase ${rowBadgeClasses(d)}`}
-                >
-                  M-{d.ticket_number}
+                <button onClick={() => navigate(`/queries/${c.query_id}`)}
+                  className={`inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase ${rowBadgeClasses(c)}`}>
+                  M-{c.ticket_number}
                 </button>
-                <span className="truncate text-xs font-medium text-amber-700">{d.customer_name || d.subject}</span>
+                <span className="truncate text-xs font-medium text-amber-700">{c.customer_name || c.subject}</span>
               </div>
               <p className="mb-3 text-sm font-semibold leading-snug text-amber-800">
                 🤖 Autopilot Paused: Manual review required for this complex query.
               </p>
-              <button
-                onClick={() => navigate(`/queries/${d.query_id}`)}
-                className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-bold text-amber-800 transition hover:bg-amber-100"
-              >
+              <button onClick={() => navigate(`/queries/${c.query_id}`)}
+                className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-bold text-amber-800 transition hover:bg-amber-100">
                 Open &amp; review →
               </button>
             </div>
           ) : (
-            <div key={d.email_id} className="mb-3 rounded-xl border border-slate-200 p-3 last:mb-0">
+            <div key={c.query_id} className="mb-3 rounded-xl border border-slate-200 p-3 last:mb-0">
               <div className="mb-2 flex items-center gap-2">
-                <button
-                  onClick={() => navigate(`/queries/${d.query_id}`)}
-                  className={`inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase ${rowBadgeClasses(d)}`}
-                >
-                  M-{d.ticket_number}
+                <button onClick={() => navigate(`/queries/${c.query_id}`)}
+                  className={`inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase ${rowBadgeClasses(c)}`}>
+                  M-{c.ticket_number}
                 </button>
-                <span className="truncate text-xs font-medium text-slate-500">{d.customer_name || d.subject}</span>
+                <span className="truncate text-xs font-medium text-slate-500">{c.customer_name || c.subject}</span>
+                {/* Draft channel chips */}
+                {c.customer_email_id && <span className="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">👤 Cust</span>}
+                {c.courier_email_id  && <span className="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">🚚 Courier</span>}
               </div>
 
-              {/* Trust badge — template path is autopilot-ready */}
-              {(d.consecutive_approvals ?? 0) >= AUTOPILOT_THRESHOLD && (
+              {(c.consecutive_approvals ?? 0) >= AUTOPILOT_THRESHOLD && (
                 <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
                   🎯 Automation Stable — Autopilot Ready
                 </div>
               )}
 
-              {/* Draft preview — hover reveals the full draft in a floating tooltip */}
-              <div className="group relative mb-3">
-                <p className="line-clamp-3 text-sm leading-snug text-slate-700">{intentLine(d)}</p>
-                {(d.body_text || d.description) && (
-                  <div className="pointer-events-none absolute left-0 right-0 top-full z-[999] mt-1 hidden max-h-72 overflow-y-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 text-xs leading-relaxed text-slate-700 shadow-2xl group-hover:block">
-                    {d.body_text || d.description}
-                  </div>
-                )}
-              </div>
+              <p className="mb-3 line-clamp-3 text-sm leading-snug text-slate-700">{intentLine(c)}</p>
 
               <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => quickApprove(d)}
-                  disabled={busyId === d.email_id}
-                  className="flex-1 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:opacity-50"
-                >
-                  {busyId === d.email_id ? 'Sending…' : '✓ Quick Approve'}
+                <button onClick={() => quickApprove(c)} disabled={busyId === c.query_id}
+                  className="flex-1 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:opacity-50">
+                  {busyId === c.query_id ? 'Sending…' : '✓ Quick Approve'}
                 </button>
-                <button
-                  onClick={() => openRefine(d)}
-                  className={`flex-1 rounded-lg border px-3 py-2 text-xs font-bold transition ${
-                    refiningId === d.email_id
-                      ? 'border-slate-900 bg-slate-900 text-white'
-                      : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
-                >
-                  🛠️ Refine / Train
-                </button>
-                <button
-                  onClick={() => setViewing(d)}
-                  className="flex items-center gap-1 rounded-md bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200"
-                >
+                <button onClick={() => setViewing(c)}
+                  className="flex items-center gap-1 rounded-md bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200">
                   👁️ Quick View
                 </button>
               </div>
-
-              {/* Inline refinement panel — expands the card downwards */}
-              {refiningId === d.email_id && (
-                <div className="mt-3 border-t border-slate-100 pt-3">
-                  <textarea
-                    autoFocus
-                    value={feedback}
-                    onChange={e => setFeedback(e.target.value)}
-                    rows={3}
-                    placeholder="Tell Gemini how to adjust this draft (e.g., make it more empathetic, emphasize the tracking code)..."
-                    className="w-full resize-none rounded-lg border border-slate-200 p-2.5 text-xs outline-none focus:border-slate-400"
-                  />
-                  <div className="mt-2 flex gap-2">
-                    <button
-                      onClick={() => executeCorrection(d)}
-                      disabled={!feedback.trim() || refineBusy}
-                      className="flex-1 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-indigo-700 disabled:opacity-50"
-                    >
-                      {refineBusy ? 'Retraining…' : '🚀 Execute Correction'}
-                    </button>
-                    <button
-                      onClick={() => { setRefiningId(null); setFeedback(''); }}
-                      className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           )
         ))}
@@ -2092,10 +2071,9 @@ function AutopilotQABay({ refreshKey, onChanged }) {
 
       {viewing && (
         <QuickViewModal
-          draft={viewing}
-          sending={sending}
+          card={viewing}
           onClose={() => setViewing(null)}
-          onConfirm={(editedBody) => confirmSend(viewing, editedBody)}
+          onDispatched={onDispatched}
         />
       )}
     </div>
