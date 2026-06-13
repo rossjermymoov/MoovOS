@@ -787,9 +787,24 @@ async function backfillTriageHandler(req, res, next) {
     `);
 
     const results = [];
-    let regraded = 0, drafted = 0, autopilot = 0, paused = 0;
+    let regraded = 0, drafted = 0, autopilot = 0, paused = 0, skipped = 0;
 
     for (const ticket of eligible.rows) {
+      // ── Duplicate-draft guard ───────────────────────────────────────────────
+      // Skip BEFORE any Gemini/triage work if this ticket already has a pending
+      // AI draft, so re-running the backfill never stacks duplicate drafts.
+      const existing = await query(
+        `SELECT COUNT(*)::int AS count FROM query_emails
+          WHERE query_id = $1 AND is_ai_draft = true
+            AND sent_at IS NULL AND ai_draft_approved_by IS NULL`,
+        [ticket.id],
+      );
+      if (existing.rows[0].count > 0) {
+        skipped++;
+        results.push({ id: ticket.id, outcome: 'skipped_existing_draft' });
+        continue;
+      }
+
       // Earliest customer-side message gives the baseline body for the engine.
       const bodyRes = await query(
         `SELECT body_text FROM query_emails
@@ -826,7 +841,7 @@ async function backfillTriageHandler(req, res, next) {
 
     res.json({
       total: eligible.rows.length,
-      regraded, drafted, autopilot_completed: autopilot, paused,
+      regraded, drafted, autopilot_completed: autopilot, paused, skipped,
       results,
     });
   } catch (err) { next(err); }
