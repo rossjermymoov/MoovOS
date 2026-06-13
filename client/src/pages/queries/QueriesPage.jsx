@@ -475,6 +475,23 @@ function mdLite(text) {
     );
 }
 
+// Clean a raw plain-text email body for display: strip extraction artefacts
+// ([signature_…], [image_…], cid: tokens), unwrap <mailto:…>/<https://…> angle
+// brackets, drop stray HTML tags + quoted reply history, and collapse blank runs.
+function cleanIncoming(raw) {
+  if (!raw) return '';
+  let t = String(raw);
+  t = t.replace(/<mailto:([^>]+)>/gi, '$1');            // <mailto:x> → x
+  t = t.replace(/<(https?:\/\/[^>]+)>/gi, '$1');        // <https://x> → https://x
+  t = t.replace(/\[(signature|image|cid|attachment)[^\]]*\]/gi, ''); // placeholder tokens
+  t = t.replace(/\[cid:[^\]]+\]/gi, '').replace(/cid:[^\s)]+/gi, '');
+  t = t.replace(/<\/?[a-z][^>]*>/gi, '');               // stray HTML tags
+  t = t.replace(/\n\s*On .+?wrote:[\s\S]*$/i, '');       // quoted reply history
+  t = t.split('\n').filter(l => !/^\s*>/.test(l)).join('\n'); // quoted '>' lines
+  t = t.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+  return t;
+}
+
 // High-contrast ticket-number badge colour driven by the dynamic tracking
 // states (not just status), so rows differentiate at a glance.
 // Badge colour is driven strictly by the priority spectrum (matching the
@@ -1829,8 +1846,8 @@ function QuickViewModal({ draft, onClose, onConfirm, sending }) {
             <div className="border-b border-slate-100 px-5 py-2.5 text-xs font-bold uppercase tracking-wide text-slate-400">
               📥 Incoming message
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap p-5 text-sm leading-relaxed text-slate-700">
-              {draft.incoming_text || draft.subject || 'No incoming message text on file for this ticket.'}
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto whitespace-pre-wrap p-5 pr-4 text-sm leading-relaxed text-slate-700">
+              {cleanIncoming(draft.incoming_text) || draft.subject || 'No incoming message text on file for this ticket.'}
             </div>
           </div>
 
