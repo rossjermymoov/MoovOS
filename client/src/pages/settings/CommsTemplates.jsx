@@ -55,8 +55,10 @@ export default function CommsTemplates() {
     setSaving(true); setSaved(false);
     try {
       const payload = {
-        queries_email: form.queries_email ?? '',
-        claims_email:  form.claims_email ?? '',
+        queries_email:    form.queries_email ?? '',
+        claims_email:     form.claims_email ?? '',
+        tracking_pattern: form.tracking_pattern ?? '',
+        tracking_example: form.tracking_example ?? '',
         ...Object.fromEntries(FIELDS.map(f => [f.key, form[f.key] ?? ''])),
       };
       const r = await api.put(`/settings/couriers/${code}/templates`, payload);
@@ -113,6 +115,25 @@ export default function CommsTemplates() {
               <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 7px' }}>Only targeted when manually hitting ‘Raise Formal Claim’.</p>
               <input type="email" value={form.claims_email ?? ''} onChange={e => set('claims_email', e.target.value)}
                 placeholder="claims@dpd.co.uk" style={{ ...taSt, minHeight: 0, padding: '9px 12px' }} />
+            </div>
+          </div>
+
+          {/* Tracking-number format — validates candidate consignments. */}
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#94A3B8', marginBottom: 10 }}>
+            Tracking Number Format
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 22 }}>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>📦 Example</label>
+              <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 7px' }}>What a valid number looks like (for reference).</p>
+              <input value={form.tracking_example ?? ''} onChange={e => set('tracking_example', e.target.value)}
+                placeholder="4366834818  (or 15504366834818)" style={{ ...taSt, minHeight: 0, padding: '9px 12px' }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>🔎 Validation Pattern (regex)</label>
+              <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 7px' }}>Candidates must match this or they’re rejected. Leave blank for the generic guard.</p>
+              <input value={form.tracking_pattern ?? ''} onChange={e => set('tracking_pattern', e.target.value)}
+                placeholder="^(1550)?\d{10}[A-Z]?$" style={{ ...taSt, minHeight: 0, padding: '9px 12px', fontFamily: 'monospace', fontSize: 12 }} />
             </div>
           </div>
 

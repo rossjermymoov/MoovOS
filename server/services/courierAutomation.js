@@ -73,6 +73,39 @@ export function stitch(header, middle, footer, vars) {
   return `${fillTemplate(header, vars)}\n\n${(middle || '').trim()}\n\n${fillTemplate(footer, vars)}`;
 }
 
+// Normalise a tracking candidate: strip spaces, upper-case, and drop DPD's
+// optional leading 1550 prefix so the same parcel reads consistently.
+function normalizeTracking(courierCode, raw) {
+  if (!raw) return null;
+  let t = String(raw).replace(/\s+/g, '').toUpperCase();
+  if ((courierCode || '').toLowerCase() === 'dpd') {
+    const m = t.match(/^1550(\d{10}[A-Z]?)$/);   // 1550 + 10 digits (+ letter)
+    if (m) t = m[1];
+  }
+  return t || null;
+}
+
+// Validate a candidate against the courier's configured pattern (falling back to
+// the generic guard when no pattern is set). Returns the normalised value or null.
+async function resolveTracking(courierCode, candidate) {
+  const norm = normalizeTracking(courierCode, candidate);
+  if (!norm) return null;
+  try {
+    const r = await query(
+      `SELECT tracking_pattern FROM courier_routing_rules WHERE courier_code = $1 LIMIT 1`,
+      [(courierCode || '').toLowerCase()],
+    );
+    const pat = r.rows[0]?.tracking_pattern;
+    if (pat) {
+      try { return new RegExp(pat, 'i').test(norm) ? norm : null; }
+      catch { /* malformed regex in settings → fall through to generic guard */ }
+    }
+  } catch (e) {
+    console.warn('[CourierAutomation] tracking pattern lookup failed:', e.message);
+  }
+  return isLikelyTracking(norm) ? norm : null;
+}
+
 // Resolve the live outbound courier address from courier_routing_rules.
 // Picks the claims inbox for claim-type issues, else the general queries inbox.
 // Falls back to the general address, then null, so drafting never blocks.
@@ -140,11 +173,10 @@ export async function processCustomerEmail(queryId, { subject = '', body = '' } 
     return { status: 'needs_human', triage };
   }
 
-  // Validate the parcel reference — never fabricate one (e.g. a phone number
-  // lifted from a signature). Prefer the stored consignment, then triage.
-  const tracking = isLikelyTracking(ticket.consignment_number) ? String(ticket.consignment_number).trim()
-                 : isLikelyTracking(triage.tracking_code)      ? String(triage.tracking_code).trim()
-                 : null;
+  // Validate the parcel reference against the courier's real format (with DPD
+  // 1550 normalisation) — never fabricate one (e.g. a phone number / word).
+  const tracking = await resolveTracking(courierCode, ticket.consignment_number)
+                || await resolveTracking(courierCode, triage.tracking_code);
 
   const tpl = await getCourierTemplates(courierCode);
   const vars = {

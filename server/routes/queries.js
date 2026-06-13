@@ -864,6 +864,41 @@ router.post('/backfill-triage', backfillTriageHandler);
 router.get('/backfill-triage',  backfillTriageHandler);
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/queries/tracking-shapes
+// Samples existing consignment numbers grouped by courier, with a masked "shape"
+// (digits→9, letters→A) + counts + examples — so we can derive accurate per-
+// courier tracking patterns from real data. Registered before '/:id'.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/tracking-shapes', async (req, res, next) => {
+  try {
+    const { rows } = await query(`
+      SELECT lower(COALESCE(courier_code, courier_name, 'unknown')) AS courier, consignment_number AS num
+      FROM queries
+      WHERE consignment_number IS NOT NULL AND btrim(consignment_number) <> ''
+    `);
+
+    const mask = s => String(s).trim().replace(/[0-9]/g, '9').replace(/[A-Za-z]/g, 'A');
+    const byCourier = {};
+    for (const r of rows) {
+      const c = (byCourier[r.courier] ||= { total: 0, shapes: {} });
+      c.total++;
+      const m = mask(r.num);
+      const sh = (c.shapes[m] ||= { shape: m, count: 0, length: r.num.trim().length, examples: [] });
+      sh.count++;
+      if (sh.examples.length < 3) sh.examples.push(r.num.trim());
+    }
+
+    const result = Object.entries(byCourier).map(([courier, c]) => ({
+      courier,
+      total: c.total,
+      shapes: Object.values(c.shapes).sort((a, b) => b.count - a.count).slice(0, 8),
+    })).sort((a, b) => b.total - a.total);
+
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/queries/drafts
 // Pending AI drafts awaiting human QA, across all open tickets — feeds the
 // Autopilot QA Bay on the command-center dashboard. Priority-sorted (urgent
