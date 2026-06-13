@@ -482,14 +482,29 @@ function mdLite(text) {
 //           ticket still reads as done)
 //  Amber  = awaiting courier response, or a Queries-group ticket
 //  Blue   = everything else (open / normal)
+// Pure, dynamic badge styling — evaluated per-row from DB attributes only.
+// No hardcoded ticket IDs. Layers are checked in priority order.
 function rowBadgeClasses(q) {
   const s = (q.status || '').toLowerCase();
-  if (q.courier_sla_breached || q.priority === 'urgent' || s === 'escalated')
+
+  // 1. Red — active SLA breach, or explicitly urgent / escalated
+  if (q.courier_sla_breached || q.priority === 'urgent' || s === 'urgent' || s === 'escalated')
     return 'bg-red-50 text-red-700 border-red-200 font-extrabold';
+
+  // 2. Amber — awaiting a courier response, or an active Queries / Claims ticket
+  if (
+    q.internal_automation_state === 'awaiting_courier_response' ||
+    s.startsWith('awaiting') ||
+    q.group_name === 'Queries' ||
+    q.group_name === 'Claims'
+  )
+    return 'bg-amber-50 text-amber-700 border-amber-200 font-extrabold';
+
+  // 3. Green — completed
   if (['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'].includes(s))
     return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-  if (q.internal_automation_state === 'awaiting_courier_response' || s.startsWith('awaiting') || q.group_name === 'Queries')
-    return 'bg-amber-50 text-amber-700 border-amber-200 font-extrabold';
+
+  // 4. Blue — standard open CRM / Billing / Technical tickets
   return 'bg-blue-50 text-blue-700 border-blue-200';
 }
 
