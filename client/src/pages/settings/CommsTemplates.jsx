@@ -54,7 +54,11 @@ export default function CommsTemplates() {
   async function save() {
     setSaving(true); setSaved(false);
     try {
-      const payload = Object.fromEntries(FIELDS.map(f => [f.key, form[f.key] ?? '']));
+      const payload = {
+        queries_email: form.queries_email ?? '',
+        claims_email:  form.claims_email ?? '',
+        ...Object.fromEntries(FIELDS.map(f => [f.key, form[f.key] ?? ''])),
+      };
       const r = await api.put(`/settings/couriers/${code}/templates`, payload);
       setCouriers(list => list.map(x => x.courier_code === code ? r.data : x));
       setSaved(true);
@@ -96,6 +100,26 @@ export default function CommsTemplates() {
 
       {!loading && couriers.length > 0 && (
         <>
+          {/* Routing endpoints — queries + claims only (no billing). */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 22 }}>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>📬 Queries Email Address</label>
+              <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 7px' }}>For delays, missing scans, POD searches, etc.</p>
+              <input type="email" value={form.queries_email ?? ''} onChange={e => set('queries_email', e.target.value)}
+                placeholder="queries@dpd.co.uk" style={{ ...taSt, minHeight: 0, padding: '9px 12px' }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>💼 Claims Email Address</label>
+              <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 7px' }}>Only targeted when manually hitting ‘Raise Formal Claim’.</p>
+              <input type="email" value={form.claims_email ?? ''} onChange={e => set('claims_email', e.target.value)}
+                placeholder="claims@dpd.co.uk" style={{ ...taSt, minHeight: 0, padding: '9px 12px' }} />
+            </div>
+          </div>
+
+          {/* Top-and-Tail boilerplate templates. */}
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#94A3B8', marginBottom: 10 }}>
+            Header &amp; Footer Boilerplate
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
             {FIELDS.map(f => (
               <div key={f.key}>

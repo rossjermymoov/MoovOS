@@ -69,7 +69,7 @@ async function resolveCourierEmail(courierCode, issueType) {
   if (!courierCode) return null;
   try {
     const r = await query(
-      `SELECT general_query_email, claims_email
+      `SELECT queries_email, claims_email
          FROM courier_routing_rules
         WHERE courier_code = $1 AND is_active = true
         LIMIT 1`,
@@ -78,8 +78,8 @@ async function resolveCourierEmail(courierCode, issueType) {
     if (!r.rows.length) return null;
     const row = r.rows[0];
     return CLAIM_ISSUES.has(issueType)
-      ? (row.claims_email || row.general_query_email)
-      : (row.general_query_email || row.claims_email);
+      ? (row.claims_email || row.queries_email)
+      : (row.queries_email || row.claims_email);
   } catch (e) {
     console.warn('[CourierAutomation] routing lookup failed:', e.message);
     return null;

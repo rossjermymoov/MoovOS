@@ -13,7 +13,10 @@ import { query } from '../db/index.js';
 
 const router = express.Router();
 
-const TEMPLATE_COLS = [
+// Editable columns: the two routing endpoints + the four boilerplate templates.
+const EDITABLE_COLS = [
+  'queries_email',
+  'claims_email',
   'courier_header_template',
   'courier_footer_template',
   'customer_header_template',
@@ -24,7 +27,7 @@ const TEMPLATE_COLS = [
 router.get('/couriers', async (req, res, next) => {
   try {
     const result = await query(`
-      SELECT courier_code, courier_name, general_query_email, claims_email, is_active,
+      SELECT courier_code, courier_name, queries_email, claims_email, is_active,
              courier_header_template, courier_footer_template,
              customer_header_template, customer_footer_template
       FROM courier_routing_rules
@@ -38,8 +41,8 @@ router.get('/couriers', async (req, res, next) => {
 router.put('/couriers/:courier_code/templates', async (req, res, next) => {
   try {
     const code    = (req.params.courier_code || '').toLowerCase();
-    const updates = Object.entries(req.body).filter(([k]) => TEMPLATE_COLS.includes(k));
-    if (!updates.length) return res.status(400).json({ error: 'No valid template fields provided' });
+    const updates = Object.entries(req.body).filter(([k]) => EDITABLE_COLS.includes(k));
+    if (!updates.length) return res.status(400).json({ error: 'No valid fields provided' });
 
     const set    = updates.map(([k], i) => `${k} = $${i + 2}`).join(', ');
     const values = [code, ...updates.map(([, v]) => (v == null ? null : String(v)))];
