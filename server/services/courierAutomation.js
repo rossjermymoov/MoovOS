@@ -27,6 +27,41 @@ async function insertDraft(queryId, direction, subject, body, toAddress = null) 
   );
 }
 
+// Default Top-and-Tail boilerplate, used when a courier has no custom row.
+const DEFAULT_TEMPLATES = {
+  courier_header_template:  'Dear Carrier Team,',
+  courier_footer_template:  'Many thanks,\nMoov Parcel Team',
+  customer_header_template: 'Hi {{customer_name}},\n\nHere is an operational update regarding your delivery:',
+  customer_footer_template: 'Kind regards,\nMoov Parcel Support Team',
+};
+
+// Read a courier's header/footer templates from courier_routing_rules.
+async function getCourierTemplates(courierCode) {
+  if (!courierCode) return { ...DEFAULT_TEMPLATES };
+  try {
+    const r = await query(
+      `SELECT courier_header_template, courier_footer_template,
+              customer_header_template, customer_footer_template
+         FROM courier_routing_rules WHERE courier_code = $1 LIMIT 1`,
+      [courierCode.toLowerCase()],
+    );
+    if (!r.rows.length) return { ...DEFAULT_TEMPLATES };
+    // Fall back to defaults for any null column.
+    const row = r.rows[0];
+    const out = { ...DEFAULT_TEMPLATES };
+    for (const k of Object.keys(DEFAULT_TEMPLATES)) if (row[k] != null) out[k] = row[k];
+    return out;
+  } catch (e) {
+    console.warn('[CourierAutomation] template lookup failed:', e.message);
+    return { ...DEFAULT_TEMPLATES };
+  }
+}
+
+// Top-and-Tail stitcher: header + dynamic middle + footer, with token fill.
+function stitch(header, middle, footer, vars) {
+  return `${fillTemplate(header, vars)}\n\n${(middle || '').trim()}\n\n${fillTemplate(footer, vars)}`;
+}
+
 // Resolve the live outbound courier address from courier_routing_rules.
 // Picks the claims inbox for claim-type issues, else the general queries inbox.
 // Falls back to the general address, then null, so drafting never blocks.
@@ -100,8 +135,16 @@ export async function processCustomerEmail(queryId, { subject = '', body = '' } 
     tracking_code: triage.tracking_code || ticket.consignment_number || '(tracking number)',
   };
 
-  // Live routing — resolve the real courier inbox from courier_routing_rules.
+  // Live routing — resolve the real courier inbox + Top-and-Tail templates.
   const courierEmail = await resolveCourierEmail(courierCode, triage.issue_type);
+  const tpl = await getCourierTemplates(courierCode);
+
+  // Courier inquiry — header + concise (greeting-free) middle ask + footer.
+  const issueLabel = (triage.issue_type || 'GENERAL').replace(/_/g, ' ').toLowerCase();
+  const courierMiddle =
+    `Please could you assist with consignment ${vars.tracking_code} regarding a ${issueLabel} issue ` +
+    `for our customer ${vars.customer_name}? Please investigate and confirm the current status and next steps.`;
+  const courierBody = stitch(tpl.courier_header_template, courierMiddle, tpl.courier_footer_template, vars);
 
   // Sandbox: create drafts only — nothing leaves the building.
   await insertDraft(queryId, 'outbound_customer',
@@ -109,7 +152,7 @@ export async function processCustomerEmail(queryId, { subject = '', body = '' } 
     fillTemplate(template.customerConfirmation, vars));
   await insertDraft(queryId, 'outbound_courier',
     `${template.courierName} — ${triage.issue_type} — ${vars.tracking_code}`,
-    fillTemplate(template.courierInquiry, vars),
+    courierBody,
     courierEmail);
 
   const expiresAt = new Date(Date.now() + (template.slaHours || DEFAULT_SLA_HOURS) * 3600 * 1000);
@@ -136,12 +179,14 @@ export async function processCustomerEmail(queryId, { subject = '', body = '' } 
 // "Courier Jargon Translation" loop: Gemini rewrites the dry/technical courier
 // update into a clear, reassuring customer-facing draft, which lands in the
 // Autopilot QA Bay for one-click approval.
+// Middle-only: header/footer come from the courier's Top-and-Tail templates, so
+// Gemini must NOT add its own greeting or sign-off — just the clear explanation.
 const TRANSLATION_SYSTEM =
   'You are a customer success translation engine. Read this dry, technical, or ' +
   'internal logistics update from a courier, strip out internal jargon/codes, and ' +
-  'write a polite, completely clear, reassuring response draft meant for the final ' +
-  'customer explaining what is happening to their parcel. Sign off as "The Moov Parcel Team". ' +
-  'Return ONLY the email body text, no preamble.';
+  'write a polite, completely clear, reassuring explanation for the final customer ' +
+  'of what is happening to their parcel. IMPORTANT: do NOT include any greeting ' +
+  '(no "Hi"/"Dear") or sign-off — output ONLY the middle body paragraph(s).';
 
 export async function recordCourierReply(queryId, { subject = '', body = '', from = '' } = {}) {
   await query(
@@ -160,9 +205,20 @@ export async function recordCourierReply(queryId, { subject = '', body = '', fro
   }
 
   if (translated && translated.trim()) {
-    const tRes = await query(`SELECT subject FROM queries WHERE id = $1`, [queryId]);
-    const subj = tRes.rows[0]?.subject ? `Re: ${tRes.rows[0].subject}` : 'Update on your parcel';
-    await insertDraft(queryId, 'outbound_customer', subj, translated.trim());
+    const tRes = await query(
+      `SELECT subject, customer_name, courier_code FROM queries WHERE id = $1`, [queryId],
+    );
+    const t    = tRes.rows[0] || {};
+    const subj = t.subject ? `Re: ${t.subject}` : 'Update on your parcel';
+
+    // Top-and-Tail: stitch the customer header + Gemini analysis + footer.
+    const tpl  = await getCourierTemplates(t.courier_code);
+    const vars = { customer_name: t.customer_name || 'there' };
+    const finalOutboundEmail = stitch(
+      tpl.customer_header_template, translated.trim(), tpl.customer_footer_template, vars,
+    );
+
+    await insertDraft(queryId, 'outbound_customer', subj, finalOutboundEmail);
     // Draft is ready for a human to approve → surface it as awaiting QA.
     await query(
       `UPDATE queries
