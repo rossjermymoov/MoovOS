@@ -124,15 +124,18 @@ function SbRow({ label, children }) {
 
 // ── Inline select (for sidebar fields) ───────────────────────────────────────
 function InlineSelect({ value, onChange, options, colorMap }) {
-  const color = colorMap?.[value]?.color || C.sub;
+  const color = colorMap?.[value]?.color || '#1E293B';
   return (
     <select
       value={value || ''}
       onChange={e => onChange(e.target.value)}
       style={{
-        background: 'transparent', border: 'none', outline: 'none',
-        color, fontSize: 11, fontWeight: 500, cursor: 'pointer',
-        padding: 0, textAlign: 'right', appearance: 'none', maxWidth: 130,
+        width: '100%', maxWidth: 170, background: '#fff',
+        border: '1px solid #E2E8F0', borderRadius: 6, outline: 'none',
+        color, fontSize: 12, fontWeight: 500, cursor: 'pointer',
+        padding: '5px 26px 5px 9px', textAlign: 'left', appearance: 'none',
+        backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
+        backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center',
       }}
     >
       {options.map(o => (
@@ -1209,45 +1212,24 @@ export default function TicketDetailPage() {
               />
             </SbRow>
             <SbRow label="Status">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4,
-                  fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 99,
-                  background: STATUS_CFG[ticket.status]?.bg || '#F8FAFC',
-                  color: STATUS_CFG[ticket.status]?.color || C.muted,
-                  border: `1px solid ${STATUS_CFG[ticket.status]?.border || '#E2E8F0'}` }}>
-                  <span style={{ width: 5, height: 5, borderRadius: '50%',
-                    background: STATUS_CFG[ticket.status]?.color || C.muted }} />
-                  {STATUS_CFG[ticket.status]?.label || ticket.status}
-                </span>
-                <InlineSelect
-                  value={ticket.status}
-                  onChange={v => patch.mutate({ status: v })}
-                  options={Object.entries(STATUS_CFG).map(([k, v]) => ({ value: k, label: '✎' }))}
-                />
-              </div>
+              <InlineSelect
+                value={ticket.status}
+                onChange={v => patch.mutate({ status: v })}
+                options={Object.entries(STATUS_CFG).map(([k, v]) => ({ value: k, label: v.label }))}
+                colorMap={STATUS_CFG}
+              />
             </SbRow>
             <SbRow label="Priority">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 11, fontWeight: 600,
-                  color: PRIORITY_CFG[ticket.priority || 'medium']?.color || C.muted }}>
-                  {PRIORITY_CFG[ticket.priority || 'medium']?.label || ticket.priority}
-                </span>
-                <InlineSelect
-                  value={ticket.priority || 'medium'}
-                  onChange={v => patch.mutate({ priority: v })}
-                  options={Object.entries(PRIORITY_CFG).map(([k, v]) => ({ value: k, label: '✎' }))}
-                  colorMap={PRIORITY_CFG}
-                />
-              </div>
+              <InlineSelect
+                value={ticket.priority || 'medium'}
+                onChange={v => patch.mutate({ priority: v })}
+                options={Object.entries(PRIORITY_CFG).map(([k, v]) => ({ value: k, label: v.label }))}
+                colorMap={PRIORITY_CFG}
+              />
             </SbRow>
           </SbSection>
 
-          {/* Tracking timeline */}
-          {trackEvents.length > 0 && (
-            <SbSection title={`Tracking · ${trackEvents.length} events`}>
-              <TrackingTimeline events={trackEvents} />
-            </SbSection>
-          )}
+          {/* Tracking is shown in the Parcel section above — no duplicate here. */}
 
         </div>
       </div>
