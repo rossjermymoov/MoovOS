@@ -658,10 +658,15 @@ router.get('/stats', async (req, res, next) => {
       // Unmatched emails
       query(`SELECT COUNT(*)::int AS count FROM unmatched_emails WHERE resolved = false`),
 
-      // Autopilot runs — AI drafts that went out without a human edit
+      // Autopilot runs — AI drafts sent without a human edit, PLUS tickets the
+      // acknowledgement filter closed autonomously (completed_autopilot).
       query(`
-        SELECT COUNT(*)::int AS count FROM query_emails
-        WHERE is_ai_draft = true AND sent_at IS NOT NULL AND ai_draft_edited = false
+        SELECT
+          (SELECT COUNT(*) FROM query_emails
+            WHERE is_ai_draft = true AND sent_at IS NOT NULL AND ai_draft_edited = false)
+        + (SELECT COUNT(*) FROM queries
+            WHERE internal_automation_state = 'completed_autopilot')
+          AS count
       `),
     ]);
 
@@ -770,20 +775,22 @@ async function backfillTriageHandler(req, res, next) {
     const force    = req.query.force === 'true';
     const RESOLVED = `('resolved','resolved_claim_approved','resolved_claim_rejected')`;
 
+    // Default scope: untriaged / default-priority / unassigned tickets. ?force=true
+    // re-runs the entire open pool.
     const eligible = await query(`
       SELECT id, subject, priority
       FROM queries
       WHERE status NOT IN ${RESOLVED}
-        ${force ? '' : "AND (priority IS NULL OR priority = 'medium')"}
+        ${force ? '' : "AND (priority IS NULL OR priority = 'medium' OR assigned_to IS NULL)"}
       ORDER BY created_at ASC
       LIMIT 200
     `);
 
     const results = [];
-    let regraded = 0;
+    let regraded = 0, drafted = 0, autopilot = 0, paused = 0;
 
     for (const ticket of eligible.rows) {
-      // Earliest customer-side message gives the baseline body for grading.
+      // Earliest customer-side message gives the baseline body for the engine.
       const bodyRes = await query(
         `SELECT body_text FROM query_emails
          WHERE query_id = $1
@@ -793,13 +800,35 @@ async function backfillTriageHandler(req, res, next) {
       );
       const body = bodyRes.rows[0]?.body_text || '';
 
-      const { priority, source } = await triagePriority({ subject: ticket.subject, body });
-      await query(`UPDATE queries SET priority = $1, updated_at = NOW() WHERE id = $2`, [priority, ticket.id]);
-      results.push({ id: ticket.id, from: ticket.priority, to: priority, source });
-      regraded++;
+      // 1. Hybrid Triage → data-driven priority (hard rules → Gemini grader).
+      let priority = ticket.priority, prioritySource = 'unchanged';
+      try {
+        const graded = await triagePriority({ subject: ticket.subject, body });
+        priority = graded.priority; prioritySource = graded.source;
+        await query(`UPDATE queries SET priority = $1, updated_at = NOW() WHERE id = $2`, [priority, ticket.id]);
+        regraded++;
+      } catch (e) { /* keep existing priority on failure */ }
+
+      // 2. Acknowledgement filter + draft generation (translated customer reply +
+      //    courier inquiry) via the courier automation engine. requires_reply=false
+      //    short-circuits to completed_autopilot with no drafts.
+      let outcome = 'skipped';
+      try {
+        const r = await processCustomerEmail(ticket.id, { subject: ticket.subject, body });
+        outcome = r.status;
+        if (r.status === 'drafted')           drafted++;
+        else if (r.status === 'autopilot_completed') autopilot++;
+        else if (r.status === 'needs_human')  paused++;
+      } catch (e) { outcome = 'error: ' + e.message; }
+
+      results.push({ id: ticket.id, from: ticket.priority, to: priority, prioritySource, outcome });
     }
 
-    res.json({ regraded, total: eligible.rows.length, results });
+    res.json({
+      total: eligible.rows.length,
+      regraded, drafted, autopilot_completed: autopilot, paused,
+      results,
+    });
   } catch (err) { next(err); }
 }
 router.post('/backfill-triage', backfillTriageHandler);

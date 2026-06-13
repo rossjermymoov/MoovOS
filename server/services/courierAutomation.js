@@ -62,6 +62,21 @@ export async function processCustomerEmail(queryId, { subject = '', body = '' } 
   const ticket = tRes.rows[0];
 
   const triage = await extractTriage(subject || ticket.subject, body);
+
+  // ── Acknowledgement filter ──────────────────────────────────────────────────
+  // Automated receipts / 'do not reply' noise need no response. Close the loop
+  // autonomously, bump the autopilot tally, and create NO drafts.
+  if (triage.requires_reply === false) {
+    await query(
+      `UPDATE queries
+          SET internal_automation_state = 'completed_autopilot',
+              updated_at = NOW()
+        WHERE id = $1`,
+      [queryId],
+    );
+    return { status: 'autopilot_completed', reason: 'no reply required (automated/non-actionable)', triage };
+  }
+
   const courierCode = triage.courier_code || ticket.courier_code;
   const template = courierCode ? matchTemplate(courierCode, triage.issue_type) : null;
 
@@ -128,12 +143,12 @@ const TRANSLATION_SYSTEM =
   'customer explaining what is happening to their parcel. Sign off as "The Moov Parcel Team". ' +
   'Return ONLY the email body text, no preamble.';
 
-export async function recordCourierReply(queryId, { subject = '', body = '' } = {}) {
+export async function recordCourierReply(queryId, { subject = '', body = '', from = '' } = {}) {
   await query(
     `INSERT INTO query_emails
        (query_id, direction, subject, body_text, from_address, is_ai_draft, received_at, created_at)
-     VALUES ($1, 'inbound_courier'::email_direction, $2, $3, 'courier@external.invalid', false, NOW(), NOW())`,
-    [queryId, subject || 'Courier update', body],
+     VALUES ($1, 'inbound_courier'::email_direction, $2, $3, $4, false, NOW(), NOW())`,
+    [queryId, subject || 'Courier update', body, from || 'courier@external.invalid'],
   );
 
   // ── Autonomous translation → customer-facing draft ──────────────────────────

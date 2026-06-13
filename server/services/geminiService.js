@@ -53,12 +53,17 @@ function regexFallback(subject, body) {
     /lost|missing/.test(text)                      ? 'LOST' :
     /no scan|not scanned|no update|stuck/.test(text) ? 'NO_SCAN_24H' :
     'GENERAL';
+  // Heuristic acknowledgement filter for the no-key path: treat obvious
+  // do-not-reply / automated-receipt noise as non-actionable.
+  const noise = /(do not reply|do-not-reply|noreply|no-reply|automated (response|message|receipt)|this is an automated|ticket (has been )?(created|received|logged)|case reference|out of office)/i.test(text);
+
   return {
     courier_code: courier,
     tracking_code: trackMatch ? trackMatch[1] : null,
     issue_type: issue,
     needs_human: !courier,
     needs_human_triage: !courier,
+    requires_reply: !noise,
     reason: courier ? null : 'Courier could not be identified from the email.',
     source: 'regex_fallback',
   };
@@ -70,12 +75,15 @@ export async function extractTriage(subject, body) {
 
   const prompt =
     `You are triaging a parcel support email for a courier reseller.\n` +
-    `Return STRICT JSON only with keys: courier_code, tracking_code, issue_type, needs_human, reason.\n` +
+    `Return STRICT JSON only with keys: courier_code, tracking_code, issue_type, needs_human, requires_reply, reason.\n` +
     `- courier_code: one of ${KNOWN_COURIERS.join(', ')} (lowercase), or null if not stated.\n` +
     `- tracking_code: the consignment/tracking number if present, else null.\n` +
     `- issue_type: one of ${ISSUE_TYPES.join(', ')}.\n` +
     `- needs_human: true if a human agent is required (no courier, unclear, complaint/escalation), else false.\n` +
     `  Set this to true whenever you cannot confidently categorise the email or map it to a structured rule.\n` +
+    `- requires_reply: true if this email needs an actionable response. Set FALSE for automated corporate noise — ` +
+    `automated ticket receipts/confirmations, 'do not reply' templates, out-of-office, or claim references that carry ` +
+    `no new/dynamic status change. When in doubt, set true.\n` +
     `- reason: short string when needs_human is true, else null.\n\n` +
     `Subject: ${subject || '(none)'}\nBody: ${(body || '').slice(0, 2000)}`;
 
@@ -102,6 +110,7 @@ export async function extractTriage(subject, body) {
       issue_type: ISSUE_TYPES.includes(parsed.issue_type) ? parsed.issue_type : 'GENERAL',
       needs_human: !!parsed.needs_human || !parsed.courier_code,
       needs_human_triage: !!parsed.needs_human || !!parsed.needs_human_triage || !parsed.courier_code,
+      requires_reply: parsed.requires_reply !== false,   // default true unless explicitly false
       reason: parsed.reason || (parsed.courier_code ? null : 'Courier not identified.'),
       source: 'gemini-1.5-flash',
     };
