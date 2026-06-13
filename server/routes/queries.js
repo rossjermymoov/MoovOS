@@ -1851,69 +1851,97 @@ router.post('/:id/revise-draft', async (req, res, next) => {
   } catch (err) { sendRevisionError(res, err, next); }
 });
 
-// POST /api/queries/:id/refine-draft — bulletproof refinement. Re-runs Gemini
-// with feedback (+ resets the trust counter). Validates the prompt, logs the raw
-// Google error, and falls back to a local mock when the key is missing or Gemini
-// rate-limits (429) so the sandbox loop never dies.
+// POST /api/queries/:id/refine-draft — bulletproof interactive refinement.
+// Builds an explicit 3-pillar context (original message + current draft + user
+// request), validates it, re-runs Gemini with deep error logging, and falls back
+// to a local mock when the key is missing or Gemini rate-limits (429).
 router.post('/:id/refine-draft', async (req, res, next) => {
   const queryId  = req.params.id;
   const email_id = req.body.email_id || req.body.draftId || req.body.emailId;
-  // Accept either `feedback` (our UI) or `prompt` (per spec).
-  const feedback = (req.body.feedback ?? req.body.prompt ?? '').toString();
-
-  // ── Payload verification ────────────────────────────────────────────────────
-  if (!feedback.trim()) {
-    return res.status(400).json({ error: 'The correction prompt was missing — send a non-empty "feedback" (or "prompt") string.' });
-  }
-  if (!email_id) {
-    return res.status(400).json({ error: 'email_id (the draft to refine) is required.' });
-  }
+  // Accept either `prompt` (per spec) or `feedback` (legacy UI).
+  const prompt   = (req.body.prompt ?? req.body.feedback ?? '').toString().trim();
 
   try {
-    const out = await runDraftRevision(queryId, { email_id, feedback, resetApprovals: true });
-    return res.json(out);
-  } catch (err) {
-    // ── Deep logging — surface the exact error object from Google ──────────────
-    console.error('❌ Gemini Refinement Failed Details:', err.response?.data || err.body || err.detail || err.message);
+    // ── Payload verification ──────────────────────────────────────────────────
+    if (!prompt)   return res.status(400).json({ error: 'Missing context payload fields' });
+    if (!email_id) return res.status(400).json({ error: 'email_id (the draft to refine) is required.' });
 
-    const rateLimited = err.upstreamStatus === 429 || err.status === 429 || /\b429\b/.test(err.detail || err.message || '');
+    // ── Context builder — pull current draft + original incoming message ───────
+    const [ticketRes, draftRes, incomingRes] = await Promise.all([
+      query(`SELECT customer_name, consignment_number, courier_name, courier_code, query_type, subject FROM queries WHERE id = $1`, [queryId]),
+      query(`SELECT * FROM query_emails WHERE id = $1 AND query_id = $2`, [email_id, queryId]),
+      query(`SELECT body_text FROM query_emails
+              WHERE query_id = $1 AND direction IN ('inbound_customer','inbound_courier')
+              ORDER BY COALESCE(received_at, created_at) DESC LIMIT 1`, [queryId]),
+    ]);
 
-    // ── Safe sandbox fallback — no key, or rate-limited ───────────────────────
-    if (!process.env.GEMINI_API_KEY || rateLimited) {
-      const localRefinedText =
-        `[Refined Draft Based on Feedback: "${feedback.trim()}"]\n\n` +
-        `Thank you for reaching out. We have received your update regarding the parcel investigation and our ` +
-        `specialist dispatch team is actively dealing with this matter. We'll keep you fully updated and ensure ` +
-        `this is resolved as quickly as possible.\n\nKind regards,\nThe Moov Parcel Team`;
-      try {
-        const upd = await query(
-          `UPDATE query_emails SET body_text = $1 WHERE id = $2 AND query_id = $3 RETURNING *`,
-          [localRefinedText, email_id, queryId],
-        );
-        if (!upd.rows.length) return res.status(404).json({ error: 'Draft email not found' });
+    if (!ticketRes.rows.length) return res.status(404).json({ error: 'Query not found' });
+    if (!draftRes.rows.length)  return res.status(404).json({ error: 'Draft email not found' });
 
-        // Still persist the instruction + reset the trust counter, as a real run would.
-        await query(
-          `INSERT INTO ai_learning_rules (courier_code, issue_type, user_feedback)
-           SELECT courier_code, query_type, $2 FROM queries WHERE id = $1`,
-          [queryId, feedback.trim()],
-        );
-        await query(`UPDATE queries SET consecutive_approvals = 0, updated_at = NOW() WHERE id = $1`, [queryId]);
+    const ticket       = ticketRes.rows[0];
+    const draftText    = (draftRes.rows[0].body_text || '').trim();
+    const originalText = (incomingRes.rows[0]?.body_text || ticket.subject || '').trim();
 
-        return res.json({
-          success: true,
-          fallback: true,
-          email: upd.rows[0],
-          revised_text: localRefinedText,
-          message: 'Fallback mock draft updated due to API limit/absence.',
-        });
-      } catch (e2) { return next(e2); }
+    // All three pillars must be present, else bail before hitting Gemini.
+    if (!originalText || !draftText || !prompt) {
+      return res.status(400).json({ error: 'Missing context payload fields' });
     }
 
-    // Otherwise surface the mapped error.
-    if (err.status) return res.status(err.status).json({ error: err.message, detail: err.detail });
-    return next(err);
-  }
+    // Standing team preferences (adaptive learning).
+    const rulesRes = await query(
+      `SELECT user_feedback FROM ai_learning_rules
+        WHERE courier_code IS NOT DISTINCT FROM $1 OR courier_code IS NULL
+        ORDER BY created_at DESC LIMIT 10`,
+      [ticket.courier_code || null],
+    );
+    const learned = rulesRes.rows.map(r => `- ${r.user_feedback}`).join('\n') || '(none yet)';
+
+    const systemPrompt = 'You are an adaptive logistics supervisor editing an existing email draft. ' +
+      'Output ONLY the revised email text — no preamble, no explanation, no JSON.';
+    const userPrompt =
+      `Original Context: ${originalText}\n\n` +
+      `Current Draft to Modify: ${draftText}\n\n` +
+      `User Revision Request: ${prompt}\n\n` +
+      `Standing team preferences to honour:\n${learned}`;
+
+    // ── Gemini call — wrapped in deep logging ─────────────────────────────────
+    let revised;
+    try {
+      revised = await geminiGenerate(userPrompt, { system: systemPrompt, maxTokens: 900 });
+    } catch (error) {
+      console.error('🚨 Detailed Gemini SDK Error:', error.response?.data || error.body || error.message);
+
+      const rateLimited = error.status === 429 || /\b429\b/.test(error.message || '');
+      if (!process.env.GEMINI_API_KEY || rateLimited) {
+        // Sandbox fallback so the training deck never dead-ends.
+        revised =
+          `[Refined Draft Based on Feedback: "${prompt}"]\n\n${draftText}\n\n` +
+          `(Auto-adjustment applied locally — Gemini was unavailable.)`;
+        const updF = await query(
+          `UPDATE query_emails SET body_text = $1 WHERE id = $2 AND query_id = $3 RETURNING *`,
+          [revised, email_id, queryId],
+        );
+        await query(`UPDATE queries SET consecutive_approvals = 0, updated_at = NOW() WHERE id = $1`, [queryId]);
+        return res.json({ success: true, fallback: true, email: updF.rows[0], revised_text: revised,
+          message: 'Fallback mock draft updated due to API limit/absence.' });
+      }
+      // Surface the exact Google message to the UI (no blank bubble).
+      return res.status(502).json({ error: `Gemini API error: ${error.message}` });
+    }
+
+    // ── Persist: draft body + learning rule + reset trust counter ─────────────
+    const updated = await query(
+      `UPDATE query_emails SET body_text = $1 WHERE id = $2 AND query_id = $3 RETURNING *`,
+      [revised, email_id, queryId],
+    );
+    await query(
+      `INSERT INTO ai_learning_rules (courier_code, issue_type, user_feedback) VALUES ($1, $2, $3)`,
+      [ticket.courier_code || null, ticket.query_type || null, prompt],
+    );
+    await query(`UPDATE queries SET consecutive_approvals = 0, updated_at = NOW() WHERE id = $1`, [queryId]);
+
+    res.json({ success: true, email: updated.rows[0], revised_text: revised });
+  } catch (err) { next(err); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

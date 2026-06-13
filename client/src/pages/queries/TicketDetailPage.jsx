@@ -417,10 +417,10 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
     if (!fb || revising) return;
     setRevising(true);
     try {
-      const r = await fetch(`/api/queries/${queryId}/revise-draft`, {
+      const r = await fetch(`/api/queries/${queryId}/refine-draft`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email_id: email.id, feedback: fb }),
+        body: JSON.stringify({ email_id: email.id, prompt: fb }),
       });
       if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || 'Server error'); }
       setReviseMode(false); reviseRef.current = ''; setReviseText('');
@@ -538,10 +538,11 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
                     <path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/>
                   </svg>
                 </button>
-                <button onClick={submitRevision} disabled={revising} style={{
+                <button onClick={submitRevision} disabled={revising || !reviseText.trim()} style={{
                   padding: '0 14px', height: 32, borderRadius: 8, border: 'none',
                   background: C.blue, color: '#fff', fontSize: 12, fontWeight: 500,
-                  cursor: revising ? 'not-allowed' : 'pointer',
+                  cursor: (revising || !reviseText.trim()) ? 'not-allowed' : 'pointer',
+                  opacity: (revising || !reviseText.trim()) ? 0.5 : 1,
                   display: 'flex', alignItems: 'center', gap: 5,
                 }}>
                   {revising ? <RefreshCw size={11} /> : <Send size={11} />}

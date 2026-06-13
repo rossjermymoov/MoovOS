@@ -1923,7 +1923,7 @@ function AutopilotQABay({ refreshKey, onChanged }) {
     try {
       const r = await api.post(`/queries/${d.query_id}/refine-draft`, {
         email_id: d.email_id,
-        feedback: feedback.trim(),
+        prompt: feedback.trim(),
       });
       // Show the corrected text instantly + reset the approval streak locally.
       setDrafts(list => list.map(x => x.email_id === d.email_id
