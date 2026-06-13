@@ -542,7 +542,6 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   const initials     = assigneeName ? assigneeName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : null;
   const unread       = parseInt(q.unread_emails) || 0;
   const hasNewReply  = q.has_new_reply;
-  const aiSummary    = getAiSummary(q);
   const preview      = q.latest_email_preview || q.description || '';
 
   // Priority → left-edge indicator (full spectrum, matches the ticket badge)
@@ -591,197 +590,130 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
     <div
       onClick={onClick}
       onMouseLeave={() => { setHoverPos(null); setAssignOpen(false); }}
-      className="relative overflow-visible hover:z-10"
-      style={{
-        display: 'flex', alignItems: 'center', gap: 12,
-        padding: '16px 16px 16px 16px',
-        border: `1px solid rgba(0,0,0,0.07)`,
-        borderLeft: `4px solid ${priorityBar}`,
-        borderRadius: 12,
-        marginBottom: 8,
-        cursor: 'pointer',
-        background: C.card,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
-        transition: 'box-shadow 0.12s ease, background 0.08s ease, transform 0.08s ease',
-        position: 'relative',
-      }}
-      onMouseOver={e => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.10)'; e.currentTarget.style.background = C.hover; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-      onMouseOut={e => { e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)'; e.currentTarget.style.background = C.card; e.currentTarget.style.transform = 'translateY(0)'; }}
+      className="relative flex min-h-[90px] cursor-pointer flex-col justify-between gap-2 border-b border-slate-100 p-4 transition-all hover:bg-slate-50"
+      style={{ borderLeft: `4px solid ${priorityBar}` }}
     >
-      {/* Type icon */}
-      <TypeIconWell type={q.query_type} />
-
-      {/* Subject · ticket id · priority · sender — single rigid baseline-locked line */}
-      <div className="min-w-0 flex-1">
-        <div className="flex h-full max-w-xl items-center gap-3 min-w-0">
+      {/* ── Line 1: identifiers (left) · status + time (right) ─────────────── */}
+      <div className="flex w-full items-center justify-between">
+        {/* Left: dot · sender · ticket badge · group */}
+        <div className="flex min-w-0 items-center gap-3">
           {(hasNewReply || unread > 0) && (
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
+            <span className="h-2 w-2 shrink-0 rounded-full bg-blue-500" />
           )}
+          <span className="truncate font-bold text-slate-800">
+            {q.customer_name || q.sender_email || '(unknown sender)'}
+          </span>
           {q.ticket_number != null && (
-            <span className={`inline-flex shrink-0 items-center justify-center min-w-[64px] rounded border px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide shadow-sm ${rowBadgeClasses(q)}`}>
-              M-{q.ticket_number}
+            <span className={`inline-flex shrink-0 items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase tracking-wide shadow-sm ${rowBadgeClasses(q)}`}>
+              #M-{q.ticket_number}
             </span>
           )}
+          <span className="shrink-0"><GroupBadge group={q.group_name} /></span>
           {pchip && (
-            <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${pchip[1]}`}>
+            <span className={`hidden shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold sm:inline ${pchip[1]}`}>
               {pchip[0]}
             </span>
           )}
-          <span className={`truncate text-[15px] font-semibold ${
-            ['resolved','resolved_claim_approved','resolved_claim_rejected'].includes(q.status)
-              ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
-            {q.subject || q.customer_name || '(no subject)'}
-          </span>
-          {q.customer_name && q.subject && (
-            <span className="shrink-0 max-w-[160px] truncate text-sm text-slate-400">· {q.customer_name}</span>
-          )}
+        </div>
+
+        {/* Right: status badge · timestamp */}
+        <div className="flex shrink-0 items-center gap-3 pl-4">
           {q.courier_sla_breached && (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-red-300 bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
               <AlertTriangle size={11} /> SLA Breached
             </span>
           )}
-        </div>
-      </div>
-
-      {/* Summary — Gemini summary text under the Summary column; hover reveals full card */}
-      <div className="group relative w-[160px] shrink-0">
-        <p className={`line-clamp-2 text-xs leading-snug ${isScreamer ? 'text-red-700' : 'text-slate-500'}`}>
-          {getAiSummary(q) || '—'}
-        </p>
-
-        {/* Floating hover card — h-auto, colour adapts to priority/sentiment */}
-        <div className={`hidden group-hover:block absolute z-50 right-0 top-8 h-auto min-w-[24rem] max-w-md rounded-xl border border-slate-100 bg-white px-4 pt-4 pb-4 text-left shadow-xl ${cardTone.topBorder}`}>
-          <div className={`mb-2 flex items-center gap-1.5 text-xs font-semibold ${cardTone.header}`}>
-            <Sparkles size={12} /> AI overview
-          </div>
-          <p className="whitespace-normal break-words text-sm leading-relaxed text-slate-700">
-            {mdLite(fullSummary || 'No AI summary yet for this ticket.')}
-          </p>
-          {sentiment && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                cardUrgent || (happiness != null && happiness < 41) ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
-                {sentiment}{cardUrgent ? ' / high risk' : ''}
-              </span>
-            </div>
-          )}
-          <p className={`mt-3 whitespace-normal break-words text-xs leading-relaxed ${cardTone.footerCls}`}>
-            {cardTone.footer}
-          </p>
-        </div>
-      </div>
-
-      {/* Group */}
-      <div style={{ width: 88, flexShrink: 0 }}>
-        <GroupBadge group={q.group_name} />
-      </div>
-
-      {/* Happiness score */}
-      <div style={{ width: 52, flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
-        {q.customer_happiness_score != null && !isNaN(parseInt(q.customer_happiness_score)) && (() => {
-          const score = parseInt(q.customer_happiness_score);
-          const isGreen = score >= 71;
-          const isAmber = score >= 41 && score < 71;
-          const bg    = isGreen ? 'rgba(0,200,83,0.10)'  : isAmber ? 'rgba(245,158,11,0.10)' : 'rgba(239,68,68,0.10)';
-          const color = isGreen ? '#059669'               : isAmber ? '#D97706'               : '#DC2626';
-          const dot   = isGreen ? '#00C853'               : isAmber ? '#F59E0B'               : '#EF4444';
-          return (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 20, background: bg, color, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
-              <span style={{ width: 5, height: 5, borderRadius: '50%', background: dot, display: 'inline-block', flexShrink: 0 }} />
-              {score}
-            </span>
-          );
-        })()}
-      </div>
-
-      {/* Status */}
-      <div style={{ width: 110, flexShrink: 0 }}>
-        <span style={{
-          fontSize: 11, fontWeight: 500, borderRadius: 20,
-          padding: '3px 9px', display: 'inline-block', whiteSpace: 'nowrap',
-          background: statusCfg.bg || `${statusCfg.color}18`,
-          color: statusCfg.color,
-        }}>
-          {statusCfg.label}
-        </span>
-      </div>
-
-      {/* SLA */}
-      <div style={{ width: 100, flexShrink: 0 }}>
-        {slaLabel && (
-          <>
-            <div style={{ fontSize: 12, fontWeight: 500, color: slaColor, lineHeight: 1.3 }}>{slaLabel}</div>
-            <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>{slaType}</div>
-          </>
-        )}
-      </div>
-
-      {/* Activity */}
-      <div style={{ width: 80, flexShrink: 0, textAlign: 'right' }}>
-        <div style={{ fontSize: 12, color: actColor, fontWeight: hasNewReply ? 500 : 400 }}>{timeAgo(actTime)}</div>
-        <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>{actLabel}</div>
-      </div>
-
-      {/* Avatar — click to assign */}
-      <div style={{ position: 'relative', flexShrink: 0 }}>
-        <div
-          onClick={e => { e.stopPropagation(); setAssignOpen(v => !v); }}
-          title={assigneeName ? `Assigned to ${assigneeName}` : 'Assign ticket'}
-          style={{
-            width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
-            background: initials ? 'rgba(99,102,241,0.12)' : 'rgba(0,0,0,0.04)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 10, fontWeight: 500,
-            color: initials ? '#4F46E5' : C.muted,
-            cursor: 'pointer',
-            outline: assignOpen ? '2px solid #6366F1' : 'none',
-            transition: 'outline 0.1s',
+          <span style={{
+            fontSize: 11, fontWeight: 500, borderRadius: 20, padding: '3px 9px',
+            display: 'inline-block', whiteSpace: 'nowrap',
+            background: statusCfg.bg || `${statusCfg.color}18`, color: statusCfg.color,
           }}>
-          {assigning ? '…' : (initials || <User size={12} color={C.muted} />)}
-        </div>
+            {statusCfg.label}
+          </span>
+          <span className="whitespace-nowrap text-xs text-slate-400">{timeAgo(actTime)}</span>
 
-        {assignOpen && (
-          <div
-            onClick={e => e.stopPropagation()}
-            className="absolute right-0 mt-2 z-[100] w-48 rounded-md border border-slate-200 bg-white py-1 shadow-lg"
-            style={{ top: '100%' }}
-          >
-            <div style={{ padding: '6px 12px 4px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#94A3B8' }}>
-              Assign to
+          {/* Assign avatar (kept for inline assignment) */}
+          <div className="relative shrink-0">
+            <div
+              onClick={e => { e.stopPropagation(); setAssignOpen(v => !v); }}
+              title={assigneeName ? `Assigned to ${assigneeName}` : 'Assign ticket'}
+              style={{
+                width: 26, height: 26, borderRadius: '50%',
+                background: initials ? 'rgba(99,102,241,0.12)' : 'rgba(0,0,0,0.04)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 10, fontWeight: 500, color: initials ? '#4F46E5' : C.muted,
+                cursor: 'pointer', outline: assignOpen ? '2px solid #6366F1' : 'none',
+              }}>
+              {assigning ? '…' : (initials || <User size={12} color={C.muted} />)}
             </div>
-            {staffList.map(s => (
+            {assignOpen && (
               <div
-                key={s.id}
-                onClick={() => handleAssign(s.id)}
-                style={{
-                  padding: '7px 12px', fontSize: 13, color: s.id === q.assigned_to ? '#4F46E5' : '#0F172A',
-                  background: s.id === q.assigned_to ? 'rgba(99,102,241,0.06)' : 'transparent',
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-                }}
-                onMouseOver={e => { if (s.id !== q.assigned_to) e.currentTarget.style.background = '#F8FAFC'; }}
-                onMouseOut={e => { if (s.id !== q.assigned_to) e.currentTarget.style.background = 'transparent'; }}
+                onClick={e => e.stopPropagation()}
+                className="absolute right-0 z-[100] mt-2 w-48 rounded-md border border-slate-200 bg-white py-1 shadow-lg"
+                style={{ top: '100%' }}
               >
-                <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(99,102,241,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 600, color: '#4F46E5', flexShrink: 0 }}>
-                  {s.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                <div style={{ padding: '6px 12px 4px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#94A3B8' }}>
+                  Assign to
                 </div>
-                <span>{s.full_name}</span>
-                {s.id === q.assigned_to && <span style={{ marginLeft: 'auto', fontSize: 11, color: '#4F46E5' }}>✓</span>}
-              </div>
-            ))}
-            {q.assigned_to && (
-              <div
-                onClick={() => handleAssign(null)}
-                style={{ padding: '7px 12px', fontSize: 12, color: '#94A3B8', cursor: 'pointer', borderTop: '1px solid rgba(0,0,0,0.06)', marginTop: 2 }}
-                onMouseOver={e => e.currentTarget.style.background = '#F8FAFC'}
-                onMouseOut={e => e.currentTarget.style.background = 'transparent'}
-              >
-                Unassign
+                {staffList.map(s => (
+                  <div
+                    key={s.id}
+                    onClick={() => handleAssign(s.id)}
+                    style={{
+                      padding: '7px 12px', fontSize: 13, color: s.id === q.assigned_to ? '#4F46E5' : '#0F172A',
+                      background: s.id === q.assigned_to ? 'rgba(99,102,241,0.06)' : 'transparent',
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                    }}
+                    onMouseOver={e => { if (s.id !== q.assigned_to) e.currentTarget.style.background = '#F8FAFC'; }}
+                    onMouseOut={e => { if (s.id !== q.assigned_to) e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(99,102,241,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 600, color: '#4F46E5', flexShrink: 0 }}>
+                      {s.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                    </div>
+                    <span>{s.full_name}</span>
+                    {s.id === q.assigned_to && <span style={{ marginLeft: 'auto', fontSize: 11, color: '#4F46E5' }}>✓</span>}
+                  </div>
+                ))}
+                {q.assigned_to && (
+                  <div
+                    onClick={() => handleAssign(null)}
+                    style={{ padding: '7px 12px', fontSize: 12, color: '#94A3B8', cursor: 'pointer', borderTop: '1px solid rgba(0,0,0,0.06)', marginTop: 2 }}
+                    onMouseOver={e => e.currentTarget.style.background = '#F8FAFC'}
+                    onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    Unassign
+                  </div>
+                )}
               </div>
             )}
           </div>
-        )}
+        </div>
       </div>
 
+      {/* ── Line 2: subject snippet (left) · AI summary hover badge (right) ── */}
+      <div className="mt-1 flex w-full items-center justify-between gap-4">
+        <span className={`max-w-2xl truncate text-sm font-medium ${
+          ['resolved','resolved_claim_approved','resolved_claim_rejected'].includes(q.status)
+            ? 'text-slate-400 line-through' : 'text-slate-600'}`}>
+          {q.subject || preview || '(no subject)'}
+        </span>
+
+        {/* AI Summary — compact badge with hover tooltip bubble */}
+        <div className="group relative shrink-0" onClick={e => e.stopPropagation()}>
+          <span className={`inline-flex cursor-default items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+            isScreamer ? 'border-red-200 bg-red-50 text-red-700' : 'border-slate-200 bg-white text-slate-500'}`}>
+            ✨ AI Summary
+          </span>
+          <div className="absolute bottom-full right-0 z-50 mb-2 hidden w-72 rounded-lg bg-slate-900 p-3 text-xs text-white shadow-xl group-hover:block">
+            {mdLite(fullSummary || 'No AI summary yet for this ticket.')}
+            {sentiment && (
+              <div className="mt-2 text-[11px] font-medium text-slate-300">
+                Sentiment: {sentiment}{cardUrgent ? ' · high risk' : ''}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -2307,18 +2239,6 @@ export default function QueriesPage() {
             )}
             {!loading && displayQueries.length > 0 && (
               <>
-                {/* Column headers */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 16px', position: 'sticky', top: 0, background: '#fff', zIndex: 1, borderBottom: `0.5px solid ${C.border}` }}>
-                  <div style={{ width: 36, flexShrink: 0 }} />
-                  <div style={{ flex: 1, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Subject</div>
-                  <div style={{ width: 160, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Summary</div>
-                  <div style={{ width: 88, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Group</div>
-                  <div style={{ width: 52, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Health</div>
-                  <div style={{ width: 110, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Status</div>
-                  <div style={{ width: 100, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>SLA</div>
-                  <div style={{ width: 80, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: 'right' }}>Activity</div>
-                  <div style={{ width: 26, flexShrink: 0 }} />
-                </div>
                 {/* Rows: Red (Urgent) & Amber (High) pinned to the top, then by activity */}
                 {[...displayQueries]
                   .sort((a, b) =>
