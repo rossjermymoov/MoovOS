@@ -475,17 +475,21 @@ function mdLite(text) {
     );
 }
 
-// High-contrast ticket-number badge colour by state (Freshdesk-style).
-//  Green = resolved · Red = urgent/attention/SLA-breached · Amber = awaiting
-//  courier/customer · Blue = open/normal.
+// High-contrast ticket-number badge colour driven by the dynamic tracking
+// states (not just status), so rows differentiate at a glance.
+//  Red    = SLA breached / urgent / escalated
+//  Green  = resolved / closed   (checked before amber so a resolved Queries
+//           ticket still reads as done)
+//  Amber  = awaiting courier response, or a Queries-group ticket
+//  Blue   = everything else (open / normal)
 function rowBadgeClasses(q) {
   const s = (q.status || '').toLowerCase();
-  const resolved = ['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'].includes(s);
-  const danger   = q.courier_sla_breached || q.priority === 'urgent' || q.requires_attention || s === 'escalated';
-  const awaiting = q.internal_automation_state === 'awaiting_courier_response' || s.startsWith('awaiting');
-  if (resolved) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-  if (danger)   return 'bg-red-50 text-red-700 border-red-200';
-  if (awaiting) return 'bg-amber-50 text-amber-700 border-amber-200';
+  if (q.courier_sla_breached || q.priority === 'urgent' || s === 'escalated')
+    return 'bg-red-50 text-red-700 border-red-200 font-extrabold';
+  if (['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'].includes(s))
+    return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  if (q.internal_automation_state === 'awaiting_courier_response' || s.startsWith('awaiting') || q.group_name === 'Queries')
+    return 'bg-amber-50 text-amber-700 border-amber-200 font-extrabold';
   return 'bg-blue-50 text-blue-700 border-blue-200';
 }
 
@@ -722,24 +726,8 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
         {assignOpen && (
           <div
             onClick={e => e.stopPropagation()}
-            style={{
-              position: 'fixed',
-              right: 'auto',
-              zIndex: 9999,
-              background: '#FFFFFF',
-              border: '1px solid rgba(0,0,0,0.10)',
-              borderRadius: 8,
-              boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-              minWidth: 180,
-              padding: '4px 0',
-            }}
-            ref={el => {
-              if (el) {
-                const rect = el.previousSibling?.getBoundingClientRect?.() || {};
-                el.style.top  = (rect.bottom + 4) + 'px';
-                el.style.left = Math.min(rect.left, window.innerWidth - 190) + 'px';
-              }
-            }}
+            className="absolute right-0 mt-2 z-[100] w-48 rounded-md border border-slate-200 bg-white py-1 shadow-lg"
+            style={{ top: '100%' }}
           >
             <div style={{ padding: '6px 12px 4px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#94A3B8' }}>
               Assign to
