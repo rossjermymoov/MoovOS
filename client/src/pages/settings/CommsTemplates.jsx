@@ -18,6 +18,18 @@ const FIELDS = [
   { key: 'customer_footer_template', label: 'Customer Footer', hint: 'Sign-off on customer emails.' },
 ];
 
+// Human-readable description of a sample's shape, e.g. "2 letters + 10 digits".
+function describeSample(sample) {
+  const t = String(sample || '').replace(/\s+/g, '').toUpperCase();
+  if (!t) return '—';
+  const runs = t.match(/(\d+|[A-Z]+|[^0-9A-Z]+)/g) || [];
+  return runs.map(r =>
+    /^\d+$/.test(r)        ? `${r.length} digit${r.length === 1 ? '' : 's'}` :
+    /^[A-Z]+$/.test(r)     ? `${r.length} letter${r.length === 1 ? '' : 's'}` :
+                             `"${r}"`
+  ).join(' + ');
+}
+
 const taSt = {
   width: '100%', boxSizing: 'border-box', background: '#fff',
   border: '1px solid #E2E8F0', borderRadius: 10, color: '#0F172A',
@@ -57,8 +69,7 @@ export default function CommsTemplates() {
       const payload = {
         queries_email:    form.queries_email ?? '',
         claims_email:     form.claims_email ?? '',
-        tracking_pattern: form.tracking_pattern ?? '',
-        tracking_example: form.tracking_example ?? '',
+        tracking_samples: form.tracking_samples ?? '',
         ...Object.fromEntries(FIELDS.map(f => [f.key, form[f.key] ?? ''])),
       };
       const r = await api.put(`/settings/couriers/${code}/templates`, payload);
@@ -118,23 +129,31 @@ export default function CommsTemplates() {
             </div>
           </div>
 
-          {/* Tracking-number format — validates candidate consignments. */}
+          {/* Sample tracking numbers — the engine derives the format from these. */}
           <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#94A3B8', marginBottom: 10 }}>
-            Tracking Number Format
+            Tracking Number Samples
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 22 }}>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>📦 Example</label>
-              <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 7px' }}>What a valid number looks like (for reference).</p>
-              <input value={form.tracking_example ?? ''} onChange={e => set('tracking_example', e.target.value)}
-                placeholder="4366834818  (or 15504366834818)" style={{ ...taSt, minHeight: 0, padding: '9px 12px' }} />
-            </div>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>🔎 Validation Pattern (regex)</label>
-              <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 7px' }}>Candidates must match this or they’re rejected. Leave blank for the generic guard.</p>
-              <input value={form.tracking_pattern ?? ''} onChange={e => set('tracking_pattern', e.target.value)}
-                placeholder="^(1550)?\d{10}[A-Z]?$" style={{ ...taSt, minHeight: 0, padding: '9px 12px', fontFamily: 'monospace', fontSize: 12 }} />
-            </div>
+          <div style={{ marginBottom: 22 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>📦 Sample tracking number(s)</label>
+            <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 7px' }}>
+              Paste one real tracking number per line — add as many formats as this carrier uses (e.g. the different Yodel/AGL variants).
+              We learn the shape automatically; anything that doesn’t match is treated as “no tracking” and we ask the customer.
+            </p>
+            <textarea value={form.tracking_samples ?? ''} onChange={e => set('tracking_samples', e.target.value)}
+              style={{ ...taSt, fontFamily: 'monospace', fontSize: 12 }} rows={4}
+              placeholder={'9753172394\nJD0002345678901'} />
+            {/* Live derived-shape preview */}
+            {(form.tracking_samples ?? '').trim() && (
+              <div style={{ marginTop: 8, fontSize: 11, color: '#475569' }}>
+                {(form.tracking_samples).split(/[\n,;]+/).map(s => s.trim()).filter(Boolean).map((s, i) => (
+                  <div key={i} style={{ marginTop: 2 }}>
+                    <code style={{ background: '#F1F5F9', padding: '1px 6px', borderRadius: 4 }}>{s}</code>
+                    <span style={{ color: '#94A3B8' }}> → detected: </span>
+                    <strong style={{ color: '#0F172A' }}>{describeSample(s)}</strong>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Top-and-Tail boilerplate templates. */}

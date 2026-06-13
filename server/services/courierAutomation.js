@@ -85,23 +85,55 @@ function normalizeTracking(courierCode, raw) {
   return t || null;
 }
 
-// Validate a candidate against the courier's configured pattern (falling back to
-// the generic guard when no pattern is set). Returns the normalised value or null.
+// Turn a real sample tracking number into an exact-shape regex: each run of
+// digits → \d{n}, each run of letters → [A-Za-z]{n}. So '9753172394' →
+// ^\d{10}$ and '1Z999AA10123456784' → ^\d{1}[A-Za-z]{1}\d{3}[A-Za-z]{2}\d{11}$.
+export function deriveTrackingRegex(sample) {
+  const t = String(sample || '').replace(/\s+/g, '').toUpperCase();
+  if (!t) return null;
+  const runs = t.match(/(\d+|[A-Z]+|[^0-9A-Z]+)/g) || [];
+  let out = '^';
+  for (const run of runs) {
+    if (/^\d+$/.test(run))        out += `\\d{${run.length}}`;
+    else if (/^[A-Z]+$/.test(run)) out += `[A-Za-z]{${run.length}}`;
+    else out += run.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');   // literal separator
+  }
+  return out + '$';
+}
+
+// All accepted patterns for a courier: derived from its sample(s), plus any
+// manual override pattern. Samples are normalised first (DPD 1550 handling).
+async function getCourierTrackingRegexes(courierCode) {
+  const code = (courierCode || '').toLowerCase();
+  try {
+    const r = await query(
+      `SELECT tracking_samples, tracking_pattern FROM courier_routing_rules WHERE courier_code = $1 LIMIT 1`,
+      [code],
+    );
+    const row = r.rows[0] || {};
+    const samples = String(row.tracking_samples || '').split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
+    const regexes = samples
+      .map(s => deriveTrackingRegex(normalizeTracking(courierCode, s)))
+      .filter(Boolean);
+    if (row.tracking_pattern) regexes.push(row.tracking_pattern);
+    return regexes;
+  } catch (e) {
+    console.warn('[CourierAutomation] tracking rule lookup failed:', e.message);
+    return [];
+  }
+}
+
+// Validate a candidate against the courier's sample-derived shapes (falling back
+// to the generic guard when none are configured). Returns the normalised value.
 async function resolveTracking(courierCode, candidate) {
   const norm = normalizeTracking(courierCode, candidate);
   if (!norm) return null;
-  try {
-    const r = await query(
-      `SELECT tracking_pattern FROM courier_routing_rules WHERE courier_code = $1 LIMIT 1`,
-      [(courierCode || '').toLowerCase()],
-    );
-    const pat = r.rows[0]?.tracking_pattern;
-    if (pat) {
-      try { return new RegExp(pat, 'i').test(norm) ? norm : null; }
-      catch { /* malformed regex in settings → fall through to generic guard */ }
+  const regexes = await getCourierTrackingRegexes(courierCode);
+  if (regexes.length) {
+    for (const p of regexes) {
+      try { if (new RegExp(p, 'i').test(norm)) return norm; } catch { /* skip bad regex */ }
     }
-  } catch (e) {
-    console.warn('[CourierAutomation] tracking pattern lookup failed:', e.message);
+    return null;   // shapes are defined but none matched → not a valid ref
   }
   return isLikelyTracking(norm) ? norm : null;
 }
