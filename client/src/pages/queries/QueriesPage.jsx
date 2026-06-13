@@ -1820,9 +1820,12 @@ function AutopilotQABay({ refreshKey, onChanged }) {
   async function quickApprove(d) {
     setBusyId(d.email_id);
     try {
-      await api.patch(`/queries/${d.query_id}/emails/${d.email_id}/approve`, {});
+      // Sandbox mode: no real mail is sent; the backend fabricates an inbound
+      // courier reply ~5s later, so reload shortly after to catch the new card.
+      await api.patch(`/queries/${d.query_id}/emails/${d.email_id}/approve?sandbox=true`, {});
       setDrafts(list => list.filter(x => x.email_id !== d.email_id));
       onChanged?.();
+      setTimeout(load, 6000);   // pick up the sandbox loop-back draft
     } catch (e) {
       alert('Approve failed: ' + (e.response?.data?.error || e.message));
     } finally { setBusyId(null); }

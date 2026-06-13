@@ -1229,12 +1229,21 @@ router.patch('/:id/emails/:emailId/approve', async (req, res, next) => {
     const wasEdited = body_text && body_text.trim() !== (draft.body_text || '').trim();
     const finalBody = body_text || draft.body_text;
 
+    // Sandbox mode bypasses any live mail transport. (There is no live SendGrid/
+    // Gmail send wired into this endpoint yet, so today every approval is already
+    // DB-only — this flag makes the intent explicit and is the switch a future
+    // live-send must check before dispatching.)
+    const sandbox = req.query.sandbox === 'true' || req.body.sandbox === true;
+
+    // Approved → it's a real sent message now (is_ai_draft = false) so it prints
+    // to the conversation timeline and leaves the QA Bay.
     const result = await query(`
       UPDATE query_emails SET
         body_text              = $1,
         ai_draft_approved_by   = NULL,
         ai_draft_approved_at   = NOW(),
         ai_draft_edited        = $2,
+        is_ai_draft            = false,
         sent_at                = NOW()
       WHERE id = $3 AND query_id = $4
       RETURNING *
@@ -1263,9 +1272,40 @@ router.patch('/:id/emails/:emailId/approve', async (req, res, next) => {
       [queryId, wasEdited],
     );
 
-    res.json(result.rows[0]);
+    // Sandbox loop-back: 5s after approval, fabricate an inbound courier reply and
+    // run it through the translation engine so a fresh draft pops back into the QA
+    // Bay — letting you watch the ping-pong cycle continuously, no real mail sent.
+    if (sandbox) scheduleSandboxLoopback(queryId);
+
+    res.json({ ...result.rows[0], sandbox });
   } catch (err) { next(err); }
 });
+
+// Fabricated courier replies for the closed-loop sandbox demo.
+const SANDBOX_COURIER_REPLIES = [
+  'Update: parcel has been scanned at the regional hub and is now out for redelivery. Expected within 2 working days.',
+  'Investigation note: depot search complete, parcel located and rebooked for delivery tomorrow before 6pm.',
+  'Status: no progressive scan in 24h, we have escalated to the sorting centre and opened a trace. Update to follow in 3 working days.',
+  'GPS proof of delivery attached on our system; please confirm whether the customer wishes to dispute.',
+];
+
+function scheduleSandboxLoopback(queryId) {
+  setTimeout(async () => {
+    try {
+      const body = SANDBOX_COURIER_REPLIES[Math.floor(Math.random() * SANDBOX_COURIER_REPLIES.length)];
+      // recordCourierReply runs the Gemini jargon-translation → new outbound_customer
+      // draft (or an action_required paused card if translation is unavailable).
+      await recordCourierReply(queryId, {
+        subject: 'Courier update (sandbox)',
+        body,
+        from: 'sandbox@courier.test',
+      });
+      console.log(`[Sandbox] loop-back reply injected for ticket ${queryId}`);
+    } catch (e) {
+      console.warn('[Sandbox] loop-back failed:', e.message);
+    }
+  }, 5000);
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/queries/triage-all
