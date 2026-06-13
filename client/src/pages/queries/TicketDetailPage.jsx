@@ -151,14 +151,14 @@ function SbRow({ label, children }) {
 }
 
 // ── Inline select (for sidebar fields) ───────────────────────────────────────
-function InlineSelect({ value, onChange, options, colorMap }) {
+function InlineSelect({ value, onChange, options, colorMap, fill = false }) {
   const color = colorMap?.[value]?.color || '#1E293B';
   return (
     <select
       value={value || ''}
       onChange={e => onChange(e.target.value)}
       style={{
-        width: '100%', maxWidth: 170, background: '#fff',
+        width: '100%', maxWidth: fill ? 'none' : 170, background: '#fff',
         border: '1px solid #E2E8F0', borderRadius: 6, outline: 'none',
         color, fontSize: 12, fontWeight: 500, cursor: 'pointer',
         padding: '5px 26px 5px 9px', textAlign: 'left', appearance: 'none',
@@ -909,6 +909,52 @@ export default function TicketDetailPage() {
               {ticket.subject || ticket.customer_name}
             </h1>
           </div>
+
+          {/* Assignment command bar — unified, horizontal control shelf */}
+          <div className="flex items-center gap-6 bg-slate-50 border border-slate-200/60 rounded-xl px-4 py-3 mt-4 mb-4 shadow-sm">
+            <div className="flex flex-col gap-1 flex-1 min-w-0">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Assigned to</label>
+              <InlineSelect
+                fill
+                value={ticket.assigned_to || ''}
+                onChange={v => patch.mutate({ assigned_to: v || null })}
+                options={[
+                  { value: '', label: '— Unassigned —' },
+                  ...staffList.map(s => ({ value: s.id, label: s.full_name || s.name })),
+                ]}
+              />
+            </div>
+            <div className="flex flex-col gap-1 flex-1 min-w-0">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Group</label>
+              <InlineSelect
+                fill
+                value={ticket.group_name || ''}
+                onChange={v => patch.mutate({ group_name: v || null })}
+                options={[{ value: '', label: '— None —' }, ...GROUPS.map(g => ({ value: g, label: g }))]}
+              />
+            </div>
+            <div className="flex flex-col gap-1 flex-1 min-w-0">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Status</label>
+              <InlineSelect
+                fill
+                value={ticket.status}
+                onChange={v => patch.mutate({ status: v })}
+                options={Object.entries(STATUS_CFG).map(([k, v]) => ({ value: k, label: v.label }))}
+                colorMap={STATUS_CFG}
+              />
+            </div>
+            <div className="flex flex-col gap-1 flex-1 min-w-0">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Priority</label>
+              <InlineSelect
+                fill
+                value={ticket.priority || 'medium'}
+                onChange={v => patch.mutate({ priority: v })}
+                options={Object.entries(PRIORITY_CFG).map(([k, v]) => ({ value: k, label: v.label }))}
+                colorMap={PRIORITY_CFG}
+              />
+            </div>
+          </div>
+
           {/* Status / attention chips (left) + SLA metadata cluster (hard-right) */}
           <div className="flex items-center justify-between w-full pt-3">
             {/* Left: existing status / attention / group / consignment pills */}
@@ -1014,55 +1060,9 @@ export default function TicketDetailPage() {
           overflowY: 'auto', padding: 0,
         }}>
 
-          {/* 1. SLA */}
-          <SbSection title="SLA">
-            {/* SLA urgency chip */}
-            {ticket.sla_breached ? (
-              <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 9,
-                padding: '10px 12px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444',
-                  boxShadow: '0 0 0 3px #FEE2E2', flexShrink: 0 }} />
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#991B1B' }}>SLA Overdue</span>
-              </div>
-            ) : ticket.sla_mins_remaining != null && ticket.sla_mins_remaining < 240 ? (
-              <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 9,
-                padding: '10px 12px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#F59E0B',
-                  boxShadow: '0 0 0 3px #FEF3C7', flexShrink: 0 }} />
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#92400E' }}>SLA At Risk</span>
-              </div>
-            ) : ticket.sla_mins_remaining != null ? (
-              <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 9,
-                padding: '10px 12px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#10B981',
-                  boxShadow: '0 0 0 3px #D1FAE5', flexShrink: 0 }} />
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#166534' }}>SLA On Track</span>
-              </div>
-            ) : null}
-            <SbRow label="Opened">
-              <span style={{ fontSize: 12, color: C.sub, fontVariantNumeric: 'tabular-nums' }}>{timeAgo(ticket.created_at)}</span>
-            </SbRow>
-            <SbRow label="Resolution">
-              <SlaValue
-                sla_due_at={ticket.sla_due_at}
-                sla_breached={ticket.sla_breached}
-                sla_mins_remaining={ticket.sla_mins_remaining}
-              />
-            </SbRow>
-            {ticket.claim_deadline_at && (() => {
-              const days = Math.ceil((new Date(ticket.claim_deadline_at) - Date.now()) / 86400000);
-              const col  = days < 0 ? C.red : days < 3 ? C.amber : C.green;
-              return (
-                <SbRow label="Claim deadline">
-                  <span style={{ fontSize: 11, fontWeight: 500, color: col }}>
-                    {days < 0 ? 'Overdue' : days === 0 ? 'Today' : `${days}d left`}
-                  </span>
-                </SbRow>
-              );
-            })()}
-          </SbSection>
+          {/* SLA + Assignment now live in the top header — sidebar is parcel/customer/claim only. */}
 
-          {/* 2. Parcel — always shown */}
+          {/* 1. Parcel — always shown */}
           <SbSection title="Parcel" action={
             consignment ? (
               <button onClick={() => navigate(`/tracking?q=${encodeURIComponent(consignment)}`)}
@@ -1151,7 +1151,7 @@ export default function TicketDetailPage() {
             )}
           </SbSection>
 
-          {/* 3. Customer */}
+          {/* 2. Customer */}
           {(ticket.customer_name || ticket.sender_email) && (
             <SbSection title="Customer">
               {/* Avatar + name card */}
@@ -1187,7 +1187,7 @@ export default function TicketDetailPage() {
             </SbSection>
           )}
 
-          {/* 4. Claim — only shown when this is a Claims ticket */}
+          {/* 3. Claim — only shown when this is a Claims ticket */}
           {(ticket.group_name === 'Claims' || ticket.claim_number || ticket.claim_amount) && (
           <SbSection title="Claim">
             {/* Alert when no formal claim yet */}
@@ -1237,51 +1237,7 @@ export default function TicketDetailPage() {
           </SbSection>
           )}
 
-          {/* Attention warning */}
-          {ticket.requires_attention && ticket.attention_reason && (
-            <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 8, background: C.amberDim, fontSize: 11, color: C.amber, lineHeight: 1.45 }}>
-              ⚠ {ticket.attention_reason}
-            </div>
-          )}
-
-          {/* 5. Assignment */}
-          <SbSection title="Assignment">
-            <SbRow label="Assigned to">
-              <InlineSelect
-                value={ticket.assigned_to || ''}
-                onChange={v => patch.mutate({ assigned_to: v || null })}
-                options={[
-                  { value: '', label: '— Unassigned —' },
-                  ...staffList.map(s => ({ value: s.id, label: s.full_name || s.name })),
-                ]}
-              />
-            </SbRow>
-            <SbRow label="Group">
-              <InlineSelect
-                value={ticket.group_name || ''}
-                onChange={v => patch.mutate({ group_name: v || null })}
-                options={[{ value: '', label: '— None —' }, ...GROUPS.map(g => ({ value: g, label: g }))]}
-              />
-            </SbRow>
-            <SbRow label="Status">
-              <InlineSelect
-                value={ticket.status}
-                onChange={v => patch.mutate({ status: v })}
-                options={Object.entries(STATUS_CFG).map(([k, v]) => ({ value: k, label: v.label }))}
-                colorMap={STATUS_CFG}
-              />
-            </SbRow>
-            <SbRow label="Priority">
-              <InlineSelect
-                value={ticket.priority || 'medium'}
-                onChange={v => patch.mutate({ priority: v })}
-                options={Object.entries(PRIORITY_CFG).map(([k, v]) => ({ value: k, label: v.label }))}
-                colorMap={PRIORITY_CFG}
-              />
-            </SbRow>
-          </SbSection>
-
-          {/* Tracking is shown in the Parcel section above — no duplicate here. */}
+          {/* Assignment moved to the top command bar; tracking lives in the Parcel section. */}
 
         </div>
       </div>
