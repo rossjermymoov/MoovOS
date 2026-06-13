@@ -1795,56 +1795,8 @@ function FilterPanel({ filters, setFilters, staffList, onClose }) {
 const PRI_RANK = { urgent: 0, high: 1, medium: 2, low: 3 };
 function priRank(q) { return PRI_RANK[(q.priority || '').toLowerCase()] ?? 4; }
 
-// ─── Refine / Train modal — feeds revise-draft + the adaptive learning rules ──
-function RefineModal({ draft, onClose, onDone }) {
-  const [fb, setFb]     = useState('');
-  const [busy, setBusy] = useState(false);
-
-  async function submit() {
-    if (!fb.trim() || busy) return;
-    setBusy(true);
-    try {
-      const r = await fetch(`/api/queries/${draft.query_id}/revise-draft`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email_id: draft.email_id, feedback: fb.trim() }),
-      });
-      if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || 'Server error'); }
-      onDone?.();
-    } catch (e) { alert('Refine failed: ' + e.message); }
-    finally { setBusy(false); }
-  }
-
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl" onClick={e => e.stopPropagation()}>
-        <div className="mb-1 flex items-center gap-2">
-          <span className={`inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase ${rowBadgeClasses(draft)}`}>
-            M-{draft.ticket_number}
-          </span>
-          <h3 className="text-base font-bold text-slate-900">Refine &amp; Train the AI</h3>
-        </div>
-        <p className="mb-3 text-xs text-slate-500">
-          Tell the AI what to change. Your feedback is stored as a learning rule and applied to future drafts.
-        </p>
-        <textarea
-          autoFocus
-          value={fb}
-          onChange={e => setFb(e.target.value)}
-          placeholder="e.g. Be firmer about the 14-day claim window and always quote the consignment number."
-          className="h-32 w-full resize-none rounded-lg border border-slate-200 p-3 text-sm outline-none focus:border-slate-400"
-        />
-        <div className="mt-3 flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button>
-          <button onClick={submit} disabled={!fb.trim() || busy}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">
-            {busy ? 'Retraining…' : '🛠️ Refine & Retrain'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+// Consecutive untouched approvals before a template path is deemed autopilot-ready.
+const AUTOPILOT_THRESHOLD = 20;
 
 // ─── Autopilot QA Bay — pending AI drafts awaiting human approval ─────────────
 function AutopilotQABay({ refreshKey, onChanged }) {
@@ -1852,7 +1804,9 @@ function AutopilotQABay({ refreshKey, onChanged }) {
   const [drafts,  setDrafts]  = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId,  setBusyId]  = useState(null);
-  const [refineFor, setRefineFor] = useState(null);
+  const [refiningId, setRefiningId] = useState(null);   // which card's refine panel is open
+  const [feedback,   setFeedback]   = useState('');
+  const [refineBusy, setRefineBusy] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -1872,6 +1826,31 @@ function AutopilotQABay({ refreshKey, onChanged }) {
     } catch (e) {
       alert('Approve failed: ' + (e.response?.data?.error || e.message));
     } finally { setBusyId(null); }
+  }
+
+  function openRefine(d) {
+    setRefiningId(prev => prev === d.email_id ? null : d.email_id);
+    setFeedback('');
+  }
+
+  async function executeCorrection(d) {
+    if (!feedback.trim() || refineBusy) return;
+    setRefineBusy(true);
+    try {
+      const r = await api.post(`/queries/${d.query_id}/refine-draft`, {
+        email_id: d.email_id,
+        feedback: feedback.trim(),
+      });
+      // Show the corrected text instantly + reset the approval streak locally.
+      setDrafts(list => list.map(x => x.email_id === d.email_id
+        ? { ...x, body_text: r.data.revised_text, description: r.data.revised_text, consecutive_approvals: 0 }
+        : x));
+      setRefiningId(null);
+      setFeedback('');
+      onChanged?.();
+    } catch (e) {
+      alert('Refine failed: ' + (e.response?.data?.error || e.message));
+    } finally { setRefineBusy(false); }
   }
 
   function intentLine(d) {
@@ -1934,7 +1913,16 @@ function AutopilotQABay({ refreshKey, onChanged }) {
                 </button>
                 <span className="truncate text-xs font-medium text-slate-500">{d.customer_name || d.subject}</span>
               </div>
-              <p className="mb-3 line-clamp-2 text-sm leading-snug text-slate-700">{intentLine(d)}</p>
+
+              {/* Trust badge — template path is autopilot-ready */}
+              {(d.consecutive_approvals ?? 0) >= AUTOPILOT_THRESHOLD && (
+                <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
+                  🎯 Automation Stable — Autopilot Ready
+                </div>
+              )}
+
+              <p className="mb-3 line-clamp-3 text-sm leading-snug text-slate-700">{intentLine(d)}</p>
+
               <div className="flex gap-2">
                 <button
                   onClick={() => quickApprove(d)}
@@ -1944,24 +1932,48 @@ function AutopilotQABay({ refreshKey, onChanged }) {
                   {busyId === d.email_id ? 'Sending…' : '✓ Quick Approve'}
                 </button>
                 <button
-                  onClick={() => setRefineFor(d)}
-                  className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
+                  onClick={() => openRefine(d)}
+                  className={`flex-1 rounded-lg border px-3 py-2 text-xs font-bold transition ${
+                    refiningId === d.email_id
+                      ? 'border-slate-900 bg-slate-900 text-white'
+                      : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
                 >
                   🛠️ Refine / Train
                 </button>
               </div>
+
+              {/* Inline refinement panel — expands the card downwards */}
+              {refiningId === d.email_id && (
+                <div className="mt-3 border-t border-slate-100 pt-3">
+                  <textarea
+                    autoFocus
+                    value={feedback}
+                    onChange={e => setFeedback(e.target.value)}
+                    rows={3}
+                    placeholder="Tell Gemini how to adjust this draft (e.g., make it more empathetic, emphasize the tracking code)..."
+                    className="w-full resize-none rounded-lg border border-slate-200 p-2.5 text-xs outline-none focus:border-slate-400"
+                  />
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      onClick={() => executeCorrection(d)}
+                      disabled={!feedback.trim() || refineBusy}
+                      className="flex-1 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      {refineBusy ? 'Retraining…' : '🚀 Execute Correction'}
+                    </button>
+                    <button
+                      onClick={() => { setRefiningId(null); setFeedback(''); }}
+                      className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )
         ))}
       </div>
-
-      {refineFor && (
-        <RefineModal
-          draft={refineFor}
-          onClose={() => setRefineFor(null)}
-          onDone={() => { setRefineFor(null); load(); onChanged?.(); }}
-        />
-      )}
     </div>
   );
 }

@@ -825,7 +825,8 @@ router.get('/drafts', async (req, res, next) => {
         qe.direction   AS direction,
         qe.created_at  AS draft_created_at,
         q.ticket_number, q.priority, q.status, q.subject,
-        q.customer_name, q.group_name, q.courier_name, q.description
+        q.customer_name, q.group_name, q.courier_name, q.description,
+        q.consecutive_approvals
       FROM query_emails qe
       JOIN queries q ON q.id = qe.query_id
       WHERE qe.is_ai_draft = true
@@ -848,7 +849,8 @@ router.get('/drafts', async (req, res, next) => {
         NULL           AS direction,
         q.updated_at   AS draft_created_at,
         q.ticket_number, q.priority, q.status, q.subject,
-        q.customer_name, q.group_name, q.courier_name, q.description
+        q.customer_name, q.group_name, q.courier_name, q.description,
+        q.consecutive_approvals
       FROM queries q
       WHERE q.internal_automation_state = 'action_required'
         AND q.status NOT IN ${RESOLVED}
@@ -1207,6 +1209,15 @@ router.patch('/:id/emails/:emailId/approve', async (req, res, next) => {
         WHERE id = $1
       `, [queryId]);
     }
+
+    // Trust metric: an untouched approval increments the autopilot streak; an
+    // edited approval breaks it (the AI needed correcting), so reset to 0.
+    await query(
+      `UPDATE queries
+          SET consecutive_approvals = CASE WHEN $2 THEN 0 ELSE consecutive_approvals + 1 END
+        WHERE id = $1`,
+      [queryId, wasEdited],
+    );
 
     res.json(result.rows[0]);
   } catch (err) { next(err); }
@@ -1622,48 +1633,48 @@ Instructions:
 // Revise an existing Katana draft based on human feedback
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.post('/:id/revise-draft', async (req, res, next) => {
-  try {
-    const { email_id, feedback } = req.body;
-    if (!email_id || !feedback?.trim()) {
-      return res.status(400).json({ error: 'email_id and feedback are required' });
-    }
+// Shared refinement engine: re-run Gemini on a draft with human feedback +
+// learned team preferences, persist the instruction to ai_learning_rules, and
+// (optionally) reset the ticket's consecutive-approval trust counter.
+// Throws an Error with `.status` for clean HTTP mapping.
+async function runDraftRevision(queryId, { email_id, feedback, resetApprovals = false }) {
+  if (!email_id || !feedback?.trim()) {
+    const e = new Error('email_id and feedback are required'); e.status = 400; throw e;
+  }
 
-    // Fetch the draft email + ticket context
-    const [queryRes, emailRes, threadRes] = await Promise.all([
-      query(`SELECT * FROM queries_inbox_view WHERE id = $1`, [req.params.id]),
-      query(`SELECT * FROM query_emails WHERE id = $1 AND query_id = $2`, [email_id, req.params.id]),
-      query(`SELECT direction, body_text, from_address, created_at FROM query_emails
-             WHERE query_id = $1 ORDER BY created_at ASC`, [req.params.id]),
-    ]);
+  const [queryRes, emailRes, threadRes] = await Promise.all([
+    query(`SELECT * FROM queries_inbox_view WHERE id = $1`, [queryId]),
+    query(`SELECT * FROM query_emails WHERE id = $1 AND query_id = $2`, [email_id, queryId]),
+    query(`SELECT id, direction, body_text, from_address, created_at FROM query_emails
+           WHERE query_id = $1 ORDER BY created_at ASC`, [queryId]),
+  ]);
 
-    if (!queryRes.rows.length)  return res.status(404).json({ error: 'Query not found' });
-    if (!emailRes.rows.length)  return res.status(404).json({ error: 'Draft email not found' });
+  if (!queryRes.rows.length) { const e = new Error('Query not found');       e.status = 404; throw e; }
+  if (!emailRes.rows.length) { const e = new Error('Draft email not found'); e.status = 404; throw e; }
 
-    const q          = queryRes.rows[0];
-    const draft      = emailRes.rows[0];
-    const isCustomer = draft.direction === 'outbound_customer';
+  const q          = queryRes.rows[0];
+  const draft      = emailRes.rows[0];
+  const isCustomer = draft.direction === 'outbound_customer';
 
-    // Adaptive learning — recall past refinement instructions for this courier
-    // (and general rules) so the model applies the team's standing preferences.
-    const rulesRes = await query(
-      `SELECT user_feedback FROM ai_learning_rules
-        WHERE courier_code IS NOT DISTINCT FROM $1 OR courier_code IS NULL
-        ORDER BY created_at DESC LIMIT 10`,
-      [q.courier_code || null],
-    );
-    const learned = rulesRes.rows.map(r => `- ${r.user_feedback}`).join('\n');
+  // Adaptive learning — recall standing instructions for this courier + general.
+  const rulesRes = await query(
+    `SELECT user_feedback FROM ai_learning_rules
+      WHERE courier_code IS NOT DISTINCT FROM $1 OR courier_code IS NULL
+      ORDER BY created_at DESC LIMIT 10`,
+    [q.courier_code || null],
+  );
+  const learned = rulesRes.rows.map(r => `- ${r.user_feedback}`).join('\n');
 
-    const emailThread = threadRes.rows
-      .filter(e => e.id !== email_id)
-      .map(e => `[${e.direction.replace(/_/g, ' ')}]\nFrom: ${e.from_address}\n\n${e.body_text}`)
-      .join('\n\n---\n\n');
+  const emailThread = threadRes.rows
+    .filter(e => e.id !== email_id)
+    .map(e => `[${e.direction.replace(/_/g, ' ')}]\nFrom: ${e.from_address}\n\n${e.body_text}`)
+    .join('\n\n---\n\n');
 
-    const systemPrompt = isCustomer
-      ? `You are a customer service agent for Moov Parcel, a UK parcel reseller. Write professional, empathetic emails in British English. Sign off as "Moov Parcel Support Team".`
-      : `You are a customer service agent writing to a courier on behalf of Moov Parcel. Write professional, firm but polite emails in British English.`;
+  const systemPrompt = isCustomer
+    ? `You are a customer service agent for Moov Parcel, a UK parcel reseller. Write professional, empathetic emails in British English. Sign off as "Moov Parcel Support Team".`
+    : `You are a customer service agent writing to a courier on behalf of Moov Parcel. Write professional, firm but polite emails in British English.`;
 
-    const userPrompt = `Here is a Katana draft email that needs to be revised based on feedback from the team.
+  const userPrompt = `Here is a Katana draft email that needs to be revised based on feedback from the team.
 
 ORIGINAL DRAFT:
 ${draft.body_text}
@@ -1685,32 +1696,58 @@ ${learned || '(none yet)'}
 
 Please rewrite the draft email incorporating the feedback. Output ONLY the revised email text — no preamble, no explanation, no JSON.`;
 
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
-    }
+  if (!process.env.GEMINI_API_KEY) {
+    const e = new Error('GEMINI_API_KEY not configured'); e.status = 500; throw e;
+  }
 
-    let newText;
-    try {
-      newText = await geminiGenerate(userPrompt, { system: systemPrompt, maxTokens: 900 });
-    } catch (e) {
-      return res.status(502).json({ error: 'Gemini API error', detail: e.message });
-    }
+  let newText;
+  try {
+    newText = await geminiGenerate(userPrompt, { system: systemPrompt, maxTokens: 900 });
+  } catch (err) {
+    const e = new Error('Gemini API error'); e.status = 502; e.detail = err.message; throw e;
+  }
 
-    // Update the draft body in-place (query_emails has no updated_at column)
-    const updated = await query(
-      `UPDATE query_emails SET body_text = $1 WHERE id = $2 RETURNING *`,
-      [newText, email_id]
-    );
+  // Update the draft body in-place (query_emails has no updated_at column)
+  const updated = await query(
+    `UPDATE query_emails SET body_text = $1 WHERE id = $2 RETURNING *`,
+    [newText, email_id],
+  );
 
-    // Persist the instruction so the AI keeps applying it in future revisions.
-    await query(
-      `INSERT INTO ai_learning_rules (courier_code, issue_type, user_feedback)
-       VALUES ($1, $2, $3)`,
-      [q.courier_code || null, q.query_type || null, feedback.trim()],
-    );
+  // Persist the instruction, mapped to this ticket's courier + issue category.
+  await query(
+    `INSERT INTO ai_learning_rules (courier_code, issue_type, user_feedback)
+     VALUES ($1, $2, $3)`,
+    [q.courier_code || null, q.query_type || null, feedback.trim()],
+  );
 
-    res.json({ email: updated.rows[0], revised_text: newText });
-  } catch (err) { next(err); }
+  // A refinement means the draft wasn't trusted as-is → reset the trust counter.
+  if (resetApprovals) {
+    await query(`UPDATE queries SET consecutive_approvals = 0, updated_at = NOW() WHERE id = $1`, [queryId]);
+  }
+
+  return { email: updated.rows[0], revised_text: newText, approvals_reset: resetApprovals };
+}
+
+function sendRevisionError(res, err, next) {
+  if (err.status) return res.status(err.status).json({ error: err.message, detail: err.detail });
+  return next(err);
+}
+
+// POST /api/queries/:id/revise-draft — re-run Gemini with human feedback.
+router.post('/:id/revise-draft', async (req, res, next) => {
+  try {
+    const out = await runDraftRevision(req.params.id, { ...req.body, resetApprovals: false });
+    res.json(out);
+  } catch (err) { sendRevisionError(res, err, next); }
+});
+
+// POST /api/queries/:id/refine-draft — same loop, but also resets the
+// consecutive-approval trust counter (a correction breaks the autopilot streak).
+router.post('/:id/refine-draft', async (req, res, next) => {
+  try {
+    const out = await runDraftRevision(req.params.id, { ...req.body, resetApprovals: true });
+    res.json(out);
+  } catch (err) { sendRevisionError(res, err, next); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1978,9 +2015,9 @@ router.post('/:id/simulate', async (req, res, next) => {
     if (!t.rows.length) return res.status(404).json({ error: 'ticket not found' });
     const queryId = t.rows[0].id;
 
-    const { role = 'customer', subject = '', body = '' } = req.body || {};
+    const { role = 'customer', subject = '', body = '', sender = '' } = req.body || {};
     const result = role === 'courier'
-      ? await recordCourierReply(queryId, { subject, body })
+      ? await recordCourierReply(queryId, { subject, body, from: sender })
       : await processCustomerEmail(queryId, { subject, body });
 
     res.json({ ok: true, role, ...result });
