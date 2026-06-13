@@ -9,7 +9,7 @@
  */
 
 import { query } from '../db/index.js';
-import { extractTriage, geminiGenerate } from './geminiService.js';
+import { extractTriage, geminiGenerate, isLikelyTracking } from './geminiService.js';
 import { matchTemplate, fillTemplate } from './courierTemplates.js';
 
 const DEFAULT_SLA_HOURS = 24;
@@ -140,15 +140,42 @@ export async function processCustomerEmail(queryId, { subject = '', body = '' } 
     return { status: 'needs_human', triage };
   }
 
+  // Validate the parcel reference — never fabricate one (e.g. a phone number
+  // lifted from a signature). Prefer the stored consignment, then triage.
+  const tracking = isLikelyTracking(ticket.consignment_number) ? String(ticket.consignment_number).trim()
+                 : isLikelyTracking(triage.tracking_code)      ? String(triage.tracking_code).trim()
+                 : null;
+
+  const tpl = await getCourierTemplates(courierCode);
   const vars = {
     customer_name: ticket.customer_name || 'there',
     courier_name:  template.courierName,
-    tracking_code: triage.tracking_code || ticket.consignment_number || '(tracking number)',
+    tracking_code: tracking,
   };
 
-  // Live routing — resolve the real courier inbox + Top-and-Tail templates.
+  // ── No valid parcel reference → ask the customer which parcels they mean ─────
+  // We can't chase a courier without a consignment number, so go straight back to
+  // the customer for clarification and create NO courier inquiry.
+  if (!tracking) {
+    const clarMiddle =
+      `Thanks for getting in touch. So we can look into this for you, could you please confirm the ` +
+      `tracking / consignment number(s) for the delayed parcel(s) you're referring to? ` +
+      `As soon as we have those we'll chase ${template.courierName} straight away.`;
+    const clarBody = stitch(tpl.customer_header_template, clarMiddle, tpl.customer_footer_template, vars);
+    await insertDraft(queryId, 'outbound_customer', `Re: ${ticket.subject || 'your enquiry'}`, clarBody);
+    await query(
+      `UPDATE queries
+          SET internal_automation_state = 'awaiting_customer',
+              status = 'awaiting_customer_info'::query_status,
+              updated_at = NOW()
+        WHERE id = $1`,
+      [queryId],
+    );
+    return { status: 'clarification_requested', triage };
+  }
+
+  // Live routing — resolve the real courier inbox.
   const courierEmail = await resolveCourierEmail(courierCode, triage.issue_type);
-  const tpl = await getCourierTemplates(courierCode);
 
   // Courier inquiry — header + concise (greeting-free) middle ask + footer.
   const issueLabel = (triage.issue_type || 'GENERAL').replace(/_/g, ' ').toLowerCase();

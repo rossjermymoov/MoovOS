@@ -27,12 +27,12 @@ function triageFallback(subject, body) {
     /royal mail/.test(text)         ? 'Royal Mail' :
     /\byodel\b/.test(text)          ? 'Yodel' :
     null;
-  const track = (body || '').match(/\b([A-Z0-9]{8,30})\b/);
+  const track = ((body || '').match(/\b([A-Za-z0-9]{8,30})\b/g) || []).find(isLikelyTracking) || null;
   return {
     ticket_type,
     summary: (subject || 'Customer enquiry').slice(0, 200),
     courier,
-    tracking_number: track ? track[1] : null,
+    tracking_number: track,
     source: 'regex_fallback',
   };
 }
@@ -66,7 +66,7 @@ export async function triageAndSummarize(subject, body) {
       ticket_type: allowed.includes(parsed.ticket_type) ? parsed.ticket_type : 'query',
       summary: (parsed.summary || subject || 'Customer enquiry').toString().slice(0, 400),
       courier: parsed.courier || null,
-      tracking_number: parsed.tracking_number || null,
+      tracking_number: isLikelyTracking(parsed.tracking_number) ? String(parsed.tracking_number).trim() : null,
       source: 'gemini-2.5-flash',
     };
   } catch (e) {
@@ -96,6 +96,7 @@ import { getAuthedClient, getConfig, updateLastSync } from './gmailService.js';
 import { query } from '../db/index.js';
 import { applySlaTriggers } from './slaEngine.js';
 import { triagePriority } from './triageEngine.js';
+import { isLikelyTracking } from './geminiService.js';
 
 function decodeBase64(str) {
   return Buffer.from(str.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8');

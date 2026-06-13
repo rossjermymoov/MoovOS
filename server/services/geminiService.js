@@ -45,6 +45,18 @@ export async function geminiGenerate(prompt, { system = '', json = false, maxTok
 
 const KNOWN_COURIERS = ['dpd', 'dhl', 'evri', 'hermes', 'royal_mail', 'yodel', 'ups', 'fedex', 'parcelforce'];
 
+// Guard against junk being treated as a tracking/consignment number — most
+// notably UK phone numbers lifted from signatures (e.g. 01159507190).
+export function isLikelyTracking(s) {
+  if (!s) return false;
+  const t = String(s).replace(/\s+/g, '').trim();
+  if (t.length < 8 || t.length > 30) return false;
+  if (!/^[A-Za-z0-9]+$/.test(t)) return false;
+  if (/^0\d{9,10}$/.test(t)) return false;        // UK landline/mobile shape
+  if (/^\+?44\d{9,10}$/.test(t)) return false;     // +44 international form
+  return true;
+}
+
 function regexFallback(subject, body) {
   const text = `${subject || ''} ${body || ''}`.toLowerCase();
   const courier =
@@ -52,7 +64,9 @@ function regexFallback(subject, body) {
     /\bdhl\b/.test(text) ? 'dhl' :
     /\bevri|hermes\b/.test(text) ? 'evri' :
     null;
-  const trackMatch = (body || '').match(/\b([A-Z0-9]{8,30})\b/);
+  // Only accept a candidate that actually looks like a tracking ref (not a phone).
+  const trackCandidate = ((body || '').match(/\b([A-Za-z0-9]{8,30})\b/g) || [])
+    .find(isLikelyTracking) || null;
   const issue =
     /damaged|broken|smashed/.test(text)            ? 'DAMAGED' :
     /return to sender|rts/.test(text)              ? 'RETURN_TO_SENDER' :
@@ -66,7 +80,7 @@ function regexFallback(subject, body) {
 
   return {
     courier_code: courier,
-    tracking_code: trackMatch ? trackMatch[1] : null,
+    tracking_code: trackCandidate,
     issue_type: issue,
     needs_human: !courier,
     needs_human_triage: !courier,
@@ -113,7 +127,7 @@ export async function extractTriage(subject, body) {
     // Normalise + guard the shape.
     return {
       courier_code: parsed.courier_code ? String(parsed.courier_code).toLowerCase() : null,
-      tracking_code: parsed.tracking_code || null,
+      tracking_code: isLikelyTracking(parsed.tracking_code) ? String(parsed.tracking_code).trim() : null,
       issue_type: ISSUE_TYPES.includes(parsed.issue_type) ? parsed.issue_type : 'GENERAL',
       needs_human: !!parsed.needs_human || !parsed.courier_code,
       needs_human_triage: !!parsed.needs_human || !!parsed.needs_human_triage || !parsed.courier_code,
