@@ -482,29 +482,27 @@ function mdLite(text) {
 //           ticket still reads as done)
 //  Amber  = awaiting courier response, or a Queries-group ticket
 //  Blue   = everything else (open / normal)
-// Pure, dynamic badge styling — evaluated per-row from DB attributes only.
-// No hardcoded ticket IDs. Layers are checked in priority order.
+// Pure, dynamic badge styling — evaluated per-row from live operational state.
+// No hardcoded ticket IDs, no group_name blanket-colouring.
 function rowBadgeClasses(q) {
-  const s = (q.status || '').toLowerCase();
+  const s     = (q.status || '').toLowerCase();
+  const state = (q.internal_automation_state || '').toLowerCase();
 
-  // 1. Red — active SLA breach, or explicitly urgent / escalated
-  if (q.courier_sla_breached || q.priority === 'urgent' || s === 'urgent' || s === 'escalated')
-    return 'bg-red-50 text-red-700 border-red-200 font-extrabold';
-
-  // 2. Amber — awaiting a courier response, or an active Queries / Claims ticket
-  if (
-    q.internal_automation_state === 'awaiting_courier_response' ||
-    s.startsWith('awaiting') ||
-    q.group_name === 'Queries' ||
-    q.group_name === 'Claims'
-  )
-    return 'bg-amber-50 text-amber-700 border-amber-200 font-extrabold';
-
-  // 3. Green — completed
+  // GREEN — terminal: completed / resolved / closed (checked first so a done
+  // ticket never reads amber just because it happens to be unassigned).
   if (['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'].includes(s))
     return 'bg-emerald-50 text-emerald-700 border-emerald-200';
 
-  // 4. Blue — standard open CRM / Billing / Technical tickets
+  // RED — active SLA breach, urgent, or escalated (needs immediate attention).
+  if (q.courier_sla_breached || q.priority === 'urgent' || s === 'urgent' || s === 'escalated')
+    return 'bg-red-50 text-red-700 border-red-200 font-extrabold';
+
+  // AMBER — the ball is in OUR court: unassigned, awaiting us, or action required.
+  if (!q.assigned_to || s === 'awaiting_us' || state === 'action_required')
+    return 'bg-amber-50 text-amber-700 border-amber-200 font-extrabold';
+
+  // BLUE — assigned and waiting on an external party (courier / customer),
+  // or a standard open ticket — open, but not bottlenecking our team.
   return 'bg-blue-50 text-blue-700 border-blue-200';
 }
 
