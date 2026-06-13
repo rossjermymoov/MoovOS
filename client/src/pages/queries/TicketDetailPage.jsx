@@ -793,6 +793,13 @@ export default function TicketDetailPage() {
     if (ticket?.id) api.post(`/queries/${ticket.id}/mark-read`).catch(() => {});
   }, [ticket?.id]);
 
+  // Tick once a minute so the SLA countdown in the meta shelf stays live.
+  const [, setSlaTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setSlaTick(t => t + 1), 60000);
+    return () => clearInterval(id);
+  }, []);
+
   // Newest reply sits at the TOP → open scrolled to the top so the latest message
   // is the first thing you see. Re-runs catch late-rendering HTML/images that
   // would otherwise nudge the scroll position.
@@ -861,135 +868,81 @@ export default function TicketDetailPage() {
       {/* ── Header ── */}
       <div style={{ flexShrink: 0 }}>
 
-        {/* Dark breadcrumb bar */}
-        <div style={{ background: '#1A1C20', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-          <button onClick={() => navigate('/queries')} style={{
-            display: 'flex', alignItems: 'center', gap: 5, background: 'none',
-            border: 'none', color: 'rgba(255,255,255,0.45)', cursor: 'pointer', padding: 0, fontSize: 12, fontFamily: 'inherit',
-          }}
-            onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.75)'}
-            onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.45)'}
-          >
-            <ArrowLeft size={12} /> Queries
-          </button>
-          <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 14 }}>›</span>
-          {ticket.customer_name && <>
-            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', fontWeight: 500 }}>{ticket.customer_name}</span>
-            <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 14 }}>›</span>
-          </>}
-          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 340 }}>
-            #{ticket.ticket_number} — {ticket.subject || 'No subject'}
-          </span>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-            {consignment && (
-              <button onClick={() => navigate(`/tracking?q=${encodeURIComponent(consignment)}`)} style={{
-                display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px',
-                borderRadius: 7, border: '1px solid rgba(255,255,255,0.12)', background: 'transparent',
-                color: 'rgba(255,255,255,0.55)', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
-              }}>
-                <ExternalLink size={11} /> Track
-              </button>
-            )}
-            <button onClick={() => patch.mutate({ status: 'resolved' })} style={{
-              display: 'flex', alignItems: 'center', gap: 5, padding: '5px 14px',
-              borderRadius: 7, border: 'none', background: '#10B981',
-              color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-            }}>
-              <CheckCircle2 size={12} /> Resolve
+        {/* ── Unified Command Banner ──────────────────────────────────────── */}
+        <div className="flex w-full items-center justify-between border-b border-slate-200 bg-white p-6">
+          {/* Left — back + identity */}
+          <div className="flex min-w-0 items-center">
+            <button
+              onClick={() => navigate('/queries')}
+              className="mr-4 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-500 transition-colors hover:text-slate-800"
+            >
+              ❮ Back to Queue
             </button>
-          </div>
-        </div>
-
-        {/* Title strip */}
-        <div style={{ background: C.card, borderBottom: `1px solid #E2E8F0`, padding: '12px 20px' }}>
-          {/* Subject line — colour-coded ticket number badge + subject */}
-          <div className="flex items-center gap-3 flex-wrap pb-4 border-b border-slate-100">
-            <span className={`inline-flex items-center rounded-md border px-3 py-1 text-sm font-semibold tracking-wide ${ticketBadgeClasses(ticket)}`}>
+            <span className={`mr-3 inline-flex shrink-0 items-center rounded-md border px-3 py-1 text-sm font-bold tracking-wide ${ticketBadgeClasses(ticket)}`}>
               Moov-{ticket.ticket_number}
             </span>
-            <h1 className="min-w-0 flex-1 truncate text-lg font-semibold text-slate-900">
-              {ticket.subject || ticket.customer_name}
-            </h1>
+            <span className="truncate text-xl font-black tracking-tight text-slate-900">
+              {ticket.customer_name || ticket.subject || 'Ticket'}
+            </span>
           </div>
 
-          {/* Assignment command bar — unified, horizontal control shelf */}
-          <div className="flex items-center gap-6 bg-slate-50 border border-slate-200/60 rounded-xl px-4 py-3 mt-4 mb-4 shadow-sm">
-            <div className="flex flex-col gap-1 flex-1 min-w-0">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Assigned to</label>
-              <InlineSelect
-                fill
-                value={ticket.assigned_to || ''}
-                onChange={v => patch.mutate({ assigned_to: v || null })}
-                options={[
-                  { value: '', label: '— Unassigned —' },
-                  ...staffList.map(s => ({ value: s.id, label: s.full_name || s.name })),
-                ]}
-              />
-            </div>
-            <div className="flex flex-col gap-1 flex-1 min-w-0">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Group</label>
-              <InlineSelect
-                fill
-                value={ticket.group_name || ''}
-                onChange={v => patch.mutate({ group_name: v || null })}
-                options={[{ value: '', label: '— None —' }, ...GROUPS.map(g => ({ value: g, label: g }))]}
-              />
-            </div>
-            <div className="flex flex-col gap-1 flex-1 min-w-0">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Status</label>
-              <InlineSelect
-                fill
-                value={ticket.status}
-                onChange={v => patch.mutate({ status: v })}
-                options={Object.entries(STATUS_CFG).map(([k, v]) => ({ value: k, label: v.label }))}
-                colorMap={STATUS_CFG}
-              />
-            </div>
-            <div className="flex flex-col gap-1 flex-1 min-w-0">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Priority</label>
-              <InlineSelect
-                fill
-                value={ticket.priority || 'medium'}
-                onChange={v => patch.mutate({ priority: v })}
-                options={Object.entries(PRIORITY_CFG).map(([k, v]) => ({ value: k, label: v.label }))}
-                colorMap={PRIORITY_CFG}
-              />
-            </div>
+          {/* Right — resolution control */}
+          <button
+            onClick={() => patch.mutate({ status: 'resolved' })}
+            className="flex shrink-0 items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-emerald-100 transition-all hover:bg-emerald-700"
+          >
+            ✓ Mark as Resolved
+          </button>
+        </div>
+
+        {/* ── Streamlined Meta Control Shelf ──────────────────────────────── */}
+        <div className="flex items-center gap-6 border-b border-slate-200 bg-slate-50/50 px-6 py-3.5 text-sm font-medium text-slate-600">
+          {/* Assigned To */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wide text-slate-400">Assigned</span>
+            <InlineSelect
+              value={ticket.assigned_to || ''}
+              onChange={v => patch.mutate({ assigned_to: v || null })}
+              options={[
+                { value: '', label: '— Unassigned —' },
+                ...staffList.map(s => ({ value: s.id, label: s.full_name || s.name })),
+              ]}
+            />
           </div>
 
-          {/* Status / attention chips (left) + SLA metadata cluster (hard-right) */}
-          <div className="flex items-center justify-between w-full pt-3">
-            {/* Left: existing status / attention / group / consignment pills */}
-            <div className="flex flex-wrap items-center gap-2">
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: status.bg, color: status.color, border: `1px solid ${status.border || status.bg}` }}>
-                <span style={{ width: 5, height: 5, borderRadius: '50%', background: status.color, display: 'inline-block' }} />
-                {status.label}
-              </span>
-              {ticket.requires_attention && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: '#FEF2F2', color: '#991B1B', border: '1px solid #FECACA' }}>⚠ Needs attention</span>
-              )}
-              {ticket.group_name && (
-                <span style={{ fontSize: 11, color: '#94A3B8', background: '#F8FAFC', borderRadius: 20, padding: '2px 9px', border: '1px solid #E2E8F0' }}>{ticket.group_name}</span>
-              )}
-              {consignment && (
-                <span style={{ fontFamily: 'monospace', fontSize: 10, color: '#64748B', background: '#F8FAFC', padding: '2px 7px', borderRadius: 5, border: '1px solid #E2E8F0' }}>{consignment}</span>
-              )}
-            </div>
+          {/* Group */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wide text-slate-400">Group</span>
+            <InlineSelect
+              value={ticket.group_name || ''}
+              onChange={v => patch.mutate({ group_name: v || null })}
+              options={[{ value: '', label: '— None —' }, ...GROUPS.map(g => ({ value: g, label: g }))]}
+            />
+          </div>
 
-            {/* Right: opened-ago + SLA countdown */}
-            <div className="flex shrink-0 items-center gap-4 text-xs font-medium text-slate-500 bg-slate-50 px-3 py-1.5 rounded-md border border-slate-200 shadow-sm">
-              <span className="flex items-center gap-1.5 border-r border-slate-200 pr-3 whitespace-nowrap">
-                ⏱️ Opened {timeAgo(ticket.created_at)}
+          {/* Priority — high-visibility colour-coded badge */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wide text-slate-400">Priority</span>
+            <span className={`inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-bold uppercase tracking-wide ${ticketBadgeClasses(ticket)}`}>
+              {(PRIORITY_CFG[ticket.priority] || PRIORITY_CFG.medium).label}
+            </span>
+          </div>
+
+          {/* SLA Target — live countdown, eye-catching highlight box */}
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wide text-slate-400">SLA Target</span>
+            {slaText ? (
+              <span className={`inline-flex items-center rounded-lg border px-3 py-1.5 text-sm font-bold tabular-nums ${
+                ticket.courier_sla_breached
+                  ? 'border-red-200 bg-red-50 text-red-700 animate-pulse'
+                  : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+                {slaText}
               </span>
-              {slaText && (
-                <span className={ticket.courier_sla_breached ? 'text-red-600 font-bold animate-pulse whitespace-nowrap' : 'text-slate-700 font-semibold whitespace-nowrap'}>
-                  {slaText}
-                </span>
-              )}
-              {!slaText && (
-                <span className="text-slate-400 whitespace-nowrap">No SLA set</span>
-              )}
-            </div>
+            ) : (
+              <span className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-400">
+                No SLA set
+              </span>
+            )}
           </div>
         </div>
       </div>
