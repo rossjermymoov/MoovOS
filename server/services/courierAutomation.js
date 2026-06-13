@@ -35,21 +35,28 @@ const DEFAULT_TEMPLATES = {
   customer_footer_template: 'Kind regards,\nMoov Parcel Support Team',
 };
 
-// Read a courier's header/footer templates from courier_routing_rules.
-async function getCourierTemplates(courierCode) {
-  if (!courierCode) return { ...DEFAULT_TEMPLATES };
+// Resolve a courier's Top-and-Tail templates with a per-field cascade:
+//   courier-specific row  →  'default' (House style) row  →  built-in fallback.
+export async function getCourierTemplates(courierCode) {
+  const out = { ...DEFAULT_TEMPLATES };
   try {
+    const codes = ['default'];
+    const code  = courierCode ? courierCode.toLowerCase() : null;
+    if (code && code !== 'default') codes.push(code);
+
     const r = await query(
-      `SELECT courier_header_template, courier_footer_template,
+      `SELECT courier_code, courier_header_template, courier_footer_template,
               customer_header_template, customer_footer_template
-         FROM courier_routing_rules WHERE courier_code = $1 LIMIT 1`,
-      [courierCode.toLowerCase()],
+         FROM courier_routing_rules WHERE courier_code = ANY($1)`,
+      [codes],
     );
-    if (!r.rows.length) return { ...DEFAULT_TEMPLATES };
-    // Fall back to defaults for any null column.
-    const row = r.rows[0];
-    const out = { ...DEFAULT_TEMPLATES };
-    for (const k of Object.keys(DEFAULT_TEMPLATES)) if (row[k] != null) out[k] = row[k];
+    const byCode = Object.fromEntries(r.rows.map(row => [row.courier_code, row]));
+
+    // Apply default first, then let the courier-specific row override per field.
+    for (const c of ['default', code]) {
+      const row = c && byCode[c];
+      if (row) for (const k of Object.keys(DEFAULT_TEMPLATES)) if (row[k] != null) out[k] = row[k];
+    }
     return out;
   } catch (e) {
     console.warn('[CourierAutomation] template lookup failed:', e.message);
@@ -58,7 +65,7 @@ async function getCourierTemplates(courierCode) {
 }
 
 // Top-and-Tail stitcher: header + dynamic middle + footer, with token fill.
-function stitch(header, middle, footer, vars) {
+export function stitch(header, middle, footer, vars) {
   return `${fillTemplate(header, vars)}\n\n${(middle || '').trim()}\n\n${fillTemplate(footer, vars)}`;
 }
 
@@ -146,10 +153,17 @@ export async function processCustomerEmail(queryId, { subject = '', body = '' } 
     `for our customer ${vars.customer_name}? Please investigate and confirm the current status and next steps.`;
   const courierBody = stitch(tpl.courier_header_template, courierMiddle, tpl.courier_footer_template, vars);
 
+  // Customer confirmation — header + greeting-free middle ack + footer.
+  const customerMiddle =
+    `Thanks for getting in touch about ${issueLabel} on ${vars.tracking_code}. ` +
+    `We've raised this with ${vars.courier_name} and are chasing an update on your behalf — ` +
+    `we'll come straight back to you as soon as we hear.`;
+  const customerBody = stitch(tpl.customer_header_template, customerMiddle, tpl.customer_footer_template, vars);
+
   // Sandbox: create drafts only — nothing leaves the building.
   await insertDraft(queryId, 'outbound_customer',
     `Re: ${ticket.subject || 'your enquiry'}`,
-    fillTemplate(template.customerConfirmation, vars));
+    customerBody);
   await insertDraft(queryId, 'outbound_courier',
     `${template.courierName} — ${triage.issue_type} — ${vars.tracking_code}`,
     courierBody,

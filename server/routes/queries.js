@@ -13,7 +13,7 @@ import { getAuthedClient } from '../services/gmailService.js';
 import { extractBody, hydratePayload, buildInlineHtml } from '../services/gmailSync.js';
 import EmailReplyParser from 'email-reply-parser';
 import { parse as parseHtml } from 'node-html-parser';
-import { processCustomerEmail, recordCourierReply } from '../services/courierAutomation.js';
+import { processCustomerEmail, recordCourierReply, getCourierTemplates, stitch } from '../services/courierAutomation.js';
 import { geminiGenerate } from '../services/geminiService.js';
 import { applySlaTriggers } from '../services/slaEngine.js';
 import { triagePriority } from '../services/triageEngine.js';
@@ -1523,7 +1523,7 @@ router.post('/auto-draft-all', async (req, res, next) => {
         const queryTypeLabel = ticket.query_type?.replace(/_/g, ' ') || 'query';
         const statusLabel    = ticket.status?.replace(/_/g, ' ') || '';
 
-        const systemPrompt = `You are a customer service agent for Moov Parcel, a UK parcel reseller. Write professional, empathetic emails in British English. Sign off as "Moov Parcel Support Team".`;
+        const systemPrompt = `You are a customer service agent for Moov Parcel, a UK parcel reseller. Write professional, empathetic emails in British English. IMPORTANT: do NOT include any greeting or sign-off — output only the middle body paragraph(s).`;
 
         const userPrompt = `Write a customer acknowledgement email for this ${queryTypeLabel} query.
 
@@ -1567,6 +1567,11 @@ For ALL other cases — standard queries, delayed parcels, missing items, genera
             draftText = draftText.slice(0, draftText.lastIndexOf(jsonMatch[0])).trim();
           } catch { /* ignore */ }
         }
+
+        // Stitch the saved Top-and-Tail templates around the AI middle.
+        const tpl  = await getCourierTemplates(ticket.courier_code);
+        const vars = { customer_name: ticket.customer_name || 'there', courier_name: ticket.courier_name || 'the courier' };
+        draftText  = stitch(tpl.customer_header_template, draftText, tpl.customer_footer_template, vars);
 
         const subject   = `Re: ${ticket.subject}`;
         const toAddress = ticket.sender_email || null;
@@ -1631,9 +1636,11 @@ router.post('/:id/generate-draft', async (req, res, next) => {
 
     const isCustomer = target === 'customer';
 
+    // Middle-only: the greeting + sign-off come from the saved Top-and-Tail
+    // templates, so Gemini must output only the body paragraphs.
     const systemPrompt = isCustomer
-      ? `You are a customer service agent for Moov Parcel, a UK parcel reseller using couriers like DPD and DHL. Write professional, empathetic emails in British English. Be solution-focused. Sign off as "Moov Parcel Support Team". Do not use American spellings.`
-      : `You are a customer service agent writing to a courier company on behalf of Moov Parcel, a UK parcel reseller. Write professional, firm but polite emails in British English requesting investigation or action. Be concise and specific.`;
+      ? `You are a customer service agent for Moov Parcel, a UK parcel reseller using couriers like DPD and DHL. Write professional, empathetic emails in British English. Be solution-focused. Do not use American spellings. IMPORTANT: do NOT include any greeting or sign-off — output only the middle body paragraph(s).`
+      : `You are a customer service agent writing to a courier company on behalf of Moov Parcel, a UK parcel reseller. Write professional, firm but polite emails in British English requesting investigation or action. Be concise and specific. IMPORTANT: do NOT include any greeting or sign-off — output only the middle body paragraph(s).`;
 
     const queryTypeLabel = q.query_type?.replace(/_/g, ' ') || 'query';
     const statusLabel    = q.status?.replace(/_/g, ' ') || '';
@@ -1699,6 +1706,13 @@ Instructions:
         draftText = draftText.slice(0, draftText.lastIndexOf(jsonMatch[0])).trim();
       } catch { /* ignore parse errors */ }
     }
+
+    // Stitch the saved Top-and-Tail header/footer around the AI middle.
+    const tpl  = await getCourierTemplates(q.courier_code);
+    const vars = { customer_name: q.customer_name || 'there', courier_name: q.courier_name || 'the courier' };
+    draftText  = isCustomer
+      ? stitch(tpl.customer_header_template, draftText, tpl.customer_footer_template, vars)
+      : stitch(tpl.courier_header_template,  draftText, tpl.courier_footer_template,  vars);
 
     // Save as AI draft in query_emails
     const direction  = isCustomer ? 'outbound_customer' : 'outbound_courier';
