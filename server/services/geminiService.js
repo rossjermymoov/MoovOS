@@ -9,9 +9,9 @@
 
 import { ISSUE_TYPES } from './courierTemplates.js';
 
-// Locked to the stable v1 API version.
+// v1beta — required for JSON mode (responseMimeType); v1 rejects it with a 400.
 const GEMINI_URL =
-  'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent';
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 // Generic Gemini 1.5 Flash text generation (REST — Node-18 safe). Replaces the
 // legacy Anthropic /v1/messages calls. Throws if the key is missing or the call
