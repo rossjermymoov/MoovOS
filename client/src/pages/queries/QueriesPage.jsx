@@ -590,33 +590,32 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
     <div
       onClick={onClick}
       onMouseLeave={() => { setHoverPos(null); setAssignOpen(false); }}
-      className="relative flex min-h-[90px] cursor-pointer flex-col justify-between gap-2 border-b border-slate-100 p-4 transition-all hover:bg-slate-50"
+      className="relative flex cursor-pointer flex-col gap-4 overflow-visible rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm transition-all hover:border-slate-300 hover:shadow-md"
       style={{ borderLeft: `4px solid ${priorityBar}` }}
     >
-      {/* ── Line 1: identifiers (left) · status + time (right) ─────────────── */}
-      <div className="flex w-full items-center justify-between">
-        {/* Left: dot · sender · ticket badge · group */}
-        <div className="flex min-w-0 items-center gap-3">
+      {/* ── Line 1: metadata shelf ────────────────────────────────────────── */}
+      <div className="flex w-full items-center justify-between border-b border-slate-100 pb-3">
+        {/* Left: priority badge (#M-ID + Urgent) · customer identity */}
+        <div className="flex min-w-0 items-center gap-2">
           {(hasNewReply || unread > 0) && (
             <span className="h-2 w-2 shrink-0 rounded-full bg-blue-500" />
           )}
-          <span className="truncate font-bold text-slate-800">
-            {q.customer_name || q.sender_email || '(unknown sender)'}
-          </span>
           {q.ticket_number != null && (
-            <span className={`inline-flex shrink-0 items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase tracking-wide shadow-sm ${rowBadgeClasses(q)}`}>
+            <span className={`inline-flex shrink-0 items-center justify-center rounded-md border px-2.5 py-1 text-xs font-bold uppercase tracking-wide shadow-sm ${rowBadgeClasses(q)}`}>
               #M-{q.ticket_number}
             </span>
           )}
-          <span className="shrink-0"><GroupBadge group={q.group_name} /></span>
           {pchip && (
-            <span className={`hidden shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold sm:inline ${pchip[1]}`}>
+            <span className={`shrink-0 rounded-md border px-2 py-1 text-xs font-bold ${pchip[1]}`}>
               {pchip[0]}
             </span>
           )}
+          <span className="ml-2 truncate text-base font-bold tracking-tight text-slate-800">
+            {q.customer_name || q.sender_email || '(unknown sender)'}
+          </span>
         </div>
 
-        {/* Right: status badge · timestamp */}
+        {/* Right: status badge · time · assign */}
         <div className="flex shrink-0 items-center gap-3 pl-4">
           {q.courier_sla_breached && (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-red-300 bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
@@ -624,13 +623,13 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
             </span>
           )}
           <span style={{
-            fontSize: 11, fontWeight: 500, borderRadius: 20, padding: '3px 9px',
+            fontSize: 12, fontWeight: 500, borderRadius: 20, padding: '4px 11px',
             display: 'inline-block', whiteSpace: 'nowrap',
             background: statusCfg.bg || `${statusCfg.color}18`, color: statusCfg.color,
           }}>
             {statusCfg.label}
           </span>
-          <span className="whitespace-nowrap text-xs text-slate-400">{timeAgo(actTime)}</span>
+          <span className="whitespace-nowrap text-sm text-slate-400">{timeAgo(actTime)}</span>
 
           {/* Assign avatar (kept for inline assignment) */}
           <div className="relative shrink-0">
@@ -638,13 +637,13 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
               onClick={e => { e.stopPropagation(); setAssignOpen(v => !v); }}
               title={assigneeName ? `Assigned to ${assigneeName}` : 'Assign ticket'}
               style={{
-                width: 26, height: 26, borderRadius: '50%',
+                width: 28, height: 28, borderRadius: '50%',
                 background: initials ? 'rgba(99,102,241,0.12)' : 'rgba(0,0,0,0.04)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 10, fontWeight: 500, color: initials ? '#4F46E5' : C.muted,
+                fontSize: 11, fontWeight: 600, color: initials ? '#4F46E5' : C.muted,
                 cursor: 'pointer', outline: assignOpen ? '2px solid #6366F1' : 'none',
               }}>
-              {assigning ? '…' : (initials || <User size={12} color={C.muted} />)}
+              {assigning ? '…' : (initials || <User size={13} color={C.muted} />)}
             </div>
             {assignOpen && (
               <div
@@ -690,29 +689,21 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
         </div>
       </div>
 
-      {/* ── Line 2: subject snippet (left) · AI summary hover badge (right) ── */}
-      <div className="mt-1 flex w-full items-center justify-between gap-4">
-        <span className={`max-w-2xl truncate text-sm font-medium ${
-          ['resolved','resolved_claim_approved','resolved_claim_rejected'].includes(q.status)
-            ? 'text-slate-400 line-through' : 'text-slate-600'}`}>
-          {q.subject || preview || '(no subject)'}
+      {/* ── Line 2: subject ───────────────────────────────────────────────── */}
+      <div className="flex items-start gap-2 text-sm font-medium text-slate-700">
+        <span className={['resolved','resolved_claim_approved','resolved_claim_rejected'].includes(q.status) ? 'text-slate-400 line-through' : ''}>
+          ✉️ <strong className="font-semibold text-slate-900">Subject:</strong> {q.subject || preview || '(no subject)'}
         </span>
+      </div>
 
-        {/* AI Summary — compact badge with hover tooltip bubble */}
-        <div className="group relative shrink-0" onClick={e => e.stopPropagation()}>
-          <span className={`inline-flex cursor-default items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${
-            isScreamer ? 'border-red-200 bg-red-50 text-red-700' : 'border-slate-200 bg-white text-slate-500'}`}>
-            ✨ AI Summary
-          </span>
-          <div className="absolute bottom-full right-0 z-50 mb-2 hidden w-72 rounded-lg bg-slate-900 p-3 text-xs text-white shadow-xl group-hover:block">
-            {mdLite(fullSummary || 'No AI summary yet for this ticket.')}
-            {sentiment && (
-              <div className="mt-2 text-[11px] font-medium text-slate-300">
-                Sentiment: {sentiment}{cardUrgent ? ' · high risk' : ''}
-              </div>
-            )}
-          </div>
+      {/* ── Line 3: always-visible Gemini summary box ─────────────────────── */}
+      <div className="relative mt-1 flex flex-col gap-1 rounded-lg border border-slate-100 bg-slate-50/80 p-3.5 text-xs font-medium leading-relaxed text-slate-600">
+        <div className="mb-1 flex items-center gap-1 font-bold text-slate-800">
+          <span>✨ Gemini Automation Analysis</span>
         </div>
+        <p className="text-sm text-slate-600">
+          {fullSummary ? mdLite(fullSummary) : 'Analyzing ticket context…'}
+        </p>
       </div>
     </div>
   );
