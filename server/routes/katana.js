@@ -15,7 +15,7 @@ import { query } from '../db/index.js';
 const router = express.Router();
 
 const GEMINI_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 // ─── DB schema description for Katana's system prompt ────────────────────────
 const DB_SCHEMA = `

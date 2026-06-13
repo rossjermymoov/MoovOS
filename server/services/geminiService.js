@@ -11,7 +11,7 @@ import { ISSUE_TYPES } from './courierTemplates.js';
 
 // Locked to the stable v1 API version.
 const GEMINI_URL =
-  'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent';
+  'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent';
 
 // Generic Gemini 1.5 Flash text generation (REST — Node-18 safe). Replaces the
 // legacy Anthropic /v1/messages calls. Throws if the key is missing or the call
@@ -119,7 +119,7 @@ export async function extractTriage(subject, body) {
       needs_human_triage: !!parsed.needs_human || !!parsed.needs_human_triage || !parsed.courier_code,
       requires_reply: parsed.requires_reply !== false,   // default true unless explicitly false
       reason: parsed.reason || (parsed.courier_code ? null : 'Courier not identified.'),
-      source: 'gemini-1.5-flash',
+      source: 'gemini-2.5-flash',
     };
   } catch (e) {
     console.warn('[Gemini] extractTriage failed:', e.message);

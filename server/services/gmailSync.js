@@ -11,7 +11,7 @@ import { google } from 'googleapis';
 // heuristics if the API key is missing or the call fails, so the sync never
 // hard-crashes.
 const GEMINI_GENERATE_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 function triageFallback(subject, body) {
   const text = `${subject || ''} ${body || ''}`.toLowerCase();
@@ -67,7 +67,7 @@ export async function triageAndSummarize(subject, body) {
       summary: (parsed.summary || subject || 'Customer enquiry').toString().slice(0, 400),
       courier: parsed.courier || null,
       tracking_number: parsed.tracking_number || null,
-      source: 'gemini-1.5-flash',
+      source: 'gemini-2.5-flash',
     };
   } catch (e) {
     console.warn('[Gemini triage] failed:', e.message);
