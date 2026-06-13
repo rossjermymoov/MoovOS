@@ -18,6 +18,7 @@ import TrackingPage from './pages/tracking/TrackingPage';
 import FinancePage from './pages/finance/FinancePage';
 import QueriesPage from './pages/queries/QueriesPage';
 import TicketDetailPage from './pages/queries/TicketDetailPage';
+import SimulatorPanel from './pages/queries/SimulatorPanel';
 import CustomerSimPage from './pages/customer/CustomerSimPage';
 import KatanaPage from './pages/katana/KatanaPage';
 import PricingPage from './pages/pricing/PricingPage';
@@ -93,6 +94,7 @@ function AppRoutes() {
         <Route path="finance"   element={<FinancePage />} />
         <Route path="queries">
           <Route index element={<QueriesPage />} />
+          <Route path="simulator" element={<SimulatorPanel />} />
           <Route path=":id" element={<TicketDetailPage />} />
         </Route>
         <Route path="customer-sim"  element={<CustomerSimPage />} />

@@ -12,6 +12,30 @@ import { ISSUE_TYPES } from './courierTemplates.js';
 const GEMINI_URL =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
+// Generic Gemini 1.5 Flash text generation (REST — Node-18 safe). Replaces the
+// legacy Anthropic /v1/messages calls. Throws if the key is missing or the call
+// fails so callers can surface a clean error.
+export async function geminiGenerate(prompt, { system = '', json = false, maxTokens = 900, temperature = 0.3 } = {}) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
+  const fullPrompt = system ? `${system}\n\n${prompt}` : prompt;
+  const resp = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(apiKey)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: fullPrompt }] }],
+      generationConfig: {
+        temperature,
+        maxOutputTokens: maxTokens,
+        ...(json ? { responseMimeType: 'application/json' } : {}),
+      },
+    }),
+  });
+  if (!resp.ok) throw new Error(`Gemini API error ${resp.status}: ${await resp.text()}`);
+  const j = await resp.json();
+  return (j.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+}
+
 const KNOWN_COURIERS = ['dpd', 'dhl', 'evri', 'hermes', 'royal_mail', 'yodel', 'ups', 'fedex', 'parcelforce'];
 
 function regexFallback(subject, body) {

@@ -7,6 +7,7 @@ import express from 'express';
 import multer from 'multer';
 import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 import { query } from '../db/index.js';
+import { geminiGenerate } from '../services/geminiService.js';
 
 const router = express.Router();
 
@@ -731,31 +732,12 @@ router.post('/parse-pdf', upload.single('file'), async (req, res, next) => {
 
 // ─── AI-Assisted Onboarding ──────────────────────────────────────────────────
 
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-const AI_MODEL = 'claude-haiku-4-5-20251001';
-
 async function callAI(systemPrompt, userContent) {
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: AI_MODEL,
-      max_tokens: 4096,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userContent }],
-    }),
-  });
-  if (!response.ok) throw new Error(`Anthropic API error: ${response.status}`);
-  const data = await response.json();
-  const text = data.content?.[0]?.text ?? '';
-  // Extract JSON from response (may be wrapped in markdown code block)
+  // Gemini 1.5 Flash (REST) — returns structured JSON for onboarding extraction.
+  const text = await geminiGenerate(userContent, { system: systemPrompt, json: true, maxTokens: 4096 });
+  // Tolerate clean JSON or a markdown-fenced block.
   const match = text.match(/```json\s*([\s\S]*?)```/i) || text.match(/(\{[\s\S]*\})/);
-  if (!match) throw new Error('AI returned no parseable JSON');
-  return JSON.parse(match[1]);
+  return JSON.parse(match ? match[1] : text);
 }
 
 // POST /api/customers/ai-extract

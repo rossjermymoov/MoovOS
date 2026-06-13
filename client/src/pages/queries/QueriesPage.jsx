@@ -1996,6 +1996,15 @@ export default function QueriesPage() {
           <RefreshCw size={11} style={{ cursor: 'pointer' }} onClick={refresh} />
           Last activity
         </span>
+        {/* Automation simulator */}
+        <button
+          onClick={() => navigate('/queries/simulator')}
+          title="Open the automation simulator"
+          className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+        >
+          🧪 Simulator
+        </button>
+
         {/* New query */}
         <button style={{
           display: 'flex', alignItems: 'center', gap: 6,

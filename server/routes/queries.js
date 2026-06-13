@@ -14,6 +14,7 @@ import { extractBody, hydratePayload, buildInlineHtml } from '../services/gmailS
 import EmailReplyParser from 'email-reply-parser';
 import { parse as parseHtml } from 'node-html-parser';
 import { processCustomerEmail, recordCourierReply } from '../services/courierAutomation.js';
+import { geminiGenerate } from '../services/geminiService.js';
 
 const router = express.Router();
 
@@ -565,7 +566,7 @@ async function seedNowHandler(req, res, next) {
 
     // Auto-triage seeded tickets if Anthropic key is available
     let triageResult = null;
-    if (process.env.ANTHROPIC_API_KEY && seededCount > 0) {
+    if (process.env.GEMINI_API_KEY && seededCount > 0) {
       try {
         const triageRes = await fetch(
           `http://localhost:${process.env.PORT || 3000}/api/queries/triage-all?force=true`,
@@ -1071,8 +1072,8 @@ router.patch('/:id/emails/:emailId/approve', async (req, res, next) => {
 
 router.post('/triage-all', async (req, res, next) => {
   try {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
     }
 
     const force = req.query.force === 'true';
@@ -1159,27 +1160,13 @@ Priority rules:
 requires_attention should be true for urgent and high priority only.
 Keep attention_reason under 10 words. Return null if requires_attention is false.`;
 
-        const aiResp = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': process.env.ANTHROPIC_API_KEY,
-            'anthropic-version': '2023-06-01',
-          },
-          body: JSON.stringify({
-            model: 'claude-haiku-4-5-20251001',
-            max_tokens: 150,
-            messages: [{ role: 'user', content: prompt }],
-          }),
-        });
-
-        if (!aiResp.ok) {
-          results.push({ id: ticket.id, source: 'ai', error: `API ${aiResp.status}` });
+        let rawText;
+        try {
+          rawText = await geminiGenerate(prompt, { json: true, maxTokens: 150 });
+        } catch (e) {
+          results.push({ id: ticket.id, source: 'ai', error: e.message });
           continue;
         }
-
-        const aiJson  = await aiResp.json();
-        const rawText = (aiJson.content?.[0]?.text || '').trim();
 
         let parsed;
         try {
@@ -1231,8 +1218,8 @@ Keep attention_reason under 10 words. Return null if requires_attention is false
 
 router.post('/auto-draft-all', async (req, res, next) => {
   try {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
     }
 
     const RESOLVED = `('resolved','resolved_claim_approved','resolved_claim_rejected')`;
@@ -1296,28 +1283,13 @@ IMPORTANT — phone_call_recommended must be TRUE only if the customer's message
 
 For ALL other cases — standard queries, delayed parcels, missing items, general frustration, mild upset, routine WISMO — set phone_call_recommended to FALSE. Most tickets do NOT warrant a phone call.`;
 
-        const aiResp = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': process.env.ANTHROPIC_API_KEY,
-            'anthropic-version': '2023-06-01',
-          },
-          body: JSON.stringify({
-            model: 'claude-haiku-4-5-20251001',
-            max_tokens: 700,
-            system: systemPrompt,
-            messages: [{ role: 'user', content: userPrompt }],
-          }),
-        });
-
-        if (!aiResp.ok) {
-          results.push({ id: ticket.id, status: 'error', error: `AI API ${aiResp.status}` });
+        let draftText;
+        try {
+          draftText = await geminiGenerate(userPrompt, { system: systemPrompt, maxTokens: 700 });
+        } catch (e) {
+          results.push({ id: ticket.id, status: 'error', error: e.message });
           continue;
         }
-
-        const aiJson   = await aiResp.json();
-        let draftText  = (aiJson.content?.[0]?.text || '').trim();
         let phoneCall  = false;
 
         const jsonMatch = draftText.match(/\{"phone_call_recommended"\s*:\s*(true|false)[^}]*\}/);
@@ -1434,32 +1406,16 @@ Instructions:
 - Keep it under 200 words
 - Then on a new line, output ONLY this JSON (no markdown, no code block): {"phone_call_recommended":true/false,"urgency_reason":"brief reason or null"}`;
 
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
     }
 
-    const aiResp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 900,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
-    });
-
-    if (!aiResp.ok) {
-      const err = await aiResp.text();
-      return res.status(502).json({ error: 'Anthropic API error', detail: err });
+    let fullText;
+    try {
+      fullText = await geminiGenerate(userPrompt, { system: systemPrompt, maxTokens: 900 });
+    } catch (e) {
+      return res.status(502).json({ error: 'Gemini API error', detail: e.message });
     }
-
-    const aiJson    = await aiResp.json();
-    const fullText  = aiJson.content?.[0]?.text || '';
 
     // Split draft text from trailing JSON block
     let draftText = fullText.trim();
@@ -1578,32 +1534,16 @@ ${learned || '(none yet)'}
 
 Please rewrite the draft email incorporating the feedback. Output ONLY the revised email text — no preamble, no explanation, no JSON.`;
 
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
     }
 
-    const aiResp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 900,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
-    });
-
-    if (!aiResp.ok) {
-      const err = await aiResp.text();
-      return res.status(502).json({ error: 'Anthropic API error', detail: err });
+    let newText;
+    try {
+      newText = await geminiGenerate(userPrompt, { system: systemPrompt, maxTokens: 900 });
+    } catch (e) {
+      return res.status(502).json({ error: 'Gemini API error', detail: e.message });
     }
-
-    const aiJson    = await aiResp.json();
-    const newText   = (aiJson.content?.[0]?.text || '').trim();
 
     // Update the draft body in-place (query_emails has no updated_at column)
     const updated = await query(
