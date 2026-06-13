@@ -739,6 +739,58 @@ router.get('/sender-suggestions', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET|POST /api/queries/backfill-triage
+// One-shot historical re-grade. Loops existing tickets, reads the baseline
+// subject + earliest email body, runs the Hybrid Triage Engine (hard rules →
+// Gemini grader) and writes a fresh priority to each row.
+//
+// By default only re-grades un-graded / default ('medium') tickets and skips
+// resolved/closed ones. Pass ?force=true to re-grade EVERY open ticket.
+//
+// Registered BEFORE '/:id' so the literal path isn't swallowed as a UUID, and
+// exposed on GET too so it can be triggered straight from a browser.
+// ─────────────────────────────────────────────────────────────────────────────
+async function backfillTriageHandler(req, res, next) {
+  try {
+    const force    = req.query.force === 'true';
+    const RESOLVED = `('resolved','resolved_claim_approved','resolved_claim_rejected','closed')`;
+
+    const eligible = await query(`
+      SELECT id, subject, priority
+      FROM queries
+      WHERE status NOT IN ${RESOLVED}
+        ${force ? '' : "AND (priority IS NULL OR priority = 'medium')"}
+      ORDER BY created_at ASC
+      LIMIT 200
+    `);
+
+    const results = [];
+    let regraded = 0;
+
+    for (const ticket of eligible.rows) {
+      // Earliest customer-side message gives the baseline body for grading.
+      const bodyRes = await query(
+        `SELECT body_text FROM query_emails
+         WHERE query_id = $1
+         ORDER BY COALESCE(received_at, created_at) ASC
+         LIMIT 1`,
+        [ticket.id]
+      );
+      const body = bodyRes.rows[0]?.body_text || '';
+
+      const { priority, source } = await triagePriority({ subject: ticket.subject, body });
+      await query(`UPDATE queries SET priority = $1, updated_at = NOW() WHERE id = $2`, [priority, ticket.id]);
+      results.push({ id: ticket.id, from: ticket.priority, to: priority, source });
+      regraded++;
+    }
+
+    res.json({ regraded, total: eligible.rows.length, results });
+  } catch (err) { next(err); }
+}
+router.post('/backfill-triage', backfillTriageHandler);
+router.get('/backfill-triage',  backfillTriageHandler);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/queries/:id
 // Single query with full email thread, evidence, and notifications
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1091,53 +1143,6 @@ router.patch('/:id/emails/:emailId/approve', async (req, res, next) => {
 // Safe to call repeatedly — skips tickets that already have a priority set
 // unless ?force=true is passed.
 // ─────────────────────────────────────────────────────────────────────────────
-
-// ─────────────────────────────────────────────────────────────────────────────
-// POST /api/queries/backfill-triage
-// One-shot historical re-grade. Loops existing tickets, reads the baseline
-// subject + earliest email body, runs the Hybrid Triage Engine (hard rules →
-// Gemini grader) and writes a fresh priority to each row.
-//
-// By default only re-grades un-graded / default ('medium') tickets and skips
-// resolved/closed ones. Pass ?force=true to re-grade EVERY open ticket.
-// ─────────────────────────────────────────────────────────────────────────────
-router.post('/backfill-triage', async (req, res, next) => {
-  try {
-    const force    = req.query.force === 'true';
-    const RESOLVED = `('resolved','resolved_claim_approved','resolved_claim_rejected','closed')`;
-
-    const eligible = await query(`
-      SELECT id, subject, priority
-      FROM queries
-      WHERE status NOT IN ${RESOLVED}
-        ${force ? '' : "AND (priority IS NULL OR priority = 'medium')"}
-      ORDER BY created_at ASC
-      LIMIT 200
-    `);
-
-    const results = [];
-    let regraded = 0;
-
-    for (const ticket of eligible.rows) {
-      // Earliest customer-side message gives the baseline body for grading.
-      const bodyRes = await query(
-        `SELECT body_text FROM query_emails
-         WHERE query_id = $1
-         ORDER BY COALESCE(received_at, created_at) ASC
-         LIMIT 1`,
-        [ticket.id]
-      );
-      const body = bodyRes.rows[0]?.body_text || '';
-
-      const { priority, source } = await triagePriority({ subject: ticket.subject, body });
-      await query(`UPDATE queries SET priority = $1, updated_at = NOW() WHERE id = $2`, [priority, ticket.id]);
-      results.push({ id: ticket.id, from: ticket.priority, to: priority, source });
-      regraded++;
-    }
-
-    res.json({ regraded, total: eligible.rows.length, results });
-  } catch (err) { next(err); }
-});
 
 router.post('/triage-all', async (req, res, next) => {
   try {
