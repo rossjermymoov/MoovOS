@@ -76,6 +76,20 @@ function ticketBadgeClasses(ticket) {
   return 'bg-blue-50 text-blue-700 border-blue-200';
 }
 
+// Dynamic SLA countdown string from courier_sla_expires_at.
+// Returns null when no SLA clock is set on the ticket.
+function slaCountdownString(ticket) {
+  if (!ticket?.courier_sla_expires_at) return null;
+  const diffMs = new Date(ticket.courier_sla_expires_at).getTime() - Date.now();
+  if (diffMs > 0) {
+    const hours   = Math.floor(diffMs / 3600000);
+    const minutes = Math.floor((diffMs % 3600000) / 60000);
+    return `⏳ ${hours}h ${minutes}m remaining`;
+  }
+  const hoursOver = Math.floor(-diffMs / 3600000);
+  return `🚨 SLA BREACHED (${hoursOver}h ago)`;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmtDate(ts) {
   if (!ts) return '—';
@@ -814,6 +828,7 @@ export default function TicketDetailPage() {
   // ── Derived values ─────────────────────────────────────────────────────────
 
   const status      = STATUS_CFG[ticket.status] || { label: ticket.status, color: C.muted, bg: 'transparent' };
+  const slaText     = slaCountdownString(ticket);
   const courierLogo = ticket.courier_code ? getCourierLogo(ticket.courier_code) : null;
   const trackEvents = trackingData?.events || trackingData?.parcel?.events || [];
   const parcel      = trackingData?.parcel || null;
@@ -894,21 +909,39 @@ export default function TicketDetailPage() {
               {ticket.subject || ticket.customer_name}
             </h1>
           </div>
-          {/* Status / attention / group / consignment chips */}
-          <div className="flex flex-wrap items-center gap-2 pt-3">
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: status.bg, color: status.color, border: `1px solid ${status.border || status.bg}` }}>
-              <span style={{ width: 5, height: 5, borderRadius: '50%', background: status.color, display: 'inline-block' }} />
-              {status.label}
-            </span>
-            {ticket.requires_attention && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: '#FEF2F2', color: '#991B1B', border: '1px solid #FECACA' }}>⚠ Needs attention</span>
-            )}
-            {ticket.group_name && (
-              <span style={{ fontSize: 11, color: '#94A3B8', background: '#F8FAFC', borderRadius: 20, padding: '2px 9px', border: '1px solid #E2E8F0' }}>{ticket.group_name}</span>
-            )}
-            {consignment && (
-              <span style={{ fontFamily: 'monospace', fontSize: 10, color: '#64748B', background: '#F8FAFC', padding: '2px 7px', borderRadius: 5, border: '1px solid #E2E8F0' }}>{consignment}</span>
-            )}
+          {/* Status / attention chips (left) + SLA metadata cluster (hard-right) */}
+          <div className="flex items-center justify-between w-full pt-3">
+            {/* Left: existing status / attention / group / consignment pills */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: status.bg, color: status.color, border: `1px solid ${status.border || status.bg}` }}>
+                <span style={{ width: 5, height: 5, borderRadius: '50%', background: status.color, display: 'inline-block' }} />
+                {status.label}
+              </span>
+              {ticket.requires_attention && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: '#FEF2F2', color: '#991B1B', border: '1px solid #FECACA' }}>⚠ Needs attention</span>
+              )}
+              {ticket.group_name && (
+                <span style={{ fontSize: 11, color: '#94A3B8', background: '#F8FAFC', borderRadius: 20, padding: '2px 9px', border: '1px solid #E2E8F0' }}>{ticket.group_name}</span>
+              )}
+              {consignment && (
+                <span style={{ fontFamily: 'monospace', fontSize: 10, color: '#64748B', background: '#F8FAFC', padding: '2px 7px', borderRadius: 5, border: '1px solid #E2E8F0' }}>{consignment}</span>
+              )}
+            </div>
+
+            {/* Right: opened-ago + SLA countdown */}
+            <div className="flex shrink-0 items-center gap-4 text-xs font-medium text-slate-500 bg-slate-50 px-3 py-1.5 rounded-md border border-slate-200 shadow-sm">
+              <span className="flex items-center gap-1.5 border-r border-slate-200 pr-3 whitespace-nowrap">
+                ⏱️ Opened {timeAgo(ticket.created_at)}
+              </span>
+              {slaText && (
+                <span className={ticket.courier_sla_breached ? 'text-red-600 font-bold animate-pulse whitespace-nowrap' : 'text-slate-700 font-semibold whitespace-nowrap'}>
+                  {slaText}
+                </span>
+              )}
+              {!slaText && (
+                <span className="text-slate-400 whitespace-nowrap">No SLA set</span>
+              )}
+            </div>
           </div>
         </div>
       </div>
