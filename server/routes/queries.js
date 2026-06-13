@@ -753,7 +753,7 @@ router.get('/sender-suggestions', async (req, res, next) => {
 async function backfillTriageHandler(req, res, next) {
   try {
     const force    = req.query.force === 'true';
-    const RESOLVED = `('resolved','resolved_claim_approved','resolved_claim_rejected','closed')`;
+    const RESOLVED = `('resolved','resolved_claim_approved','resolved_claim_rejected')`;
 
     const eligible = await query(`
       SELECT id, subject, priority
