@@ -1863,6 +1863,158 @@ function FilterPanel({ filters, setFilters, staffList, onClose }) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
+// ─── Priority ordering (urgent → high → medium → low) for the live queue ──────
+const PRI_RANK = { urgent: 0, high: 1, medium: 2, low: 3 };
+function priRank(q) { return PRI_RANK[(q.priority || '').toLowerCase()] ?? 4; }
+
+// ─── Refine / Train modal — feeds revise-draft + the adaptive learning rules ──
+function RefineModal({ draft, onClose, onDone }) {
+  const [fb, setFb]     = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function submit() {
+    if (!fb.trim() || busy) return;
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/queries/${draft.query_id}/revise-draft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email_id: draft.email_id, feedback: fb.trim() }),
+      });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || 'Server error'); }
+      onDone?.();
+    } catch (e) { alert('Refine failed: ' + e.message); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl" onClick={e => e.stopPropagation()}>
+        <div className="mb-1 flex items-center gap-2">
+          <span className={`inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase ${rowBadgeClasses(draft)}`}>
+            M-{draft.ticket_number}
+          </span>
+          <h3 className="text-base font-bold text-slate-900">Refine &amp; Train the AI</h3>
+        </div>
+        <p className="mb-3 text-xs text-slate-500">
+          Tell the AI what to change. Your feedback is stored as a learning rule and applied to future drafts.
+        </p>
+        <textarea
+          autoFocus
+          value={fb}
+          onChange={e => setFb(e.target.value)}
+          placeholder="e.g. Be firmer about the 14-day claim window and always quote the consignment number."
+          className="h-32 w-full resize-none rounded-lg border border-slate-200 p-3 text-sm outline-none focus:border-slate-400"
+        />
+        <div className="mt-3 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button onClick={submit} disabled={!fb.trim() || busy}
+            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">
+            {busy ? 'Retraining…' : '🛠️ Refine & Retrain'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Autopilot QA Bay — pending AI drafts awaiting human approval ─────────────
+function AutopilotQABay({ refreshKey, onChanged }) {
+  const navigate = useNavigate();
+  const [drafts,  setDrafts]  = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId,  setBusyId]  = useState(null);
+  const [refineFor, setRefineFor] = useState(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    api.get('/queries/drafts')
+      .then(r => setDrafts(r.data || []))
+      .catch(() => setDrafts([]))
+      .finally(() => setLoading(false));
+  }, []);
+  useEffect(() => { load(); }, [load, refreshKey]);
+
+  async function quickApprove(d) {
+    setBusyId(d.email_id);
+    try {
+      await api.patch(`/queries/${d.query_id}/emails/${d.email_id}/approve`, {});
+      setDrafts(list => list.filter(x => x.email_id !== d.email_id));
+      onChanged?.();
+    } catch (e) {
+      alert('Approve failed: ' + (e.response?.data?.error || e.message));
+    } finally { setBusyId(null); }
+  }
+
+  function intentLine(d) {
+    if (d.description) return d.description;
+    const what = d.group_name ? d.group_name.toLowerCase() : 'reply';
+    return `Drafting ${what}${d.courier_name ? ` to ${d.courier_name}` : ''} for ${d.customer_name || 'customer'}`;
+  }
+
+  return (
+    <div className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className="text-base">🤖</span>
+          <span className="text-sm font-bold text-slate-900">Autopilot QA Guardrails</span>
+        </div>
+        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">
+          {drafts.length} pending
+        </span>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {loading && <div className="p-6 text-center text-xs text-slate-400">Loading drafts…</div>}
+        {!loading && drafts.length === 0 && (
+          <div className="p-8 text-center">
+            <div className="mb-2 text-3xl">✓</div>
+            <div className="text-sm font-semibold text-slate-600">Queue clear</div>
+            <div className="text-xs text-slate-400">No AI drafts waiting for QA.</div>
+          </div>
+        )}
+        {drafts.map(d => (
+          <div key={d.email_id} className="mb-3 rounded-xl border border-slate-200 p-3 last:mb-0">
+            <div className="mb-2 flex items-center gap-2">
+              <button
+                onClick={() => navigate(`/queries/${d.query_id}`)}
+                className={`inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase ${rowBadgeClasses(d)}`}
+              >
+                M-{d.ticket_number}
+              </button>
+              <span className="truncate text-xs font-medium text-slate-500">{d.customer_name || d.subject}</span>
+            </div>
+            <p className="mb-3 line-clamp-2 text-sm leading-snug text-slate-700">{intentLine(d)}</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => quickApprove(d)}
+                disabled={busyId === d.email_id}
+                className="flex-1 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {busyId === d.email_id ? 'Sending…' : '✓ Quick Approve'}
+              </button>
+              <button
+                onClick={() => setRefineFor(d)}
+                className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
+              >
+                🛠️ Refine / Train
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {refineFor && (
+        <RefineModal
+          draft={refineFor}
+          onClose={() => setRefineFor(null)}
+          onDone={() => { setRefineFor(null); load(); onChanged?.(); }}
+        />
+      )}
+    </div>
+  );
+}
+
 export default function QueriesPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -2038,24 +2190,30 @@ export default function QueriesPage() {
         </button>
       </div>
 
-      {/* ── KPI cards — active workload triage ─────────────────────────────── */}
-      <div className="flex shrink-0 gap-3 bg-slate-50 px-[18px] pb-3 pt-3.5">
+      {/* ── Threat Matrix — high-impact operational counters ───────────────── */}
+      <div className="grid shrink-0 grid-cols-2 gap-3 bg-slate-50 px-[18px] pb-3 pt-3.5 lg:grid-cols-4">
         {[
-          { label: 'Unassigned',            value: stats?.unassigned,        tone: '#4F46E5', onClick: () => setWorkspace('unassigned'),                                                         active: workspace === 'unassigned' },
-          { label: 'SLA breached / urgent', value: stats?.sla_breached,      tone: '#DC2626', onClick: () => setFilters(f => ({ ...f, sla_breached: !f.sla_breached, attention: false })),       active: filters.sla_breached },
-          { label: 'Awaiting us',           value: stats?.awaiting_us,       tone: '#D97706', onClick: () => setFilters(f => ({ ...f, status: f.status === 'open' ? '' : 'open', attention: false })),                 active: filters.status === 'open' },
-          { label: 'Awaiting customer',     value: stats?.awaiting_customer, tone: '#475569', onClick: () => setFilters(f => ({ ...f, status: f.status === 'awaiting_customer' ? '' : 'awaiting_customer', attention: false })), active: filters.status === 'awaiting_customer' },
+          { key: 'urgent', label: '🚨 Critical Threats',     value: stats?.urgent_open,          accent: '#DC2626', ring: 'ring-red-200',    tint: 'bg-red-50',    text: 'text-red-700',
+            onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'urgent' ? '' : 'urgent', sla_breached: false, status: '', attention: false })), active: filters.priority === 'urgent' },
+          { key: 'high',   label: '⚠️ High Priority',         value: stats?.high_open,            accent: '#D97706', ring: 'ring-amber-200',  tint: 'bg-amber-50',  text: 'text-amber-700',
+            onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'high' ? '' : 'high', sla_breached: false, status: '', attention: false })), active: filters.priority === 'high' },
+          { key: 'sla',    label: '⏳ Courier SLA Breaches',  value: stats?.courier_sla_breached, accent: '#7C3AED', ring: 'ring-purple-200', tint: 'bg-purple-50', text: 'text-purple-700',
+            onClick: () => setFilters(f => ({ ...f, sla_breached: !f.sla_breached, priority: '', status: '', attention: false })), active: filters.sla_breached },
+          { key: 'auto',   label: '🤖 Autopilot Runs',        value: stats?.autopilot_runs,       accent: '#059669', ring: 'ring-emerald-200', tint: 'bg-emerald-50', text: 'text-emerald-700',
+            onClick: null, active: false },
         ].map(k => (
           <button
-            key={k.label}
-            onClick={k.onClick}
-            className={`flex flex-1 flex-col items-start rounded-2xl border bg-white p-4 text-left transition hover:shadow-sm
-              ${k.active ? 'border-slate-300 shadow-sm' : 'border-slate-100 hover:border-slate-200'}`}
+            key={k.key}
+            onClick={k.onClick || undefined}
+            className={`flex flex-col items-start rounded-2xl border p-4 text-left transition
+              ${k.tint} ${k.active ? `ring-2 ${k.ring} shadow-sm` : 'border-transparent hover:shadow-sm'}
+              ${k.onClick ? 'cursor-pointer' : 'cursor-default'}`}
+            style={{ borderColor: k.active ? k.accent : 'transparent' }}
           >
-            <span className="text-3xl font-semibold leading-none" style={{ color: (k.value ?? 0) > 0 ? k.tone : '#94A3B8' }}>
+            <span className="text-4xl font-extrabold leading-none" style={{ color: k.accent }}>
               {k.value ?? '—'}
             </span>
-            <span className="mt-2 text-xs font-medium uppercase tracking-wide text-slate-400">{k.label}</span>
+            <span className={`mt-2 text-xs font-bold uppercase tracking-wide ${k.text}`}>{k.label}</span>
           </button>
         ))}
       </div>
@@ -2105,54 +2263,64 @@ export default function QueriesPage() {
         </div>
       </div>
 
-      {/* ── Body: list + filter panel ────────────────────────────────────── */}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
+      {/* ── Command Center: live queue (2 cols) + Autopilot QA Bay (1 col) ── */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 items-stretch gap-6 overflow-hidden px-[18px] py-3 xl:grid-cols-3">
 
-        {/* Ticket list */}
-        <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '8px 12px 16px' }}>
-          {loading && <div style={{ padding: 40, textAlign: 'center', color: C.muted, fontSize: 12 }}>Loading…</div>}
-          {!loading && displayQueries.length === 0 && (
-            <div style={{ padding: 60, textAlign: 'center' }}>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>📭</div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: C.sub, marginBottom: 6 }}>No queries match</div>
-              <div style={{ fontSize: 12, color: C.muted }}>Try a different filter or check back later</div>
-            </div>
-          )}
-          {!loading && displayQueries.length > 0 && (
-            <>
-              {/* Column headers */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '2px 16px 8px 16px' }}>
-                <div style={{ width: 36, flexShrink: 0 }} />
-                <div style={{ flex: 1, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Subject</div>
-                <div style={{ width: 160, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Summary</div>
-                <div style={{ width: 88, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Group</div>
-                <div style={{ width: 52, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Health</div>
-                <div style={{ width: 110, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Status</div>
-                <div style={{ width: 100, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>SLA</div>
-                <div style={{ width: 80, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: 'right' }}>Activity</div>
-                <div style={{ width: 26, flexShrink: 0 }} />
+        {/* Columns 1 & 2 — Live Traffic Queue */}
+        <div className="flex min-h-0 flex-col xl:col-span-2">
+          <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-slate-200 bg-white">
+            {loading && <div style={{ padding: 40, textAlign: 'center', color: C.muted, fontSize: 12 }}>Loading…</div>}
+            {!loading && displayQueries.length === 0 && (
+              <div style={{ padding: 60, textAlign: 'center' }}>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>📭</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: C.sub, marginBottom: 6 }}>No queries match</div>
+                <div style={{ fontSize: 12, color: C.muted }}>Try a different filter or check back later</div>
               </div>
-              {/* Rows sorted by last activity */}
-              {[...displayQueries]
-                .sort((a, b) => new Date(b.latest_email_at || b.created_at) - new Date(a.latest_email_at || a.created_at))
-                .map(q => (
-                  <InboxRow key={q.id} q={q} onClick={() => navigate(`/queries/${q.id}`)} staffList={staffList} onUpdate={refresh} />
-                ))
-              }
-            </>
-          )}
+            )}
+            {!loading && displayQueries.length > 0 && (
+              <>
+                {/* Column headers */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 16px', position: 'sticky', top: 0, background: '#fff', zIndex: 1, borderBottom: `0.5px solid ${C.border}` }}>
+                  <div style={{ width: 36, flexShrink: 0 }} />
+                  <div style={{ flex: 1, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Subject</div>
+                  <div style={{ width: 160, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Summary</div>
+                  <div style={{ width: 88, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Group</div>
+                  <div style={{ width: 52, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Health</div>
+                  <div style={{ width: 110, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Status</div>
+                  <div style={{ width: 100, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>SLA</div>
+                  <div style={{ width: 80, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: 'right' }}>Activity</div>
+                  <div style={{ width: 26, flexShrink: 0 }} />
+                </div>
+                {/* Rows: Red (Urgent) & Amber (High) pinned to the top, then by activity */}
+                {[...displayQueries]
+                  .sort((a, b) =>
+                    priRank(a) - priRank(b) ||
+                    new Date(b.latest_email_at || b.created_at) - new Date(a.latest_email_at || a.created_at)
+                  )
+                  .map(q => (
+                    <InboxRow key={q.id} q={q} onClick={() => navigate(`/queries/${q.id}`)} staffList={staffList} onUpdate={refresh} />
+                  ))
+                }
+              </>
+            )}
+          </div>
         </div>
 
-        {/* Right filter panel */}
-        {showFilters && (
-          <FilterPanel
-            filters={filters}
-            setFilters={setFilters}
-            staffList={staffList}
-            onClose={() => setShowFilters(false)}
-          />
-        )}
+        {/* Column 3 — Autopilot QA Bay */}
+        <div className="min-h-0 xl:col-span-1">
+          <AutopilotQABay refreshKey={refreshKey} onChanged={refresh} />
+        </div>
       </div>
+
+      {/* Right filter panel (overlay) */}
+      {showFilters && (
+        <FilterPanel
+          filters={filters}
+          setFilters={setFilters}
+          staffList={staffList}
+          onClose={() => setShowFilters(false)}
+        />
+      )}
 
       {/* ── Pagination footer ──────────────────────────────────────────────── */}
       {total > 0 && (

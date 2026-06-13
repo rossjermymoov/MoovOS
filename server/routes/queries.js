@@ -595,7 +595,7 @@ router.get('/stats', async (req, res, next) => {
     // Current user (for the "Assigned to me" count) — validated as a UUID.
     const me = /^[0-9a-f-]{36}$/i.test(req.query.assigned_to || '') ? req.query.assigned_to : null;
 
-    const [overview, byStatus, byType, claimDeadlines, unmatched] = await Promise.all([
+    const [overview, byStatus, byType, claimDeadlines, unmatched, autopilot] = await Promise.all([
 
       // All key counts in one pass over the inbox view
       query(`
@@ -604,6 +604,11 @@ router.get('/stats', async (req, res, next) => {
           COUNT(*) FILTER (WHERE requires_attention = true
                              AND status NOT IN ${RESOLVED})                          AS requires_attention,
           COUNT(*) FILTER (WHERE sla_breached = true)                              AS sla_breached,
+          COUNT(*) FILTER (WHERE courier_sla_breached = true)                       AS courier_sla_breached,
+          COUNT(*) FILTER (WHERE priority = 'urgent'
+                             AND status NOT IN ${RESOLVED})                          AS urgent_open,
+          COUNT(*) FILTER (WHERE priority = 'high'
+                             AND status NOT IN ${RESOLVED})                          AS high_open,
           COUNT(*) FILTER (WHERE pending_drafts > 0
                              AND status NOT IN ${RESOLVED})                          AS tickets_to_verify,
           COUNT(*) FILTER (
@@ -652,6 +657,12 @@ router.get('/stats', async (req, res, next) => {
 
       // Unmatched emails
       query(`SELECT COUNT(*)::int AS count FROM unmatched_emails WHERE resolved = false`),
+
+      // Autopilot runs — AI drafts that went out without a human edit
+      query(`
+        SELECT COUNT(*)::int AS count FROM query_emails
+        WHERE is_ai_draft = true AND sent_at IS NOT NULL AND ai_draft_edited = false
+      `),
     ]);
 
     const o = overview.rows[0];
@@ -659,13 +670,17 @@ router.get('/stats', async (req, res, next) => {
       total_open:               parseInt(o.total_open)            || 0,
       requires_attention:       parseInt(o.requires_attention)    || 0,
       sla_breached:             parseInt(o.sla_breached)          || 0,
+      courier_sla_breached:     parseInt(o.courier_sla_breached)  || 0,
+      urgent_open:              parseInt(o.urgent_open)           || 0,
+      high_open:                parseInt(o.high_open)             || 0,
       tickets_to_verify:        parseInt(o.tickets_to_verify)     || 0,
       claim_deadlines_7d:       parseInt(o.claim_deadlines_7d)    || 0,
       unassigned:               parseInt(o.unassigned)            || 0,
       awaiting_us:              parseInt(o.awaiting_us)           || 0,
       awaiting_customer:        parseInt(o.awaiting_customer)     || 0,
       assigned_to_me:           parseInt(o.assigned_to_me)        || 0,
-      autopilot_sent:           0,                                        // future
+      autopilot_runs:           parseInt(autopilot.rows[0].count) || 0,
+      autopilot_sent:           parseInt(autopilot.rows[0].count) || 0,   // alias
       total_queries:            parseInt(o.total_queries)         || 0,
       unmatched_emails:         parseInt(unmatched.rows[0].count) || 0,
       upcoming_claim_deadlines: claimDeadlines.rows,
@@ -789,6 +804,38 @@ async function backfillTriageHandler(req, res, next) {
 }
 router.post('/backfill-triage', backfillTriageHandler);
 router.get('/backfill-triage',  backfillTriageHandler);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/queries/drafts
+// Pending AI drafts awaiting human QA, across all open tickets — feeds the
+// Autopilot QA Bay on the command-center dashboard. Priority-sorted (urgent
+// first). Registered before '/:id'.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/drafts', async (req, res, next) => {
+  try {
+    const result = await query(`
+      SELECT
+        qe.id          AS email_id,
+        qe.query_id    AS query_id,
+        qe.body_text   AS body_text,
+        qe.direction   AS direction,
+        qe.created_at  AS draft_created_at,
+        q.ticket_number, q.priority, q.status, q.subject,
+        q.customer_name, q.group_name, q.courier_name, q.description
+      FROM query_emails qe
+      JOIN queries q ON q.id = qe.query_id
+      WHERE qe.is_ai_draft = true
+        AND qe.sent_at IS NULL
+        AND qe.ai_draft_approved_by IS NULL
+        AND q.status NOT IN ('resolved','resolved_claim_approved','resolved_claim_rejected')
+      ORDER BY
+        CASE q.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
+        qe.created_at DESC
+      LIMIT 50
+    `);
+    res.json(result.rows);
+  } catch (err) { next(err); }
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/queries/:id
