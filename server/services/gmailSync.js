@@ -105,7 +105,32 @@ import { query } from '../db/index.js';
 import { applySlaTriggers } from './slaEngine.js';
 import { triagePriority } from './triageEngine.js';
 import { isLikelyTracking } from './geminiService.js';
-import { identifyCourierByTracking, getAllTrackingExamples } from './courierAutomation.js';
+import { identifyCourierByTracking, getAllTrackingExamples, draftCustomerUpdateFromCourier } from './courierAutomation.js';
+
+// Sender domains that are couriers / our wholesaler (AGL) — never the customer.
+const COURIER_DOMAINS = /@(?:[a-z0-9-]+\.)*(dpd|dhl|evri|hermes|myhermes|yodel|ups|parcelforce|royalmail|fedex|agl)\.[a-z.]{2,}/i;
+
+// Find the original ticket a courier reply belongs to, by the tracking number(s)
+// in its body — covering DPD's 1550-prefixed vs bare 10-digit forms.
+async function findTicketByTrackingInBody(body) {
+  const tokens = (String(body || '').match(/\b[A-Za-z0-9]{8,30}\b/g) || []).filter(isLikelyTracking);
+  if (!tokens.length) return null;
+  const variants = new Set();
+  for (const tok of tokens) {
+    const u = tok.toUpperCase();
+    variants.add(u);
+    const m = u.match(/^1550(\d{10}[A-Z]?)$/); if (m) variants.add(m[1]);   // strip DPD 1550
+    if (/^\d{10}[A-Z]?$/.test(u)) variants.add('1550' + u);                 // add DPD 1550
+  }
+  const r = await query(
+    `SELECT id FROM queries
+      WHERE upper(consignment_number) = ANY($1)
+        AND status NOT IN ('resolved','resolved_claim_approved','resolved_claim_rejected')
+      ORDER BY created_at DESC LIMIT 1`,
+    [[...variants]],
+  );
+  return r.rows[0]?.id || null;
+}
 
 function decodeBase64(str) {
   return Buffer.from(str.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8');
@@ -258,10 +283,12 @@ async function upsertTicket(msg, gmail = null) {
   if (!senderEmail) return { status: 'skipped', reason: 'no sender email' };
 
   // Our own SENT messages (or anything from a support domain) are outbound.
-  const isOurs    = labelIds.includes('SENT') || SUPPORT_DOMAINS.test(senderEmail);
-  const direction = isOurs ? 'outbound_customer' : 'inbound_customer';
+  const isOurs = labelIds.includes('SENT') || SUPPORT_DOMAINS.test(senderEmail);
+  // A courier/AGL sender is NEVER the customer — classify as inbound_courier.
+  const isCourierSender = !isOurs && COURIER_DOMAINS.test(senderEmail);
+  const direction = isOurs ? 'outbound_customer' : isCourierSender ? 'inbound_courier' : 'inbound_customer';
 
-  const customer = await resolveCustomer(senderEmail);
+  const customer = isCourierSender ? null : await resolveCustomer(senderEmail);
 
   // Find the ticket this Gmail thread belongs to.
   //  • Our own reply (outbound) attaches to its thread under ANY status —
@@ -282,6 +309,17 @@ async function upsertTicket(msg, gmail = null) {
          ORDER BY q.created_at DESC LIMIT 1`;
     const match = await query(sql, [gmailThreadId]);
     if (match.rows[0]) queryId = match.rows[0].id;
+  }
+
+  // A courier replied outside our thread — route it back to the ORIGINAL ticket
+  // by the tracking number, never spin up a new "DPD-as-customer" ticket.
+  if (!queryId && isCourierSender) {
+    queryId = await findTicketByTrackingInBody(`${subject}\n${body}`);
+    if (!queryId) {
+      console.warn(`[Gmail sync] Courier reply from ${senderEmail} unmatched to any ticket (no tracking match) — skipped`);
+      return { status: 'skipped', reason: 'courier reply with no matching ticket' };
+    }
+    console.log(`[Gmail sync] Courier reply from ${senderEmail} routed to original ticket ${queryId} via tracking`);
   }
 
   if (!queryId) {
@@ -356,6 +394,14 @@ async function upsertTicket(msg, gmail = null) {
 
   await query(`UPDATE queries SET updated_at = NOW() WHERE id = $1`, [queryId]);
   if (isOurs) console.log(`[Gmail sync] Stored OUTBOUND reply on ticket ${queryId} (thread ${gmailThreadId}, from ${senderEmail})`);
+
+  // Courier reply stored on the original ticket → translate it into a draft back
+  // to the ORIGINAL customer (never reply to the courier).
+  if (isCourierSender) {
+    try { await draftCustomerUpdateFromCourier(queryId, body); }
+    catch (e) { console.warn('[Gmail sync] courier→customer translation failed:', e.message); }
+  }
+
   return { status: 'imported', queryId };
 }
 

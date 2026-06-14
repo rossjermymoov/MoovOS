@@ -370,15 +370,10 @@ const TRANSLATION_SYSTEM =
   'of what is happening to their parcel. IMPORTANT: do NOT include any greeting ' +
   '(no "Hi"/"Dear") or sign-off — output ONLY the middle body paragraph(s).';
 
-export async function recordCourierReply(queryId, { subject = '', body = '', from = '' } = {}) {
-  await query(
-    `INSERT INTO query_emails
-       (query_id, direction, subject, body_text, from_address, is_ai_draft, received_at, created_at)
-     VALUES ($1, 'inbound_courier'::email_direction, $2, $3, $4, false, NOW(), NOW())`,
-    [queryId, subject || 'Courier update', body, from || 'courier@external.invalid'],
-  );
-
-  // ── Autonomous translation → customer-facing draft ──────────────────────────
+// Translate an already-recorded courier update into a customer-facing draft on
+// the SAME ticket — so the reply routes back to the original customer, never to
+// the courier. Used by the simulator AND live ingest (Gmail courier replies).
+export async function draftCustomerUpdateFromCourier(queryId, body) {
   let translated = null;
   try {
     translated = await geminiGenerate(body, { system: TRANSLATION_SYSTEM, maxTokens: 700, temperature: 0.4 });
@@ -387,26 +382,16 @@ export async function recordCourierReply(queryId, { subject = '', body = '', fro
   }
 
   if (translated && translated.trim()) {
-    const tRes = await query(
-      `SELECT subject, customer_name, courier_code FROM queries WHERE id = $1`, [queryId],
-    );
+    const tRes = await query(`SELECT subject, customer_name, courier_code FROM queries WHERE id = $1`, [queryId]);
     const t    = tRes.rows[0] || {};
     const subj = t.subject ? `Re: ${t.subject}` : 'Update on your parcel';
-
-    // Top-and-Tail: stitch the customer header + Gemini analysis + footer.
     const tpl  = await getCourierTemplates(t.courier_code);
     const vars = { customer_name: t.customer_name || 'there' };
-    const finalOutboundEmail = stitch(
-      tpl.customer_header_template, translated.trim(), tpl.customer_footer_template, vars,
-    );
+    const finalOutboundEmail = stitch(tpl.customer_header_template, translated.trim(), tpl.customer_footer_template, vars);
 
     await insertDraft(queryId, 'outbound_customer', subj, finalOutboundEmail);
-    // Draft is ready for a human to approve → surface it as awaiting QA.
     await query(
-      `UPDATE queries
-          SET internal_automation_state = 'awaiting_courier_response',
-              updated_at = NOW()
-        WHERE id = $1`,
+      `UPDATE queries SET internal_automation_state = 'awaiting_courier_response', updated_at = NOW() WHERE id = $1`,
       [queryId],
     );
     return { status: 'translated_draft_created' };
@@ -414,12 +399,18 @@ export async function recordCourierReply(queryId, { subject = '', body = '', fro
 
   // No translation (no key / failure) → hand back to a human.
   await query(
-    `UPDATE queries
-        SET internal_automation_state = 'action_required',
-            requires_attention = true,
-            updated_at = NOW()
-      WHERE id = $1`,
+    `UPDATE queries SET internal_automation_state = 'action_required', requires_attention = true, updated_at = NOW() WHERE id = $1`,
     [queryId],
   );
   return { status: 'courier_reply_recorded' };
+}
+
+export async function recordCourierReply(queryId, { subject = '', body = '', from = '' } = {}) {
+  await query(
+    `INSERT INTO query_emails
+       (query_id, direction, subject, body_text, from_address, is_ai_draft, received_at, created_at)
+     VALUES ($1, 'inbound_courier'::email_direction, $2, $3, $4, false, NOW(), NOW())`,
+    [queryId, subject || 'Courier update', body, from || 'courier@external.invalid'],
+  );
+  return draftCustomerUpdateFromCourier(queryId, body);
 }
