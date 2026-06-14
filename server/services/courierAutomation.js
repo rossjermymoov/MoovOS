@@ -255,7 +255,48 @@ export async function processCustomerEmail(queryId, { subject = '', body = '' } 
     );
   }
 
-  // No courier rule matched, or Gemini flagged a structural blocker → human.
+  const tpl = await getCourierTemplates(courierCode);
+  const vars = {
+    customer_name: ticket.customer_name || 'there',
+    courier_name:  template?.courierName || ticket.courier_name || 'the courier',
+    tracking_code: null,
+  };
+
+  // Validate the parcel reference against the courier's real format (with DPD
+  // 1550 normalisation) — never fabricate one (e.g. a phone number / word).
+  const tracking = await resolveTracking(courierCode, ticket.consignment_number)
+                || await resolveTracking(courierCode, triage.tracking_code);
+  vars.tracking_code = tracking;
+
+  // ── Generalised Information-Gathering branch ────────────────────────────────
+  // Missing context = Gemini flagged a gap, OR we'd need to chase a courier but
+  // have no valid parcel reference. Either way → ask the customer, suppress the
+  // courier inquiry, and record exactly what's missing for the UI.
+  const missing = new Set(triage.missing_variables || []);
+  if (!tracking && template) missing.add('tracking_number');   // can't chase without it
+  const needsContext = triage.has_required_context === false || missing.size > 0;
+
+  if (needsContext) {
+    const missingList = [...missing];
+    const friendly = missingList.map(v => v.replace(/_/g, ' ')).join(', ');
+    const clarMiddle = triage.contextual_clarification_draft
+      || `Thanks for getting in touch. So we can take this forward, could you please confirm ` +
+         `${friendly || 'a few outstanding details'}? As soon as we have that we'll progress this straight away.`;
+    const clarBody = stitch(tpl.customer_header_template, clarMiddle, tpl.customer_footer_template, vars);
+    await insertDraft(queryId, 'outbound_customer', `Re: ${ticket.subject || 'your enquiry'}`, clarBody);
+    await query(
+      `UPDATE queries
+          SET internal_automation_state = 'awaiting_customer',
+              status = 'awaiting_customer_info'::query_status,
+              missing_variables = $2,
+              updated_at = NOW()
+        WHERE id = $1`,
+      [queryId, missingList.join(', ') || null],
+    );
+    return { status: 'clarification_requested', missing: missingList, triage };
+  }
+
+  // We have full context → escalating to a courier needs a matched template.
   if (triage.needs_human || !template) {
     await query(
       `UPDATE queries
@@ -267,39 +308,6 @@ export async function processCustomerEmail(queryId, { subject = '', body = '' } 
       [queryId, triage.reason || 'Automation could not match a courier rule — human review needed.'],
     );
     return { status: 'needs_human', triage };
-  }
-
-  // Validate the parcel reference against the courier's real format (with DPD
-  // 1550 normalisation) — never fabricate one (e.g. a phone number / word).
-  const tracking = await resolveTracking(courierCode, ticket.consignment_number)
-                || await resolveTracking(courierCode, triage.tracking_code);
-
-  const tpl = await getCourierTemplates(courierCode);
-  const vars = {
-    customer_name: ticket.customer_name || 'there',
-    courier_name:  template.courierName,
-    tracking_code: tracking,
-  };
-
-  // ── No valid parcel reference → ask the customer which parcels they mean ─────
-  // We can't chase a courier without a consignment number, so go straight back to
-  // the customer for clarification and create NO courier inquiry.
-  if (!tracking) {
-    const clarMiddle =
-      `Thanks for getting in touch. So we can look into this for you, could you please confirm the ` +
-      `tracking / consignment number(s) for the delayed parcel(s) you're referring to? ` +
-      `As soon as we have those we'll chase ${template.courierName} straight away.`;
-    const clarBody = stitch(tpl.customer_header_template, clarMiddle, tpl.customer_footer_template, vars);
-    await insertDraft(queryId, 'outbound_customer', `Re: ${ticket.subject || 'your enquiry'}`, clarBody);
-    await query(
-      `UPDATE queries
-          SET internal_automation_state = 'awaiting_customer',
-              status = 'awaiting_customer_info'::query_status,
-              updated_at = NOW()
-        WHERE id = $1`,
-      [queryId],
-    );
-    return { status: 'clarification_requested', triage };
   }
 
   // Live routing — resolve the real courier inbox.
@@ -334,6 +342,7 @@ export async function processCustomerEmail(queryId, { subject = '', body = '' } 
         SET internal_automation_state = 'awaiting_courier_response',
             courier_sla_expires_at = $2,
             courier_code = COALESCE(courier_code, $3),
+            missing_variables = NULL,
             updated_at = NOW()
       WHERE id = $1`,
     [queryId, expiresAt, courierCode],

@@ -88,6 +88,9 @@ function regexFallback(subject, body) {
     needs_human_triage: !courier,
     requires_reply: !noise,
     reason: courier ? null : 'Courier could not be identified from the email.',
+    has_required_context: true,        // fallback can't assess — let validators decide
+    missing_variables: [],
+    contextual_clarification_draft: null,
     source: 'regex_fallback',
   };
 }
@@ -107,7 +110,7 @@ export async function extractTriage(subject, body, { trackingExamples = '' } = {
 
   const prompt =
     `You are triaging a parcel support email for a courier reseller.\n` +
-    `Return STRICT JSON only with keys: courier_code, tracking_code, issue_type, needs_human, requires_reply, reason.\n` +
+    `Return STRICT JSON only with keys: courier_code, tracking_code, issue_type, needs_human, requires_reply, reason, has_required_context, missing_variables, contextual_clarification_draft.\n` +
     `- courier_code: one of ${KNOWN_COURIERS.join(', ')} (lowercase), or null if not stated.\n` +
     `- tracking_code: the consignment/tracking number if present, else null.\n` +
     trackingGuide +
@@ -117,7 +120,13 @@ export async function extractTriage(subject, body, { trackingExamples = '' } = {
     `- requires_reply: true if this email needs an actionable response. Set FALSE for automated corporate noise — ` +
     `automated ticket receipts/confirmations, 'do not reply' templates, out-of-office, or claim references that carry ` +
     `no new/dynamic status change. When in doubt, set true.\n` +
-    `- reason: short string when needs_human is true, else null.\n\n` +
+    `- reason: short string when needs_human is true, else null.\n` +
+    `- has_required_context: given the inferred intent, do we have EVERY mandatory operational detail needed to action ` +
+    `or escalate this? false if anything essential is missing (tracking number, order reference, item description, ` +
+    `delivery address, etc.), else true.\n` +
+    `- missing_variables: array of the specific missing detail names, e.g. ["tracking_number"], ["order_number","delivery_address"]; [] when nothing is missing.\n` +
+    `- contextual_clarification_draft: when has_required_context is false, a warm, professional British-English email BODY ` +
+    `(NO greeting, NO sign-off — body paragraphs only) that clearly asks the customer to provide exactly the missing_variables; else null.\n\n` +
     `Subject: ${subject || '(none)'}\nBody: ${(body || '').slice(0, 2000)}`;
 
   try {
@@ -145,6 +154,9 @@ export async function extractTriage(subject, body, { trackingExamples = '' } = {
       needs_human_triage: !!parsed.needs_human || !!parsed.needs_human_triage || !parsed.courier_code,
       requires_reply: parsed.requires_reply !== false,   // default true unless explicitly false
       reason: parsed.reason || (parsed.courier_code ? null : 'Courier not identified.'),
+      has_required_context: parsed.has_required_context !== false,   // default true unless explicitly false
+      missing_variables: Array.isArray(parsed.missing_variables) ? parsed.missing_variables.map(v => String(v).trim()).filter(Boolean) : [],
+      contextual_clarification_draft: parsed.contextual_clarification_draft ? String(parsed.contextual_clarification_draft).trim() : null,
       source: 'gemini-2.5-flash',
     };
   } catch (e) {

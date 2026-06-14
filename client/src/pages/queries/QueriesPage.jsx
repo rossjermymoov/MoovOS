@@ -1926,6 +1926,13 @@ function QuickViewModal({ card, onClose, onDispatched }) {
                   </div>
                 </div>
               </>
+            ) : card.missing_variables ? (
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 bg-amber-50/60 p-6 text-center">
+                <div className="text-sm font-bold text-amber-700">⚠️ Carrier escalation on standby</div>
+                <div className="text-xs font-medium text-amber-700">
+                  Awaiting customer clarification for: {card.missing_variables.split(/[,;]+/).map(v => v.trim().replace(/_/g, ' ')).filter(Boolean).join(', ')}.
+                </div>
+              </div>
             ) : (
               <div className="flex flex-1 items-center justify-center bg-slate-50/60 p-6 text-center text-sm font-medium text-slate-400">
                 No carrier outreach required for this query type.
