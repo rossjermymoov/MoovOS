@@ -659,16 +659,10 @@ router.get('/stats', async (req, res, next) => {
       // Unmatched emails
       query(`SELECT COUNT(*)::int AS count FROM unmatched_emails WHERE resolved = false`),
 
-      // Autopilot runs — AI drafts sent without a human edit, PLUS tickets the
-      // acknowledgement filter closed autonomously (completed_autopilot).
-      query(`
-        SELECT
-          (SELECT COUNT(*) FROM query_emails
-            WHERE is_ai_draft = true AND sent_at IS NOT NULL AND ai_draft_edited = false)
-        + (SELECT COUNT(*) FROM queries
-            WHERE internal_automation_state = 'completed_autopilot')
-          AS count
-      `),
+      // Autopilot runs — STRICTLY true autonomous dispatches from the audit log.
+      // In sandbox/staging nothing is auto-sent, so this correctly reads 0 until a
+      // real 'autopilot_dispatch' is logged.
+      query(`SELECT COUNT(*)::int AS count FROM audit_logs WHERE action_type = 'autopilot_dispatch'`),
     ]);
 
     const o = overview.rows[0];
