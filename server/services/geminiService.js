@@ -95,20 +95,17 @@ function regexFallback(subject, body) {
   };
 }
 
-export async function extractTriage(subject, body, { trackingExamples = '' } = {}) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return regexFallback(subject, body);
+const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 
-  // Inject the real per-courier sample tracking numbers from Settings so Gemini
-  // extracts a number matching an actual format and ignores junk.
+// Build the shared triage prompt (used by every LLM tier).
+function buildTriagePrompt(subject, body, trackingExamples) {
   const trackingGuide = trackingExamples
     ? `\nVALID TRACKING NUMBER FORMATS (real examples from our system, per courier):\n${trackingExamples}\n` +
       `The tracking_code MUST structurally match one of these formats (length + character types). ` +
       `IGNORE anything that doesn't — signature markers like [signature_12345678], phone numbers, order refs. ` +
       `If nothing in the email matches a real format, set tracking_code to null.\n`
     : '';
-
-  const prompt =
+  return (
     `You are triaging a parcel support email for a courier reseller.\n` +
     `Return STRICT JSON only with keys: courier_code, tracking_code, issue_type, needs_human, requires_reply, reason, has_required_context, missing_variables, contextual_clarification_draft.\n` +
     `- courier_code: one of ${KNOWN_COURIERS.join(', ')} (lowercase), or null if not stated.\n` +
@@ -127,40 +124,90 @@ export async function extractTriage(subject, body, { trackingExamples = '' } = {
     `- missing_variables: array of the specific missing detail names, e.g. ["tracking_number"], ["order_number","delivery_address"]; [] when nothing is missing.\n` +
     `- contextual_clarification_draft: when has_required_context is false, a warm, professional British-English email BODY ` +
     `(NO greeting, NO sign-off — body paragraphs only) that clearly asks the customer to provide exactly the missing_variables; else null.\n\n` +
-    `Subject: ${subject || '(none)'}\nBody: ${(body || '').slice(0, 2000)}`;
+    `Subject: ${subject || '(none)'}\nBody: ${(body || '').slice(0, 2000)}`
+  );
+}
 
-  try {
-    const resp = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(apiKey)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0, responseMimeType: 'application/json' },
-      }),
-    });
-    if (!resp.ok) {
-      console.warn('[Gemini] non-OK response:', resp.status);
-      return regexFallback(subject, body);
-    }
-    const json = await resp.json();
-    const text = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    const parsed = JSON.parse(text);
-    // Normalise + guard the shape.
-    return {
-      courier_code: parsed.courier_code ? String(parsed.courier_code).toLowerCase() : null,
-      tracking_code: isLikelyTracking(parsed.tracking_code) ? String(parsed.tracking_code).trim() : null,
-      issue_type: ISSUE_TYPES.includes(parsed.issue_type) ? parsed.issue_type : 'GENERAL',
-      needs_human: !!parsed.needs_human || !parsed.courier_code,
-      needs_human_triage: !!parsed.needs_human || !!parsed.needs_human_triage || !parsed.courier_code,
-      requires_reply: parsed.requires_reply !== false,   // default true unless explicitly false
-      reason: parsed.reason || (parsed.courier_code ? null : 'Courier not identified.'),
-      has_required_context: parsed.has_required_context !== false,   // default true unless explicitly false
-      missing_variables: Array.isArray(parsed.missing_variables) ? parsed.missing_variables.map(v => String(v).trim()).filter(Boolean) : [],
-      contextual_clarification_draft: parsed.contextual_clarification_draft ? String(parsed.contextual_clarification_draft).trim() : null,
-      source: 'gemini-2.5-flash',
-    };
-  } catch (e) {
-    console.warn('[Gemini] extractTriage failed:', e.message);
-    return regexFallback(subject, body);
+// Tolerant JSON parse — handles models that wrap JSON in prose / code fences.
+function parseJsonLoose(text) {
+  const t = String(text || '').trim();
+  try { return JSON.parse(t); } catch { /* try to extract a JSON object */ }
+  const m = t.match(/\{[\s\S]*\}/);
+  if (m) return JSON.parse(m[0]);
+  throw new Error('No JSON object in response');
+}
+
+// Normalise any model's parsed JSON into our guarded triage shape.
+function normalizeTriage(parsed, source) {
+  return {
+    courier_code: parsed.courier_code ? String(parsed.courier_code).toLowerCase() : null,
+    tracking_code: isLikelyTracking(parsed.tracking_code) ? String(parsed.tracking_code).trim() : null,
+    issue_type: ISSUE_TYPES.includes(parsed.issue_type) ? parsed.issue_type : 'GENERAL',
+    needs_human: !!parsed.needs_human || !parsed.courier_code,
+    needs_human_triage: !!parsed.needs_human || !!parsed.needs_human_triage || !parsed.courier_code,
+    requires_reply: parsed.requires_reply !== false,
+    reason: parsed.reason || (parsed.courier_code ? null : 'Courier not identified.'),
+    has_required_context: parsed.has_required_context !== false,
+    missing_variables: Array.isArray(parsed.missing_variables) ? parsed.missing_variables.map(v => String(v).trim()).filter(Boolean) : [],
+    contextual_clarification_draft: parsed.contextual_clarification_draft ? String(parsed.contextual_clarification_draft).trim() : null,
+    source,
+  };
+}
+
+// Tier 1 — Gemini (throws on any non-200 so the cascade can fall through).
+async function callGemini(prompt) {
+  const resp = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(process.env.GEMINI_API_KEY)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0, responseMimeType: 'application/json' },
+    }),
+  });
+  if (!resp.ok) { const e = new Error(`Gemini ${resp.status}: ${await resp.text()}`); e.status = resp.status; throw e; }
+  const j = await resp.json();
+  return parseJsonLoose(j.candidates?.[0]?.content?.parts?.[0]?.text || '');
+}
+
+// Tier 2 — Anthropic Claude 3.5 Sonnet (REST; Node-18 safe, no SDK).
+async function callAnthropic(prompt) {
+  const resp = await fetch(ANTHROPIC_URL, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': process.env.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-3-5-sonnet-latest',
+      max_tokens: 1024,
+      temperature: 0,
+      system: 'You are a logistics triage engine. Output ONLY a single valid JSON object — no prose, no markdown.',
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+  if (!resp.ok) { const e = new Error(`Anthropic ${resp.status}: ${await resp.text()}`); e.status = resp.status; throw e; }
+  const j = await resp.json();
+  return parseJsonLoose(j.content?.[0]?.text || '');
+}
+
+// Multi-LLM failover triage: Gemini → Anthropic → deterministic regex floor.
+// Every tier returns the identical schema so the 3-panel dashboard is unaffected.
+export async function extractTriage(subject, body, { trackingExamples = '' } = {}) {
+  const prompt = buildTriagePrompt(subject, body, trackingExamples);
+
+  // Tier 1 — Gemini
+  if (process.env.GEMINI_API_KEY) {
+    try { return normalizeTriage(await callGemini(prompt), 'gemini-2.5-flash'); }
+    catch (e) { console.warn('[Triage] Tier 1 Gemini failed → trying Anthropic:', e.message); }
   }
+
+  // Tier 2 — Anthropic Claude 3.5 Sonnet
+  if (process.env.ANTHROPIC_API_KEY) {
+    try { return normalizeTriage(await callAnthropic(prompt), 'claude-3-5-sonnet'); }
+    catch (e) { console.warn('[Triage] Tier 2 Anthropic failed → falling back to regex:', e.message); }
+  }
+
+  // Tier 3 — deterministic regex floor (never throws)
+  return regexFallback(subject, body);
 }
