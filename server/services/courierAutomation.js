@@ -123,6 +123,54 @@ async function getCourierTrackingRegexes(courierCode) {
   }
 }
 
+// Build a per-courier list of real sample tracking numbers (from Settings) to
+// feed into the Gemini triage prompt as the authoritative format guide.
+export async function getAllTrackingExamples() {
+  try {
+    const r = await query(
+      `SELECT courier_name, courier_code, tracking_samples
+         FROM courier_routing_rules
+        WHERE courier_code <> 'default'
+          AND tracking_samples IS NOT NULL AND btrim(tracking_samples) <> ''`,
+    );
+    return r.rows.map(row => {
+      const samples = String(row.tracking_samples).split(/[\n,;]+/).map(s => s.trim()).filter(Boolean).join(', ');
+      return `- ${row.courier_name || row.courier_code}: ${samples}`;
+    }).join('\n');
+  } catch (e) {
+    console.warn('[CourierAutomation] tracking examples fetch failed:', e.message);
+    return '';
+  }
+}
+
+// Identify which courier a tracking number belongs to, purely from its shape —
+// so AGL-sourced parcels resolve to Evri or Yodel (we never surface AGL). Returns
+// { courier_code, courier_name } or null when no courier's samples match.
+export async function identifyCourierByTracking(candidate) {
+  if (!candidate) return null;
+  try {
+    const r = await query(
+      `SELECT courier_code, courier_name, tracking_samples, tracking_pattern
+         FROM courier_routing_rules
+        WHERE is_active = true AND courier_code <> 'default'`,
+    );
+    for (const row of r.rows) {
+      const norm = normalizeTracking(row.courier_code, candidate);
+      if (!norm) continue;
+      const regexes = String(row.tracking_samples || '').split(/[\n,;]+/).map(s => s.trim()).filter(Boolean)
+        .map(s => deriveTrackingRegex(normalizeTracking(row.courier_code, s))).filter(Boolean);
+      if (row.tracking_pattern) regexes.push(row.tracking_pattern);
+      for (const p of regexes) {
+        try { if (new RegExp(p, 'i').test(norm)) return { courier_code: row.courier_code, courier_name: row.courier_name }; }
+        catch { /* skip bad regex */ }
+      }
+    }
+  } catch (e) {
+    console.warn('[CourierAutomation] courier identify failed:', e.message);
+  }
+  return null;
+}
+
 // Validate a candidate against the courier's sample-derived shapes (falling back
 // to the generic guard when none are configured). Returns the normalised value.
 async function resolveTracking(courierCode, candidate) {
@@ -172,7 +220,8 @@ export async function processCustomerEmail(queryId, { subject = '', body = '' } 
   if (!tRes.rows.length) return { status: 'error', reason: 'ticket not found' };
   const ticket = tRes.rows[0];
 
-  const triage = await extractTriage(subject || ticket.subject, body);
+  const trackingExamples = await getAllTrackingExamples();
+  const triage = await extractTriage(subject || ticket.subject, body, { trackingExamples });
 
   // ── Acknowledgement filter ──────────────────────────────────────────────────
   // Automated receipts / 'do not reply' noise need no response. Close the loop
@@ -188,8 +237,23 @@ export async function processCustomerEmail(queryId, { subject = '', body = '' } 
     return { status: 'autopilot_completed', reason: 'no reply required (automated/non-actionable)', triage };
   }
 
-  const courierCode = triage.courier_code || ticket.courier_code;
+  // Resolve courier — never surface AGL (the wholesaler we buy Evri/Yodel from).
+  // Strip it, then let the tracking-number shape decide Evri vs Yodel.
+  let courierCode = String(triage.courier_code || ticket.courier_code || '').toLowerCase();
+  if (courierCode === 'agl') courierCode = '';
+  if (!courierCode) {
+    const id = await identifyCourierByTracking(ticket.consignment_number || triage.tracking_code);
+    if (id) courierCode = id.courier_code;
+  }
   const template = courierCode ? matchTemplate(courierCode, triage.issue_type) : null;
+
+  // Persist the resolved courier so the ticket shows Evri/Yodel (never AGL/blank).
+  if (template) {
+    await query(
+      `UPDATE queries SET courier_code = $2, courier_name = $3, updated_at = NOW() WHERE id = $1`,
+      [queryId, courierCode, template.courierName],
+    );
+  }
 
   // No courier rule matched, or Gemini flagged a structural blocker → human.
   if (triage.needs_human || !template) {

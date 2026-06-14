@@ -92,15 +92,25 @@ function regexFallback(subject, body) {
   };
 }
 
-export async function extractTriage(subject, body) {
+export async function extractTriage(subject, body, { trackingExamples = '' } = {}) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return regexFallback(subject, body);
+
+  // Inject the real per-courier sample tracking numbers from Settings so Gemini
+  // extracts a number matching an actual format and ignores junk.
+  const trackingGuide = trackingExamples
+    ? `\nVALID TRACKING NUMBER FORMATS (real examples from our system, per courier):\n${trackingExamples}\n` +
+      `The tracking_code MUST structurally match one of these formats (length + character types). ` +
+      `IGNORE anything that doesn't — signature markers like [signature_12345678], phone numbers, order refs. ` +
+      `If nothing in the email matches a real format, set tracking_code to null.\n`
+    : '';
 
   const prompt =
     `You are triaging a parcel support email for a courier reseller.\n` +
     `Return STRICT JSON only with keys: courier_code, tracking_code, issue_type, needs_human, requires_reply, reason.\n` +
     `- courier_code: one of ${KNOWN_COURIERS.join(', ')} (lowercase), or null if not stated.\n` +
     `- tracking_code: the consignment/tracking number if present, else null.\n` +
+    trackingGuide +
     `- issue_type: one of ${ISSUE_TYPES.join(', ')}.\n` +
     `- needs_human: true if a human agent is required (no courier, unclear, complaint/escalation), else false.\n` +
     `  Set this to true whenever you cannot confidently categorise the email or map it to a structured rule.\n` +

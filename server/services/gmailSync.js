@@ -41,13 +41,21 @@ export async function triageAndSummarize(subject, body) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return triageFallback(subject, body);
 
+  const trackingExamples = await getAllTrackingExamples();
+  const trackingGuide = trackingExamples
+    ? `\nVALID TRACKING NUMBER FORMATS (real examples from our system, per courier):\n${trackingExamples}\n` +
+      `tracking_number MUST structurally match one of these (length + character types). IGNORE signature ` +
+      `markers like [signature_12345678], phone numbers and order refs; set null if nothing matches.\n`
+    : '';
+
   const prompt =
     `You are triaging a parcel-courier support email. Return STRICT JSON only with keys:\n` +
     `- ticket_type: exactly one of ["query","claim","billing","technical"].\n` +
     `- summary: max 2 sentences describing the core issue (no "The email"/"This email").\n` +
     `- courier: the courier name (e.g. "DPD","DHL","Evri") or null if none mentioned.\n` +
-    `- tracking_number: the tracking/consignment number if present, else null.\n\n` +
-    `Subject: ${subject || '(none)'}\nBody: ${(body || '').slice(0, 2000)}`;
+    `- tracking_number: the tracking/consignment number if present, else null.\n` +
+    trackingGuide +
+    `\nSubject: ${subject || '(none)'}\nBody: ${(body || '').slice(0, 2000)}`;
 
   try {
     const resp = await fetch(`${GEMINI_GENERATE_URL}?key=${encodeURIComponent(apiKey)}`, {
@@ -97,6 +105,7 @@ import { query } from '../db/index.js';
 import { applySlaTriggers } from './slaEngine.js';
 import { triagePriority } from './triageEngine.js';
 import { isLikelyTracking } from './geminiService.js';
+import { identifyCourierByTracking, getAllTrackingExamples } from './courierAutomation.js';
 
 function decodeBase64(str) {
   return Buffer.from(str.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8');
@@ -285,9 +294,17 @@ async function upsertTicket(msg, gmail = null) {
     // Gemini triage — drives group routing, summary, courier and tracking.
     const triage      = await triageAndSummarize(subject, body);
     const groupName   = GROUP_BY_TICKET_TYPE[triage.ticket_type] || 'Queries';
-    const courierName = triage.courier || null;
-    const courierCode = courierName ? courierName.toLowerCase().replace(/\s+/g, '_') : null;
     const tracking    = triage.tracking_number || null;
+
+    // Resolve courier — never store AGL (wholesaler). Strip it, then identify
+    // Evri vs Yodel from the tracking number's shape when the text didn't say.
+    let courierName = triage.courier || null;
+    if (courierName && /^agl$/i.test(courierName.trim())) courierName = null;
+    let courierCode = courierName ? courierName.toLowerCase().replace(/\s+/g, '_') : null;
+    if (!courierCode && tracking) {
+      const id = await identifyCourierByTracking(tracking);
+      if (id) { courierCode = id.courier_code; courierName = id.courier_name; }
+    }
 
     const ticketRes = await query(`
       INSERT INTO queries
