@@ -81,6 +81,7 @@ function regexFallback(subject, body) {
   const noise = /(do not reply|do-not-reply|noreply|no-reply|automated (response|message|receipt)|this is an automated|ticket (has been )?(created|received|logged)|case reference|out of office)/i.test(text);
 
   return {
+    intent: courier ? 'courier_chase' : 'other',
     courier_code: courier,
     tracking_code: trackCandidate,
     issue_type: issue,
@@ -107,7 +108,9 @@ function buildTriagePrompt(subject, body, trackingExamples) {
     : '';
   return (
     `You are triaging a parcel support email for a courier reseller.\n` +
-    `Return STRICT JSON only with keys: courier_code, tracking_code, issue_type, needs_human, requires_reply, reason, has_required_context, missing_variables, contextual_clarification_draft.\n` +
+    `Return STRICT JSON only with keys: intent, courier_code, tracking_code, issue_type, needs_human, requires_reply, reason, has_required_context, missing_variables, contextual_clarification_draft.\n` +
+    `- intent: the transactional intent — one of ["courier_chase","ticket_closure","information_request","complaint","other"]. ` +
+    `Use "ticket_closure" when the customer is simply confirming resolution, saying thanks, or otherwise needs no further outward action.\n` +
     `- courier_code: one of ${KNOWN_COURIERS.join(', ')} (lowercase), or null if not stated.\n` +
     `- tracking_code: the consignment/tracking number if present, else null.\n` +
     trackingGuide +
@@ -138,8 +141,11 @@ function parseJsonLoose(text) {
 }
 
 // Normalise any model's parsed JSON into our guarded triage shape.
+const INTENTS = ['courier_chase', 'ticket_closure', 'information_request', 'complaint', 'other'];
+
 function normalizeTriage(parsed, source) {
   return {
+    intent: INTENTS.includes(parsed.intent) ? parsed.intent : 'other',
     courier_code: parsed.courier_code ? String(parsed.courier_code).toLowerCase() : null,
     tracking_code: isLikelyTracking(parsed.tracking_code) ? String(parsed.tracking_code).trim() : null,
     issue_type: ISSUE_TYPES.includes(parsed.issue_type) ? parsed.issue_type : 'GENERAL',

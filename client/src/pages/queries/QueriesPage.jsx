@@ -1933,6 +1933,11 @@ function QuickViewModal({ card, onClose, onDispatched }) {
                   Awaiting customer clarification for: {card.missing_variables.split(/[,;]+/).map(v => v.trim().replace(/_/g, ' ')).filter(Boolean).join(', ')}.
                 </div>
               </div>
+            ) : card.triage_intent === 'ticket_closure' ? (
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 bg-emerald-50/60 p-6 text-center">
+                <div className="text-sm font-bold text-emerald-700">✅ Issue Resolved / Suspended</div>
+                <div className="text-xs font-medium text-emerald-700">No carrier intervention required for this query state.</div>
+              </div>
             ) : (
               <div className="flex flex-1 items-center justify-center bg-slate-50/60 p-6 text-center text-sm font-medium text-slate-400">
                 No carrier outreach required for this query type.

@@ -972,7 +972,7 @@ router.get('/drafts', async (req, res, next) => {
         qe.created_at  AS draft_created_at,
         q.ticket_number, q.priority, q.status, q.subject,
         q.customer_name, q.group_name, q.courier_name, q.description,
-        q.consecutive_approvals, q.missing_variables,
+        q.consecutive_approvals, q.missing_variables, q.triage_intent,
         COALESCE(
           (SELECT rep.body_text FROM query_emails rep WHERE rep.id = qe.reply_to_message_id),
           (SELECT qe2.body_text FROM query_emails qe2
@@ -1003,7 +1003,7 @@ router.get('/drafts', async (req, res, next) => {
         q.updated_at   AS draft_created_at,
         q.ticket_number, q.priority, q.status, q.subject,
         q.customer_name, q.group_name, q.courier_name, q.description,
-        q.consecutive_approvals, q.missing_variables,
+        q.consecutive_approvals, q.missing_variables, q.triage_intent,
         (SELECT qe2.body_text FROM query_emails qe2
           WHERE qe2.query_id = q.id
             AND qe2.direction IN ('inbound_customer','inbound_courier')
@@ -1036,6 +1036,7 @@ router.get('/drafts', async (req, res, next) => {
           courier_name: r.courier_name, description: r.description,
           consecutive_approvals: r.consecutive_approvals,
           missing_variables: r.missing_variables,
+          triage_intent: r.triage_intent,
           incoming_text: r.incoming_text,
           customer_email_id: null, customer_body: null,
           courier_email_id:  null, courier_body:  null,

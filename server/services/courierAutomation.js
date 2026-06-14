@@ -268,6 +268,27 @@ export async function processCustomerEmail(queryId, { subject = '', body = '' } 
                 || await resolveTracking(courierCode, triage.tracking_code);
   vars.tracking_code = tracking;
 
+  // ── Ticket-closure pivot ────────────────────────────────────────────────────
+  // Customer is just confirming resolution / saying thanks → draft a brief
+  // closing note to them and create NO courier inquiry.
+  if (triage.intent === 'ticket_closure') {
+    const closeMiddle = triage.contextual_clarification_draft
+      || `Thanks for letting us know — we're really pleased this is now resolved. ` +
+         `We'll close this off, but do reach out if there's anything else we can help with.`;
+    const closeBody = stitch(tpl.customer_header_template, closeMiddle, tpl.customer_footer_template, vars);
+    await insertDraft(queryId, 'outbound_customer', `Re: ${ticket.subject || 'your enquiry'}`, closeBody);
+    await query(
+      `UPDATE queries
+          SET internal_automation_state = 'awaiting_customer',
+              triage_intent = 'ticket_closure',
+              missing_variables = NULL,
+              updated_at = NOW()
+        WHERE id = $1`,
+      [queryId],
+    );
+    return { status: 'closure_drafted', triage };
+  }
+
   // ── Generalised Information-Gathering branch ────────────────────────────────
   // Missing context = Gemini flagged a gap, OR we'd need to chase a courier but
   // have no valid parcel reference. Either way → ask the customer, suppress the
@@ -289,9 +310,10 @@ export async function processCustomerEmail(queryId, { subject = '', body = '' } 
           SET internal_automation_state = 'awaiting_customer',
               status = 'awaiting_customer_info'::query_status,
               missing_variables = $2,
+              triage_intent = $3,
               updated_at = NOW()
         WHERE id = $1`,
-      [queryId, missingList.join(', ') || null],
+      [queryId, missingList.join(', ') || null, triage.intent || 'information_request'],
     );
     return { status: 'clarification_requested', missing: missingList, triage };
   }
@@ -343,6 +365,7 @@ export async function processCustomerEmail(queryId, { subject = '', body = '' } 
             courier_sla_expires_at = $2,
             courier_code = COALESCE(courier_code, $3),
             missing_variables = NULL,
+            triage_intent = 'courier_chase',
             updated_at = NOW()
       WHERE id = $1`,
     [queryId, expiresAt, courierCode],
