@@ -783,6 +783,15 @@ async function backfillTriageHandler(req, res, next) {
         RETURNING id`,
     );
 
+    // force=true → wipe stale analysis columns so every open ticket is judged
+    // from scratch by the updated model, not left with old intent/missing flags.
+    if (force) {
+      await query(
+        `UPDATE queries SET triage_intent = NULL, missing_variables = NULL, internal_automation_state = NULL
+          WHERE status NOT IN ${RESOLVED}`,
+      );
+    }
+
     // Default scope: untriaged / default-priority / unassigned tickets. ?force=true
     // re-runs the entire open pool.
     const eligible = await query(`
@@ -813,11 +822,13 @@ async function backfillTriageHandler(req, res, next) {
         continue;
       }
 
-      // Earliest customer-side message gives the baseline body for the engine.
+      // The LATEST inbound message is what we triage — an old thread header like
+      // "Redelivery Request" must not override a newer "all sorted, please close".
       const bodyRes = await query(
         `SELECT body_text FROM query_emails
          WHERE query_id = $1
-         ORDER BY COALESCE(received_at, created_at) ASC
+           AND direction IN ('inbound_customer','inbound_courier')
+         ORDER BY COALESCE(received_at, created_at) DESC
          LIMIT 1`,
         [ticket.id]
       );

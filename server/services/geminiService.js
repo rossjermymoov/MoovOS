@@ -111,6 +111,10 @@ function buildTriagePrompt(subject, body, trackingExamples) {
     `Return STRICT JSON only with keys: intent, courier_code, tracking_code, issue_type, needs_human, requires_reply, reason, has_required_context, missing_variables, contextual_clarification_draft.\n` +
     `- intent: the transactional intent — one of ["courier_chase","ticket_closure","information_request","complaint","other"]. ` +
     `Use "ticket_closure" when the customer is simply confirming resolution, saying thanks, or otherwise needs no further outward action.\n` +
+    `  HIGH-CONFIDENCE RULE: if the latest message uses final-state language (e.g. "parcel has now been delivered", ` +
+    `"successfully delivered", "received it", "thank you for your help, please close", "all sorted", "no further action") ` +
+    `you MUST set intent = "ticket_closure" AND has_required_context = true. Judge ONLY the most recent message, ` +
+    `not older thread history or the subject line.\n` +
     `- courier_code: one of ${KNOWN_COURIERS.join(', ')} (lowercase), or null if not stated.\n` +
     `- tracking_code: the consignment/tracking number if present, else null.\n` +
     trackingGuide +
