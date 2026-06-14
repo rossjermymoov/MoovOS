@@ -783,13 +783,16 @@ async function backfillTriageHandler(req, res, next) {
         RETURNING id`,
     );
 
-    // force=true → wipe stale analysis columns so every open ticket is judged
-    // from scratch by the updated model, not left with old intent/missing flags.
+    // force=true → deliberate clean-slate: wipe stale analysis columns so every
+    // open ticket is judged from scratch by the updated model. NOTE: these live on
+    // the `queries` table (triage_intent / missing_variables / internal_automation_state);
+    // there is no `ai_metadata` column and `query_emails` has no automation state.
     if (force) {
       await query(
         `UPDATE queries SET triage_intent = NULL, missing_variables = NULL, internal_automation_state = NULL
           WHERE status NOT IN ${RESOLVED}`,
       );
+      console.log('🔄 Deliberate reset executed: triage_intent / missing_variables / internal_automation_state cleared for clean-slate re-analysis.');
     }
 
     // Default scope: untriaged / default-priority / unassigned tickets. ?force=true
