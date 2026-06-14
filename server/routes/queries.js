@@ -17,6 +17,7 @@ import { processCustomerEmail, recordCourierReply, getCourierTemplates, stitch }
 import { geminiGenerate } from '../services/geminiService.js';
 import { applySlaTriggers } from '../services/slaEngine.js';
 import { triagePriority } from '../services/triageEngine.js';
+import { aiAutonomouslyLearnPreference } from '../services/learningEngine.js';
 
 const router = express.Router();
 
@@ -862,6 +863,64 @@ async function backfillTriageHandler(req, res, next) {
 }
 router.post('/backfill-triage', backfillTriageHandler);
 router.get('/backfill-triage',  backfillTriageHandler);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Learning nudges — surface auto-committed learned behaviours to the dashboard.
+//   GET    /api/queries/learning-nudges            → latest undismissed nudge(s)
+//   POST   /api/queries/learning-nudges/:id/dismiss
+//   POST   /api/queries/learning-nudges/:id/apply  → re-refine matching drafts
+// Registered before '/:id'.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/learning-nudges', async (req, res, next) => {
+  try {
+    const r = await query(
+      `SELECT id, scenario_trigger, core_instruction, courier_code, issue_type, match_count, created_at
+         FROM learning_nudges
+        WHERE dismissed = false AND match_count > 0
+        ORDER BY created_at DESC LIMIT 5`,
+    );
+    res.json(r.rows);
+  } catch (err) { next(err); }
+});
+
+router.post('/learning-nudges/:id/dismiss', async (req, res, next) => {
+  try {
+    await query(`UPDATE learning_nudges SET dismissed = true WHERE id = $1`, [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// Apply a learned instruction to every matching open ticket's pending draft.
+router.post('/learning-nudges/:id/apply', async (req, res, next) => {
+  try {
+    const nRes = await query(`SELECT * FROM learning_nudges WHERE id = $1`, [req.params.id]);
+    const n = nRes.rows[0];
+    if (!n) return res.status(404).json({ error: 'Nudge not found' });
+
+    const RES = `('resolved','resolved_claim_approved','resolved_claim_rejected')`;
+    const targets = await query(
+      `SELECT q.id AS query_id, qe.id AS email_id
+         FROM queries q
+         JOIN query_emails qe ON qe.query_id = q.id
+          AND qe.is_ai_draft = true AND qe.sent_at IS NULL AND qe.ai_draft_approved_by IS NULL
+        WHERE q.status NOT IN ${RES}
+          AND q.courier_code IS NOT DISTINCT FROM $1
+          AND q.query_type   IS NOT DISTINCT FROM $2
+        LIMIT 50`,
+      [n.courier_code || null, n.issue_type || null],
+    );
+
+    let applied = 0;
+    for (const t of targets.rows) {
+      try {
+        await runDraftRevision(t.query_id, { email_id: t.email_id, feedback: n.core_instruction, resetApprovals: false });
+        applied++;
+      } catch (e) { /* skip individual failures */ }
+    }
+    await query(`UPDATE learning_nudges SET dismissed = true WHERE id = $1`, [req.params.id]);
+    res.json({ ok: true, applied, total: targets.rows.length });
+  } catch (err) { next(err); }
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/queries/tracking-shapes
@@ -2088,6 +2147,10 @@ router.post('/:id/refine-draft', async (req, res, next) => {
     await query(`UPDATE queries SET consecutive_approvals = 0, updated_at = NOW() WHERE id = $1`, [queryId]);
 
     res.json({ success: true, email: updated.rows[0], revised_text: revised });
+
+    // Background: silently abstract + commit the underlying rule, and raise a
+    // nudge if other open tickets match. Fire-and-forget — never blocks the reply.
+    aiAutonomouslyLearnPreference(queryId, prompt).catch(() => {});
   } catch (err) { next(err); }
 });
 
