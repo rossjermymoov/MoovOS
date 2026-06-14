@@ -1825,6 +1825,17 @@ function QuickViewModal({ card, onClose, onDispatched }) {
   const [sending,  setSending]    = useState(false);
   const pchip = priorityChip(card);
   const hasCourier = !!card.courier_email_id;
+  const isClosure  = card.triage_intent === 'ticket_closure' || card.kind === 'closure';
+
+  async function confirmClose() {
+    setSending(true);
+    try {
+      await api.post(`/queries/${card.query_id}/direct-resolve`);
+      onDispatched?.();
+    } catch (e) {
+      alert('Close failed: ' + (e.response?.data?.error || e.message));
+    } finally { setSending(false); }
+  }
 
   async function refine(side) {
     const email_id = side === 'courier' ? card.courier_email_id : card.customer_email_id;
@@ -1873,7 +1884,21 @@ function QuickViewModal({ card, onClose, onDispatched }) {
           <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">✕</button>
         </div>
 
-        {/* Three-panel cockpit */}
+        {/* Closure → AI suggestion intercept (no draft, no email) */}
+        {isClosure ? (
+          <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto p-8">
+            <div className="w-full max-w-lg rounded-2xl border border-emerald-200 bg-emerald-50/50 p-8 text-center">
+              <div className="text-lg font-black text-slate-900">🤖 We believe this ticket should be resolved.</div>
+              <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 text-left">
+                <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">Customer message snippet</div>
+                <p className="line-clamp-6 whitespace-pre-wrap text-sm leading-relaxed text-slate-600">
+                  {cleanIncoming(card.incoming_text)?.slice(0, 400) || card.subject || '—'}
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
+        /* Three-panel cockpit */
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden p-4 lg:grid-cols-3">
           {/* Panel 1 — inbound trigger */}
           <div className={panel}>
@@ -1945,17 +1970,25 @@ function QuickViewModal({ card, onClose, onDispatched }) {
             )}
           </div>
         </div>
+        )}
 
-        {/* Footer — single dual-dispatch action */}
+        {/* Footer — closure confirm, or dual-dispatch */}
         <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-4">
           <button onClick={onClose}
             className="rounded-lg border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">
             Cancel / Close
           </button>
-          <button onClick={dispatch} disabled={sending}
-            className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm shadow-emerald-100 transition hover:bg-emerald-700 disabled:opacity-50">
-            {sending ? 'Dispatching…' : '✓ Approve & Send Balanced Strategy'}
-          </button>
+          {isClosure ? (
+            <button onClick={confirmClose} disabled={sending}
+              className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm shadow-emerald-100 transition hover:bg-emerald-700 disabled:opacity-50">
+              {sending ? 'Closing…' : '✓ Confirmed - Close Ticket'}
+            </button>
+          ) : (
+            <button onClick={dispatch} disabled={sending}
+              className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm shadow-emerald-100 transition hover:bg-emerald-700 disabled:opacity-50">
+              {sending ? 'Dispatching…' : '✓ Approve & Send Balanced Strategy'}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -2043,6 +2076,23 @@ function AutopilotQABay({ refreshKey, onChanged }) {
               <button onClick={() => navigate(`/queries/${c.query_id}`)}
                 className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-bold text-amber-800 transition hover:bg-amber-100">
                 Open &amp; review →
+              </button>
+            </div>
+          ) : c.kind === 'closure' ? (
+            <div key={`c-${c.query_id}`} className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 last:mb-0">
+              <div className="mb-2 flex items-center gap-2">
+                <button onClick={() => navigate(`/queries/${c.query_id}`)}
+                  className={`inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase ${rowBadgeClasses(c)}`}>
+                  M-{c.ticket_number}
+                </button>
+                <span className="truncate text-xs font-medium text-emerald-700">{c.customer_name || c.subject}</span>
+              </div>
+              <p className="mb-3 text-sm font-semibold leading-snug text-emerald-800">
+                🤖 AI suggests this ticket can be resolved.
+              </p>
+              <button onClick={() => setViewing(c)}
+                className="w-full rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-bold text-emerald-800 transition hover:bg-emerald-100">
+                👁️ Review &amp; close →
               </button>
             </div>
           ) : (

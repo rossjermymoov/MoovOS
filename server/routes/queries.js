@@ -877,6 +877,32 @@ router.get('/learning-nudges', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// POST /api/queries/:id/direct-resolve — one-click AI-suggested closure.
+// No email/SendGrid. Marks the ticket resolved and logs a correct-AI-assessment
+// entry to the audit ledger. Registered before '/:id'.
+router.post('/:id/direct-resolve', async (req, res, next) => {
+  try {
+    const r = await query(
+      `UPDATE queries
+          SET status = 'resolved'::query_status,
+              internal_automation_state = 'resolved_autopilot',
+              missing_variables = NULL,
+              updated_at = NOW()
+        WHERE id = $1
+        RETURNING id`,
+      [req.params.id],
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'Ticket not found' });
+
+    await query(
+      `INSERT INTO audit_logs (action_type, query_id, actor, metadata)
+       VALUES ('ai_closure_confirmed', $1, 'human', '{"source":"suggestion_intercept"}'::jsonb)`,
+      [req.params.id],
+    );
+    res.json({ ok: true, resolved: req.params.id });
+  } catch (err) { next(err); }
+});
+
 router.post('/learning-nudges/:id/dismiss', async (req, res, next) => {
   try {
     await query(`UPDATE learning_nudges SET dismissed = true WHERE id = $1`, [req.params.id]);
@@ -1022,6 +1048,30 @@ router.get('/drafts', async (req, res, next) => {
       LIMIT 50
     `);
 
+    // 3. AI-suggested closures (no draft, no email) → kind 'closure'.
+    const closures = await query(`
+      SELECT
+        'closure'      AS kind,
+        NULL           AS email_id,
+        q.id           AS query_id,
+        NULL           AS body_text,
+        NULL           AS direction,
+        q.updated_at   AS draft_created_at,
+        q.ticket_number, q.priority, q.status, q.subject,
+        q.customer_name, q.group_name, q.courier_name, q.description,
+        q.consecutive_approvals, q.missing_variables, q.triage_intent,
+        (SELECT qe2.body_text FROM query_emails qe2
+          WHERE qe2.query_id = q.id
+            AND qe2.direction IN ('inbound_customer','inbound_courier')
+          ORDER BY COALESCE(qe2.received_at, qe2.created_at) DESC LIMIT 1) AS incoming_text
+      FROM queries q
+      WHERE q.internal_automation_state = 'suggested_closure'
+        AND q.triage_intent = 'ticket_closure'
+        AND q.status NOT IN ${RESOLVED}
+      ORDER BY q.updated_at DESC
+      LIMIT 50
+    `);
+
     // Group pending drafts → ONE card per ticket, carrying both the customer and
     // courier draft (whichever exist).
     const byTicket = new Map();
@@ -1051,7 +1101,7 @@ router.get('/drafts', async (req, res, next) => {
       }
     }
 
-    res.json([...paused.rows, ...byTicket.values()]);
+    res.json([...closures.rows, ...paused.rows, ...byTicket.values()]);
   } catch (err) { next(err); }
 });
 

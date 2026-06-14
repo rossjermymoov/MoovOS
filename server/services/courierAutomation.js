@@ -269,24 +269,20 @@ export async function processCustomerEmail(queryId, { subject = '', body = '' } 
   vars.tracking_code = tracking;
 
   // ── Ticket-closure pivot ────────────────────────────────────────────────────
-  // Customer is just confirming resolution / saying thanks → draft a brief
-  // closing note to them and create NO courier inquiry.
+  // Customer is just confirming resolution / saying thanks → NO outbound draft.
+  // Flag it as an AI-suggested closure; the dashboard intercepts and a human
+  // one-click resolves it (no email sent).
   if (triage.intent === 'ticket_closure') {
-    const closeMiddle = triage.contextual_clarification_draft
-      || `Thanks for letting us know — we're really pleased this is now resolved. ` +
-         `We'll close this off, but do reach out if there's anything else we can help with.`;
-    const closeBody = stitch(tpl.customer_header_template, closeMiddle, tpl.customer_footer_template, vars);
-    await insertDraft(queryId, 'outbound_customer', `Re: ${ticket.subject || 'your enquiry'}`, closeBody);
     await query(
       `UPDATE queries
-          SET internal_automation_state = 'awaiting_customer',
+          SET internal_automation_state = 'suggested_closure',
               triage_intent = 'ticket_closure',
               missing_variables = NULL,
               updated_at = NOW()
         WHERE id = $1`,
       [queryId],
     );
-    return { status: 'closure_drafted', triage };
+    return { status: 'closure_suggested', triage };
   }
 
   // ── Generalised Information-Gathering branch ────────────────────────────────
