@@ -555,8 +555,11 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
 
   const logoUrl      = q.courier_code ? getCourierLogo(q.courier_code) : null;
   const statusCfg    = STATUS_CFG[q.status] || { label: q.status, color: C.muted, bg: 'rgba(148,163,184,0.1)' };
-  const assigneeName = staffList.find(s => s.id === q.assigned_to)?.full_name;
-  const initials     = assigneeName ? assigneeName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : null;
+  const humanName    = staffList.find(s => s.id === q.assigned_to)?.full_name;
+  // No human owner + a staged AI draft → owned by the AI agent "Katana" (never "Unassigned").
+  const isKatana     = !humanName && (parseInt(q.pending_drafts) || 0) > 0;
+  const assigneeName = humanName || (isKatana ? 'Katana' : null);
+  const initials     = humanName ? humanName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : null;
   const unread       = parseInt(q.unread_emails) || 0;
   const hasNewReply  = q.has_new_reply;
   const preview      = q.latest_email_preview || q.description || '';
@@ -648,20 +651,30 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
           </span>
           <span className="whitespace-nowrap text-sm text-slate-400">{timeAgo(actTime)}</span>
 
-          {/* Assign avatar (kept for inline assignment) */}
+          {/* Assign avatar (kept for inline assignment) — Katana pill when AI-owned */}
           <div className="relative shrink-0">
-            <div
-              onClick={e => { e.stopPropagation(); setAssignOpen(v => !v); }}
-              title={assigneeName ? `Assigned to ${assigneeName}` : 'Assign ticket'}
-              style={{
-                width: 28, height: 28, borderRadius: '50%',
-                background: initials ? 'rgba(99,102,241,0.12)' : 'rgba(0,0,0,0.04)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 11, fontWeight: 600, color: initials ? '#4F46E5' : C.muted,
-                cursor: 'pointer', outline: assignOpen ? '2px solid #6366F1' : 'none',
-              }}>
-              {assigning ? '…' : (initials || <User size={13} color={C.muted} />)}
-            </div>
+            {isKatana ? (
+              <div
+                onClick={e => { e.stopPropagation(); setAssignOpen(v => !v); }}
+                title="Owned by Katana (AI) — draft awaiting review"
+                className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700"
+                style={{ outline: assignOpen ? '2px solid #6366F1' : 'none' }}>
+                🤖 Katana
+              </div>
+            ) : (
+              <div
+                onClick={e => { e.stopPropagation(); setAssignOpen(v => !v); }}
+                title={assigneeName ? `Assigned to ${assigneeName}` : 'Assign ticket'}
+                style={{
+                  width: 28, height: 28, borderRadius: '50%',
+                  background: initials ? 'rgba(99,102,241,0.12)' : 'rgba(0,0,0,0.04)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 11, fontWeight: 600, color: initials ? '#4F46E5' : C.muted,
+                  cursor: 'pointer', outline: assignOpen ? '2px solid #6366F1' : 'none',
+                }}>
+                {assigning ? '…' : (initials || <User size={13} color={C.muted} />)}
+              </div>
+            )}
             {assignOpen && (
               <div
                 onClick={e => e.stopPropagation()}

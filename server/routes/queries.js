@@ -617,7 +617,12 @@ router.get('/stats', async (req, res, next) => {
               AND claim_deadline_at BETWEEN NOW() AND NOW() + INTERVAL '7 days'
               AND status NOT IN ${RESOLVED}
           )                                                                          AS claim_deadlines_7d,
-          COUNT(*) FILTER (WHERE assigned_to IS NULL AND status NOT IN ${RESOLVED}) AS unassigned,
+          -- Truly unassigned = no human owner AND no AI draft staged (those belong to Kay).
+          COUNT(*) FILTER (WHERE assigned_to IS NULL AND pending_drafts = 0
+                             AND status NOT IN ${RESOLVED})                          AS unassigned,
+          -- Owned by the AI agent "Kay": no human, but an AI draft is staged for review.
+          COUNT(*) FILTER (WHERE assigned_to IS NULL AND pending_drafts > 0
+                             AND status NOT IN ${RESOLVED})                          AS assigned_to_kay,
           COUNT(*) FILTER (WHERE status = 'open')                                   AS awaiting_us,
           COUNT(*) FILTER (WHERE status = 'awaiting_customer')                      AS awaiting_customer,
           COUNT(*) FILTER (WHERE assigned_to = $1::uuid
@@ -676,6 +681,7 @@ router.get('/stats', async (req, res, next) => {
       tickets_to_verify:        parseInt(o.tickets_to_verify)     || 0,
       claim_deadlines_7d:       parseInt(o.claim_deadlines_7d)    || 0,
       unassigned:               parseInt(o.unassigned)            || 0,
+      assigned_to_kay:          parseInt(o.assigned_to_kay)       || 0,
       awaiting_us:              parseInt(o.awaiting_us)           || 0,
       awaiting_customer:        parseInt(o.awaiting_customer)     || 0,
       assigned_to_me:           parseInt(o.assigned_to_me)        || 0,
