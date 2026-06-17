@@ -28,6 +28,7 @@ import ReconciliationPage from './pages/reconciliation/ReconciliationPage';
 import RunDetailPage from './pages/reconciliation/RunDetailPage';
 import MarginReportPage from './pages/reconciliation/MarginReportPage';
 import ServiceCodeMappingsPage from './pages/reconciliation/ServiceCodeMappingsPage';
+import OnboardingBoard from './pages/onboarding/OnboardingBoard';
 
 // Placeholder pages for other sections (to be built)
 const Placeholder = ({ name }) => (
@@ -91,6 +92,7 @@ function AppRoutes() {
           <Route index element={<PricingPage />} />
           <Route path="rate-card/:id" element={<RateCardEditor />} />
         </Route>
+        <Route path="onboarding" element={<OnboardingBoard />} />
         <Route path="tracking"  element={<TrackingPage />} />
         <Route path="finance"   element={<FinancePage />} />
         <Route path="queries">
