@@ -109,20 +109,25 @@ router.get('/:id', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { name, code, description, customer_type, is_default, created_by } = req.body || {};
+    const { name, code, description, customer_type, is_default, created_by,
+            applicable_tiers, applicable_methods } = req.body || {};
     if (!name) return res.status(400).json({ error: 'name is required' });
     const { rows } = await query(`
-      INSERT INTO onboarding_templates (name, code, description, customer_type, is_default, created_by)
-      VALUES ($1, $2, $3, COALESCE($4,'custom')::onboarding_customer_type, COALESCE($5,false), $6)
+      INSERT INTO onboarding_templates
+        (name, code, description, customer_type, is_default, created_by, applicable_tiers, applicable_methods)
+      VALUES ($1, $2, $3, COALESCE($4,'custom')::onboarding_customer_type, COALESCE($5,false), $6,
+              COALESCE($7,'{}'), COALESCE($8,'{}'))
       RETURNING *
-    `, [name, code || null, description || null, customer_type || null, is_default || false, created_by || null]);
+    `, [name, code || null, description || null, customer_type || null, is_default || false, created_by || null,
+        applicable_tiers || [], applicable_methods || []]);
     res.status(201).json(rows[0]);
   } catch (err) { next(err); }
 });
 
 router.patch('/:id', async (req, res, next) => {
   try {
-    const fields = ['name', 'code', 'description', 'customer_type', 'is_active', 'is_default'];
+    const fields = ['name', 'code', 'description', 'customer_type', 'is_active', 'is_default',
+      'applicable_tiers', 'applicable_methods'];
     const sets = [], vals = [];
     let i = 1;
     for (const f of fields) {

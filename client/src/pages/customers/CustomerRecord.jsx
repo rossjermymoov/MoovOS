@@ -16,6 +16,8 @@ import { HealthBadge, AccountStatusBadge, TierBadge, CreditUtilisationBar } from
 import CustomerPricingTab from './tabs/CustomerPricingTab';
 import HappinessScore from './tabs/HappinessScore';
 import CustomerOnboardingTab from './tabs/CustomerOnboardingTab';
+import { onboardingTemplatesApi } from '../../api/onboardingTemplates';
+import { integrationSoftwareApi } from '../../api/integrationSoftware';
 import { format } from 'date-fns';
 
 const TABS = [
@@ -430,6 +432,65 @@ function LinkedIdsSection({ customer }) {
   );
 }
 
+const INTEGRATION_LABELS = { moov_ninja: 'Moov Ninja', moov_api: 'Moov API', third_party: 'Third-party software' };
+
+// ─── Integration & Onboarding card (Overview) ────────────────
+function IntegrationOnboardingCard({ c, edit, form, set }) {
+  const { data: templates = [] } = useQuery({ queryKey: ['onb-templates'], queryFn: onboardingTemplatesApi.list });
+  const { data: software = [] } = useQuery({ queryKey: ['integration-software'], queryFn: integrationSoftwareApi.list });
+
+  const method = edit ? form.integration_method : c.integration_method;
+  const activeTemplates = templates.filter(t => t.is_active);
+
+  // Auto-suggest a template from the customer's tier + integration method.
+  const tier = edit ? form.tier : c.tier;
+  const suggested = activeTemplates.find(t =>
+    (t.applicable_methods || []).includes(method) || (t.applicable_tiers || []).includes(tier));
+  const chosenId = edit ? form.onboarding_template_id : c.onboarding_template_id;
+  const showSuggest = edit && suggested && suggested.id !== chosenId;
+
+  return (
+    <InfoCard title="Integration & Onboarding">
+      <Row label="Integration" value={INTEGRATION_LABELS[c.integration_method] || '—'} edit={edit}
+        editNode={
+          <select style={sel()} value={form.integration_method} onChange={e => set('integration_method', e.target.value)}>
+            <option value="moov_ninja">Moov Ninja</option>
+            <option value="moov_api">Moov API</option>
+            <option value="third_party">Third-party software</option>
+          </select>
+        } />
+
+      {method === 'third_party' && (
+        <Row label="Software" value={c.third_party_software} edit={edit}
+          editNode={
+            <>
+              <input style={inp()} list="moov-software-list" value={form.third_party_software}
+                onChange={e => set('third_party_software', e.target.value)} placeholder="e.g. ShipStation" />
+              <datalist id="moov-software-list">
+                {software.map(s => <option key={s.id} value={s.name} />)}
+              </datalist>
+            </>
+          } />
+      )}
+
+      <Row label="Template" value={c.onboarding_template_name || 'Not set'} edit={edit}
+        editNode={
+          <select style={sel()} value={form.onboarding_template_id} onChange={e => set('onboarding_template_id', e.target.value)}>
+            <option value="">Not set</option>
+            {activeTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        } />
+
+      {showSuggest && (
+        <div style={{ fontSize: 11, color: '#7B2FBE', marginTop: 4, paddingLeft: 2, cursor: 'pointer' }}
+          onClick={() => set('onboarding_template_id', suggested.id)}>
+          Suggested: <strong>{suggested.name}</strong> — click to apply
+        </div>
+      )}
+    </InfoCard>
+  );
+}
+
 function OverviewTab({ c, onSaved, onDeleteRequest }) {
   const [edit, setEdit] = useState(false);
   const [form, setForm] = useState({});
@@ -458,6 +519,9 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
       tier:               c.tier || 'bronze',
       manual_billing:     c.manual_billing ?? false,
       dc_customer_id:     c.dc_customer_id || '',
+      integration_method:   c.integration_method || 'moov_ninja',
+      third_party_software: c.third_party_software || '',
+      onboarding_template_id: c.onboarding_template_id || '',
     });
     setEdit(true);
   }
@@ -480,6 +544,8 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
       eori_number:        form.eori_number || null,
       ioss_number:        form.ioss_number || null,
       dc_customer_id:     form.dc_customer_id || null,
+      third_party_software: form.integration_method === 'third_party' ? (form.third_party_software || null) : null,
+      onboarding_template_id: form.onboarding_template_id || null,
     }),
     onSuccess: (updated) => { onSaved(updated); setEdit(false); },
   });
@@ -599,6 +665,7 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
                   <option value="bronze">Bronze</option>
                   <option value="silver">Silver</option>
                   <option value="gold">Gold</option>
+                  <option value="platinum">Platinum</option>
                   <option value="enterprise">Enterprise</option>
                 </select>
               } />
@@ -641,6 +708,8 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
             <Row label="Account Status"    value={<AccountStatusBadge status={c.account_status} />} />
             <Row label="Health Score"      value={<HealthBadge score={c.health_score} />} />
           </InfoCard>
+
+          <IntegrationOnboardingCard c={c} edit={edit} form={form} set={set} />
 
           <InfoCard title="Team">
             <Row label="Account Manager"   value={c.account_manager_name || 'Unmanaged'} />

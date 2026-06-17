@@ -23,6 +23,7 @@ const TIERS = [
   { value: 'bronze',     label: 'Bronze',     desc: 'Low volume, higher margin target' },
   { value: 'silver',     label: 'Silver',     desc: 'Mid-tier accounts' },
   { value: 'gold',       label: 'Gold',       desc: 'High-value accounts' },
+  { value: 'platinum',   label: 'Platinum',   desc: 'Top-tier strategic accounts' },
   { value: 'enterprise', label: 'Enterprise', desc: 'High volume, negotiated rates' },
 ];
 

@@ -50,16 +50,16 @@ export default function CustomerOnboardingTab({ customerId, customer }) {
   const refresh = () => { qc.invalidateQueries(key); qc.invalidateQueries(['customer', customerId]); qc.invalidateQueries(['onboarding-board']); };
 
   if (isLoading) return <div style={{ color: '#64748B', padding: 24 }}>Loading…</div>;
-  if (isError || !onb) return <StartPanel customerId={customerId} onStarted={refresh} />;
+  if (isError || !onb) return <StartPanel customerId={customerId} customer={customer} onStarted={refresh} />;
 
   return <ActivePlan onb={onb} customer={customer} onChange={refresh} />;
 }
 
 // ─── Start panel ────────────────────────────────────────────────────
-function StartPanel({ customerId, onStarted }) {
+function StartPanel({ customerId, customer, onStarted }) {
   const { data: templates = [] } = useQuery({ queryKey: ['onb-templates'], queryFn: onboardingTemplatesApi.list });
   const { data: staff = [] } = useQuery({ queryKey: ['staff'], queryFn: () => staffApi.list() });
-  const [templateId, setTemplateId] = useState('');
+  const [templateId, setTemplateId] = useState(customer?.onboarding_template_id || '');
   const [ownerId, setOwnerId] = useState('');
   const [goLive, setGoLive] = useState('');
 

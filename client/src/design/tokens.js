@@ -53,5 +53,6 @@ export const tierColor = {
   bronze:     { text: '#92400e', bg: 'rgba(205,127,50,0.12)' },
   silver:     { text: '#475569', bg: 'rgba(100,116,139,0.12)' },
   gold:       { text: '#92400e', bg: '#fef3c7' },
+  platinum:   { text: '#475569', bg: 'rgba(148,163,184,0.18)' },
   enterprise: { text: colors.accent.purple, bg: 'rgba(123,47,190,0.10)' },
 };

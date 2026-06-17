@@ -7,7 +7,7 @@ import { HealthBadge, AccountStatusBadge, TierBadge, CreditUtilisationBar } from
 import { format } from 'date-fns';
 
 const PAGE_SIZES = [10, 50, 100];
-const TIERS    = ['bronze', 'silver', 'gold', 'enterprise'];
+const TIERS    = ['bronze', 'silver', 'gold', 'platinum', 'enterprise'];
 const STATUSES = ['onboarding', 'active', 'on_stop', 'suspended', 'churned'];
 const HEALTH   = ['green', 'amber', 'red'];
 

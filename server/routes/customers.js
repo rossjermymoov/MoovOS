@@ -126,6 +126,7 @@ router.get('/:id', async (req, res, next) => {
           am.full_name AS account_manager_name,
           sp.full_name AS salesperson_name,
           ob.full_name AS onboarding_person_name,
+          ot.name AS onboarding_template_name,
           (
         COALESCE((
           SELECT SUM(ch.price)
@@ -141,6 +142,7 @@ router.get('/:id', async (req, res, next) => {
         LEFT JOIN staff am ON am.id = c.account_manager_id
         LEFT JOIN staff sp ON sp.id = c.salesperson_id
         LEFT JOIN staff ob ON ob.id = c.onboarding_person_id
+        LEFT JOIN onboarding_templates ot ON ot.id = c.onboarding_template_id
         WHERE c.id = $1
       `, [id]),
 
@@ -209,11 +211,20 @@ router.post('/', async (req, res, next) => {
       tier, payment_terms_days = 7, billing_cycle = 'monthly', credit_limit = 0,
       accounts_email, eori_number, ioss_number,
       salesperson_id, account_manager_id, onboarding_person_id,
+      integration_method, third_party_software, onboarding_template_id,
       account_number,   // optional — if supplied, overrides the auto-generated MOOV-XXXX
     } = req.body;
 
     if (!business_name || !postcode || !phone_number || !primary_email) {
       return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Capture any new third-party software name into the reusable list.
+    if (integration_method === 'third_party' && third_party_software) {
+      await query(
+        `INSERT INTO integration_software (name) VALUES ($1) ON CONFLICT (LOWER(name)) DO NOTHING`,
+        [third_party_software.trim()]
+      ).catch(() => {});
     }
 
     // If account_number is explicitly supplied, include it in the INSERT so the
@@ -222,7 +233,7 @@ router.post('/', async (req, res, next) => {
       ? ', account_number'
       : '';
     const accountNumberParam = account_number
-      ? ', $23'
+      ? ', $26'
       : '';
 
     const result = await query(`
@@ -232,8 +243,9 @@ router.post('/', async (req, res, next) => {
         company_type, company_reg_number, vat_number,
         tier, payment_terms_days, billing_cycle, credit_limit,
         accounts_email, eori_number, ioss_number,
-        salesperson_id, account_manager_id, onboarding_person_id${accountNumberClause}
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22${accountNumberParam})
+        salesperson_id, account_manager_id, onboarding_person_id,
+        integration_method, third_party_software, onboarding_template_id${accountNumberClause}
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25${accountNumberParam})
       RETURNING *
     `, [
       business_name, address_line_1 || null, address_line_2 || null, city || null, county || null,
@@ -242,6 +254,7 @@ router.post('/', async (req, res, next) => {
       tier || 'bronze', payment_terms_days, billing_cycle, credit_limit,
       accounts_email || null, eori_number || null, ioss_number || null,
       salesperson_id || null, account_manager_id || null, onboarding_person_id || null,
+      integration_method || 'moov_ninja', third_party_software || null, onboarding_template_id || null,
       ...(account_number ? [account_number.trim().toUpperCase()] : []),
     ]);
 
@@ -269,9 +282,18 @@ router.patch('/:id', async (req, res, next) => {
       'tier', 'account_status', 'payment_terms_days', 'billing_cycle', 'credit_limit', 'bond_amount_held',
       'accounts_email', 'eori_number', 'ioss_number',
       'salesperson_id', 'account_manager_id', 'onboarding_person_id',
+      'integration_method', 'third_party_software', 'onboarding_template_id',
     ];
     const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));
     if (!updates.length) return res.status(400).json({ error: 'No valid fields to update' });
+
+    // Capture any new third-party software name into the reusable list.
+    if (req.body.integration_method === 'third_party' && req.body.third_party_software) {
+      await query(
+        `INSERT INTO integration_software (name) VALUES ($1) ON CONFLICT (LOWER(name)) DO NOTHING`,
+        [req.body.third_party_software.trim()]
+      ).catch(() => {});
+    }
 
     const setClauses = updates.map(([k], i) => `${k} = $${i + 2}`).join(', ');
     const values = [id, ...updates.map(([, v]) => v)];

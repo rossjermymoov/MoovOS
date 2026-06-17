@@ -13,12 +13,8 @@ import { SettingsNav } from './RulesSettings';
 import { onboardingTemplatesApi } from '../../api/onboardingTemplates';
 import { staffApi } from '../../api/staff';
 
-const CUSTOMER_TYPES = [
-  { value: 'standard_api',  label: 'Standard API' },
-  { value: 'dpd_drop_shop', label: 'DPD Drop Shop' },
-  { value: 'non_api',       label: 'Non-API' },
-  { value: 'custom',        label: 'Custom' },
-];
+const TIERS   = [{ value: 'bronze', label: 'Bronze' }, { value: 'silver', label: 'Silver' }, { value: 'gold', label: 'Gold' }, { value: 'platinum', label: 'Platinum' }];
+const METHODS = [{ value: 'moov_ninja', label: 'Moov Ninja' }, { value: 'moov_api', label: 'Moov API' }, { value: 'third_party', label: 'Third-party' }];
 
 const card = { background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 16 };
 const input = { width: '100%', boxSizing: 'border-box', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: '#0F172A', outline: 'none' };
@@ -109,19 +105,32 @@ function TemplatesView() {
 
 function NewTemplateForm({ onCancel, onCreate }) {
   const [name, setName] = useState('');
-  const [customer_type, setType] = useState('custom');
   return (
     <div style={{ ...card, marginBottom: 12, background: '#F8FAFC' }}>
-      <label style={label}>Name</label>
-      <input style={input} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Enterprise API" />
-      <label style={{ ...label, marginTop: 10 }}>Customer type</label>
-      <select style={input} value={customer_type} onChange={e => setType(e.target.value)}>
-        {CUSTOMER_TYPES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-      </select>
+      <label style={label}>Template name</label>
+      <input style={input} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Moov Ninja Client" autoFocus />
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-        <button className="btn-primary" disabled={!name.trim()} onClick={() => onCreate({ name: name.trim(), customer_type })}>Create</button>
+        <button className="btn-primary" disabled={!name.trim()} onClick={() => onCreate({ name: name.trim() })}>Create</button>
         <button className="btn-ghost" onClick={onCancel}>Cancel</button>
       </div>
+    </div>
+  );
+}
+
+// Toggleable chip group for tier / method tags.
+function ChipPicker({ options, selected = [], onToggle }) {
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      {options.map(o => {
+        const on = selected.includes(o.value);
+        return (
+          <button key={o.value} onClick={() => onToggle(o.value)} style={{
+            padding: '4px 11px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+            border: `1px solid ${on ? '#00C853' : '#E2E8F0'}`,
+            background: on ? 'rgba(0,200,83,0.12)' : '#fff', color: on ? '#00A845' : '#64748B',
+          }}>{o.label}</button>
+        );
+      })}
     </div>
   );
 }
@@ -139,21 +148,43 @@ function TemplateEditor({ templateId, onDeleted }) {
   const addTask  = useMutation({ mutationFn: (d) => onboardingTemplatesApi.addTask(templateId, d), onSuccess: invalidate });
   const delTask  = useMutation({ mutationFn: (tid) => onboardingTemplatesApi.deleteTask(tid), onSuccess: invalidate });
   const delTmpl  = useMutation({ mutationFn: () => onboardingTemplatesApi.remove(templateId), onSuccess: () => { invalidate(); onDeleted(); } });
+  const updateTmpl = useMutation({ mutationFn: (d) => onboardingTemplatesApi.update(templateId, d), onSuccess: invalidate });
 
   const [newStage, setNewStage] = useState('');
 
   if (isLoading || !tmpl) return <div style={{ ...card, color: '#94A3B8' }}>Loading…</div>;
 
+  function toggleTag(field, value) {
+    const cur = tmpl[field] || [];
+    const next = cur.includes(value) ? cur.filter(x => x !== value) : [...cur, value];
+    updateTmpl.mutate({ [field]: next });
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ ...card, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0F172A' }}>{tmpl.name}</h2>
-          <span style={{ fontSize: 12, color: '#64748B' }}>{tmpl.description || tmpl.customer_type}</span>
+      <div style={card}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0F172A' }}>{tmpl.name}</h2>
+            {tmpl.description && <span style={{ fontSize: 12, color: '#64748B' }}>{tmpl.description}</span>}
+          </div>
+          <button className="btn-ghost" style={{ color: '#E91E8C' }} onClick={() => { if (confirm('Delete this template?')) delTmpl.mutate(); }}>
+            <Trash2 size={14} /> Delete template
+          </button>
         </div>
-        <button className="btn-ghost" style={{ color: '#E91E8C' }} onClick={() => { if (confirm('Delete this template?')) delTmpl.mutate(); }}>
-          <Trash2 size={14} /> Delete template
-        </button>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 14 }}>
+          <div>
+            <label style={label}>Applies to tiers</label>
+            <ChipPicker options={TIERS} selected={tmpl.applicable_tiers} onToggle={(v) => toggleTag('applicable_tiers', v)} />
+          </div>
+          <div>
+            <label style={label}>Applies to integration</label>
+            <ChipPicker options={METHODS} selected={tmpl.applicable_methods} onToggle={(v) => toggleTag('applicable_methods', v)} />
+          </div>
+        </div>
+        <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 10 }}>
+          These tags drive the suggested template on the customer record. You can still pick any template manually.
+        </p>
       </div>
 
       {tmpl.stages.map(stage => (
