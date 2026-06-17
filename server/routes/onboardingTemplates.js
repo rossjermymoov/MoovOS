@@ -116,7 +116,7 @@ router.post('/', async (req, res, next) => {
       INSERT INTO onboarding_templates
         (name, code, description, customer_type, is_default, created_by, applicable_tiers, applicable_methods)
       VALUES ($1, $2, $3, COALESCE($4,'custom')::onboarding_customer_type, COALESCE($5,false), $6,
-              COALESCE($7,'{}'), COALESCE($8,'{}'))
+              COALESCE($7::text[],'{}'), COALESCE($8::text[],'{}'))
       RETURNING *
     `, [name, code || null, description || null, customer_type || null, is_default || false, created_by || null,
         applicable_tiers || [], applicable_methods || []]);

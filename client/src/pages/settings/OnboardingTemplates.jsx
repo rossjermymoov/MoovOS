@@ -63,6 +63,7 @@ function TemplatesView() {
   const createTmpl = useMutation({
     mutationFn: onboardingTemplatesApi.create,
     onSuccess: (t) => { qc.invalidateQueries(['onb-templates']); setSelectedId(t.id); setCreating(false); },
+    onError: (e) => alert(e?.response?.data?.error || 'Could not create template'),
   });
 
   return (
