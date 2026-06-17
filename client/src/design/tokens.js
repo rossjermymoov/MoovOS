@@ -42,6 +42,7 @@ export const healthScoreColor = {
 };
 
 export const accountStatusColor = {
+  onboarding: { text: colors.accent.amber,   bg: colors.accent.amberDim,   label: 'Onboarding' },
   active:     { text: '#166534',             bg: '#dcfce7',                label: 'Active' },
   on_stop:    { text: colors.accent.magenta, bg: colors.accent.magentaDim, label: 'On Stop' },
   suspended:  { text: '#92400e',             bg: '#fef3c7',                label: 'Suspended' },

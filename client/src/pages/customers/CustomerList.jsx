@@ -8,7 +8,7 @@ import { format } from 'date-fns';
 
 const PAGE_SIZES = [10, 50, 100];
 const TIERS    = ['bronze', 'silver', 'gold', 'enterprise'];
-const STATUSES = ['active', 'on_stop', 'suspended', 'churned'];
+const STATUSES = ['onboarding', 'active', 'on_stop', 'suspended', 'churned'];
 const HEALTH   = ['green', 'amber', 'red'];
 
 const gbp = (n) => `£${parseFloat(n || 0).toLocaleString('en-GB', { minimumFractionDigits: 0 })}`;
