@@ -29,6 +29,7 @@ import RunDetailPage from './pages/reconciliation/RunDetailPage';
 import MarginReportPage from './pages/reconciliation/MarginReportPage';
 import ServiceCodeMappingsPage from './pages/reconciliation/ServiceCodeMappingsPage';
 import OnboardingBoard from './pages/onboarding/OnboardingBoard';
+import OnboardingTemplates from './pages/settings/OnboardingTemplates';
 
 // Placeholder pages for other sections (to be built)
 const Placeholder = ({ name }) => (
@@ -114,6 +115,7 @@ function AppRoutes() {
           <Route index element={<StaffSettings />} />
           <Route path="staff"       element={<StaffSettings />} />
           <Route path="rules"       element={<RulesSettings />} />
+          <Route path="onboarding-templates" element={<OnboardingTemplates />} />
           <Route path="comms-templates" element={<CommsTemplates />} />
           <Route path="volumetric"  element={<VolumetricSettings />} />
           <Route path="billing"     element={<BillingSettings />} />

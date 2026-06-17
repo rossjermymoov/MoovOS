@@ -34,6 +34,7 @@ import emailRouter from './routes/email.js';
 import { sendAlert } from './services/emailService.js';
 import gmailRouter from './routes/gmail.js';
 import onboardingRouter from './routes/onboarding.js';
+import onboardingTemplatesRouter from './routes/onboardingTemplates.js';
 import { startGmailSync, backfillEmailBodiesOnce, backfillSentRepliesOnce } from './services/gmailSync.js';
 
 dotenv.config();
@@ -73,6 +74,7 @@ app.use('/api/katana',                katanaRouter);
 app.use('/api/pricing',               pricingRouter);
 app.use('/api/xero',                  xeroRouter);
 app.use('/api/v1/onboarding',         onboardingRouter);
+app.use('/api/onboarding-templates',  onboardingTemplatesRouter);
 // Webhook-safe alias — suppliers that block URLs containing "billing"
 // should send to /api/moov-charges/webhook instead
 app.use('/api/moov-charges',          billingRouter);

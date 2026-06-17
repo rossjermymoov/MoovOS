@@ -5,7 +5,7 @@ import {
   ArrowLeft, AlertTriangle, Phone, Mail, MapPin, Building2,
   Users, MessageSquare, TrendingUp, DollarSign, Zap, Info,
   Pencil, X, Check, ShieldCheck, Trash2, Bug, ChevronDown, ChevronRight, RefreshCw,
-  ToggleLeft, ToggleRight, Plus, FlaskConical, Heart,
+  ToggleLeft, ToggleRight, Plus, FlaskConical, Heart, Rocket,
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -15,10 +15,12 @@ import { customerRateCardsApi } from '../../api/customerRateCards';
 import { HealthBadge, AccountStatusBadge, TierBadge, CreditUtilisationBar } from '../../components/ui/StatusBadge';
 import CustomerPricingTab from './tabs/CustomerPricingTab';
 import HappinessScore from './tabs/HappinessScore';
+import CustomerOnboardingTab from './tabs/CustomerOnboardingTab';
 import { format } from 'date-fns';
 
 const TABS = [
   { key: 'overview',  label: 'Overview',        icon: Building2 },
+  { key: 'onboarding', label: 'Onboarding',      icon: Rocket },
   { key: 'contacts',  label: 'Contacts',         icon: Users },
   { key: 'comms',     label: 'Communications',   icon: MessageSquare },
   { key: 'volume',    label: 'Performance',      icon: TrendingUp },
@@ -1753,6 +1755,7 @@ export default function CustomerRecord() {
       </div>
 
       {activeTab === 'overview'  && <OverviewTab c={c} onSaved={handleCustomerSaved} onDeleteRequest={() => { setDeleteModal(true); setDeleteConfirm(''); }} />}
+      {activeTab === 'onboarding' && <CustomerOnboardingTab customerId={id} customer={c} />}
       {activeTab === 'contacts'  && <ContactsTab customerId={id} contacts={contacts} onRefresh={refetch} />}
       {activeTab === 'volume'    && <PerformanceTab customerId={c.id} />}
       {activeTab === 'financial' && <FinancialTab c={c} />}

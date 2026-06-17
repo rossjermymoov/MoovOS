@@ -21,6 +21,7 @@ export function SettingsNav() {
   const tabs = [
     { to: '/settings/staff',       label: 'Staff' },
     { to: '/settings/rules',       label: 'SLA Rules Engine' },
+    { to: '/settings/onboarding-templates', label: 'Onboarding Templates' },
     { to: '/settings/comms-templates', label: 'Comms Templates' },
     { to: '/settings/volumetric',  label: 'Volumetric Weight' },
     { to: '/settings/billing',     label: 'Billing' },
