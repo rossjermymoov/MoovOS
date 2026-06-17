@@ -14,10 +14,11 @@ const VALID_ROLES = ['sales', 'account_management', 'onboarding', 'finance', 'cu
 // GET /api/staff  — list active staff, optionally filtered by role
 router.get('/', async (req, res, next) => {
   try {
-    const { role } = req.query;
-    let sql = 'SELECT id, full_name, email, role, is_active FROM staff WHERE is_active = true';
+    const { role, team_id } = req.query;
+    let sql = 'SELECT id, full_name, email, role, team_id, is_active FROM staff WHERE is_active = true';
     const values = [];
-    if (role) { sql += ' AND role = $1'; values.push(role); }
+    if (role)    { values.push(role);    sql += ` AND role = $${values.length}`; }
+    if (team_id) { values.push(team_id); sql += ` AND team_id = $${values.length}`; }
     sql += ' ORDER BY full_name';
     const result = await query(sql, values);
     res.json(result.rows);
@@ -29,7 +30,7 @@ router.get('/', async (req, res, next) => {
 router.get('/all', async (req, res, next) => {
   try {
     const result = await query(
-      `SELECT id, full_name, email, role, is_active, is_admin, page_permissions,
+      `SELECT id, full_name, email, role, team_id, is_active, is_admin, page_permissions,
               (password_hash IS NOT NULL) AS has_password,
               created_at
        FROM staff ORDER BY is_active DESC, full_name`
@@ -56,15 +57,15 @@ router.get('/:id', async (req, res, next) => {
 // POST /api/staff  — create staff member
 router.post('/', async (req, res, next) => {
   try {
-    const { full_name, email, role } = req.body;
+    const { full_name, email, role, team_id } = req.body;
     if (!full_name?.trim()) return res.status(400).json({ error: 'full_name is required' });
     if (!email?.trim())     return res.status(400).json({ error: 'email is required' });
     if (!VALID_ROLES.includes(role)) return res.status(400).json({ error: `role must be one of: ${VALID_ROLES.join(', ')}` });
 
     const result = await query(
-      `INSERT INTO staff (full_name, email, role) VALUES ($1, $2, $3)
-       RETURNING id, full_name, email, role, is_active, is_admin, page_permissions, created_at`,
-      [full_name.trim(), email.trim().toLowerCase(), role]
+      `INSERT INTO staff (full_name, email, role, team_id) VALUES ($1, $2, $3, $4)
+       RETURNING id, full_name, email, role, team_id, is_active, is_admin, page_permissions, created_at`,
+      [full_name.trim(), email.trim().toLowerCase(), role, team_id || null]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -76,7 +77,7 @@ router.post('/', async (req, res, next) => {
 // PATCH /api/staff/:id  — update fields (excluding password)
 router.patch('/:id', async (req, res, next) => {
   try {
-    const allowed = ['full_name', 'email', 'role', 'is_active', 'is_admin', 'page_permissions'];
+    const allowed = ['full_name', 'email', 'role', 'team_id', 'is_active', 'is_admin', 'page_permissions'];
     const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));
     if (!updates.length) return res.status(400).json({ error: 'No valid fields to update' });
 
@@ -85,7 +86,7 @@ router.patch('/:id', async (req, res, next) => {
 
     const result = await query(
       `UPDATE staff SET ${setClauses} WHERE id = $1
-       RETURNING id, full_name, email, role, is_active, is_admin, page_permissions,
+       RETURNING id, full_name, email, role, team_id, is_active, is_admin, page_permissions,
                  (password_hash IS NOT NULL) AS has_password`,
       values
     );

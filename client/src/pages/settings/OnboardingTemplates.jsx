@@ -12,6 +12,7 @@ import { Plus, Trash2, ChevronRight, ChevronDown, Mail, Clock, Layers, X } from 
 import { SettingsNav } from './RulesSettings';
 import { onboardingTemplatesApi } from '../../api/onboardingTemplates';
 import { staffApi } from '../../api/staff';
+import { teamsApi } from '../../api/teams';
 
 const TIERS   = [{ value: 'bronze', label: 'Bronze' }, { value: 'silver', label: 'Silver' }, { value: 'gold', label: 'Gold' }, { value: 'platinum', label: 'Platinum' }];
 const METHODS = [{ value: 'moov_ninja', label: 'Moov Ninja' }, { value: 'moov_api', label: 'Moov API' }, { value: 'third_party', label: 'Third-party' }];
@@ -142,7 +143,7 @@ function TemplateEditor({ templateId, onDeleted }) {
 
   const { data: tmpl, isLoading } = useQuery({ queryKey: ['onb-template', templateId], queryFn: () => onboardingTemplatesApi.get(templateId) });
   const { data: comms = [] } = useQuery({ queryKey: ['onb-comms'], queryFn: onboardingTemplatesApi.comms });
-  const { data: staff = [] } = useQuery({ queryKey: ['staff'], queryFn: () => staffApi.list() });
+  const { data: teams = [] } = useQuery({ queryKey: ['teams'], queryFn: teamsApi.list });
 
   const addStage = useMutation({ mutationFn: (name) => onboardingTemplatesApi.addStage(templateId, { name }), onSuccess: invalidate });
   const delStage = useMutation({ mutationFn: (sid) => onboardingTemplatesApi.deleteStage(sid), onSuccess: invalidate });
@@ -202,6 +203,7 @@ function TemplateEditor({ templateId, onDeleted }) {
                 <div style={{ flex: 1 }}>
                   <span style={{ fontSize: 13, color: '#0F172A', fontWeight: 600 }}>{t.title}</span>
                   {!t.is_required && <span style={{ fontSize: 10, color: '#94A3B8', marginLeft: 8 }}>(optional)</span>}
+                  {t.team_name && <span style={{ fontSize: 10, color: '#7B2FBE', marginLeft: 8, fontWeight: 700 }}>{t.team_name}</span>}
                 </div>
                 {t.target_duration_hours != null && (
                   <span style={{ fontSize: 11, color: '#64748B', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -215,7 +217,7 @@ function TemplateEditor({ templateId, onDeleted }) {
                 </button>
               </div>
             ))}
-            <AddTaskRow stageId={stage.id} comms={comms} staff={staff} onAdd={(d) => addTask.mutate(d)} />
+            <AddTaskRow stageId={stage.id} comms={comms} teams={teams} onAdd={(d) => addTask.mutate(d)} />
           </div>
         </div>
       ))}
@@ -231,9 +233,9 @@ function TemplateEditor({ templateId, onDeleted }) {
   );
 }
 
-function AddTaskRow({ stageId, comms, staff, onAdd }) {
+function AddTaskRow({ stageId, comms, teams, onAdd }) {
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ title: '', sla_days: '', sla_basis: 'onboarding_start', comms_template_id: '', default_assignee_id: '', is_required: true });
+  const [form, setForm] = useState({ title: '', sla_days: '', sla_basis: 'onboarding_start', comms_template_id: '', team_id: '', is_required: true });
   function submit() {
     if (!form.title.trim()) return;
     onAdd({
@@ -243,11 +245,11 @@ function AddTaskRow({ stageId, comms, staff, onAdd }) {
       target_duration_hours: form.sla_days ? Math.round(Number(form.sla_days) * 24) : null,
       sla_basis: form.sla_basis,
       comms_template_id: form.comms_template_id || null,
-      default_assignee_id: form.default_assignee_id || null,
+      team_id: form.team_id || null,
       is_required: form.is_required,
       auto_send_comms: false,
     });
-    setForm({ title: '', sla_days: '', sla_basis: 'onboarding_start', comms_template_id: '', default_assignee_id: '', is_required: true });
+    setForm({ title: '', sla_days: '', sla_basis: 'onboarding_start', comms_template_id: '', team_id: '', is_required: true });
     setOpen(false);
   }
   if (!open) return (
@@ -271,10 +273,10 @@ function AddTaskRow({ stageId, comms, staff, onAdd }) {
           </select>
         </div>
       </div>
-      <label style={{ ...label, marginTop: 8 }}>Assignee</label>
-      <select style={input} value={form.default_assignee_id} onChange={e => setForm(f => ({ ...f, default_assignee_id: e.target.value }))}>
+      <label style={{ ...label, marginTop: 8 }}>Team</label>
+      <select style={input} value={form.team_id} onChange={e => setForm(f => ({ ...f, team_id: e.target.value }))}>
         <option value="">—</option>
-        {staff.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+        {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
       </select>
       <label style={{ ...label, marginTop: 8 }}>Linked email (optional)</label>
       <select style={input} value={form.comms_template_id} onChange={e => setForm(f => ({ ...f, comms_template_id: e.target.value }))}>

@@ -4,6 +4,7 @@ import { UserPlus, Check, X, ChevronDown, ChevronUp, Shield, Key, Lock, Unlock }
 import axios from 'axios';
 import { SettingsNav } from './RulesSettings';
 import { NAV_ITEMS } from '../../components/layout/Sidebar';
+import { teamsApi } from '../../api/teams';
 
 const api = axios.create({ baseURL: '/api' });
 
@@ -27,7 +28,7 @@ const ROLE_COLORS = {
   director:           { bg: 'rgba(0,0,0,0.08)', text: '#ffffff' },
 };
 
-const EMPTY = { full_name: '', email: '', role: 'sales' };
+const EMPTY = { full_name: '', email: '', role: 'sales', team_id: '' };
 
 // Page keys from sidebar — used to label permission toggles
 const PAGE_KEYS = NAV_ITEMS.map(n => ({ key: n.key, label: n.label }));
@@ -294,9 +295,42 @@ function PermissionsPanel({ staffMember, onClose }) {
   );
 }
 
+// ─── TeamsCard ───────────────────────────────────────────────────────────────
+
+function TeamsCard({ teams = [] }) {
+  const queryClient = useQueryClient();
+  const save = useMutation({
+    mutationFn: ({ id, inbox_email }) => teamsApi.update(id, { inbox_email }),
+    onSuccess: () => queryClient.invalidateQueries(['teams']),
+  });
+  return (
+    <div className="moov-card" style={{ padding: '16px 20px', marginBottom: 16 }}>
+      <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A', marginBottom: 4 }}>Teams & shared inboxes</div>
+      <p style={{ fontSize: 12, color: '#64748B', marginBottom: 14 }}>
+        Onboarding tasks are assigned to a team. The shared inbox is where team notifications can be sent.
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {teams.map(t => (
+          <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#7B2FBE', width: 110 }}>{t.name}</span>
+            <span style={{ fontSize: 11, color: '#64748B', width: 60 }}>{(t.members || []).length} member{(t.members || []).length === 1 ? '' : 's'}</span>
+            <input
+              defaultValue={t.inbox_email || ''}
+              placeholder="team@yourdomain.com"
+              onBlur={e => { if (e.target.value !== (t.inbox_email || '')) save.mutate({ id: t.id, inbox_email: e.target.value }); }}
+              style={{ flex: 1, fontSize: 13, padding: '7px 11px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', color: '#0F172A' }}
+            />
+          </div>
+        ))}
+        {!teams.length && <span style={{ fontSize: 12, color: '#94A3B8' }}>Teams will appear here once the database migration has run.</span>}
+      </div>
+    </div>
+  );
+}
+
 // ─── StaffRow ────────────────────────────────────────────────────────────────
 
-function StaffRow({ s, onToggleActive }) {
+function StaffRow({ s, teams = [], onToggleActive, onChangeTeam }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -313,6 +347,13 @@ function StaffRow({ s, onToggleActive }) {
           }}>
             {ROLES.find(r => r.value === s.role)?.label || s.role}
           </span>
+        </td>
+        <td>
+          <select value={s.team_id || ''} onChange={e => onChangeTeam(s.id, e.target.value || null)}
+            style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid #E2E8F0', background: '#fff', color: '#0F172A' }}>
+            <option value="">No team</option>
+            {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
         </td>
         <td>
           {/* Permission status badge */}
@@ -348,7 +389,7 @@ function StaffRow({ s, onToggleActive }) {
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={5} style={{ padding: '0 16px 16px' }}>
+          <td colSpan={6} style={{ padding: '0 16px 16px' }}>
             <PermissionsPanel staffMember={s} onClose={() => setExpanded(false)} />
           </td>
         </tr>
@@ -386,6 +427,12 @@ export default function StaffSettings() {
   const toggleActive = useMutation({
     mutationFn: ({ id, is_active }) => api.patch(`/staff/${id}`, { is_active }).then(r => r.data),
     onSuccess: () => queryClient.invalidateQueries(['staff']),
+  });
+
+  const { data: teams = [] } = useQuery({ queryKey: ['teams'], queryFn: teamsApi.list });
+  const changeTeam = useMutation({
+    mutationFn: ({ id, team_id }) => api.patch(`/staff/${id}`, { team_id }).then(r => r.data),
+    onSuccess: () => { queryClient.invalidateQueries(['staff']); queryClient.invalidateQueries(['teams']); },
   });
 
   function set(field, value) {
@@ -454,6 +501,17 @@ export default function StaffSettings() {
                 <div className="green-cap">▾</div>
               </div>
             </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#0F172A', marginBottom: 6 }}>Team</label>
+              <div className="pill-input-wrap">
+                <select value={form.team_id} onChange={e => set('team_id', e.target.value)} style={{ paddingLeft: 16 }}>
+                  <option value="">No team</option>
+                  {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+                <div className="green-cap">▾</div>
+              </div>
+            </div>
           </div>
 
           {errors.api && (
@@ -472,6 +530,9 @@ export default function StaffSettings() {
           </div>
         </div>
       )}
+
+      {/* Teams + shared inboxes */}
+      <TeamsCard teams={teams} />
 
       {/* Active staff */}
       <div className="moov-card" style={{ overflow: 'hidden', marginBottom: 16 }}>
@@ -493,6 +554,7 @@ export default function StaffSettings() {
                 <th>Name</th>
                 <th>Email</th>
                 <th>Role</th>
+                <th>Team</th>
                 <th>Access</th>
                 <th></th>
               </tr>
@@ -502,7 +564,9 @@ export default function StaffSettings() {
                 <StaffRow
                   key={s.id}
                   s={s}
+                  teams={teams}
                   onToggleActive={(id, val) => toggleActive.mutate({ id, is_active: val })}
+                  onChangeTeam={(id, team_id) => changeTeam.mutate({ id, team_id })}
                 />
               ))}
             </tbody>

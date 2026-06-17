@@ -3,5 +3,6 @@ import axios from 'axios';
 const api = axios.create({ baseURL: '/api' });
 
 export const staffApi = {
-  list: (role) => api.get('/staff', { params: role ? { role } : {} }).then(r => r.data),
+  // Accepts a role string (back-compat), a params object like { team_id }, or nothing.
+  list: (arg) => api.get('/staff', { params: typeof arg === 'string' ? { role: arg } : (arg || {}) }).then(r => r.data),
 };

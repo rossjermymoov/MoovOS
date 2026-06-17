@@ -17,6 +17,7 @@ import {
 import { onboardingApi } from '../../../api/onboarding';
 import { onboardingTemplatesApi } from '../../../api/onboardingTemplates';
 import { staffApi } from '../../../api/staff';
+import { teamsApi } from '../../../api/teams';
 
 const STATUS = {
   not_started: { label: 'Not started', color: '#94A3B8', bg: 'rgba(148,163,184,0.12)', icon: Circle },
@@ -58,13 +59,15 @@ export default function CustomerOnboardingTab({ customerId, customer }) {
 // ─── Start panel ────────────────────────────────────────────────────
 function StartPanel({ customerId, customer, onStarted }) {
   const { data: templates = [] } = useQuery({ queryKey: ['onb-templates'], queryFn: onboardingTemplatesApi.list });
-  const { data: staff = [] } = useQuery({ queryKey: ['staff'], queryFn: () => staffApi.list() });
+  const { data: teams = [] } = useQuery({ queryKey: ['teams'], queryFn: teamsApi.list });
   const [templateId, setTemplateId] = useState(customer?.onboarding_template_id || '');
-  const [ownerId, setOwnerId] = useState('');
   const [goLive, setGoLive] = useState('');
+  const [members, setMembers] = useState({}); // { team_id: staff_id }
 
   const start = useMutation({
-    mutationFn: () => onboardingApi.start(customerId, { template_id: templateId, owner_id: ownerId || null, target_go_live: goLive || null }),
+    mutationFn: () => onboardingApi.start(customerId, {
+      template_id: templateId, target_go_live: goLive || null, team_members: members,
+    }),
     onSuccess: onStarted,
   });
 
@@ -76,26 +79,33 @@ function StartPanel({ customerId, customer, onStarted }) {
         <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A' }}>Start onboarding</h3>
       </div>
       <p style={{ fontSize: 13, color: '#64748B', marginBottom: 16 }}>
-        Pick a template. The tasks are copied onto this customer and their status switches to <strong>Onboarding</strong>.
+        Pick a template and the person on each team for this client. Tasks are copied onto the customer,
+        assigned to the right people, and their status switches to <strong>Onboarding</strong>.
       </p>
       <label style={{ fontSize: 12, fontWeight: 700, color: '#64748B' }}>Template</label>
-      <select style={{ ...input, marginTop: 5, marginBottom: 12 }} value={templateId} onChange={e => setTemplateId(e.target.value)}>
+      <select style={{ ...input, marginTop: 5, marginBottom: 14 }} value={templateId} onChange={e => setTemplateId(e.target.value)}>
         <option value="">Select a template…</option>
         {active.map(t => <option key={t.id} value={t.id}>{t.name} ({t.task_count} tasks)</option>)}
       </select>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <div>
-          <label style={{ fontSize: 12, fontWeight: 700, color: '#64748B' }}>Owner</label>
-          <select style={{ ...input, marginTop: 5 }} value={ownerId} onChange={e => setOwnerId(e.target.value)}>
-            <option value="">—</option>
-            {staff.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
-          </select>
-        </div>
-        <div>
-          <label style={{ fontSize: 12, fontWeight: 700, color: '#64748B' }}>Target go-live</label>
-          <input type="date" style={{ ...input, marginTop: 5 }} value={goLive} onChange={e => setGoLive(e.target.value)} />
-        </div>
+
+      <label style={{ fontSize: 12, fontWeight: 700, color: '#64748B' }}>Who's doing each role?</label>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, margin: '6px 0 14px' }}>
+        {teams.map(team => (
+          <div key={team.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#7B2FBE', width: 110 }}>{team.name}</span>
+            <select style={{ ...input, flex: 1 }} value={members[team.id] || ''}
+              onChange={e => setMembers(m => ({ ...m, [team.id]: e.target.value }))}>
+              <option value="">Select {team.name.toLowerCase()} member…</option>
+              {(team.members || []).map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
+            </select>
+          </div>
+        ))}
+        {!teams.length && <span style={{ fontSize: 12, color: '#94A3B8' }}>No teams set up yet — add them in Settings → Staff & Teams.</span>}
       </div>
+
+      <label style={{ fontSize: 12, fontWeight: 700, color: '#64748B' }}>Target go-live</label>
+      <input type="date" style={{ ...input, marginTop: 5, maxWidth: 200, display: 'block' }} value={goLive} onChange={e => setGoLive(e.target.value)} />
+
       {start.isError && <div style={{ color: '#E91E8C', fontSize: 12, marginTop: 10 }}>{start.error?.response?.data?.error || 'Could not start onboarding'}</div>}
       <button className="btn-primary" style={{ marginTop: 16 }} disabled={!templateId || start.isPending} onClick={() => start.mutate()}>
         <Rocket size={14} /> {start.isPending ? 'Starting…' : 'Start onboarding'}
@@ -262,6 +272,7 @@ function TaskRow({ task, onChange }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>{task.title}</span>
           {!task.is_required && <span style={{ fontSize: 10, color: '#94A3B8', marginLeft: 6 }}>(optional)</span>}
+          {task.team_name && <span style={{ fontSize: 10, color: '#7B2FBE', marginLeft: 6, fontWeight: 700 }}>{task.team_name}</span>}
         </div>
 
         {task.due_at ? (

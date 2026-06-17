@@ -108,8 +108,11 @@ router.post('/customers/:customerId/start', async (req, res, next) => {
   const client = await getClient();
   try {
     const { customerId } = req.params;
-    const { template_id, owner_id, target_go_live } = req.body || {};
+    const { template_id, owner_id, target_go_live, team_members } = req.body || {};
     if (!template_id) return res.status(400).json({ error: 'template_id is required' });
+
+    // team_members: { [team_id]: staff_id } chosen for this client at go-live.
+    const memberMap = team_members && typeof team_members === 'object' ? team_members : {};
 
     // Guard: no existing active onboarding.
     const existing = await client.query(
@@ -158,16 +161,27 @@ router.post('/customers/:customerId/start', async (req, res, next) => {
       // no due date until the call is booked (set via PATCH /:id/call).
       const due = (t.sla_basis !== 'post_call' && t.target_duration_hours)
         ? new Date(Date.now() + t.target_duration_hours * 3600 * 1000) : null;
+      // Resolve assignee from the team→person mapping chosen at go-live.
+      const assignee = (t.team_id && memberMap[t.team_id]) || t.default_assignee_id || null;
       const r = await client.query(`
         INSERT INTO onboarding_tasks
           (onboarding_id, stage_id, template_task_id, title, description, position,
-           assignee_id, is_required, target_duration_hours, due_at, comms_template_id, auto_send_comms, sla_basis)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+           assignee_id, team_id, is_required, target_duration_hours, due_at, comms_template_id, auto_send_comms, sla_basis)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
         RETURNING id
       `, [onboardingId, stageMap[t.stage_id], t.id, t.title, t.description, t.position,
-          t.default_assignee_id, t.is_required, t.target_duration_hours, due,
+          assignee, t.team_id, t.is_required, t.target_duration_hours, due,
           t.comms_template_id, t.auto_send_comms, t.sla_basis || 'onboarding_start']);
       taskMap[t.id] = r.rows[0].id;
+    }
+
+    // Persist the team → person choices on the onboarding.
+    for (const [teamId, staffId] of Object.entries(memberMap)) {
+      if (!staffId) continue;
+      await client.query(`
+        INSERT INTO customer_onboarding_team_members (onboarding_id, team_id, staff_id)
+        VALUES ($1,$2,$3) ON CONFLICT (onboarding_id, team_id) DO UPDATE SET staff_id = EXCLUDED.staff_id
+      `, [onboardingId, teamId, staffId]);
     }
     // Second pass: parent links + creation events.
     for (const t of tasks.rows) {
@@ -212,8 +226,11 @@ async function loadOnboardingTree(onboardingId) {
 
   const [stages, tasks, deps, checklist, notes, attachments] = await Promise.all([
     query(`SELECT * FROM onboarding_stages WHERE onboarding_id = $1 ORDER BY position`, [onboardingId]),
-    query(`SELECT t.*, a.full_name AS assignee_name FROM onboarding_tasks t
-           LEFT JOIN staff a ON a.id = t.assignee_id WHERE t.onboarding_id = $1 ORDER BY position`, [onboardingId]),
+    query(`SELECT t.*, a.full_name AS assignee_name, tm.name AS team_name, tm.key AS team_key
+           FROM onboarding_tasks t
+           LEFT JOIN staff a ON a.id = t.assignee_id
+           LEFT JOIN teams tm ON tm.id = t.team_id
+           WHERE t.onboarding_id = $1 ORDER BY position`, [onboardingId]),
     query(`SELECT d.* FROM onboarding_task_deps d
            JOIN onboarding_tasks t ON t.id = d.task_id WHERE t.onboarding_id = $1`, [onboardingId]),
     query(`SELECT ch.* FROM onboarding_task_checklist ch
