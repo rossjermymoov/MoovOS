@@ -193,7 +193,7 @@ function TemplateEditor({ templateId, onDeleted }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <span style={{ fontSize: 14, fontWeight: 700, color: '#7B2FBE' }}>{stage.name}</span>
             <button className="btn-ghost" style={{ fontSize: 12, color: '#94A3B8' }} onClick={() => delStage.mutate(stage.id)}>
-              <X size={13} /> Remove stage
+              <X size={13} /> Remove milestone
             </button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -205,7 +205,8 @@ function TemplateEditor({ templateId, onDeleted }) {
                 </div>
                 {t.target_duration_hours != null && (
                   <span style={{ fontSize: 11, color: '#64748B', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    <Clock size={12} /> {t.target_duration_hours}h
+                    <Clock size={12} /> {(t.target_duration_hours / 24).toLocaleString(undefined, { maximumFractionDigits: 1 })}d
+                    {t.sla_basis === 'post_call' && <span style={{ color: '#7B2FBE' }}>· post-call</span>}
                   </span>
                 )}
                 {t.comms_template_id && <Mail size={13} color="#00BCD4" title="Linked email" />}
@@ -221,9 +222,9 @@ function TemplateEditor({ templateId, onDeleted }) {
 
       {/* Add stage */}
       <div style={{ ...card, display: 'flex', gap: 8, alignItems: 'center' }}>
-        <input style={input} value={newStage} onChange={e => setNewStage(e.target.value)} placeholder="New stage name…" />
+        <input style={input} value={newStage} onChange={e => setNewStage(e.target.value)} placeholder="New milestone name…" />
         <button className="btn-primary" disabled={!newStage.trim()} onClick={() => { addStage.mutate(newStage.trim()); setNewStage(''); }}>
-          <Plus size={14} /> Stage
+          <Plus size={14} /> Milestone
         </button>
       </div>
     </div>
@@ -232,19 +233,21 @@ function TemplateEditor({ templateId, onDeleted }) {
 
 function AddTaskRow({ stageId, comms, staff, onAdd }) {
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ title: '', target_duration_hours: '', comms_template_id: '', default_assignee_id: '', is_required: true });
+  const [form, setForm] = useState({ title: '', sla_days: '', sla_basis: 'onboarding_start', comms_template_id: '', default_assignee_id: '', is_required: true });
   function submit() {
     if (!form.title.trim()) return;
     onAdd({
       stage_id: stageId,
       title: form.title.trim(),
-      target_duration_hours: form.target_duration_hours ? Number(form.target_duration_hours) : null,
+      // SLA is entered in days; stored as hours.
+      target_duration_hours: form.sla_days ? Math.round(Number(form.sla_days) * 24) : null,
+      sla_basis: form.sla_basis,
       comms_template_id: form.comms_template_id || null,
       default_assignee_id: form.default_assignee_id || null,
       is_required: form.is_required,
       auto_send_comms: false,
     });
-    setForm({ title: '', target_duration_hours: '', comms_template_id: '', default_assignee_id: '', is_required: true });
+    setForm({ title: '', sla_days: '', sla_basis: 'onboarding_start', comms_template_id: '', default_assignee_id: '', is_required: true });
     setOpen(false);
   }
   if (!open) return (
@@ -257,17 +260,22 @@ function AddTaskRow({ stageId, comms, staff, onAdd }) {
       <input style={input} value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="Task title" autoFocus />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
         <div>
-          <label style={label}>Target (hours)</label>
-          <input style={input} type="number" value={form.target_duration_hours} onChange={e => setForm(f => ({ ...f, target_duration_hours: e.target.value }))} />
+          <label style={label}>SLA (days)</label>
+          <input style={input} type="number" min="0" step="0.5" value={form.sla_days} onChange={e => setForm(f => ({ ...f, sla_days: e.target.value }))} placeholder="e.g. 3" />
         </div>
         <div>
-          <label style={label}>Assignee</label>
-          <select style={input} value={form.default_assignee_id} onChange={e => setForm(f => ({ ...f, default_assignee_id: e.target.value }))}>
-            <option value="">—</option>
-            {staff.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+          <label style={label}>SLA starts from</label>
+          <select style={input} value={form.sla_basis} onChange={e => setForm(f => ({ ...f, sla_basis: e.target.value }))}>
+            <option value="onboarding_start">Onboarding start</option>
+            <option value="post_call">After onboarding call</option>
           </select>
         </div>
       </div>
+      <label style={{ ...label, marginTop: 8 }}>Assignee</label>
+      <select style={input} value={form.default_assignee_id} onChange={e => setForm(f => ({ ...f, default_assignee_id: e.target.value }))}>
+        <option value="">—</option>
+        {staff.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+      </select>
       <label style={{ ...label, marginTop: 8 }}>Linked email (optional)</label>
       <select style={input} value={form.comms_template_id} onChange={e => setForm(f => ({ ...f, comms_template_id: e.target.value }))}>
         <option value="">No email</option>

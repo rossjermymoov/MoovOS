@@ -12,6 +12,8 @@ export const onboardingApi = {
   get:          (onboardingId)           => api.get(`/${onboardingId}`).then(r => r.data),
   timeline:     (onboardingId)           => api.get(`/${onboardingId}/timeline`).then(r => r.data),
   complete:     (onboardingId, body = {})=> api.post(`/${onboardingId}/complete`, body).then(r => r.data),
+  setCall:      (onboardingId, body)     => api.patch(`/${onboardingId}/call`, body).then(r => r.data),
+  cancel:       (onboardingId)           => api.delete(`/${onboardingId}`).then(r => r.data),
 
   // Tasks
   updateTask:   (taskId, data)           => api.patch(`/tasks/${taskId}`, data).then(r => r.data),

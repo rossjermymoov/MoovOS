@@ -12,7 +12,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Rocket, Clock, CheckCircle2, Circle, AlertOctagon, Loader, Mail, Paperclip,
-  MessageSquarePlus, Plus, ChevronDown, ChevronRight, Send, CheckCheck,
+  MessageSquarePlus, Plus, ChevronDown, ChevronRight, Send, CheckCheck, Trash2, Phone,
 } from 'lucide-react';
 import { onboardingApi } from '../../../api/onboarding';
 import { onboardingTemplatesApi } from '../../../api/onboardingTemplates';
@@ -110,6 +110,10 @@ function ActivePlan({ onb, customer, onChange }) {
     mutationFn: (force) => onboardingApi.complete(onb.id, { force }),
     onSuccess: onChange,
   });
+  const cancel = useMutation({
+    mutationFn: () => onboardingApi.cancel(onb.id),
+    onSuccess: onChange,
+  });
 
   const allTasks = onb.stages.flatMap(s => s.tasks);
   const done = allTasks.filter(t => t.status === 'complete').length;
@@ -132,13 +136,20 @@ function ActivePlan({ onb, customer, onChange }) {
               {onb.target_go_live ? ` · Target go-live: ${onb.target_go_live}` : ''}
             </span>
           </div>
-          <button className="btn-primary" disabled={complete.isPending}
-            onClick={() => {
-              if (requiredOpen > 0) { if (confirm(`${requiredOpen} required task(s) still open. Force-complete anyway?`)) complete.mutate(true); }
-              else complete.mutate(false);
-            }}>
-            <CheckCheck size={14} /> Complete onboarding
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn-ghost" disabled={cancel.isPending}
+              onClick={() => { if (confirm('Cancel this onboarding and remove its milestones & tasks? The customer stays in onboarding so you can start a new plan.')) cancel.mutate(); }}
+              style={{ color: '#E91E8C' }}>
+              <Trash2 size={14} /> Cancel
+            </button>
+            <button className="btn-primary" disabled={complete.isPending}
+              onClick={() => {
+                if (requiredOpen > 0) { if (confirm(`${requiredOpen} required task(s) still open. Force-complete anyway?`)) complete.mutate(true); }
+                else complete.mutate(false);
+              }}>
+              <CheckCheck size={14} /> Complete onboarding
+            </button>
+          </div>
         </div>
         {/* Progress bar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
@@ -149,10 +160,46 @@ function ActivePlan({ onb, customer, onChange }) {
         </div>
       </div>
 
-      {/* Stages */}
+      {/* Onboarding call */}
+      <CallPanel onb={onb} onChange={onChange} />
+
+      {/* Milestones */}
       {onb.stages.map(stage => (
         <StageBlock key={stage.id} stage={stage} onChange={onChange} />
       ))}
+    </div>
+  );
+}
+
+function CallPanel({ onb, onChange }) {
+  const [booked, setBooked] = useState(!!onb.call_booked);
+  const [date, setDate] = useState(onb.call_booked_for ? onb.call_booked_for.slice(0, 10) : '');
+  const save = useMutation({
+    mutationFn: () => onboardingApi.setCall(onb.id, { call_booked: booked, call_booked_for: booked ? (date || null) : null }),
+    onSuccess: onChange,
+  });
+  const dirty = booked !== !!onb.call_booked || (date || '') !== (onb.call_booked_for ? onb.call_booked_for.slice(0, 10) : '');
+
+  return (
+    <div style={{ ...card, borderColor: booked ? '#00C853' : '#E2E8F0' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <Phone size={16} color={booked ? '#00C853' : '#64748B'} />
+        <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Onboarding call</span>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#475569', marginLeft: 8 }}>
+          <input type="checkbox" checked={booked} onChange={e => setBooked(e.target.checked)} /> Call booked
+        </label>
+        {booked && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#475569' }}>
+            for <input type="date" value={date} onChange={e => setDate(e.target.value)}
+              style={{ ...input, width: 'auto', padding: '5px 9px' }} />
+          </label>
+        )}
+        {dirty && <button className="btn-primary" style={{ marginLeft: 'auto' }} disabled={save.isPending || (booked && !date)} onClick={() => save.mutate()}>Save</button>}
+      </div>
+      <p style={{ fontSize: 11.5, color: '#64748B', margin: '8px 0 0' }}>
+        Tasks set to start <strong>after the onboarding call</strong> have their SLA dates calculated from this date.
+        {booked && date ? ` Post-call SLAs run from ${new Date(date).toLocaleDateString('en-GB')}.` : ' Set a date to schedule them.'}
+      </p>
     </div>
   );
 }
@@ -217,11 +264,15 @@ function TaskRow({ task, onChange }) {
           {!task.is_required && <span style={{ fontSize: 10, color: '#94A3B8', marginLeft: 6 }}>(optional)</span>}
         </div>
 
-        {task.due_at && (
+        {task.due_at ? (
           <span style={{ fontSize: 11, color: overdue ? '#E91E8C' : '#64748B', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             <Clock size={12} /> {overdue ? 'Overdue' : new Date(task.due_at).toLocaleDateString('en-GB')}
           </span>
-        )}
+        ) : task.sla_basis === 'post_call' ? (
+          <span style={{ fontSize: 11, color: '#7B2FBE', display: 'inline-flex', alignItems: 'center', gap: 4 }} title="SLA starts after the onboarding call">
+            <Clock size={12} /> After call
+          </span>
+        ) : null}
 
         {/* Assignee */}
         <select value={task.assignee_id || ''} onChange={e => update.mutate({ assignee_id: e.target.value || null })}

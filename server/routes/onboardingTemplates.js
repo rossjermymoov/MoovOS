@@ -198,12 +198,12 @@ router.post('/:id/tasks', async (req, res, next) => {
     const { rows } = await query(`
       INSERT INTO onboarding_template_tasks
         (template_id, stage_id, parent_task_id, title, description, position,
-         default_assignee_id, target_duration_hours, is_required, comms_template_id, auto_send_comms)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,COALESCE($9,true),$10,COALESCE($11,false))
+         default_assignee_id, target_duration_hours, is_required, comms_template_id, auto_send_comms, sla_basis)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,COALESCE($9,true),$10,COALESCE($11,false),COALESCE($12,'onboarding_start'))
       RETURNING *
     `, [req.params.id, b.stage_id, b.parent_task_id || null, b.title, b.description || null, pos,
         b.default_assignee_id || null, b.target_duration_hours || null, b.is_required,
-        b.comms_template_id || null, b.auto_send_comms]);
+        b.comms_template_id || null, b.auto_send_comms, b.sla_basis || null]);
     res.status(201).json(rows[0]);
   } catch (err) { next(err); }
 });
@@ -211,7 +211,7 @@ router.post('/:id/tasks', async (req, res, next) => {
 router.patch('/tasks/:taskId', async (req, res, next) => {
   try {
     const fields = ['stage_id', 'parent_task_id', 'title', 'description', 'position',
-      'default_assignee_id', 'target_duration_hours', 'is_required', 'comms_template_id', 'auto_send_comms'];
+      'default_assignee_id', 'target_duration_hours', 'is_required', 'comms_template_id', 'auto_send_comms', 'sla_basis'];
     const sets = [], vals = [];
     let i = 1;
     for (const f of fields) if (req.body[f] !== undefined) { sets.push(`${f} = $${i++}`); vals.push(req.body[f]); }

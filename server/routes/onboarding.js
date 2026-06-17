@@ -154,17 +154,19 @@ router.post('/customers/:customerId/start', async (req, res, next) => {
     // 4. Copy tasks (two passes so parent_task_id can be remapped).
     const taskMap = {};
     for (const t of tasks.rows) {
-      const due = t.target_duration_hours
+      // Due date is calculated from onboarding start now. 'post_call' tasks have
+      // no due date until the call is booked (set via PATCH /:id/call).
+      const due = (t.sla_basis !== 'post_call' && t.target_duration_hours)
         ? new Date(Date.now() + t.target_duration_hours * 3600 * 1000) : null;
       const r = await client.query(`
         INSERT INTO onboarding_tasks
           (onboarding_id, stage_id, template_task_id, title, description, position,
-           assignee_id, is_required, target_duration_hours, due_at, comms_template_id, auto_send_comms)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+           assignee_id, is_required, target_duration_hours, due_at, comms_template_id, auto_send_comms, sla_basis)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
         RETURNING id
       `, [onboardingId, stageMap[t.stage_id], t.id, t.title, t.description, t.position,
           t.default_assignee_id, t.is_required, t.target_duration_hours, due,
-          t.comms_template_id, t.auto_send_comms]);
+          t.comms_template_id, t.auto_send_comms, t.sla_basis || 'onboarding_start']);
       taskMap[t.id] = r.rows[0].id;
     }
     // Second pass: parent links + creation events.
@@ -494,6 +496,64 @@ async function sendTaskComms(taskId, actorId, overrideTo) {
 
   return { sent: true, to, template: row.template_name };
 }
+
+// ════════════════════════════════════════════════════════════════════
+// ONBOARDING CALL — book / record the call; recompute post-call SLAs
+// ════════════════════════════════════════════════════════════════════
+router.patch('/:onboardingId/call', async (req, res, next) => {
+  const client = await getClient();
+  try {
+    const { onboardingId } = req.params;
+    const b = req.body || {};
+
+    const sets = [], vals = [];
+    let i = 1;
+    if (b.call_booked !== undefined)     { sets.push(`call_booked = $${i++}`);     vals.push(b.call_booked); }
+    if (b.call_booked_for !== undefined) { sets.push(`call_booked_for = $${i++}`); vals.push(b.call_booked_for || null); }
+    if (b.call_completed !== undefined)  { sets.push(`call_completed = $${i++}`);  vals.push(b.call_completed); }
+    if (!sets.length) return res.status(400).json({ error: 'No call fields to update' });
+
+    await client.query('BEGIN');
+    vals.push(onboardingId);
+    const upd = await client.query(
+      `UPDATE customer_onboarding SET ${sets.join(', ')} WHERE id = $${i} RETURNING *`, vals);
+    if (!upd.rows[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
+    const onb = upd.rows[0];
+
+    // Recompute due dates for non-complete 'post_call' tasks from the call date.
+    // If no call date, their due date is cleared (unknown until booked).
+    await client.query(`
+      UPDATE onboarding_tasks
+      SET due_at = CASE
+        WHEN $2::timestamptz IS NULL OR target_duration_hours IS NULL THEN NULL
+        ELSE $2::timestamptz + (target_duration_hours || ' hours')::interval
+      END
+      WHERE onboarding_id = $1
+        AND sla_basis = 'post_call'
+        AND status NOT IN ('complete','skipped')
+    `, [onboardingId, onb.call_booked_for]);
+
+    await client.query('COMMIT');
+    res.json(onb);
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════
+// CANCEL / CLEAR an onboarding (removes its milestones & tasks)
+// ════════════════════════════════════════════════════════════════════
+router.delete('/:onboardingId', async (req, res, next) => {
+  try {
+    const r = await query(
+      `DELETE FROM customer_onboarding WHERE id = $1 RETURNING customer_id`, [req.params.onboardingId]);
+    if (!r.rows[0]) return res.status(404).json({ error: 'Not found' });
+    res.json({ deleted: true, customer_id: r.rows[0].customer_id });
+  } catch (err) { next(err); }
+});
 
 // ════════════════════════════════════════════════════════════════════
 // COMPLETE ONBOARDING → customer becomes 'active'
