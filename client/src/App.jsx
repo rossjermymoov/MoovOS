@@ -8,15 +8,19 @@ import CustomerNew from './pages/customers/CustomerNew';
 import CustomerAI from './pages/customers/CustomerAI';
 import StaffSettings from './pages/settings/StaffSettings';
 import RulesSettings from './pages/settings/RulesSettings';
+import CommsTemplates from './pages/settings/CommsTemplates';
+import Switchboard from './pages/settings/Switchboard';
 import BillingSettings from './pages/settings/BillingSettings';
 import XeroSettings from './pages/settings/XeroSettings';
 import VolumetricSettings from './pages/settings/VolumetricSettings';
 import EmailSettings from './pages/settings/EmailSettings';
+import GmailSettings from './pages/settings/GmailSettings';
 import CarrierManagement from './pages/carriers/CarrierManagement';
 import TrackingPage from './pages/tracking/TrackingPage';
 import FinancePage from './pages/finance/FinancePage';
 import QueriesPage from './pages/queries/QueriesPage';
 import TicketDetailPage from './pages/queries/TicketDetailPage';
+import SimulatorPanel from './pages/queries/SimulatorPanel';
 import CustomerSimPage from './pages/customer/CustomerSimPage';
 import KatanaPage from './pages/katana/KatanaPage';
 import PricingPage from './pages/pricing/PricingPage';
@@ -28,9 +32,9 @@ import ServiceCodeMappingsPage from './pages/reconciliation/ServiceCodeMappingsP
 
 // Placeholder pages for other sections (to be built)
 const Placeholder = ({ name }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 300, color: '#AAAAAA' }}>
+  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 300, color: '#64748B' }}>
     <div style={{ fontSize: 40, marginBottom: 12 }}>🚧</div>
-    <div style={{ fontSize: 18, fontWeight: 700, color: '#fff', marginBottom: 6 }}>{name}</div>
+    <div style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', marginBottom: 6 }}>{name}</div>
     <div style={{ fontSize: 13 }}>This section is coming soon</div>
   </div>
 );
@@ -44,10 +48,9 @@ function RequireAuth({ children }) {
   const location = useLocation();
 
   if (loading) {
-    // Blank screen while checking token — brief flicker is acceptable
     return (
-      <div style={{ background: '#0A0B1E', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ color: '#AAAAAA', fontSize: 14 }}>Loading…</span>
+      <div style={{ background: '#F8FAFC', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ color: '#64748B', fontSize: 14 }}>Loading…</span>
       </div>
     );
   }
@@ -93,6 +96,7 @@ function AppRoutes() {
         <Route path="finance"   element={<FinancePage />} />
         <Route path="queries">
           <Route index element={<QueriesPage />} />
+          <Route path="simulator" element={<SimulatorPanel />} />
           <Route path=":id" element={<TicketDetailPage />} />
         </Route>
         <Route path="customer-sim"  element={<CustomerSimPage />} />
@@ -109,10 +113,13 @@ function AppRoutes() {
           <Route index element={<StaffSettings />} />
           <Route path="staff"       element={<StaffSettings />} />
           <Route path="rules"       element={<RulesSettings />} />
+          <Route path="comms-templates" element={<CommsTemplates />} />
+          <Route path="switchboard"     element={<Switchboard />} />
           <Route path="volumetric"  element={<VolumetricSettings />} />
           <Route path="billing"     element={<BillingSettings />} />
           <Route path="xero"        element={<XeroSettings />} />
           <Route path="email"       element={<EmailSettings />} />
+          <Route path="gmail"       element={<GmailSettings />} />
         </Route>
         <Route path="*"         element={<Navigate to="/" replace />} />
       </Route>

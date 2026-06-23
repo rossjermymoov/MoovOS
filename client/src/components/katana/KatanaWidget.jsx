@@ -11,17 +11,17 @@ import { X, Send, Sparkles, RefreshCw, ChevronDown, Mic, MicOff } from 'lucide-r
 
 // ─── Colours ──────────────────────────────────────────────────────────────────
 const C = {
-  bg:        '#0D0E24',
-  surface:   '#13152E',
-  card:      '#1A1D3D',
-  border:    'rgba(255,255,255,0.07)',
-  amber:     '#F59E0B',
-  amberDim:  'rgba(245,158,11,0.12)',
-  amberGlow: 'rgba(245,158,11,0.25)',
-  text:      '#F0F0FF',
-  muted:     '#8888AA',
-  userBg:    'rgba(245,158,11,0.15)',
-  userBorder:'rgba(245,158,11,0.35)',
+  bg:        '#FFFFFF',
+  surface:   '#F8FAFC',
+  card:      '#F1F5F9',
+  border:    'rgba(0,0,0,0.08)',
+  amber:     '#B45309',
+  amberDim:  'rgba(180,83,9,0.08)',
+  amberGlow: 'rgba(180,83,9,0.18)',
+  text:      '#0F172A',
+  muted:     '#64748B',
+  userBg:    '#FEF3C7',
+  userBorder:'rgba(180,83,9,0.25)',
 };
 
 // ─── Katana sword SVG icon ────────────────────────────────────────────────────
@@ -70,7 +70,7 @@ function MessageBubble({ msg }) {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           marginRight: 8, marginTop: 2, boxShadow: `0 0 8px ${C.amberGlow}`,
         }}>
-          <KatanaIcon size={14} color="#0D0E24" />
+          <KatanaIcon size={14} color="#FFFFFF" />
         </div>
       )}
       <div style={{
@@ -240,7 +240,7 @@ export default function KatanaWidget() {
               boxShadow: `0 0 12px ${C.amberGlow}`,
               flexShrink: 0,
             }}>
-              <KatanaIcon size={18} color="#0D0E24" />
+              <KatanaIcon size={18} color="#FFFFFF" />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: C.amber, letterSpacing: '0.03em' }}>
@@ -338,7 +338,7 @@ export default function KatanaWidget() {
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   marginRight: 8, marginTop: 2,
                 }}>
-                  <KatanaIcon size={14} color="#0D0E24" />
+                  <KatanaIcon size={14} color="#FFFFFF" />
                 </div>
                 <div style={{
                   background: C.card, border: `1px solid ${C.border}`,
@@ -400,7 +400,7 @@ export default function KatanaWidget() {
                 onClick={speech.toggle}
                 title={speech.listening ? 'Stop listening' : 'Dictate question (en-GB)'}
                 style={{
-                  background: speech.listening ? C.amber : 'rgba(255,255,255,0.06)',
+                  background: speech.listening ? C.amber : 'rgba(0,0,0,0.06)',
                   border: 'none', borderRadius: 7, cursor: 'pointer',
                   width: 32, height: 32, flexShrink: 0,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -409,7 +409,7 @@ export default function KatanaWidget() {
                 }}
               >
                 {speech.listening
-                  ? <MicOff size={13} color="#0D0E24" />
+                  ? <MicOff size={13} color="#FFFFFF" />
                   : <Mic size={13} color={C.muted} />
                 }
               </button>
@@ -420,7 +420,7 @@ export default function KatanaWidget() {
                 style={{
                   background: input.trim() && !loading
                     ? `linear-gradient(135deg, ${C.amber}, #D97706)`
-                    : 'rgba(255,255,255,0.06)',
+                    : 'rgba(0,0,0,0.06)',
                   border: 'none', borderRadius: 7, cursor: input.trim() && !loading ? 'pointer' : 'default',
                   width: 32, height: 32, flexShrink: 0,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -428,7 +428,7 @@ export default function KatanaWidget() {
                   boxShadow: input.trim() && !loading ? `0 0 12px ${C.amberGlow}` : 'none',
                 }}
               >
-                <Send size={14} color={input.trim() && !loading ? '#0D0E24' : C.muted} />
+                <Send size={14} color={input.trim() && !loading ? '#FFFFFF' : C.muted} />
               </button>
             </div>
             <div style={{ fontSize: 10.5, color: C.muted, marginTop: 6, textAlign: 'center' }}>
@@ -460,7 +460,7 @@ export default function KatanaWidget() {
       >
         {open
           ? <X size={20} color={C.amber} />
-          : <KatanaIcon size={24} color="#0D0E24" />
+          : <KatanaIcon size={24} color="#FFFFFF" />
         }
       </button>
     </>

@@ -425,19 +425,15 @@ router.post('/import', async (req, res, next) => {
       }
       const service_id = serviceCache[svcKey];
 
-      // Resolve or create zone
-      const zoneKey = `${service_id}::${zone_name}`;
+      // Resolve zone — never auto-create. Zones must be defined at carrier level
+      // first (via the Carriers admin UI). Rows with an unrecognised zone are skipped.
+      const zoneKey = `${service_id}::${zone_name.toLowerCase()}`;
       if (!zoneCache[zoneKey]) {
-        let z = await client.query(
-          `SELECT id FROM zones WHERE courier_service_id = $1 AND name = $2 LIMIT 1`,
+        const z = await client.query(
+          `SELECT id FROM zones WHERE courier_service_id = $1 AND LOWER(name) = LOWER($2) LIMIT 1`,
           [service_id, zone_name]
         );
-        if (!z.rows.length) {
-          z = await client.query(
-            `INSERT INTO zones(courier_service_id, name) VALUES ($1, $2) RETURNING id`,
-            [service_id, zone_name]
-          );
-        }
+        if (!z.rows.length) { skipped++; continue; }
         zoneCache[zoneKey] = z.rows[0].id;
       }
       const zone_id = zoneCache[zoneKey];

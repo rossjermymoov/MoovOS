@@ -24,15 +24,15 @@ const api = axios.create({ baseURL: '/api' });
 
 // ─── Style tokens ─────────────────────────────────────────────────────────────
 
-const PAGE_BG   = { minHeight: '100vh', background: '#0A0B1E', padding: '28px 32px', color: '#E6EDF3' };
-const CARD       = { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '20px 24px' };
-const INPUT      = { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 7, color: '#E6EDF3', fontSize: 13, padding: '8px 12px', outline: 'none', width: '100%', boxSizing: 'border-box' };
+const PAGE_BG   = { minHeight: '100vh', background: '#F8FAFC', padding: '28px 32px', color: '#0F172A' };
+const CARD       = { background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10, padding: '20px 24px' };
+const INPUT      = { background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.10)', borderRadius: 7, color: '#0F172A', fontSize: 13, padding: '8px 12px', outline: 'none', width: '100%', boxSizing: 'border-box' };
 const SELECT_ST  = { ...INPUT, cursor: 'pointer' };
 const BTN_GREEN  = { background: 'rgba(0,200,83,0.15)', border: '1px solid rgba(0,200,83,0.4)', borderRadius: 7, color: '#00C853', padding: '9px 18px', cursor: 'pointer', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' };
-const BTN_GHOST  = { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 7, color: '#AAA', padding: '9px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 };
+const BTN_GHOST  = { background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 7, color: '#64748B', padding: '9px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 };
 const BTN_RED    = { background: 'rgba(213,0,0,0.08)', border: '1px solid rgba(213,0,0,0.25)', borderRadius: 7, color: '#FF5252', padding: '6px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 };
-const TH         = { padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid rgba(255,255,255,0.07)', textAlign: 'left', whiteSpace: 'nowrap' };
-const TD         = { padding: '12px 14px', fontSize: 13, color: '#E6EDF3', borderBottom: '1px solid rgba(255,255,255,0.04)', verticalAlign: 'middle' };
+const TH         = { padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid rgba(0,0,0,0.07)', textAlign: 'left', whiteSpace: 'nowrap' };
+const TD         = { padding: '12px 14px', fontSize: 13, color: '#0F172A', borderBottom: '1px solid rgba(0,0,0,0.03)', verticalAlign: 'middle' };
 
 // Carrier tiles — limited to reconciliation-ready carriers
 const RECON_READY = new Set(['dpd', 'dhl']);
@@ -48,9 +48,9 @@ function CarrierTile({ courier, selected, onSelect }) {
       title={ready ? courier.name : `${courier.name} — not yet configured for reconciliation`}
       style={{
         padding: '10px 18px', borderRadius: 8, cursor: ready ? 'pointer' : 'not-allowed',
-        background: selected ? 'rgba(0,200,83,0.1)' : 'rgba(255,255,255,0.04)',
-        border: `2px solid ${selected ? '#00C853' : 'rgba(255,255,255,0.1)'}`,
-        color: selected ? '#00C853' : ready ? '#E6EDF3' : '#555',
+        background: selected ? 'rgba(0,200,83,0.1)' : 'rgba(0,0,0,0.03)',
+        border: `2px solid ${selected ? '#00C853' : 'rgba(0,0,0,0.08)'}`,
+        color: selected ? '#00C853' : ready ? '#0F172A' : '#475569',
         fontSize: 13, fontWeight: 700, transition: 'all 0.15s',
         opacity: ready ? 1 : 0.4,
       }}
@@ -76,6 +76,7 @@ export default function ServiceCodeMappingsPage() {
 
   const [selectedCarrierId, setSelectedCarrierId] = useState(null);
   const [newCode,    setNewCode]    = useState('');
+  const [newProduct, setNewProduct] = useState('');
   const [newService, setNewService] = useState('');
   const [newNotes,   setNewNotes]   = useState('');
   const [formError,  setFormError]  = useState('');
@@ -110,13 +111,21 @@ export default function ServiceCodeMappingsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['service-code-mappings'] });
       setNewCode('');
+      setNewProduct('');
       setNewService('');
       setNewNotes('');
       setFormError('');
       setSaveOk(true);
       setTimeout(() => setSaveOk(false), 3000);
     },
-    onError: (err) => setFormError(err.response?.data?.error || 'Save failed'),
+    onError: (err) => {
+      const raw = err.response?.data?.error || '';
+      if (raw.includes('unique') || raw.includes('duplicate')) {
+        setFormError(`A mapping for invoice code "${newCode.trim()}" already exists — edit the existing entry instead.`);
+      } else {
+        setFormError(raw || 'Save failed');
+      }
+    },
   });
 
   const deleteMutation = useMutation({
@@ -134,6 +143,7 @@ export default function ServiceCodeMappingsPage() {
     saveMutation.mutate({
       carrier_id:   selectedCarrierId,
       courier_code: newCode.trim(),
+      product_code: newProduct.trim() || undefined,
       service_id:   parseInt(newService),
       notes:        newNotes.trim() || undefined,
     });
@@ -158,7 +168,7 @@ export default function ServiceCodeMappingsPage() {
         </button>
         <div>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Service Code Mappings</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#888' }}>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748B' }}>
             Map carrier invoice service codes to Moov OS services so the reconciliation engine can price each line correctly.
           </p>
         </div>
@@ -166,7 +176,7 @@ export default function ServiceCodeMappingsPage() {
 
       {/* ── Carrier picker ──────────────────────────────────────────────────── */}
       <div style={{ ...CARD, marginBottom: 24 }}>
-        <p style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+        <p style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
           Select Carrier
         </p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -174,9 +184,9 @@ export default function ServiceCodeMappingsPage() {
             onClick={() => setSelectedCarrierId(null)}
             style={{
               padding: '10px 18px', borderRadius: 8, cursor: 'pointer',
-              background: selectedCarrierId === null ? 'rgba(0,200,83,0.1)' : 'rgba(255,255,255,0.04)',
-              border: `2px solid ${selectedCarrierId === null ? '#00C853' : 'rgba(255,255,255,0.1)'}`,
-              color: selectedCarrierId === null ? '#00C853' : '#E6EDF3',
+              background: selectedCarrierId === null ? 'rgba(0,200,83,0.1)' : 'rgba(0,0,0,0.03)',
+              border: `2px solid ${selectedCarrierId === null ? '#00C853' : 'rgba(0,0,0,0.08)'}`,
+              color: selectedCarrierId === null ? '#00C853' : '#0F172A',
               fontSize: 13, fontWeight: 700, transition: 'all 0.15s',
             }}
           >
@@ -196,10 +206,10 @@ export default function ServiceCodeMappingsPage() {
       {/* ── Mappings table ──────────────────────────────────────────────────── */}
       <div style={{ ...CARD, marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             {selectedCarrier ? `${selectedCarrier.name} mappings` : 'All mappings'}
             {!loadingMappings && (
-              <span style={{ marginLeft: 8, fontWeight: 400, color: '#555', textTransform: 'none' }}>
+              <span style={{ marginLeft: 8, fontWeight: 400, color: '#64748B', textTransform: 'none' }}>
                 — {activeMappings.length} active{inactiveMappings.length > 0 ? `, ${inactiveMappings.length} inactive` : ''}
               </span>
             )}
@@ -207,7 +217,7 @@ export default function ServiceCodeMappingsPage() {
         </div>
 
         {loadingMappings ? (
-          <p style={{ color: '#555', fontSize: 13, margin: 0 }}>Loading…</p>
+          <p style={{ color: '#64748B', fontSize: 13, margin: 0 }}>Loading…</p>
         ) : activeMappings.length === 0 ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '20px 0', color: '#FF9800' }}>
             <AlertTriangle size={16} />
@@ -221,6 +231,7 @@ export default function ServiceCodeMappingsPage() {
               <colgroup>
                 <col style={{ width: 110 }} />
                 <col style={{ width: 60 }} />
+                <col style={{ width: 70 }} />
                 <col />
                 <col />
                 <col style={{ width: 100 }} />
@@ -229,6 +240,7 @@ export default function ServiceCodeMappingsPage() {
                 <tr>
                   <th style={TH}>Carrier</th>
                   <th style={TH}>Invoice Code</th>
+                  <th style={TH}>Product Code</th>
                   <th style={TH}>Maps to Service</th>
                   <th style={TH}>Notes</th>
                   <th style={{ ...TH, textAlign: 'right' }}>Action</th>
@@ -237,11 +249,11 @@ export default function ServiceCodeMappingsPage() {
               <tbody>
                 {activeMappings.map(m => (
                   <tr key={m.id} style={{ transition: 'background 0.1s' }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'}
                     onMouseLeave={e => e.currentTarget.style.background = ''}
                   >
                     <td style={TD}>
-                      <span style={{ fontSize: 12, color: '#AAA' }}>{m.carrier_name || '—'}</span>
+                      <span style={{ fontSize: 12, color: '#64748B' }}>{m.carrier_name || '—'}</span>
                     </td>
                     <td style={TD}>
                       <span style={{
@@ -253,16 +265,29 @@ export default function ServiceCodeMappingsPage() {
                       </span>
                     </td>
                     <td style={TD}>
+                      {m.product_code ? (
+                        <span style={{
+                          background: 'rgba(0,188,212,0.1)', border: '1px solid rgba(0,188,212,0.25)',
+                          borderRadius: 6, color: '#00BCD4', fontSize: 12, fontWeight: 700,
+                          padding: '3px 8px', fontFamily: 'monospace',
+                        }}>
+                          {m.product_code}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#475569', fontSize: 12 }}>—</span>
+                      )}
+                    </td>
+                    <td style={TD}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <ChevronRight size={14} style={{ color: '#555', flexShrink: 0 }} />
+                        <ChevronRight size={14} style={{ color: '#64748B', flexShrink: 0 }} />
                         <span style={{ fontWeight: 600 }}>{m.service_name || <span style={{ color: '#FF5252' }}>Unknown service</span>}</span>
                         {m.service_code && (
-                          <span style={{ fontSize: 11, color: '#666', marginLeft: 4 }}>({m.service_code})</span>
+                          <span style={{ fontSize: 11, color: '#64748B', marginLeft: 4 }}>({m.service_code})</span>
                         )}
                       </div>
                     </td>
-                    <td style={{ ...TD, color: '#888', fontSize: 12 }}>
-                      {m.notes || <span style={{ color: '#444' }}>—</span>}
+                    <td style={{ ...TD, color: '#64748B', fontSize: 12 }}>
+                      {m.notes || <span style={{ color: '#475569' }}>—</span>}
                     </td>
                     <td style={{ ...TD, textAlign: 'right' }}>
                       <button
@@ -284,7 +309,7 @@ export default function ServiceCodeMappingsPage() {
 
       {/* ── Add new mapping ─────────────────────────────────────────────────── */}
       <div style={CARD}>
-        <p style={{ margin: '0 0 16px', fontSize: 12, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+        <p style={{ margin: '0 0 16px', fontSize: 12, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
           Add New Mapping
         </p>
 
@@ -295,18 +320,18 @@ export default function ServiceCodeMappingsPage() {
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr', gap: 14, alignItems: 'end', maxWidth: 700 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '120px 100px 1fr 1fr', gap: 14, alignItems: 'end', maxWidth: 860 }}>
 
-          {/* Carrier code */}
+          {/* Invoice code */}
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#888', marginBottom: 6 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748B', marginBottom: 6 }}>
               <Hash size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />
               Invoice Code
             </label>
             <input
               value={newCode}
               onChange={e => setNewCode(e.target.value)}
-              placeholder="e.g. 4"
+              placeholder="e.g. 2"
               maxLength={20}
               disabled={!selectedCarrierId}
               style={{ ...INPUT, opacity: selectedCarrierId ? 1 : 0.45, fontFamily: 'monospace', fontWeight: 700 }}
@@ -314,9 +339,26 @@ export default function ServiceCodeMappingsPage() {
             />
           </div>
 
+          {/* Product code */}
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748B', marginBottom: 6 }}>
+              <Hash size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />
+              Product Code <span style={{ fontWeight: 400 }}>(opt)</span>
+            </label>
+            <input
+              value={newProduct}
+              onChange={e => setNewProduct(e.target.value)}
+              placeholder="e.g. 1"
+              maxLength={60}
+              disabled={!selectedCarrierId}
+              style={{ ...INPUT, opacity: selectedCarrierId ? 1 : 0.45, fontFamily: 'monospace', fontWeight: 700, color: '#00BCD4' }}
+              onKeyDown={e => e.key === 'Enter' && handleSave()}
+            />
+          </div>
+
           {/* Service picker */}
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#888', marginBottom: 6 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748B', marginBottom: 6 }}>
               <Tag size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />
               Maps to Service
             </label>
@@ -337,14 +379,14 @@ export default function ServiceCodeMappingsPage() {
 
           {/* Notes */}
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#888', marginBottom: 6 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748B', marginBottom: 6 }}>
               <StickyNote size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />
-              Notes <span style={{ fontWeight: 400, color: '#555' }}>(optional)</span>
+              Notes <span style={{ fontWeight: 400, color: '#64748B' }}>(optional)</span>
             </label>
             <input
               value={newNotes}
               onChange={e => setNewNotes(e.target.value)}
-              placeholder="e.g. Saturday delivery"
+              placeholder="e.g. Express Pack"
               disabled={!selectedCarrierId}
               style={{ ...INPUT, opacity: selectedCarrierId ? 1 : 0.45 }}
               onKeyDown={e => e.key === 'Enter' && handleSave()}

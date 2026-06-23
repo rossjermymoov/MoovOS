@@ -5,7 +5,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Trash2, Globe, Search, X, ChevronDown, ChevronRight, Package, Check, Zap, AlertCircle, Percent } from 'lucide-react';
+import { Trash2, Globe, Search, X, ChevronDown, ChevronRight, Package, Check, Zap, AlertCircle, Percent, ToggleLeft, ToggleRight, Plus } from 'lucide-react';
 import axios from 'axios';
 import { getCourierLogo } from '../../../utils/courierLogos';
 
@@ -14,8 +14,8 @@ const api = axios.create({ baseURL: '/api' });
 const gbp = (n) => `£${parseFloat(n || 0).toFixed(2)}`;
 
 const inp = {
-  background: '#0D0E2A', border: '1px solid rgba(255,255,255,0.15)',
-  borderRadius: 9999, padding: '4px 12px', color: '#fff', fontSize: 12,
+  background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
+  borderRadius: 9999, padding: '4px 12px', color: '#0F172A', fontSize: 12,
   outline: 'none', boxSizing: 'border-box',
 };
 
@@ -69,7 +69,7 @@ function PriceCell({ rateId, initialPrice, onSaved, onDelete }) {
       {confirm
         ? <>
             <button onClick={() => onDelete(rateId)} style={{ background: '#E91E8C', border: 'none', borderRadius: 4, color: '#fff', fontSize: 10, padding: '2px 6px', cursor: 'pointer' }}>Delete</button>
-            <button onClick={() => setConfirm(false)} style={{ background: 'none', border: 'none', color: '#AAAAAA', fontSize: 10, cursor: 'pointer' }}>✕</button>
+            <button onClick={() => setConfirm(false)} style={{ background: 'none', border: 'none', color: '#64748B', fontSize: 10, cursor: 'pointer' }}>✕</button>
           </>
         : <button onClick={() => setConfirm(true)} style={{ background: 'none', border: 'none', color: 'transparent', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
             <Trash2 size={11} color="#333" />
@@ -119,7 +119,7 @@ function SubPriceCell({ rateId, initialSubPrice, onSaved }) {
           if (e.key === 'Enter') commit();
           if (e.key === 'Escape') { setVal(hasValue ? String(parseFloat(initialSubPrice).toFixed(2)) : ''); setEditing(false); }
         }}
-        style={{ ...inp, width: 72, textAlign: 'right', color: '#FFC107', fontWeight: 700, fontFamily: 'monospace', border: '1px solid rgba(255,193,7,0.6)', background: 'rgba(255,193,7,0.08)' }}
+        style={{ ...inp, width: 72, textAlign: 'right', color: '#D97706', fontWeight: 700, fontFamily: 'monospace', border: '1px solid rgba(255,193,7,0.6)', background: 'rgba(255,193,7,0.08)' }}
       />
     );
   }
@@ -130,7 +130,7 @@ function SubPriceCell({ rateId, initialSubPrice, onSaved }) {
         onClick={startEdit}
         title="Sub-parcel rate — click to edit, clear to remove"
         style={{
-          fontSize: 12, fontWeight: 700, color: '#FFC107',
+          fontSize: 12, fontWeight: 700, color: '#D97706',
           cursor: 'pointer', padding: '2px 8px', borderRadius: 5,
           border: '1px solid rgba(255,193,7,0.35)',
           background: 'rgba(255,193,7,0.08)',
@@ -151,13 +151,13 @@ function SubPriceCell({ rateId, initialSubPrice, onSaved }) {
       onClick={startEdit}
       title="Add sub-parcel rate (2nd+ boxes)"
       style={{
-        fontSize: 11, color: '#444', cursor: 'pointer',
+        fontSize: 11, color: '#475569', cursor: 'pointer',
         padding: '2px 7px', borderRadius: 5,
         border: '1px dashed rgba(255,193,7,0.2)',
         fontFamily: 'monospace',
         transition: 'color 0.12s, border-color 0.12s',
       }}
-      onMouseEnter={e => { e.currentTarget.style.color = '#FFC107'; e.currentTarget.style.borderColor = 'rgba(255,193,7,0.5)'; }}
+      onMouseEnter={e => { e.currentTarget.style.color = '#D97706'; e.currentTarget.style.borderColor = 'rgba(255,193,7,0.5)'; }}
       onMouseLeave={e => { e.currentTarget.style.color = '#444'; e.currentTarget.style.borderColor = 'rgba(255,193,7,0.2)'; }}
     >
       + sub
@@ -316,58 +316,41 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
 
   const cardService = cardData?.services?.find(s => s.service_code === service.service_code);
 
-  // Derive a consistent weight_class_name from a carrier band's min/max kg
+  // Derive a consistent weight_class_name from a carrier band's min/max kg (lowercase, matches DB)
   function bandLabel(band) {
     const fmt = n => {
       const f = parseFloat(n);
       return Number.isInteger(f) ? String(f) : f.toFixed(f < 1 ? 3 : 1).replace(/\.?0+$/, '');
     };
-    return `${fmt(band.min_weight_kg)}-${fmt(band.max_weight_kg)}KG`;
+    if (band.max_weight_kg == null) return `${fmt(band.min_weight_kg)}kg+`;
+    return `${fmt(band.min_weight_kg)}-${fmt(band.max_weight_kg)}kg`;
   }
 
-  // Apply markup: cost × (1 + pct/100) for every zone/band in the carrier card
+  // Apply markup: single server-side call — deletes all existing rates for this
+  // service and re-inserts fresh rows at carrier_price × (1 + pct/100).
   async function applyMarkup() {
     const pct = parseFloat(markup);
-    if (isNaN(pct) || pct < 0 || !cardService) return;
+    if (isNaN(pct) || pct < 0 || !activeCardId) return;
     setApplying(true);
     setApplyResult(null);
     try {
-      // Build lookup of existing customer rates for this service
-      const existingMap = {};
-      for (const r of service.rates) existingMap[`${r.zone_name}::${r.weight_class_name}`] = r;
+      const result = await api.post(`/customer-rates/${customerId}/apply-markup`, {
+        service_code:         service.service_code,
+        service_id:           service.service_id,
+        service_name:         service.service_name,
+        courier_id:           service.courier_id   || 0,
+        courier_code:         service.courier_code || '',
+        courier_name:         service.courier_name || '',
+        carrier_rate_card_id: activeCardId,
+        markup_pct:           pct,
+      });
 
-      const toCreate = [];
-      for (const zone of cardService.zones) {
-        for (const band of zone.bands) {
-          const wcn      = bandLabel(band);
-          const sellPrice = parseFloat((parseFloat(band.price_first) * (1 + pct / 100)).toFixed(2));
-          const sellSub   = band.price_sub != null
-            ? parseFloat((parseFloat(band.price_sub) * (1 + pct / 100)).toFixed(2))
-            : null;
-          toCreate.push({ zone_name: zone.zone_name, wcn, sellPrice, sellSub });
-        }
-      }
-
-      await Promise.all(toCreate.map(({ zone_name, wcn, sellPrice, sellSub }) =>
-        api.post(`/customer-rates/${customerId}`, {
-          courier_id:        service.courier_id   || 0,
-          courier_code:      service.courier_code || '',
-          courier_name:      service.courier_name || '',
-          service_id:        service.service_id,
-          service_code:      service.service_code,
-          service_name:      service.service_name,
-          zone_name,
-          weight_class_name: wcn,
-          price:             sellPrice,
-          price_sub:         sellSub,
-        })
-      ));
-
-      setApplyResult({ created: toCreate.length });
+      setApplyResult({ created: result.data.inserted });
       qc.invalidateQueries(['customer-rates', customerId]);
       onRateCreated?.();
     } catch (e) {
-      console.error('[applyMarkup] failed', e);
+      console.error('[applyMarkup] failed', e.response?.data || e.message);
+      setApplyResult({ error: e.response?.data?.error || 'Failed to apply markup' });
     } finally {
       setApplying(false);
     }
@@ -438,11 +421,11 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
     <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(8,9,26,0.97)', display: 'flex', flexDirection: 'column' }}>
 
       {/* Header */}
-      <div style={{ flexShrink: 0, padding: '20px 28px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: 16, background: '#0A0B1E' }}>
+      <div style={{ flexShrink: 0, padding: '20px 28px 16px', borderBottom: '1px solid rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', gap: 16, background: '#F8FAFC' }}>
         <Globe size={20} color="#00BCD4" style={{ flexShrink: 0 }} />
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 17, fontWeight: 700, color: '#fff' }}>{service.service_name}</div>
-          <div style={{ fontSize: 12, color: '#AAAAAA', marginTop: 2 }}>
+          <div style={{ fontSize: 17, fontWeight: 700, color: '#0F172A' }}>{service.service_name}</div>
+          <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
             <span style={{ color: '#00BCD4', fontFamily: 'monospace', fontWeight: 700, marginRight: 10 }}>{service.service_code}</span>
             {rates.length.toLocaleString()} rates · {totalZones} zones
             {multiWeight && ` · ${[...new Set(rates.map(r => r.weight_class_name))].length} weight classes`}
@@ -451,31 +434,31 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
 
         {/* Search */}
         <div style={{ position: 'relative', flex: '0 0 440px' }}>
-          <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#AAAAAA', pointerEvents: 'none' }} />
+          <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#64748B', pointerEvents: 'none' }} />
           <input
             ref={searchRef}
             value={searchText}
             onChange={e => setSearchText(e.target.value)}
             placeholder='e.g. "Jamaica"  or  "1kg to France"'
-            style={{ width: '100%', boxSizing: 'border-box', background: '#0D0E2A', border: '1px solid rgba(0,188,212,0.5)', borderRadius: 8, padding: '10px 36px 10px 36px', color: '#fff', fontSize: 13, outline: 'none' }}
+            style={{ width: '100%', boxSizing: 'border-box', background: '#FFFFFF', border: '1px solid rgba(0,188,212,0.5)', borderRadius: 8, padding: '10px 36px 10px 36px', color: '#0F172A', fontSize: 13, outline: 'none' }}
           />
           {searchText && (
-            <button onClick={() => setSearchText('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#AAAAAA', cursor: 'pointer', padding: 0, display: 'flex' }}>
+            <button onClick={() => setSearchText('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: 0, display: 'flex' }}>
               <X size={14} />
             </button>
           )}
         </div>
 
-        <button onClick={onClose} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, color: '#AAAAAA', fontSize: 12, padding: '7px 14px', cursor: 'pointer', flexShrink: 0 }}>
+        <button onClick={onClose} style={{ background: 'none', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 6, color: '#64748B', fontSize: 12, padding: '7px 14px', cursor: 'pointer', flexShrink: 0 }}>
           Close  <span style={{ opacity: 0.5, fontSize: 11 }}>esc</span>
         </button>
       </div>
 
-      {/* Markup toolbar — only shown when carrier rate card is available */}
-      {cardService && (
+      {/* Markup toolbar — shown whenever a carrier rate card is linked */}
+      {activeCardId && (
         <div style={{ flexShrink: 0, padding: '8px 28px', background: 'rgba(0,200,83,0.04)', borderBottom: '1px solid rgba(0,200,83,0.08)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <Percent size={12} color="#00C853" />
-          <span style={{ fontSize: 12, color: '#AAAAAA' }}>Markup from carrier cost</span>
+          <span style={{ fontSize: 12, color: '#64748B' }}>Markup from carrier cost</span>
           <input
             value={markup}
             onChange={e => { setMarkup(e.target.value); setApplyResult(null); }}
@@ -483,28 +466,35 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
             placeholder="e.g. 20"
             style={{ ...inp, width: 70, textAlign: 'right', fontSize: 12, color: '#00C853', border: '1px solid rgba(0,200,83,0.4)', background: 'rgba(0,200,83,0.06)' }}
           />
-          <span style={{ fontSize: 12, color: '#AAAAAA' }}>%</span>
+          <span style={{ fontSize: 12, color: '#64748B' }}>%</span>
           <button
             onClick={applyMarkup}
             disabled={applying || !markup}
             style={{
               background: applying ? 'transparent' : 'rgba(0,200,83,0.12)',
               border: '1px solid rgba(0,200,83,0.4)', borderRadius: 5,
-              color: applying ? '#555' : '#00C853',
+              color: applying ? '#475569' : '#00C853',
               fontSize: 12, fontWeight: 700, padding: '5px 14px',
               cursor: applying ? 'not-allowed' : 'pointer',
             }}
           >
             {applying ? 'Applying…' : 'Apply to all zones'}
           </button>
-          {applyResult && (
+          {applyResult && !applyResult.error && (
             <span style={{ fontSize: 12, color: '#00C853', fontWeight: 700 }}>
               ✓ {applyResult.created} rates set
             </span>
           )}
-          <span style={{ fontSize: 11, color: '#444', marginLeft: 'auto' }}>
-            {cardService.zones.length} zones · {[...new Set(cardService.zones.flatMap(z => z.bands.map(bandLabel)))].length} weight bands in carrier card
-          </span>
+          {applyResult?.error && (
+            <span style={{ fontSize: 12, color: '#E91E8C', fontWeight: 700 }}>
+              ✗ {applyResult.error}
+            </span>
+          )}
+          {cardService && (
+            <span style={{ fontSize: 11, color: '#475569', marginLeft: 'auto' }}>
+              {cardService.zones.length} zones · {[...new Set(cardService.zones.flatMap(z => z.bands.map(bandLabel)))].length} weight bands in carrier card
+            </span>
+          )}
         </div>
       )}
 
@@ -515,16 +505,16 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
           <span style={{ color: matchCount === 0 ? '#E91E8C' : '#00BCD4', fontWeight: 700 }}>
             {matchCount === 0 ? 'No matches found' : matchCount === 1 ? '1 match' : `${matchCount} matches`}
           </span>
-          {parsed.zoneTerm   && <span style={{ color: '#AAAAAA' }}>Zone: <span style={{ color: '#fff' }}>{parsed.zoneTerm}</span></span>}
-          {parsed.weightKg != null && <span style={{ color: '#AAAAAA' }}>Weight: <span style={{ color: '#fff' }}>{parsed.weightKg} kg</span></span>}
-          <button onClick={() => setSearchText('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 12 }}>Clear ✕</button>
+          {parsed.zoneTerm   && <span style={{ color: '#64748B' }}>Zone: <span style={{ color: '#0F172A' }}>{parsed.zoneTerm}</span></span>}
+          {parsed.weightKg != null && <span style={{ color: '#64748B' }}>Weight: <span style={{ color: '#0F172A' }}>{parsed.weightKg} kg</span></span>}
+          <button onClick={() => setSearchText('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: 12 }}>Clear ✕</button>
         </div>
       )}
 
       {/* ── Exact match: big price display ───────────────────── */}
       {exactMatch && (
         <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 28px', gap: 16 }}>
-          <div style={{ fontSize: 13, color: '#AAAAAA', fontWeight: 600, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          <div style={{ fontSize: 13, color: '#64748B', fontWeight: 600, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
             {service.service_name} · {exactMatch.zone_name}
             {multiWeight && <> · {exactMatch.weight_class_name}</>}
           </div>
@@ -536,7 +526,7 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
             <SubPriceCell rateId={exactMatch.id} initialSubPrice={exactMatch.price_sub} onSaved={onRateUpdate} />
             <PerKgCell rateId={exactMatch.id} initialPerKgRate={exactMatch.per_kg_rate} onSaved={onPerKgUpdate} />
           </div>
-          <div style={{ fontSize: 12, color: '#444', marginTop: 4 }}>Click a price to edit · amber = 2nd+ parcels · cyan = per-kg above threshold</div>
+          <div style={{ fontSize: 12, color: '#475569', marginTop: 4 }}>Click a price to edit · amber = 2nd+ parcels · cyan = per-kg above threshold</div>
         </div>
       )}
 
@@ -544,32 +534,32 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
       {!exactMatch && (
         <div style={{ flex: 1, overflow: 'auto', padding: '0 0 40px' }}>
           {rates.length === 0 ? (
-            <div style={{ padding: 40, textAlign: 'center', color: '#555', fontSize: 14, fontStyle: 'italic' }}>No pricing found for this service</div>
+            <div style={{ padding: 40, textAlign: 'center', color: '#64748B', fontSize: 14, fontStyle: 'italic' }}>No pricing found for this service</div>
           ) : hasSearch && matchCount === 0 ? (
             <div style={{ padding: 60, textAlign: 'center' }}>
               <div style={{ fontSize: 40, marginBottom: 16 }}>🔍</div>
-              <div style={{ fontSize: 16, color: '#555', fontWeight: 600 }}>No rates match your search</div>
-              <div style={{ fontSize: 13, color: '#444', marginTop: 8 }}>Try a different zone name or weight</div>
+              <div style={{ fontSize: 16, color: '#64748B', fontWeight: 600 }}>No rates match your search</div>
+              <div style={{ fontSize: 13, color: '#475569', marginTop: 8 }}>Try a different zone name or weight</div>
             </div>
           ) : multiWeight ? (
             /* Matrix: zones × weight classes */
             <table style={{ borderCollapse: 'collapse', minWidth: '100%', fontSize: 13 }}>
               <thead>
-                <tr style={{ background: '#0A0B1E', position: 'sticky', top: 0, zIndex: 10 }}>
-                  <th style={{ textAlign: 'left', padding: '12px 20px 12px 28px', color: '#AAAAAA', fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.08)', minWidth: 220 }}>Zone</th>
+                <tr style={{ background: '#F8FAFC', position: 'sticky', top: 0, zIndex: 10 }}>
+                  <th style={{ textAlign: 'left', padding: '12px 20px 12px 28px', color: '#64748B', fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap', borderBottom: '1px solid rgba(0,0,0,0.08)', minWidth: 220 }}>Zone</th>
                   {weightClasses.map(wc => (
-                    <th key={wc} style={{ textAlign: 'right', padding: '12px 20px', color: '#AAAAAA', fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.08)', minWidth: 120 }}>{wc}</th>
+                    <th key={wc} style={{ textAlign: 'right', padding: '12px 20px', color: '#64748B', fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap', borderBottom: '1px solid rgba(0,0,0,0.08)', minWidth: 120 }}>{wc}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {zones.map((zone, zi) => (
                   <tr key={zone} style={{ background: zi % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
-                    <td style={{ padding: '8px 20px 8px 28px', color: '#DDD', whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>{zone}</td>
+                    <td style={{ padding: '8px 20px 8px 28px', color: '#334155', whiteSpace: 'nowrap', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>{zone}</td>
                     {weightClasses.map(wc => {
                       const rate = rateMap[zone]?.[wc];
                       return (
-                        <td key={wc} style={{ textAlign: 'right', padding: '8px 20px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                        <td key={wc} style={{ textAlign: 'right', padding: '8px 20px', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
                           {rate
                             ? <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
                                 <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
@@ -588,24 +578,24 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
             /* Simple list */
             <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
               <thead>
-                <tr style={{ background: '#0A0B1E', position: 'sticky', top: 0, zIndex: 10 }}>
-                  <th style={{ textAlign: 'left', padding: '12px 20px 12px 28px', color: '#AAAAAA', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>Zone</th>
-                  <th style={{ textAlign: 'right', padding: '12px 20px', color: '#00C853', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>1st parcel</th>
-                  <th style={{ textAlign: 'right', padding: '12px 20px', color: '#FFC107', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>2nd+</th>
-                  <th style={{ textAlign: 'right', padding: '12px 28px 12px 20px', color: '#00BCD4', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>£/kg</th>
+                <tr style={{ background: '#F8FAFC', position: 'sticky', top: 0, zIndex: 10 }}>
+                  <th style={{ textAlign: 'left', padding: '12px 20px 12px 28px', color: '#64748B', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>Zone</th>
+                  <th style={{ textAlign: 'right', padding: '12px 20px', color: '#00C853', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>1st parcel</th>
+                  <th style={{ textAlign: 'right', padding: '12px 20px', color: '#D97706', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>2nd+</th>
+                  <th style={{ textAlign: 'right', padding: '12px 28px 12px 20px', color: '#00BCD4', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>£/kg</th>
                 </tr>
               </thead>
               <tbody>
                 {displayRates.map((rate, ri) => (
                   <tr key={rate.id} style={{ background: ri % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
-                    <td style={{ padding: '8px 20px 8px 28px', color: '#DDD', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>{rate.zone_name}</td>
-                    <td style={{ textAlign: 'right', padding: '8px 20px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                    <td style={{ padding: '8px 20px 8px 28px', color: '#334155', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>{rate.zone_name}</td>
+                    <td style={{ textAlign: 'right', padding: '8px 20px', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
                       <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
                     </td>
-                    <td style={{ textAlign: 'right', padding: '8px 20px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                    <td style={{ textAlign: 'right', padding: '8px 20px', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
                       <SubPriceCell rateId={rate.id} initialSubPrice={rate.price_sub} onSaved={onRateUpdate} />
                     </td>
-                    <td style={{ textAlign: 'right', padding: '8px 28px 8px 20px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                    <td style={{ textAlign: 'right', padding: '8px 28px 8px 20px', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
                       <PerKgCell rateId={rate.id} initialPerKgRate={rate.per_kg_rate} onSaved={onPerKgUpdate} />
                     </td>
                   </tr>
@@ -656,7 +646,7 @@ function NewPriceCell({ service, customerId, zoneName, weightClassName, onCreate
   }
 
   if (saving) {
-    return <span style={{ fontSize: 12, color: '#555', fontFamily: 'monospace', padding: '3px 10px' }}>…</span>;
+    return <span style={{ fontSize: 12, color: '#64748B', fontFamily: 'monospace', padding: '3px 10px' }}>…</span>;
   }
 
   if (editing) {
@@ -679,12 +669,12 @@ function NewPriceCell({ service, customerId, zoneName, weightClassName, onCreate
       style={{
         fontSize: 12, color: '#2A2A2A', cursor: 'pointer',
         padding: '3px 10px', borderRadius: 5, fontFamily: 'monospace',
-        border: '1px dashed rgba(255,255,255,0.1)',
+        border: '1px dashed rgba(0,0,0,0.08)',
         display: 'inline-block', minWidth: 52, textAlign: 'center',
         transition: 'border-color 0.12s, color 0.12s',
       }}
       onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(0,200,83,0.5)'; e.currentTarget.style.color = '#00C853'; }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = '#2A2A2A'; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.08)'; e.currentTarget.style.color = '#2A2A2A'; }}
     >
       —
     </span>
@@ -715,13 +705,34 @@ function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateD
 
   // Derived values (used in both header and body)
   const rateMap = {};
+  // Fallback lookup by zone name only — used when weight_class_name labels differ
+  // between what the weight_bands table derives ("0-2kg") and what customer_rates
+  // stores ("Parcel"). Without this, existing rates become invisible when a new
+  // zone is added to the service and the template is used for display.
+  const rateByZone = {};
   for (const rate of service.rates) {
     rateMap[`${rate.zone_name}::${rate.weight_class_name}`] = rate;
+    if (!rateByZone[rate.zone_name]) rateByZone[rate.zone_name] = rate;
   }
   const zonesToShow = !isIntl
-    ? (templateZones.length > 0
-        ? templateZones
-        : service.rates.map(r => ({ zone_name: r.zone_name, weight_class_name: r.weight_class_name })))
+    ? (() => {
+        if (templateZones.length === 0) {
+          // No template — use the customer's own rate keys directly
+          return service.rates.map(r => ({ zone_name: r.zone_name, weight_class_name: r.weight_class_name }));
+        }
+        // Template loaded — use it if any zone NAME matches a customer rate.
+        // We check zone names only (not the full zone::weight key) because
+        // weight_class_name labels can differ between weight_bands ("0-2kg")
+        // and customer_rates ("Parcel") for the same logical band. Using only
+        // zone names means a newly-added zone (e.g. "Isle of Man") will appear
+        // alongside existing zones even when weight labels don't exactly match.
+        const customerZoneNames = new Set(service.rates.map(r => r.zone_name));
+        const anyZoneMatch = templateZones.some(t => customerZoneNames.has(t.zone_name));
+        if (!anyZoneMatch && service.rates.length > 0) {
+          return service.rates.map(r => ({ zone_name: r.zone_name, weight_class_name: r.weight_class_name }));
+        }
+        return templateZones;
+      })()
     : [];
   const multiWeight = [...new Set(zonesToShow.map(z => z.weight_class_name))].length > 1;
   const pricedCount = service.rates.length;
@@ -734,14 +745,14 @@ function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateD
       <>
         <div
           onClick={() => setOverlay(true)}
-          style={{ display: 'flex', alignItems: 'center', padding: '10px 18px', borderTop: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: 'rgba(0,188,212,0.03)' }}
+          style={{ display: 'flex', alignItems: 'center', padding: '10px 18px', borderTop: '1px solid rgba(0,0,0,0.03)', cursor: 'pointer', background: 'rgba(0,188,212,0.03)' }}
           onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,188,212,0.07)'}
           onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,188,212,0.03)'}
         >
           <Globe size={12} color="#00BCD4" style={{ marginRight: 8, flexShrink: 0 }} />
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', flex: 1 }}>{service.service_name}</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', flex: 1 }}>{service.service_name}</span>
           {totalCount > 0 && (
-            <span style={{ fontSize: 11, color: allPriced ? '#00C853' : '#FFC107', fontWeight: 700, marginRight: 12 }}>
+            <span style={{ fontSize: 11, color: allPriced ? '#00C853' : '#D97706', fontWeight: 700, marginRight: 12 }}>
               {pricedCount}/{totalCount} priced
             </span>
           )}
@@ -766,26 +777,26 @@ function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateD
 
   // ── Domestic: collapsible zone chips ─────────────────────────
   return (
-    <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+    <div style={{ borderTop: '1px solid rgba(0,0,0,0.04)' }}>
       {/* Collapsible header */}
       <div
         onClick={() => setOpen(o => !o)}
         style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 18px', cursor: 'pointer' }}
-        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
+        onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'}
         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
       >
         {open
-          ? <ChevronDown size={11} color="#555" style={{ flexShrink: 0 }} />
-          : <ChevronRight size={11} color="#555" style={{ flexShrink: 0 }} />}
-        <span style={{ fontSize: 12, fontWeight: 700, color: '#AAAAAA', textTransform: 'uppercase', letterSpacing: '0.06em', flex: 1 }}>
+          ? <ChevronDown size={11} color="#475569" style={{ flexShrink: 0 }} />
+          : <ChevronRight size={11} color="#475569" style={{ flexShrink: 0 }} />}
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', flex: 1 }}>
           {service.service_name}
         </span>
         {totalCount > 0 && (
-          <span style={{ fontSize: 10, color: allPriced ? '#00C853' : '#FFC107', fontWeight: 700 }}>
+          <span style={{ fontSize: 10, color: allPriced ? '#00C853' : '#D97706', fontWeight: 700 }}>
             {pricedCount}/{totalCount}
           </span>
         )}
-        <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#555', background: 'rgba(255,255,255,0.04)', padding: '1px 6px', borderRadius: 3, border: '1px solid rgba(255,255,255,0.07)' }}>
+        <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#64748B', background: 'rgba(0,0,0,0.03)', padding: '1px 6px', borderRadius: 3, border: '1px solid rgba(0,0,0,0.07)' }}>
           {service.service_code}
         </span>
       </div>
@@ -794,20 +805,20 @@ function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateD
       {open && (
         <div style={{ padding: '4px 18px 14px' }}>
           {templateLoading ? (
-            <div style={{ fontSize: 11, color: '#444' }}>Loading zones…</div>
+            <div style={{ fontSize: 11, color: '#475569' }}>Loading zones…</div>
           ) : zonesToShow.length === 0 ? (
-            <div style={{ fontSize: 11, color: '#555', fontStyle: 'italic' }}>No zone template found for this service</div>
+            <div style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic' }}>No zone template found for this service</div>
           ) : (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {zonesToShow.map(({ zone_name, weight_class_name }) => {
                 const key  = `${zone_name}::${weight_class_name}`;
-                const rate = rateMap[key];
+                const rate = rateMap[key] || (!multiWeight ? rateByZone[zone_name] : null);
                 return (
                   <div key={key} style={{
                     display: 'inline-flex', alignItems: 'center', gap: 8,
                     padding: '5px 8px 5px 10px',
-                    background: rate ? 'rgba(255,255,255,0.02)' : 'transparent',
-                    border: `1px solid ${rate ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.04)'}`,
+                    background: rate ? 'rgba(0,0,0,0.02)' : 'transparent',
+                    border: `1px solid ${rate ? 'rgba(0,0,0,0.07)' : 'rgba(0,0,0,0.03)'}`,
                     borderRadius: 7,
                   }}>
                     <span style={{ fontSize: 11, color: rate ? '#666' : '#444', fontWeight: 500, whiteSpace: 'nowrap' }}>
@@ -848,11 +859,11 @@ function CourierGroup({ courierName, services, customerId, activeCardId, onRateU
 
   return (
     <div className="moov-card" style={{ marginBottom: 16, overflow: 'hidden' }}>
-      <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', padding: '13px 18px', cursor: 'pointer', borderBottom: open ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
-        {open ? <ChevronDown size={14} style={{ color: '#00C853', marginRight: 8 }} /> : <ChevronRight size={14} style={{ color: '#555', marginRight: 8 }} />}
-        <span style={{ fontSize: 14, fontWeight: 700, color: '#fff', flex: 1 }}>{courierName}</span>
+      <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', padding: '13px 18px', cursor: 'pointer', borderBottom: open ? '1px solid rgba(0,0,0,0.06)' : 'none' }}>
+        {open ? <ChevronDown size={14} style={{ color: '#00C853', marginRight: 8 }} /> : <ChevronRight size={14} style={{ color: '#64748B', marginRight: 8 }} />}
+        <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', flex: 1 }}>{courierName}</span>
         {hasIntl && <span style={{ fontSize: 10, color: '#00BCD4', background: 'rgba(0,188,212,0.1)', border: '1px solid rgba(0,188,212,0.25)', borderRadius: 5, padding: '2px 7px', fontWeight: 700, marginRight: 10 }}>INTL</span>}
-        <span style={{ fontSize: 11, color: '#AAAAAA' }}>{services.length} service{services.length !== 1 ? 's' : ''} · {totalRates.toLocaleString()} rates</span>
+        <span style={{ fontSize: 11, color: '#64748B' }}>{services.length} service{services.length !== 1 ? 's' : ''} · {totalRates.toLocaleString()} rates</span>
       </div>
       {open && services.map(svc => (
         <ServiceBlock
@@ -922,12 +933,12 @@ function ServiceSelector({ customerId, activeCourierIds }) {
 
   return (
     <div className="moov-card" style={{ marginBottom: 16, overflow: 'hidden' }}>
-      <div style={{ padding: '12px 18px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div style={{ padding: '12px 18px', borderBottom: '1px solid rgba(0,0,0,0.06)', display: 'flex', alignItems: 'center', gap: 10 }}>
         <Package size={14} color="#7B2FBE" />
         <h3 style={{ fontSize: 14, fontWeight: 700, color: '#7B2FBE', margin: 0, flex: 1 }}>Service Selection</h3>
         {totalSelected > 0
           ? <span style={{ fontSize: 12, color: '#00C853', fontWeight: 700 }}>{totalSelected} active</span>
-          : <span style={{ fontSize: 12, color: '#AAAAAA', fontStyle: 'italic' }}>None selected — all rates shown</span>
+          : <span style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic' }}>None selected — all rates shown</span>
         }
       </div>
 
@@ -935,35 +946,35 @@ function ServiceSelector({ customerId, activeCourierIds }) {
         const isOpen       = openCouriers[courierName] === true;
         const countInGroup = services.filter(s => selectedIds.has(s.id)).length;
         return (
-          <div key={courierName} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+          <div key={courierName} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
             <div
               onClick={() => toggleCourier(courierName)}
-              style={{ display: 'flex', alignItems: 'center', padding: '9px 18px', cursor: 'pointer', background: 'rgba(255,255,255,0.01)' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.01)'}
+              style={{ display: 'flex', alignItems: 'center', padding: '9px 18px', cursor: 'pointer', background: 'rgba(0,0,0,0.02)' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.03)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'}
             >
-              {isOpen ? <ChevronDown size={12} color="#555" style={{ marginRight: 8 }} /> : <ChevronRight size={12} color="#555" style={{ marginRight: 8 }} />}
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', flex: 1 }}>{courierName}</span>
+              {isOpen ? <ChevronDown size={12} color="#475569" style={{ marginRight: 8 }} /> : <ChevronRight size={12} color="#475569" style={{ marginRight: 8 }} />}
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', flex: 1 }}>{courierName}</span>
               {countInGroup > 0 && (
                 <span style={{ fontSize: 11, color: '#00C853', fontWeight: 700, marginRight: 8 }}>{countInGroup}/{services.length}</span>
               )}
               <button onClick={e => { e.stopPropagation(); services.forEach(s => { if (!selectedIds.has(s.id)) addSvc.mutate(s.id); }); }}
                 style={{ background: 'none', border: '1px solid rgba(0,200,83,0.3)', borderRadius: 5, color: '#00C853', fontSize: 11, fontWeight: 700, padding: '2px 8px', cursor: 'pointer', marginRight: 6 }}>All</button>
               <button onClick={e => { e.stopPropagation(); services.forEach(s => { if (selectedIds.has(s.id)) delSvc.mutate(s.id); }); }}
-                style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 5, color: '#AAAAAA', fontSize: 11, fontWeight: 700, padding: '2px 8px', cursor: 'pointer' }}>None</button>
+                style={{ background: 'none', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 5, color: '#64748B', fontSize: 11, fontWeight: 700, padding: '2px 8px', cursor: 'pointer' }}>None</button>
             </div>
             {isOpen && services.map(svc => {
               const active = selectedIds.has(svc.id);
               return (
                 <div key={svc.id} onClick={() => toggle(svc.id)}
-                  style={{ display: 'flex', alignItems: 'center', padding: '7px 18px 7px 40px', cursor: 'pointer', borderTop: '1px solid rgba(255,255,255,0.03)', background: active ? 'rgba(0,200,83,0.04)' : 'transparent' }}
-                  onMouseEnter={e => e.currentTarget.style.background = active ? 'rgba(0,200,83,0.07)' : 'rgba(255,255,255,0.02)'}
+                  style={{ display: 'flex', alignItems: 'center', padding: '7px 18px 7px 40px', cursor: 'pointer', borderTop: '1px solid rgba(0,0,0,0.03)', background: active ? 'rgba(0,200,83,0.04)' : 'transparent' }}
+                  onMouseEnter={e => e.currentTarget.style.background = active ? 'rgba(0,200,83,0.07)' : 'rgba(0,0,0,0.02)'}
                   onMouseLeave={e => e.currentTarget.style.background = active ? 'rgba(0,200,83,0.04)' : 'transparent'}
                 >
-                  <div style={{ width: 15, height: 15, borderRadius: 4, border: `2px solid ${active ? '#00C853' : 'rgba(255,255,255,0.2)'}`, background: active ? '#00C853' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 12, flexShrink: 0, transition: 'all 0.15s' }}>
+                  <div style={{ width: 15, height: 15, borderRadius: 4, border: `2px solid ${active ? '#00C853' : 'rgba(0,0,0,0.14)'}`, background: active ? '#00C853' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 12, flexShrink: 0, transition: 'all 0.15s' }}>
                     {active && <Check size={9} color="#000" strokeWidth={3} />}
                   </div>
-                  <span style={{ fontSize: 13, color: active ? '#fff' : '#AAAAAA', fontWeight: active ? 600 : 400, flex: 1 }}>{svc.name}</span>
+                  <span style={{ fontSize: 13, color: active ? '#0F172A' : '#64748B', fontWeight: active ? 600 : 400, flex: 1 }}>{svc.name}</span>
                   <span style={{ fontSize: 11, fontFamily: 'monospace', color: active ? '#00C853' : '#444', background: active ? 'rgba(0,200,83,0.08)' : 'transparent', padding: '1px 6px', borderRadius: 3 }}>{svc.service_code}</span>
                   {svc.service_type === 'international' && (
                     <span style={{ fontSize: 10, color: '#00BCD4', fontWeight: 700, marginLeft: 8 }}>INTL</span>
@@ -994,7 +1005,7 @@ function CourierToggleStrip({ carriers, customerId }) {
   return (
     <div className="moov-card" style={{ marginBottom: 14, padding: '9px 16px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>Carriers</span>
+        <span style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>Carriers</span>
         {carriers.map(carrier => {
           const logo = getCourierLogo(carrier.courier_code);
           const isActive = carrier.active;
@@ -1006,16 +1017,16 @@ function CourierToggleStrip({ carriers, customerId }) {
               style={{
                 display: 'flex', alignItems: 'center', gap: 6,
                 padding: '5px 12px', borderRadius: 9999, cursor: 'pointer',
-                border: `1.5px solid ${isActive ? 'rgba(0,200,83,0.5)' : 'rgba(255,255,255,0.07)'}`,
+                border: `1.5px solid ${isActive ? 'rgba(0,200,83,0.5)' : 'rgba(0,0,0,0.07)'}`,
                 background: isActive ? 'rgba(0,200,83,0.07)' : 'transparent',
                 transition: 'all 0.15s', outline: 'none',
               }}
               onMouseEnter={e => { if (!isActive) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)'; }}
-              onMouseLeave={e => { if (!isActive) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)'; }}
+              onMouseLeave={e => { if (!isActive) e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; }}
             >
               {logo
                 ? <img src={logo} alt={carrier.courier_name} style={{ height: 15, objectFit: 'contain', opacity: isActive ? 1 : 0.3, transition: 'opacity 0.15s' }} />
-                : <span style={{ fontSize: 12, fontWeight: 700, color: isActive ? '#00C853' : '#555' }}>{carrier.courier_name}</span>
+                : <span style={{ fontSize: 12, fontWeight: 700, color: isActive ? '#00C853' : '#475569' }}>{carrier.courier_name}</span>
               }
               {isActive && <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#00C853', flexShrink: 0 }} />}
             </button>
@@ -1059,10 +1070,10 @@ function CustomerFuelRow({ fg, customerId }) {
   const hasOverride = fg.customer_pct != null;
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 16px 6px 26px', borderTop: '1px solid rgba(255,255,255,0.03)' }}>
-      <span style={{ fontSize: 12, color: '#999', flex: 1 }}>{fg.name}</span>
-      <span style={{ fontSize: 10, color: '#444', fontFamily: 'monospace' }}>cost {parseFloat(fg.cost_pct || 0).toFixed(2)}%</span>
-      <span style={{ fontSize: 10, color: '#555', fontFamily: 'monospace' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 16px 6px 26px', borderTop: '1px solid rgba(0,0,0,0.03)' }}>
+      <span style={{ fontSize: 12, color: '#64748B', flex: 1 }}>{fg.name}</span>
+      <span style={{ fontSize: 10, color: '#475569', fontFamily: 'monospace' }}>cost {parseFloat(fg.cost_pct || 0).toFixed(2)}%</span>
+      <span style={{ fontSize: 10, color: '#64748B', fontFamily: 'monospace' }}>
         std {fg.standard_sell_pct != null ? `${parseFloat(fg.standard_sell_pct).toFixed(2)}%` : '—'}
       </span>
       {editing ? (
@@ -1073,7 +1084,7 @@ function CustomerFuelRow({ fg, customerId }) {
           onBlur={commit}
           onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
           placeholder="% (clear = reset to std)"
-          style={{ ...inp, width: 110, textAlign: 'right', color: '#FFC107', fontFamily: 'monospace', border: '1px solid rgba(255,193,7,0.6)', background: 'rgba(255,193,7,0.08)', fontSize: 11 }}
+          style={{ ...inp, width: 110, textAlign: 'right', color: '#D97706', fontFamily: 'monospace', border: '1px solid rgba(255,193,7,0.6)', background: 'rgba(255,193,7,0.08)', fontSize: 11 }}
         />
       ) : (
         <span
@@ -1081,16 +1092,71 @@ function CustomerFuelRow({ fg, customerId }) {
           title={hasOverride ? 'Custom rate — click to edit, clear to revert to standard' : 'Click to set a customer-specific rate'}
           style={{
             fontSize: 12, fontWeight: hasOverride ? 700 : 400,
-            color: hasOverride ? '#FFC107' : '#444',
+            color: hasOverride ? '#D97706' : '#444',
             cursor: 'pointer', padding: '2px 8px', borderRadius: 4,
-            border: `1px solid ${hasOverride ? 'rgba(255,193,7,0.35)' : 'rgba(255,255,255,0.06)'}`,
+            border: `1px solid ${hasOverride ? 'rgba(255,193,7,0.35)' : 'rgba(0,0,0,0.06)'}`,
             background: hasOverride ? 'rgba(255,193,7,0.08)' : 'transparent',
             fontFamily: 'monospace',
           }}
           onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(255,193,7,0.5)'}
-          onMouseLeave={e => e.currentTarget.style.borderColor = hasOverride ? 'rgba(255,193,7,0.35)' : 'rgba(255,255,255,0.06)'}
+          onMouseLeave={e => e.currentTarget.style.borderColor = hasOverride ? 'rgba(255,193,7,0.35)' : 'rgba(0,0,0,0.06)'}
         >
           {hasOverride ? `${parseFloat(fg.customer_pct).toFixed(2)}%` : '+ Override'}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ─── Inline editable price field (used for both cost and sell in surcharge rows) ─
+function SurchargePriceField({ label, standardValue, overrideValue, isPct, accentColor, accentBg, accentBorder, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal]         = useState('');
+  const inputRef              = useRef(null);
+  const hasOverride           = overrideValue !== null && overrideValue !== undefined;
+  const fmt = (v) => isPct ? `${parseFloat(v).toFixed(2)}%` : `£${parseFloat(v).toFixed(2)}`;
+
+  function startEdit() {
+    setVal(hasOverride ? String(parseFloat(overrideValue).toFixed(2)) : String(parseFloat(standardValue || 0).toFixed(2)));
+    setEditing(true);
+    setTimeout(() => inputRef.current?.select(), 0);
+  }
+
+  function commit() {
+    const parsed = parseFloat(val);
+    if (isNaN(parsed) || parsed < 0) { setEditing(false); return; }
+    onSave(parsed);
+    setEditing(false);
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+      <span style={{ fontSize: 10, color: '#94A3B8', minWidth: 26 }}>{label}</span>
+      <span style={{ fontSize: 11, color: '#64748B', fontFamily: 'monospace' }}>{fmt(standardValue || 0)}</span>
+      <span style={{ fontSize: 9, color: '#94A3B8' }}>→</span>
+      {editing ? (
+        <input
+          ref={inputRef}
+          value={val}
+          onChange={e => setVal(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
+          style={{ ...inp, width: 64, textAlign: 'right', color: accentColor, fontFamily: 'monospace', border: `1px solid ${accentBorder}`, background: accentBg, fontSize: 11 }}
+        />
+      ) : (
+        <span
+          onClick={startEdit}
+          title="Click to override"
+          style={{
+            fontSize: 11, fontWeight: hasOverride ? 700 : 400,
+            color: hasOverride ? accentColor : '#475569',
+            cursor: 'pointer', padding: '1px 7px', borderRadius: 4,
+            border: `1px solid ${hasOverride ? accentBorder : 'rgba(0,0,0,0.06)'}`,
+            background: hasOverride ? accentBg : 'transparent',
+            fontFamily: 'monospace',
+          }}
+        >
+          {hasOverride ? fmt(overrideValue) : '+ Override'}
         </span>
       )}
     </div>
@@ -1100,13 +1166,10 @@ function CustomerFuelRow({ fg, customerId }) {
 // ─── Per-surcharge override row ───────────────────────────────
 function SurchargeOverrideRow({ surcharge, override, customerId, onChanged }) {
   const qc = useQueryClient();
-  const [editing, setEditing] = useState(false);
-  const [val, setVal]         = useState('');
-  const inputRef              = useRef(null);
 
   const upsert = useMutation({
-    mutationFn: (override_value) =>
-      api.post(`/surcharges/customer-overrides/${customerId}`, { surcharge_id: surcharge.id, override_value }),
+    mutationFn: (body) =>
+      api.post(`/surcharges/customer-overrides/${customerId}`, { surcharge_id: surcharge.id, ...body }),
     onSuccess: () => { qc.invalidateQueries(['surcharge-overrides', customerId]); onChanged?.(); },
   });
   const remove = useMutation({
@@ -1114,59 +1177,45 @@ function SurchargeOverrideRow({ surcharge, override, customerId, onChanged }) {
     onSuccess: () => { qc.invalidateQueries(['surcharge-overrides', customerId]); onChanged?.(); },
   });
 
-  function startEdit() {
-    setVal(override ? String(override.override_value) : String(parseFloat(surcharge.default_value || 0).toFixed(2)));
-    setEditing(true);
-    setTimeout(() => inputRef.current?.select(), 0);
-  }
-
-  function commit() {
-    const parsed = parseFloat(val);
-    if (isNaN(parsed) || parsed < 0) { setEditing(false); return; }
-    upsert.mutate(parsed);
-    setEditing(false);
-  }
-
   const hasOverride = !!override;
   const isPct = surcharge.calc_type === 'percentage';
-  const fmt = (v) => isPct ? `${parseFloat(v).toFixed(2)}%` : `£${parseFloat(v).toFixed(2)}`;
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 6px', borderRadius: 5, background: hasOverride ? 'rgba(255,193,7,0.03)' : 'transparent' }}>
-      <span style={{ fontSize: 12, color: hasOverride ? '#DDD' : '#888', flex: 1 }}>{surcharge.name}</span>
-      <span style={{ fontSize: 11, color: '#444', fontFamily: 'monospace' }}>{fmt(surcharge.default_value || 0)}</span>
-      <span style={{ fontSize: 10, color: '#333' }}>→</span>
-      {editing ? (
-        <input
-          ref={inputRef}
-          value={val}
-          onChange={e => setVal(e.target.value)}
-          onBlur={commit}
-          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
-          style={{ ...inp, width: 72, textAlign: 'right', color: '#FFC107', fontFamily: 'monospace', border: '1px solid rgba(255,193,7,0.6)', background: 'rgba(255,193,7,0.08)', fontSize: 11 }}
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 8,
+      padding: '6px 6px', borderRadius: 5,
+      background: hasOverride ? 'rgba(255,193,7,0.03)' : 'transparent',
+    }}>
+      <span style={{ fontSize: 12, color: hasOverride ? '#334155' : '#64748B', flex: 1, minWidth: 0 }}>{surcharge.name}</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {/* Cost price override */}
+        <SurchargePriceField
+          label="Cost"
+          standardValue={surcharge.cost_price ?? surcharge.default_value}
+          overrideValue={override?.cost_price_override ?? null}
+          isPct={isPct}
+          accentColor="#64748B"
+          accentBg="rgba(100,116,139,0.08)"
+          accentBorder="rgba(100,116,139,0.35)"
+          onSave={(v) => upsert.mutate({ cost_price_override: v })}
         />
-      ) : (
-        <span
-          onClick={startEdit}
-          style={{
-            fontSize: 12, fontWeight: hasOverride ? 700 : 400,
-            color: hasOverride ? '#FFC107' : '#444',
-            cursor: 'pointer', padding: '2px 8px', borderRadius: 4,
-            border: `1px solid ${hasOverride ? 'rgba(255,193,7,0.35)' : 'rgba(255,255,255,0.06)'}`,
-            background: hasOverride ? 'rgba(255,193,7,0.08)' : 'transparent',
-            fontFamily: 'monospace',
-          }}
-          onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(255,193,7,0.5)'}
-          onMouseLeave={e => e.currentTarget.style.borderColor = hasOverride ? 'rgba(255,193,7,0.35)' : 'rgba(255,255,255,0.06)'}
-        >
-          {hasOverride ? fmt(override.override_value) : '+ Override'}
-        </span>
-      )}
-      {hasOverride && !editing && (
-        <button onClick={() => remove.mutate()} title="Remove override"
-          style={{ background: 'none', border: 'none', color: '#333', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center' }}
+        {/* Sell price override */}
+        <SurchargePriceField
+          label="Sell"
+          standardValue={surcharge.default_value}
+          overrideValue={override?.override_value ?? null}
+          isPct={isPct}
+          accentColor="#D97706"
+          accentBg="rgba(255,193,7,0.08)"
+          accentBorder="rgba(255,193,7,0.35)"
+          onSave={(v) => upsert.mutate({ override_value: v })}
+        />
+      </div>
+      {hasOverride && (
+        <button onClick={() => remove.mutate()} title="Remove all overrides"
+          style={{ background: 'none', border: 'none', color: '#CBD5E1', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center', flexShrink: 0 }}
           onMouseEnter={e => e.currentTarget.style.color = '#E91E8C'}
-          onMouseLeave={e => e.currentTarget.style.color = '#333'}
+          onMouseLeave={e => e.currentTarget.style.color = '#CBD5E1'}
         >
           <Trash2 size={11} />
         </button>
@@ -1175,15 +1224,70 @@ function SurchargeOverrideRow({ surcharge, override, customerId, onChanged }) {
   );
 }
 
-// ─── Per-active-carrier section (account number + fuel + surcharges) ──────────
+// ─── Single account row (label + account number, inline editable) ─────────────
+function CarrierAccountRow({ account, customerId }) {
+  const qc = useQueryClient();
+  const [labelVal, setLabelVal] = useState(account.label || '');
+  const [acctVal,  setAcctVal]  = useState(account.account_number || '');
+  const [saving,   setSaving]   = useState(false);
+
+  async function savePatch(updates) {
+    setSaving(true);
+    try {
+      await api.patch(`/customer-carrier-links/${customerId}/link/${account.link_id}`, updates);
+      qc.invalidateQueries(['customer-carrier-links', customerId]);
+    } catch (e) { console.error('Failed to update account:', e); }
+    finally { setSaving(false); }
+  }
+
+  async function removeAccount() {
+    if (!window.confirm('Remove this account?')) return;
+    await api.delete(`/customer-carrier-links/${customerId}/link/${account.link_id}`);
+    qc.invalidateQueries(['customer-carrier-links', customerId]);
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+      <input
+        value={labelVal}
+        onChange={e => setLabelVal(e.target.value)}
+        onBlur={() => { if (labelVal !== (account.label || '')) savePatch({ label: labelVal }); }}
+        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setLabelVal(account.label || ''); }}
+        placeholder="Label"
+        title="Account label (e.g. Perishable)"
+        style={{ ...inp, width: 100, fontSize: 11 }}
+        disabled={saving}
+      />
+      <input
+        value={acctVal}
+        onChange={e => setAcctVal(e.target.value)}
+        onBlur={() => { if (acctVal !== (account.account_number || '')) savePatch({ account_number: acctVal }); }}
+        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setAcctVal(account.account_number || ''); }}
+        placeholder="Account No."
+        title="Carrier account number"
+        style={{ ...inp, width: 100, fontSize: 11, fontFamily: 'monospace', color: '#00BCD4' }}
+        disabled={saving}
+      />
+      <button
+        onClick={removeAccount}
+        title="Remove this account"
+        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', padding: '2px 4px', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+      >
+        <Trash2 size={11} />
+      </button>
+    </div>
+  );
+}
+
+// ─── Per-active-carrier section (account numbers + fuel + surcharges) ─────────
 function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesChange }) {
   const [fuelOpen,  setFuelOpen]  = useState(false);
   const [surchOpen, setSurchOpen] = useState(true);  // open by default so surcharges are visible
-  // Account number inline editing
-  const [acctEditing, setAcctEditing] = useState(false);
-  const [acctVal, setAcctVal]         = useState(carrier.account_number || '');
-  const [acctSaving, setAcctSaving]   = useState(false);
-  const acctRef = useRef(null);
+  // Multi-account: add-account inline form
+  const [addingAccount, setAddingAccount] = useState(false);
+  const [newLabel,      setNewLabel]      = useState('');
+  const [newAcctNo,     setNewAcctNo]     = useState('');
+  const [addSaving,     setAddSaving]     = useState(false);
 
   const logo    = getCourierLogo(carrier.courier_code);
   // Only show fuel section for active (linked) carriers
@@ -1205,31 +1309,28 @@ function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesCh
     onSuccess:  () => qc.invalidateQueries(['customer-carrier-links', customerId]),
   });
 
-  async function saveAcctNumber() {
-    const trimmed = acctVal.trim();
-    if (trimmed === (carrier.account_number || '')) { setAcctEditing(false); return; }
-    setAcctSaving(true);
+  async function addAccount() {
+    if (!newAcctNo.trim() && !newLabel.trim()) return;
+    setAddSaving(true);
     try {
-      await api.patch(`/customer-carrier-links/${customerId}/${carrier.courier_id}`, { account_number: trimmed });
+      await api.post(`/customer-carrier-links/${customerId}`, {
+        courier_id:     carrier.courier_id,
+        account_number: newAcctNo.trim() || null,
+        label:          newLabel.trim()  || null,
+      });
       qc.invalidateQueries(['customer-carrier-links', customerId]);
-    } finally {
-      setAcctSaving(false);
-      setAcctEditing(false);
-    }
-  }
-
-  function startAcctEdit() {
-    setAcctVal(carrier.account_number || '');
-    setAcctEditing(true);
-    setTimeout(() => acctRef.current?.select(), 0);
+      setNewLabel('');
+      setNewAcctNo('');
+      setAddingAccount(false);
+    } finally { setAddSaving(false); }
   }
 
   return (
     <div className="moov-card" style={{ marginBottom: 10, overflow: 'hidden' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', background: 'rgba(0,200,83,0.03)', borderBottom: '1px solid rgba(255,255,255,0.05)', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', background: 'rgba(0,200,83,0.03)', borderBottom: '1px solid rgba(0,0,0,0.04)', flexWrap: 'wrap' }}>
         {logo && <img src={logo} alt={carrier.courier_name} style={{ height: 15, objectFit: 'contain', flexShrink: 0 }} />}
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', flex: 1 }}>{carrier.courier_name}</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', flex: 1 }}>{carrier.courier_name}</span>
 
         {/* Rate card selector */}
         {carrier.available_cards?.length > 1 ? (
@@ -1243,42 +1344,51 @@ function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesCh
             ))}
           </select>
         ) : (
-          <span style={{ fontSize: 11, color: '#555' }}>{carrier.available_cards?.[0]?.name || 'Master'}</span>
+          <span style={{ fontSize: 11, color: '#64748B' }}>{carrier.available_cards?.[0]?.name || 'Master'}</span>
         )}
 
-        {/* Account number — inline editable, optional */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 10, color: '#555', textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0 }}>Acct No.</span>
-          {acctEditing ? (
-            <input
-              ref={acctRef}
-              value={acctVal}
-              onChange={e => setAcctVal(e.target.value)}
-              onBlur={saveAcctNumber}
-              onKeyDown={e => { if (e.key === 'Enter') saveAcctNumber(); if (e.key === 'Escape') { setAcctEditing(false); setAcctVal(carrier.account_number || ''); } }}
-              placeholder="e.g. 123456789"
-              style={{ ...inp, width: 130, fontSize: 11, fontFamily: 'monospace', color: '#00BCD4', border: '1px solid rgba(0,188,212,0.5)', background: 'rgba(0,188,212,0.08)' }}
-              disabled={acctSaving}
-            />
-          ) : (
-            <span
-              onClick={startAcctEdit}
-              title="Click to set account number"
-              style={{
-                fontSize: 11, fontFamily: 'monospace', fontWeight: 600,
-                color: carrier.account_number ? '#00BCD4' : '#333',
-                cursor: 'pointer', padding: '3px 10px', borderRadius: 5,
-                border: `1px solid ${carrier.account_number ? 'rgba(0,188,212,0.35)' : 'rgba(255,255,255,0.08)'}`,
-                background: carrier.account_number ? 'rgba(0,188,212,0.08)' : 'rgba(255,255,255,0.02)',
-                transition: 'border-color 0.12s, background 0.12s',
-                minWidth: 80, display: 'inline-block', textAlign: 'center',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(0,188,212,0.6)'; e.currentTarget.style.background = 'rgba(0,188,212,0.12)'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = carrier.account_number ? 'rgba(0,188,212,0.35)' : 'rgba(255,255,255,0.08)'; e.currentTarget.style.background = carrier.account_number ? 'rgba(0,188,212,0.08)' : 'rgba(255,255,255,0.02)'; }}
-            >
-              {carrier.account_number || '+ Add'}
-            </span>
-          )}
+        {/* Account numbers — multi-account */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+          <span style={{ fontSize: 10, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0, paddingTop: 6 }}>Accts</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {(carrier.accounts || []).map(acct => (
+              <CarrierAccountRow key={acct.link_id} account={acct} customerId={customerId} />
+            ))}
+            {addingAccount ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <input
+                  value={newLabel}
+                  onChange={e => setNewLabel(e.target.value)}
+                  placeholder="Label (optional)"
+                  style={{ ...inp, width: 100, fontSize: 11 }}
+                  autoFocus
+                  disabled={addSaving}
+                  onKeyDown={e => { if (e.key === 'Enter') addAccount(); if (e.key === 'Escape') setAddingAccount(false); }}
+                />
+                <input
+                  value={newAcctNo}
+                  onChange={e => setNewAcctNo(e.target.value)}
+                  placeholder="Account No."
+                  style={{ ...inp, width: 100, fontSize: 11, fontFamily: 'monospace', color: '#00BCD4' }}
+                  disabled={addSaving}
+                  onKeyDown={e => { if (e.key === 'Enter') addAccount(); if (e.key === 'Escape') setAddingAccount(false); }}
+                />
+                <button onClick={addAccount} disabled={addSaving} title="Save" style={{ background: 'rgba(0,200,83,0.15)', border: '1px solid rgba(0,200,83,0.4)', borderRadius: 6, color: '#00C853', padding: '3px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                  <Check size={11} />
+                </button>
+                <button onClick={() => { setAddingAccount(false); setNewLabel(''); setNewAcctNo(''); }} title="Cancel" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: '2px 4px', display: 'flex', alignItems: 'center' }}>
+                  <X size={11} />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setAddingAccount(true)}
+                style={{ background: 'none', border: '1px dashed rgba(0,188,212,0.45)', borderRadius: 5, color: '#64748B', padding: '2px 8px', cursor: 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', gap: 4, alignSelf: 'flex-start' }}
+              >
+                <Plus size={9} /> Add account
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1287,15 +1397,15 @@ function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesCh
         <>
           <div onClick={() => setFuelOpen(o => !o)}
             style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', cursor: 'pointer',
-              borderBottom: fuelOpen ? '1px solid rgba(255,255,255,0.04)' : 'none',
+              borderBottom: fuelOpen ? '1px solid rgba(0,0,0,0.03)' : 'none',
               background: fuelOpen ? 'rgba(255,193,7,0.04)' : 'transparent' }}>
-            {fuelOpen ? <ChevronDown size={11} color="#FFC107" /> : <ChevronRight size={11} color="#555" />}
-            <Zap size={11} color={fuelOpen ? '#FFC107' : '#555'} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: fuelOpen ? '#FFC107' : '#777', flex: 1 }}>
+            {fuelOpen ? <ChevronDown size={11} color="#D97706" /> : <ChevronRight size={11} color="#475569" />}
+            <Zap size={11} color={fuelOpen ? '#D97706' : '#475569'} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: fuelOpen ? '#D97706' : '#475569', flex: 1 }}>
               Fuel Groups ({carrier.fuel_groups.length})
             </span>
             {carrier.fuel_groups.some(fg => fg.customer_pct != null) && (
-              <span style={{ fontSize: 10, color: '#FFC107', fontWeight: 700 }}>Custom rates</span>
+              <span style={{ fontSize: 10, color: '#D97706', fontWeight: 700 }}>Custom rates</span>
             )}
           </div>
           {fuelOpen && carrier.fuel_groups.map(fg => (
@@ -1309,16 +1419,16 @@ function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesCh
         <>
           <div onClick={() => setSurchOpen(o => !o)}
             style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', cursor: 'pointer',
-              borderTop: hasFuel ? '1px solid rgba(255,255,255,0.04)' : 'none',
-              borderBottom: surchOpen ? '1px solid rgba(255,255,255,0.04)' : 'none',
+              borderTop: hasFuel ? '1px solid rgba(0,0,0,0.03)' : 'none',
+              borderBottom: surchOpen ? '1px solid rgba(0,0,0,0.03)' : 'none',
               background: surchOpen ? 'rgba(123,47,190,0.04)' : 'transparent' }}>
-            {surchOpen ? <ChevronDown size={11} color="#7B2FBE" /> : <ChevronRight size={11} color="#555" />}
-            <AlertCircle size={11} color={surchOpen ? '#7B2FBE' : '#555'} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: surchOpen ? '#7B2FBE' : '#777', flex: 1 }}>
+            {surchOpen ? <ChevronDown size={11} color="#7B2FBE" /> : <ChevronRight size={11} color="#475569" />}
+            <AlertCircle size={11} color={surchOpen ? '#7B2FBE' : '#475569'} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: surchOpen ? '#7B2FBE' : '#475569', flex: 1 }}>
               Surcharge Overrides ({surcharges.length})
             </span>
             {carrierOverrides.length > 0 && (
-              <span style={{ fontSize: 10, color: '#FFC107', fontWeight: 700 }}>{carrierOverrides.length} custom</span>
+              <span style={{ fontSize: 10, color: '#D97706', fontWeight: 700 }}>{carrierOverrides.length} custom</span>
             )}
           </div>
           {surchOpen && (
@@ -1341,6 +1451,284 @@ function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesCh
 }
 
 // ─── Main tab ─────────────────────────────────────────────────
+// ─── DDP Mode Section ──────────────────────────────────────────────────────────
+// When a customer ships exclusively DDP (duty-paid), the reconciliation engine
+// must look up DDP rate-card variants for their air services. This section lets
+// operators toggle DDP mode on/off and shows the active service code overrides.
+function DDPModeSection({ customer }) {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [enabled, setEnabled] = useState(!!customer.ddp_mode);
+
+  // Keep local state in sync if parent re-fetches with a new value
+  useEffect(() => { setEnabled(!!customer.ddp_mode); }, [customer.ddp_mode]);
+
+  const { data: overridesData, isLoading } = useQuery({
+    queryKey: ['service-code-overrides', customer.id],
+    queryFn:  () => api.get(`/customers/${customer.id}/service-code-overrides`).then(r => r.data),
+  });
+  const overrides = overridesData?.overrides || [];
+
+  async function toggleDDP() {
+    const newValue = !enabled;
+    setEnabled(newValue);   // move the toggle immediately
+    setBusy(true);
+    try {
+      await api.put(`/customers/${customer.id}/ddp-mode`, { enabled: newValue });
+      qc.invalidateQueries(['customer', customer.id]);
+      qc.invalidateQueries(['service-code-overrides', customer.id]);
+    } catch (err) {
+      setEnabled(!newValue);  // revert on error
+      console.error('DDP mode toggle failed:', err.response?.data || err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="moov-card" style={{ marginBottom: 16, padding: '16px 20px' }}>
+      {/* Header row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>DDP Mode</span>
+            {enabled && (
+              <span style={{
+                fontSize: 11, fontWeight: 600, color: '#FF8F00',
+                background: 'rgba(255,143,0,0.12)', border: '1px solid rgba(255,143,0,0.35)',
+                borderRadius: 12, padding: '2px 8px', letterSpacing: '0.3px',
+              }}>ACTIVE</span>
+            )}
+          </div>
+          <p style={{ fontSize: 12, color: '#64748B', margin: '3px 0 0' }}>
+            This customer books exclusively on DDP (duty-paid) air services.
+            When enabled, the reconciliation engine uses DDP rate-card variants
+            (e.g. DPD-10DDP) instead of standard air rates for invoice matching.
+          </p>
+        </div>
+        <button
+          onClick={toggleDDP}
+          disabled={busy}
+          title={enabled ? 'Disable DDP mode' : 'Enable DDP mode'}
+          style={{
+            background: 'none', border: 'none', cursor: busy ? 'wait' : 'pointer',
+            padding: 4, display: 'flex', alignItems: 'center', opacity: busy ? 0.5 : 1,
+          }}
+        >
+          {enabled
+            ? <ToggleRight size={32} color="#FF8F00" strokeWidth={1.5} />
+            : <ToggleLeft  size={32} color="#94A3B8" strokeWidth={1.5} />
+          }
+        </button>
+      </div>
+
+      {/* Active overrides list */}
+      {enabled && (
+        <div style={{ marginTop: 12, borderTop: '1px solid rgba(0,0,0,0.07)', paddingTop: 12 }}>
+          {isLoading && <span style={{ fontSize: 12, color: '#64748B' }}>Loading overrides…</span>}
+          {!isLoading && overrides.length === 0 && (
+            <span style={{ fontSize: 12, color: '#64748B' }}>
+              No overrides created yet. DDP variants will be set up automatically on the next reconciliation run.
+            </span>
+          )}
+          {!isLoading && overrides.length > 0 && (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 8 }}>
+                Active Service Code Overrides
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {overrides.map(ov => (
+                  <div
+                    key={ov.id}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      background: 'rgba(255,143,0,0.08)', border: '1px solid rgba(255,143,0,0.3)',
+                      borderRadius: 8, padding: '4px 10px', fontSize: 12,
+                    }}
+                  >
+                    <span style={{ color: '#475569' }}>{ov.carrier_name}</span>
+                    <span style={{ color: '#94A3B8', fontSize: 10 }}>·</span>
+                    <span style={{ fontFamily: 'monospace', color: '#0F172A', fontWeight: 600 }}>{ov.courier_code}</span>
+                    <span style={{ color: '#94A3B8' }}>→</span>
+                    <span style={{ fontFamily: 'monospace', color: '#FF8F00', fontWeight: 600 }}>{ov.service_code}</span>
+                    <button
+                      onClick={async () => {
+                        await api.delete(`/customers/${customer.id}/service-code-overrides/${ov.id}`);
+                        qc.invalidateQueries(['service-code-overrides', customer.id]);
+                      }}
+                      title="Remove override"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', marginLeft: 2 }}
+                    >
+                      <X size={12} color="#94A3B8" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Companion Parcel Billing Section ──────────────────────────────────────────
+// When a customer books multiple parcels under the same reference on the same day
+// (e.g. Europa two-parcel consignments), the carrier may consolidate them under one
+// master tracking number in their invoice. This toggle enables the reconciliation
+// engine to automatically match and close out those companion charges.
+function CompanionParcelBillingSection({ customer }) {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [enabled, setEnabled] = useState(!!customer.reconciliation_flexible_parcel_count);
+
+  useEffect(() => {
+    setEnabled(!!customer.reconciliation_flexible_parcel_count);
+  }, [customer.reconciliation_flexible_parcel_count]);
+
+  async function toggle() {
+    const newValue = !enabled;
+    setEnabled(newValue);
+    setBusy(true);
+    try {
+      await api.put(`/customers/${customer.id}/companion-parcel-billing`, { enabled: newValue });
+      qc.invalidateQueries(['customer', customer.id]);
+    } catch (err) {
+      setEnabled(!newValue);
+      console.error('Companion parcel billing toggle failed:', err.response?.data || err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="moov-card" style={{ marginBottom: 16, padding: '16px 20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Companion Parcel Billing</span>
+            {enabled && (
+              <span style={{
+                fontSize: 11, fontWeight: 600, color: '#0891B2',
+                background: 'rgba(8,145,178,0.10)', border: '1px solid rgba(8,145,178,0.30)',
+                borderRadius: 12, padding: '2px 8px', letterSpacing: '0.3px',
+              }}>ACTIVE</span>
+            )}
+          </div>
+          <p style={{ fontSize: 12, color: '#64748B', margin: '3px 0 0' }}>
+            This customer books multiple parcels under the same reference on the same day.
+            When enabled, the reconciliation engine automatically matches companion charges
+            to the master consignment and reconciles them without manual intervention.
+          </p>
+        </div>
+        <button
+          onClick={toggle}
+          disabled={busy}
+          title={enabled ? 'Disable companion parcel billing' : 'Enable companion parcel billing'}
+          style={{
+            background: 'none', border: 'none', cursor: busy ? 'wait' : 'pointer',
+            padding: 4, display: 'flex', alignItems: 'center', opacity: busy ? 0.5 : 1,
+          }}
+        >
+          {enabled
+            ? <ToggleRight size={32} color="#0891B2" strokeWidth={1.5} />
+            : <ToggleLeft  size={32} color="#94A3B8" strokeWidth={1.5} />
+          }
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Multi-Parcel Pricing Section ──────────────────────────────────────────────
+// Controls whether multi-parcel shipments are billed as first+sub or all-at-sub.
+//
+// Pricing modes:
+//   'sub'   (default, toggle OFF): 1st parcel at the rate-card price, 2nd+ at
+//           price_sub. Only applies when price_sub values are set. If there is
+//           no price_sub, every parcel is charged at price regardless.
+//   'multi' (toggle ON): ALL parcels billed at price_sub — used for customers
+//           who consistently ship multiple parcels per order and have negotiated
+//           the sub rate on every box.
+//
+// When there is no price_sub at all (i.e. a flat single-rate customer), this
+// toggle has no effect — shown as a greyed note in that case.
+function MultiParcelPricingSection({ customer }) {
+  const qc      = useQueryClient();
+  const [busy, setBusy]       = useState(false);
+  const [mode, setMode]       = useState(customer.parcel_pricing_mode || 'sub');
+
+  useEffect(() => {
+    setMode(customer.parcel_pricing_mode || 'sub');
+  }, [customer.parcel_pricing_mode]);
+
+  const isMulti  = mode === 'multi';
+  const accent   = '#10B981';   // emerald — distinct from DDP orange + companion cyan
+  const accentBg = 'rgba(16,185,129,0.10)';
+  const accentBd = 'rgba(16,185,129,0.30)';
+
+  async function toggle() {
+    const next = isMulti ? 'sub' : 'multi';
+    setMode(next);
+    setBusy(true);
+    try {
+      await api.put(`/customers/${customer.id}/parcel-pricing-mode`, { mode: next });
+      qc.invalidateQueries(['customer', customer.id]);
+    } catch (err) {
+      setMode(isMulti ? 'multi' : 'sub');   // revert on error
+      console.error('Parcel pricing mode toggle failed:', err.response?.data || err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="moov-card" style={{ marginBottom: 16, padding: '16px 20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Multi-Parcel Pricing</span>
+            {isMulti && (
+              <span style={{
+                fontSize: 11, fontWeight: 600, color: accent,
+                background: accentBg, border: `1px solid ${accentBd}`,
+                borderRadius: 12, padding: '2px 8px', letterSpacing: '0.3px',
+              }}>ACTIVE</span>
+            )}
+          </div>
+          <p style={{ fontSize: 12, color: '#64748B', margin: '3px 0 0' }}>
+            {isMulti
+              ? 'All parcels on a multi-parcel shipment are charged at the sub rate.'
+              : 'Standard: 1st parcel at the main rate, 2nd+ at the sub rate (if set).'}
+          </p>
+          <div style={{ marginTop: 6, display: 'flex', gap: 16 }}>
+            <span style={{ fontSize: 11, color: isMulti ? '#94A3B8' : '#0F172A', fontWeight: isMulti ? 400 : 600 }}>
+              Off — flat / first+sub
+            </span>
+            <span style={{ fontSize: 11, color: isMulti ? accent : '#94A3B8', fontWeight: isMulti ? 600 : 400 }}>
+              On — all parcels at sub rate
+            </span>
+          </div>
+        </div>
+        <button
+          onClick={toggle}
+          disabled={busy}
+          title={isMulti ? 'Switch to first+sub pricing' : 'Switch to multi-parcel (all at sub rate)'}
+          style={{
+            background: 'none', border: 'none', cursor: busy ? 'wait' : 'pointer',
+            padding: 4, display: 'flex', alignItems: 'center', opacity: busy ? 0.5 : 1,
+          }}
+        >
+          {isMulti
+            ? <ToggleRight size={32} color={accent} strokeWidth={1.5} />
+            : <ToggleLeft  size={32} color="#94A3B8" strokeWidth={1.5} />
+          }
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function CustomerPricingTab({ customer }) {
   const qc = useQueryClient();
 
@@ -1394,16 +1782,15 @@ export default function CustomerPricingTab({ customer }) {
   const rateServiceMap = Object.fromEntries((rateData?.services || []).map(s => [s.service_code, s]));
 
   // Rate cards:
-  // When services are selected, use selectedServices as the primary list so every
-  // selected service gets a block — even those with no rate rows yet.
-  // When nothing is selected, fall back to whatever rate data exists.
+  // Three cases:
+  // 1. selectedCodes > 0: show only the explicitly selected services
+  // 2. selectedServices configured (rows in DB) but nothing currently selected:
+  //    the user deliberately chose "none" — show empty state
+  // 3. selectedServices never configured (no rows in DB): default to showing all
+  //    rate data for active couriers — this is the normal state for most customers
   let visibleServices;
-  if (selectedCodes.size === 0) {
-    // No services selected: show all rate data filtered to active carriers
-    visibleServices = (rateData?.services || []).filter(s =>
-      activeCourierCodes.size === 0 || activeCourierCodes.has(s.courier_code)
-    );
-  } else {
+  if (selectedCodes.size > 0) {
+    // User has explicitly selected specific services — show only those
     visibleServices = selectedServices
       .filter(s => {
         const meta = allServicesMeta[s.service_code];
@@ -1428,6 +1815,16 @@ export default function CustomerPricingTab({ customer }) {
           rates:        [],
         };
       });
+  } else if (selectedServices.length > 0) {
+    // Service selection has been configured for this customer but nothing is
+    // currently ticked — the user deliberately chose to show nothing
+    visibleServices = [];
+  } else {
+    // Service selection has never been configured — default to showing all
+    // rate data for active couriers (the standard state for most customers)
+    visibleServices = (rateData?.services || []).filter(s =>
+      activeCourierCodes.size === 0 || activeCourierCodes.has(s.courier_code)
+    );
   }
 
   // Map courier_code → active_card_id so ServiceBlock can fetch carrier cost prices for markup
@@ -1462,6 +1859,15 @@ export default function CustomerPricingTab({ customer }) {
       {/* 1 — Thin carrier toggle strip */}
       <CourierToggleStrip carriers={carriers} customerId={customer.id} />
 
+      {/* 1b — DDP Mode toggle */}
+      <DDPModeSection customer={customer} />
+
+      {/* 1c — Companion Parcel Billing toggle */}
+      <CompanionParcelBillingSection customer={customer} />
+
+      {/* 1d — Multi-Parcel Pricing mode */}
+      <MultiParcelPricingSection customer={customer} />
+
       {/* 2 — Per-carrier: fuel groups + surcharge overrides (active carriers only) */}
       {activeCarriers.map(carrier => (
         <ActiveCarrierSection
@@ -1479,9 +1885,9 @@ export default function CustomerPricingTab({ customer }) {
       {/* 4 — Rate cards */}
       {visibleServices.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#fff', margin: 0, flex: 1 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', margin: 0, flex: 1 }}>
             Rate Cards
-            <span style={{ fontSize: 13, color: '#AAAAAA', fontWeight: 400, marginLeft: 10 }}>
+            <span style={{ fontSize: 13, color: '#64748B', fontWeight: 400, marginLeft: 10 }}>
               {visibleServices.length} service{visibleServices.length !== 1 ? 's' : ''}
               {visibleRates > 0 && ` · ${visibleRates.toLocaleString()} rates`}
             </span>
@@ -1490,12 +1896,22 @@ export default function CustomerPricingTab({ customer }) {
       )}
 
       {ratesLoading && (
-        <div className="moov-card" style={{ padding: 32, textAlign: 'center', color: '#AAAAAA' }}>Loading rates…</div>
+        <div className="moov-card" style={{ padding: 32, textAlign: 'center', color: '#64748B' }}>Loading rates…</div>
       )}
 
-      {!ratesLoading && visibleServices.length === 0 && activeCourierIds.size > 0 && (
-        <div className="moov-card" style={{ padding: 24, textAlign: 'center', color: '#555', fontSize: 13 }}>
-          No rate data for the selected carriers yet.
+      {!ratesLoading && visibleServices.length === 0 && selectedServices.length > 0 && selectedCodes.size === 0 && (
+        <div className="moov-card" style={{ padding: 24, textAlign: 'center', color: '#64748B', fontSize: 13 }}>
+          No services selected — use <strong>Service Selection</strong> above to choose which services to display rate cards for.
+          <div style={{ marginTop: 8, fontSize: 11, color: '#94A3B8' }}>
+            Note: selecting services here only controls the display. Rate rows in the database are unchanged.
+            Use the individual delete buttons on each rate to permanently remove pricing.
+          </div>
+        </div>
+      )}
+
+      {!ratesLoading && visibleServices.length === 0 && activeCourierIds.size > 0 && selectedCodes.size > 0 && (
+        <div className="moov-card" style={{ padding: 24, textAlign: 'center', color: '#64748B', fontSize: 13 }}>
+          No rate data for the selected services yet.
         </div>
       )}
 

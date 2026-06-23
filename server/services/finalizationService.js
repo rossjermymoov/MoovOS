@@ -59,12 +59,200 @@ export async function finalizeRun(runId, staffId = null) {
     throw new Error('No matched or corrected lines to finalize');
   }
 
+  // Pre-build the set of tracking numbers that have a freight recon line in this
+  // run (is_fuel=false, surcharge_id IS NULL).  Used in buildSnapshot to reliably
+  // detect orphan surcharge lines — avoids a per-line async DB query and prevents
+  // false-negatives when tracking number formats differ slightly.
+  const freightTrackingsInRun = new Set(
+    lines
+      .filter(l => !l.surcharge_id && !l.is_fuel)
+      .map(l => l.tracking_number)
+  );
+
   let finalized = 0;
   let externalBalanceUpdates = 0;
 
+  // ── Step 0: Insert pending DDP admin charges ──────────────────────────────
+  //
+  // ddp_admin reconciliation lines were created by the engine without a charge_id
+  // (the engine never writes to the charges table — that's our job here at finalize
+  // time). We insert the charge now and back-populate charge_id on the recon line
+  // so buildSnapshot can enrich from the charges table normally.
+  // ── Step 0.5: Create surcharge charges for resolved sell_surcharge_missing lines ──
+  //
+  // When a carrier bills a surcharge that has no sell-side equivalent (sell_surcharge_missing
+  // warning lines), the operator resolves them as map_to_surcharge and sets corrected_sell_price.
+  // We now create an actual charges record (charge_type='surcharge') so that:
+  //   1. buildSnapshot picks it up via the sell_surcharge subquery on the freight line.
+  //   2. The customer CSV export shows the surcharge as a named line-item column.
+  //   3. The customer is actually billed for it.
+  //
+  // We look up the shipment via the freight line (same tracking, surcharge_id IS NULL, has charge_id)
+  // rather than the tracking_codes array, which is more reliable for DPD-style prefixed numbers.
+  for (const line of lines) {
+    // Fire for any corrected line with surcharge_id set — covers both:
+    //   • sell_surcharge_missing warnings (carrier billed a surcharge we never charged)
+    //   • manually resolved map_to_surcharge lines (operator mapped an unmatched line to a surcharge)
+    if (!line.surcharge_id) continue;
+    if (line.status !== 'corrected') continue;
+
+    try {
+      // Use corrected_sell_price when set; fall back to carrier_amount for pass-through
+      // surcharges (e.g. Congestion) where default_value=0 and operator accepted at £0.
+      const rawSell = parseFloat(line.corrected_sell_price) || 0;
+      const costAmt = round4(parseFloat(line.carrier_amount) || 0);
+      const sellAmt = rawSell > 0 ? round4(rawSell) : round4(costAmt);
+      if (sellAmt <= 0) continue;
+
+      // Find shipment_id from the freight counterpart line (same run + tracking, no surcharge_id)
+      const freightRes = await query(`
+        SELECT ch.shipment_id, ch.customer_id, sh.despatch_date
+        FROM   reconciliation_lines rl2
+        JOIN   charges ch ON ch.id = rl2.charge_id
+        LEFT JOIN shipments sh ON sh.id = ch.shipment_id
+        WHERE  rl2.run_id           = $1
+          AND  rl2.tracking_number  = $2
+          AND  rl2.surcharge_id    IS NULL
+          AND  rl2.charge_id       IS NOT NULL
+        LIMIT 1
+      `, [line.run_id, line.tracking_number]);
+
+      const shipmentId  = freightRes.rows[0]?.shipment_id  || null;
+      const despatchDate = freightRes.rows[0]?.despatch_date || line.shipment_date || null;
+
+      // Idempotency: if the charge was already created at resolve time (map_to_surcharge),
+      // charge_id on the line will point to a 'surcharge' charge — skip creation.
+      if (line.charge_id) {
+        const { rows: cTypeRows } = await query(
+          `SELECT charge_type FROM charges WHERE id = $1 LIMIT 1`,
+          [line.charge_id]
+        );
+        if (cTypeRows[0]?.charge_type === 'surcharge') {
+          console.log(`[finalization] Surcharge charge already exists (id=${line.charge_id}), skipping creation for tracking=${line.tracking_number}`);
+          continue;
+        }
+      }
+
+      // Insert surcharge charge (explicit existence check — ON CONFLICT alone doesn't
+      // prevent duplicates without a matching unique constraint on the table)
+      const existRes = await query(`
+        SELECT id FROM charges
+        WHERE  customer_id  = $1
+          AND  surcharge_id = $3
+          AND  charge_type  = 'surcharge'
+          AND  cancelled    = false
+          AND  ($2::uuid IS NULL OR shipment_id = $2::uuid)
+        LIMIT 1
+      `, [line.customer_id, shipmentId, line.surcharge_id]);
+
+      let chargeId = existRes.rows[0]?.id || null;
+      if (!chargeId) {
+        const chargeRes = await query(`
+          INSERT INTO charges (
+            customer_id, shipment_id, charge_type,
+            surcharge_id, cost_price, sell_price, price,
+            status, verified, despatch_date, source
+          ) VALUES ($1,$2,'surcharge',$3,$4,$5,$5,'verified',true,$6,'recon_surcharge')
+          RETURNING id
+        `, [
+          line.customer_id,
+          shipmentId,
+          line.surcharge_id,
+          costAmt,
+          sellAmt,
+          despatchDate,
+        ]);
+        chargeId = chargeRes.rows[0]?.id || null;
+      }
+
+      if (chargeId) {
+        // Back-populate charge_id on the recon line so subsequent reporting can trace it
+        await query(
+          `UPDATE reconciliation_lines SET charge_id = $1 WHERE id = $2`,
+          [chargeId, line.id]
+        );
+        console.log(`[finalization] Surcharge charge linked: id=${chargeId} surcharge=${line.surcharge_id} sell=£${sellAmt} tracking=${line.tracking_number}`);
+      }
+    } catch (surchargeErr) {
+      console.error(`[finalization] Surcharge charge creation failed for tracking=${line.tracking_number}:`, surchargeErr.message);
+      // Non-fatal — continue
+    }
+  }
+
+  for (const line of lines) {
+    if (line.source !== 'ddp_admin' || line.charge_id) continue;
+
+    try {
+      // Resolve shipment_id from tracking number
+      const shipRes = await query(
+        `SELECT s.id FROM shipments s WHERE $1 = ANY(s.tracking_codes) LIMIT 1`,
+        [line.tracking_number]
+      );
+      const shipmentId = shipRes.rows[0]?.id || null;
+
+      const fee = round4(parseFloat(line.corrected_sell_price) || 0);
+      if (fee <= 0) continue;  // skip zero-fee lines (shouldn't happen but guard anyway)
+
+      // Insert charge (idempotent — ON CONFLICT DO NOTHING)
+      const chargeRes = await query(`
+        INSERT INTO charges (
+          customer_id, shipment_id, charge_type,
+          cost_price, sell_price, price,
+          status, verified, despatch_date,
+          pricing_logic_trace, source
+        ) VALUES ($1,$2,'ddp_admin', 0,$3,$3, 'verified',true,$4, $5,'ddp_admin_finalized')
+        ON CONFLICT DO NOTHING
+        RETURNING id
+      `, [
+        line.customer_id,
+        shipmentId,
+        fee,
+        line.shipment_date || null,
+        line.correction_metadata || null,
+      ]);
+
+      let chargeId = chargeRes.rows[0]?.id || null;
+
+      // If ON CONFLICT fired, find the existing charge
+      if (!chargeId && shipmentId) {
+        const existingRes = await query(
+          `SELECT id FROM charges WHERE shipment_id = $1 AND charge_type = 'ddp_admin' AND cancelled = false LIMIT 1`,
+          [shipmentId]
+        );
+        chargeId = existingRes.rows[0]?.id || null;
+      }
+
+      if (chargeId) {
+        // Back-populate so buildSnapshot can enrich from the charges table
+        line.charge_id = chargeId;
+        await query(
+          `UPDATE reconciliation_lines SET charge_id = $1 WHERE id = $2`,
+          [chargeId, line.id]
+        );
+        console.log(`[finalization] DDP admin charge created: id=${chargeId} customer=${line.customer_id} fee=£${fee} tracking=${line.tracking_number}`);
+      }
+    } catch (ddpErr) {
+      console.error(`[finalization] DDP admin charge failed for tracking=${line.tracking_number}:`, ddpErr.message);
+      // Non-fatal — continue without the ddp_admin line
+    }
+  }
+
   for (const line of lines) {
     try {
-      const snapshot = await buildSnapshot(line, run);
+      const snapshot = await buildSnapshot(line, run, freightTrackingsInRun);
+
+      // Guard: customer_id is NOT NULL in finalized_billing_lines.
+      // If it is null here, the INSERT will fail with a constraint violation.
+      // Log a detailed warning so the issue is visible in Railway logs.
+      if (!snapshot.customer_id) {
+        console.error(
+          `[finalization] SKIPPING line ${line.id} (tracking=${line.tracking_number}): ` +
+          `customer_id is null — cannot insert into finalized_billing_lines. ` +
+          `Ensure the reconciliation_line has customer_id set before finalizing.`
+        );
+        continue;
+      }
+
       await insertSnapshot(runId, line.id, snapshot);
       finalized++;
 
@@ -86,7 +274,7 @@ export async function finalizeRun(runId, staffId = null) {
       }
 
     } catch (err) {
-      console.error(`[finalization] Failed to snapshot line ${line.id}:`, err.message);
+      console.error(`[finalization] Failed to snapshot line ${line.id} (tracking=${line.tracking_number}):`, err.message);
       // Continue — don't fail the whole run for one bad line
     }
   }
@@ -159,7 +347,7 @@ export async function finalizeRun(runId, staffId = null) {
 
 // ─── Build snapshot for a single reconciliation line ─────────────────────────
 
-async function buildSnapshot(line, run) {
+async function buildSnapshot(line, run, freightTrackingsInRun = new Set()) {
   // Start with what we know from the reconciliation line itself
   const snapshot = {
     charge_id:               line.charge_id || null,
@@ -183,6 +371,7 @@ async function buildSnapshot(line, run) {
     order_reference:         null,
     recipient_name:          null,
     recipient_postcode:      null,
+    parcel_count:            line.parcel_count || null,
     weight_kg:               line.carrier_billed_weight_kg || null,
     service_name:            null,
     service_code:            null,
@@ -194,8 +383,134 @@ async function buildSnapshot(line, run) {
     despatch_date:           line.shipment_date || null,
   };
 
+  // ── Fuel recon lines: carrier side only ──────────────────────────────────────
+  //
+  // is_fuel = true lines represent the carrier's fuel surcharge invoice line item.
+  // Their sell amounts are already captured in the FREIGHT recon line's snapshot
+  // via the per-shipment sell_fuel subquery.  Running enrichment here would
+  // duplicate those sell amounts in the customer CSV.
+  //
+  // Record only carrier_fuel_amount; zero all sell fields.
+  if (line.is_fuel) {
+    // carrier_fuel_amount is set correctly from line.carrier_amount in initialization
+    if (snapshot.customer_id) {
+      try {
+        const cRes = await query(
+          `SELECT business_name FROM customers WHERE id = $1`,
+          [snapshot.customer_id]
+        );
+        if (cRes.rows.length) snapshot.customer_name = cRes.rows[0].business_name;
+      } catch (_) { /* non-fatal */ }
+    }
+    return snapshot;  // sell amounts remain 0 — freight line captures sell_fuel
+  }
+
+  // ── Surcharge (map_to_surcharge) recon lines ─────────────────────────────────
+  //
+  // Lines with surcharge_id set represent carrier invoice surcharge line items
+  // resolved via "Map to Surcharge".
+  //
+  // Sell amount: apply corrected_sell_price directly to this row's
+  // sell_surcharge_amount.  The freight enrichment subquery
+  // (WHERE sc.shipment_id = c.shipment_id AND sc.charge_type = 'surcharge')
+  // cannot reliably find these charges when the surcharge charge has
+  // shipment_id = NULL — which is common for external DHL bookings where the
+  // carrier tracking number is not in Moov's shipments table.  Trusting the
+  // freight chain silently produced £0 sell on every affected surcharge row.
+  //
+  // The freight enrichment subquery now excludes source='recon_surcharge'
+  // charges (see below) so there is no double-count.
+  if (line.surcharge_id) {
+    snapshot.carrier_base_amount      = 0;
+    snapshot.carrier_surcharge_amount = round4(parseFloat(line.carrier_amount) || 0);
+    snapshot.carrier_fuel_amount      = 0;
+    snapshot.carrier_total_amount     = round4(parseFloat(line.carrier_amount) || 0);
+
+    // Apply corrected_sell_price directly — reliable for all booking types.
+    if (line.corrected_sell_price != null) {
+      const surchargesSell = round4(parseFloat(line.corrected_sell_price) || 0);
+      if (surchargesSell > 0) {
+        snapshot.sell_surcharge_amount = surchargesSell;
+        snapshot.sell_total_amount     = surchargesSell;
+      }
+    }
+
+    // ── Orphan surcharge enrichment ───────────────────────────────────────────
+    // If no freight recon line exists for this tracking in the same run (DHL
+    // invoiced the Long Length on a combined line without a separate freight
+    // line), pull the freight + fuel sell from the charges table so the FBL row
+    // captures the full billing and the margin calculation is correct.
+    // freightTrackingsInRun is pre-built in finalizeRun — no async query needed,
+    // and the Set uses exact tracking_number strings from the same loaded lines
+    // so there is no format-mismatch risk.
+    try {
+      if (!freightTrackingsInRun.has(line.tracking_number)) {
+        // No freight counterpart in this run — enrich from charges table
+        const orphanRes = await query(`
+          SELECT c.price    AS freight_sell,
+                 c.order_id AS order_reference,
+                 s.ship_to_name       AS recipient_name,
+                 s.ship_to_postcode   AS postcode,
+                 s.collection_date    AS despatch_date,
+                 s.dc_service_id      AS service_code,
+                 COALESCE((
+                   SELECT SUM(cf.price) FROM charges cf
+                   WHERE cf.shipment_id = c.shipment_id
+                     AND cf.charge_type = 'fuel'
+                     AND cf.cancelled   = false
+                 ), 0) AS fuel_sell
+          FROM   charges c
+          JOIN   shipments s ON s.id = c.shipment_id
+          WHERE  c.charge_type = 'courier'
+            AND  c.cancelled   = false
+            AND  $1 = ANY(s.tracking_codes)
+          ORDER  BY c.created_at DESC
+          LIMIT  1
+        `, [line.tracking_number]);
+
+        if (orphanRes.rows.length) {
+          const d = orphanRes.rows[0];
+          const freightSell = round4(parseFloat(d.freight_sell || 0));
+          const fuelSell    = round4(parseFloat(d.fuel_sell    || 0));
+          if (freightSell > 0 || fuelSell > 0) {
+            snapshot.sell_base_amount  = freightSell;
+            snapshot.sell_fuel_amount  = fuelSell;
+            snapshot.sell_total_amount = round4(freightSell + fuelSell + snapshot.sell_surcharge_amount);
+            // Enrich shipment metadata
+            if (!snapshot.order_reference)    snapshot.order_reference    = d.order_reference  || null;
+            if (!snapshot.recipient_name)     snapshot.recipient_name     = d.recipient_name   || null;
+            if (!snapshot.recipient_postcode) snapshot.recipient_postcode = d.postcode         || null;
+            if (!snapshot.despatch_date)      snapshot.despatch_date      = d.despatch_date    || null;
+            if (!snapshot.service_code)       snapshot.service_code       = d.service_code     || null;
+            console.log(
+              `[buildSnapshot] Orphan surcharge enriched from charges: ` +
+              `tracking=${line.tracking_number} freight=£${freightSell} fuel=£${fuelSell}`
+            );
+          }
+        }
+      }
+    } catch (orphanErr) {
+      console.warn(`[buildSnapshot] Orphan enrichment failed for tracking=${line.tracking_number}: ${orphanErr.message}`);
+    }
+
+    if (snapshot.customer_id) {
+      try {
+        const cRes = await query(
+          `SELECT business_name FROM customers WHERE id = $1`,
+          [snapshot.customer_id]
+        );
+        if (cRes.rows.length) snapshot.customer_name = cRes.rows[0].business_name;
+      } catch (_) { /* non-fatal */ }
+    }
+    return snapshot;
+  }
+
   // ── Enrich from our charges table + shipments ─────────────────────────────
-  if (line.charge_id) {
+  //
+  // Only reaches here for freight (is_fuel=false, surcharge_id IS NULL) lines.
+  const enrichChargeId = line.charge_id;
+
+  if (enrichChargeId) {
     const enrichRes = await query(`
       SELECT
         c.shipment_id,
@@ -207,7 +522,7 @@ async function buildSnapshot(line, run) {
         s.ship_to_postcode                 AS postcode,
         s.total_weight_kg                  AS weight_kg,
         s.dc_service_id                    AS service_code,
-        s.despatch_date,
+        s.collection_date                  AS despatch_date,
         cs.name                            AS service_name,
         -- Fuel sell (for this shipment, excluding recon-excluded surcharges)
         COALESCE((
@@ -222,13 +537,15 @@ async function buildSnapshot(line, run) {
                 AND sx.reconciliation_excluded = true
             )
         ), 0)                              AS sell_fuel,
-        -- Surcharge sell (non-fuel, non-recon-excluded)
+        -- Surcharge sell (non-fuel, non-recon-excluded, excludes recon_surcharge
+        -- charges which are now captured directly in the surcharge FBL row)
         COALESCE((
           SELECT SUM(sc.price)
           FROM   charges sc
           WHERE  sc.shipment_id = c.shipment_id
             AND  sc.charge_type = 'surcharge'
             AND  sc.cancelled   = false
+            AND  COALESCE(sc.source, '') != 'recon_surcharge'
             AND  NOT EXISTS (
               SELECT 1 FROM surcharges sx
               WHERE sx.id = sc.surcharge_id
@@ -257,15 +574,21 @@ async function buildSnapshot(line, run) {
       LEFT JOIN courier_services cs ON cs.id = (
         SELECT id FROM courier_services WHERE service_code ILIKE s.dc_service_id LIMIT 1
       )
-      WHERE  c.id = $1
-    `, [line.charge_id]);
+      WHERE  c.id = $1  -- enrichChargeId (freight charge for surcharge lines, charge_id otherwise)
+    `, [enrichChargeId]);
 
     if (enrichRes.rows.length) {
       const d = enrichRes.rows[0];
       // corrected_sell_price: recomputed at billed weight by the reconciliation engine
       // for corrected (mapping-adjusted) pool-matched lines. Takes priority over
       // the booking-time charges.price so the snapshot reflects the reconciled sell.
-      const correctedSell = line.corrected_sell_price != null
+      //
+      // For map_to_surcharge lines (surcharge_id set), corrected_sell_price is the
+      // *surcharge* sell price — not the freight sell.  The surcharge sell is already
+      // captured via the surcharge_detail subquery below (shipment's surcharge charges),
+      // so we must NOT also apply it as sell_base here (that would double-count it and
+      // push the freight sell to zero).  Only apply correctedSell for freight lines.
+      const correctedSell = (line.corrected_sell_price != null && !line.surcharge_id)
         ? round4(parseFloat(line.corrected_sell_price))
         : null;
       const sellBase      = correctedSell ?? round4(parseFloat(d.sell_base || 0));
@@ -333,6 +656,106 @@ async function buildSnapshot(line, run) {
     }
   }
 
+  // ── Fallback: manually-corrected lines with no linked charge ─────────────
+  //
+  // manual_price and remap_service set corrected_sell_price but do NOT always
+  // link a charge_id (external bookings, unmatched lines where the shipment was
+  // not booked through Moov OS — common for reseller accounts like Boori EUR
+  // whose DHL shipments originate elsewhere).
+  //
+  // corrected_sell_price = base * (1 + fuel%) — the resolve endpoint already
+  // applied the fuel surcharge % when the operator typed their base amount.
+  // We decompose it back into base + fuel here so the customer CSV shows the
+  // correct split rather than a combined lump in the Base column.
+  if (snapshot.sell_base_amount === 0 && snapshot.sell_total_amount === 0 &&
+      line.corrected_sell_price != null && !line.surcharge_id) {
+    const correctedTotal = round4(parseFloat(line.corrected_sell_price));
+    if (correctedTotal > 0) {
+      let sellBase = correctedTotal;
+      let sellFuel = 0;
+
+      // Look up the customer's sell fuel% for this carrier so we can reverse
+      // the fuel markup that was baked in at resolve time.
+      try {
+        const fuelPctRes = await query(`
+          SELECT COALESCE(cfgp.sell_pct, fg.standard_sell_pct, 0) AS sell_pct
+          FROM   courier_services cs
+          JOIN   fuel_groups fg ON fg.id = cs.fuel_group_id
+          LEFT JOIN customer_fuel_group_pricing cfgp
+                    ON cfgp.fuel_group_id = fg.id
+                   AND cfgp.customer_id   = $1
+          WHERE  cs.carrier_id = $2
+          ORDER  BY COALESCE(cfgp.sell_pct, fg.standard_sell_pct) DESC
+          LIMIT  1
+        `, [line.customer_id, run.carrier_id]);
+
+        const fuelPct = parseFloat(fuelPctRes.rows[0]?.sell_pct || 0);
+        if (fuelPct > 0) {
+          // correctedTotal = base * (1 + fuelPct/100)  →  base = total / (1 + fuelPct/100)
+          sellBase = round4(correctedTotal / (1 + fuelPct / 100));
+          sellFuel = round4(correctedTotal - sellBase);
+        }
+      } catch (fuelErr) {
+        console.warn(`[buildSnapshot] Could not look up fuel% for customer=${line.customer_id} carrier=${run.carrier_id}: ${fuelErr.message}`);
+      }
+
+      snapshot.sell_base_amount  = sellBase;
+      snapshot.sell_fuel_amount  = sellFuel;
+      snapshot.sell_total_amount = round4(sellBase + sellFuel);
+      console.log(
+        `[buildSnapshot] External booking fallback: corrected_sell_price=£${correctedTotal} ` +
+        `→ base=£${sellBase} fuel=£${sellFuel} for line ${line.id} tracking=${line.tracking_number}`
+      );
+    }
+  }
+
+  // ── Fuel guarantee — applies to every freight line ───────────────────────────
+  //
+  // Every shipment must show a fuel charge as a separate column.  If sell_fuel is
+  // still 0 after all enrichment (no fuel charges in the charges table, e.g. for
+  // external bookings, remap_service lines on unbooked shipments, or air waybills),
+  // split the current sell_base into base + fuel using the customer's fuel %.
+  //
+  // This is NOT applied to surcharge or fuel companion rows (surcharge_id / is_fuel).
+  if (
+    !line.surcharge_id &&
+    !line.is_fuel &&
+    snapshot.sell_base_amount > 0 &&
+    snapshot.sell_fuel_amount === 0
+  ) {
+    try {
+      const fuelPctRes = await query(`
+        SELECT COALESCE(cfgp.sell_pct, fg.standard_sell_pct, 0) AS sell_pct
+        FROM   courier_services cs
+        JOIN   fuel_groups fg ON fg.id = cs.fuel_group_id
+        LEFT JOIN customer_fuel_group_pricing cfgp
+                  ON cfgp.fuel_group_id = fg.id
+                 AND cfgp.customer_id   = $1
+        WHERE  cs.carrier_id = $2
+        ORDER  BY COALESCE(cfgp.sell_pct, fg.standard_sell_pct) DESC
+        LIMIT  1
+      `, [line.customer_id, run.carrier_id]);
+
+      const fuelPct = parseFloat(fuelPctRes.rows[0]?.sell_pct || 0);
+      if (fuelPct > 0) {
+        // sell_base already represents the all-in total for these lines;
+        // decompose: total = base × (1 + fuel%)  →  base = total / (1 + fuel%)
+        const total    = round4(snapshot.sell_base_amount + snapshot.sell_surcharge_amount);
+        const newBase  = round4(snapshot.sell_base_amount / (1 + fuelPct / 100));
+        const newFuel  = round4(snapshot.sell_base_amount - newBase);
+        snapshot.sell_base_amount  = newBase;
+        snapshot.sell_fuel_amount  = newFuel;
+        snapshot.sell_total_amount = round4(newBase + newFuel + snapshot.sell_surcharge_amount);
+        console.log(
+          `[buildSnapshot] Fuel guarantee applied: ${fuelPct}% → ` +
+          `base=£${newBase} fuel=£${newFuel} tracking=${line.tracking_number}`
+        );
+      }
+    } catch (fuelGErr) {
+      console.warn(`[buildSnapshot] Fuel guarantee lookup failed for tracking=${line.tracking_number}: ${fuelGErr.message}`);
+    }
+  }
+
   // If we still don't have a customer_name, fetch it directly
   if (!snapshot.customer_name && snapshot.customer_id) {
     const cRes = await query(
@@ -352,24 +775,72 @@ async function insertSnapshot(runId, reconLineId, s) {
     INSERT INTO finalized_billing_lines (
       run_id, reconciliation_line_id, charge_id, customer_id, customer_name,
       tracking_number, order_reference, recipient_name, recipient_postcode,
-      weight_kg, service_name, service_code, despatch_date,
+      parcel_count, weight_kg, service_name, service_code, despatch_date,
       carrier_base_amount, carrier_fuel_amount, carrier_surcharge_amount, carrier_total_amount,
       sell_base_amount, sell_fuel_amount, sell_surcharge_amount, sell_total_amount,
       surcharge_detail, recon_status, corrected_by, source
     ) VALUES (
-      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,
-      $14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
+      $15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26
     )
     ON CONFLICT (reconciliation_line_id) DO NOTHING
   `, [
     runId, reconLineId, s.charge_id, s.customer_id, s.customer_name,
     s.tracking_number, s.order_reference, s.recipient_name, s.recipient_postcode,
-    s.weight_kg, s.service_name, s.service_code, s.despatch_date,
+    s.parcel_count || null, s.weight_kg, s.service_name, s.service_code, s.despatch_date,
     s.carrier_base_amount, s.carrier_fuel_amount, s.carrier_surcharge_amount, s.carrier_total_amount,
     s.sell_base_amount, s.sell_fuel_amount, s.sell_surcharge_amount, s.sell_total_amount,
     s.surcharge_detail ? JSON.stringify(s.surcharge_detail) : null,
     s.recon_status, s.corrected_by, s.source,
   ]);
+}
+
+// ─── Re-snapshot: recovery for finalized runs with empty billing lines ────────
+//
+// Re-runs only the INSERT step for a run that is already finalized but has
+// missing rows in finalized_billing_lines (e.g. DB error silently swallowed
+// during original finalization). Uses ON CONFLICT DO NOTHING so safe to repeat.
+
+export async function reSnapshot(runId) {
+  const runRes = await query(`SELECT * FROM reconciliation_runs WHERE id = $1`, [runId]);
+  if (!runRes.rows.length) throw new Error('Run not found');
+  const run = runRes.rows[0];
+  if (!run.finalized) throw new Error('Run is not finalized — use the normal Finalize button instead');
+
+  const linesRes = await query(`
+    SELECT rl.*
+    FROM   reconciliation_lines rl
+    WHERE  rl.run_id = $1
+      AND  rl.status IN ('matched', 'corrected')
+  `, [runId]);
+
+  const lines = linesRes.rows;
+  if (!lines.length) throw new Error('No matched or corrected lines found for this run');
+
+  let inserted = 0;
+  let skipped  = 0;
+  const errors = [];
+
+  for (const line of lines) {
+    try {
+      const snapshot = await buildSnapshot(line, run);
+      const before = await query(
+        `SELECT id FROM finalized_billing_lines WHERE reconciliation_line_id = $1`, [line.id]
+      );
+      if (before.rows.length) {
+        skipped++;
+        continue;
+      }
+      await insertSnapshot(runId, line.id, snapshot);
+      inserted++;
+    } catch (err) {
+      errors.push({ line_id: line.id, tracking: line.tracking_number, error: err.message });
+      console.error(`[re-snapshot] Failed line ${line.id} (${line.tracking_number}):`, err.message);
+    }
+  }
+
+  console.log(`[re-snapshot] Run ${runId}: inserted=${inserted} skipped=${skipped} errors=${errors.length}`);
+  return { inserted, skipped, errors };
 }
 
 // ─── Customer summary for a finalized run ─────────────────────────────────────
@@ -389,7 +860,8 @@ export async function getCustomerSummaries(runId) {
       SUM(f.margin_amount)              AS total_margin,
       COUNT(*) FILTER (WHERE f.xero_pushed_at IS NOT NULL) AS xero_pushed_count,
       MAX(f.xero_invoice_id)            AS xero_invoice_id,
-      MAX(f.xero_pushed_at)             AS xero_pushed_at
+      MAX(f.xero_pushed_at)             AS xero_pushed_at,
+      MAX(f.xero_push_error)            AS xero_push_error
     FROM   finalized_billing_lines f
     LEFT JOIN customers cu ON cu.id = f.customer_id
     WHERE  f.run_id = $1
@@ -425,17 +897,65 @@ export async function generateCustomerCSV(runId, customerId) {
   if (!runRes.rows.length) throw new Error('Run not found');
   const run = runRes.rows[0];
 
-  // Fetch lines for this customer
+  // Fetch freight lines only (surcharge_id IS NULL on the recon line).
+  // Corrected surcharge companion rows (map_to_surcharge resolutions) now carry
+  // sell_surcharge_amount > 0 after the buildSnapshot fix, so the old
+  // sell_total_amount > 0 filter would include them as orphan zero-column rows.
+  // We exclude them here and merge their sell amounts below via manualSurchargeMap.
   const linesRes = await query(`
     SELECT f.*
     FROM   finalized_billing_lines f
-    WHERE  f.run_id      = $1
-      AND  f.customer_id = $2
+    JOIN   reconciliation_lines   rl ON rl.id = f.reconciliation_line_id
+    WHERE  f.run_id          = $1
+      AND  f.customer_id     = $2
+      AND  rl.surcharge_id  IS NULL
+      AND  f.sell_total_amount > 0
     ORDER  BY f.despatch_date ASC, f.tracking_number ASC
   `, [runId, customerId]);
 
   const lines = linesRes.rows;
   if (!lines.length) throw new Error('No finalized lines found for this customer in this run');
+
+  // Fetch corrected surcharge companion rows (map_to_surcharge resolutions).
+  // These have their own FBL row with sell_surcharge_amount = corrected_sell_price.
+  // They are either merged into a freight row (same tracking in this run) or, when
+  // the freight for that shipment was on a different DHL invoice, they appear as
+  // standalone surcharge-only rows in the CSV.
+  const manualSurchargeRes = await query(`
+    SELECT f.tracking_number,
+           f.sell_surcharge_amount,
+           f.weight_kg,
+           f.parcel_count,
+           f.carrier_total_amount,
+           sx.name AS surcharge_name
+    FROM   finalized_billing_lines f
+    JOIN   reconciliation_lines   rl ON rl.id = f.reconciliation_line_id
+    JOIN   surcharges             sx ON sx.id = rl.surcharge_id
+    WHERE  f.run_id          = $1
+      AND  f.customer_id     = $2
+      AND  rl.surcharge_id  IS NOT NULL
+      AND  f.sell_surcharge_amount > 0
+  `, [runId, customerId]);
+
+  // Build tracking_number → [{ surcharge_name, sell_amount, weight_kg, parcel_count }] lookup
+  const manualSurchargeMap = {};
+  for (const r of manualSurchargeRes.rows) {
+    if (!manualSurchargeMap[r.tracking_number]) {
+      manualSurchargeMap[r.tracking_number] = {
+        surcharges:    [],
+        weight_kg:     r.weight_kg,
+        parcel_count:  r.parcel_count,
+      };
+    }
+    manualSurchargeMap[r.tracking_number].surcharges.push({
+      surcharge_name: r.surcharge_name || 'Surcharge',
+      sell_amount:    parseFloat(r.sell_surcharge_amount || 0),
+      charge_type:    'surcharge',
+    });
+  }
+
+  // Tracking numbers that have a freight row in this run (used to detect orphans)
+  const freightTrackingSet = new Set(linesRes.rows.map(l => l.tracking_number));
 
   // Update CSV export timestamp
   await query(`
@@ -444,8 +964,9 @@ export async function generateCustomerCSV(runId, customerId) {
     WHERE run_id = $1 AND customer_id = $2
   `, [runId, customerId]);
 
-  // Collect all distinct surcharge names across this customer's lines so we
-  // can produce individual surcharge columns in the CSV.
+  // Collect all distinct surcharge names — from surcharge_detail JSONB on freight
+  // rows (EFS, HGV, etc.) AND from manually resolved surcharge companion rows
+  // (Long Length, etc.) merged via manualSurchargeMap.
   const surchargeNames = new Set();
   for (const l of lines) {
     const detail = Array.isArray(l.surcharge_detail)
@@ -453,6 +974,16 @@ export async function generateCustomerCSV(runId, customerId) {
       : (l.surcharge_detail ? JSON.parse(l.surcharge_detail) : []);
     for (const s of detail) {
       if (s.charge_type === 'surcharge') surchargeNames.add(s.surcharge_name);
+    }
+    // Also add names from manually resolved companion surcharge rows
+    for (const s of (manualSurchargeMap[l.tracking_number]?.surcharges || [])) {
+      surchargeNames.add(s.surcharge_name);
+    }
+  }
+  // Also collect surcharge names from orphan surcharge rows (no freight in this run)
+  for (const [tracking, entry] of Object.entries(manualSurchargeMap)) {
+    if (!freightTrackingSet.has(tracking)) {
+      for (const s of entry.surcharges) surchargeNames.add(s.surcharge_name);
     }
   }
   const surchargeNamesSorted = [...surchargeNames].sort();
@@ -464,13 +995,13 @@ export async function generateCustomerCSV(runId, customerId) {
     'Recipient Name',
     'Postcode',
     'Service',
+    'Parcels',
     'Weight (kg)',
     'Base Charge (£)',
     'Fuel Charge (£)',
     ...surchargeNamesSorted.map(n => `${n} (£)`),
     'Total Surcharges (£)',
     'Line Total (£)',
-    'Status',
   ];
 
   const rows = lines.map(l => {
@@ -478,13 +1009,27 @@ export async function generateCustomerCSV(runId, customerId) {
       ? l.surcharge_detail
       : (l.surcharge_detail ? JSON.parse(l.surcharge_detail) : []);
 
-    // Build per-named-surcharge sell amounts
+    // Build per-named-surcharge sell amounts from surcharge_detail (EFS, HGV, etc.)
+    // plus manually resolved companion surcharge rows (Long Length, etc.)
     const surchargeMap = {};
     for (const s of detail) {
       if (s.charge_type === 'surcharge') {
         surchargeMap[s.surcharge_name] = (surchargeMap[s.surcharge_name] || 0) + (s.sell_amount || 0);
       }
     }
+    for (const s of (manualSurchargeMap[l.tracking_number]?.surcharges || [])) {
+      surchargeMap[s.surcharge_name] = (surchargeMap[s.surcharge_name] || 0) + s.sell_amount;
+    }
+
+    // Compute totals from the individual surcharge columns rather than the
+    // snapshot sell_surcharge_amount / sell_total_amount fields.  Those fields
+    // exclude reconciliation_excluded surcharges (e.g. Emergency Fuel Surcharge)
+    // because they were designed for reconciliation comparison, not billing.
+    // The CSV must show the full customer charge, so we sum every visible column.
+    const namedSurchargeTotal = surchargeNamesSorted.reduce((sum, n) => sum + (surchargeMap[n] || 0), 0);
+    const base = parseFloat(l.sell_base_amount || 0);
+    const fuel = parseFloat(l.sell_fuel_amount || 0);
+    const lineTotal = base + fuel + namedSurchargeTotal;
 
     return [
       l.tracking_number       || '',
@@ -493,15 +1038,106 @@ export async function generateCustomerCSV(runId, customerId) {
       l.recipient_name        || '',
       l.recipient_postcode    || '',
       l.service_name          || '',
+      l.parcel_count != null  ? l.parcel_count : '',
       l.weight_kg != null     ? parseFloat(l.weight_kg).toFixed(3) : '',
-      parseFloat(l.sell_base_amount      || 0).toFixed(2),
-      parseFloat(l.sell_fuel_amount      || 0).toFixed(2),
+      base.toFixed(2),
+      fuel.toFixed(2),
       ...surchargeNamesSorted.map(n => (surchargeMap[n] || 0).toFixed(2)),
-      parseFloat(l.sell_surcharge_amount || 0).toFixed(2),
-      parseFloat(l.sell_total_amount     || 0).toFixed(2),
-      l.recon_status          || '',
+      namedSurchargeTotal.toFixed(2),
+      lineTotal.toFixed(2),
     ];
   });
+
+  // Orphan surcharge rows — surcharges where the freight for that shipment was on
+  // a different DHL invoice period.  Enrich with freight sell + shipment metadata
+  // from the charges table so the row is complete for the customer invoice.
+  for (const [tracking, entry] of Object.entries(manualSurchargeMap)) {
+    if (freightTrackingSet.has(tracking)) continue; // already merged into freight row
+
+    // Look up freight charge and shipment metadata from charges table
+    let enrichBase = 0, enrichFuel = 0, enrichEfs = 0, enrichHgv = 0;
+    let enrichRecipient = '', enrichPostcode = '', enrichService = '', enrichOrderRef = '', enrichDate = '';
+    try {
+      const enrichRes = await query(`
+        SELECT c.price      AS freight_sell,
+               c.order_id   AS order_ref,
+               s.ship_to_name        AS recipient,
+               s.ship_to_postcode    AS postcode,
+               s.collection_date     AS despatch_date,
+               cs.name               AS service_name,
+               COALESCE((
+                 SELECT SUM(cf.price) FROM charges cf
+                 WHERE cf.shipment_id = c.shipment_id AND cf.charge_type = 'fuel' AND cf.cancelled = false
+               ), 0) AS fuel_sell,
+               COALESCE((
+                 SELECT json_agg(json_build_object(
+                   'surcharge_name', sx.name,
+                   'sell_amount',    cf.price
+                 ))
+                 FROM   charges cf
+                 JOIN   surcharges sx ON sx.id = cf.surcharge_id
+                 WHERE  cf.shipment_id  = c.shipment_id
+                   AND  cf.charge_type  = 'surcharge'
+                   AND  cf.cancelled    = false
+                   AND  COALESCE(cf.source,'') != 'recon_surcharge'
+               ), '[]'::json) AS named_surcharges
+        FROM   charges c
+        JOIN   shipments s  ON s.id = c.shipment_id
+        LEFT JOIN courier_services cs ON cs.id = (
+          SELECT id FROM courier_services WHERE service_code ILIKE s.dc_service_id LIMIT 1
+        )
+        WHERE  c.charge_type = 'courier'
+          AND  c.cancelled   = false
+          AND  $1 = ANY(s.tracking_codes)
+        ORDER  BY c.created_at DESC
+        LIMIT  1
+      `, [tracking]);
+
+      if (enrichRes.rows.length) {
+        const d = enrichRes.rows[0];
+        enrichBase      = round4(parseFloat(d.freight_sell   || 0));
+        enrichFuel      = round4(parseFloat(d.fuel_sell      || 0));
+        enrichOrderRef  = d.order_ref    || '';
+        enrichRecipient = d.recipient    || '';
+        enrichPostcode  = d.postcode     || '';
+        enrichService   = d.service_name || '';
+        enrichDate      = d.despatch_date ? new Date(d.despatch_date).toLocaleDateString('en-GB') : '';
+        // Store for use in surchargeMap below and in totals row
+        entry._enrichBase = enrichBase;
+        entry._enrichFuel = enrichFuel;
+        entry._enrichedSurcharges = Array.isArray(d.named_surcharges)
+          ? d.named_surcharges
+          : (d.named_surcharges ? JSON.parse(d.named_surcharges) : []);
+      }
+    } catch (_) { /* non-fatal — use zero enrichment */ }
+
+    const surchargeMap = {};
+    for (const s of entry.surcharges) {
+      surchargeMap[s.surcharge_name] = (surchargeMap[s.surcharge_name] || 0) + s.sell_amount;
+    }
+    // Add booking-time named surcharges (EFS, HGV etc.) from the charges table
+    for (const sx of (entry._enrichedSurcharges || [])) {
+      surchargeMap[sx.surcharge_name] = (surchargeMap[sx.surcharge_name] || 0) + round4(parseFloat(sx.sell_amount || 0));
+    }
+    const namedSurchargeTotal = surchargeNamesSorted.reduce((sum, n) => sum + (surchargeMap[n] || 0), 0);
+    const lineTotal = enrichBase + enrichFuel + namedSurchargeTotal;
+
+    rows.push([
+      tracking,
+      enrichOrderRef,
+      enrichDate,
+      enrichRecipient,
+      enrichPostcode,
+      enrichService,
+      entry.parcel_count != null ? entry.parcel_count : '',
+      entry.weight_kg    != null ? parseFloat(entry.weight_kg).toFixed(3) : '',
+      enrichBase.toFixed(2),
+      enrichFuel.toFixed(2),
+      ...surchargeNamesSorted.map(n => (surchargeMap[n] || 0).toFixed(2)),
+      namedSurchargeTotal.toFixed(2),
+      lineTotal.toFixed(2),
+    ]);
+  }
 
   // Summary totals row
   const totals = lines.reduce((acc, l) => {
@@ -514,6 +1150,9 @@ export async function generateCustomerCSV(runId, customerId) {
         surchargeMap[s.surcharge_name] = (surchargeMap[s.surcharge_name] || 0) + (s.sell_amount || 0);
       }
     }
+    for (const s of (manualSurchargeMap[l.tracking_number]?.surcharges || [])) {
+      surchargeMap[s.surcharge_name] = (surchargeMap[s.surcharge_name] || 0) + s.sell_amount;
+    }
     for (const n of surchargeNamesSorted) {
       acc.surchargeByName[n] = (acc.surchargeByName[n] || 0) + (surchargeMap[n] || 0);
     }
@@ -523,19 +1162,49 @@ export async function generateCustomerCSV(runId, customerId) {
       surcharge:      acc.surcharge + parseFloat(l.sell_surcharge_amount || 0),
       total:          acc.total     + parseFloat(l.sell_total_amount     || 0),
       surchargeByName: acc.surchargeByName,
+      parcelCount:    acc.parcelCount + (parseInt(l.parcel_count) || 0),
     };
-  }, { base: 0, fuel: 0, surcharge: 0, total: 0, surchargeByName: {} });
+  }, { base: 0, fuel: 0, surcharge: 0, total: 0, surchargeByName: {}, parcelCount: 0 });
+
+  // Add orphan row values into totals (freight rows reduction doesn't include them)
+  for (const [tracking, entry] of Object.entries(manualSurchargeMap)) {
+    if (freightTrackingSet.has(tracking)) continue;
+    totals.base       += entry._enrichBase || 0;
+    totals.fuel       += entry._enrichFuel || 0;
+    totals.parcelCount += (parseInt(entry.parcel_count) || 0);
+    for (const sx of (entry._enrichedSurcharges || [])) {
+      totals.surchargeByName[sx.surcharge_name] = (totals.surchargeByName[sx.surcharge_name] || 0) + round4(parseFloat(sx.sell_amount || 0));
+    }
+    for (const s of entry.surcharges) {
+      totals.surchargeByName[s.surcharge_name] = (totals.surchargeByName[s.surcharge_name] || 0) + s.sell_amount;
+    }
+  }
+
+  // Sum from individual surcharge columns — includes both freight and orphan rows
+  const totalNamedSurcharge = surchargeNamesSorted.reduce((sum, n) => sum + (totals.surchargeByName[n] || 0), 0);
+  const grandTotal = totals.base + totals.fuel + totalNamedSurcharge;
 
   rows.push([]); // blank separator
   rows.push([
-    'TOTAL', '', '', '', '', '', '',
+    'TOTAL', '', '', '', '', '',
+    totals.parcelCount > 0 ? totals.parcelCount : '',
+    '',
     totals.base.toFixed(2),
     totals.fuel.toFixed(2),
     ...surchargeNamesSorted.map(n => (totals.surchargeByName[n] || 0).toFixed(2)),
-    totals.surcharge.toFixed(2),
-    totals.total.toFixed(2),
-    '',
+    totalNamedSurcharge.toFixed(2),
+    grandTotal.toFixed(2),
   ]);
+
+  // Compute the Xero invoice number using the same logic as xero.js
+  // so the CSV reference always matches what was (or will be) sent to Xero.
+  const custName   = lines[0]?.customer_name || 'CUST';
+  const custAbbrev = custName.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+  const runDate    = run.invoice_date ? new Date(run.invoice_date) : new Date();
+  const dd  = String(runDate.getDate()).padStart(2, '0');
+  const mm  = String(runDate.getMonth() + 1).padStart(2, '0');
+  const yy  = String(runDate.getFullYear()).slice(-2);
+  const xeroInvoiceNumber = `${custAbbrev}-${dd}${mm}${yy}`;
 
   // Escape and join
   const escape = (v) => `"${String(v).replace(/"/g, '""')}"`;
@@ -543,8 +1212,7 @@ export async function generateCustomerCSV(runId, customerId) {
     // Header block
     `"Moov OS — Carrier Invoice Reconciliation Export"`,
     `"Carrier: ${run.carrier_name || ''}"`,
-    `"Invoice Ref: ${run.invoice_ref || ''}"`,
-    `"Run ID: ${run.id}"`,
+    `"Invoice Number: ${xeroInvoiceNumber}"`,
     `"Customer: ${lines[0]?.customer_name || ''}"`,
     `"Generated: ${new Date().toLocaleString('en-GB')}"`,
     '',
@@ -553,6 +1221,58 @@ export async function generateCustomerCSV(runId, customerId) {
   ];
 
   return csvLines.join('\r\n');
+}
+
+// ─── Re-snapshot a single customer within a finalized run ─────────────────────
+//
+// Deletes finalized_billing_lines for one customer in a run and re-builds them
+// from the current state of the charges table.  Used after charge corrections
+// (e.g. cancelled phantom surcharges, repriced multi-parcel charges) to refresh
+// the snapshot without re-running the full reconciliation.
+//
+// The run must already be finalized.  Reconciliation_lines are not changed.
+
+export async function reSnapshotCustomer(runId, customerId) {
+  const runRes = await query(`SELECT * FROM reconciliation_runs WHERE id = $1`, [runId]);
+  if (!runRes.rows.length) throw new Error('Run not found');
+  const run = runRes.rows[0];
+  if (!run.finalized) throw new Error('Run is not finalized — use the normal Finalize button instead');
+
+  // Load this customer's matched/corrected lines
+  const linesRes = await query(`
+    SELECT rl.*
+    FROM   reconciliation_lines rl
+    WHERE  rl.run_id      = $1
+      AND  rl.customer_id = $2
+      AND  rl.status IN ('matched', 'corrected')
+  `, [runId, customerId]);
+
+  const lines = linesRes.rows;
+  if (!lines.length) throw new Error('No matched or corrected lines found for this customer in this run');
+
+  // Delete existing snapshots for this customer in this run
+  const delRes = await query(
+    `DELETE FROM finalized_billing_lines WHERE run_id = $1 AND customer_id = $2`,
+    [runId, customerId]
+  );
+  const deleted = delRes.rowCount || 0;
+
+  let inserted = 0;
+  const errors = [];
+
+  for (const line of lines) {
+    try {
+      const snapshot = await buildSnapshot(line, run);
+      await insertSnapshot(runId, line.id, snapshot);
+      inserted++;
+    } catch (err) {
+      errors.push({ line_id: line.id, tracking: line.tracking_number, error: err.message });
+      console.error(`[re-snapshot-customer] Failed line ${line.id} (${line.tracking_number}):`, err.message);
+    }
+  }
+
+  console.log(`[re-snapshot-customer] Run ${runId} / customer ${customerId}: deleted=${deleted} inserted=${inserted} errors=${errors.length}`);
+  return { deleted, inserted, errors };
 }
 
 // ─── Margin report for all finalized runs ─────────────────────────────────────

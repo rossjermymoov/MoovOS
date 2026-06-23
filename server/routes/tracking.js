@@ -9,8 +9,9 @@
 
 import express from 'express';
 import { query } from '../db/index.js';
-import { fetchShipmentByReference, fetchShipmentById } from '../services/voilaClient.js';
+import { fetchShipmentByReference, fetchShipmentById, requestTrackingUpdate } from '../services/voilaClient.js';
 import { processShipment, insertCharges } from '../services/pricingEngine.js';
+// upsertEvent and normalisePayload are defined later in this file and used by bulk runner below
 
 const router = express.Router();
 
@@ -116,7 +117,8 @@ const STATUS_MAP = {
   exception: 'exception', damaged: 'exception', lost: 'exception',
   missing: 'exception', problem: 'exception', delay: 'exception',
   address_query: 'exception', address_issue: 'exception', undeliverable: 'exception',
-  tracking_expired: 'exception', cancelled: 'exception',
+  tracking_expired: 'exception',
+  cancelled: 'cancelled', cancellation: 'cancelled', voided: 'cancelled',
 
   // ── Returned ──────────────────────────────────────────────────────────────
   returned: 'returned', return: 'returned', rts: 'returned',
@@ -356,6 +358,33 @@ export async function upsertEvent(event, rawBody) {
     ON CONFLICT DO NOTHING
   `, [parcelId, consignment, eventCode, status, description, location, eventAt,
       JSON.stringify(event._raw || event)]);
+
+  // Auto-cancel: if the carrier has cancelled this booking, cancel the linked charge.
+  // This fires when a cancellation tracking event arrives (status_code 12 from DPD,
+  // or text "Cancelled" from Voila's tracking API) and no shipment.cancelled webhook
+  // was received. Mirrors the billing webhook cancellation handler exactly.
+  if (status === 'cancelled') {
+    await query(`
+      UPDATE charges
+      SET    cancelled = true, updated_at = NOW()
+      WHERE  cancelled = false
+        AND  shipment_id IN (
+               SELECT id FROM shipments
+               WHERE  $1 = ANY(tracking_codes)
+                 AND  (collection_date IS NULL OR collection_date >= CURRENT_DATE - INTERVAL '400 days')
+             )
+    `, [consignment]);
+
+    await query(`
+      UPDATE shipments
+      SET    cancelled = true, cancelled_at = NOW(), updated_at = NOW()
+      WHERE  $1 = ANY(tracking_codes)
+        AND  cancelled = false
+        AND  (collection_date IS NULL OR collection_date >= CURRENT_DATE - INTERVAL '400 days')
+    `, [consignment]);
+
+    return { ok: true, consignment, status: 'cancelled', parcel_id: parcelId, auto_cancelled: true };
+  }
 
   // Auto-verify: if this event confirms physical movement, mark the linked charge verified.
   // The 400-day window is a belt-and-braces guard against tracking number recycling —
@@ -702,5 +731,488 @@ export async function purgeOldTrackingData() {
     console.warn('⚠ purgeOldTrackingData failed (non-fatal):', err.message);
   }
 }
+
+// ─── POST /api/tracking/backfill-verify ──────────────────────────────────────
+//
+// Finds all unverified charges from the last N days and:
+//   1. Runs an immediate catch-up verify pass (verify any charges that already
+//      have qualifying tracking events in the DB but weren't verified yet).
+//   2. Returns a full list of shipments that remain unverified so the operator
+//      can see exactly what's missing and take manual action if needed.
+//
+// Body: { days: 14 }  — optional, defaults to 14
+//
+// Called manually when the tracking webhook has been disabled or missed events.
+
+router.post('/backfill-verify', async (req, res, next) => {
+  try {
+    const days = Math.min(parseInt(req.body?.days) || 14, 90); // cap at 90 days
+
+    // ── Step 1: Aggressive catch-up verify ───────────────────────────────────
+    // Verify any charge whose shipment already has a qualifying tracking event
+    // in the parcels/tracking_events tables (these may pre-date the webhook gap).
+    const verifyRes = await query(`
+      UPDATE charges c
+      SET    verified   = true,
+             updated_at = NOW()
+      FROM   shipments s
+      WHERE  c.shipment_id = s.id
+        AND  c.verified    = false
+        AND  c.cancelled   = false
+        AND  c.charge_type = 'courier'
+        AND  c.created_at  >= NOW() - ($1 || ' days')::INTERVAL
+        AND  s.tracking_codes IS NOT NULL
+        AND  array_length(s.tracking_codes, 1) > 0
+        AND  EXISTS (
+          SELECT 1
+          FROM   parcels p
+          JOIN   tracking_events te ON te.parcel_id = p.id
+          WHERE  p.consignment_number = ANY(s.tracking_codes)
+            AND  te.status = ANY(ARRAY[
+                   'in_transit','at_depot','out_for_delivery',
+                   'delivered','failed_delivery','on_hold',
+                   'awaiting_collection','customs_hold','exception','returned'
+                 ]::parcel_status[])
+        )
+    `, [days]);
+
+    const justVerified = verifyRes.rowCount || 0;
+
+    // ── Step 2: List still-unverified shipments ───────────────────────────────
+    // Everything that has a tracking code but still no qualifying event.
+    const stillUnverifiedRes = await query(`
+      SELECT
+        c.id                                    AS charge_id,
+        c.created_at,
+        c.charge_type,
+        cu.business_name                        AS customer_name,
+        cu.account_number,
+        s.id                                    AS shipment_id,
+        s.tracking_codes,
+        s.courier,
+        s.despatch_date,
+        -- Has any tracking event at all (even non-qualifying like 'booked')
+        EXISTS (
+          SELECT 1 FROM parcels p
+          JOIN tracking_events te ON te.parcel_id = p.id
+          WHERE p.consignment_number = ANY(s.tracking_codes)
+        )                                       AS has_any_event
+      FROM   charges    c
+      JOIN   shipments  s  ON s.id  = c.shipment_id
+      LEFT JOIN customers cu ON cu.id = c.customer_id
+      WHERE  c.verified    = false
+        AND  c.cancelled   = false
+        AND  c.charge_type = 'courier'
+        AND  c.created_at  >= NOW() - ($1 || ' days')::INTERVAL
+        AND  s.tracking_codes IS NOT NULL
+        AND  array_length(s.tracking_codes, 1) > 0
+      ORDER  BY c.created_at DESC
+    `, [days]);
+
+    const unverified = stillUnverifiedRes.rows;
+
+    console.log(
+      `[tracking/backfill-verify] days=${days}: ` +
+      `verified ${justVerified} charge(s), ${unverified.length} still unverified`
+    );
+
+    res.json({
+      days_scanned:     days,
+      just_verified:    justVerified,
+      still_unverified: unverified.length,
+      unverified_list:  unverified.map(r => ({
+        charge_id:      r.charge_id,
+        customer:       r.customer_name,
+        account_number: r.account_number,
+        shipment_id:    r.shipment_id,
+        courier:        r.courier,
+        tracking_codes: r.tracking_codes,
+        despatch_date:  r.despatch_date,
+        created_at:     r.created_at,
+        has_any_event:  r.has_any_event,
+      })),
+    });
+  } catch (err) { next(err); }
+});
+
+// ─── POST /api/tracking/test-tracking-request ────────────────────────────────
+//
+// Diagnostic endpoint — picks the single OLDEST unverified shipment that has
+// Voila tracking credentials stored and calls the Voila tracking API synchronously.
+// Returns the raw Voila response so the format can be inspected before wiring up
+// the full bulk runner to process events from it.
+
+router.post('/test-tracking-request', async (req, res, next) => {
+  try {
+    // Find the oldest unverified shipment with credentials
+    const { rows } = await query(`
+      SELECT
+        s.id                            AS shipment_id,
+        s.voila_tracking_request_id     AS track_req_id,
+        s.voila_tracking_request_hash   AS track_req_hash,
+        s.tracking_codes,
+        s.courier,
+        s.created_at,
+        c.id                            AS charge_id,
+        cu.business_name                AS customer_name
+      FROM   shipments s
+      JOIN   charges   c  ON c.shipment_id = s.id
+                         AND c.charge_type  = 'courier'
+                         AND c.verified     = false
+                         AND c.cancelled    = false
+      LEFT JOIN customers cu ON cu.id = c.customer_id
+      WHERE  s.voila_tracking_request_id   IS NOT NULL
+        AND  s.voila_tracking_request_hash IS NOT NULL
+      ORDER  BY s.created_at ASC
+      LIMIT  1
+    `);
+
+    if (!rows.length) {
+      return res.json({ ok: false, message: 'No unverified shipments with Voila tracking credentials found.' });
+    }
+
+    const shipment = rows[0];
+
+    console.log(
+      `[test-tracking-request] Calling Voila for shipment ${shipment.shipment_id} ` +
+      `(req_id=${shipment.track_req_id}, customer="${shipment.customer_name}", ` +
+      `created=${shipment.created_at})`
+    );
+
+    const voilaResponse = await requestTrackingUpdate(
+      shipment.track_req_id,
+      shipment.track_req_hash
+    );
+
+    return res.json({
+      ok: true,
+      shipment: {
+        shipment_id:    shipment.shipment_id,
+        charge_id:      shipment.charge_id,
+        customer:       shipment.customer_name,
+        courier:        shipment.courier,
+        tracking_codes: shipment.tracking_codes,
+        created_at:     shipment.created_at,
+        track_req_id:   shipment.track_req_id,
+        track_req_hash: shipment.track_req_hash,
+      },
+      voila_response: voilaResponse,
+    });
+
+  } catch (err) {
+    console.error('[test-tracking-request] Error:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ─── POST /api/tracking/bulk-tracking-update ──────────────────────────────────
+//
+// Calls the Voila on-demand tracking API for every unverified shipment that has
+// voila_tracking_request_id + voila_tracking_request_hash stored.
+//
+// Runs in the background (responds immediately) and processes up to `limit`
+// shipments per call (default 500, max 2500) with a configurable delay between
+// each request to avoid hammering the Voila API.
+//
+// Body (all optional):
+//   { limit: 500, delay_ms: 500, dry_run: false }
+//
+// Returns: { queued: N, message: "..." }
+// Progress is logged to Railway logs.
+
+router.post('/bulk-tracking-update', async (req, res, next) => {
+  try {
+    const limit   = Math.min(parseInt(req.body?.limit)    || 500,  2500);
+    const delayMs = Math.min(parseInt(req.body?.delay_ms) || 500,  5000);
+    const dryRun  = req.body?.dry_run === true;
+
+    // Find all unverified shipments that have Voila tracking credentials stored
+    const { rows: candidates } = await query(`
+      SELECT
+        s.id                            AS shipment_id,
+        s.voila_tracking_request_id     AS track_req_id,
+        s.voila_tracking_request_hash   AS track_req_hash,
+        s.tracking_codes,
+        s.courier,
+        c.id                            AS charge_id,
+        c.customer_id
+      FROM   shipments s
+      JOIN   charges   c ON c.shipment_id = s.id
+                        AND c.charge_type  = 'courier'
+                        AND c.verified     = false
+                        AND c.cancelled    = false
+      WHERE  s.voila_tracking_request_id   IS NOT NULL
+        AND  s.voila_tracking_request_hash IS NOT NULL
+      ORDER  BY s.created_at DESC
+      LIMIT  $1
+    `, [limit]);
+
+    if (!candidates.length) {
+      return res.json({
+        queued:  0,
+        message: 'No unverified shipments with Voila tracking credentials found.',
+      });
+    }
+
+    res.json({
+      queued:   candidates.length,
+      dry_run:  dryRun,
+      delay_ms: delayMs,
+      message:  `Bulk tracking update running in background for ${candidates.length} shipment(s). Check Railway logs for progress.`,
+    });
+
+    // ── Background processing ─────────────────────────────────────────────────
+    (async () => {
+      let ok = 0, already = 0, failed = 0, noEvents = 0;
+      const errors = [];
+
+      for (const row of candidates) {
+        try {
+          if (delayMs > 0) await new Promise(r => setTimeout(r, delayMs));
+
+          if (dryRun) {
+            console.log(`[bulk-tracking] DRY RUN: would request tracking for shipment ${row.shipment_id} (req_id=${row.track_req_id})`);
+            ok++;
+            continue;
+          }
+
+          // Call the Voila tracking API
+          const trackingData = await requestTrackingUpdate(
+            row.track_req_id,
+            row.track_req_hash
+          );
+
+          // Feed the Voila response through the standard tracking event pipeline.
+          // The API response has the same parcel/event structure as the tracking webhook,
+          // so we wrap it in a synthetic tracking_update envelope and normalise it.
+          const parcels = trackingData?.data?.parcels;
+          if (!Array.isArray(parcels) || !parcels.length) {
+            noEvents++;
+            console.log(`[bulk-tracking] ⚠️  No parcels in response for shipment ${row.shipment_id}`);
+            continue;
+          }
+
+          const syntheticPayload = {
+            tracking_update: {
+              parcels,
+              expected_delivery: trackingData.data.expected_delivery || null,
+            },
+            shipment: {
+              id:           String(trackingData.data.shipment_id || row.shipment_id),
+              courier:      row.courier || null,
+            },
+          };
+
+          const events = normalisePayload(syntheticPayload);
+          let eventsStored = 0;
+          let eventsVerified = 0;
+          let eventsCancelled = 0;
+
+          for (const ev of events) {
+            const result = await upsertEvent(ev, null);
+            if (result?.auto_cancelled) { eventsCancelled++; continue; }
+            if (!result?.skipped && !result?.deduped) eventsStored++;
+            if (result?.verified) eventsVerified++;
+          }
+
+          if (eventsVerified > 0) already += eventsVerified;
+
+          if (eventsCancelled > 0) {
+            ok++;
+            console.log(`[bulk-tracking] 🚫 shipment ${row.shipment_id}: cancelled — charge auto-cancelled`);
+          } else if (eventsStored > 0 || eventsVerified > 0) {
+            ok++;
+            console.log(
+              `[bulk-tracking] ✅ shipment ${row.shipment_id}: ` +
+              `${eventsStored} event(s) stored, ${eventsVerified} charge(s) verified`
+            );
+          } else {
+            noEvents++;
+            console.log(`[bulk-tracking] ⏳ shipment ${row.shipment_id}: only 'booked' status — nothing to verify yet`);
+          }
+
+        } catch (err) {
+          failed++;
+          errors.push({ shipment_id: row.shipment_id, error: err.message });
+          console.error(`[bulk-tracking] ❌ Error for shipment ${row.shipment_id}:`, err.message);
+        }
+      }
+
+      console.log(
+        `[bulk-tracking] Complete: ${ok} requested, ${already} verified, ` +
+        `${noEvents} no-events-yet, ${failed} errors`
+      );
+      if (errors.length) {
+        console.warn('[bulk-tracking] First 20 errors:', JSON.stringify(errors.slice(0, 20)));
+      }
+    })().catch(err => console.error('[bulk-tracking] Unhandled background error:', err.message));
+
+  } catch (err) { next(err); }
+});
+
+// ─── POST /api/tracking/refresh-stale ─────────────────────────────────────────
+//
+// Fetches the latest tracking from Voila for every parcel whose status has not
+// advanced in the last N days and is not in a terminal state.
+//
+// This is the counterpart to bulk-tracking-update.  That endpoint targets
+// *unverified charges* (parcels that have never been scanned).  This one
+// targets parcels that WERE verified (e.g. reached "on_hold") but whose
+// tracking webhook has since gone silent — they are stuck in a non-terminal
+// status with a stale last_event_at.
+//
+// Body (all optional):
+//   {
+//     days:     7,    // treat parcels with last_event_at older than this as stale
+//     limit:    500,  // max parcels to process per call (hard cap 2500)
+//     delay_ms: 500,  // ms to wait between Voila API calls
+//     dry_run:  false // if true, log candidates without calling the API
+//   }
+//
+// Returns immediately: { queued: N, message: "..." }
+// Progress is written to Railway logs.
+
+router.post('/refresh-stale', async (req, res, next) => {
+  try {
+    const days    = Math.max(parseInt(req.body?.days)     || 7,    1);
+    const limit   = Math.min(parseInt(req.body?.limit)    || 500,  2500);
+    const delayMs = Math.min(parseInt(req.body?.delay_ms) || 500,  5000);
+    const dryRun  = req.body?.dry_run === true;
+
+    // Terminal statuses — parcels in these states are considered resolved and
+    // should never be refreshed regardless of how old they are.
+    const TERMINAL = `'delivered','returned','cancelled','tracking_expired'`;
+
+    // Find stale non-terminal parcels that have Voila tracking credentials
+    // stored on their linked shipment.  DISTINCT ON ensures each parcel
+    // (consignment_number) appears only once even when multiple charge rows
+    // exist for the same shipment.
+    const { rows: candidates } = await query(`
+      SELECT DISTINCT ON (p.consignment_number)
+        p.id                             AS parcel_id,
+        p.consignment_number,
+        p.status                         AS current_status,
+        p.last_event_at,
+        s.id                             AS shipment_id,
+        s.voila_tracking_request_id      AS track_req_id,
+        s.voila_tracking_request_hash    AS track_req_hash,
+        s.courier
+      FROM   parcels  p
+      JOIN   charges  ch ON ch.tracking_code = p.consignment_number
+                        AND ch.charge_type   = 'courier'
+                        AND ch.cancelled     = false
+      JOIN   shipments s  ON s.id = ch.shipment_id
+                        AND s.voila_tracking_request_id   IS NOT NULL
+                        AND s.voila_tracking_request_hash IS NOT NULL
+      WHERE  p.status NOT IN (${TERMINAL})
+        AND  (
+               p.last_event_at IS NULL
+               OR p.last_event_at < NOW() - ($1 || ' days')::INTERVAL
+             )
+      ORDER  BY p.consignment_number, p.last_event_at ASC NULLS FIRST
+      LIMIT  $2
+    `, [days, limit]);
+
+    if (!candidates.length) {
+      return res.json({
+        queued:  0,
+        days,
+        message: `No stale non-terminal parcels found (threshold: ${days} day(s)).`,
+      });
+    }
+
+    res.json({
+      queued:   candidates.length,
+      days,
+      dry_run:  dryRun,
+      delay_ms: delayMs,
+      message:  `Stale tracking refresh running in background for ${candidates.length} parcel(s) ` +
+                `(>${days}d stale). Check Railway logs for progress.`,
+    });
+
+    // ── Background processing ─────────────────────────────────────────────────
+    (async () => {
+      let updated = 0, unchanged = 0, failed = 0, noData = 0;
+      const errors = [];
+
+      for (const row of candidates) {
+        try {
+          if (delayMs > 0) await new Promise(r => setTimeout(r, delayMs));
+
+          if (dryRun) {
+            console.log(
+              `[refresh-stale] DRY RUN: ${row.consignment_number} ` +
+              `status=${row.current_status} last_event=${row.last_event_at?.toISOString() ?? 'null'}`
+            );
+            updated++;
+            continue;
+          }
+
+          // Request the latest tracking snapshot from Voila
+          const trackingData = await requestTrackingUpdate(
+            row.track_req_id,
+            row.track_req_hash
+          );
+
+          const parcels = trackingData?.data?.parcels;
+          if (!Array.isArray(parcels) || !parcels.length) {
+            noData++;
+            console.log(`[refresh-stale] ⚠️  No parcel data returned for ${row.consignment_number}`);
+            continue;
+          }
+
+          // Wrap in the synthetic envelope that normalisePayload expects
+          const syntheticPayload = {
+            tracking_update: {
+              parcels,
+              expected_delivery: trackingData.data.expected_delivery || null,
+            },
+            shipment: {
+              id:      String(trackingData.data.shipment_id || row.shipment_id),
+              courier: row.courier || null,
+            },
+          };
+
+          const events = normalisePayload(syntheticPayload);
+          let eventsStored = 0;
+
+          for (const ev of events) {
+            const result = await upsertEvent(ev, null);
+            if (!result?.skipped && !result?.deduped && !result?.auto_cancelled) {
+              eventsStored++;
+            }
+          }
+
+          if (eventsStored > 0) {
+            updated++;
+            console.log(
+              `[refresh-stale] ✅ ${row.consignment_number}: ` +
+              `${eventsStored} new event(s) (was ${row.current_status})`
+            );
+          } else {
+            unchanged++;
+            console.log(
+              `[refresh-stale] ⏳ ${row.consignment_number}: no new events — still ${row.current_status}`
+            );
+          }
+
+        } catch (err) {
+          failed++;
+          errors.push({ consignment: row.consignment_number, error: err.message });
+          console.error(`[refresh-stale] ❌ ${row.consignment_number}:`, err.message);
+        }
+      }
+
+      console.log(
+        `[refresh-stale] Complete — updated: ${updated}, unchanged: ${unchanged}, ` +
+        `no_data: ${noData}, errors: ${failed}`
+      );
+      if (errors.length) {
+        console.warn('[refresh-stale] First 20 errors:', JSON.stringify(errors.slice(0, 20)));
+      }
+    })().catch(err => console.error('[refresh-stale] Unhandled background error:', err.message));
+
+  } catch (err) { next(err); }
+});
 
 export default router;

@@ -102,7 +102,7 @@ function validate(step, form) {
 function Field({ label, error, required, children }) {
   return (
     <div>
-      <label style={{ display: 'block', fontSize: 12, color: '#AAAAAA', marginBottom: 6 }}>
+      <label style={{ display: 'block', fontSize: 12, color: '#64748B', marginBottom: 6 }}>
         {label}{required && <span style={{ color: '#E91E8C', marginLeft: 3 }}>*</span>}
       </label>
       {children}
@@ -113,14 +113,14 @@ function Field({ label, error, required, children }) {
 
 const inputStyle = (error) => ({
   width: '100%', boxSizing: 'border-box',
-  background: '#0D0E2A', border: `1px solid ${error ? '#E91E8C' : 'rgba(255,255,255,0.1)'}`,
-  borderRadius: 9999, padding: '10px 18px', color: '#fff', fontSize: 14, outline: 'none',
+  background: '#FFFFFF', border: `1px solid ${error ? '#E91E8C' : 'rgba(0,0,0,0.08)'}`,
+  borderRadius: 9999, padding: '10px 18px', color: '#0F172A', fontSize: 14, outline: 'none',
 });
 
 const selectStyle = {
   width: '100%', boxSizing: 'border-box',
-  background: '#0D0E2A', border: '1px solid rgba(255,255,255,0.1)',
-  borderRadius: 9999, padding: '10px 18px', color: '#fff', fontSize: 14, outline: 'none',
+  background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.08)',
+  borderRadius: 9999, padding: '10px 18px', color: '#0F172A', fontSize: 14, outline: 'none',
 };
 
 const grid2 = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 };
@@ -156,7 +156,7 @@ function StepBusiness({ form, set, errors }) {
         </Field>
       </div>
 
-      <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16 }}>
+      <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 16 }}>
         <p style={sectionHeading}>Address</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <Field label="Address Line 1">
@@ -188,7 +188,7 @@ function StepBusiness({ form, set, errors }) {
         </div>
       </div>
 
-      <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16 }}>
+      <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 16 }}>
         <p style={sectionHeading}>Contact Details</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={grid2}>
@@ -209,7 +209,7 @@ function StepBusiness({ form, set, errors }) {
         </div>
       </div>
 
-      <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16 }}>
+      <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 16 }}>
         <p style={sectionHeading}>International Trade</p>
         <div style={grid2}>
           <Field label="EORI Number">
@@ -249,17 +249,17 @@ function StepAccount({ form, set, errors }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
       <div>
-        <label style={{ display: 'block', fontSize: 12, color: '#AAAAAA', marginBottom: 10 }}>Account Tier</label>
+        <label style={{ display: 'block', fontSize: 12, color: '#64748B', marginBottom: 10 }}>Account Tier</label>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           {TIERS.map(t => (
             <button key={t.value} onClick={() => set('tier', t.value)} style={{
               padding: '12px 16px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
-              background: form.tier === t.value ? 'rgba(123,47,190,0.2)' : 'rgba(255,255,255,0.03)',
-              border: form.tier === t.value ? '1px solid #7B2FBE' : '1px solid rgba(255,255,255,0.08)',
-              color: '#fff',
+              background: form.tier === t.value ? 'rgba(123,47,190,0.2)' : 'rgba(0,0,0,0.03)',
+              border: form.tier === t.value ? '1px solid #7B2FBE' : '1px solid rgba(0,0,0,0.08)',
+              color: '#0F172A',
             }}>
               <div style={{ fontSize: 13, fontWeight: 600 }}>{t.label}</div>
-              <div style={{ fontSize: 11, color: '#AAAAAA', marginTop: 2 }}>{t.desc}</div>
+              <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{t.desc}</div>
             </button>
           ))}
         </div>
@@ -271,14 +271,14 @@ function StepAccount({ form, set, errors }) {
       </Field>
 
       <div>
-        <label style={{ display: 'block', fontSize: 12, color: '#AAAAAA', marginBottom: 10 }}>Billing Period</label>
+        <label style={{ display: 'block', fontSize: 12, color: '#64748B', marginBottom: 10 }}>Billing Period</label>
         <div style={{ display: 'flex', gap: 10 }}>
           {BILLING_PERIODS.map(bp => (
             <button key={bp.value} onClick={() => set('billing_cycle', bp.value)} style={{
               flex: 1, padding: '10px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600,
-              background: form.billing_cycle === bp.value ? 'rgba(0,200,83,0.15)' : 'rgba(255,255,255,0.03)',
-              border: form.billing_cycle === bp.value ? '1px solid #00C853' : '1px solid rgba(255,255,255,0.08)',
-              color: form.billing_cycle === bp.value ? '#00C853' : '#AAAAAA',
+              background: form.billing_cycle === bp.value ? 'rgba(0,200,83,0.15)' : 'rgba(0,0,0,0.03)',
+              border: form.billing_cycle === bp.value ? '1px solid #00C853' : '1px solid rgba(0,0,0,0.08)',
+              color: form.billing_cycle === bp.value ? '#00C853' : '#64748B',
             }}>
               {bp.label}
             </button>
@@ -287,14 +287,14 @@ function StepAccount({ form, set, errors }) {
       </div>
 
       <div>
-        <label style={{ display: 'block', fontSize: 12, color: '#AAAAAA', marginBottom: 10 }}>Billing Terms</label>
+        <label style={{ display: 'block', fontSize: 12, color: '#64748B', marginBottom: 10 }}>Billing Terms</label>
         <div style={{ display: 'flex', gap: 10 }}>
           {PAYMENT_TERMS.map(pt => (
             <button key={pt.value} onClick={() => set('payment_terms_days', pt.value)} style={{
               flex: 1, padding: '10px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600,
-              background: form.payment_terms_days === pt.value ? 'rgba(0,200,83,0.15)' : 'rgba(255,255,255,0.03)',
-              border: form.payment_terms_days === pt.value ? '1px solid #00C853' : '1px solid rgba(255,255,255,0.08)',
-              color: form.payment_terms_days === pt.value ? '#00C853' : '#AAAAAA',
+              background: form.payment_terms_days === pt.value ? 'rgba(0,200,83,0.15)' : 'rgba(0,0,0,0.03)',
+              border: form.payment_terms_days === pt.value ? '1px solid #00C853' : '1px solid rgba(0,0,0,0.08)',
+              color: form.payment_terms_days === pt.value ? '#00C853' : '#64748B',
             }}>
               <div>{pt.label}</div>
               {pt.note && <div style={{ fontSize: 10, marginTop: 2, opacity: 0.7 }}>{pt.note}</div>}
@@ -331,12 +331,12 @@ function StepContact({ form, set, errors }) {
         </Field>
       </div>
       <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: '#AAAAAA' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: '#64748B' }}>
           <input type="checkbox" checked={form.contact_is_main}
             onChange={e => set('contact_is_main', e.target.checked)} style={{ accentColor: '#7B2FBE' }} />
           Main contact
         </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: '#AAAAAA' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: '#64748B' }}>
           <input type="checkbox" checked={form.contact_is_finance}
             onChange={e => set('contact_is_finance', e.target.checked)} style={{ accentColor: '#7B2FBE' }} />
           Finance contact
@@ -359,8 +359,8 @@ function StepIndicator({ steps, current }) {
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
               <div style={{
                 width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: done ? '#00C853' : active ? '#7B2FBE' : 'rgba(255,255,255,0.05)',
-                border: `2px solid ${done ? '#00C853' : active ? '#7B2FBE' : 'rgba(255,255,255,0.1)'}`,
+                background: done ? '#00C853' : active ? '#7B2FBE' : 'rgba(0,0,0,0.04)',
+                border: `2px solid ${done ? '#00C853' : active ? '#7B2FBE' : 'rgba(0,0,0,0.08)'}`,
                 color: done || active ? '#fff' : '#666',
               }}>
                 {done ? <Check size={16} /> : <Icon size={16} />}
@@ -368,7 +368,7 @@ function StepIndicator({ steps, current }) {
               <span style={{ fontSize: 11, color: active ? '#fff' : '#666', whiteSpace: 'nowrap' }}>{s.label}</span>
             </div>
             {i < steps.length - 1 && (
-              <div style={{ flex: 1, height: 2, background: done ? '#00C853' : 'rgba(255,255,255,0.08)', margin: '0 8px', marginBottom: 20 }} />
+              <div style={{ flex: 1, height: 2, background: done ? '#00C853' : 'rgba(0,0,0,0.08)', margin: '0 8px', marginBottom: 20 }} />
             )}
           </div>
         );
@@ -393,8 +393,8 @@ function SuccessScreen({ customer, navigate }) {
       <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(0,200,83,0.15)', border: '2px solid #00C853', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
         <Check size={28} color="#00C853" />
       </div>
-      <h2 style={{ fontSize: 22, fontWeight: 700, color: '#fff', marginBottom: 8 }}>Customer Created</h2>
-      <p style={{ color: '#AAAAAA', marginBottom: 4 }}>{customer.business_name}</p>
+      <h2 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>Customer Created</h2>
+      <p style={{ color: '#64748B', marginBottom: 4 }}>{customer.business_name}</p>
       <p style={{ color: '#00C853', fontWeight: 600, marginBottom: 28 }}>{customer.account_number}</p>
       <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
         <button className="btn-primary" onClick={() => navigate(`/customers/${customer.id}`)}>View Customer</button>
@@ -482,11 +482,11 @@ export default function CustomerNew() {
     <div style={{ maxWidth: 760, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
         <button onClick={() => navigate('/customers')}
-          style={{ background: 'none', border: 'none', color: '#AAAAAA', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+          style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
           <ArrowLeft size={14} /> Customers
         </button>
-        <span style={{ color: '#444' }}>/</span>
-        <span style={{ fontSize: 13, color: '#fff' }}>Add Customer</span>
+        <span style={{ color: '#475569' }}>/</span>
+        <span style={{ fontSize: 13, color: '#0F172A' }}>Add Customer</span>
       </div>
 
       <h1 style={{ fontSize: 24, fontWeight: 700, color: '#00C853', marginBottom: 24 }}>Add Customer</h1>
@@ -497,7 +497,7 @@ export default function CustomerNew() {
         <h2 style={{ fontSize: 18, fontWeight: 600, color: '#7B2FBE', marginBottom: 4 }}>
           {STEPS[step].label}
         </h2>
-        <p style={{ fontSize: 13, color: '#AAAAAA', marginBottom: 28 }}>
+        <p style={{ fontSize: 13, color: '#64748B', marginBottom: 28 }}>
           {stepSubtitle(step)}
         </p>
 
@@ -512,7 +512,7 @@ export default function CustomerNew() {
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 32, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 32, paddingTop: 24, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
           <button className="btn-ghost" onClick={step === 0 ? () => navigate('/customers') : back}>
             <ArrowLeft size={14} /> {step === 0 ? 'Cancel' : 'Back'}
           </button>

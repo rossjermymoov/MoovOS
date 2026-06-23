@@ -45,11 +45,13 @@ const FILTER_FIELDS = [
 ];
 
 const TEXT_OPS = [
-  { value: 'eq',       label: 'equals' },
-  { value: 'not_eq',   label: 'does not equal' },
-  { value: 'in',       label: 'is any of' },
-  { value: 'not_in',   label: 'is none of' },
-  { value: 'contains', label: 'contains' },
+  { value: 'eq',          label: 'equals' },
+  { value: 'not_eq',      label: 'does not equal' },
+  { value: 'starts_with', label: 'starts with' },
+  { value: 'ends_with',   label: 'ends with' },
+  { value: 'contains',    label: 'contains' },
+  { value: 'in',          label: 'is any of' },
+  { value: 'not_in',      label: 'is none of' },
 ];
 
 const NUM_OPS = [
@@ -78,18 +80,18 @@ function formatDate(d) {
 }
 
 const col = {
-  header: { fontSize: 11, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '0 12px 10px' },
-  cell:   { padding: '14px 12px', verticalAlign: 'middle', borderBottom: '1px solid rgba(255,255,255,0.05)' },
+  header: { fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '0 12px 10px' },
+  cell:   { padding: '14px 12px', verticalAlign: 'middle', borderBottom: '1px solid rgba(0,0,0,0.04)' },
 };
 
 const inp = (extra = {}) => ({
-  background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
-  borderRadius: 6, color: '#fff', fontSize: 13, padding: '6px 10px', ...extra,
+  background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.10)',
+  borderRadius: 6, color: '#0F172A', fontSize: 13, padding: '6px 10px', ...extra,
 });
 
 const sel = (extra = {}) => ({
-  background: 'rgba(30,30,40,0.95)', border: '1px solid rgba(255,255,255,0.12)',
-  borderRadius: 6, color: '#fff', fontSize: 13, padding: '6px 10px', ...extra,
+  background: '#F8FAFC', border: '1px solid rgba(0,0,0,0.12)',
+  borderRadius: 6, color: '#0F172A', fontSize: 13, padding: '6px 10px', ...extra,
 });
 
 // ── Chip input ─────────────────────────────────────────────────────────────────
@@ -105,11 +107,11 @@ function ChipInput({ value, onChange, placeholder }) {
   }
 
   return (
-    <div style={{ border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, background: 'rgba(255,255,255,0.06)', padding: '4px 8px', minHeight: 36, display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+    <div style={{ border: '1px solid rgba(0,0,0,0.10)', borderRadius: 6, background: 'rgba(0,0,0,0.06)', padding: '4px 8px', minHeight: 36, display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
       {items.map((item, i) => (
-        <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(123,47,190,0.3)', border: '1px solid rgba(123,47,190,0.5)', borderRadius: 9999, padding: '2px 8px', fontSize: 12, color: '#fff', fontWeight: 600 }}>
+        <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(123,47,190,0.3)', border: '1px solid rgba(123,47,190,0.5)', borderRadius: 9999, padding: '2px 8px', fontSize: 12, color: '#0F172A', fontWeight: 600 }}>
           {item}
-          <button onClick={() => onChange(items.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#AAAAAA', padding: 0, display: 'flex' }}><X size={10} /></button>
+          <button onClick={() => onChange(items.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: 0, display: 'flex' }}><X size={10} /></button>
         </span>
       ))}
       <input
@@ -118,7 +120,7 @@ function ChipInput({ value, onChange, placeholder }) {
         onKeyDown={e => { if ((e.key === 'Enter' || e.key === ',') && draft.trim()) { e.preventDefault(); add(draft); } if (e.key === 'Backspace' && !draft && items.length) onChange(items.slice(0, -1)); }}
         onBlur={() => { if (draft.trim()) add(draft); }}
         placeholder={items.length ? '' : (placeholder || 'Type and press Enter…')}
-        style={{ background: 'none', border: 'none', color: '#fff', fontSize: 12, outline: 'none', flex: 1, minWidth: 100, padding: '2px 0' }}
+        style={{ background: 'none', border: 'none', color: '#0F172A', fontSize: 12, outline: 'none', flex: 1, minWidth: 100, padding: '2px 0' }}
       />
     </div>
   );
@@ -141,7 +143,7 @@ function ServicePicker({ courierId, selected = [], onChange }) {
         const on = selected.includes(svc.service_code);
         return (
           <button key={svc.id} onClick={() => onChange(on ? selected.filter(s => s !== svc.service_code) : [...selected, svc.service_code])}
-            style={{ padding: '3px 10px', borderRadius: 9999, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none', background: on ? 'rgba(0,200,83,0.2)' : 'rgba(255,255,255,0.06)', color: on ? '#00C853' : '#888', outline: on ? '1px solid rgba(0,200,83,0.35)' : '1px solid rgba(255,255,255,0.1)' }}>
+            style={{ padding: '3px 10px', borderRadius: 9999, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none', background: on ? 'rgba(0,200,83,0.2)' : 'rgba(0,0,0,0.06)', color: on ? '#00C853' : '#64748B', outline: on ? '1px solid rgba(0,200,83,0.35)' : '1px solid rgba(0,0,0,0.08)' }}>
             {on && <Check size={10} style={{ marginRight: 4 }} />}
             {svc.name}
           </button>
@@ -158,7 +160,7 @@ function ConditionRow({ filter, onChange, onRemove, isFirst, logic }) {
   const isMulti = filter.op === 'in' || filter.op === 'not_in';
   return (
     <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginBottom: 6 }}>
-      <div style={{ width: 34, flexShrink: 0, paddingTop: 8, textAlign: 'center', fontSize: 10, fontWeight: 700, color: isFirst ? '#888' : logic === 'OR' ? '#F59E0B' : '#7B2FBE' }}>
+      <div style={{ width: 34, flexShrink: 0, paddingTop: 8, textAlign: 'center', fontSize: 10, fontWeight: 700, color: isFirst ? '#64748B' : logic === 'OR' ? '#F59E0B' : '#7B2FBE' }}>
         {isFirst ? 'IF' : logic}
       </div>
       <select value={filter.field} onChange={e => { const f = e.target.value; onChange({ ...filter, field: f, op: opsFor(f)[0].value, value: '' }); }} style={{ ...sel(), width: 180, flexShrink: 0 }}>
@@ -198,38 +200,38 @@ function RuleEditor({ surchargeId, courierId, rule, onSave, onCancel }) {
   return (
     <div style={{ background: 'rgba(0,200,83,0.04)', border: '1px solid rgba(0,200,83,0.2)', borderRadius: 8, padding: 16, marginBottom: 8 }}>
       <div style={{ marginBottom: 10 }}>
-        <label style={{ fontSize: 11, color: '#888', fontWeight: 600, display: 'block', marginBottom: 3, textTransform: 'uppercase' }}>Rule name</label>
+        <label style={{ fontSize: 11, color: '#64748B', fontWeight: 600, display: 'block', marginBottom: 3, textTransform: 'uppercase' }}>Rule name</label>
         <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. EU countries" style={{ ...inp(), width: '100%', boxSizing: 'border-box' }} />
       </div>
 
       <div style={{ marginBottom: 10 }}>
-        <label style={{ fontSize: 11, color: '#888', fontWeight: 600, display: 'block', marginBottom: 6, textTransform: 'uppercase' }}>
-          Apply to services <span style={{ color: '#555', fontWeight: 400, textTransform: 'none' }}>— leave blank for all</span>
+        <label style={{ fontSize: 11, color: '#64748B', fontWeight: 600, display: 'block', marginBottom: 6, textTransform: 'uppercase' }}>
+          Apply to services <span style={{ color: '#64748B', fontWeight: 400, textTransform: 'none' }}>— leave blank for all</span>
         </label>
         <ServicePicker courierId={courierId} selected={serviceCodes} onChange={setServiceCodes} />
       </div>
 
       <div style={{ marginBottom: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-          <label style={{ fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', margin: 0 }}>Conditions</label>
+          <label style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', margin: 0 }}>Conditions</label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {['AND', 'OR'].map(l => (
-              <button key={l} type="button" onClick={() => setLogic(l)} style={{ padding: '3px 10px', borderRadius: 9999, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none', background: logic === l ? (l === 'AND' ? 'rgba(123,47,190,0.35)' : 'rgba(245,158,11,0.25)') : 'rgba(255,255,255,0.06)', color: logic === l ? (l === 'AND' ? '#C4B5FD' : '#F59E0B') : '#888' }}>
+              <button key={l} type="button" onClick={() => setLogic(l)} style={{ padding: '3px 10px', borderRadius: 9999, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none', background: logic === l ? (l === 'AND' ? 'rgba(123,47,190,0.35)' : 'rgba(245,158,11,0.25)') : 'rgba(0,0,0,0.06)', color: logic === l ? (l === 'AND' ? '#C4B5FD' : '#F59E0B') : '#64748B' }}>
                 {l}
               </button>
             ))}
-            <span style={{ fontSize: 11, color: '#555' }}>{logic === 'AND' ? 'all match' : 'any matches'}</span>
-            <button onClick={() => setFilters(f => [...f, { field: 'ship_to_country_iso', op: 'in', value: [] }])} style={{ background: 'rgba(255,255,255,0.06)', border: 'none', borderRadius: 6, color: '#AAAAAA', cursor: 'pointer', fontSize: 12, padding: '3px 10px', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ fontSize: 11, color: '#64748B' }}>{logic === 'AND' ? 'all match' : 'any matches'}</span>
+            <button onClick={() => setFilters(f => [...f, { field: 'ship_to_country_iso', op: 'in', value: [] }])} style={{ background: 'rgba(0,0,0,0.06)', border: 'none', borderRadius: 6, color: '#64748B', cursor: 'pointer', fontSize: 12, padding: '3px 10px', display: 'flex', alignItems: 'center', gap: 4 }}>
               <Plus size={11} /> Add condition
             </button>
           </div>
         </div>
-        {filters.length === 0 && <div style={{ fontSize: 12, color: '#888' }}>No conditions — fires for all matching shipments on selected services.</div>}
+        {filters.length === 0 && <div style={{ fontSize: 12, color: '#64748B' }}>No conditions — fires for all matching shipments on selected services.</div>}
         {filters.map((f, i) => <ConditionRow key={i} filter={f} index={i} isFirst={i === 0} logic={logic} onChange={next => setFilters(fs => fs.map((x, j) => j === i ? next : x))} onRemove={() => setFilters(fs => fs.filter((_, j) => j !== i))} />)}
       </div>
 
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button type="button" onClick={onCancel} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: 11 }}>Cancel</button>
+        <button type="button" onClick={onCancel} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: 11 }}>Cancel</button>
         <button type="button" onClick={() => save.mutate()} disabled={!name || save.isPending} style={{ background: '#00C853', border: 'none', borderRadius: 6, color: '#fff', fontSize: 11, fontWeight: 700, padding: '5px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
           <Check size={11} /> {rule?.id ? 'Save rule' : 'Add rule'}
         </button>
@@ -252,12 +254,12 @@ function RulesPanel({ surcharge, courierId }) {
   });
 
   return (
-    <div style={{ padding: '12px 16px 16px', borderTop: '1px solid rgba(255,255,255,0.05)', background: 'rgba(0,0,0,0.15)' }}>
+    <div style={{ padding: '12px 16px 16px', borderTop: '1px solid rgba(0,0,0,0.04)', background: 'rgba(0,0,0,0.03)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
           Trigger Rules {surcharge.applies_when === 'always' ? '— controls when this auto-fires' : '— conditions for matching on invoice reconciliation'}
         </span>
-        <button type="button" onClick={() => { setAddingRule(true); setEditingRule(null); }} style={{ background: 'rgba(255,255,255,0.06)', border: 'none', borderRadius: 6, color: '#AAAAAA', cursor: 'pointer', fontSize: 11, padding: '3px 10px', display: 'flex', alignItems: 'center', gap: 4 }}>
+        <button type="button" onClick={() => { setAddingRule(true); setEditingRule(null); }} style={{ background: 'rgba(0,0,0,0.06)', border: 'none', borderRadius: 6, color: '#64748B', cursor: 'pointer', fontSize: 11, padding: '3px 10px', display: 'flex', alignItems: 'center', gap: 4 }}>
           <Plus size={10} /> Add rule
         </button>
       </div>
@@ -277,20 +279,20 @@ function RulesPanel({ surcharge, courierId }) {
             {editingRule === rule.id
               ? <RuleEditor surchargeId={surcharge.id} courierId={courierId} rule={rule} onSave={() => setEditingRule(null)} onCancel={() => setEditingRule(null)} />
               : (
-                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 7, padding: '9px 12px', marginBottom: 6 }}>
+                <div style={{ background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 7, padding: '9px 12px', marginBottom: 6 }}>
 
                   {/* Row 1 — name + logic + actions */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: svcCodes.length || filters.length ? 7 : 0 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', flex: 1 }}>{rule.name}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', flex: 1 }}>{rule.name}</span>
                     <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: rule.logic === 'OR' ? 'rgba(245,158,11,0.18)' : 'rgba(123,47,190,0.18)', color: rule.logic === 'OR' ? '#F59E0B' : '#C4B5FD', flexShrink: 0 }}>{rule.logic || 'AND'}</span>
-                    <button type="button" onClick={() => setEditingRule(rule.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#555', padding: '2px 4px', fontSize: 12, flexShrink: 0 }}>✏️</button>
+                    <button type="button" onClick={() => setEditingRule(rule.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: '2px 4px', fontSize: 12, flexShrink: 0 }}>✏️</button>
                     <button type="button" onClick={() => deleteRule.mutate(rule.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#E91E8C', padding: '2px 4px', display: 'flex', flexShrink: 0 }}><Trash2 size={12} /></button>
                   </div>
 
                   {/* Row 2 — services (wrapping, compact) */}
                   {svcCodes.length > 0 && (
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, flexWrap: 'wrap', marginBottom: filters.length ? 6 : 0 }}>
-                      <span style={{ fontSize: 10, color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>Services</span>
+                      <span style={{ fontSize: 10, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>Services</span>
                       {svcCodes.map(sc => (
                         <span key={sc} style={{ fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 4, background: 'rgba(0,188,212,0.12)', color: '#00BCD4', border: '1px solid rgba(0,188,212,0.2)' }}>{sc}</span>
                       ))}
@@ -345,18 +347,18 @@ function AddSurchargeForm({ courierId, onDone }) {
     <div style={{ background: 'rgba(0,200,83,0.04)', border: '1px solid rgba(0,200,83,0.2)', borderRadius: 10, padding: 18, marginBottom: 12 }}>
       <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: 10, marginBottom: 12 }}>
         <div>
-          <label style={{ fontSize: 11, color: '#888', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' }}>Code</label>
+          <label style={{ fontSize: 11, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' }}>Code</label>
           <input maxLength={4} value={form.code} onChange={e => f('code', e.target.value.toUpperCase())} placeholder="A" style={{ ...inp(), width: '100%', boxSizing: 'border-box', textAlign: 'center', fontWeight: 700, fontSize: 16, letterSpacing: '0.05em' }} />
         </div>
         <div>
-          <label style={{ fontSize: 11, color: '#888', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' }}>Name</label>
+          <label style={{ fontSize: 11, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' }}>Name</label>
           <input value={form.name} onChange={e => f('name', e.target.value)} placeholder="e.g. Fuel and Energy Charge" style={{ ...inp(), width: '100%', boxSizing: 'border-box' }} />
         </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
         <div>
-          <label style={{ fontSize: 11, color: '#888', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' }}>Charge type</label>
+          <label style={{ fontSize: 11, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' }}>Charge type</label>
           <select value={form.calc_type} onChange={e => { f('calc_type', e.target.value); if (e.target.value === 'percentage') f('charge_per', 'shipment'); }} style={{ ...sel(), width: '100%' }}>
             <option value="flat">Flat amount (£)</option>
             <option value="percentage">% of base rate</option>
@@ -365,7 +367,7 @@ function AddSurchargeForm({ courierId, onDone }) {
 
         {form.calc_type === 'flat' && (
           <div>
-            <label style={{ fontSize: 11, color: '#888', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' }}>Per</label>
+            <label style={{ fontSize: 11, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' }}>Per</label>
             <select value={form.charge_per} onChange={e => f('charge_per', e.target.value)} style={{ ...sel(), width: '100%' }}>
               <option value="shipment">Shipment</option>
               <option value="parcel">Parcel</option>
@@ -374,20 +376,20 @@ function AddSurchargeForm({ courierId, onDone }) {
         )}
 
         <div>
-          <label style={{ fontSize: 11, color: '#888', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' }}>{form.calc_type === 'percentage' ? 'Rate (%)' : 'Amount (£)'}</label>
+          <label style={{ fontSize: 11, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' }}>{form.calc_type === 'percentage' ? 'Rate (%)' : 'Amount (£)'}</label>
           <input type="number" step="0.01" value={form.default_value} onChange={e => f('default_value', e.target.value)} placeholder="0.00" style={{ ...inp(), width: '100%', boxSizing: 'border-box' }} />
         </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
         <div>
-          <label style={{ fontSize: 11, color: '#888', fontWeight: 700, display: 'block', marginBottom: 6, textTransform: 'uppercase' }}>Applies when</label>
-          <div style={{ display: 'inline-flex', background: 'rgba(255,255,255,0.05)', borderRadius: 7, padding: 3, gap: 2 }}>
-            {[['always', '● Always', '#00C853'], ['reconciliation', '◎ Code-only', '#888']].map(([val, label, clr]) => (
+          <label style={{ fontSize: 11, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 6, textTransform: 'uppercase' }}>Applies when</label>
+          <div style={{ display: 'inline-flex', background: 'rgba(0,0,0,0.04)', borderRadius: 7, padding: 3, gap: 2 }}>
+            {[['always', '● Always', '#00C853'], ['reconciliation', '◎ Code-only', '#64748B']].map(([val, label, clr]) => (
               <button key={val} type="button" onClick={() => f('applies_when', val)}
                 style={{ padding: '4px 12px', borderRadius: 5, cursor: 'pointer', border: 'none', fontSize: 12, fontWeight: form.applies_when === val ? 700 : 400,
-                  background: form.applies_when === val ? (val === 'always' ? 'rgba(0,200,83,0.25)' : 'rgba(255,255,255,0.1)') : 'transparent',
-                  color: form.applies_when === val ? clr : '#555' }}>
+                  background: form.applies_when === val ? (val === 'always' ? 'rgba(0,200,83,0.25)' : 'rgba(0,0,0,0.08)') : 'transparent',
+                  color: form.applies_when === val ? clr : '#475569' }}>
                 {label}
               </button>
             ))}
@@ -395,13 +397,13 @@ function AddSurchargeForm({ courierId, onDone }) {
         </div>
 
         <div>
-          <label style={{ fontSize: 11, color: '#888', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' }}>Effective from</label>
+          <label style={{ fontSize: 11, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' }}>Effective from</label>
           <input type="date" value={form.effective_date} onChange={e => f('effective_date', e.target.value)} style={{ ...inp(), width: '100%', boxSizing: 'border-box' }} />
         </div>
       </div>
 
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button type="button" onClick={onDone} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: 11 }}>Cancel</button>
+        <button type="button" onClick={onDone} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: 11 }}>Cancel</button>
         <button type="button" onClick={() => create.mutate()} disabled={!form.code || !form.name || !form.default_value || create.isPending} style={{ background: '#00C853', border: 'none', borderRadius: 6, color: '#fff', fontSize: 11, fontWeight: 700, padding: '5px 14px', cursor: 'pointer' }}>
           Add surcharge
         </button>
@@ -444,7 +446,7 @@ export default function SurchargesTab({ courierId, courierCode }) {
     onSuccess: () => qc.invalidateQueries(['surcharges']),
   });
 
-  if (isLoading) return <div style={{ color: '#888', fontSize: 13 }}>Loading surcharges…</div>;
+  if (isLoading) return <div style={{ color: '#64748B', fontSize: 13 }}>Loading surcharges…</div>;
 
   return (
     <div>
@@ -452,9 +454,9 @@ export default function SurchargesTab({ courierId, courierCode }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
         <div>
           <h2 style={{ fontSize: 15, fontWeight: 700, color: '#7B2FBE', margin: '0 0 4px' }}>Surcharges — {courierCode}</h2>
-          <p style={{ fontSize: 12, color: '#555', margin: 0 }}>
+          <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>
             <span style={{ color: '#00C853', fontWeight: 700 }}>YES</span> surcharges auto-apply on every matching shipment.
-            <span style={{ color: '#888', fontWeight: 700, marginLeft: 8 }}>CODE-ONLY</span> are matched against invoices during reconciliation.
+            <span style={{ color: '#64748B', fontWeight: 700, marginLeft: 8 }}>CODE-ONLY</span> are matched against invoices during reconciliation.
           </p>
         </div>
         <button onClick={() => setAdding(a => !a)} style={{ background: '#00C853', border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontSize: 11, fontWeight: 700, padding: '5px 12px', display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -465,7 +467,7 @@ export default function SurchargesTab({ courierId, courierCode }) {
       {adding && <AddSurchargeForm courierId={courierId} onDone={() => setAdding(false)} />}
 
       {surcharges.length === 0 && !adding && (
-        <div style={{ textAlign: 'center', color: '#555', padding: '48px 0', fontSize: 13 }}>No surcharges yet for {courierCode}.</div>
+        <div style={{ textAlign: 'center', color: '#64748B', padding: '48px 0', fontSize: 13 }}>No surcharges yet for {courierCode}.</div>
       )}
 
       {/* Table */}
@@ -487,7 +489,7 @@ export default function SurchargesTab({ courierId, courierCode }) {
                     <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 8, background: 'rgba(245,158,11,0.2)', border: '1px solid rgba(245,158,11,0.4)', color: '#F59E0B', fontWeight: 800, fontSize: 13 }}>
                       {s.code?.charAt(0) || '?'}
                     </span>
-                    {s.code?.length > 1 && <span style={{ fontSize: 11, color: '#888', marginLeft: 6 }}>{s.code}</span>}
+                    {s.code?.length > 1 && <span style={{ fontSize: 11, color: '#64748B', marginLeft: 6 }}>{s.code}</span>}
                   </td>
 
                   <td style={col.cell}>
@@ -495,7 +497,7 @@ export default function SurchargesTab({ courierId, courierCode }) {
                       <input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} onClick={e => e.stopPropagation()} style={{ ...inp(), width: 220 }} />
                     ) : (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{s.name}</span>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>{s.name}</span>
                         {(s.rules || []).length > 0 && (
                           <span title={`${s.rules.length} rule${s.rules.length > 1 ? 's' : ''} — click to view`} style={{
                             display: 'inline-flex', alignItems: 'center', gap: 3,
@@ -537,7 +539,7 @@ export default function SurchargesTab({ courierId, courierCode }) {
                         <input type="number" step="0.01" value={editForm.default_value} onChange={e => setEditForm(f => ({ ...f, default_value: e.target.value }))} style={{ ...inp(), width: 80 }} />
                       </div>
                     ) : (
-                      <span style={{ fontSize: 13, color: '#AAAAAA', fontFamily: 'monospace' }}>{formatRate(s)}</span>
+                      <span style={{ fontSize: 13, color: '#64748B', fontFamily: 'monospace' }}>{formatRate(s)}</span>
                     )}
                   </td>
 
@@ -550,7 +552,7 @@ export default function SurchargesTab({ courierId, courierCode }) {
                     ) : s.applies_when === 'always' ? (
                       <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 9999, background: 'rgba(0,200,83,0.2)', color: '#00C853', fontSize: 11, fontWeight: 800, letterSpacing: '0.05em' }}>YES</span>
                     ) : (
-                      <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 9999, background: 'rgba(255,255,255,0.06)', color: '#888', fontSize: 11, fontWeight: 700, letterSpacing: '0.03em' }}>CODE-ONLY</span>
+                      <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 9999, background: 'rgba(0,0,0,0.06)', color: '#64748B', fontSize: 11, fontWeight: 700, letterSpacing: '0.03em' }}>CODE-ONLY</span>
                     )}
                   </td>
 
@@ -558,7 +560,7 @@ export default function SurchargesTab({ courierId, courierCode }) {
                     {editing === s.id ? (
                       <input type="date" value={editForm.effective_date} onChange={e => setEditForm(f => ({ ...f, effective_date: e.target.value }))} onClick={e => e.stopPropagation()} style={{ ...inp(), width: 130 }} />
                     ) : (
-                      <span style={{ fontSize: 12, color: '#888' }}>{formatDate(s.effective_date)}</span>
+                      <span style={{ fontSize: 12, color: '#64748B' }}>{formatDate(s.effective_date)}</span>
                     )}
                   </td>
 
@@ -567,16 +569,16 @@ export default function SurchargesTab({ courierId, courierCode }) {
                       {editing === s.id ? (
                         <>
                           <button type="button" onClick={() => update.mutate(s.id)} disabled={update.isPending} style={{ background: '#00C853', border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontSize: 11, fontWeight: 700, padding: '3px 10px' }}>Save</button>
-                          <button type="button" onClick={() => setEditing(null)} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: 11 }}>Cancel</button>
+                          <button type="button" onClick={() => setEditing(null)} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: 11 }}>Cancel</button>
                         </>
                       ) : (
                         <>
                           {expanded.has(s.id)
-                            ? <ChevronDown size={14} color="#555" />
-                            : <ChevronRight size={14} color="#555" />
+                            ? <ChevronDown size={14} color="#475569" />
+                            : <ChevronRight size={14} color="#475569" />
                           }
-                          <button onClick={e => { e.stopPropagation(); startEdit(s); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#888', padding: '4px', fontSize: 13 }}>✏️</button>
-                          <button onClick={e => { e.stopPropagation(); toggleActive.mutate(s); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: s.active ? '#00C853' : '#555', padding: '4px', fontSize: 12 }} title={s.active ? 'Disable' : 'Enable'}>{s.active ? '●' : '○'}</button>
+                          <button onClick={e => { e.stopPropagation(); startEdit(s); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: '4px', fontSize: 13 }}>✏️</button>
+                          <button onClick={e => { e.stopPropagation(); toggleActive.mutate(s); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: s.active ? '#00C853' : '#475569', padding: '4px', fontSize: 12 }} title={s.active ? 'Disable' : 'Enable'}>{s.active ? '●' : '○'}</button>
                           <button onClick={e => { e.stopPropagation(); del.mutate(s.id); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#E91E8C', padding: '4px', display: 'flex', alignItems: 'center' }}><Trash2 size={13} /></button>
                         </>
                       )}
@@ -587,7 +589,7 @@ export default function SurchargesTab({ courierId, courierCode }) {
                 {/* Expanded rules panel */}
                 {expanded.has(s.id) && editing !== s.id && (
                   <tr key={`${s.id}-rules`}>
-                    <td colSpan={6} style={{ padding: 0, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <td colSpan={6} style={{ padding: 0, borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
                       <RulesPanel surcharge={s} courierId={courierId} />
                     </td>
                   </tr>

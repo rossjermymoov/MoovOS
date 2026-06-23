@@ -1,12 +1,6 @@
 /**
- * TicketDetailPage  —  /queries/:id
- *
- * Conversation bubble layout:
- *   Left column: header + thread (3 tabs) + unified compose bar
- *   Right sidebar: ticket info + parcel tracking (always visible)
- *
- * All real functionality preserved: AI draft gen/approval/revision,
- * voice input, manual send, React Query, PATCH mutations.
+ * TicketDetailPage — /queries/:id
+ * Moov OS 2.4 — complete rewrite, clean Linear/Vercel aesthetic
  */
 
 import { useState, useRef, useEffect } from 'react';
@@ -14,146 +8,121 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import {
-  ArrowLeft, Clock, AlertTriangle, CheckCircle2, User, Users,
-  Package, Truck, Mail, MessageSquare, FileText, Send,
-  MapPin, RotateCcw, RefreshCw, ExternalLink,
-  Tag, Building2, PackageCheck, PackageX, Store, ShieldAlert,
-  Sparkles, Edit2,
+  ArrowLeft, CheckCircle2, Mail, MessageSquare, Truck,
+  Send, RefreshCw, ExternalLink, Sparkles, Edit2,
+  AlertTriangle, Clock,
 } from 'lucide-react';
 import { getCourierLogo } from '../../utils/courierLogos';
 
 const api = axios.create({ baseURL: '/api' });
 
-// ─── Design tokens ────────────────────────────────────────────────────────────
+// ── Design tokens ─────────────────────────────────────────────────────────────
 const C = {
-  bg:       '#080F1C',
-  header:   '#09122A',
-  surface:  '#0D1827',
-  card:     '#111F32',
-  hover:    '#152035',
-  border:   'rgba(255,255,255,0.07)',
-  green:    '#22C55E',
-  amber:    '#F97316',
-  red:      '#EF4444',
-  blue:     '#3B82F6',
-  purple:   '#A855F7',
-  text:     '#F0F4FC',
-  sub:      '#8AABFF',
-  muted:    '#3D5270',
-  greenDim: 'rgba(34,197,94,0.12)',
-  amberDim: 'rgba(249,115,22,0.12)',
-  redDim:   'rgba(239,68,68,0.12)',
-  blueDim:  'rgba(59,130,246,0.13)',
+  bg:       '#F8FAFC',  // crisp slate
+  card:     '#FFFFFF',
+  border:   'rgba(0,0,0,0.08)',
+  green:    '#166534',
+  amber:    '#92400E',
+  red:      '#991B1B',
+  blue:     '#1E40AF',
+  text:     '#0F172A',
+  sub:      '#334155',
+  muted:    '#94A3B8',
+  greenDim: '#DCFCE7',
+  amberDim: '#FEF3C7',
+  redDim:   '#FEE2E2',
+  blueDim:  '#EFF6FF',
 };
 
-// ─── Config maps ──────────────────────────────────────────────────────────────
-const PRIORITY_CFG = {
-  urgent: { label: 'Urgent',  color: C.red   },
-  high:   { label: 'High',    color: C.amber },
-  medium: { label: 'Medium',  color: C.blue  },
-  low:    { label: 'Low',     color: C.muted },
-};
-
+// ── Status / priority config ──────────────────────────────────────────────────
 const STATUS_CFG = {
   open:                    { label: 'Open',              color: C.blue,  bg: C.blueDim  },
-  awaiting_customer_info:  { label: 'Awaiting Customer', color: C.amber, bg: C.amberDim },
-  info_received:           { label: 'Info Received',     color: C.green, bg: C.greenDim },
+  awaiting_customer_info:  { label: 'Awaiting customer', color: C.amber, bg: C.amberDim },
+  info_received:           { label: 'Info received',     color: C.green, bg: C.greenDim },
   drafting:                { label: 'Drafting',          color: C.green, bg: C.greenDim },
-  awaiting_courier:        { label: 'Awaiting Courier',  color: C.amber, bg: C.amberDim },
-  courier_replied:         { label: 'Courier Replied',   color: C.green, bg: C.greenDim },
+  awaiting_courier:        { label: 'Awaiting courier',  color: C.amber, bg: C.amberDim },
+  courier_replied:         { label: 'Courier replied',   color: C.green, bg: C.greenDim },
   courier_investigating:   { label: 'Investigating',     color: C.amber, bg: C.amberDim },
-  awaiting_customer:       { label: 'Awaiting Customer', color: C.amber, bg: C.amberDim },
-  claim_raised:            { label: 'Claim Raised',      color: C.red,   bg: C.redDim   },
-  awaiting_claim_docs:     { label: 'Awaiting Docs',     color: C.red,   bg: C.redDim   },
-  claim_submitted:         { label: 'Claim Submitted',   color: C.amber, bg: C.amberDim },
+  awaiting_customer:       { label: 'Awaiting customer', color: C.amber, bg: C.amberDim },
+  claim_raised:            { label: 'Claim raised',      color: C.red,   bg: C.redDim   },
+  awaiting_claim_docs:     { label: 'Awaiting docs',     color: C.red,   bg: C.redDim   },
+  claim_submitted:         { label: 'Claim submitted',   color: C.amber, bg: C.amberDim },
   resolved:                { label: 'Resolved',          color: C.green, bg: C.greenDim },
-  resolved_claim_approved: { label: 'Claim Approved',    color: C.green, bg: C.greenDim },
-  resolved_claim_rejected: { label: 'Claim Rejected',    color: C.red,   bg: C.redDim   },
+  resolved_claim_approved: { label: 'Claim approved',    color: C.green, bg: C.greenDim },
+  resolved_claim_rejected: { label: 'Claim rejected',    color: C.red,   bg: C.redDim   },
   escalated:               { label: 'Escalated',         color: C.red,   bg: C.redDim   },
 };
 
-const GROUPS = ['Delivery Enquiries', 'Claims', 'Accounts', 'Technical', 'General'];
+const PRIORITY_CFG = {
+  urgent: { label: 'Urgent', color: C.red   },
+  high:   { label: 'High',   color: C.amber },
+  medium: { label: 'Medium', color: C.blue  },
+  low:    { label: 'Low',    color: C.muted },
+};
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+const GROUPS = ['Claims', 'Queries', 'Billing', 'Technical'];
+
+// Map a ticket's state to a premium, contextual badge style (Freshdesk-like).
+//  Green = resolved/closed · Red = urgent/escalated/SLA-breached · Amber =
+//  needs attention/awaiting · Blue = normal/open.
+// Badge colour driven strictly by the priority spectrum (matching the queue's
+// left-hand indicator strip), with completed tickets overriding to green.
+//   Closed/Resolved → green · Urgent → red · High → amber · Medium → yellow · Low → blue
+function ticketBadgeClasses(ticket) {
+  const s = (ticket?.status || '').toLowerCase();
+  const p = (ticket?.priority || '').toLowerCase();
+  if (['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'].includes(s))
+    return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  if (p === 'urgent') return 'bg-red-50 text-red-700 border-red-200 font-bold';
+  if (p === 'high')   return 'bg-amber-50 text-amber-700 border-amber-200 font-bold';
+  if (p === 'medium') return 'bg-yellow-50 text-yellow-700 border-yellow-200 font-bold';
+  return 'bg-blue-50 text-blue-700 border-blue-200'; // low / default
+}
+
+// Dynamic SLA countdown string from courier_sla_expires_at.
+// Returns null when no SLA clock is set on the ticket.
+function slaCountdownString(ticket) {
+  if (!ticket?.courier_sla_expires_at) return null;
+  const diffMs = new Date(ticket.courier_sla_expires_at).getTime() - Date.now();
+  if (diffMs > 0) {
+    const hours   = Math.floor(diffMs / 3600000);
+    const minutes = Math.floor((diffMs % 3600000) / 60000);
+    return `⏳ ${hours}h ${minutes}m remaining`;
+  }
+  const hoursOver = Math.floor(-diffMs / 3600000);
+  return `🚨 SLA BREACHED (${hoursOver}h ago)`;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function fmtDate(ts) {
   if (!ts) return '—';
-  return new Date(ts).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return new Date(ts).toLocaleString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
 }
 
 function timeAgo(ts) {
   if (!ts) return '—';
-  const secs = (Date.now() - new Date(ts)) / 1000;
-  if (secs < 60)    return 'just now';
-  if (secs < 3600)  return `${Math.floor(secs / 60)}m ago`;
-  if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
-  return `${Math.floor(secs / 86400)}d ago`;
+  const s = (Date.now() - new Date(ts)) / 1000;
+  if (s < 60)    return 'just now';
+  if (s < 3600)  return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
 }
 
-function SlaChip({ sla_due_at, sla_breached, sla_mins_remaining }) {
-  if (!sla_due_at) return null;
-  const mins = sla_mins_remaining;
-  let label, color, bg;
-  if (sla_breached) {
-    label = 'SLA Breached'; color = C.red; bg = C.redDim;
-  } else if (mins < 60) {
-    label = `${Math.round(mins)}m left`; color = C.red; bg = C.redDim;
-  } else if (mins < 240) {
-    label = `${Math.round(mins / 60)}h left`; color = C.amber; bg = C.amberDim;
-  } else {
-    const h = Math.floor(mins / 60), m = Math.round(mins % 60);
-    label = m > 0 ? `${h}h ${m}m left` : `${h}h left`; color = C.green; bg = C.greenDim;
-  }
-  return (
-    <span title={fmtDate(sla_due_at)} style={{
-      display: 'inline-flex', alignItems: 'center', gap: 4,
-      padding: '3px 8px', borderRadius: 5,
-      background: bg, border: `1px solid ${color}33`,
-      fontSize: 10, fontWeight: 700, color,
-    }}>
-      <Clock size={9} /> {label}
-    </span>
-  );
-}
-
-function PropRow({ icon: Icon, label, children }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '7px 0', borderBottom: `1px solid ${C.border}` }}>
-      <Icon size={12} color={C.muted} style={{ marginTop: 2, flexShrink: 0 }} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>{label}</div>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function InlineSelect({ value, onChange, options, colorMap }) {
-  const color = colorMap?.[value]?.color || C.text;
-  return (
-    <select value={value || ''} onChange={e => onChange(e.target.value)} style={{
-      background: 'transparent', border: 'none', outline: 'none',
-      color, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-      padding: 0, width: '100%', appearance: 'none',
-    }}>
-      {options.map(opt => (
-        <option key={opt.value} value={opt.value} style={{ background: C.card, color: C.text }}>{opt.label}</option>
-      ))}
-    </select>
-  );
-}
-
-// ─── Voice-to-text hook ───────────────────────────────────────────────────────
+// ── Voice input hook ──────────────────────────────────────────────────────────
 function useSpeechInput(setText) {
   const [listening, setListening] = useState(false);
   function toggle() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { alert('Voice input not supported. Use Chrome or Edge.'); return; }
+    if (!SR) { alert('Voice input not supported in this browser.'); return; }
     setListening(true);
     const rec = new SR();
     rec.lang = 'en-GB'; rec.continuous = false; rec.interimResults = false;
-    rec.onresult = (e) => {
+    rec.onresult = e => {
       const t = e.results[0]?.[0]?.transcript || '';
-      if (t) setText(prev => prev ? prev + ' ' + t : t);
+      if (t) setText(p => p ? p + ' ' + t : t);
     };
     rec.onend = () => setListening(false);
     rec.onerror = () => setListening(false);
@@ -162,465 +131,517 @@ function useSpeechInput(setText) {
   return { listening, toggle };
 }
 
-// ─── Tracking ─────────────────────────────────────────────────────────────────
-const TRACK_STATUS = {
-  booked:              { label: 'Booked',           color: '#00BCD4', bg: 'rgba(0,188,212,0.12)',    icon: Package },
-  collected:           { label: 'Collected',         color: '#2196F3', bg: 'rgba(33,150,243,0.12)',   icon: Package },
-  at_depot:            { label: 'At Hub',             color: '#5C6BC0', bg: 'rgba(92,107,192,0.12)',   icon: Package },
-  in_transit:          { label: 'In Transit',         color: '#7B2FBE', bg: 'rgba(123,47,190,0.12)',   icon: Truck },
-  out_for_delivery:    { label: 'Out for Delivery',   color: '#FFC107', bg: 'rgba(255,193,7,0.12)',    icon: Truck },
-  failed_delivery:     { label: 'Failed Attempt',     color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
-  delivered:           { label: 'Delivered',          color: '#00C853', bg: 'rgba(0,200,83,0.12)',     icon: PackageCheck },
-  on_hold:             { label: 'On Hold',            color: '#FF9800', bg: 'rgba(255,152,0,0.12)',    icon: Clock },
-  exception:           { label: 'Address Issue',      color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
-  returned:            { label: 'Return to Sender',   color: '#607D8B', bg: 'rgba(96,125,139,0.12)',   icon: RotateCcw },
-  tracking_expired:    { label: 'Tracking Expired',   color: '#757575', bg: 'rgba(117,117,117,0.12)',  icon: Clock },
-  cancelled:           { label: 'Cancelled',          color: '#757575', bg: 'rgba(117,117,117,0.12)',  icon: AlertTriangle },
-  awaiting_collection: { label: 'Awaiting Collection',color: '#FF6F00', bg: 'rgba(255,111,0,0.12)',    icon: Store },
-  damaged:             { label: 'Damaged',            color: '#E91E8C', bg: 'rgba(233,30,140,0.12)',   icon: PackageX },
-  customs_hold:        { label: 'Customs Hold',       color: '#9C27B0', bg: 'rgba(156,39,176,0.12)',   icon: ShieldAlert },
-  unknown:             { label: 'Unknown',            color: '#555555', bg: 'rgba(255,255,255,0.05)',  icon: Package },
-};
-
-function TrackingMiniTimeline({ events }) {
-  if (!events?.length) return (
-    <div style={{ fontSize: 11, color: C.muted, fontStyle: 'italic', padding: '6px 0' }}>No tracking events</div>
-  );
-  const recent = [...events].sort((a, b) => new Date(b.event_at) - new Date(a.event_at)).slice(0, 5);
+// ── Sidebar card ──────────────────────────────────────────────────────────────
+function SbSection({ title, action, children }) {
   return (
-    <div>
-      {recent.map((ev, i) => {
-        const cfg = TRACK_STATUS[ev.status] || TRACK_STATUS.unknown;
-        const isLast = i === recent.length - 1;
-        return (
-          <div key={ev.id || i} style={{ display: 'flex', gap: 9, paddingBottom: isLast ? 0 : 12, position: 'relative' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
-              <div style={{ width: 10, height: 10, borderRadius: '50%', background: cfg.color, flexShrink: 0, marginTop: 2 }} />
-              {!isLast && <div style={{ width: 1, flex: 1, minHeight: 10, background: C.border, marginTop: 3 }} />}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: cfg.color }}>{cfg.label}</div>
-              {ev.description && <div style={{ fontSize: 10, color: C.muted, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ev.description}</div>}
-              <div style={{ fontSize: 10, color: '#444', marginTop: 1 }}>{timeAgo(ev.event_at)}</div>
-            </div>
-          </div>
-        );
-      })}
+    <div style={{ padding: '18px 20px', borderBottom: '1px solid #F1F5F9' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#94A3B8', margin: 0 }}>{title}</p>
+        {action}
+      </div>
+      {children}
     </div>
   );
 }
 
-// ─── Message bubble ───────────────────────────────────────────────────────────
-function MessageBubble({ email, queryId, courierName, courierCode, approving, onApproved }) {
-  const [expanded,    setExpanded]    = useState(true);
-  const [editMode,    setEditMode]    = useState(false);
-  const [editBody,    setEditBody]    = useState(email.body_text || '');
-  const [localApproving, setLocalApp] = useState(false);
-  const [reviseMode,  setReviseMode]  = useState(false);
-  const [reviseText,  setReviseText]  = useState('');
+function SbRow({ label, children }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', padding: '5px 0' }}>
+      <span style={{ fontSize: 11.5, color: '#94A3B8', fontWeight: 500, width: 90, flexShrink: 0, paddingTop: 1 }}>{label}</span>
+      <span style={{ fontSize: 12, color: '#1E293B', fontWeight: 500, flex: 1, textAlign: 'right', lineHeight: 1.4 }}>{children}</span>
+    </div>
+  );
+}
+
+// ── Inline select (for sidebar fields) ───────────────────────────────────────
+function InlineSelect({ value, onChange, options, colorMap, fill = false }) {
+  const color = colorMap?.[value]?.color || '#1E293B';
+  return (
+    <select
+      value={value || ''}
+      onChange={e => onChange(e.target.value)}
+      style={{
+        width: '100%', maxWidth: fill ? 'none' : 170, background: '#fff',
+        border: '1px solid #E2E8F0', borderRadius: 6, outline: 'none',
+        color, fontSize: 12, fontWeight: 500, cursor: 'pointer',
+        padding: '5px 26px 5px 9px', textAlign: 'left', appearance: 'none',
+        backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
+        backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center',
+      }}
+    >
+      {options.map(o => (
+        <option key={o.value} value={o.value}
+          style={{ background: C.card, color: C.text, fontWeight: 400 }}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+// ── SLA chip ──────────────────────────────────────────────────────────────────
+function SlaValue({ sla_due_at, sla_breached, sla_mins_remaining }) {
+  if (!sla_due_at) return <span style={{ fontSize: 11, color: C.muted }}>—</span>;
+  const mins = sla_mins_remaining;
+  let label, color;
+  if (sla_breached)    { label = 'Overdue'; color = C.red; }
+  else if (mins < 60)  { label = `${Math.round(mins)}m left`; color = C.red; }
+  else if (mins < 240) { label = `${Math.round(mins / 60)}h left`; color = C.amber; }
+  else {
+    const h = Math.floor(mins / 60), m = Math.round(mins % 60);
+    label = m > 0 ? `${h}h ${m}m left` : `${h}h left`;
+    color = C.green;
+  }
+  return <span style={{ fontSize: 11, fontWeight: 500, color }}>{label}</span>;
+}
+
+// ── Tracking mini-timeline ────────────────────────────────────────────────────
+function TrackingTimeline({ events }) {
+  if (!events?.length) return (
+    <div style={{ fontSize: 11, color: C.muted, padding: '4px 0', fontStyle: 'italic' }}>No tracking events yet</div>
+  );
+  const recent = [...events]
+    .sort((a, b) => new Date(b.event_at) - new Date(a.event_at))
+    .slice(0, 6);
+  return (
+    <div style={{ position: 'relative', paddingLeft: 22 }}>
+      {/* Vertical connecting line */}
+      <div style={{
+        position: 'absolute', left: 5, top: 7,
+        width: 1.5, height: `calc(100% - 14px)`,
+        background: 'linear-gradient(to bottom, #6366F1, #10B981 40%, #E2E8F0)',
+        borderRadius: 2,
+      }} />
+      {recent.map((ev, i) => (
+        <div key={ev.id || i} style={{ position: 'relative', marginBottom: i < recent.length - 1 ? 13 : 0 }}>
+          {/* Dot */}
+          <div style={{
+            position: 'absolute', left: -22, top: 2,
+            width: 12, height: 12, borderRadius: '50%',
+            background: i === 0 ? '#6366F1' : i === 1 ? '#10B981' : '#E2E8F0',
+            border: `2px solid #fff`,
+            boxShadow: i === 0 ? '0 0 0 2.5px #C7D2FE' : i === 1 ? '0 0 0 2px #D1FAE5' : 'none',
+          }} />
+          <div style={{ fontSize: 12, fontWeight: i === 0 ? 600 : 400, color: i === 0 ? '#0F172A' : '#475569', lineHeight: 1.3 }}>
+            {ev.description || ev.status?.replace(/_/g, ' ')}
+          </div>
+          <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+            {timeAgo(ev.event_at)}{ev.location ? ` · ${ev.location}` : ''}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Tidy a plain-text body for display (used only when no HTML body exists):
+// drop leftover [cid:...] image placeholders and collapse blank-line runs.
+function stripCidTokens(body) {
+  return (body || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\[cid:[^\]]+\]/gi, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+// Keep only the NEW message text — cut at the first quoted-history marker
+// (">" lines, "On <date> … wrote:", Outlook "From:/Sent:/To:" header blocks,
+// or divider lines). Never returns blank; falls back to the full body.
+function trimQuotedText(body) {
+  const lines = (body || '').replace(/\r\n/g, '\n').split('\n');
+  const isQuoteStart = (raw, i) => {
+    const t = raw.trim();
+    if (/^>{1,}/.test(t)) return true;
+    if (/^On\b.+\bwrote:$/.test(t)) return true;
+    if (/^_{10,}$/.test(t)) return true;
+    if (/^-{2,}\s*(Original|Forwarded) Message\s*-{2,}/i.test(t)) return true;
+    if (/^From:\s?\S/i.test(t)) {
+      const ahead = lines.slice(i + 1, i + 6).map(l => l.trim());
+      if (ahead.some(l => /^(Sent|Date|To|Cc|Subject):/i.test(l))) return true;
+    }
+    return false;
+  };
+  let cut = -1;
+  for (let i = 1; i < lines.length; i++) { if (isQuoteStart(lines[i], i)) { cut = i; break; } }
+  if (cut < 1) return (body || '').trim();
+  const main = lines.slice(0, cut).join('\n').trim();
+  return main || (body || '').trim();
+}
+
+// Keep only the NEW message of an HTML email — remove Gmail/Apple/Outlook
+// quoted-reply containers and any trailing "From: …" header block. Runs in the
+// browser via DOMParser; never returns blank.
+function trimQuotedHtml(html) {
+  try {
+    const doc = new DOMParser().parseFromString(html || '', 'text/html');
+    const body = doc.body;
+    if (!body) return html;
+    body.querySelectorAll(
+      '.gmail_quote, .gmail_quote_container, blockquote[type="cite"], ' +
+      '#divRplyFwdMsg, #appendonsend, #x_appendonsend, #mail-editor-reference-message-container'
+    ).forEach(n => n.remove());
+    // Outlook desktop wraps the reply in a divider div (border-top). Remove it
+    // and everything after it.
+    for (const div of body.querySelectorAll('div')) {
+      const s = (div.getAttribute('style') || '').replace(/\s+/g, '').toLowerCase();
+      if (s.includes('border-top:solid') || s.includes('border-top:1pt') || s.includes('border-top:1px')) {
+        let n = div; while (n) { const next = n.nextSibling; n.remove(); n = next; }
+        break;
+      }
+    }
+    // Fallback: a block whose text is a quoted "From: … Sent: …" header.
+    for (const el of body.querySelectorAll('div, p, table')) {
+      const t = (el.textContent || '').trim();
+      if (/^From:\s/i.test(t) && /(Sent|Date|To|Subject):/i.test(t)) {
+        let n = el; while (n) { const next = n.nextSibling; n.remove(); n = next; }
+        break;
+      }
+    }
+    const out = body.innerHTML.trim();
+    return out || html;
+  } catch { return html; }
+}
+
+// Renders an email's HTML body inside a Shadow DOM. The host element grows to
+// its content naturally (no height is ever measured, so it cannot clip), while
+// the shadow root isolates the email's CSS from the rest of the app. Scripts
+// inserted via innerHTML never execute; we also strip inline event handlers and
+// javascript: URLs as a safety net.
+function EmailHtml({ html }) {
+  const hostRef = useRef(null);
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const root = host.shadowRoot || host.attachShadow({ mode: 'open' });
+    const safe = trimQuotedHtml(html || '')
+      .replace(/<\s*script[\s\S]*?<\s*\/\s*script\s*>/gi, '')
+      .replace(/<\s*script[^>]*>/gi, '')
+      .replace(/\son\w+\s*=\s*"[^"]*"/gi, '')
+      .replace(/\son\w+\s*=\s*'[^']*'/gi, '')
+      .replace(/\son\w+\s*=\s*[^\s>]+/gi, '')
+      .replace(/(href|src)\s*=\s*(["'])\s*javascript:[^"']*\2/gi, '$1="#"');
+    root.innerHTML =
+      `<style>:host{display:block}` +
+      `img{max-width:100%!important;height:auto}table{max-width:100%!important}` +
+      `a{color:#1d4ed8}*{word-break:break-word;overflow-wrap:break-word}</style>` +
+      `<div style="font:13px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#334155">${safe}</div>`;
+  }, [html]);
+  return <div ref={hostRef} />;
+}
+
+// ── Thread item ───────────────────────────────────────────────────────────────
+function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
+  const [editMode,   setEditMode]   = useState(false);
+  const [editBody,   setEditBody]   = useState(email.body_text || '');
+  const [approving,  setApproving]  = useState(false);
+  const [reviseMode, setReviseMode] = useState(false);
+  const [reviseText, setReviseText] = useState('');
+  const [revising,   setRevising]   = useState(false);
   const reviseRef = useRef('');
-  const [revising,    setRevising]    = useState(false);
   const qc = useQueryClient();
 
-  function updateRevise(val) {
-    if (typeof val === 'function') {
-      setReviseText(prev => { const next = val(prev); reviseRef.current = next; return next; });
-    } else {
-      reviseRef.current = val; setReviseText(val);
-    }
-  }
-  const speech = useSpeechInput(updateRevise);
+  const speech = useSpeechInput(v => {
+    if (typeof v === 'function') {
+      setReviseText(p => { const n = v(p); reviseRef.current = n; return n; });
+    } else { reviseRef.current = v; setReviseText(v); }
+  });
 
   const dir       = email.direction;
   const isDraft   = email.is_ai_draft && !email.sent_at && !email.ai_draft_approved_by;
-  const isInbound = dir === 'inbound_customer' || dir === 'inbound_courier';
-  const isCourier = dir === 'inbound_courier'  || dir === 'outbound_courier';
+  const isCourier = dir === 'inbound_courier' || dir === 'outbound_courier';
   const isNote    = dir === 'note';
-
-  // Bubble styling
-  let bubbleBg, bubbleBorderStyle, accentColor, bubbleRadius, maxW, align;
-  if (isNote) {
-    bubbleBg = 'rgba(234,179,8,0.07)';
-    bubbleBorderStyle = `1px solid rgba(234,179,8,0.18)`;
-    accentColor = '#EAB308';
-    bubbleRadius = 8;
-    align = 'center';
-    maxW = '100%';
-  } else if (dir === 'inbound_customer') {
-    bubbleBg = '#111F32';
-    bubbleBorderStyle = `1px solid rgba(255,255,255,0.07)`;
-    accentColor = C.blue;
-    bubbleRadius = '2px 10px 10px 10px';
-    align = 'left';
-    maxW = '76%';
-  } else if (dir === 'outbound_customer') {
-    bubbleBg = isDraft ? 'rgba(34,197,94,0.08)' : 'rgba(59,130,246,0.13)';
-    bubbleBorderStyle = isDraft ? `1px solid rgba(34,197,94,0.25)` : `1px solid rgba(59,130,246,0.2)`;
-    accentColor = isDraft ? C.green : C.blue;
-    bubbleRadius = '10px 2px 10px 10px';
-    align = 'right';
-    maxW = '76%';
-  } else if (dir === 'inbound_courier') {
-    bubbleBg = '#111F32';
-    bubbleBorderStyle = `1px solid rgba(249,115,22,0.2)`;
-    accentColor = C.amber;
-    bubbleRadius = '2px 10px 10px 10px';
-    align = 'left';
-    maxW = '76%';
-  } else {
-    bubbleBg = 'rgba(249,115,22,0.10)';
-    bubbleBorderStyle = `1px solid rgba(249,115,22,0.18)`;
-    accentColor = C.amber;
-    bubbleRadius = '10px 2px 10px 10px';
-    align = 'right';
-    maxW = '76%';
-  }
+  const isOut     = dir === 'outbound_customer' || dir === 'outbound_courier';
 
   const logoUrl = isCourier && courierCode ? getCourierLogo(courierCode) : null;
-  const senderLabel = isNote
-    ? 'Internal Note'
-    : dir === 'inbound_customer'  ? (email.from_address || 'Customer')
-    : dir === 'outbound_customer' ? 'You → Customer'
-    : dir === 'inbound_courier'   ? (courierName || 'Courier')
-    :                               `You → ${courierName || 'Courier'}`;
 
-  const bodyLines = (email.body_text || '').split('\n');
-  const cutoff = bodyLines.findIndex(l => l.startsWith('On ') && l.includes('wrote:'));
-  const displayBody = cutoff > 0
-    ? bodyLines.slice(0, cutoff).join('\n').trim()
-    : (email.body_text || '').trim();
+  // Card background + accent per direction
+  const cardBg = isNote             ? 'rgba(234,179,8,0.05)'
+    : dir === 'inbound_customer'     ? '#FFFFFF'
+    : dir === 'outbound_customer'    ? 'rgba(30,64,175,0.03)'
+    : dir === 'inbound_courier'      ? 'rgba(217,119,6,0.06)'
+    :                                  'rgba(217,119,6,0.03)';
 
-  async function doApprove(bodyOverride) {
-    setLocalApp(true);
+  const cardBorderLeft = isNote             ? '3px solid rgba(234,179,8,0.45)'
+    : dir === 'inbound_customer'             ? '3px solid rgba(30,64,175,0.35)'
+    : dir === 'inbound_courier'              ? '3px solid rgba(217,119,6,0.50)'
+    :                                          'none';
+
+  // Avatar colour
+  const avBg = isNote    ? '#FEF9C3'
+    : isOut              ? '#EDE9FE'
+    : isCourier          ? '#FEF3C7'
+    :                      '#DBEAFE';
+  const avColor = isNote ? C.amber
+    : isOut              ? '#4F46E5'
+    : isCourier          ? C.amber
+    :                      C.blue;
+  const avInitial = isNote ? '—'
+    : isOut              ? 'Y'
+    : isCourier          ? (courierName?.[0]?.toUpperCase() || 'C')
+    : (email.from_address?.[0]?.toUpperCase() || '?');
+
+  const senderLabel = isNote             ? 'Internal note'
+    : dir === 'inbound_customer'         ? (email.from_address || 'Customer')
+    : dir === 'outbound_customer'        ? 'You → Customer'
+    : dir === 'inbound_courier'          ? (courierName || 'Courier')
+    :                                      `You → ${courierName || 'Courier'}`;
+
+  // Full stored body; splitMessage() separates the new content from quoted history.
+  const displayBody = (email.body_text || '').trim();
+
+  const ts = email.sent_at || email.received_at || email.created_at;
+
+  async function doApprove(body) {
+    setApproving(true);
     try {
       await api.patch(`/queries/${queryId}/emails/${email.id}/approve`, {
-        body_text: bodyOverride ?? email.body_text,
+        body_text: body ?? email.body_text,
       });
       qc.invalidateQueries(['ticket', queryId]);
       onApproved?.();
-    } catch (e) {
-      alert('Approval failed: ' + (e.response?.data?.error || e.message));
-    } finally { setLocalApp(false); }
+    } catch (e) { alert('Approval failed: ' + (e.response?.data?.error || e.message)); }
+    finally { setApproving(false); }
+  }
+
+  async function discardDraft() {
+    if (!window.confirm('Discard this AI draft? You can then type a manual reply.')) return;
+    try {
+      await api.delete(`/queries/${queryId}/emails/${email.id}`);
+      qc.invalidateQueries(['ticket', queryId]);
+    } catch (e) { alert('Discard failed: ' + (e.response?.data?.error || e.message)); }
   }
 
   async function submitRevision() {
-    const feedback = reviseRef.current.trim();
-    if (!feedback || revising) return;
+    const fb = reviseRef.current.trim();
+    if (!fb || revising) return;
     setRevising(true);
     try {
-      const resp = await fetch(`/api/queries/${queryId}/revise-draft`, {
+      const r = await fetch(`/api/queries/${queryId}/refine-draft`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email_id: email.id, feedback }),
+        body: JSON.stringify({ email_id: email.id, prompt: fb }),
       });
-      if (!resp.ok) {
-        const d = await resp.json().catch(() => ({}));
-        throw new Error(d.error || `Server error ${resp.status}`);
-      }
+      if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || 'Server error'); }
       setReviseMode(false); reviseRef.current = ''; setReviseText('');
       qc.invalidateQueries(['ticket', queryId]);
-    } catch (e) {
-      alert('Revision failed: ' + e.message);
-    } finally { setRevising(false); }
+    } catch (e) { alert('Revision failed: ' + e.message); }
+    finally { setRevising(false); }
   }
 
-  const busy = localApproving || approving;
+  // Prefer the rendered HTML body; fall back to plain text when absent.
+  // Either way, show only the new message — strip the quoted reply history.
+  const plainFallback = stripCidTokens(trimQuotedText(displayBody));
+  const isInbound = dir.startsWith('inbound');
+  const stepBadge = isNote
+    ? { label: 'Note',     cls: 'bg-amber-50 text-amber-700' }
+    : isInbound
+      ? { label: 'Inbound',  cls: 'bg-blue-50 text-blue-700' }
+      : { label: 'Outbound', cls: 'bg-slate-100 text-slate-600' };
+  const rowClass = (!isInbound && !isNote)
+    ? 'my-4 rounded-2xl border border-slate-100 bg-slate-50/70 px-6 py-8'
+    : 'border-b border-slate-100 py-10 last:border-b-0';
+
+  // The server returns `body` already parsed down to just the new message.
+  // Fall back to client-side trimming for older payloads.
+  const bodyText = (email.body && email.body.trim()) ? email.body.trim() : plainFallback;
+
+  const dirBadge = isNote ? { label: 'Note', bg: '#FEF9C3', color: '#854D0E', border: '#FDE047' }
+    : dir === 'inbound_customer'  ? { label: 'Inbound', bg: '#DBEAFE', color: '#1D4ED8', border: '#93C5FD' }
+    : dir === 'outbound_customer' ? { label: 'Sent', bg: '#DCFCE7', color: '#166534', border: '#86EFAC' }
+    : dir === 'inbound_courier'   ? { label: 'Courier', bg: '#FEF3C7', color: '#92400E', border: '#FDE68A' }
+    :                               { label: 'To courier', bg: '#DCFCE7', color: '#166534', border: '#86EFAC' };
 
   return (
-    <div style={{ display: 'flex', justifyContent: align === 'right' ? 'flex-end' : align === 'center' ? 'center' : 'flex-start', marginBottom: 10 }}>
-      <div style={{ maxWidth: maxW, minWidth: isNote ? 0 : 200, width: isNote ? '100%' : undefined }}>
+    <article className={`w-full max-w-none ${rowClass}`}>
 
-        {/* Sender + time */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3,
-          justifyContent: isNote ? 'center' : (isInbound ? 'flex-start' : 'flex-end'),
-        }}>
-          {logoUrl && <img src={logoUrl} alt="" style={{ width: 14, height: 10, objectFit: 'contain' }} />}
-          <span style={{ fontSize: 10, fontWeight: 700, color: accentColor }}>{senderLabel}</span>
-          {isDraft && (
-            <span style={{ fontSize: 9, fontWeight: 700, color: C.green, background: C.greenDim,
-              padding: '1px 5px', borderRadius: 3, border: `1px solid ${C.green}33` }}>
-              AI Draft
-            </span>
-          )}
-          <span style={{ fontSize: 10, color: C.muted }}>
-            {email.sent_at ? fmtDate(email.sent_at) : fmtDate(email.received_at || email.created_at)}
-          </span>
-        </div>
-
-        {/* Bubble */}
-        <div style={{
-          background: bubbleBg,
-          border: bubbleBorderStyle,
-          borderLeft: isNote ? `3px solid rgba(234,179,8,0.5)` : undefined,
-          borderRadius: bubbleRadius,
-          overflow: 'hidden',
-          cursor: 'pointer',
-        }}
-          onClick={() => setExpanded(e => !e)}
+      {/* Minimalist header */}
+      <header className="mb-5 flex items-center gap-3">
+        {/* Avatar */}
+        <div
+          className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full"
+          style={{ background: logoUrl ? '#fff' : avBg, border: logoUrl ? `1px solid ${C.border}` : 'none' }}
         >
-          {email.subject && !isNote && (
-            <div style={{ padding: '6px 12px 5px', fontSize: 10, fontWeight: 700, color: C.muted,
-              borderBottom: `1px solid ${C.border}` }}>
-              {email.subject}
-            </div>
-          )}
-
-          {expanded && (
-            <div style={{ padding: isNote ? '8px 12px' : '10px 12px' }}
-              onClick={e => editMode && e.stopPropagation()}
-            >
-              {editMode ? (
-                <textarea value={editBody} onChange={e => setEditBody(e.target.value)}
-                  onClick={e => e.stopPropagation()}
-                  style={{
-                    width: '100%', minHeight: 110, background: C.surface,
-                    border: `1px solid ${C.green}44`, borderRadius: 5,
-                    color: C.text, fontSize: 12, padding: 8, resize: 'vertical',
-                    fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none',
-                  }}
-                />
-              ) : (
-                <pre style={{
-                  margin: 0, fontSize: 12, color: C.sub, whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word', lineHeight: 1.65, maxHeight: 200,
-                  overflow: 'auto', fontFamily: 'inherit',
-                }}>
-                  {displayBody || <span style={{ color: C.muted, fontStyle: 'italic' }}>No body</span>}
-                </pre>
-              )}
-            </div>
-          )}
-
-          {/* AI draft action bar */}
-          {isDraft && expanded && (
-            <div style={{ borderTop: `1px solid ${C.border}` }} onClick={e => e.stopPropagation()}>
-
-              {/* Revise panel */}
-              {reviseMode && (
-                <div style={{ padding: '10px 12px', background: 'rgba(210,153,34,0.04)', borderBottom: `1px solid ${C.amber}22` }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: C.amber, marginBottom: 6 }}>
-                    Tell Katana why you'd change this
-                  </div>
-                  <div style={{ display: 'flex', gap: 5, alignItems: 'flex-end' }}>
-                    <textarea
-                      value={reviseText}
-                      onChange={e => updateRevise(e.target.value)}
-                      placeholder="e.g. Too formal, customer is upset — be more apologetic…"
-                      rows={2}
-                      autoFocus
-                      style={{
-                        flex: 1, background: C.card, border: `1px solid ${C.amber}33`,
-                        borderRadius: 5, padding: '6px 8px', color: C.text,
-                        fontSize: 11, lineHeight: 1.5, resize: 'none',
-                        outline: 'none', fontFamily: 'inherit',
-                      }}
-                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitRevision(); } }}
-                    />
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <button onClick={speech.toggle} title={speech.listening ? 'Listening…' : 'Dictate'}
-                        style={{
-                          width: 28, height: 28, borderRadius: 5, border: 'none',
-                          background: speech.listening ? C.amber : `${C.amber}18`,
-                          color: speech.listening ? '#000' : C.amber,
-                          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
-                          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                          <line x1="12" y1="19" x2="12" y2="22"/>
-                        </svg>
-                      </button>
-                      <button onClick={submitRevision} disabled={revising} title="Send (Enter)"
-                        style={{
-                          width: 28, height: 28, borderRadius: 5, border: 'none',
-                          background: revising ? `${C.amber}18` : C.amber,
-                          color: revising ? C.muted : '#000',
-                          cursor: revising ? 'default' : 'pointer',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>
-                        {revising
-                          ? <RefreshCw size={11} style={{ animation: 'spin 1s linear infinite' }} />
-                          : <Send size={11} />}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Approve / Edit / Revise buttons */}
-              <div style={{ display: 'flex', gap: 6, padding: '8px 12px', flexWrap: 'wrap' }}>
-                {editMode ? (
-                  <>
-                    <button onClick={() => { doApprove(editBody); setEditMode(false); }} disabled={busy}
-                      style={{ padding: '5px 12px', borderRadius: 5, border: 'none', background: C.green,
-                        color: '#000', fontSize: 11, fontWeight: 700, cursor: busy ? 'default' : 'pointer',
-                        display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <CheckCircle2 size={11} /> {busy ? 'Saving…' : 'Save & Approve'}
-                    </button>
-                    <button onClick={() => { setEditMode(false); setEditBody(email.body_text || ''); }}
-                      style={{ padding: '5px 10px', borderRadius: 5, border: `1px solid ${C.border}`,
-                        background: 'transparent', color: C.muted, fontSize: 11, cursor: 'pointer' }}>
-                      Cancel
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button onClick={() => doApprove()} disabled={busy}
-                      style={{ padding: '5px 12px', borderRadius: 5, border: 'none', background: C.green,
-                        color: '#000', fontSize: 11, fontWeight: 700, cursor: busy ? 'default' : 'pointer',
-                        opacity: busy ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <CheckCircle2 size={11} /> {busy ? 'Sending…' : 'Approve & Send'}
-                    </button>
-                    <button onClick={() => { setReviseMode(r => !r); reviseRef.current = ''; setReviseText(''); }}
-                      style={{ padding: '5px 10px', borderRadius: 5,
-                        border: `1px solid ${C.amber}44`, background: reviseMode ? `${C.amber}10` : 'transparent',
-                        color: C.amber, fontSize: 11, cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Sparkles size={11} /> {reviseMode ? 'Cancel' : 'Ask Katana to revise'}
-                    </button>
-                    <button onClick={() => setEditMode(true)}
-                      style={{ padding: '5px 10px', borderRadius: 5,
-                        border: `1px solid ${C.border}`, background: 'transparent',
-                        color: C.muted, fontSize: 11, cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Edit2 size={10} /> Edit
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
+          {logoUrl
+            ? <img src={logoUrl} alt="" style={{ width: '100%', objectFit: 'contain', padding: 4 }} />
+            : <span className="text-sm font-semibold" style={{ color: avColor }}>{avInitial}</span>
+          }
+        </div>
+        {/* Sender info */}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-sm font-semibold text-slate-800">{senderLabel}</span>
+            {isDraft && (
+              <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">AI draft</span>
+            )}
+          </div>
+          {email.from_address && !isOut && (
+            <p className="truncate text-xs text-slate-400">{email.from_address}</p>
           )}
         </div>
-      </div>
-    </div>
-  );
-}
+        {/* Direction badge + timestamp */}
+        <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${stepBadge.cls}`}>
+          {stepBadge.label}
+        </span>
+        <time className="shrink-0 text-xs text-slate-400">{fmtDate(ts)}</time>
+      </header>
 
-// ─── Thread area (tabs + messages) ───────────────────────────────────────────
-function ThreadArea({ emails, queryId, courierName, courierCode, approving, onApproved }) {
-  const [tab, setTab] = useState('customer');
-  const messagesRef = useRef(null);
-
-  const customerEmails = emails.filter(e => e.direction === 'inbound_customer' || e.direction === 'outbound_customer');
-  const courierEmails  = emails.filter(e => e.direction === 'inbound_courier'  || e.direction === 'outbound_courier');
-  const noteEmails     = emails.filter(e => e.direction === 'note');
-  const logoUrl = courierCode ? getCourierLogo(courierCode) : null;
-
-  const tabs = [
-    { key: 'customer', label: 'Customer',               count: customerEmails.length, color: C.blue },
-    { key: 'courier',  label: courierName || 'Courier',  count: courierEmails.length,  color: C.amber, logo: logoUrl },
-    { key: 'notes',    label: 'Notes',                  count: noteEmails.length,     color: C.muted },
-  ];
-
-  const visible = tab === 'customer' ? customerEmails
-                : tab === 'courier'  ? courierEmails
-                : noteEmails;
-
-  // Scroll to bottom of messages when tab changes or new message arrives.
-  // Using scrollTop directly — scrollIntoView bubbles up the DOM and can
-  // scroll the window if the messages div has no overflow, breaking the layout.
-  useEffect(() => {
-    if (messagesRef.current) {
-      messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
-    }
-  }, [tab, emails.length]);
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-      {/* Tab bar */}
-      <div style={{ display: 'flex', flexShrink: 0, borderBottom: `1px solid ${C.border}`, background: C.surface }}>
-        {tabs.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)} style={{
-            padding: '9px 16px', border: 'none',
-            borderBottom: `2px solid ${tab === t.key ? t.color : 'transparent'}`,
-            background: 'transparent',
-            color: tab === t.key ? t.color : C.muted,
-            fontSize: 12, fontWeight: tab === t.key ? 700 : 400,
-            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, transition: 'color 0.1s',
-          }}>
-            {t.logo ? (
-              <div style={{ background: '#fff', borderRadius: 2, padding: '1px 3px', display: 'flex', alignItems: 'center' }}>
-                <img src={t.logo} alt="" style={{ height: 11, objectFit: 'contain' }} />
-              </div>
-            ) : null}
-            {t.label}
-            {t.count > 0 && (
-              <span style={{
-                fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8,
-                background: tab === t.key ? `${t.color}22` : C.card,
-                color: tab === t.key ? t.color : C.muted,
-              }}>{t.count}</span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Messages */}
-      <div ref={messagesRef} style={{ flex: 1, overflowY: 'auto', padding: '14px 18px 6px' }}>
-        {visible.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '48px 20px', color: C.muted }}>
-            <Mail size={28} style={{ marginBottom: 10, opacity: 0.25 }} />
-            <div style={{ fontSize: 13 }}>No messages in this thread yet</div>
+      {/* Body — full width, no fixed height, no inner scroll */}
+      <div className="w-full max-w-none">
+        {editMode ? (
+          <textarea
+            value={editBody}
+            onChange={e => setEditBody(e.target.value)}
+            style={{
+              width: '100%', minHeight: 120, background: '#FAFAFA',
+              border: '1px solid #E2E8F0', borderRadius: 8,
+              color: '#334155', fontSize: 13, padding: 10, resize: 'vertical',
+              fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none', lineHeight: 1.65,
+            }}
+          />
+        ) : email.html_body ? (
+          <div className="prose prose-slate max-w-none">
+            <EmailHtml html={email.html_body} />
           </div>
         ) : (
-          [...visible]
-            .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
-            .map(email => (
-              <MessageBubble
-                key={email.id}
-                email={email}
-                queryId={queryId}
-                courierName={courierName}
-                courierCode={courierCode}
-                approving={approving}
-                onApproved={onApproved}
-              />
-            ))
+          <pre className="m-0 h-auto w-full max-w-none whitespace-pre-wrap break-words font-sans text-base leading-relaxed text-slate-800">
+            {bodyText || <span className="italic text-slate-400">No content</span>}
+          </pre>
+        )}
+
+        {/* AI draft actions */}
+        {isDraft && (
+          <div style={{ marginTop: 14 }}>
+            {reviseMode ? (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                <textarea
+                  value={reviseText}
+                  onChange={e => { reviseRef.current = e.target.value; setReviseText(e.target.value); }}
+                  autoFocus rows={2}
+                  placeholder="What would you like to change or teach the AI? (e.g., make it shorter, add specific instructions…)"
+                  style={{
+                    flex: 1, background: C.card, border: `0.5px solid ${C.border}`,
+                    borderRadius: 8, padding: '8px 10px', fontSize: 12, color: C.text,
+                    lineHeight: 1.55, resize: 'none', outline: 'none', fontFamily: 'inherit',
+                  }}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitRevision(); } }}
+                />
+                <button onClick={speech.toggle} style={{
+                  width: 32, height: 32, borderRadius: 8,
+                  border: `0.5px solid ${C.border}`,
+                  background: speech.listening ? C.blue : C.card,
+                  color: speech.listening ? '#fff' : C.muted,
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/>
+                  </svg>
+                </button>
+                <button onClick={submitRevision} disabled={revising || !reviseText.trim()} style={{
+                  padding: '0 14px', height: 32, borderRadius: 8, border: 'none',
+                  background: C.blue, color: '#fff', fontSize: 12, fontWeight: 500,
+                  cursor: (revising || !reviseText.trim()) ? 'not-allowed' : 'pointer',
+                  opacity: (revising || !reviseText.trim()) ? 0.5 : 1,
+                  display: 'flex', alignItems: 'center', gap: 5,
+                }}>
+                  {revising ? <RefreshCw size={11} /> : <Send size={11} />}
+                  {revising ? 'Rewriting…' : 'Rewrite'}
+                </button>
+                <button onClick={() => setReviseMode(false)} style={{
+                  padding: '0 12px', height: 32, borderRadius: 8,
+                  border: `0.5px solid ${C.border}`, background: 'transparent',
+                  color: C.muted, fontSize: 12, cursor: 'pointer',
+                }}>
+                  Cancel
+                </button>
+              </div>
+            ) : editMode ? (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => { doApprove(editBody); setEditMode(false); }} disabled={approving} style={{
+                  padding: '6px 14px', borderRadius: 8, border: 'none',
+                  background: C.green, color: '#fff', fontSize: 12, fontWeight: 500,
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
+                }}>
+                  <CheckCircle2 size={11} /> {approving ? 'Saving…' : 'Approve & send'}
+                </button>
+                <button onClick={() => { setEditMode(false); setEditBody(email.body_text || ''); }} style={{
+                  padding: '6px 12px', borderRadius: 8, border: `0.5px solid ${C.border}`,
+                  background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer',
+                }}>
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => doApprove()} disabled={approving} style={{
+                  padding: '6px 14px', borderRadius: 8, border: 'none',
+                  background: C.green, color: '#fff', fontSize: 12, fontWeight: 500,
+                  opacity: approving ? 0.6 : 1, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 5,
+                }}>
+                  <CheckCircle2 size={11} /> {approving ? 'Sending…' : 'Approve & send'}
+                </button>
+                <button onClick={() => setReviseMode(true)} style={{
+                  padding: '6px 12px', borderRadius: 8, border: `0.5px solid ${C.border}`,
+                  background: 'transparent', color: C.sub, fontSize: 12, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 5,
+                }}>
+                  <Sparkles size={11} /> Refine
+                </button>
+                <button onClick={() => setEditMode(true)} style={{
+                  padding: '6px 12px', borderRadius: 8, border: `0.5px solid ${C.border}`,
+                  background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 5,
+                }}>
+                  <Edit2 size={11} /> Edit
+                </button>
+                <button onClick={discardDraft} style={{
+                  padding: '6px 12px', borderRadius: 8, border: '0.5px solid #FCA5A5',
+                  background: 'transparent', color: '#DC2626', fontSize: 12, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 5, marginLeft: 'auto',
+                }}>
+                  🗑️ Discard Draft
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
-    </div>
+    </article>
   );
 }
 
-// ─── Unified compose bar ──────────────────────────────────────────────────────
-function UnifiedComposeBar({ queryId, courierName, onSent }) {
-  const [active,    setActive]    = useState(null); // null | 'customer' | 'courier' | 'note'
-  const [text,      setText]      = useState('');
-  const [sending,   setSending]   = useState(false);
-  const [generating, setGen]      = useState(false);
-  const [drafted,   setDrafted]   = useState(false);
+// ── Compose bar ───────────────────────────────────────────────────────────────
+function ComposeBar({ queryId, courierName, onSent }) {
+  const [active,     setActive]  = useState(null);
+  const [text,       setText]    = useState('');
+  const [sending,    setSending] = useState(false);
+  const [generating, setGen]     = useState(false);
+  const [drafted,    setDrafted] = useState(false);
   const qc = useQueryClient();
 
   const tabs = [
-    { key: 'customer', label: 'Reply to Customer',                icon: Mail,          color: C.blue,  dir: 'outbound_customer' },
-    { key: 'courier',  label: `Email ${courierName || 'Courier'}`, icon: Truck,         color: C.amber, dir: 'outbound_courier'  },
-    { key: 'note',     label: 'Internal Note',                    icon: MessageSquare, color: C.muted, dir: 'note'              },
+    { key: 'customer', label: 'Reply to customer',            icon: Mail,          dir: 'outbound_customer' },
+    { key: 'courier',  label: `Chase ${courierName || 'courier'}`, icon: Truck,    dir: 'outbound_courier'  },
+    { key: 'note',     label: 'Internal note',                icon: MessageSquare, dir: 'note'              },
   ];
-
   const activeCfg = tabs.find(t => t.key === active);
-  const accent    = activeCfg?.color || C.blue;
 
-  function switchTab(key) {
-    setActive(a => a === key ? null : key);
-    setText(''); setDrafted(false);
-  }
+  function switchTab(key) { setActive(a => a === key ? null : key); setText(''); setDrafted(false); }
 
   async function generateDraft() {
     if (!active || active === 'note') return;
     setGen(true);
     try {
       const r = await fetch(`/api/queries/${queryId}/generate-draft`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ target: active }),
       });
       if (!r.ok) throw new Error(await r.text());
-      setDrafted(true);
-      qc.invalidateQueries(['ticket', queryId]);
-    } catch (e) {
-      alert('Failed to generate draft: ' + e.message);
-    } finally { setGen(false); }
+      setDrafted(true); qc.invalidateQueries(['ticket', queryId]);
+    } catch (e) { alert('Failed: ' + e.message); }
+    finally { setGen(false); }
   }
 
   async function send() {
@@ -635,29 +656,31 @@ function UnifiedComposeBar({ queryId, courierName, onSent }) {
       setText(''); setDrafted(false);
       qc.invalidateQueries(['ticket', queryId]);
       onSent?.();
-    } catch (e) {
-      alert('Send failed: ' + (e.response?.data?.error || e.message));
-    } finally { setSending(false); }
+    } catch (e) { alert('Send failed: ' + (e.response?.data?.error || e.message)); }
+    finally { setSending(false); }
   }
 
   return (
-    <div style={{ flexShrink: 0, borderTop: `1px solid ${C.border}`, background: '#080F1E' }}>
-      {/* Tab bar */}
-      <div style={{ display: 'flex', borderBottom: active ? `1px solid ${C.border}` : 'none' }}>
+    <div style={{ flexShrink: 0, borderTop: '1px solid #E2E8F0', background: '#fff' }}>
+      {/* Premium tab bar */}
+      <div style={{ display: 'flex', padding: '10px 16px 0', gap: 2, borderBottom: '1px solid #E2E8F0', background: '#fff' }}>
         {tabs.map(t => (
-          <button key={t.key}
-            onClick={() => switchTab(t.key)}
-            style={{
-              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-              padding: '8px 6px', border: 'none',
-              borderTop: `2px solid ${active === t.key ? t.color : 'transparent'}`,
-              background: active === t.key ? `${t.color}10` : 'transparent',
-              color: active === t.key ? t.color : C.muted,
-              fontSize: 11, fontWeight: active === t.key ? 700 : 500,
-              cursor: 'pointer', transition: 'all 0.1s',
-              borderRight: t.key !== 'note' ? `1px solid ${C.border}` : 'none',
-            }}>
-            <t.icon size={11} />
+          <button key={t.key} onClick={() => switchTab(t.key)} style={{
+            padding: '6px 12px',
+            border: active === t.key ? '1px solid #E2E8F0' : 'none',
+            borderBottom: active === t.key ? '2px solid #0F172A' : '2px solid transparent',
+            borderRadius: 0,
+            background: 'transparent',
+            color: active === t.key ? '#0F172A' : '#94A3B8',
+            fontSize: 12.5, fontWeight: active === t.key ? 700 : 500,
+            cursor: 'pointer', marginBottom: 0,
+            display: 'flex', alignItems: 'center', gap: 6,
+            transition: 'all 0.1s', fontFamily: 'inherit',
+          }}
+            onMouseEnter={e => { if (active !== t.key) e.currentTarget.style.color = '#64748B'; }}
+            onMouseLeave={e => { if (active !== t.key) e.currentTarget.style.color = '#94A3B8'; }}
+          >
+            <t.icon size={12} />
             {t.label}
           </button>
         ))}
@@ -665,91 +688,81 @@ function UnifiedComposeBar({ queryId, courierName, onSent }) {
 
       {/* Compose area */}
       {active && (
-        <div style={{ padding: '10px 14px 12px' }}>
-          {/* AI draft confirmation banner */}
+        <div style={{ padding: '14px 20px' }}>
           {drafted && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10,
-              padding: '7px 10px', borderRadius: 6,
-              background: 'rgba(63,185,80,0.08)', border: `1px solid ${C.green}33`,
-              fontSize: 11, color: C.green, fontWeight: 600 }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10,
+              padding: '7px 10px', borderRadius: 8, background: C.greenDim,
+              fontSize: 12, color: C.green, fontWeight: 500,
+            }}>
               <CheckCircle2 size={12} />
-              Katana draft generated — scroll up to review and approve
+              AI draft generated — scroll up to review and approve
             </div>
           )}
-
           <textarea
             value={text}
             onChange={e => setText(e.target.value)}
             placeholder={
-              active === 'customer' ? 'Reply to customer…'
-              : active === 'courier'  ? 'Message to courier…'
-              : 'Add an internal note (visible to team only)…'
+              active === 'customer' ? 'Write a reply…'
+              : active === 'courier' ? `Message to ${courierName || 'courier'}…`
+              : 'Internal note — visible to your team only…'
             }
             rows={3}
             style={{
               width: '100%', boxSizing: 'border-box',
-              background: C.card, border: `1px solid ${C.border}`,
-              borderRadius: 7, padding: '9px 12px', color: C.text,
-              fontSize: 12, lineHeight: 1.6, resize: 'none', outline: 'none',
+              background: C.card, border: `0.5px solid ${C.border}`,
+              borderRadius: 8, padding: '10px 12px', color: C.text,
+              fontSize: 13, lineHeight: 1.65, resize: 'none', outline: 'none',
               fontFamily: 'inherit', display: 'block',
             }}
-            onFocus={e => e.target.style.borderColor = `${accent}55`}
-            onBlur={e => e.target.style.borderColor = C.border}
             onKeyDown={e => { if (e.key === 'Enter' && e.metaKey) send(); }}
           />
-
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-            {/* AI draft button (only for customer/courier) */}
-            {active !== 'note' ? (
-              <button onClick={generateDraft} disabled={generating}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  background: generating ? 'rgba(168,85,247,0.08)' : 'rgba(168,85,247,0.15)',
-                  border: '1px solid rgba(168,85,247,0.3)', borderRadius: 5,
-                  color: generating ? C.muted : '#C4B5FD',
-                  fontSize: 11, fontWeight: 600, padding: '5px 12px',
-                  cursor: generating ? 'not-allowed' : 'pointer',
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {active !== 'note' && (
+                <button onClick={generateDraft} disabled={generating} style={{
+                  display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px',
+                  borderRadius: 6, border: '1px solid #E2E8F0', background: '#fff',
+                  color: generating ? '#94A3B8' : '#6366F1', fontSize: 12,
+                  cursor: generating ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
                 }}>
-                <Sparkles size={11} />
-                {generating ? 'Generating…' : drafted ? 'Regenerate Draft' : 'Katana Draft'}
-              </button>
-            ) : <div />}
-
-            {/* Send button */}
-            <button
-              onClick={send}
-              disabled={sending || !text.trim()}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                background: sending || !text.trim() ? `${accent}10` : `${accent}1A`,
-                border: `1px solid ${accent}55`, borderRadius: 6,
-                color: text.trim() ? '#3B82F6' : C.muted,
-                fontSize: 12, fontWeight: 700, padding: '6px 18px',
-                cursor: sending || !text.trim() ? 'not-allowed' : 'pointer',
-                transition: 'all 0.1s',
+                  <Sparkles size={12} />
+                  {generating ? 'Generating…' : drafted ? 'Regenerate' : 'AI draft'}
+                </button>
+              )}
+              <button style={{
+                padding: '5px 11px', borderRadius: 6,
+                border: '1px solid #E2E8F0', background: '#fff',
+                color: '#64748B', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
               }}>
+                Template
+              </button>
+            </div>
+            <button onClick={send} disabled={sending || !text.trim()} style={{
+              display: 'flex', alignItems: 'center', gap: 5, padding: '7px 18px',
+              borderRadius: 7, border: 'none',
+              background: text.trim() ? '#0F172A' : '#CBD5E1',
+              color: '#fff', fontSize: 12, fontWeight: 600,
+              cursor: sending || !text.trim() ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+            }}>
               <Send size={12} />
-              {sending ? 'Sending…' : active === 'note' ? 'Save Note' : 'Send'}
+              {sending ? 'Sending…' : active === 'note' ? 'Save note' : 'Send'}
             </button>
           </div>
-          {active !== 'note' && (
-            <div style={{ fontSize: 9, color: C.muted, marginTop: 5 }}>
-              ⌘+Enter to send · Or use Katana Draft above — it saves to the thread for your review
-            </div>
-          )}
         </div>
       )}
     </div>
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+// ── Main page ─────────────────────────────────────────────────────────────────
 export default function TicketDetailPage() {
   const { id }   = useParams();
   const navigate = useNavigate();
   const qc       = useQueryClient();
+  const messagesRef = useRef(null);
+  const [convTab, setConvTab] = useState('customer');  // 'customer' | 'courier'
 
-  // Fetch ticket + emails
   const { data: ticket, isLoading, error } = useQuery({
     queryKey: ['ticket', id],
     queryFn:  () => api.get(`/queries/${id}`).then(r => r.data),
@@ -757,14 +770,12 @@ export default function TicketDetailPage() {
     refetchOnWindowFocus: true,
   });
 
-  // Fetch staff list
   const { data: staffList = [] } = useQuery({
     queryKey: ['staff'],
     queryFn:  () => api.get('/staff').then(r => r.data),
     staleTime: 300_000,
   });
 
-  // Fetch tracking if consignment present
   const consignment = ticket?.consignment_number;
   const { data: trackingData } = useQuery({
     queryKey: ['ticket-tracking', consignment],
@@ -773,193 +784,123 @@ export default function TicketDetailPage() {
     staleTime: 60_000,
   });
 
-  // PATCH mutation for sidebar fields
   const patch = useMutation({
-    mutationFn: (body) => api.patch(`/queries/${id}`, body).then(r => r.data),
+    mutationFn: body => api.patch(`/queries/${id}`, body).then(r => r.data),
     onSuccess:  () => qc.invalidateQueries(['ticket', id]),
   });
 
-  const [approving, setApproving] = useState(false);
-
-  // Mark emails as read on load
+  // Mark emails read on open
   useEffect(() => {
-    if (ticket?.id) {
-      api.post(`/queries/${ticket.id}/mark-read`).catch(() => {});
-    }
+    if (ticket?.id) api.post(`/queries/${ticket.id}/mark-read`).catch(() => {});
   }, [ticket?.id]);
 
-  async function handleApproved() {
-    qc.invalidateQueries(['ticket', id]);
-  }
+  // Tick once a minute so the SLA countdown in the meta shelf stays live.
+  const [, setSlaTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setSlaTick(t => t + 1), 60000);
+    return () => clearInterval(id);
+  }, []);
 
-  if (isLoading) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 400, color: C.muted }}>
-        <RefreshCw size={18} style={{ animation: 'spin 1s linear infinite', marginRight: 10 }} />
-        Loading ticket…
-      </div>
-    );
-  }
+  // Newest reply sits at the TOP → open scrolled to the top so the latest message
+  // is the first thing you see. Re-runs catch late-rendering HTML/images that
+  // would otherwise nudge the scroll position.
+  const emails = ticket?.emails || [];
+  useEffect(() => {
+    const el = messagesRef.current;
+    if (!el) return;
+    const toTop = () => el.scrollTo({ top: 0, behavior: 'auto' });
+    toTop();
+    const t1 = setTimeout(toTop, 300);
+    const t2 = setTimeout(toTop, 900);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [emails.length]);
 
-  if (error || !ticket) {
-    return (
-      <div style={{ padding: 40, textAlign: 'center', color: C.red }}>
-        <AlertTriangle size={28} style={{ marginBottom: 10 }} />
-        <div>Ticket not found</div>
-        <button onClick={() => navigate('/queries')} style={{
-          marginTop: 14, background: 'none', border: `1px solid ${C.border}`,
-          borderRadius: 6, color: C.muted, padding: '7px 14px', cursor: 'pointer',
-        }}>
-          ← Back to tickets
-        </button>
-      </div>
-    );
-  }
+  // ── Loading / error states ─────────────────────────────────────────────────
 
-  const emails       = ticket.emails || [];
-  const priority     = PRIORITY_CFG[ticket.priority] || PRIORITY_CFG.medium;
-  const status       = STATUS_CFG[ticket.status]    || { label: ticket.status, color: C.muted };
-  const courierLogo  = ticket.courier_code ? getCourierLogo(ticket.courier_code) : null;
-  const trackEvents  = (trackingData?.events || trackingData?.parcel?.events || []);
-  const parcel       = trackingData?.parcel || trackingData || null;
+  if (isLoading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 400, color: C.muted, gap: 10 }}>
+      <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} />
+      Loading…
+    </div>
+  );
+
+  if (error || !ticket) return (
+    <div style={{ padding: 48, textAlign: 'center' }}>
+      <AlertTriangle size={24} color={C.red} style={{ marginBottom: 12 }} />
+      <div style={{ fontSize: 14, color: C.red, marginBottom: 14 }}>Ticket not found</div>
+      <button onClick={() => navigate('/queries')} style={{
+        background: 'none', border: `0.5px solid ${C.border}`, borderRadius: 8,
+        color: C.muted, padding: '7px 14px', cursor: 'pointer', fontSize: 13,
+      }}>
+        ← Back to queries
+      </button>
+    </div>
+  );
+
+  // ── Derived values ─────────────────────────────────────────────────────────
+
+  const status      = STATUS_CFG[ticket.status] || { label: ticket.status, color: C.muted, bg: 'transparent' };
+  const slaText     = slaCountdownString(ticket);
+  const courierLogo = ticket.courier_code ? getCourierLogo(ticket.courier_code) : null;
+  const trackEvents = trackingData?.events || trackingData?.parcel?.events || [];
+  const parcel      = trackingData?.parcel || null;
+
+  // Newest → oldest so the latest reply is at the top of the thread.
+  const allEmails = [...emails].sort((a, b) =>
+    new Date(b.sent_at || b.received_at || b.created_at) -
+    new Date(a.sent_at || a.received_at || a.created_at)
+  );
+
+  // Split timeline — customers never see courier correspondence and vice versa.
+  const isCourierDir = e => String(e.direction || '').includes('courier');
+  const customerEmails = allEmails.filter(e => !isCourierDir(e));
+  const courierEmails  = allEmails.filter(e => isCourierDir(e));
+  // Courier tabs only make sense for parcel-led work (Queries/Claims). Billing &
+  // Technical tickets render as a clean internal CRM view with no courier track.
+  const showCourierTab = !['Billing', 'Technical'].includes(ticket?.group_name);
+  const effectiveTab   = showCourierTab ? convTab : 'customer';
+  const visibleEmails  = effectiveTab === 'courier' ? courierEmails : customerEmails;
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden' }}>
 
       {/* ── Header ── */}
-      <div style={{ flexShrink: 0, background: C.header, borderBottom: `1px solid ${C.border}` }}>
-        {/* Row 1: back · customer name · type badge · status */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px 8px' }}>
-          <button onClick={() => navigate('/queries')} style={{
-            width: 26, height: 26, borderRadius: 6, border: 'none',
-            background: 'rgba(255,255,255,0.06)', color: C.sub,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', flexShrink: 0,
-          }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.12)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
+      <div style={{ flexShrink: 0 }}>
+
+        {/* ── Unified Command Banner ──────────────────────────────────────── */}
+        <div className="flex w-full items-center justify-between border-b border-slate-200 bg-white p-6">
+          {/* Left — back + identity */}
+          <div className="flex min-w-0 items-center">
+            <button
+              onClick={() => navigate('/queries')}
+              className="mr-4 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-500 transition-colors hover:text-slate-800"
+            >
+              ❮ Back to Queue
+            </button>
+            <span className={`mr-3 inline-flex shrink-0 items-center rounded-md border px-3 py-1 text-sm font-bold tracking-wide ${ticketBadgeClasses(ticket)}`}>
+              Moov-{ticket.ticket_number}
+            </span>
+            <span className="truncate text-xl font-black tracking-tight text-slate-900">
+              {ticket.customer_name || ticket.subject || 'Ticket'}
+            </span>
+          </div>
+
+          {/* Right — resolution control */}
+          <button
+            onClick={() => patch.mutate({ status: 'resolved' })}
+            className="flex shrink-0 items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-emerald-100 transition-all hover:bg-emerald-700"
           >
-            <ArrowLeft size={13} />
+            ✓ Mark as Resolved
           </button>
-          <span style={{ fontSize: 17, fontWeight: 800, color: C.text, letterSpacing: '-0.02em',
-            flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {ticket.customer_name || ticket.subject}
-          </span>
-          {ticket.query_type && (
-            <span style={{ fontSize: 11, fontWeight: 700, color: C.amber,
-              background: C.amberDim, border: `1px solid ${C.amber}33`,
-              padding: '3px 10px', borderRadius: 5, flexShrink: 0,
-              textTransform: 'capitalize', letterSpacing: '0.01em' }}>
-              {ticket.query_type.replace(/_/g, ' ')}
-            </span>
-          )}
-          <span style={{ fontSize: 11, fontWeight: 700, color: status.color,
-            background: `${status.color}18`, border: `1px solid ${status.color}33`,
-            padding: '3px 10px', borderRadius: 5, flexShrink: 0, marginLeft: 'auto' }}>
-            {status.label}
-          </span>
-        </div>
-        {/* Row 2: courier logo · consignment · parcel status · divider · ticket# */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px 10px', paddingLeft: 52 }}>
-          {courierLogo && (
-            <div style={{ background: '#fff', borderRadius: 3, padding: '2px 5px', display: 'flex', alignItems: 'center', height: 18 }}>
-              <img src={courierLogo} alt="" style={{ height: 12, objectFit: 'contain' }} />
-            </div>
-          )}
-          {consignment && (
-            <span style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: 700,
-              background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)',
-              borderRadius: 6, padding: '2px 8px', color: '#6A8BAA', letterSpacing: '0.03em' }}>
-              {consignment}
-            </span>
-          )}
-          {parcel?.status && (() => {
-            const ps = TRACK_STATUS[parcel.status] || TRACK_STATUS.unknown;
-            return (
-              <span style={{ fontSize: 12, fontWeight: 700, color: ps.color }}>{ps.label}</span>
-            );
-          })()}
-          {(consignment || courierLogo) && ticket.ticket_number && (
-            <div style={{ width: 1, height: 12, background: C.border, marginLeft: 2 }} />
-          )}
-          {ticket.ticket_number && (
-            <span style={{ fontSize: 11, color: C.muted, fontFamily: 'monospace', fontWeight: 700 }}>
-              #{ticket.ticket_number}
-            </span>
-          )}
-          {ticket.requires_attention && (
-            <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, color: C.red,
-              background: C.redDim, border: `1px solid ${C.red}33`,
-              padding: '2px 7px', borderRadius: 4 }}>⚠ NEEDS ATTENTION</span>
-          )}
-        </div>
-      </div>
-
-      {/* ── Body ─────────────────────────────────────────────────── */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-
-        {/* ── Left: thread + compose ───────────────────────────── */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-          <ThreadArea
-            emails={emails}
-            queryId={id}
-            courierName={ticket.courier_name}
-            courierCode={ticket.courier_code}
-            approving={approving}
-            onApproved={handleApproved}
-          />
-          <UnifiedComposeBar
-            queryId={id}
-            courierName={ticket.courier_name}
-            onSent={() => qc.invalidateQueries(['ticket', id])}
-          />
         </div>
 
-        {/* ── Right sidebar ─────────────────────────────────────── */}
-        <div style={{
-          width: 196, flexShrink: 0,
-          background: C.bg, borderLeft: `1px solid ${C.border}`,
-          overflowY: 'auto', padding: '14px 14px 32px',
-        }}>
-          {/* SLA */}
-          <SlaChip
-            sla_due_at={ticket.sla_due_at}
-            sla_breached={ticket.sla_breached}
-            sla_mins_remaining={ticket.sla_mins_remaining}
-          />
-          {ticket.sla_due_at && <div style={{ marginBottom: 12 }} />}
-
-          {/* Ticket section */}
-          <div style={{ fontSize: 9, fontWeight: 700, color: '#1E3A5A', textTransform: 'uppercase',
-            letterSpacing: '0.08em', marginBottom: 8 }}>Ticket</div>
-
-          <PropRow icon={AlertTriangle} label="Priority">
-            <InlineSelect
-              value={ticket.priority || 'medium'}
-              onChange={v => patch.mutate({ priority: v })}
-              options={Object.entries(PRIORITY_CFG).map(([k, v]) => ({ value: k, label: v.label }))}
-              colorMap={PRIORITY_CFG}
-            />
-          </PropRow>
-
-          <PropRow icon={Tag} label="Status">
-            <InlineSelect
-              value={ticket.status}
-              onChange={v => patch.mutate({ status: v })}
-              options={Object.entries(STATUS_CFG).map(([k, v]) => ({ value: k, label: v.label }))}
-              colorMap={STATUS_CFG}
-            />
-          </PropRow>
-
-          <PropRow icon={Users} label="Group">
-            <InlineSelect
-              value={ticket.group_name || ''}
-              onChange={v => patch.mutate({ group_name: v || null })}
-              options={[{ value: '', label: '— Unassigned —' }, ...GROUPS.map(g => ({ value: g, label: g }))]}
-            />
-          </PropRow>
-
-          <PropRow icon={User} label="Assignee">
+        {/* ── Streamlined Meta Control Shelf ──────────────────────────────── */}
+        <div className="flex items-center gap-6 border-b border-slate-200 bg-slate-50/50 px-6 py-3.5 text-sm font-medium text-slate-600">
+          {/* Assigned To */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wide text-slate-400">Assigned</span>
             <InlineSelect
               value={ticket.assigned_to || ''}
               onChange={v => patch.mutate({ assigned_to: v || null })}
@@ -968,128 +909,292 @@ export default function TicketDetailPage() {
                 ...staffList.map(s => ({ value: s.id, label: s.full_name || s.name })),
               ]}
             />
-          </PropRow>
+          </div>
 
-          <PropRow icon={Clock} label="Opened">
-            <div style={{ fontSize: 11, color: C.sub }}>{fmtDate(ticket.created_at)}</div>
-            <div style={{ fontSize: 10, color: C.muted }}>{timeAgo(ticket.created_at)}</div>
-          </PropRow>
+          {/* Group */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wide text-slate-400">Group</span>
+            <InlineSelect
+              value={ticket.group_name || ''}
+              onChange={v => patch.mutate({ group_name: v || null })}
+              options={[{ value: '', label: '— None —' }, ...GROUPS.map(g => ({ value: g, label: g }))]}
+            />
+          </div>
 
-          {ticket.query_type && (
-            <PropRow icon={FileText} label="Type">
-              <div style={{ fontSize: 11, color: C.sub, textTransform: 'capitalize' }}>
-                {ticket.query_type.replace(/_/g, ' ')}
+          {/* Priority — high-visibility colour-coded badge */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wide text-slate-400">Priority</span>
+            <span className={`inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-bold uppercase tracking-wide ${ticketBadgeClasses(ticket)}`}>
+              {(PRIORITY_CFG[ticket.priority] || PRIORITY_CFG.medium).label}
+            </span>
+          </div>
+
+          {/* SLA Target — live countdown, eye-catching highlight box */}
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wide text-slate-400">SLA Target</span>
+            {slaText ? (
+              <span className={`inline-flex items-center rounded-lg border px-3 py-1.5 text-sm font-bold tabular-nums ${
+                ticket.courier_sla_breached
+                  ? 'border-red-200 bg-red-50 text-red-700 animate-pulse'
+                  : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+                {slaText}
+              </span>
+            ) : (
+              <span className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-400">
+                No SLA set
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Body ── */}
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
+
+        {/* ── Left: parallel dual-track conversation + compose ── */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, overflow: 'hidden', background: '#F8FAFC' }}>
+
+          {/* Two lanes, side by side: Customer Face (Track A) + Courier Face (Track B).
+              Billing/Technical tickets hide the courier lane for a clean CRM view. */}
+          <div className={`grid min-h-0 flex-1 gap-0 overflow-hidden ${showCourierTab ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
+
+            {/* Track A — Customer Face */}
+            <div className="flex min-h-0 flex-col border-r border-slate-200 bg-white">
+              <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-3">
+                <span className="text-xs font-extrabold uppercase tracking-wide text-blue-600">👤 Customer Face</span>
+                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-700">{customerEmails.length}</span>
               </div>
-            </PropRow>
-          )}
-
-          {/* Attention */}
-          {ticket.requires_attention && ticket.attention_reason && (
-            <div style={{ margin: '10px 0', padding: '8px 10px', borderRadius: 6,
-              background: C.amberDim, border: `1px solid ${C.amber}33`,
-              fontSize: 11, color: C.amber, lineHeight: 1.45 }}>
-              ⚠ {ticket.attention_reason}
+              <div ref={messagesRef} className="min-h-0 flex-1 overflow-y-auto p-6">
+                {customerEmails.length === 0 ? (
+                  <div className="py-12 text-center text-sm text-slate-400">No customer messages yet</div>
+                ) : customerEmails.map(email => (
+                  <ThreadItem
+                    key={email.id} email={email} queryId={id}
+                    courierName={ticket.courier_name} courierCode={ticket.courier_code}
+                    onApproved={() => qc.invalidateQueries(['ticket', id])}
+                  />
+                ))}
+              </div>
             </div>
-          )}
 
-          {/* Customer section */}
+            {/* Track B — Courier Face */}
+            {showCourierTab && (
+              <div className="flex min-h-0 flex-col bg-white">
+                <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-3">
+                  <span className="text-xs font-extrabold uppercase tracking-wide text-amber-600">
+                    🚚 Courier Face{ticket.courier_name ? ` · ${ticket.courier_name}` : ''}
+                  </span>
+                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-700">{courierEmails.length}</span>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto p-6">
+                  {courierEmails.length === 0 ? (
+                    <div className="py-12 text-center text-sm text-slate-400">No courier correspondence yet</div>
+                  ) : courierEmails.map(email => (
+                    <ThreadItem
+                      key={email.id} email={email} queryId={id}
+                      courierName={ticket.courier_name} courierCode={ticket.courier_code}
+                      onApproved={() => qc.invalidateQueries(['ticket', id])}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Compose */}
+          <ComposeBar
+            queryId={id}
+            courierName={ticket.courier_name}
+            onSent={() => qc.invalidateQueries(['ticket', id])}
+          />
+        </div>
+
+        {/* ── Right sidebar ── */}
+        <div style={{
+          width: 264, flexShrink: 0, background: '#fff',
+          borderLeft: '1px solid #E2E8F0',
+          overflowY: 'auto', padding: 0,
+        }}>
+
+          {/* SLA + Assignment now live in the top header — sidebar is parcel/customer/claim only. */}
+
+          {/* 1. Parcel — always shown */}
+          <SbSection title="Parcel" action={
+            consignment ? (
+              <button onClick={() => navigate(`/tracking?q=${encodeURIComponent(consignment)}`)}
+                style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700,
+                  color: '#6366F1', background: '#EEF2FF', border: '1px solid #C7D2FE',
+                  borderRadius: 6, padding: '3px 9px', cursor: 'pointer' }}>
+                <ExternalLink size={10} /> Track
+              </button>
+            ) : null
+          }>
+            {consignment ? (
+              <>
+                {/* Carrier + parcel status */}
+                {(courierLogo || ticket.courier_name) && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    {courierLogo && (
+                      <div style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid #E2E8F0',
+                        background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        overflow: 'hidden', flexShrink: 0 }}>
+                        <img src={courierLogo} alt="" style={{ width: '100%', objectFit: 'contain', padding: 3 }} />
+                      </div>
+                    )}
+                    <span style={{ fontSize: 12.5, fontWeight: 600, color: '#0F172A' }}>{ticket.courier_name}</span>
+                    {parcel?.status && (
+                      <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, textTransform: 'capitalize',
+                        color: parcel.status === 'delivered' ? '#166534' : '#92400E',
+                        background: parcel.status === 'delivered' ? '#F0FDF4' : '#FFFBEB',
+                        padding: '2px 8px', borderRadius: 20, border: '1px solid transparent', flexShrink: 0 }}>
+                        {parcel.status.replace(/_/g, ' ')}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {/* Consignment chip */}
+                <div style={{ fontFamily: 'monospace', fontSize: 12.5, fontWeight: 700, color: '#0F172A',
+                  background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8,
+                  padding: '8px 12px', marginBottom: 10, letterSpacing: '0.03em',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span>{consignment}</span>
+                  <span style={{ fontSize: 10, color: '#94A3B8', fontWeight: 400, cursor: 'pointer' }}
+                    onClick={() => navigator.clipboard?.writeText(consignment)}
+                    title="Copy to clipboard">copy</span>
+                </div>
+                {ticket.service_name && (
+                  <SbRow label="Service">
+                    <span style={{ fontSize: 12, color: C.sub }}>{ticket.service_name}</span>
+                  </SbRow>
+                )}
+                {parcel?.recipient_postcode && (
+                  <SbRow label="Postcode">
+                    <span style={{ fontSize: 12, color: C.sub }}>{parcel.recipient_postcode}</span>
+                  </SbRow>
+                )}
+                {parcel?.delivered_at && (
+                  <SbRow label="Delivered">
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#166534' }}>
+                      {new Date(parcel.delivered_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </span>
+                  </SbRow>
+                )}
+                {/* Tracking timeline — appears automatically when events exist */}
+                {trackEvents.length > 0 && (
+                  <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #F1F5F9' }}>
+                    <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
+                      textTransform: 'uppercase', color: '#94A3B8', marginBottom: 12 }}>
+                      {trackEvents.length} event{trackEvents.length !== 1 ? 's' : ''}
+                    </p>
+                    <TrackingTimeline events={trackEvents} />
+                  </div>
+                )}
+                {trackEvents.length === 0 && (
+                  <div style={{ marginTop: 10, padding: '8px 10px', background: '#F8FAFC',
+                    borderRadius: 7, border: '1px solid #F1F5F9', textAlign: 'center' }}>
+                    <p style={{ fontSize: 11, color: '#CBD5E1', margin: 0 }}>No tracking events yet</p>
+                  </div>
+                )}
+              </>
+            ) : (
+              /* No consignment linked */
+              <div style={{ padding: '16px 12px', background: '#F8FAFC', borderRadius: 10,
+                border: '1px dashed #E2E8F0', textAlign: 'center' }}>
+                <div style={{ fontSize: 24, marginBottom: 8 }}>📦</div>
+                <p style={{ fontSize: 12, fontWeight: 600, color: '#94A3B8', margin: '0 0 3px' }}>No parcel linked</p>
+                <p style={{ fontSize: 11, color: '#CBD5E1', margin: 0 }}>No consignment number on this ticket</p>
+              </div>
+            )}
+          </SbSection>
+
+          {/* 2. Customer */}
           {(ticket.customer_name || ticket.sender_email) && (
-            <>
-              <div style={{ fontSize: 9, fontWeight: 700, color: '#1E3A5A', textTransform: 'uppercase',
-                letterSpacing: '0.08em', margin: '14px 0 8px' }}>Customer</div>
-
-              {ticket.customer_name && (
-                <PropRow icon={Building2} label="Account">
-                  <button
-                    onClick={() => ticket.customer_id && navigate(`/customers/${ticket.customer_id}`)}
-                    style={{ background: 'none', border: 'none', color: C.blue, fontSize: 12,
-                      fontWeight: 600, cursor: 'pointer', padding: 0, textAlign: 'left' }}>
-                    {ticket.customer_name}
-                  </button>
-                </PropRow>
+            <SbSection title="Customer">
+              {/* Avatar + name card */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14,
+                padding: '10px 12px', background: '#F8FAFC', borderRadius: 10, border: '1px solid #E2E8F0' }}>
+                <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#DBEAFE',
+                  border: '2px solid #BFDBFE', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 14, fontWeight: 800, color: '#1D4ED8', flexShrink: 0, letterSpacing: '-0.02em' }}>
+                  {(ticket.customer_name || ticket.sender_email || '?')[0].toUpperCase()}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', margin: 0,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {ticket.customer_name || ticket.sender_email}
+                  </p>
+                  {ticket.customer_name && ticket.sender_email && (
+                    <p style={{ fontSize: 11, color: '#94A3B8', margin: '2px 0 0',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {ticket.sender_email}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {ticket.customer_id && (
+                <button onClick={() => navigate(`/customers/${ticket.customer_id}`)}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    gap: 5, padding: '7px 0', borderRadius: 8, border: '1px solid #C7D2FE',
+                    background: '#EEF2FF', color: '#4338CA', fontSize: 12, fontWeight: 600,
+                    cursor: 'pointer' }}>
+                  View account →
+                </button>
               )}
-
-              {ticket.sender_email && (
-                <PropRow icon={Mail} label="Email">
-                  <div style={{ fontSize: 11, color: C.sub, wordBreak: 'break-all' }}>{ticket.sender_email}</div>
-                </PropRow>
-              )}
-            </>
+            </SbSection>
           )}
 
-          {/* Parcel + tracking section */}
-          {consignment && (
-            <>
-              <div style={{ fontSize: 9, fontWeight: 700, color: '#1E3A5A', textTransform: 'uppercase',
-                letterSpacing: '0.08em', margin: '14px 0 8px' }}>
-                Parcel
-                <a
-                  href={`/tracking?q=${encodeURIComponent(consignment)}`}
-                  onClick={e => { e.preventDefault(); navigate(`/tracking?q=${encodeURIComponent(consignment)}`); }}
-                  style={{ marginLeft: 6, color: C.blue, fontSize: 9, cursor: 'pointer', textDecoration: 'none' }}>
-                  <ExternalLink size={9} style={{ display: 'inline' }} />
-                </a>
+          {/* 3. Claim — only shown when this is a Claims ticket */}
+          {(ticket.group_name === 'Claims' || ticket.claim_number || ticket.claim_amount) && (
+          <SbSection title="Claim">
+            {/* Alert when no formal claim yet */}
+            {!ticket.claim_number && (
+              <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 10,
+                padding: '10px 12px', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <svg width="13" height="13" fill="none" viewBox="0 0 14 14">
+                    <path d="M7 2v4.5M7 9.5v.5" stroke="#C2410C" strokeWidth="1.5" strokeLinecap="round"/>
+                    <circle cx="7" cy="7" r="6" stroke="#C2410C" strokeWidth="1.4"/>
+                  </svg>
+                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.07em',
+                    textTransform: 'uppercase', color: '#C2410C' }}>No claim raised yet</span>
+                </div>
+                {ticket.claim_amount && (
+                  <p style={{ fontSize: 11.5, color: '#9A3412', margin: 0, lineHeight: 1.5 }}>
+                    Indicated value: <strong>£{Number(ticket.claim_amount).toFixed(2)}</strong>
+                  </p>
+                )}
               </div>
-
-              {courierLogo && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <div style={{ width: 28, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: '#fff', borderRadius: 3, padding: 2, flexShrink: 0 }}>
-                    <img src={courierLogo} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
-                  </div>
-                  <span style={{ fontSize: 11, color: C.sub }}>{ticket.courier_name}</span>
-                </div>
+            )}
+            {ticket.claim_number && <SbRow label="Claim no.">
+              <span style={{ fontSize: 12, color: C.text, fontWeight: 600 }}>{ticket.claim_number}</span>
+            </SbRow>}
+            <SbRow label="Amount">
+              <span style={{ fontSize: 12, color: ticket.claim_amount ? '#0F172A' : C.muted, fontWeight: ticket.claim_amount ? 700 : 400 }}>
+                {ticket.claim_amount ? `£${Number(ticket.claim_amount).toFixed(2)}` : '—'}
+              </span>
+            </SbRow>
+            <SbRow label="Evidence">
+              {(ticket.evidence_count > 0) ? (
+                <span style={{ fontSize: 12, fontWeight: 600, color: C.green }}>
+                  {ticket.evidence_count} {ticket.evidence_count === 1 ? 'file' : 'files'}
+                </span>
+              ) : (
+                <span style={{ fontSize: 11, color: C.muted }}>None yet</span>
               )}
-
-              <div style={{ fontFamily: 'monospace', fontSize: 10, fontWeight: 700, color: C.text,
-                background: C.card, border: `1px solid ${C.border}`, borderRadius: 4,
-                padding: '4px 8px', marginBottom: 8, wordBreak: 'break-all' }}>
-                {consignment}
-              </div>
-
-              {parcel?.status && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: 10, color: C.muted }}>Status</span>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: C.sub, textTransform: 'capitalize' }}>
-                    {parcel.status.replace(/_/g, ' ')}
-                  </span>
-                </div>
-              )}
-              {parcel?.recipient_postcode && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: 10, color: C.muted }}>Postcode</span>
-                  <span style={{ fontSize: 11, color: C.sub }}>{parcel.recipient_postcode}</span>
-                </div>
-              )}
-              {parcel?.estimated_delivery && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: 10, color: C.muted }}>Est. delivery</span>
-                  <span style={{ fontSize: 11, color: C.sub }}>
-                    {new Date(parcel.estimated_delivery).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                  </span>
-                </div>
-              )}
-              {parcel?.delivered_at && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: 10, color: C.muted }}>Delivered</span>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: C.green }}>
-                    {new Date(parcel.delivered_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </span>
-                </div>
-              )}
-
-              {/* Mini tracking timeline */}
-              {trackEvents.length > 0 && (
-                <>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: '#1E3A5A', textTransform: 'uppercase',
-                    letterSpacing: '0.08em', margin: '12px 0 8px' }}>
-                    Tracking ({trackEvents.length} events)
-                  </div>
-                  <TrackingMiniTimeline events={trackEvents} />
-                </>
-              )}
-            </>
+            </SbRow>
+            {!ticket.claim_number && (
+              <button style={{ width: '100%', marginTop: 12, display: 'flex', alignItems: 'center',
+                justifyContent: 'center', gap: 6, padding: '8px 0', borderRadius: 9,
+                fontSize: 12.5, fontWeight: 700, color: '#C2410C', background: '#FFF7ED',
+                border: '1.5px solid #FED7AA', cursor: 'pointer' }}>
+                + Raise Formal Claim
+              </button>
+            )}
+          </SbSection>
           )}
+
+          {/* Assignment moved to the top command bar; tracking lives in the Parcel section. */}
+
         </div>
       </div>
     </div>

@@ -17,19 +17,19 @@ const api = axios.create({ baseURL: '/api' });
 
 const S = {
   page:        { padding: '32px 40px', maxWidth: 860, margin: '0 auto' },
-  card:        { background: '#12132a', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '24px 28px', marginBottom: 20 },
-  cardTitle:   { fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 4 },
-  cardSub:     { fontSize: 13, color: '#888', marginBottom: 20 },
+  card:        { background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10, padding: '24px 28px', marginBottom: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' },
+  cardTitle:   { fontSize: 15, fontWeight: 700, color: '#0F172A', marginBottom: 4 },
+  cardSub:     { fontSize: 13, color: '#64748B', marginBottom: 20 },
   row:         { display: 'flex', gap: 12, alignItems: 'flex-end', marginBottom: 14 },
-  label:       { fontSize: 12, color: '#888', fontWeight: 600, marginBottom: 5, display: 'block', textTransform: 'uppercase', letterSpacing: '0.04em' },
-  input:       { background: '#0d0e21', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '8px 12px', color: '#fff', fontSize: 13, width: '100%', outline: 'none' },
+  label:       { fontSize: 12, color: '#64748B', fontWeight: 600, marginBottom: 5, display: 'block', textTransform: 'uppercase', letterSpacing: '0.04em' },
+  input:       { background: '#F8FAFC', border: '1px solid rgba(0,0,0,0.10)', borderRadius: 6, padding: '8px 12px', color: '#0F172A', fontSize: 13, width: '100%', outline: 'none' },
   btn:         { padding: '8px 18px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
   btnPrimary:  { background: '#00C853', color: '#000' },
-  btnSecondary:{ background: 'rgba(255,255,255,0.07)', color: '#ccc' },
-  btnDanger:   { background: 'rgba(255,60,60,0.15)', color: '#ff6b6b', border: '1px solid rgba(255,60,60,0.2)' },
+  btnSecondary:{ background: '#F1F5F9', color: '#334155', border: '1px solid rgba(0,0,0,0.08)' },
+  btnDanger:   { background: 'rgba(220,38,38,0.08)', color: '#991B1B', border: '1px solid rgba(220,38,38,0.2)' },
   toggle:      { width: 38, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 },
   pill:        { padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 },
-  divider:     { borderTop: '1px solid rgba(255,255,255,0.06)', margin: '16px 0' },
+  divider:     { borderTop: '1px solid rgba(0,0,0,0.06)', margin: '16px 0' },
 };
 
 // ─── Alert type display config ────────────────────────────────────────────────
@@ -126,9 +126,9 @@ function ConnectionCard({ config, onSaved }) {
           <div style={S.cardSub}>Emails are sent via SendGrid. Enter your API key and sending address below.</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 12, color: '#888' }}>{form.enabled ? 'Enabled' : 'Disabled'}</span>
+          <span style={{ fontSize: 12, color: '#64748B' }}>{form.enabled ? 'Enabled' : 'Disabled'}</span>
           <button
-            style={{ ...S.toggle, background: form.enabled ? '#00C853' : 'rgba(255,255,255,0.1)' }}
+            style={{ ...S.toggle, background: form.enabled ? '#00C853' : 'rgba(0,0,0,0.08)' }}
             onClick={() => setForm(f => ({ ...f, enabled: !f.enabled }))}
           >
             <span style={{
@@ -151,7 +151,7 @@ function ConnectionCard({ config, onSaved }) {
               onChange={e => setForm(f => ({ ...f, api_key: e.target.value }))}
             />
             <button
-              style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#888', padding: 2 }}
+              style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: 2 }}
               onClick={() => setShowKey(v => !v)}
             >
               {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -200,7 +200,7 @@ function ConnectionCard({ config, onSaved }) {
 
 function AlertCard({ alert }) {
   const qc = useQueryClient();
-  const meta = ALERT_META[alert.code] || { icon: '🔔', colour: '#888' };
+  const meta = ALERT_META[alert.code] || { icon: '🔔', colour: '#64748B' };
   const [addEmail, setAddEmail] = useState('');
   const [addName,  setAddName]  = useState('');
   const [saving, setSaving]     = useState(false);
@@ -241,16 +241,16 @@ function AlertCard({ alert }) {
             <span style={{ ...S.cardTitle, marginBottom: 0 }}>{alert.name}</span>
             <span style={{
               ...S.pill,
-              background: alert.enabled ? 'rgba(0,200,83,0.12)' : 'rgba(255,255,255,0.05)',
+              background: alert.enabled ? 'rgba(0,200,83,0.12)' : 'rgba(0,0,0,0.04)',
               color: alert.enabled ? '#00C853' : '#666'
             }}>
               {alert.enabled ? 'Active' : 'Off'}
             </span>
           </div>
-          <div style={{ fontSize: 13, color: '#777', maxWidth: 560 }}>{alert.description}</div>
+          <div style={{ fontSize: 13, color: '#475569', maxWidth: 560 }}>{alert.description}</div>
         </div>
         <button
-          style={{ ...S.toggle, background: alert.enabled ? '#00C853' : 'rgba(255,255,255,0.1)', marginTop: 4 }}
+          style={{ ...S.toggle, background: alert.enabled ? '#00C853' : 'rgba(0,0,0,0.08)', marginTop: 4 }}
           onClick={toggleEnabled}
         >
           <span style={{
@@ -312,19 +312,19 @@ function AlertCard({ alert }) {
       <div style={S.divider} />
 
       {/* Recipients */}
-      <div style={{ fontSize: 12, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10 }}>
+      <div style={{ fontSize: 12, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10 }}>
         Recipients
       </div>
 
       {alert.recipients?.length > 0 ? (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
           {alert.recipients.map(r => (
-            <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.05)', borderRadius: 6, padding: '5px 10px 5px 12px', fontSize: 13 }}>
-              <Mail size={12} style={{ color: '#888' }} />
-              <span style={{ color: '#ddd' }}>{r.name ? `${r.name} <${r.email}>` : r.email}</span>
+            <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,0,0,0.04)', borderRadius: 6, padding: '5px 10px 5px 12px', fontSize: 13 }}>
+              <Mail size={12} style={{ color: '#64748B' }} />
+              <span style={{ color: '#334155' }}>{r.name ? `${r.name} <${r.email}>` : r.email}</span>
               <button
                 onClick={() => removeRecipient(r.id)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#666', padding: 0, marginLeft: 4, display: 'flex' }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: 0, marginLeft: 4, display: 'flex' }}
               >
                 <Trash2 size={12} />
               </button>
@@ -332,7 +332,7 @@ function AlertCard({ alert }) {
           ))}
         </div>
       ) : (
-        <div style={{ fontSize: 13, color: '#555', marginBottom: 12 }}>No recipients — add one below to activate this alert.</div>
+        <div style={{ fontSize: 13, color: '#64748B', marginBottom: 12 }}>No recipients — add one below to activate this alert.</div>
       )}
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
@@ -416,15 +416,15 @@ function BackfillCard() {
               ['Failed',             result.shipments_failed, result.shipments_failed > 0 ? '#ff9800' : null],
             ].map(([label, val, col]) => (
               <div key={label}>
-                <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: col || '#fff' }}>{val ?? 0}</div>
+                <div style={{ fontSize: 11, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: col || '#0F172A' }}>{val ?? 0}</div>
               </div>
             ))}
           </div>
           {result.errors?.length > 0 && (
             <details style={{ marginTop: 8 }}>
               <summary style={{ color: '#ff9800', cursor: 'pointer', fontSize: 12 }}>Show {result.errors.length} error(s)</summary>
-              <pre style={{ fontSize: 11, color: '#aaa', marginTop: 6, overflow: 'auto' }}>
+              <pre style={{ fontSize: 11, color: '#64748B', marginTop: 6, overflow: 'auto' }}>
                 {JSON.stringify(result.errors, null, 2)}
               </pre>
             </details>
@@ -454,26 +454,26 @@ export default function EmailSettings() {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
         <Mail size={22} style={{ color: '#00C853' }} />
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#fff' }}>Email Settings</h2>
+        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#0F172A' }}>Email Settings</h2>
       </div>
 
       {cfgLoading ? (
-        <div style={{ color: '#888', fontSize: 14 }}>Loading…</div>
+        <div style={{ color: '#64748B', fontSize: 14 }}>Loading…</div>
       ) : (
         <ConnectionCard config={config} />
       )}
 
-      <h3 style={{ fontSize: 14, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '28px 0 14px' }}>
+      <h3 style={{ fontSize: 14, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '28px 0 14px' }}>
         Alert Types
       </h3>
 
       {alertsLoading ? (
-        <div style={{ color: '#888', fontSize: 14 }}>Loading alerts…</div>
+        <div style={{ color: '#64748B', fontSize: 14 }}>Loading alerts…</div>
       ) : (
         alerts?.map(a => <AlertCard key={a.id} alert={a} />)
       )}
 
-      <h3 style={{ fontSize: 14, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '28px 0 14px' }}>
+      <h3 style={{ fontSize: 14, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '28px 0 14px' }}>
         Disaster Recovery
       </h3>
 

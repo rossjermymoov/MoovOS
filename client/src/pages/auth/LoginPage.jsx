@@ -30,15 +30,15 @@ export default function LoginPage() {
 
   return (
     <div
-      style={{ background: '#0A0B1E', minHeight: '100vh' }}
+      style={{ background: '#F8FAFC', minHeight: '100vh' }}
       className="flex items-center justify-center p-4"
     >
       <div
         style={{
-          background: '#14162A',
-          border: '1px solid rgba(255,255,255,0.08)',
+          background: '#FFFFFF',
+          border: '1px solid rgba(0,0,0,0.08)',
           borderRadius: '14px',
-          boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+          boxShadow: '0 4px 24px rgba(0,0,0,0.10)',
           width: '100%',
           maxWidth: '400px',
           padding: '40px 36px',
@@ -57,24 +57,24 @@ export default function LoginPage() {
               justifyContent: 'center',
               fontWeight: 800,
               fontSize: 16,
-              color: '#fff',
+              color: '#0F172A',
             }}
           >
             M
           </div>
-          <span style={{ color: '#fff', fontWeight: 700, fontSize: 20 }}>Moov OS</span>
+          <span style={{ color: '#0F172A', fontWeight: 700, fontSize: 20 }}>Moov OS</span>
         </div>
 
-        <h1 style={{ color: '#fff', fontWeight: 700, fontSize: 22, marginBottom: 6 }}>
+        <h1 style={{ color: '#0F172A', fontWeight: 700, fontSize: 22, marginBottom: 6 }}>
           Sign in
         </h1>
-        <p style={{ color: '#AAAAAA', fontSize: 14, marginBottom: 28 }}>
+        <p style={{ color: '#64748B', fontSize: 14, marginBottom: 28 }}>
           Enter your email and password to continue.
         </p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
-            <label style={{ color: '#AAAAAA', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            <label style={{ color: '#64748B', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Email
             </label>
             <input
@@ -85,10 +85,10 @@ export default function LoginPage() {
               required
               placeholder="you@example.com"
               style={{
-                background: '#1A1D35',
-                border: '1px solid rgba(255,255,255,0.12)',
+                background: '#F1F5F9',
+                border: '1px solid rgba(0,0,0,0.10)',
                 borderRadius: 8,
-                color: '#fff',
+                color: '#0F172A',
                 padding: '10px 14px',
                 fontSize: 14,
                 outline: 'none',
@@ -98,7 +98,7 @@ export default function LoginPage() {
           </div>
 
           <div className="flex flex-col gap-1">
-            <label style={{ color: '#AAAAAA', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            <label style={{ color: '#64748B', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Password
             </label>
             <input
@@ -109,10 +109,10 @@ export default function LoginPage() {
               required
               placeholder="••••••••"
               style={{
-                background: '#1A1D35',
-                border: '1px solid rgba(255,255,255,0.12)',
+                background: '#F1F5F9',
+                border: '1px solid rgba(0,0,0,0.10)',
                 borderRadius: 8,
-                color: '#fff',
+                color: '#0F172A',
                 padding: '10px 14px',
                 fontSize: 14,
                 outline: 'none',
@@ -143,7 +143,7 @@ export default function LoginPage() {
               background: loading
                 ? 'rgba(123, 47, 190, 0.5)'
                 : 'linear-gradient(135deg, #7B2FBE 0%, #E91E8C 100%)',
-              color: '#fff',
+              color: '#0F172A',
               border: 'none',
               borderRadius: 8,
               padding: '12px 0',

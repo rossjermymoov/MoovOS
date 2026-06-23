@@ -57,7 +57,11 @@ async function createOrUpdateShipment(payload, customerId) {
   // consignment numbers (e.g. the 14-digit DPD consignment number). The pool
   // indexes by these so it can match invoice lines to our charge records.
   const clParcels    = ship.create_label_parcels || [];
-  const trackingCodes = clParcels.map(p => p.tracking_code).filter(Boolean);
+  // Deduplicate: DHL multi-parcel consignments share one master tracking code
+  // across all parcels — without dedup the array becomes {X,X,X} which breaks
+  // pool matching (adds no extra keys but wastes space and confuses diagnostics).
+  // For DPD each parcel has its own consignment number so dedup is a no-op.
+  const trackingCodes = [...new Set(clParcels.map(p => p.tracking_code).filter(Boolean))];
 
   // Total weight from parcels
   const totalWeightKg = clParcels.length
@@ -76,9 +80,12 @@ async function createOrUpdateShipment(payload, customerId) {
         tracking_codes, raw_payload
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
       ON CONFLICT (platform_shipment_id) DO UPDATE SET
-        customer_id    = COALESCE(EXCLUDED.customer_id,    shipments.customer_id),
-        tracking_codes = COALESCE(EXCLUDED.tracking_codes, shipments.tracking_codes),
-        dc_service_id  = COALESCE(EXCLUDED.dc_service_id,  shipments.dc_service_id),
+        customer_id      = COALESCE(EXCLUDED.customer_id,      shipments.customer_id),
+        tracking_codes   = COALESCE(EXCLUDED.tracking_codes,   shipments.tracking_codes),
+        dc_service_id    = COALESCE(EXCLUDED.dc_service_id,    shipments.dc_service_id),
+        ship_to_name     = COALESCE(EXCLUDED.ship_to_name,     shipments.ship_to_name),
+        ship_to_postcode = COALESCE(EXCLUDED.ship_to_postcode, shipments.ship_to_postcode),
+        collection_date  = COALESCE(EXCLUDED.collection_date,  shipments.collection_date),
         updated_at     = NOW()
       RETURNING id
     `, [

@@ -24,6 +24,7 @@ import queriesRouter from './routes/queries.js';
 import surchargesRouter from './routes/surcharges.js';
 import customerCarrierLinksRouter from './routes/customerCarrierLinks.js';
 import slaRulesRouter from './routes/slaRules.js';
+import settingsRouter from './routes/settings.js';
 import katanaRouter from './routes/katana.js';
 import pricingRouter from './routes/pricing.js';
 import xeroRouter from './routes/xero.js';
@@ -31,6 +32,9 @@ import authRouter from './routes/auth.js';
 import reconciliationRouter from './routes/reconciliation.js';
 import emailRouter from './routes/email.js';
 import { sendAlert } from './services/emailService.js';
+import gmailRouter from './routes/gmail.js';
+import { startGmailSync, backfillEmailBodiesOnce, backfillSentRepliesOnce } from './services/gmailSync.js';
+import { runSlaScreamScan } from './services/slaMonitor.js';
 
 dotenv.config();
 
@@ -64,6 +68,7 @@ app.use('/api/queries',               queriesRouter);
 app.use('/api/surcharges',            surchargesRouter);
 app.use('/api/customer-carrier-links', customerCarrierLinksRouter);
 app.use('/api/sla',                   slaRulesRouter);
+app.use('/api/settings',              settingsRouter);
 app.use('/api/katana',                katanaRouter);
 app.use('/api/pricing',               pricingRouter);
 app.use('/api/xero',                  xeroRouter);
@@ -72,6 +77,7 @@ app.use('/api/xero',                  xeroRouter);
 app.use('/api/moov-charges',          billingRouter);
 app.use('/api/reconciliation',        reconciliationRouter);
 app.use('/api/email',                 emailRouter);
+app.use('/api/gmail',                 gmailRouter);
 
 // ─── Health check ────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'moov-os' }));
@@ -116,6 +122,14 @@ async function start() {
     startBillingScheduler();
     // Webhook health monitor — checks every 5 minutes during UK business hours
     startWebhookHealthMonitor();
+    startGmailSync(3 * 60 * 1000); // poll every 3 minutes
+    // SLA scream monitor — escalate breached tickets to Google Chat every 5 min.
+    setInterval(() => { runSlaScreamScan().catch(e => console.warn('[SLA] scan error:', e.message)); }, 5 * 60 * 1000);
+    // One-time repair of emails imported before the body-parsing fix.
+    // Fire-and-forget so it can never delay or crash startup.
+    backfillEmailBodiesOnce().catch(e => console.warn('[Email backfill] skipped:', e.message));
+    // One-time: pull SENT replies into existing threads so they become two-sided.
+    backfillSentRepliesOnce().catch(e => console.warn('[Sent backfill] skipped:', e.message));
   } catch (err) {
     console.error('❌ Migration failed — server will not start.');
     console.error('   Error code:   ', err.code    || 'unknown');

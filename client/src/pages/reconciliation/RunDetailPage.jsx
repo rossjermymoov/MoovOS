@@ -19,15 +19,15 @@ const api = axios.create({ baseURL: '/api' });
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const card = {
-  background: 'rgba(255,255,255,0.04)',
-  border: '1px solid rgba(255,255,255,0.08)',
+  background: 'rgba(0,0,0,0.03)',
+  border: '1px solid rgba(0,0,0,0.08)',
   borderRadius: 10, padding: '16px 20px',
 };
 const inputSt = {
   width: '100%', boxSizing: 'border-box',
-  background: 'rgba(255,255,255,0.06)',
-  border: '1px solid rgba(255,255,255,0.12)',
-  borderRadius: 7, color: '#E6EDF3', fontSize: 12,
+  background: 'rgba(0,0,0,0.06)',
+  border: '1px solid rgba(0,0,0,0.10)',
+  borderRadius: 7, color: '#0F172A', fontSize: 12,
   padding: '7px 10px', outline: 'none',
 };
 const btnGreen = {
@@ -36,8 +36,8 @@ const btnGreen = {
   fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5,
 };
 const btnGhost = {
-  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-  borderRadius: 7, color: '#AAA', padding: '7px 14px', cursor: 'pointer',
+  background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)',
+  borderRadius: 7, color: '#64748B', padding: '7px 14px', cursor: 'pointer',
   fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5,
 };
 const btnRed = {
@@ -52,8 +52,8 @@ function StatusBadge({ status }) {
     matched:      { color: '#00C853', bg: 'rgba(0,200,83,0.12)',   border: 'rgba(0,200,83,0.3)',   label: 'Matched' },
     corrected:    { color: '#FF8F00', bg: 'rgba(255,143,0,0.12)',  border: 'rgba(255,143,0,0.3)',  label: 'Corrected' },
     unmatched:    { color: '#FFB300', bg: 'rgba(255,160,0,0.12)',  border: 'rgba(255,160,0,0.3)',  label: 'Unmatched' },
-    processing:   { color: '#888',   bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.1)', label: 'Processing' },
-  }[status] || { color: '#AAA', bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.1)', label: status };
+    processing:   { color: '#64748B',   bg: 'rgba(0,0,0,0.04)', border: 'rgba(0,0,0,0.08)', label: 'Processing' },
+  }[status] || { color: '#64748B', bg: 'rgba(0,0,0,0.04)', border: 'rgba(0,0,0,0.08)', label: status };
   return (
     <span style={{
       display: 'inline-block', padding: '1px 8px', borderRadius: 9999,
@@ -67,9 +67,19 @@ function StatusBadge({ status }) {
 
 // ─── Unmatched reason label ───────────────────────────────────────────────────
 function ReasonLabel({ reason, correctedBy }) {
+  // Warning: carrier billed a surcharge but customer was not charged
+  if (reason === 'sell_surcharge_missing') {
+    return <span style={{ fontSize: 10, color: '#92400E', background: 'rgba(255,179,0,0.2)', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>⚠ Customer not billed</span>;
+  }
   // corrected_by values from the engine
   if (correctedBy === 'surcharge_mapping') {
     return <span style={{ fontSize: 10, color: '#00C853', fontWeight: 600 }}>Surcharge mapping</span>;
+  }
+  if (correctedBy === 'weight_correction') {
+    return <span style={{ fontSize: 10, color: '#92400E', background: '#FEF3C7', padding: '1px 5px', borderRadius: 4, fontWeight: 600 }}>⚖ Weight corrected</span>;
+  }
+  if (correctedBy === 'carrier_undercharge') {
+    return <span style={{ fontSize: 10, color: '#1E40AF', background: '#DBEAFE', padding: '1px 5px', borderRadius: 4, fontWeight: 600 }}>↓ Carrier undercharge</span>;
   }
   const labels = {
     unknown_service_code:    { text: 'Unknown service code',  color: '#FF5252' },
@@ -82,9 +92,15 @@ function ReasonLabel({ reason, correctedBy }) {
     hgv_aggregate_mismatch:  { text: 'HGV mismatch',         color: '#FFB300' },
     no_hgv_rate:             { text: 'No HGV rate on file',   color: '#FF5252' },
     aggregate_mismatch:      { text: 'Aggregate mismatch',    color: '#FFB300' },
-    parcel_count_mismatch:   { text: '⚠ Parcel count overbill', color: '#FF5252' },
+    parcel_count_mismatch:        { text: '⚠ Parcel count overbill',      color: '#FF5252' },
+    weight_sell_lookup_failed:    { text: '⚖ Weight corrected — sell rate missing', color: '#FF5252' },
+    cancelled_unshipped:          { text: '🚫 Cancelled — dispute with DPD', color: '#FF5252' },
+    cancelled_shipped:            { text: '⚠ Cancelled — parcel was shipped', color: '#FFB300' },
+    cancelled_booking_invoiced:   { text: '🚫 Cancelled booking — credit DPD',  color: '#FF5252' },
+    hash_continuation:            { text: '# Split row — continuation parcel',  color: '#64748B' },
+    processing_error:             { text: '⚡ Processing error — re-import', color: '#FF5252' },
   };
-  const cfg = labels[reason] || { text: reason || '—', color: '#888' };
+  const cfg = labels[reason] || { text: reason || '—', color: '#64748B' };
   return <span style={{ fontSize: 10, color: cfg.color, fontWeight: 600 }}>{cfg.text}</span>;
 }
 
@@ -139,7 +155,7 @@ function CorrectionDetail({ line, surchargeLookup }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
         <span style={{ fontSize: 10, color: '#79AAFF', fontWeight: 600 }}>{mappingLabel}</span>
         {line.mapping_match_field && line.mapping_match_value && (
-          <span style={{ fontSize: 10, color: '#555' }}>
+          <span style={{ fontSize: 10, color: '#64748B' }}>
             {line.mapping_match_field}: {line.mapping_match_value}
           </span>
         )}
@@ -171,8 +187,44 @@ function CorrectionDetail({ line, surchargeLookup }) {
           </span>
         ))}
         {!hasBreakdown && (
-          <span style={{ fontSize: 10, color: '#555' }}>No surcharge breakdown available</span>
+          <span style={{ fontSize: 10, color: '#64748B' }}>No surcharge breakdown available</span>
         )}
+      </div>
+    );
+  }
+
+  // weight_correction: carrier billed at higher weight — charge repriced upward
+  if (cb === 'weight_correction') {
+    const declared = meta?.declared_weight_kg;
+    const billed   = meta?.billed_weight_kg;
+    const diff     = meta?.weight_diff_kg;
+    const oldCost  = meta?.old_cost_price;
+    const newCost  = meta?.new_cost_price;
+    const band     = meta?.band_label;
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span style={{ fontSize: 10, color: '#92400E', fontWeight: 600 }}>⚖ Weight corrected & recharged</span>
+        {declared != null && billed != null && (
+          <span style={{ fontSize: 10, color: '#64748B' }}>
+            {parseFloat(declared).toFixed(2)}kg → {parseFloat(billed).toFixed(2)}kg (+{parseFloat(diff ?? 0).toFixed(2)}kg)
+          </span>
+        )}
+        {oldCost != null && newCost != null && (
+          <span style={{ fontSize: 10, color: '#64748B' }}>
+            Cost £{parseFloat(oldCost).toFixed(2)} → £{parseFloat(newCost).toFixed(2)}
+            {band ? ` · ${band}` : ''}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  // carrier_undercharge: carrier billed less than expected — flagged only, NOT downgraded
+  if (cb === 'carrier_undercharge') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <span style={{ fontSize: 10, color: '#1E40AF', fontWeight: 600 }}>↓ Carrier undercharge</span>
+        <span style={{ fontSize: 10, color: '#64748B' }}>Highlighted only — charge not reduced</span>
       </div>
     );
   }
@@ -191,9 +243,9 @@ function CorrectionDetail({ line, surchargeLookup }) {
   if (cb === 'human') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-        <span style={{ fontSize: 10, color: '#888', fontWeight: 600 }}>Manually approved</span>
+        <span style={{ fontSize: 10, color: '#64748B', fontWeight: 600 }}>Manually approved</span>
         {line.resolved_by_name && (
-          <span style={{ fontSize: 10, color: '#555' }}>by {line.resolved_by_name}</span>
+          <span style={{ fontSize: 10, color: '#64748B' }}>by {line.resolved_by_name}</span>
         )}
       </div>
     );
@@ -201,7 +253,7 @@ function CorrectionDetail({ line, surchargeLookup }) {
 
   // fallback for any future corrected_by values
   if (cb) {
-    return <span style={{ fontSize: 10, color: '#666' }}>via {cb}</span>;
+    return <span style={{ fontSize: 10, color: '#64748B' }}>via {cb}</span>;
   }
 
   return null;
@@ -209,26 +261,93 @@ function CorrectionDetail({ line, surchargeLookup }) {
 
 // ─── Resolve drawer ───────────────────────────────────────────────────────────
 function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolutionType }) {
-  const isUnknownCode = line.unmatched_reason === 'unknown_service_code';
+  const isUnknownCode          = line.unmatched_reason === 'unknown_service_code';
+  const isCancelledBooking     = line.unmatched_reason === 'cancelled_booking_invoiced';
+  const isNoAccountMapping     = line.unmatched_reason === 'no_account_mapping';
+  const isUnassignedSurcharge  = line.unmatched_reason === 'unassigned_surcharge_customer';
 
   // For unknown service code lines default straight into the mapping flow.
   // defaultResolutionType lets callers (e.g. the DeltaCell tooltip) pre-select
   // a resolution type without the operator having to pick it manually.
   const [scope,           setScope]           = useState('once');
-  const [saveRule,        setSaveRule]        = useState(isUnknownCode);   // "Save as Permanent Rule" checkbox
+  const [saveRule,        setSaveRule]        = useState(isUnknownCode || isNoAccountMapping);
   const [ruleScope,       setRuleScope]       = useState('global');        // 'global' | 'customer'
   const [resolutionType,  setResolutionType]  = useState(
-    defaultResolutionType || (isUnknownCode ? 'map_to_service' : '')
+    defaultResolutionType
+    || (isUnknownCode         ? 'map_to_service'   : '')
+    || (isCancelledBooking    ? 'credit_request'   : '')
+    || (isNoAccountMapping    ? 'map_to_customer'  : '')
+    || (isUnassignedSurcharge ? 'map_to_surcharge' : '')
   );
   const [resolutionValue, setResolutionValue] = useState(
     // Pre-populate with suggested service if the engine found one
-    isUnknownCode && line.suggested_service_id ? String(line.suggested_service_id) : ''
+    isUnknownCode && line.suggested_service_id
+      ? String(line.suggested_service_id)
+      // Pre-populate surcharge for warning lines (sell_surcharge_missing) and
+      // unassigned_surcharge_customer lines where the surcharge is already stored
+      : ((defaultResolutionType === 'map_to_surcharge' || isUnassignedSurcharge) && line.surcharge_id)
+        ? String(line.surcharge_id)
+        : ''
   );
-  const [notes,    setNotes]   = useState('');
-  const [loading,  setLoading] = useState(false);
-  const [error,    setError]   = useState('');
+  const [notes,           setNotes]           = useState('');
+  const [loading,         setLoading]         = useState(false);
+  const [error,           setError]           = useState('');
+  const [fuelRate,        setFuelRate]        = useState(null);
+  // Customer search state for map_to_customer
+  const [custSearch,      setCustSearch]      = useState('');
+  const [custResults,     setCustResults]     = useState([]);
+  const [custSearching,   setCustSearching]   = useState(false);
+  const [selectedCust,    setSelectedCust]    = useState(null); // { id, business_name, account_number }
+  // Surcharge charge preview (pre-resolve) and post-resolve confirmation
+  const [chargePreview,   setChargePreview]   = useState(null);
+  const [previewLoading,  setPreviewLoading]  = useState(false);
+  const [confirmedCharge, setConfirmedCharge] = useState(null); // set after resolve succeeds
 
-  const isSurchargeMapping = resolutionType === 'map_to_surcharge';
+  const isSurchargeMapping  = resolutionType === 'map_to_surcharge';
+  const isManualPrice       = resolutionType === 'manual_price';
+  const isMapToCustomer     = resolutionType === 'map_to_customer';
+  const isRemapService      = resolutionType === 'remap_service';
+
+  // Customer search for map_to_customer
+  useEffect(() => {
+    if (!isMapToCustomer || custSearch.length < 2) { setCustResults([]); return; }
+    setCustSearching(true);
+    const timer = setTimeout(() => {
+      api.get(`/customers?search=${encodeURIComponent(custSearch)}&limit=10`)
+        .then(r => setCustResults(r.data?.customers || r.data || []))
+        .catch(() => setCustResults([]))
+        .finally(() => setCustSearching(false));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [custSearch, isMapToCustomer]);
+
+  // Fetch fuel rate when manual_price is selected
+  useEffect(() => {
+    if (!isManualPrice) return;
+    api.get(`/reconciliation/runs/${line.run_id}/lines/${line.id}/fuel-rate`)
+      .then(r => setFuelRate(r.data))
+      .catch(() => setFuelRate({ fuel_pct: 0, fuel_group_name: null }));
+  }, [isManualPrice, line.run_id, line.id]);
+
+  // Fetch resolve preview when a surcharge or remap_service target is selected.
+  // Shows carrier cost, attributed customer, and calculated sell price before commit.
+  useEffect(() => {
+    if (!(isSurchargeMapping || isRemapService) || !resolutionValue) { setChargePreview(null); return; }
+    const previewType = isSurchargeMapping ? 'map_to_surcharge' : 'remap_service';
+    setPreviewLoading(true);
+    setChargePreview(null);
+    api.get(`/reconciliation/runs/${line.run_id}/lines/${line.id}/resolve-preview`, {
+      params: { type: previewType, value: resolutionValue }
+    })
+      .then(r => setChargePreview(r.data))
+      .catch(() => setChargePreview(null))
+      .finally(() => setPreviewLoading(false));
+  }, [isSurchargeMapping, isRemapService, resolutionValue, line.run_id, line.id]);
+
+  // Derived: total sell when manual_price is active
+  const manualBase  = parseFloat(resolutionValue) || 0;
+  const fuelPct     = fuelRate?.fuel_pct ?? 0;
+  const manualTotal = manualBase > 0 ? Math.round(manualBase * (1 + fuelPct / 100) * 100) / 100 : 0;
 
   const { data: services = [] } = useQuery({
     queryKey: ['recon-services', courierId],
@@ -243,38 +362,167 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
   });
 
   const suggestedMappingType = {
-    unknown_service_code:    'service_code',
-    no_account_mapping:      'account_number',
-    no_pricing_rules:        null,
-    unexplained_delta:       'delta_acceptance',
-    external_booking_review: 'account_number',
+    unknown_service_code:       'service_code',
+    no_account_mapping:         'account_number',
+    no_pricing_rules:           null,
+    unexplained_delta:          'delta_acceptance',
+    external_booking_review:    'account_number',
+    cancelled_booking_invoiced: 'credit_request',  // triggers bulk-apply in server
   }[line.unmatched_reason];
 
   async function handleResolve() {
-    if (!resolutionType || !resolutionValue) {
+    const noValueNeeded = resolutionType === 'credit_request';
+    const customerValueNeeded = isMapToCustomer;
+    if (!resolutionType || (!noValueNeeded && !customerValueNeeded && !resolutionValue)) {
       setError('Please fill in all required fields');
+      return;
+    }
+    if (isMapToCustomer && !selectedCust) {
+      setError('Select a customer from the dropdown');
+      return;
+    }
+    if (resolutionType === 'manual_price' && (parseFloat(resolutionValue) || 0) <= 0) {
+      setError('Enter a base freight price greater than £0');
       return;
     }
     setLoading(true);
     setError('');
     try {
       const effectiveScope = saveRule ? 'always' : 'once';
-      const customerId     = (saveRule && ruleScope === 'customer') ? (line.customer_id || null) : null;
+      const customerId = isMapToCustomer
+        ? selectedCust.id
+        : (saveRule && ruleScope === 'customer') ? (line.customer_id || null) : null;
 
-      await api.post(`/reconciliation/runs/${line.run_id}/lines/${line.id}/resolve`, {
+      const { data } = await api.post(`/reconciliation/runs/${line.run_id}/lines/${line.id}/resolve`, {
         resolution_type:  resolutionType,
-        resolution_value: resolutionValue,
+        resolution_value: isMapToCustomer ? selectedCust.id : resolutionValue,
         scope:            effectiveScope,
         mapping_type:     effectiveScope === 'always' ? suggestedMappingType : null,
         customer_id:      customerId,
         notes,
       });
+
+      // Refresh the line list immediately so the resolved line moves tabs
       onResolved();
-      onClose();
+
+      // For surcharge mappings, hold the drawer open and show a confirmation ledger.
+      // For all other resolution types, close straight away.
+      if (isSurchargeMapping && (data.confirmed || chargePreview)) {
+        setConfirmedCharge({
+          ...(chargePreview || {}),
+          ...(data.confirmed || {}),
+          bulk_applied: data.bulk_applied || 0,
+        });
+        setLoading(false);
+      } else {
+        onClose();
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to resolve');
       setLoading(false);
     }
+  }
+
+  // ── Post-resolve confirmation screen ────────────────────────────────────────
+  if (confirmedCharge) {
+    const cc         = confirmedCharge;
+    const hasCustomer = !!cc.customer_id || !!cc.customer_name;
+    const accentColor = cc.status === 'unmatched' ? '#FFB300' : '#00C853';
+    const bgColor     = cc.status === 'unmatched' ? 'rgba(255,179,0,0.06)' : 'rgba(0,200,83,0.06)';
+    const borderColor = cc.status === 'unmatched' ? 'rgba(255,179,0,0.35)' : 'rgba(0,200,83,0.3)';
+
+    const totalSell = (cc.freight_sell ?? 0) + (cc.calculated_sell ?? cc.corrected_sell ?? 0);
+    const totalCost = (cc.freight_cost ?? 0) + (cc.carrier_cost ?? 0);
+
+    const LedgerRow = ({ label, cost, sell, bold, topBorder }) => (
+      <div style={{
+        display: 'grid', gridTemplateColumns: '1fr 80px 80px',
+        padding: bold ? '6px 0 2px' : '4px 0',
+        ...(topBorder ? { borderTop: '1px solid rgba(0,0,0,0.09)', marginTop: 4, paddingTop: 8 } : {}),
+      }}>
+        <span style={{ fontSize: 12, color: bold ? '#0F172A' : '#64748B', fontWeight: bold ? 700 : 400 }}>{label}</span>
+        <span style={{ fontSize: 12, fontFamily: 'monospace', textAlign: 'right', color: '#64748B' }}>
+          {cost > 0 ? `£${cost.toFixed(2)}` : '—'}
+        </span>
+        <span style={{ fontSize: bold ? 13 : 12, fontFamily: 'monospace', textAlign: 'right', fontWeight: bold ? 700 : 600, color: bold ? accentColor : '#0F172A' }}>
+          {sell > 0 ? `£${sell.toFixed(2)}` : '—'}
+        </span>
+      </div>
+    );
+
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end' }}>
+        <div style={{ width: 460, height: '100vh', background: '#FFFFFF', padding: 24, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16, boxShadow: '-8px 0 40px rgba(0,0,0,0.18)' }}>
+
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: 0 }}>Charge Confirmed</h3>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer' }}>
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Status badge */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: bgColor, border: `1px solid ${borderColor}`, borderRadius: 8 }}>
+            <div style={{ width: 26, height: 26, borderRadius: '50%', background: accentColor, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 800, flexShrink: 0 }}>
+              {cc.status === 'unmatched' ? '!' : '✓'}
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>
+                {cc.status === 'unmatched' ? 'Surcharge mapped — awaiting customer' : 'Pinned to billing tab'}
+              </div>
+              <div style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
+                {cc.customer_name || (cc.status === 'unmatched' ? 'No customer assigned — line stays visible as Unmatched' : 'Customer unresolved')}
+                {cc.surcharge_name && <span style={{ marginLeft: 6, color: '#79AAFF', fontWeight: 600 }}>{cc.surcharge_name}</span>}
+              </div>
+            </div>
+          </div>
+
+          {/* Full cost/sell ledger */}
+          <div style={{ ...card, padding: '12px 16px' }}>
+            {/* Column headers */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 80px', marginBottom: 6 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Line Item</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cost</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sell</span>
+            </div>
+
+            {cc.has_freight !== false && cc.freight_sell > 0 && (
+              <LedgerRow label="Base Freight" cost={cc.freight_cost ?? 0} sell={cc.freight_sell ?? 0} />
+            )}
+            <LedgerRow
+              label={cc.surcharge_name ? `Surcharge: ${cc.surcharge_name}` : 'Surcharge'}
+              cost={cc.carrier_cost ?? 0}
+              sell={cc.calculated_sell ?? cc.corrected_sell ?? 0}
+            />
+            {cc.parcel_count > 1 && (
+              <div style={{ fontSize: 10, color: '#64748B', textAlign: 'right', marginTop: -2, marginBottom: 2 }}>× {cc.parcel_count} parcels</div>
+            )}
+            {cc.has_freight !== false && cc.freight_sell > 0 && (
+              <LedgerRow label="Total to Client" cost={totalCost} sell={totalSell} bold topBorder />
+            )}
+            {cc.has_override && (
+              <div style={{ fontSize: 10, color: '#64748B', marginTop: 6 }}>✦ Using customer-specific rate override</div>
+            )}
+          </div>
+
+          {cc.bulk_applied > 0 && (
+            <div style={{ background: 'rgba(121,170,255,0.08)', border: '1px solid rgba(121,170,255,0.25)', borderRadius: 7, padding: '8px 12px', fontSize: 11, color: '#79AAFF', fontWeight: 600 }}>
+              ⚡ Rule applied to {cc.bulk_applied} additional matching line{cc.bulk_applied !== 1 ? 's' : ''} in this run
+            </div>
+          )}
+
+          <div style={{ flex: 1 }} />
+
+          <button
+            onClick={onClose}
+            style={{ ...btnGreen, width: '100%', justifyContent: 'center', padding: '10px 0', fontSize: 13 }}
+          >
+            Close & View Lines
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // Find the suggested service object for display
@@ -292,17 +540,17 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
       display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end',
     }}>
       <div style={{
-        width: 460, height: '100vh', background: '#0D0F2B',
-        border: '1px solid rgba(255,255,255,0.1)',
-        boxShadow: '-8px 0 40px rgba(0,0,0,0.5)',
+        width: 460, height: '100vh', background: '#FFFFFF',
+        border: '1px solid rgba(0,0,0,0.08)',
+        boxShadow: '-8px 0 40px rgba(0,0,0,0.18)',
         padding: 24, overflowY: 'auto',
         display: 'flex', flexDirection: 'column', gap: 16,
       }}>
 
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ fontSize: 16, fontWeight: 700, color: '#E6EDF3', margin: 0 }}>Resolve Line</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer' }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: 0 }}>Resolve Line</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer' }}>
             <X size={18} />
           </button>
         </div>
@@ -311,21 +559,21 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
         <div style={{ ...card, fontSize: 12 }}>
           <div style={{ display: 'grid', gap: 6 }}>
             {line.tracking_number && (
-              <div><span style={{ color: '#888' }}>Tracking:</span> <span style={{ color: '#E6EDF3', fontFamily: 'monospace' }}>{line.tracking_number}</span></div>
+              <div><span style={{ color: '#64748B' }}>Tracking:</span> <span style={{ color: '#0F172A', fontFamily: 'monospace' }}>{line.tracking_number}</span></div>
             )}
-            <div><span style={{ color: '#888' }}>Raw service code:</span> <span style={{ color: '#79AAFF', fontFamily: 'monospace', fontWeight: 700 }}>{line.raw_service_code || '—'}</span></div>
-            <div><span style={{ color: '#888' }}>Carrier amount:</span> <span style={{ color: '#E6EDF3', fontWeight: 700 }}>£{parseFloat(line.carrier_amount || 0).toFixed(2)}</span></div>
+            <div><span style={{ color: '#64748B' }}>Raw service code:</span> <span style={{ color: '#79AAFF', fontFamily: 'monospace', fontWeight: 700 }}>{line.raw_service_code || '—'}</span></div>
+            <div><span style={{ color: '#64748B' }}>Carrier amount:</span> <span style={{ color: '#0F172A', fontWeight: 700 }}>£{parseFloat(line.carrier_amount || 0).toFixed(2)}</span></div>
             {line.expected_amount != null && (
-              <div><span style={{ color: '#888' }}>Expected:</span> <span style={{ color: '#E6EDF3' }}>£{parseFloat(line.expected_amount).toFixed(2)}</span></div>
+              <div><span style={{ color: '#64748B' }}>Expected:</span> <span style={{ color: '#0F172A' }}>£{parseFloat(line.expected_amount).toFixed(2)}</span></div>
             )}
             {line.delta != null && (
-              <div><span style={{ color: '#888' }}>Delta:</span>
+              <div><span style={{ color: '#64748B' }}>Delta:</span>
                 <span style={{ color: parseFloat(line.delta) > 0 ? '#FF5252' : '#00C853', fontWeight: 700, marginLeft: 4 }}>
                   {parseFloat(line.delta) > 0 ? '+' : ''}£{parseFloat(line.delta).toFixed(2)}
                 </span>
               </div>
             )}
-            <div><span style={{ color: '#888' }}>Reason:</span> <span style={{ marginLeft: 4 }}><ReasonLabel reason={line.unmatched_reason} /></span></div>
+            <div><span style={{ color: '#64748B' }}>Reason:</span> <span style={{ marginLeft: 4 }}><ReasonLabel reason={line.unmatched_reason} /></span></div>
             {line.unmatched_reason === 'parcel_count_mismatch' && line.correction_metadata && (
               <div style={{
                 marginTop: 6, padding: '8px 12px',
@@ -333,7 +581,7 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
                 borderRadius: 6, fontSize: 11,
               }}>
                 <span style={{ color: '#FF5252', fontWeight: 700 }}>DPD invoiced {line.correction_metadata.invoice_parcel_count} parcel{line.correction_metadata.invoice_parcel_count !== 1 ? 's' : ''} — booking was for {line.correction_metadata.booked_parcel_count} parcel{line.correction_metadata.booked_parcel_count !== 1 ? 's' : ''}</span>
-                <span style={{ color: '#888', marginLeft: 8 }}>Dispute this charge with DPD before finalising.</span>
+                <span style={{ color: '#64748B', marginLeft: 8 }}>Dispute this charge with DPD before finalising.</span>
               </div>
             )}
             {line.aged && (
@@ -355,13 +603,13 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
             <div style={{ fontSize: 11, color: '#79AAFF', fontWeight: 700, marginBottom: 4 }}>
               ✦ Smart Suggestion
             </div>
-            <div style={{ fontSize: 12, color: '#C8D8EF' }}>
+            <div style={{ fontSize: 12, color: '#475569' }}>
               The tracking number was found in the Verified Pool. The shipment was booked as:
             </div>
-            <div style={{ marginTop: 6, fontSize: 13, fontWeight: 700, color: '#E6EDF3' }}>
+            <div style={{ marginTop: 6, fontSize: 13, fontWeight: 700, color: '#0F172A' }}>
               {suggestionLabel}
             </div>
-            <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
+            <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
               The dropdown below is pre-selected with this match.
             </div>
           </div>
@@ -373,40 +621,45 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
           </div>
         )}
 
-        {/* Resolution type — for unknown_service_code show both service and surcharge mapping options */}
+        {/* Resolution type — for unknown_service_code show tile grid + manual price option */}
         {isUnknownCode ? (
           <div>
-            <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 6, fontWeight: 600 }}>RESOLUTION TYPE</label>
+            <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>RESOLUTION TYPE</label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {[
-                { val: 'map_to_service',   label: 'Delivery Service', desc: 'Base freight service (e.g. DHL Next Day)' },
+                { val: 'map_to_service',   label: 'Map Service Code', desc: 'Save a mapping rule; engine reprices on next run' },
+                { val: 'remap_service',    label: 'Change Service',   desc: 'Price this line from a different service rate card now' },
                 { val: 'map_to_surcharge', label: 'Surcharge',        desc: 'Named fee (e.g. congestion, remote area)' },
+                { val: 'manual_price',     label: 'Manual Price',     desc: 'Enter a sell price directly for this line' },
               ].map(opt => (
                 <button
                   key={opt.val}
                   onClick={() => { setResolutionType(opt.val); setResolutionValue(''); }}
                   style={{
                     padding: '9px 11px', borderRadius: 7, cursor: 'pointer', textAlign: 'left',
-                    background: resolutionType === opt.val ? 'rgba(0,200,83,0.1)' : 'rgba(255,255,255,0.04)',
-                    border: `1px solid ${resolutionType === opt.val ? 'rgba(0,200,83,0.35)' : 'rgba(255,255,255,0.08)'}`,
+                    background: resolutionType === opt.val ? 'rgba(0,200,83,0.1)' : 'rgba(0,0,0,0.03)',
+                    border: `1px solid ${resolutionType === opt.val ? 'rgba(0,200,83,0.35)' : 'rgba(0,0,0,0.08)'}`,
                   }}
                 >
-                  <div style={{ fontSize: 12, fontWeight: 700, color: resolutionType === opt.val ? '#00C853' : '#E6EDF3' }}>{opt.label}</div>
-                  <div style={{ fontSize: 10, color: '#666', marginTop: 2 }}>{opt.desc}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: resolutionType === opt.val ? '#00C853' : '#0F172A' }}>{opt.label}</div>
+                  <div style={{ fontSize: 10, color: '#64748B', marginTop: 2 }}>{opt.desc}</div>
                 </button>
               ))}
             </div>
           </div>
         ) : (
           <div>
-            <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 6, fontWeight: 600 }}>RESOLUTION TYPE</label>
-            <select style={inputSt} value={resolutionType} onChange={e => setResolutionType(e.target.value)}>
+            <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>RESOLUTION TYPE</label>
+            <select style={inputSt} value={resolutionType} onChange={e => { setResolutionType(e.target.value); setResolutionValue(''); }}>
               <option value=''>— Select type —</option>
               <option value='accept'>Accept charge as-is</option>
-              <option value='map_to_service'>Map to internal service</option>
-              <option value='map_to_surcharge'>Map to surcharge</option>
-              <option value='map_to_customer'>Map account to customer</option>
               <option value='accept_delta'>Accept delta as tolerance</option>
+              <option value='manual_price'>Set manual sell price</option>
+              <option value='credit_request'>Applying for credit with Courier</option>
+              <option value='remap_service'>Change Service (reprice from rate card)</option>
+              <option value='map_to_surcharge'>Map to surcharge</option>
+              <option value='map_to_service'>Map to internal service</option>
+              <option value='map_to_customer'>Map account to customer</option>
               <option value='reject'>Reject / dispute charge</option>
             </select>
           </div>
@@ -415,7 +668,7 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
         {/* Service mapping dropdown */}
         {(resolutionType === 'map_to_service') && (
           <div>
-            <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 6, fontWeight: 600 }}>
+            <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>
               MAP "{line.raw_service_code}" TO INTERNAL SERVICE *
             </label>
             <select
@@ -434,36 +687,203 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
           </div>
         )}
 
-        {/* Surcharge mapping dropdown */}
-        {(resolutionType === 'map_to_surcharge') && (
+        {/* Change Service (remap_service) — service picker + live price preview */}
+        {isRemapService && (
           <div>
-            <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 6, fontWeight: 600 }}>
-              MAP "{line.raw_service_code}" TO SURCHARGE *
+            <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>
+              REPRICE AS SERVICE *
             </label>
             <select
               style={inputSt}
               value={resolutionValue}
               onChange={e => setResolutionValue(e.target.value)}
+              autoFocus
             >
-              <option value=''>— Select surcharge —</option>
-              {surcharges.map(s => (
+              <option value=''>— Select target service —</option>
+              {services.map(s => (
                 <option key={s.id} value={s.id}>
-                  {s.name} ({s.code})
+                  {s.name} ({s.service_code})
                 </option>
               ))}
             </select>
-            {surcharges.length === 0 && (
-              <div style={{ fontSize: 10, color: '#FFB300', marginTop: 4 }}>
-                No surcharges configured for this carrier yet. Add them in Settings → Surcharges first.
+            <div style={{ fontSize: 10, color: '#64748B', marginTop: 4 }}>
+              Carrier cost stays as invoiced. Sell price is recalculated from this service's rate card.
+            </div>
+
+            {/* Preview panel */}
+            {resolutionValue && previewLoading && (
+              <div style={{ marginTop: 8, padding: '9px 12px', background: 'rgba(0,0,0,0.03)', borderRadius: 7, fontSize: 11, color: '#64748B' }}>
+                Calculating…
               </div>
             )}
+            {resolutionValue && !previewLoading && chargePreview && (() => {
+              const cp = chargePreview;
+              return (
+                <div style={{
+                  marginTop: 8, padding: '12px 14px',
+                  background: cp.no_rate ? 'rgba(255,179,0,0.07)' : 'rgba(0,200,83,0.06)',
+                  border: `1px solid ${cp.no_rate ? 'rgba(255,179,0,0.35)' : 'rgba(0,200,83,0.2)'}`,
+                  borderRadius: 8,
+                }}>
+                  {cp.customer_name && (
+                    <div style={{ fontSize: 11, color: '#64748B', marginBottom: 8 }}>
+                      Customer: <span style={{ fontWeight: 700, color: '#0F172A' }}>{cp.customer_name}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
+                    <span style={{ color: '#64748B' }}>Carrier cost</span>
+                    <span style={{ color: '#0F172A', fontWeight: 600 }}>£{(cp.carrier_cost || 0).toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
+                    <span style={{ color: '#64748B' }}>Service</span>
+                    <span style={{ color: '#0F172A', fontWeight: 600 }}>{cp.service_name}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
+                    <span style={{ color: '#64748B' }}>Weight / parcels</span>
+                    <span style={{ color: '#0F172A' }}>{(cp.weight_kg || 0).toFixed(3)} kg / {cp.parcel_count || 1} pcs</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
+                    <span style={{ color: '#64748B' }}>Zone</span>
+                    <span style={{ color: '#0F172A' }}>{cp.zone_name || '—'}</span>
+                  </div>
+                  <div style={{
+                    display: 'flex', justifyContent: 'space-between',
+                    borderTop: '1px solid rgba(0,0,0,0.08)', paddingTop: 8, marginTop: 6, fontSize: 13,
+                  }}>
+                    <span style={{ color: '#0F172A', fontWeight: 700 }}>Calculated sell</span>
+                    {cp.no_rate ? (
+                      <span style={{ color: '#FFB300', fontWeight: 700 }}>No rate configured</span>
+                    ) : (
+                      <span style={{ color: '#00C853', fontWeight: 700 }}>£{(cp.calculated_sell || 0).toFixed(2)}</span>
+                    )}
+                  </div>
+                  {cp.no_rate && (
+                    <div style={{ fontSize: 10, color: '#FFB300', marginTop: 6 }}>
+                      Set up customer rates for {cp.service_code} first, then resolve — or use Manual Price instead.
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
+
+        {/* Surcharge mapping dropdown */}
+        {(resolutionType === 'map_to_surcharge') && (() => {
+          const selectedSurcharge = surcharges.find(s => s.id === resolutionValue);
+          return (
+            <div>
+              <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>
+                MAP "{line.raw_service_code}" TO SURCHARGE *
+              </label>
+              <select
+                style={inputSt}
+                value={resolutionValue}
+                onChange={e => setResolutionValue(e.target.value)}
+              >
+                <option value=''>— Select surcharge —</option>
+                {surcharges.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.code})
+                  </option>
+                ))}
+              </select>
+              {surcharges.length === 0 && (
+                <div style={{ fontSize: 10, color: '#FFB300', marginTop: 4 }}>
+                  No surcharges configured for this carrier yet. Add them in Carriers → Surcharges first.
+                </div>
+              )}
+
+              {/* ── Live Ledger Preview — loads as soon as a surcharge is selected ── */}
+              {selectedSurcharge && previewLoading && (
+                <div style={{ marginTop: 8, padding: '9px 12px', background: 'rgba(0,0,0,0.03)', borderRadius: 7, fontSize: 11, color: '#64748B' }}>
+                  Calculating…
+                </div>
+              )}
+              {selectedSurcharge && !previewLoading && chargePreview && (() => {
+                const cp          = chargePreview;
+                const hasCustomer = !!cp.customer_id;
+                const borderColor = hasCustomer ? 'rgba(0,200,83,0.3)'  : 'rgba(255,179,0,0.45)';
+                const bgColor     = hasCustomer ? 'rgba(0,200,83,0.05)' : 'rgba(255,179,0,0.07)';
+                const sellColor   = hasCustomer ? '#00C853' : '#FFB300';
+                const totalSell   = (cp.freight_sell ?? 0) + (cp.calculated_sell ?? 0);
+                const totalCost   = (cp.freight_cost ?? 0) + (cp.carrier_cost ?? 0);
+
+                const LRow = ({ label, cost, sell, bold, topBorder }) => (
+                  <div style={{
+                    display: 'grid', gridTemplateColumns: '1fr 72px 72px',
+                    padding: '3px 0',
+                    ...(topBorder ? { borderTop: '1px solid rgba(0,0,0,0.08)', marginTop: 4, paddingTop: 6 } : {}),
+                  }}>
+                    <span style={{ fontSize: 11, color: bold ? '#0F172A' : '#64748B', fontWeight: bold ? 700 : 400 }}>{label}</span>
+                    <span style={{ fontSize: 11, fontFamily: 'monospace', textAlign: 'right', color: '#64748B' }}>
+                      {cost > 0 ? `£${cost.toFixed(2)}` : '—'}
+                    </span>
+                    <span style={{ fontSize: bold ? 13 : 11, fontFamily: 'monospace', textAlign: 'right', fontWeight: bold ? 700 : 600, color: bold ? sellColor : '#0F172A' }}>
+                      {sell > 0 ? `£${sell.toFixed(2)}` : '—'}
+                    </span>
+                  </div>
+                );
+
+                return (
+                  <div style={{ marginTop: 8, padding: '10px 13px', background: bgColor, border: `1px solid ${borderColor}`, borderRadius: 7 }}>
+                    {/* Customer attribution */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, paddingBottom: 7, borderBottom: '1px solid rgba(0,0,0,0.07)' }}>
+                      <span style={{ fontSize: 11, color: '#64748B' }}>Customer</span>
+                      <div style={{ textAlign: 'right' }}>
+                        {hasCustomer ? (
+                          <>
+                            <span style={{ fontWeight: 700, color: '#0F172A', fontSize: 12 }}>{cp.customer_name}</span>
+                            {cp.customer_source !== 'direct' && (
+                              <div style={{ fontSize: 10, color: '#64748B' }}>{cp.customer_source}</div>
+                            )}
+                          </>
+                        ) : (
+                          <span style={{ fontWeight: 700, color: '#FFB300', fontSize: 11 }}>UNRESOLVED</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Column headers */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 72px 72px', marginBottom: 2 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase' }} />
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textAlign: 'right', textTransform: 'uppercase' }}>Cost</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textAlign: 'right', textTransform: 'uppercase' }}>Sell</span>
+                    </div>
+
+                    {/* Freight row — only when counterpart exists */}
+                    {cp.has_freight && <LRow label="Base Freight" cost={cp.freight_cost ?? 0} sell={cp.freight_sell ?? 0} />}
+
+                    {/* Surcharge row */}
+                    <LRow label={`${cp.surcharge_name || selectedSurcharge.name}`} cost={cp.carrier_cost ?? 0} sell={cp.calculated_sell ?? 0} />
+
+                    {cp.parcel_count > 1 && (
+                      <div style={{ fontSize: 10, color: '#64748B', textAlign: 'right', marginBottom: 2 }}>× {cp.parcel_count} parcels</div>
+                    )}
+                    {cp.has_override && (
+                      <div style={{ fontSize: 10, color: '#64748B', textAlign: 'right', marginBottom: 2 }}>✦ customer override rate</div>
+                    )}
+
+                    {/* Total row — only when freight data available */}
+                    {cp.has_freight && <LRow label="Total to Client" cost={totalCost} sell={totalSell} bold topBorder />}
+
+                    {/* Warning when no customer */}
+                    {!hasCustomer && (
+                      <div style={{ marginTop: 8, padding: '6px 9px', background: 'rgba(255,179,0,0.12)', borderRadius: 5, fontSize: 10, color: '#B27800' }}>
+                        ⚠ No customer — line will stay Unmatched (visible on dashboard). Use Map to Customer first.
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          );
+        })()}
 
         {/* Delta tolerance input */}
         {resolutionType === 'accept_delta' && (
           <div>
-            <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 6, fontWeight: 600 }}>TOLERANCE % *</label>
+            <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>TOLERANCE % *</label>
             <input
               style={inputSt}
               type='number' step='0.1' min='0' max='100'
@@ -471,31 +891,127 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
               value={resolutionValue}
               onChange={e => setResolutionValue(e.target.value)}
             />
-            <div style={{ fontSize: 10, color: '#666', marginTop: 4 }}>±% delta that will auto-correct in future runs</div>
+            <div style={{ fontSize: 10, color: '#64748B', marginTop: 4 }}>±% delta that will auto-correct in future runs</div>
+          </div>
+        )}
+
+        {/* Manual price input */}
+        {isManualPrice && (
+          <div>
+            <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>
+              BASE FREIGHT SELL PRICE (£) *
+            </label>
+            <input
+              style={inputSt}
+              type='number' step='0.01' min='0.01'
+              placeholder='e.g. 45.00'
+              value={resolutionValue}
+              onChange={e => setResolutionValue(e.target.value)}
+            />
+            {fuelRate === null && manualBase > 0 && (
+              <div style={{ fontSize: 10, color: '#64748B', marginTop: 6 }}>Loading fuel rate…</div>
+            )}
+            {fuelRate !== null && manualBase > 0 && (
+              <div style={{
+                marginTop: 8, padding: '10px 12px',
+                background: 'rgba(0,200,83,0.06)', border: '1px solid rgba(0,200,83,0.2)',
+                borderRadius: 7, fontSize: 12,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ color: '#64748B' }}>Base freight</span>
+                  <span style={{ color: '#0F172A', fontWeight: 600 }}>£{manualBase.toFixed(2)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ color: '#64748B' }}>
+                    Fuel {fuelRate.fuel_group_name ? `(${fuelRate.fuel_group_name})` : ''} {fuelPct}%
+                  </span>
+                  <span style={{ color: '#0F172A' }}>£{(manualTotal - manualBase).toFixed(2)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(0,0,0,0.08)', paddingTop: 6, marginTop: 4 }}>
+                  <span style={{ color: '#0F172A', fontWeight: 700 }}>Total to bill customer</span>
+                  <span style={{ color: '#00C853', fontWeight: 700, fontSize: 13 }}>£{manualTotal.toFixed(2)}</span>
+                </div>
+                {fuelPct === 0 && (
+                  <div style={{ fontSize: 10, color: '#FFB300', marginTop: 6 }}>
+                    ⚠ No fuel rate found for this customer — total equals base freight
+                  </div>
+                )}
+                {fuelPct > 0 && fuelRate?.source === 'carrier_standard' && (
+                  <div style={{ fontSize: 10, color: '#64748B', marginTop: 6 }}>
+                    Using carrier standard rate (no billing history yet for this customer)
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Customer search for map_to_customer */}
+        {isMapToCustomer && (
+          <div>
+            {line.carrier_account_no && (
+              <div style={{ fontSize: 11, color: '#64748B', marginBottom: 8 }}>
+                Carrier account: <span style={{ fontFamily: 'monospace', color: '#0F172A', fontWeight: 700 }}>{line.carrier_account_no}</span>
+              </div>
+            )}
+            <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>ASSIGN TO CUSTOMER *</label>
+            {selectedCust ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'rgba(0,200,83,0.08)', border: '1px solid rgba(0,200,83,0.3)', borderRadius: 6 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>{selectedCust.business_name}</div>
+                  <div style={{ fontSize: 10, color: '#64748B' }}>Account: {selectedCust.account_number || '—'}</div>
+                </div>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 16 }} onClick={() => { setSelectedCust(null); setCustSearch(''); }}>×</button>
+              </div>
+            ) : (
+              <div style={{ position: 'relative' }}>
+                <input
+                  style={inputSt}
+                  placeholder='Type customer name or account number…'
+                  value={custSearch}
+                  onChange={e => setCustSearch(e.target.value)}
+                  autoFocus
+                />
+                {custSearching && <div style={{ fontSize: 10, color: '#64748B', marginTop: 4 }}>Searching…</div>}
+                {custResults.length > 0 && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, background: '#FFF', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', marginTop: 2, maxHeight: 200, overflowY: 'auto' }}>
+                    {custResults.map(c => (
+                      <div
+                        key={c.id}
+                        style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid rgba(0,0,0,0.06)' }}
+                        onMouseDown={() => { setSelectedCust(c); setResolutionValue(c.id); setCustResults([]); setCustSearch(''); }}
+                      >
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#0F172A' }}>{c.business_name}</div>
+                        <div style={{ fontSize: 10, color: '#64748B' }}>Account: {c.account_number || '—'}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            <div style={{ fontSize: 10, color: '#64748B', marginTop: 6 }}>
+              Tick "Save as Permanent Rule" below to auto-assign all future lines from this DPD account to this customer.
+            </div>
           </div>
         )}
 
         {/* Generic value input for other types */}
-        {!isUnknownCode && resolutionType !== 'map_to_service' && resolutionType !== 'accept_delta' && resolutionType && (
+        {!isUnknownCode && !isMapToCustomer && !isRemapService && resolutionType !== 'map_to_service' && resolutionType !== 'accept_delta' && resolutionType !== 'credit_request' && !isManualPrice && !isSurchargeMapping && resolutionType && (
           <div>
-            <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 6, fontWeight: 600 }}>RESOLUTION VALUE *</label>
+            <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>RESOLUTION VALUE *</label>
             <input
               style={inputSt}
-              placeholder={
-                resolutionType === 'map_to_customer' ? 'Customer name or account number' :
-                resolutionType === 'reject'           ? 'Reason for rejection' :
-                'Resolution value'
-              }
+              placeholder={resolutionType === 'reject' ? 'Reason for rejection' : 'Resolution value'}
               value={resolutionValue}
               onChange={e => setResolutionValue(e.target.value)}
             />
           </div>
         )}
 
-        {/* Save as Permanent Rule */}
+        {/* Save as Permanent Rule / Apply to all */}
         <div style={{
-          background: saveRule ? 'rgba(0,200,83,0.06)' : 'rgba(255,255,255,0.03)',
-          border: `1px solid ${saveRule ? 'rgba(0,200,83,0.3)' : 'rgba(255,255,255,0.08)'}`,
+          background: saveRule ? 'rgba(0,200,83,0.06)' : 'rgba(0,0,0,0.03)',
+          border: `1px solid ${saveRule ? 'rgba(0,200,83,0.3)' : 'rgba(0,0,0,0.08)'}`,
           borderRadius: 8, padding: '12px 14px',
         }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
@@ -506,19 +1022,23 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
               style={{ width: 15, height: 15, accentColor: '#00C853', cursor: 'pointer' }}
             />
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: saveRule ? '#00C853' : '#E6EDF3' }}>
-                Save as Permanent Rule
+              <div style={{ fontSize: 13, fontWeight: 700, color: saveRule ? '#00C853' : '#0F172A' }}>
+                {isCancelledBooking ? 'Apply to all cancelled lines in this run' :
+                 isMapToCustomer   ? 'Save account → customer mapping permanently' :
+                 'Save as Permanent Rule'}
               </div>
-              <div style={{ fontSize: 11, color: '#888', marginTop: 1 }}>
-                Auto-resolve this code on all future runs for this carrier
+              <div style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
+                {isCancelledBooking ? 'Marks all other cancelled booking lines in this run for credit' :
+                 isMapToCustomer   ? `Always assign DPD account ${line.carrier_account_no || '—'} to this customer` :
+                 'Auto-resolve this code on all future runs for this carrier'}
               </div>
             </div>
           </label>
 
           {/* Rule scope — visible when saving a service code OR surcharge mapping */}
           {saveRule && (isUnknownCode || resolutionType === 'map_to_surcharge') && (
-            <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-              <div style={{ fontSize: 11, color: '#888', fontWeight: 600, marginBottom: 8 }}>APPLIES TO</div>
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+              <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, marginBottom: 8 }}>APPLIES TO</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 {[
                   { val: 'global',   label: 'All Customers',    desc: 'Standard code used by all' },
@@ -529,12 +1049,12 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
                     onClick={() => setRuleScope(opt.val)}
                     style={{
                       padding: '9px 11px', borderRadius: 7, cursor: 'pointer', textAlign: 'left',
-                      background: ruleScope === opt.val ? 'rgba(0,200,83,0.1)' : 'rgba(255,255,255,0.04)',
-                      border: `1px solid ${ruleScope === opt.val ? 'rgba(0,200,83,0.35)' : 'rgba(255,255,255,0.08)'}`,
+                      background: ruleScope === opt.val ? 'rgba(0,200,83,0.1)' : 'rgba(0,0,0,0.03)',
+                      border: `1px solid ${ruleScope === opt.val ? 'rgba(0,200,83,0.35)' : 'rgba(0,0,0,0.08)'}`,
                     }}
                   >
-                    <div style={{ fontSize: 12, fontWeight: 700, color: ruleScope === opt.val ? '#00C853' : '#E6EDF3' }}>{opt.label}</div>
-                    <div style={{ fontSize: 10, color: '#666', marginTop: 2 }}>{opt.desc}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: ruleScope === opt.val ? '#00C853' : '#0F172A' }}>{opt.label}</div>
+                    <div style={{ fontSize: 10, color: '#64748B', marginTop: 2 }}>{opt.desc}</div>
                   </button>
                 ))}
               </div>
@@ -549,7 +1069,7 @@ function ResolveDrawer({ line, courierId, onClose, onResolved, defaultResolution
 
         {/* Notes */}
         <div>
-          <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 6, fontWeight: 600 }}>NOTES (OPTIONAL)</label>
+          <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 6, fontWeight: 600 }}>NOTES (OPTIONAL)</label>
           <textarea
             style={{ ...inputSt, minHeight: 56, resize: 'vertical' }}
             placeholder='Any context for this resolution…'
@@ -651,7 +1171,7 @@ function ServiceCodeMappingBanner({ unmatchedLines, runId, courierId, onMapped }
             <AlertTriangle size={15} />
             {groups.size} unknown service code{groups.size !== 1 ? 's' : ''} — map before finalizing
           </div>
-          <div style={{ fontSize: 12, color: '#888', marginTop: 3 }}>
+          <div style={{ fontSize: 12, color: '#64748B', marginTop: 3 }}>
             Map each raw carrier code to an internal service. Saves as a permanent rule so future runs auto-resolve.
           </div>
         </div>
@@ -662,22 +1182,22 @@ function ServiceCodeMappingBanner({ unmatchedLines, runId, courierId, onMapped }
           <div key={g.code} style={{
             display: 'grid', gridTemplateColumns: '140px 50px 1fr 120px', gap: 12,
             alignItems: 'center', padding: '10px 14px',
-            background: 'rgba(255,255,255,0.03)', borderRadius: 8,
-            border: selections[g.code] ? '1px solid rgba(0,200,83,0.2)' : '1px solid rgba(255,255,255,0.06)',
+            background: 'rgba(0,0,0,0.03)', borderRadius: 8,
+            border: selections[g.code] ? '1px solid rgba(0,200,83,0.2)' : '1px solid rgba(0,0,0,0.06)',
           }}>
             {/* Raw code */}
             <div>
-              <div style={{ fontSize: 10, color: '#666', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Raw Code</div>
+              <div style={{ fontSize: 10, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Raw Code</div>
               <div style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, color: '#79AAFF' }}>{g.code}</div>
             </div>
             {/* Line count */}
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 10, color: '#666', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Lines</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#AAA' }}>{g.count}</div>
+              <div style={{ fontSize: 10, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Lines</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#64748B' }}>{g.count}</div>
             </div>
             {/* Service dropdown */}
             <div>
-              <div style={{ fontSize: 10, color: '#666', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>
+              <div style={{ fontSize: 10, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>
                 Maps To{g.suggested_label && <span style={{ color: '#79AAFF', marginLeft: 5 }}>✦ Suggestion available</span>}
               </div>
               <select
@@ -790,10 +1310,10 @@ function ShipmentLookupPanel() {
 
   return (
     <div style={card}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: '#E6EDF3', marginBottom: 12 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', marginBottom: 12 }}>
         Shipment Lookup
       </div>
-      <div style={{ fontSize: 11, color: '#555', marginBottom: 12 }}>
+      <div style={{ fontSize: 11, color: '#64748B', marginBottom: 12 }}>
         Search for any tracking / consignment number across all shipments — no reconciliation gates applied.
         Shows verified status, courier match, pool eligibility, and what's blocking the pool if anything.
       </div>
@@ -815,10 +1335,10 @@ function ShipmentLookupPanel() {
 
       {result && (
         <div>
-          <div style={{ fontSize: 11, color: '#555', marginBottom: 10 }}>
-            Searched: <span style={{ fontFamily: 'monospace', color: '#AAA' }}>{result.tracking_searched}</span>
+          <div style={{ fontSize: 11, color: '#64748B', marginBottom: 10 }}>
+            Searched: <span style={{ fontFamily: 'monospace', color: '#64748B' }}>{result.tracking_searched}</span>
             {' '}·{' '}
-            Variants tried: <span style={{ fontFamily: 'monospace', color: '#666' }}>{result.variants_tried.join(', ')}</span>
+            Variants tried: <span style={{ fontFamily: 'monospace', color: '#64748B' }}>{result.variants_tried.join(', ')}</span>
           </div>
 
           {result.shipments_found === 0 && (
@@ -839,8 +1359,8 @@ function ShipmentLookupPanel() {
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#FFB300', marginBottom: 4 }}>
                   Recover missed shipment
                 </div>
-                <div style={{ fontSize: 11, color: '#888', marginBottom: 10, lineHeight: 1.5 }}>
-                  Enter the <strong style={{ color: '#AAA' }}>sender reference</strong> (the customer ref used when booking — visible in DC) and the
+                <div style={{ fontSize: 11, color: '#64748B', marginBottom: 10, lineHeight: 1.5 }}>
+                  Enter the <strong style={{ color: '#64748B' }}>sender reference</strong> (the customer ref used when booking — visible in DC) and the
                   tracking number. We'll search DC for that booking and pull it in.
                 </div>
                 <form onSubmit={handleBackfill} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -881,7 +1401,7 @@ function ShipmentLookupPanel() {
                         Warnings: {backfillResult.warnings.join(', ')}
                       </div>
                     )}
-                    <div style={{ marginTop: 4, color: '#888' }}>
+                    <div style={{ marginTop: 4, color: '#64748B' }}>
                       Search the tracking number above again to confirm it is now in the pool.
                     </div>
                   </div>
@@ -900,7 +1420,7 @@ function ShipmentLookupPanel() {
               <div style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10,
               }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#E6EDF3', fontFamily: 'monospace' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#0F172A', fontFamily: 'monospace' }}>
                   Shipment {r.shipment.id}
                 </span>
                 <span style={{
@@ -928,8 +1448,8 @@ function ShipmentLookupPanel() {
                   ['Postcode',         r.shipment.ship_to_postcode || '—'],
                 ].map(([k, v]) => (
                   <div key={k} style={{ fontSize: 10 }}>
-                    <span style={{ color: '#444' }}>{k}: </span>
-                    <span style={{ color: '#888', fontFamily: 'monospace' }}>{v}</span>
+                    <span style={{ color: '#475569' }}>{k}: </span>
+                    <span style={{ color: '#64748B', fontFamily: 'monospace' }}>{v}</span>
                   </div>
                 ))}
               </div>
@@ -942,7 +1462,7 @@ function ShipmentLookupPanel() {
                   fontSize: 11,
                 }}>
                   <span style={{ color: '#58A6FF', fontWeight: 700 }}>Reconciliation expected_amount: £{r.total_cost_price.toFixed(2)}</span>
-                  <span style={{ color: '#555', marginLeft: 8 }}>(base cost + fuel + surcharges — this is what the engine compares against the carrier invoice)</span>
+                  <span style={{ color: '#64748B', marginLeft: 8 }}>(base cost + fuel + surcharges — this is what the engine compares against the carrier invoice)</span>
                 </div>
               )}
 
@@ -969,30 +1489,30 @@ function ShipmentLookupPanel() {
               ) : (
                 <table style={{ width: '100%', fontSize: 10, borderCollapse: 'collapse' }}>
                   <thead>
-                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                    <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
                       {['Type', 'Service', 'V', 'X', 'Cost (our cost)', 'Sell (customer)', 'Zone', 'Source', 'Customer'].map(h => (
-                        <th key={h} style={{ padding: '4px 6px', textAlign: 'left', color: '#444', fontWeight: 700, textTransform: 'uppercase', fontSize: 9 }}>{h}</th>
+                        <th key={h} style={{ padding: '4px 6px', textAlign: 'left', color: '#475569', fontWeight: 700, textTransform: 'uppercase', fontSize: 9 }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {r.charges.map((c, j) => (
                       <tr key={j} style={{
-                        borderBottom: '1px solid rgba(255,255,255,0.03)',
+                        borderBottom: '1px solid rgba(0,0,0,0.03)',
                         opacity: c.cancelled ? 0.4 : 1,
                       }}>
-                        <td style={{ padding: '4px 6px', color: '#AAA' }}>{c.charge_type}</td>
-                        <td style={{ padding: '4px 6px', color: '#666', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.service_name}>{c.service_code || c.service_name || '—'}</td>
+                        <td style={{ padding: '4px 6px', color: '#64748B' }}>{c.charge_type}</td>
+                        <td style={{ padding: '4px 6px', color: '#64748B', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.service_name}>{c.service_code || c.service_name || '—'}</td>
                         <td style={{ padding: '4px 6px', color: statusColor(c.verified), fontWeight: 700, fontSize: 9 }}>{c.verified ? '✓' : '✗'}</td>
                         <td style={{ padding: '4px 6px', color: c.cancelled ? '#FF5252' : '#333', fontWeight: c.cancelled ? 700 : 400, fontSize: 9 }}>{c.cancelled ? '✗' : '—'}</td>
-                        <td style={{ padding: '4px 6px', color: '#E6EDF3', fontWeight: 600 }}>
+                        <td style={{ padding: '4px 6px', color: '#0F172A', fontWeight: 600 }}>
                           {c.cost_price != null ? `£${parseFloat(c.cost_price).toFixed(2)}` : '—'}
                           {c.recon_corrected && <span title="Updated by reconciliation" style={{ marginLeft: 4, color: '#FFB300', fontSize: 8 }}>●R</span>}
                         </td>
                         <td style={{ padding: '4px 6px', color: '#00C853', fontWeight: 600 }}>{c.sell_price != null ? `£${parseFloat(c.sell_price).toFixed(2)}` : '—'}</td>
-                        <td style={{ padding: '4px 6px', color: '#666' }}>{c.zone_name || '—'}</td>
-                        <td style={{ padding: '4px 6px', color: '#555', fontSize: 9 }}>{c.source || '—'}</td>
-                        <td style={{ padding: '4px 6px', color: '#AAA' }}>{c.customer_name || '—'}</td>
+                        <td style={{ padding: '4px 6px', color: '#64748B' }}>{c.zone_name || '—'}</td>
+                        <td style={{ padding: '4px 6px', color: '#64748B', fontSize: 9 }}>{c.source || '—'}</td>
+                        <td style={{ padding: '4px 6px', color: '#64748B' }}>{c.customer_name || '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1019,7 +1539,7 @@ function TraceModal({ runId, lineId, trackingNumber, onClose }) {
       .catch(e => { setErr(e.response?.data?.error || 'Failed to load trace'); setLoading(false); });
   }, [runId, lineId]);
 
-  const stepColor = s => s === 'ok' ? '#00C853' : s === 'warn' ? '#FF8F00' : s === 'error' ? '#FF5252' : '#AAA';
+  const stepColor = s => s === 'ok' ? '#00C853' : s === 'warn' ? '#FF8F00' : s === 'error' ? '#FF5252' : '#64748B';
 
   return (
     <div style={{
@@ -1027,7 +1547,7 @@ function TraceModal({ runId, lineId, trackingNumber, onClose }) {
       background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
     }} onClick={onClose}>
       <div style={{
-        background: '#0d1117', border: '1px solid rgba(255,255,255,0.12)',
+        background: '#0d1117', border: '1px solid rgba(0,0,0,0.10)',
         borderRadius: 12, padding: 24, width: 640, maxHeight: '80vh',
         overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
       }} onClick={e => e.stopPropagation()}>
@@ -1035,10 +1555,10 @@ function TraceModal({ runId, lineId, trackingNumber, onClose }) {
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#E6EDF3', marginBottom: 4 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>
               Reconciliation Trace
             </div>
-            <div style={{ fontSize: 11, color: '#555', fontFamily: 'monospace' }}>
+            <div style={{ fontSize: 11, color: '#64748B', fontFamily: 'monospace' }}>
               {trackingNumber || `line #${lineId}`}
             </div>
           </div>
@@ -1048,7 +1568,7 @@ function TraceModal({ runId, lineId, trackingNumber, onClose }) {
         </div>
 
         {loading && (
-          <div style={{ textAlign: 'center', color: '#555', fontSize: 12, padding: '30px 0' }}>
+          <div style={{ textAlign: 'center', color: '#64748B', fontSize: 12, padding: '30px 0' }}>
             <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite', marginBottom: 8 }} />
             <div>Loading trace…</div>
           </div>
@@ -1064,13 +1584,13 @@ function TraceModal({ runId, lineId, trackingNumber, onClose }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {data.steps.map((step, i) => (
               <div key={i} style={{
-                background: 'rgba(255,255,255,0.03)',
+                background: 'rgba(0,0,0,0.03)',
                 border: `1px solid rgba(255,255,255,${step.status === 'error' ? '0.15' : '0.06'})`,
                 borderRadius: 8, padding: '10px 14px',
                 borderLeft: `3px solid ${stepColor(step.status)}`,
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#E6EDF3' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#0F172A' }}>
                     {i + 1}. {step.label}
                   </span>
                   <span style={{
@@ -1080,13 +1600,13 @@ function TraceModal({ runId, lineId, trackingNumber, onClose }) {
                     {step.status}
                   </span>
                 </div>
-                <div style={{ fontSize: 11, color: '#888', lineHeight: 1.5 }}>
+                <div style={{ fontSize: 11, color: '#64748B', lineHeight: 1.5 }}>
                   {step.detail}
                 </div>
                 {step.value != null && (
                   <div style={{
                     marginTop: 6, fontSize: 12, fontWeight: 700,
-                    color: step.status === 'error' ? '#FF5252' : step.status === 'warn' ? '#FF8F00' : '#E6EDF3',
+                    color: step.status === 'error' ? '#FF5252' : step.status === 'warn' ? '#FF8F00' : '#0F172A',
                   }}>
                     {step.value}
                   </div>
@@ -1094,13 +1614,13 @@ function TraceModal({ runId, lineId, trackingNumber, onClose }) {
                 {step.meta && Object.keys(step.meta).length > 0 && (
                   <div style={{
                     marginTop: 8, padding: '6px 10px',
-                    background: 'rgba(255,255,255,0.03)', borderRadius: 6,
+                    background: 'rgba(0,0,0,0.03)', borderRadius: 6,
                     display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 16px',
                   }}>
                     {Object.entries(step.meta).map(([k, v]) => (
-                      <div key={k} style={{ fontSize: 10, color: '#555' }}>
-                        <span style={{ color: '#444' }}>{k}: </span>
-                        <span style={{ color: '#888', fontFamily: 'monospace' }}>{String(v)}</span>
+                      <div key={k} style={{ fontSize: 10, color: '#64748B' }}>
+                        <span style={{ color: '#475569' }}>{k}: </span>
+                        <span style={{ color: '#64748B', fontFamily: 'monospace' }}>{String(v)}</span>
                       </div>
                     ))}
                   </div>
@@ -1128,11 +1648,11 @@ function DeltaCell({ line, onResolveAsSurcharge }) {
   const carrier  = parseFloat(line.carrier_amount  || 0);
   const expected = parseFloat(line.expected_amount || 0);
 
-  if (line.delta == null) return <span style={{ color: '#555' }}>—</span>;
+  if (line.delta == null) return <span style={{ color: '#64748B' }}>—</span>;
 
   const isPriceMismatch = line.unmatched_reason === 'price_mismatch';
   const isPositive = delta > 0.01;
-  const color = isPositive ? '#FF5252' : delta < -0.01 ? '#00C853' : '#555';
+  const color = isPositive ? '#FF5252' : delta < -0.01 ? '#00C853' : '#475569';
 
   function handleMouseEnter() {
     if (!isPriceMismatch || !ref.current) return;
@@ -1160,7 +1680,7 @@ function DeltaCell({ line, onResolveAsSurcharge }) {
             transform: 'translate(-50%, calc(-100% - 10px))',
             zIndex: 9999,
             background: '#0D1117',
-            border: '1px solid rgba(255,255,255,0.15)',
+            border: '1px solid rgba(0,0,0,0.12)',
             borderRadius: 8, padding: '12px 14px', width: 230,
             boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
             pointerEvents: 'all',
@@ -1170,32 +1690,32 @@ function DeltaCell({ line, onResolveAsSurcharge }) {
         >
           {/* Arrow */}
           <div style={{
-            position: 'absolute', bottom: -6, left: '50%', transform: 'translateX(-50%)',
+            position: 'absolute', bottom: -6, left: '50%',
             width: 10, height: 10, background: '#0D1117',
-            borderRight: '1px solid rgba(255,255,255,0.15)',
-            borderBottom: '1px solid rgba(255,255,255,0.15)',
+            borderRight: '1px solid rgba(0,0,0,0.12)',
+            borderBottom: '1px solid rgba(0,0,0,0.12)',
             transform: 'translateX(-50%) rotate(45deg)',
           }} />
 
-          <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+          <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
             Price Mismatch
           </div>
 
           {/* Breakdown */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 10 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-              <span style={{ color: '#888' }}>Carrier charged</span>
-              <span style={{ color: '#E6EDF3', fontWeight: 600 }}>£{carrier.toFixed(2)}</span>
+              <span style={{ color: '#64748B' }}>Carrier charged</span>
+              <span style={{ color: '#0F172A', fontWeight: 600 }}>£{carrier.toFixed(2)}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-              <span style={{ color: '#888' }}>Expected</span>
-              <span style={{ color: '#888' }}>£{expected.toFixed(2)}</span>
+              <span style={{ color: '#64748B' }}>Expected</span>
+              <span style={{ color: '#64748B' }}>£{expected.toFixed(2)}</span>
             </div>
             <div style={{
-              borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 5,
+              borderTop: '1px solid rgba(0,0,0,0.07)', paddingTop: 5,
               display: 'flex', justifyContent: 'space-between', fontSize: 11,
             }}>
-              <span style={{ color: '#888' }}>{isPositive ? 'Carrier surplus' : 'Carrier deficit'}</span>
+              <span style={{ color: '#64748B' }}>{isPositive ? 'Carrier surplus' : 'Carrier deficit'}</span>
               <span style={{ color, fontWeight: 700 }}>{delta > 0 ? '+' : ''}£{delta.toFixed(2)}</span>
             </div>
           </div>
@@ -1216,13 +1736,13 @@ function DeltaCell({ line, onResolveAsSurcharge }) {
               .sort((a, b) => a.diff - b.diff);
 
             if (!relevant.length) return (
-              <div style={{ fontSize: 10, color: '#555', marginBottom: 10, lineHeight: 1.5 }}>
+              <div style={{ fontSize: 10, color: '#64748B', marginBottom: 10, lineHeight: 1.5 }}>
                 No CSV column closely matches this delta — may be a relabel, credit, zone correction, or a column not yet in the profile.
               </div>
             );
             return (
               <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>
+                <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>
                   Likely source column{relevant.length > 1 ? 's' : ''}
                 </div>
                 {relevant.map(({ col, amt, diff }) => {
@@ -1231,14 +1751,14 @@ function DeltaCell({ line, onResolveAsSurcharge }) {
                     <div key={col} style={{
                       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                       fontSize: 11, padding: '3px 6px', borderRadius: 4, marginBottom: 2,
-                      background: isExact ? 'rgba(0,200,83,0.08)' : 'rgba(255,255,255,0.03)',
-                      border: isExact ? '1px solid rgba(0,200,83,0.2)' : '1px solid rgba(255,255,255,0.06)',
+                      background: isExact ? 'rgba(0,200,83,0.08)' : 'rgba(0,0,0,0.03)',
+                      border: isExact ? '1px solid rgba(0,200,83,0.2)' : '1px solid rgba(0,0,0,0.06)',
                     }}>
-                      <span style={{ color: isExact ? '#E6EDF3' : '#AAA', fontWeight: isExact ? 700 : 400 }}>
+                      <span style={{ color: isExact ? '#0F172A' : '#64748B', fontWeight: isExact ? 700 : 400 }}>
                         {isExact && <span style={{ color: '#00C853', marginRight: 4 }}>✓</span>}
                         {col}
                       </span>
-                      <span style={{ color: isExact ? '#00C853' : '#888', fontWeight: 600, marginLeft: 8, flexShrink: 0 }}>
+                      <span style={{ color: isExact ? '#00C853' : '#64748B', fontWeight: 600, marginLeft: 8, flexShrink: 0 }}>
                         £{parseFloat(amt).toFixed(2)}
                       </span>
                     </div>
@@ -1302,6 +1822,51 @@ function exportLinesToCSV(lines, filename) {
   setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
 }
 
+// ─── Re-open button ───────────────────────────────────────────────────────────
+function ReopenButton({ lineId, runId }) {
+  const queryClient = useQueryClient();
+  const [confirming, setConfirming] = useState(false);
+
+  const { mutate, isPending } = useMutation({
+    mutationFn: () => api.post(`/reconciliation/runs/${runId}/lines/${lineId}/reopen`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['recon-lines', runId] });
+      queryClient.invalidateQueries({ queryKey: ['recon-run', runId] });
+      setConfirming(false);
+    },
+  });
+
+  if (confirming) {
+    return (
+      <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        <button
+          style={{ ...btnRed, padding: '4px 8px', fontSize: 10 }}
+          onClick={() => mutate()}
+          disabled={isPending}
+        >
+          {isPending ? '…' : 'Confirm re-open'}
+        </button>
+        <button
+          style={{ ...btnGhost, padding: '4px 8px', fontSize: 10 }}
+          onClick={() => setConfirming(false)}
+        >
+          Cancel
+        </button>
+      </span>
+    );
+  }
+
+  return (
+    <button
+      title="Revert this correction back to unmatched so it can be resolved again"
+      style={{ ...btnGhost, padding: '4px 8px', fontSize: 10 }}
+      onClick={() => setConfirming(true)}
+    >
+      Re-open
+    </button>
+  );
+}
+
 function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, onRaiseQuery, runId, courierId, exportFilename }) {
   const [traceLine,      setTraceLine]      = useState(null);
   const [surchargeFilter, setSurchargeFilter] = useState('all'); // 'all' | 'freight' | surcharge_id
@@ -1335,17 +1900,17 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, onRai
   const pill = (active, color = '#79AAFF') => ({
     ...pillBase,
     background: active ? `${color}22` : 'transparent',
-    borderColor: active ? `${color}66` : 'rgba(255,255,255,0.1)',
-    color:       active ? color        : '#555',
+    borderColor: active ? `${color}66` : 'rgba(0,0,0,0.08)',
+    color:       active ? color        : '#475569',
   });
 
   return (
     <div>
       {/* Toolbar: surcharge filter (when present) + CSV export */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 4px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 4px 12px', borderBottom: '1px solid rgba(0,0,0,0.06)', marginBottom: 4 }}>
         {surchargeTypes.length > 0 ? (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ fontSize: 10, color: '#444', textTransform: 'uppercase', letterSpacing: '0.06em', marginRight: 4 }}>Show</span>
+            <span style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginRight: 4 }}>Show</span>
             <span style={pill(surchargeFilter === 'all')} onClick={() => setSurchargeFilter('all')}>All lines</span>
             <span style={pill(surchargeFilter === 'freight', '#00C853')} onClick={() => setSurchargeFilter('freight')}>Freight only</span>
             {surchargeTypes.map(s => (
@@ -1354,13 +1919,13 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, onRai
               </span>
             ))}
             {surchargeFilter !== 'all' && (
-              <span style={{ fontSize: 10, color: '#555', marginLeft: 6 }}>
+              <span style={{ fontSize: 10, color: '#64748B', marginLeft: 6 }}>
                 {filteredLines.length} line{filteredLines.length !== 1 ? 's' : ''}
               </span>
             )}
           </div>
         ) : (
-          <span style={{ fontSize: 10, color: '#555' }}>{filteredLines.length} line{filteredLines.length !== 1 ? 's' : ''}</span>
+          <span style={{ fontSize: 10, color: '#64748B' }}>{filteredLines.length} line{filteredLines.length !== 1 ? 's' : ''}</span>
         )}
         <button
           style={{ ...btnGhost, padding: '4px 10px', fontSize: 11 }}
@@ -1373,21 +1938,21 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, onRai
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
         <thead>
-          <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-            {['Tracking', 'Service (raw)', 'Service', 'Customer', 'Type', 'Carrier £', 'Expected £', 'Delta £', 'Status', 'Reason', ''].map(h => (
-              <th key={h} style={{ padding: '8px 10px', textAlign: 'left', color: '#555', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
+          <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
+            {['Tracking', 'Service (raw)', 'Service', 'Customer', 'Type', 'Carrier £', 'Expected £', 'Billed kg', 'Delta £', 'Status', 'Reason', ''].map(h => (
+              <th key={h} style={{ padding: '8px 10px', textAlign: 'left', color: '#64748B', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {filteredLines.map(line => (
-            <tr key={line.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-              <td style={{ padding: '9px 10px', fontFamily: 'monospace', color: '#AAA', fontSize: 10 }}>
+            <tr key={line.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
+              <td style={{ padding: '9px 10px', fontFamily: 'monospace', color: '#64748B', fontSize: 10 }}>
                 {line.aged && <span title='Aged' style={{ color: '#FF5252', marginRight: 4 }}>⚠</span>}
                 {line.tracking_number || '—'}
               </td>
               <td style={{ padding: '9px 10px', color: '#79AAFF', fontFamily: 'monospace', fontSize: 10 }}>{line.raw_service_code || '—'}</td>
-              <td style={{ padding: '9px 10px', color: '#AAA' }}>
+              <td style={{ padding: '9px 10px', color: '#64748B' }}>
                 {line.service_name || (
                   line.suggested_service_name
                     ? <span style={{ color: '#79AAFF', fontStyle: 'italic' }}>
@@ -1396,13 +1961,36 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, onRai
                     : '—'
                 )}
               </td>
-              <td style={{ padding: '9px 10px', color: '#AAA' }}>{line.customer_name || '—'}</td>
-              <td style={{ padding: '9px 10px', color: '#666' }}>{line.charge_type || 'base'}</td>
-              <td style={{ padding: '9px 10px', color: '#E6EDF3', fontWeight: 600 }}>
+              <td style={{ padding: '9px 10px', color: '#64748B' }}>{line.customer_name || '—'}</td>
+              <td style={{ padding: '9px 10px', color: '#64748B' }}>{line.charge_type || 'base'}</td>
+              <td style={{ padding: '9px 10px', color: '#0F172A', fontWeight: 600 }}>
                 {line.carrier_amount != null ? `£${parseFloat(line.carrier_amount).toFixed(2)}` : '—'}
               </td>
-              <td style={{ padding: '9px 10px', color: '#888' }}>
+              <td style={{ padding: '9px 10px', color: '#64748B' }}>
                 {line.expected_amount != null ? `£${parseFloat(line.expected_amount).toFixed(2)}` : '—'}
+              </td>
+              <td style={{ padding: '9px 10px' }}>
+                {line.carrier_billed_weight_kg != null ? (() => {
+                  const billed   = parseFloat(line.carrier_billed_weight_kg);
+                  const declared = parseFloat(line.declared_weight_kg ?? line.weight_charged_kg ?? 0);
+                  const diff     = declared > 0 ? billed - declared : 0;
+                  const flagged  = diff > 0.01; // carrier billed heavier than declared
+                  return (
+                    <span title={flagged ? `Declared ${declared.toFixed(2)}kg · billed ${billed.toFixed(2)}kg` : `${billed.toFixed(2)}kg`} style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 3,
+                      fontWeight: flagged ? 700 : 400,
+                      color: flagged ? '#92400E' : '#475569',
+                      background: flagged ? '#FEF3C7' : 'transparent',
+                      padding: flagged ? '1px 5px' : 0,
+                      borderRadius: 4,
+                      fontSize: 11,
+                    }}>
+                      {flagged && <span style={{ fontSize: 9 }}>⚠</span>}
+                      {billed.toFixed(2)}kg
+                      {flagged && <span style={{ fontSize: 9, color: '#92400E' }}>+{diff.toFixed(2)}</span>}
+                    </span>
+                  );
+                })() : '—'}
               </td>
               <td style={{ padding: '9px 10px', fontWeight: 600 }}>
                 <DeltaCell
@@ -1419,10 +2007,29 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, onRai
               </td>
               <td style={{ padding: '9px 10px' }}>
                 <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-                  {showResolve && line.status === 'unmatched' && (
+                  {showResolve && (line.status === 'unmatched' || line.status === 'warning') && (
                     <button style={{ ...btnGhost, padding: '4px 8px', fontSize: 10 }} onClick={() => onResolve(line)}>
                       Resolve
                     </button>
+                  )}
+                  {/* Re-resolve button for auto-corrected carrier_direct surcharge lines.
+                      These are corrected by the engine but may have wrong amounts
+                      (e.g. DHL repeats the shipment total on every invoice row).
+                      The server now accepts re-resolution for these lines. */}
+                  {line.status === 'corrected' &&
+                   line.source   === 'carrier_direct' &&
+                   line.surcharge_id != null &&
+                   onResolveAsSurcharge && (
+                    <button
+                      style={{ ...btnGhost, padding: '4px 8px', fontSize: 10 }}
+                      title="Re-resolve this surcharge line (amend the amounts)"
+                      onClick={() => onResolveAsSurcharge(line)}
+                    >
+                      Re-resolve
+                    </button>
+                  )}
+                  {line.status === 'corrected' && line.corrected_by === 'human' && runId && (
+                    <ReopenButton lineId={line.id} runId={runId} />
                   )}
                   {onRaiseQuery && line.status === 'unmatched' && (
                     <button
@@ -1449,7 +2056,7 @@ function LinesTable({ lines, showResolve, onResolve, onResolveAsSurcharge, onRai
         </tbody>
       </table>
       {filteredLines.length === 0 && (
-        <div style={{ textAlign: 'center', color: '#555', fontSize: 12, padding: '30px 0' }}>
+        <div style={{ textAlign: 'center', color: '#64748B', fontSize: 12, padding: '30px 0' }}>
           {surchargeFilter === 'all' ? 'No lines in this category' : 'No lines match this filter'}
         </div>
       )}
@@ -1472,27 +2079,28 @@ function CustomerLinesDrilldown({ runId, customerId }) {
   const { data: lines = [], isLoading } = useQuery({
     queryKey: ['recon-preview-lines', runId, customerId],
     queryFn:  () => api.get(`/reconciliation/runs/${runId}/customers/preview/lines`, {
-      params: { customer_id: customerId },
+      params: { customer_id: customerId ?? 'null', t: Date.now() },
     }).then(r => r.data),
-    staleTime: 30_000,
+    staleTime: 0,
+    cacheTime: 0,
   });
 
   if (isLoading) return (
-    <tr><td colSpan={9} style={{ padding: '12px 16px', color: '#555', fontSize: 11 }}>Loading lines…</td></tr>
+    <tr><td colSpan={9} style={{ padding: '12px 16px', color: '#64748B', fontSize: 11 }}>Loading lines…</td></tr>
   );
   if (!lines.length) return (
-    <tr><td colSpan={9} style={{ padding: '12px 16px', color: '#555', fontSize: 11 }}>No lines found</td></tr>
+    <tr><td colSpan={9} style={{ padding: '12px 16px', color: '#64748B', fontSize: 11 }}>No lines found</td></tr>
   );
 
-  const thStyle = { padding: '6px 10px', textAlign: 'left', color: '#444', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', background: 'rgba(255,255,255,0.02)' };
-  const tdStyle = { padding: '7px 10px', fontSize: 11, borderBottom: '1px solid rgba(255,255,255,0.03)' };
+  const thStyle = { padding: '6px 10px', textAlign: 'left', color: '#475569', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', background: '#F1F5F9' };
+  const tdStyle = { padding: '7px 10px', fontSize: 11, borderBottom: '1px solid rgba(0,0,0,0.05)', color: '#0F172A' };
 
   return (
     <tr>
-      <td colSpan={9} style={{ padding: 0, background: 'rgba(0,0,0,0.25)' }}>
+      <td colSpan={9} style={{ padding: 0, background: '#F8FAFC', borderTop: '1px solid rgba(0,0,0,0.06)', borderBottom: '2px solid rgba(0,0,0,0.08)' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
               <th style={thStyle}>Tracking</th>
               <th style={thStyle}>Date</th>
               <th style={thStyle}>Service</th>
@@ -1511,24 +2119,31 @@ function CustomerLinesDrilldown({ runId, customerId }) {
               const cost      = parseFloat(l.cost_total || 0);
               const sell      = parseFloat(l.sell_total || 0);
               const margin    = sell - cost;
-              const isSurcharge = !!l.surcharge_id;
-              const rowBg     = isSurcharge ? 'rgba(0,188,212,0.04)' : 'transparent';
+              const hasCorrectedSurcharge = !!l.has_warning_correction;
+              const rowBg     = hasCorrectedSurcharge ? 'rgba(255,143,0,0.04)' : 'transparent';
               return (
-                <tr key={l.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)', background: rowBg }}>
-                  <td style={{ ...tdStyle, color: isSurcharge ? '#00BCD4' : '#79AAFF', fontFamily: 'monospace', fontSize: 10 }}>
-                    {isSurcharge ? <span style={{ color: '#888', fontFamily: 'sans-serif' }}>↳</span> : null}
-                    {' '}{l.tracking_number || '—'}
+                <tr key={l.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.02)', background: rowBg }}>
+                  <td style={{ ...tdStyle, color: '#79AAFF', fontFamily: 'monospace', fontSize: 10 }}>
+                    {l.tracking_number || '—'}
                   </td>
-                  <td style={{ ...tdStyle, color: '#888' }}>{l.shipment_date ? new Date(l.shipment_date).toLocaleDateString('en-GB') : '—'}</td>
-                  <td style={{ ...tdStyle, color: isSurcharge ? '#00BCD4' : '#AAA' }}>
-                    {isSurcharge ? (l.surcharge_name || l.raw_service_code || 'Surcharge') : (l.service_name || '—')}
+                  <td style={{ ...tdStyle, color: '#64748B' }}>{l.shipment_date ? new Date(l.shipment_date).toLocaleDateString('en-GB') : '—'}</td>
+                  <td style={{ ...tdStyle, color: '#64748B' }}>
+                    {l.service_name || '—'}
+                    {hasCorrectedSurcharge && (
+                      <span
+                        title={`Surcharge added: ${l.corrected_surcharge_names || 'manual correction'}`}
+                        style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, color: '#FF8F00', background: 'rgba(255,143,0,0.15)', border: '1px solid rgba(255,143,0,0.4)', borderRadius: 3, padding: '1px 5px', verticalAlign: 'middle', cursor: 'help' }}
+                      >
+                        +SURCHARGE
+                      </span>
+                    )}
                   </td>
-                  <td style={{ ...tdStyle, color: '#888' }}>{isSurcharge ? '—' : (l.parcel_count || 1)}</td>
-                  <td style={{ ...tdStyle, color: '#AAA', textAlign: 'right' }}>£{cost.toFixed(2)}</td>
-                  <td style={{ ...tdStyle, color: '#888', textAlign: 'right' }}>£{parseFloat(l.sell_base || 0).toFixed(2)}</td>
-                  <td style={{ ...tdStyle, color: '#888', textAlign: 'right' }}>£{parseFloat(l.sell_fuel || 0).toFixed(2)}</td>
-                  <td style={{ ...tdStyle, color: '#888', textAlign: 'right' }}>£{parseFloat(l.sell_surcharge || 0).toFixed(2)}</td>
-                  <td style={{ ...tdStyle, color: isSurcharge ? '#00BCD4' : '#00C853', fontWeight: 700, textAlign: 'right' }}>£{sell.toFixed(2)}</td>
+                  <td style={{ ...tdStyle, color: '#64748B' }}>{l.parcel_count || 1}</td>
+                  <td style={{ ...tdStyle, color: '#64748B', textAlign: 'right' }}>£{cost.toFixed(2)}</td>
+                  <td style={{ ...tdStyle, color: '#64748B', textAlign: 'right' }}>£{parseFloat(l.sell_base || 0).toFixed(2)}</td>
+                  <td style={{ ...tdStyle, color: '#64748B', textAlign: 'right' }}>£{parseFloat(l.sell_fuel || 0).toFixed(2)}</td>
+                  <td style={{ ...tdStyle, color: hasCorrectedSurcharge ? '#FF8F00' : '#64748B', textAlign: 'right', fontWeight: hasCorrectedSurcharge ? 700 : 400 }}>£{parseFloat(l.sell_surcharge || 0).toFixed(2)}</td>
+                  <td style={{ ...tdStyle, color: '#00C853', fontWeight: 700, textAlign: 'right' }}>£{sell.toFixed(2)}</td>
                   <td style={{ ...tdStyle, color: margin >= 0 ? '#00C853' : '#FF5252', fontWeight: 600, textAlign: 'right' }}>£{margin.toFixed(2)}</td>
                   <td style={{ ...tdStyle }}><StatusBadge status={l.status} /></td>
                 </tr>
@@ -1536,9 +2151,9 @@ function CustomerLinesDrilldown({ runId, customerId }) {
             })}
           </tbody>
           <tfoot>
-            <tr style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-              <td colSpan={4} style={{ ...tdStyle, color: '#555', fontWeight: 700, fontSize: 10 }}>SUBTOTAL ({lines.length} lines)</td>
-              <td style={{ ...tdStyle, color: '#AAA', fontWeight: 700, textAlign: 'right' }}>
+            <tr style={{ borderTop: '1px solid rgba(0,0,0,0.08)' }}>
+              <td colSpan={4} style={{ ...tdStyle, color: '#64748B', fontWeight: 700, fontSize: 10 }}>SUBTOTAL ({lines.length} lines)</td>
+              <td style={{ ...tdStyle, color: '#64748B', fontWeight: 700, textAlign: 'right' }}>
                 £{lines.reduce((s, l) => s + parseFloat(l.cost_total || 0), 0).toFixed(2)}
               </td>
               <td style={{ ...tdStyle, textAlign: 'right' }} />
@@ -1561,17 +2176,44 @@ function CustomerLinesDrilldown({ runId, customerId }) {
 
 // ─── Customer preview panel (pre-finalization) ────────────────────────────────
 function CustomerPreviewPanel({ runId }) {
+  const qc = useQueryClient();
   const [expandedId, setExpandedId] = useState(null);
+  const [repairing,  setRepairing]  = useState(false);
+  const [repairMsg,  setRepairMsg]  = useState(null);
 
-  const { data: customers = [], isLoading } = useQuery({
+  const { data: customers = [], isLoading, refetch } = useQuery({
     queryKey: ['recon-customers-preview', runId],
-    queryFn:  () => api.get(`/reconciliation/runs/${runId}/customers/preview`).then(r => r.data),
-    staleTime: 30_000,
+    queryFn:  () => api.get(`/reconciliation/runs/${runId}/customers/preview?t=${Date.now()}`).then(r => r.data),
+    staleTime: 0,        // always fetch fresh — never serve 304 cached view
+    cacheTime: 0,
   });
 
-  if (isLoading) return <div style={{ color: '#666', fontSize: 12, padding: 20 }}>Loading preview…</div>;
+  async function handleRepairAndRefresh() {
+    setRepairing(true);
+    setRepairMsg(null);
+    try {
+      const res = await api.post('/reconciliation/backfill-carrier-direct-surcharges');
+      const { found, repriced, processed, errors } = res.data;
+      setRepairMsg(
+        repriced > 0 || processed > 0
+          ? `✓ ${repriced} charge(s) repriced · ${processed} surcharge(s) inserted`
+          : found === 0
+            ? '✓ No missing surcharges found — data already correct'
+            : errors > 0
+              ? `⚠ ${errors} error(s) — check server logs`
+              : '✓ Checked — no changes needed'
+      );
+      await refetch();
+    } catch (err) {
+      setRepairMsg(`✗ ${err.response?.data?.error || err.message}`);
+    } finally {
+      setRepairing(false);
+    }
+  }
+
+  if (isLoading) return <div style={{ color: '#64748B', fontSize: 12, padding: 20 }}>Loading preview…</div>;
   if (!customers.length) return (
-    <div style={{ ...card, color: '#555', fontSize: 12, textAlign: 'center', padding: 30 }}>
+    <div style={{ ...card, color: '#64748B', fontSize: 12, textAlign: 'center', padding: 30 }}>
       No matched or corrected lines yet — process lines first to see a billing preview
     </div>
   );
@@ -1588,22 +2230,47 @@ function CustomerPreviewPanel({ runId }) {
     <div style={card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#E6EDF3' }}>Customer Billing Preview</div>
-          <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Customer Billing Preview</div>
+          <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
             {customers.length} customer{customers.length !== 1 ? 's' : ''} · {customers.reduce((s, c) => s + (c.line_count || 0), 0)} shipments · Click a row to see line detail · Finalise to push to Xero
           </div>
         </div>
-        <span style={{ fontSize: 11, color: '#FFB300', fontWeight: 600 }}>
-          ⏳ Preview — not yet finalised
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {repairMsg && (
+            <span style={{
+              fontSize: 11, color: repairMsg.startsWith('✓') ? '#00C853' : repairMsg.startsWith('⚠') ? '#FFB300' : '#FF5252',
+              fontWeight: 600,
+            }}>
+              {repairMsg}
+            </span>
+          )}
+          <button
+            onClick={handleRepairAndRefresh}
+            disabled={repairing}
+            title="Re-price and insert missing fuel &amp; surcharges for carrier-direct shipments, then refresh this preview"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              fontSize: 11, fontWeight: 600, cursor: repairing ? 'default' : 'pointer',
+              background: repairing ? 'rgba(0,0,0,0.04)' : 'rgba(59,130,246,0.08)',
+              border: '1px solid rgba(59,130,246,0.3)',
+              color: repairing ? '#94A3B8' : '#3B82F6',
+              borderRadius: 5, padding: '5px 10px',
+            }}
+          >
+            {repairing ? '⟳ Repairing…' : '⟳ Repair & Refresh'}
+          </button>
+          <span style={{ fontSize: 11, color: '#FFB300', fontWeight: 600 }}>
+            ⏳ Preview — not yet finalised
+          </span>
+        </div>
       </div>
 
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
-          <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+          <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
             <th style={{ width: 24, padding: '7px 6px' }} />
             {['Customer', 'Shipments', 'Sell Base', 'Fuel', 'Surcharges', 'Total Sell', 'Our Cost', 'Margin', 'CSV'].map(h => (
-              <th key={h} style={{ padding: '7px 10px', textAlign: 'left', color: '#555', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
+              <th key={h} style={{ padding: '7px 10px', textAlign: 'left', color: '#64748B', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
             ))}
           </tr>
         </thead>
@@ -1620,21 +2287,21 @@ function CustomerPreviewPanel({ runId }) {
                   key={rowKey}
                   onClick={() => toggleExpand(rowKey)}
                   style={{
-                    borderBottom: expanded ? 'none' : '1px solid rgba(255,255,255,0.04)',
+                    borderBottom: expanded ? 'none' : '1px solid rgba(0,0,0,0.03)',
                     cursor: 'pointer',
-                    background: expanded ? 'rgba(255,255,255,0.03)' : 'transparent',
+                    background: expanded ? 'rgba(0,0,0,0.03)' : 'transparent',
                   }}
                 >
-                  <td style={{ padding: '9px 6px', color: '#555', textAlign: 'center', fontSize: 10 }}>
+                  <td style={{ padding: '9px 6px', color: '#64748B', textAlign: 'center', fontSize: 10 }}>
                     {expanded ? '▾' : '▸'}
                   </td>
-                  <td style={{ padding: '9px 10px', color: '#E6EDF3', fontWeight: 600 }}>{c.customer_name || '—'}</td>
-                  <td style={{ padding: '9px 10px', color: '#AAA' }}>{c.line_count}</td>
-                  <td style={{ padding: '9px 10px', color: '#888' }}>£{parseFloat(c.total_base || 0).toFixed(2)}</td>
-                  <td style={{ padding: '9px 10px', color: '#888' }}>£{parseFloat(c.total_fuel || 0).toFixed(2)}</td>
-                  <td style={{ padding: '9px 10px', color: '#888' }}>£{(parseFloat(c.total_surcharge || 0) + parseFloat(c.total_recon_surcharge || 0)).toFixed(2)}</td>
+                  <td style={{ padding: '9px 10px', color: '#0F172A', fontWeight: 600 }}>{c.customer_name || '—'}</td>
+                  <td style={{ padding: '9px 10px', color: '#64748B' }}>{c.line_count}</td>
+                  <td style={{ padding: '9px 10px', color: '#64748B' }}>£{parseFloat(c.total_base || 0).toFixed(2)}</td>
+                  <td style={{ padding: '9px 10px', color: '#64748B' }}>£{parseFloat(c.total_fuel || 0).toFixed(2)}</td>
+                  <td style={{ padding: '9px 10px', color: '#64748B' }}>£{(parseFloat(c.total_surcharge || 0) + parseFloat(c.total_recon_surcharge || 0)).toFixed(2)}</td>
                   <td style={{ padding: '9px 10px', color: '#00C853', fontWeight: 700 }}>£{sell.toFixed(2)}</td>
-                  <td style={{ padding: '9px 10px', color: '#AAA' }}>£{cost.toFixed(2)}</td>
+                  <td style={{ padding: '9px 10px', color: '#64748B' }}>£{cost.toFixed(2)}</td>
                   <td style={{ padding: '9px 10px', color: margin >= 0 ? '#00C853' : '#FF5252', fontWeight: 600 }}>
                     £{margin.toFixed(2)}
                   </td>
@@ -1667,13 +2334,13 @@ function CustomerPreviewPanel({ runId }) {
           })}
         </tbody>
         <tfoot>
-          <tr style={{ borderTop: '2px solid rgba(255,255,255,0.1)' }}>
+          <tr style={{ borderTop: '2px solid rgba(0,0,0,0.08)' }}>
             <td />
-            <td style={{ padding: '9px 10px', color: '#888', fontSize: 12, fontWeight: 700 }}>TOTAL</td>
-            <td style={{ padding: '9px 10px', color: '#AAA' }}>{customers.reduce((s, c) => s + (c.line_count || 0), 0)}</td>
+            <td style={{ padding: '9px 10px', color: '#64748B', fontSize: 12, fontWeight: 700 }}>TOTAL</td>
+            <td style={{ padding: '9px 10px', color: '#64748B' }}>{customers.reduce((s, c) => s + (c.line_count || 0), 0)}</td>
             <td colSpan={3} />
             <td style={{ padding: '9px 10px', color: '#00C853', fontWeight: 800, fontSize: 14 }}>£{totalSell.toFixed(2)}</td>
-            <td style={{ padding: '9px 10px', color: '#AAA', fontWeight: 700 }}>£{totalCost.toFixed(2)}</td>
+            <td style={{ padding: '9px 10px', color: '#64748B', fontWeight: 700 }}>£{totalCost.toFixed(2)}</td>
             <td style={{ padding: '9px 10px', color: totalMargin >= 0 ? '#00C853' : '#FF5252', fontWeight: 800 }}>£{totalMargin.toFixed(2)}</td>
             <td />
           </tr>
@@ -1685,7 +2352,8 @@ function CustomerPreviewPanel({ runId }) {
 
 function CustomerSummaryPanel({ runId, run }) {
   const qc = useQueryClient();
-  const [pushing, setPushing] = useState(null); // customer_id being pushed
+  const [pushing,    setPushing]    = useState(null); // customer_id being pushed
+  const [refreshing, setRefreshing] = useState(null); // customer_id being re-snapshotted
 
   const { data: customers = [], refetch } = useQuery({
     queryKey: ['recon-customers', runId],
@@ -1693,11 +2361,37 @@ function CustomerSummaryPanel({ runId, run }) {
     enabled:  !!run?.finalized,
   });
 
+  async function handleRefreshSnapshot(customerId, customerName) {
+    if (!window.confirm(
+      `Refresh billing snapshot for ${customerName}?\n\nThis deletes and re-builds their finalized billing lines from the current state of the charges table. Use this after running charge corrections (e.g. cancelled surcharges, repriced parcels).`
+    )) return;
+    setRefreshing(customerId);
+    try {
+      const res = await api.post(`/reconciliation/runs/${runId}/re-snapshot-customer/${customerId}`);
+      refetch();
+      alert(`Snapshot refreshed: ${res.data.deleted} line(s) replaced with ${res.data.inserted} fresh line(s).`);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Refresh failed — check server logs');
+    } finally {
+      setRefreshing(null);
+    }
+  }
+
   async function handleXeroPush(customerId) {
     setPushing(customerId);
     try {
-      await api.post(`/xero/reconciliation-runs/${runId}/push`, { customer_id: customerId });
+      const res = await api.post(`/xero/reconciliation-runs/${runId}/push`, { customer_id: customerId });
+      const { pushed = [], skipped = [], errors = [] } = res.data;
       refetch();
+      if (pushed.length > 0) {
+        // Success — no alert needed, UI will update to show ✓ Pushed
+      } else if (errors.length > 0) {
+        alert(`Xero push failed: ${errors[0]?.error || 'Unknown error'}`);
+      } else if (skipped.length > 0) {
+        alert(`Not pushed — customer is not linked to a Xero contact.\nGo to Settings → Xero to link them.`);
+      } else {
+        alert('Push returned no result — check server logs.');
+      }
     } catch (err) {
       alert(err.response?.data?.error || 'Xero push failed');
     } finally {
@@ -1729,7 +2423,7 @@ function CustomerSummaryPanel({ runId, run }) {
   }
 
   if (!customers.length) return (
-    <div style={{ ...card, color: '#555', fontSize: 12, textAlign: 'center', padding: 30 }}>
+    <div style={{ ...card, color: '#64748B', fontSize: 12, textAlign: 'center', padding: 30 }}>
       No finalized billing lines found
     </div>
   );
@@ -1741,8 +2435,8 @@ function CustomerSummaryPanel({ runId, run }) {
     <div style={card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#E6EDF3' }}>Customer Billing Summary</div>
-          <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Customer Billing Summary</div>
+          <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
             {customers.length} customers · {customers.reduce((s, c) => s + c.line_count, 0)} shipments
           </div>
         </div>
@@ -1767,38 +2461,48 @@ function CustomerSummaryPanel({ runId, run }) {
 
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
-          <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+          <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
             {['Customer', 'Shipments', 'Base', 'Fuel', 'Surcharges', 'Total Sell', 'Margin', 'Xero', 'CSV', ''].map(h => (
-              <th key={h} style={{ padding: '7px 10px', textAlign: 'left', color: '#555', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
+              <th key={h} style={{ padding: '7px 10px', textAlign: 'left', color: '#64748B', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {customers.map(c => (
-            <tr key={c.customer_id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-              <td style={{ padding: '9px 10px', color: '#E6EDF3', fontWeight: 600 }}>{c.customer_name || '—'}</td>
-              <td style={{ padding: '9px 10px', color: '#AAA' }}>{c.line_count}</td>
-              <td style={{ padding: '9px 10px', color: '#888' }}>£{parseFloat(c.total_base || 0).toFixed(2)}</td>
-              <td style={{ padding: '9px 10px', color: '#888' }}>£{parseFloat(c.total_fuel || 0).toFixed(2)}</td>
-              <td style={{ padding: '9px 10px', color: '#888' }}>£{parseFloat(c.total_surcharge || 0).toFixed(2)}</td>
+            <tr
+              key={c.customer_id}
+              style={{
+                borderBottom: '1px solid rgba(0,0,0,0.03)',
+                background: c.xero_pushed_count > 0 ? 'rgba(0,200,83,0.05)' : 'transparent',
+              }}
+            >
+              <td style={{ padding: '9px 10px', color: '#0F172A', fontWeight: 600 }}>{c.customer_name || '—'}</td>
+              <td style={{ padding: '9px 10px', color: '#64748B' }}>{c.line_count}</td>
+              <td style={{ padding: '9px 10px', color: '#64748B' }}>£{parseFloat(c.total_base || 0).toFixed(2)}</td>
+              <td style={{ padding: '9px 10px', color: '#64748B' }}>£{parseFloat(c.total_fuel || 0).toFixed(2)}</td>
+              <td style={{ padding: '9px 10px', color: '#64748B' }}>£{parseFloat(c.total_surcharge || 0).toFixed(2)}</td>
               <td style={{ padding: '9px 10px', color: '#00C853', fontWeight: 700 }}>£{parseFloat(c.total_sell || 0).toFixed(2)}</td>
               <td style={{ padding: '9px 10px', color: parseFloat(c.total_margin || 0) > 0 ? '#00C853' : '#FF5252' }}>
                 £{parseFloat(c.total_margin || 0).toFixed(2)}
               </td>
               <td style={{ padding: '9px 10px' }}>
-                {c.xero_pushed_count > 0 ? (
-                  <span style={{ color: '#00C853', fontSize: 11, fontWeight: 700 }}>✓ Pushed</span>
-                ) : c.xero_linked ? (
-                  <button
-                    style={{ ...btnGhost, padding: '3px 8px', fontSize: 10, opacity: pushing === c.customer_id ? 0.7 : 1 }}
-                    onClick={() => handleXeroPush(c.customer_id)}
-                    disabled={!!pushing}
-                  >
-                    {pushing === c.customer_id ? <RefreshCw size={11} /> : <Send size={11} />}
-                    Push
-                  </button>
+                {c.xero_linked ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {c.xero_pushed_count > 0 && (
+                      <span style={{ color: '#00C853', fontSize: 11, fontWeight: 700 }}>✓ Pushed</span>
+                    )}
+                    <button
+                      style={{ ...btnGhost, padding: '3px 8px', fontSize: 10, opacity: pushing === c.customer_id ? 0.7 : 1 }}
+                      onClick={() => handleXeroPush(c.customer_id)}
+                      disabled={!!pushing}
+                      title={c.xero_pushed_count > 0 ? 'Re-push to Xero (void the existing invoice in Xero first)' : 'Push to Xero'}
+                    >
+                      {pushing === c.customer_id ? <RefreshCw size={11} /> : <Send size={11} />}
+                      {c.xero_pushed_count > 0 ? 'Re-push' : 'Push'}
+                    </button>
+                  </div>
                 ) : (
-                  <span style={{ color: '#555', fontSize: 10 }}>Not linked</span>
+                  <span style={{ color: '#64748B', fontSize: 10 }}>Not linked</span>
                 )}
               </td>
               <td style={{ padding: '9px 10px' }}>
@@ -1810,15 +2514,26 @@ function CustomerSummaryPanel({ runId, run }) {
                   <Download size={11} />CSV
                 </button>
               </td>
-              <td style={{ padding: '9px 10px', color: '#555' }}>
-                {c.xero_push_error && <span style={{ color: '#FF5252', fontSize: 10 }} title={c.xero_push_error}>⚠ Error</span>}
+              <td style={{ padding: '9px 10px', color: '#64748B' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {c.xero_push_error && <span style={{ color: '#FF5252', fontSize: 10 }} title={c.xero_push_error}>⚠ Error</span>}
+                  <button
+                    style={{ ...btnGhost, padding: '3px 8px', fontSize: 10, opacity: refreshing === c.customer_id ? 0.6 : 1 }}
+                    onClick={() => handleRefreshSnapshot(c.customer_id, c.customer_name)}
+                    disabled={!!pushing || !!refreshing}
+                    title="Refresh billing snapshot — re-builds from current charges (use after charge corrections)"
+                  >
+                    <RefreshCw size={11} />
+                    {refreshing === c.customer_id ? '…' : 'Refresh'}
+                  </button>
+                </div>
               </td>
             </tr>
           ))}
         </tbody>
         <tfoot>
-          <tr style={{ borderTop: '2px solid rgba(255,255,255,0.1)' }}>
-            <td colSpan={5} style={{ padding: '9px 10px', color: '#888', fontSize: 12, fontWeight: 700 }}>TOTAL</td>
+          <tr style={{ borderTop: '2px solid rgba(0,0,0,0.08)' }}>
+            <td colSpan={5} style={{ padding: '9px 10px', color: '#64748B', fontSize: 12, fontWeight: 700 }}>TOTAL</td>
             <td style={{ padding: '9px 10px', color: '#00C853', fontWeight: 800, fontSize: 14 }}>
               £{customers.reduce((s, c) => s + parseFloat(c.total_sell || 0), 0).toFixed(2)}
             </td>
@@ -1845,7 +2560,9 @@ const QUERY_TYPE_OPTS = [
 ];
 
 function inferQueryType(reason) {
-  if (reason === 'parcel_count_mismatch') return 'parcel_count_overbill';
+  if (reason === 'parcel_count_mismatch')  return 'parcel_count_overbill';
+  if (reason === 'cancelled_unshipped')    return 'unrecognised_charge';
+  if (reason === 'cancelled_shipped')      return 'unrecognised_charge';
   if (reason === 'unexplained_delta' || reason === 'aggregate_mismatch') return 'rate_dispute';
   return 'other';
 }
@@ -1856,6 +2573,12 @@ function RaiseQueryModal({ line, runId, carrierId, invoiceRef, onClose, onRaised
     if (line.unmatched_reason === 'parcel_count_mismatch' && line.correction_metadata) {
       const m = line.correction_metadata;
       return `DPD invoiced ${m.invoice_parcel_count} parcel${m.invoice_parcel_count !== 1 ? 's' : ''} but booking was for ${m.booked_parcel_count} parcel${m.booked_parcel_count !== 1 ? 's' : ''}. Disputed amount: £${Math.abs(parseFloat(line.carrier_amount || 0) - parseFloat(line.expected_amount || 0)).toFixed(2)}.`;
+    }
+    if (line.unmatched_reason === 'cancelled_unshipped') {
+      return `Tracking number ${line.tracking_number} was invoiced by DPD at £${parseFloat(line.carrier_amount || 0).toFixed(2)} but this booking was cancelled in our system and the parcel was never collected/despatched. Please credit this charge.`;
+    }
+    if (line.unmatched_reason === 'cancelled_shipped') {
+      return `Tracking number ${line.tracking_number} was invoiced by DPD at £${parseFloat(line.carrier_amount || 0).toFixed(2)}. The booking was cancelled in our system but the parcel appears to have been despatched. Please confirm delivery status.`;
     }
     return '';
   });
@@ -1897,7 +2620,7 @@ function RaiseQueryModal({ line, runId, carrierId, invoiceRef, onClose, onRaised
     background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
   };
   const modal = {
-    background: '#0d1117', border: '1px solid rgba(255,255,255,0.12)',
+    background: '#0d1117', border: '1px solid rgba(0,0,0,0.10)',
     borderRadius: 12, padding: 24, width: 500, maxHeight: '90vh',
     overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
   };
@@ -1908,8 +2631,8 @@ function RaiseQueryModal({ line, runId, carrierId, invoiceRef, onClose, onRaised
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#E6EDF3' }}>Raise Carrier Query</div>
-            <div style={{ fontSize: 11, color: '#555', marginTop: 2 }}>Log a dispute to follow up with the carrier</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>Raise Carrier Query</div>
+            <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>Log a dispute to follow up with the carrier</div>
           </div>
           <button style={{ ...btnGhost, padding: '4px 8px' }} onClick={onClose}><X size={14} /></button>
         </div>
@@ -1921,15 +2644,15 @@ function RaiseQueryModal({ line, runId, carrierId, invoiceRef, onClose, onRaised
           display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10,
         }}>
           <div>
-            <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Tracking</div>
-            <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#AAA' }}>{line.tracking_number || '—'}</div>
+            <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Tracking</div>
+            <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#64748B' }}>{line.tracking_number || '—'}</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Carrier charged</div>
+            <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Carrier charged</div>
             <div style={{ fontSize: 13, fontWeight: 700, color: '#FF5252' }}>£{parseFloat(line.carrier_amount || 0).toFixed(2)}</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Disputed</div>
+            <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Disputed</div>
             <div style={{ fontSize: 13, fontWeight: 700, color: '#FFB300' }}>{parseFloat(disputed) > 0 ? '+' : ''}£{disputed}</div>
           </div>
         </div>
@@ -1937,7 +2660,7 @@ function RaiseQueryModal({ line, runId, carrierId, invoiceRef, onClose, onRaised
         <form onSubmit={handleSubmit}>
           {/* Query type */}
           <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 11, color: '#888', fontWeight: 700, display: 'block', marginBottom: 6 }}>
+            <label style={{ fontSize: 11, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 6 }}>
               QUERY TYPE
             </label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
@@ -1949,8 +2672,8 @@ function RaiseQueryModal({ line, runId, carrierId, invoiceRef, onClose, onRaised
                   style={{
                     padding: '7px 10px', borderRadius: 6, cursor: 'pointer',
                     textAlign: 'left', fontSize: 11, fontWeight: 600,
-                    background: queryType === opt.value ? 'rgba(255,179,0,0.12)' : 'rgba(255,255,255,0.03)',
-                    border: queryType === opt.value ? '1px solid rgba(255,179,0,0.5)' : '1px solid rgba(255,255,255,0.08)',
+                    background: queryType === opt.value ? 'rgba(255,179,0,0.12)' : 'rgba(0,0,0,0.03)',
+                    border: queryType === opt.value ? '1px solid rgba(255,179,0,0.5)' : '1px solid rgba(0,0,0,0.08)',
                     color: queryType === opt.value ? '#FFB300' : '#666',
                   }}
                 >
@@ -1962,7 +2685,7 @@ function RaiseQueryModal({ line, runId, carrierId, invoiceRef, onClose, onRaised
 
           {/* Details */}
           <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 11, color: '#888', fontWeight: 700, display: 'block', marginBottom: 6 }}>
+            <label style={{ fontSize: 11, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 6 }}>
               DETAILS
             </label>
             <textarea
@@ -1975,8 +2698,8 @@ function RaiseQueryModal({ line, runId, carrierId, invoiceRef, onClose, onRaised
 
           {/* Carrier ref (optional) */}
           <div style={{ marginBottom: 20 }}>
-            <label style={{ fontSize: 11, color: '#888', fontWeight: 700, display: 'block', marginBottom: 6 }}>
-              CARRIER CASE REFERENCE <span style={{ color: '#555', fontWeight: 400 }}>(optional — add after raising with carrier)</span>
+            <label style={{ fontSize: 11, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 6 }}>
+              CARRIER CASE REFERENCE <span style={{ color: '#64748B', fontWeight: 400 }}>(optional — add after raising with carrier)</span>
             </label>
             <input
               style={inputSt}
@@ -2012,11 +2735,11 @@ const QUERY_STATUS_CFG = {
   acknowledged: { color: '#FF8F00', bg: 'rgba(255,143,0,0.12)',  border: 'rgba(255,143,0,0.3)',  label: 'Acknowledged' },
   credited:     { color: '#00C853', bg: 'rgba(0,200,83,0.12)',   border: 'rgba(0,200,83,0.3)',   label: 'Credited' },
   rejected:     { color: '#FF5252', bg: 'rgba(213,0,0,0.12)',    border: 'rgba(213,0,0,0.3)',    label: 'Rejected' },
-  written_off:  { color: '#555',    bg: 'rgba(255,255,255,0.04)', border: 'rgba(255,255,255,0.1)', label: 'Written off' },
+  written_off:  { color: '#64748B',    bg: 'rgba(0,0,0,0.03)', border: 'rgba(0,0,0,0.08)', label: 'Written off' },
 };
 
 function QueryStatusBadge({ status }) {
-  const cfg = QUERY_STATUS_CFG[status] || { color: '#AAA', bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.1)', label: status };
+  const cfg = QUERY_STATUS_CFG[status] || { color: '#64748B', bg: 'rgba(0,0,0,0.04)', border: 'rgba(0,0,0,0.08)', label: status };
   return (
     <span style={{
       display: 'inline-block', padding: '1px 8px', borderRadius: 9999,
@@ -2077,7 +2800,7 @@ function CourierQueriesPanel({ runId, carrierId }) {
     }
   }
 
-  if (isLoading) return <div style={{ color: '#555', fontSize: 12, padding: 20 }}>Loading queries…</div>;
+  if (isLoading) return <div style={{ color: '#64748B', fontSize: 12, padding: 20 }}>Loading queries…</div>;
   if (error) return <div style={{ color: '#FF5252', fontSize: 12, padding: 20 }}>Failed to load queries</div>;
 
   const totalDisputed = queries.reduce((s, q) => s + parseFloat(q.disputed_amount || 0), 0);
@@ -2089,38 +2812,38 @@ function CourierQueriesPanel({ runId, carrierId }) {
       {/* Summary header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#E6EDF3' }}>Carrier Queries</div>
-          <div style={{ fontSize: 11, color: '#555', marginTop: 2 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Carrier Queries</div>
+          <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
             Disputes and queries raised with the carrier for this run
           </div>
         </div>
         <div style={{ display: 'flex', gap: 20 }}>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Active</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: activeCount > 0 ? '#FFB300' : '#555' }}>{activeCount}</div>
+            <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Active</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: activeCount > 0 ? '#FFB300' : '#475569' }}>{activeCount}</div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total disputed</div>
+            <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total disputed</div>
             <div style={{ fontSize: 18, fontWeight: 800, color: '#FF5252' }}>£{totalDisputed.toFixed(2)}</div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Credited back</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: totalCredited > 0 ? '#00C853' : '#555' }}>£{totalCredited.toFixed(2)}</div>
+            <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Credited back</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: totalCredited > 0 ? '#00C853' : '#475569' }}>£{totalCredited.toFixed(2)}</div>
           </div>
         </div>
       </div>
 
       {queries.length === 0 ? (
-        <div style={{ textAlign: 'center', color: '#555', fontSize: 12, padding: '30px 0' }}>
+        <div style={{ textAlign: 'center', color: '#64748B', fontSize: 12, padding: '30px 0' }}>
           No queries raised for this run yet. Use the Needs Review tab to raise a query against a specific line.
         </div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+              <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
                 {['Tracking', 'Type', 'Carrier £', 'Expected £', 'Disputed', 'Carrier Ref', 'Status', 'Raised', ''].map(h => (
-                  <th key={h} style={{ padding: '8px 10px', textAlign: 'left', color: '#555', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 10px', textAlign: 'left', color: '#64748B', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -2130,15 +2853,15 @@ function CourierQueriesPanel({ runId, carrierId }) {
                 const isUpdating = updatingId === q.id;
                 const disputed = parseFloat(q.disputed_amount || 0);
                 return (
-                  <tr key={q.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                    <td style={{ padding: '9px 10px', fontFamily: 'monospace', color: '#AAA', fontSize: 10 }}>{q.tracking_number || '—'}</td>
-                    <td style={{ padding: '9px 10px', color: '#888' }}>
+                  <tr key={q.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
+                    <td style={{ padding: '9px 10px', fontFamily: 'monospace', color: '#64748B', fontSize: 10 }}>{q.tracking_number || '—'}</td>
+                    <td style={{ padding: '9px 10px', color: '#64748B' }}>
                       {QUERY_TYPE_OPTS.find(o => o.value === q.query_type)?.label || q.query_type}
                     </td>
-                    <td style={{ padding: '9px 10px', color: '#E6EDF3', fontWeight: 600 }}>
+                    <td style={{ padding: '9px 10px', color: '#0F172A', fontWeight: 600 }}>
                       {q.carrier_charged != null ? `£${parseFloat(q.carrier_charged).toFixed(2)}` : '—'}
                     </td>
-                    <td style={{ padding: '9px 10px', color: '#888' }}>
+                    <td style={{ padding: '9px 10px', color: '#64748B' }}>
                       {q.expected_charged != null ? `£${parseFloat(q.expected_charged).toFixed(2)}` : '—'}
                     </td>
                     <td style={{ padding: '9px 10px', fontWeight: 700, color: disputed > 0 ? '#FF5252' : '#00C853' }}>
@@ -2153,13 +2876,13 @@ function CourierQueriesPanel({ runId, carrierId }) {
                           placeholder="Carrier case #"
                         />
                       ) : (
-                        <span style={{ color: q.carrier_reference ? '#E6EDF3' : '#333', fontFamily: q.carrier_reference ? 'monospace' : 'inherit', fontSize: 10 }}>
+                        <span style={{ color: q.carrier_reference ? '#0F172A' : '#333', fontFamily: q.carrier_reference ? 'monospace' : 'inherit', fontSize: 10 }}>
                           {q.carrier_reference || 'Not yet raised'}
                         </span>
                       )}
                     </td>
                     <td style={{ padding: '9px 10px' }}><QueryStatusBadge status={q.status} /></td>
-                    <td style={{ padding: '9px 10px', color: '#555', fontSize: 10 }}>
+                    <td style={{ padding: '9px 10px', color: '#64748B', fontSize: 10 }}>
                       {q.raised_at ? new Date(q.raised_at).toLocaleDateString('en-GB') : '—'}
                     </td>
                     <td style={{ padding: '9px 6px' }}>
@@ -2266,6 +2989,329 @@ function CourierQueriesPanel({ runId, carrierId }) {
   );
 }
 
+// ─── BulkSurchargeResolver ────────────────────────────────────────────────────
+// When the Needs Review tab has price-mismatch lines that are all the same
+// surcharge type, this banner lets the operator pick the surcharge once and
+// apply it to every line in one click.
+
+function BulkSurchargeResolver({ unmatchedLines, runId, courierId, onResolved }) {
+  // Only show for lines that have a carrier delta (price mismatch / weight corrected)
+  const deltaLines = unmatchedLines.filter(l =>
+    ['unexplained_delta', 'weight_correction', 'parcel_count_mismatch'].includes(l.unmatched_reason)
+    || (l.delta && parseFloat(l.delta) !== 0)
+  );
+
+  const [open,        setOpen]        = useState(false);
+  const [surchargeId, setSurchargeId] = useState('');
+  const [applying,    setApplying]    = useState(false);
+  const [done,        setDone]        = useState(null);   // { resolved, skipped }
+  const [error,       setError]       = useState('');
+
+  const { data: surcharges = [] } = useQuery({
+    queryKey: ['recon-surcharges', courierId],
+    queryFn:  () => api.get(`/reconciliation/surcharges?carrier_id=${courierId}`).then(r => r.data),
+    enabled:  !!courierId && open,
+  });
+
+  if (deltaLines.length === 0) return null;
+
+  async function applyAll() {
+    if (!surchargeId) { setError('Select a surcharge first'); return; }
+    setApplying(true);
+    setError('');
+    try {
+      const res = await api.post(`/reconciliation/runs/${runId}/bulk-resolve-as-surcharge`, {
+        surcharge_id: surchargeId,
+      });
+      setDone(res.data);
+      onResolved();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed');
+    } finally {
+      setApplying(false);
+    }
+  }
+
+  const selectedSur = surcharges.find(s => s.id === surchargeId);
+
+  return (
+    <div style={{
+      background: 'rgba(121,170,255,0.08)', border: '1px solid rgba(121,170,255,0.3)',
+      borderRadius: 8, padding: '12px 16px', marginBottom: 16,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <span style={{ fontWeight: 700, fontSize: 13, color: '#1E3A5F' }}>
+            {deltaLines.length} price mismatch line{deltaLines.length !== 1 ? 's' : ''}
+          </span>
+          <span style={{ fontSize: 12, color: '#475569', marginLeft: 8 }}>
+            — Are these all the same surcharge? Resolve them all at once:
+          </span>
+        </div>
+        {!open && !done && (
+          <button
+            onClick={() => setOpen(true)}
+            style={{
+              padding: '7px 16px', borderRadius: 6, cursor: 'pointer',
+              background: 'rgba(121,170,255,0.15)', border: '1px solid rgba(121,170,255,0.4)',
+              color: '#1E40AF', fontWeight: 700, fontSize: 12, flexShrink: 0,
+            }}
+          >
+            Bulk Resolve…
+          </button>
+        )}
+        {done && (
+          <span style={{ fontSize: 12, color: '#00A040', fontWeight: 700 }}>
+            ✓ {done.resolved} resolved{done.skipped > 0 ? `, ${done.skipped} skipped` : ''}
+          </span>
+        )}
+      </div>
+
+      {open && !done && (
+        <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <select
+            value={surchargeId}
+            onChange={e => { setSurchargeId(e.target.value); setError(''); }}
+            style={{
+              padding: '7px 10px', borderRadius: 6, fontSize: 12,
+              border: '1px solid rgba(0,0,0,0.15)', background: '#fff', color: '#0F172A',
+              minWidth: 200,
+            }}
+          >
+            <option value=''>— Which surcharge? —</option>
+            {surcharges.map(s => (
+              <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+            ))}
+          </select>
+
+          {selectedSur && (
+            <span style={{ fontSize: 11, color: '#64748B' }}>
+              Standard sell: <strong>
+                {selectedSur.calc_type === 'percentage'
+                  ? `${parseFloat(selectedSur.default_value).toFixed(2)}% of base`
+                  : `£${parseFloat(selectedSur.default_value || 0).toFixed(2)} / ${selectedSur.charge_per || 'shipment'}`
+                }
+              </strong> — added on top of each line's existing freight sell price
+            </span>
+          )}
+
+          <button
+            onClick={applyAll}
+            disabled={applying || !surchargeId}
+            style={{
+              padding: '7px 18px', borderRadius: 6, cursor: applying ? 'wait' : 'pointer',
+              background: applying || !surchargeId ? '#e2e8f0' : '#00C853',
+              border: 'none', color: '#fff', fontWeight: 700, fontSize: 12,
+            }}
+          >
+            {applying ? 'Applying…' : `Apply to all ${deltaLines.length} lines`}
+          </button>
+
+          <button
+            onClick={() => setOpen(false)}
+            style={{
+              padding: '7px 12px', borderRadius: 6, cursor: 'pointer',
+              background: 'transparent', border: '1px solid rgba(0,0,0,0.1)',
+              color: '#64748B', fontSize: 12,
+            }}
+          >
+            Cancel
+          </button>
+
+          {error && <span style={{ fontSize: 12, color: '#C62828' }}>{error}</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── WarningTab ───────────────────────────────────────────────────────────────
+// Simplified one-click acceptance UI for sell_surcharge_missing warning lines.
+// Each row shows the carrier cost, the surcharge name, and the customer's
+// configured sell price, with a single "Accept £X.XX" button.
+// Lines without a known surcharge_id still have a "Manual Resolve" button.
+
+function WarningTab({ lines, runId, onResolved, onOpenDrawer }) {
+  const [acceptingId,   setAcceptingId]   = useState(null);   // line id being accepted
+  const [acceptingAll,  setAcceptingAll]  = useState(false);
+  const [error,         setError]         = useState('');
+
+  // Lines that can be auto-accepted (have a surcharge_id + positive suggested_sell_price)
+  const autoLines   = lines.filter(l => l.surcharge_id && parseFloat(l.suggested_sell_price || 0) > 0);
+  const manualLines = lines.filter(l => !l.surcharge_id || parseFloat(l.suggested_sell_price || 0) <= 0);
+
+  async function acceptOne(line) {
+    setAcceptingId(line.id);
+    setError('');
+    try {
+      await api.post(`/reconciliation/runs/${runId}/lines/${line.id}/resolve`, {
+        resolution_type:  'map_to_surcharge',
+        resolution_value: line.surcharge_id,
+        scope:            'once',
+      });
+      onResolved();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to accept');
+    } finally {
+      setAcceptingId(null);
+    }
+  }
+
+  async function acceptAll() {
+    setAcceptingAll(true);
+    setError('');
+    try {
+      const res = await api.post(`/reconciliation/runs/${runId}/resolve-all-warnings`);
+      onResolved();
+      if (res.data?.skipped > 0) {
+        setError(`${res.data.resolved} accepted. ${res.data.skipped} lines skipped (no price configured).`);
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to accept all');
+    } finally {
+      setAcceptingAll(false);
+    }
+  }
+
+  const thSt = { padding: '8px 12px', fontSize: 10, fontWeight: 700, color: '#64748B',
+                 textAlign: 'left', borderBottom: '1px solid rgba(0,0,0,0.08)', whiteSpace: 'nowrap' };
+  const tdSt = { padding: '9px 12px', fontSize: 12, color: '#0F172A', verticalAlign: 'middle' };
+
+  return (
+    <div>
+      {/* Header bar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: 14,
+      }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: '#92400E' }}>
+            ⚠ {lines.length} unbilled surcharge{lines.length !== 1 ? 's' : ''} — carrier charged, customer not billed
+          </div>
+          <div style={{ fontSize: 12, color: '#78350F', marginTop: 3 }}>
+            Click "Accept" on each row to add the surcharge to the customer's invoice at the standard price.
+          </div>
+        </div>
+        {autoLines.length > 1 && (
+          <button
+            onClick={acceptAll}
+            disabled={acceptingAll}
+            style={{
+              padding: '9px 18px', borderRadius: 7, cursor: acceptingAll ? 'wait' : 'pointer',
+              background: acceptingAll ? '#e2e8f0' : '#00C853',
+              border: 'none', color: '#fff', fontWeight: 700, fontSize: 12,
+              flexShrink: 0, marginLeft: 16,
+            }}
+          >
+            {acceptingAll ? 'Accepting…' : `✓ Accept All ${autoLines.length} at Standard Price`}
+          </button>
+        )}
+      </div>
+
+      {error && (
+        <div style={{
+          background: 'rgba(213,0,0,0.08)', border: '1px solid rgba(213,0,0,0.25)',
+          borderRadius: 7, padding: '9px 14px', fontSize: 12, color: '#C62828', marginBottom: 12,
+        }}>
+          {error}
+        </div>
+      )}
+
+      {lines.length === 0 && (
+        <div style={{ ...card, textAlign: 'center', color: '#64748B', padding: '32px 20px' }}>
+          No warning lines — all surcharges accounted for.
+        </div>
+      )}
+
+      {lines.length > 0 && (
+        <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: 'rgba(255,179,0,0.08)' }}>
+                <th style={thSt}>TRACKING</th>
+                <th style={thSt}>DATE</th>
+                <th style={thSt}>CUSTOMER</th>
+                <th style={thSt}>SURCHARGE</th>
+                <th style={{ ...thSt, textAlign: 'right' }}>CARRIER COST</th>
+                <th style={{ ...thSt, textAlign: 'right' }}>SELL PRICE</th>
+                <th style={{ ...thSt, textAlign: 'right' }}>ACTION</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((line, idx) => {
+                const sellPrice = parseFloat(line.suggested_sell_price || 0);
+                const canAuto   = !!line.surcharge_id && sellPrice > 0;
+                const isLoading = acceptingId === line.id;
+                return (
+                  <tr key={line.id} style={{
+                    borderBottom: idx < lines.length - 1 ? '1px solid rgba(0,0,0,0.05)' : 'none',
+                    background: isLoading ? 'rgba(0,200,83,0.04)' : 'rgba(255,179,0,0.04)',
+                  }}>
+                    <td style={{ ...tdSt, fontFamily: 'monospace', fontSize: 10, color: '#79AAFF' }}>
+                      {line.tracking_number || '—'}
+                    </td>
+                    <td style={{ ...tdSt, color: '#64748B', fontSize: 11 }}>
+                      {line.shipment_date ? new Date(line.shipment_date).toLocaleDateString('en-GB') : '—'}
+                    </td>
+                    <td style={{ ...tdSt, color: '#475569' }}>
+                      {line.customer_name || '—'}
+                    </td>
+                    <td style={{ ...tdSt }}>
+                      {line.surcharge_name
+                        ? <span style={{ background: 'rgba(255,179,0,0.15)', color: '#92400E',
+                            borderRadius: 4, padding: '2px 7px', fontSize: 11, fontWeight: 600 }}>
+                            {line.surcharge_name}
+                          </span>
+                        : <span style={{ color: '#94A3B8', fontSize: 11 }}>Unknown</span>
+                      }
+                    </td>
+                    <td style={{ ...tdSt, textAlign: 'right', fontWeight: 600 }}>
+                      £{parseFloat(line.carrier_amount || 0).toFixed(2)}
+                    </td>
+                    <td style={{ ...tdSt, textAlign: 'right', fontWeight: 700,
+                      color: canAuto ? '#00C853' : '#94A3B8' }}>
+                      {canAuto ? `£${sellPrice.toFixed(2)}` : '—'}
+                    </td>
+                    <td style={{ ...tdSt, textAlign: 'right' }}>
+                      {canAuto ? (
+                        <button
+                          onClick={() => acceptOne(line)}
+                          disabled={isLoading || acceptingAll}
+                          style={{
+                            padding: '6px 14px', borderRadius: 6, cursor: 'pointer',
+                            background: isLoading ? '#e2e8f0' : 'rgba(0,200,83,0.12)',
+                            border: '1px solid rgba(0,200,83,0.35)',
+                            color: '#00A040', fontWeight: 700, fontSize: 11,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {isLoading ? '…' : `✓ Accept £${sellPrice.toFixed(2)}`}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => onOpenDrawer(line)}
+                          style={{
+                            padding: '6px 12px', borderRadius: 6, cursor: 'pointer',
+                            background: 'rgba(0,0,0,0.05)',
+                            border: '1px solid rgba(0,0,0,0.12)',
+                            color: '#475569', fontWeight: 600, fontSize: 11,
+                          }}
+                        >
+                          Set Price…
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function RunDetailPage() {
   const { id }     = useParams();
@@ -2276,13 +3322,45 @@ export default function RunDetailPage() {
   const [defaultResolveType, setDefaultResolveType] = useState(null);
   const [finalizing,        setFinalizing]        = useState(false);
   const [finalizeError,     setFinalizeError]     = useState('');
+  const [unfinalizing,      setUnfinalizing]      = useState(false);
   const [raisingQueryLine,  setRaisingQueryLine]  = useState(null);
+  const [repairing,         setRepairing]         = useState(false);
+  const [repairMsg,         setRepairMsg]         = useState(null);
 
   const { data: run, isLoading: runLoading, refetch: refetchRun } = useQuery({
     queryKey: ['recon-run', id],
-    queryFn:  () => api.get(`/reconciliation/runs/${id}`).then(r => r.data),
-    refetchInterval: (data) => data?.status === 'processing' ? 3000 : false,
+    queryFn:  () => api.get(`/reconciliation/runs/${id}?t=${Date.now()}`).then(r => r.data),
+    refetchInterval: (data) => data?.status === 'processing' ? 2000 : false,
+    staleTime: 0,
   });
+
+  // When the run finishes processing, force-refresh all data views
+  const prevStatusRef = React.useRef(null);
+  React.useEffect(() => {
+    const prev = prevStatusRef.current;
+    const curr = run?.status;
+    if (prev === 'processing' && curr && curr !== 'processing') {
+      qc.invalidateQueries({ queryKey: ['recon-lines',             id] });
+      qc.invalidateQueries({ queryKey: ['recon-customers-preview', id] });
+      qc.invalidateQueries({ queryKey: ['recon-preview-lines',     id] });
+    }
+    prevStatusRef.current = curr;
+  }, [run?.status, id, qc]);
+
+  async function handleUnfinalize() {
+    if (!window.confirm('Reset this run back to editable? This will delete the billing snapshot so you can fix lines and re-finalize. Any Xero invoices already pushed will need to be voided in Xero manually.')) return;
+    setUnfinalizing(true);
+    try {
+      await api.post(`/reconciliation/runs/${id}/unfinalize`);
+      qc.invalidateQueries({ queryKey: ['recon-run', id] });
+      qc.invalidateQueries({ queryKey: ['recon-customers', id] });
+      refetchRun();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Reset failed');
+    } finally {
+      setUnfinalizing(false);
+    }
+  }
 
   async function handleFinalize() {
     if (!window.confirm('Finalize this run? This will lock all Matched and Corrected lines and create the billing snapshot. This cannot be undone.')) return;
@@ -2300,14 +3378,41 @@ export default function RunDetailPage() {
     }
   }
 
+  async function handleRepairAndRefresh() {
+    setRepairing(true);
+    setRepairMsg(null);
+    try {
+      const res = await api.post('/reconciliation/backfill-carrier-direct-surcharges');
+      const { found, repriced, processed, errors } = res.data;
+      setRepairMsg(
+        repriced > 0 || processed > 0
+          ? `✓ ${repriced} repriced · ${processed} surcharges inserted`
+          : found === 0
+            ? '✓ No missing surcharges'
+            : errors > 0
+              ? `⚠ ${errors} error(s)`
+              : '✓ Already correct'
+      );
+      qc.invalidateQueries({ queryKey: ['recon-customers-preview', id] });
+      qc.invalidateQueries({ queryKey: ['recon-lines', id] });
+    } catch (err) {
+      setRepairMsg(`✗ ${err.response?.data?.error || err.message}`);
+    } finally {
+      setRepairing(false);
+    }
+  }
+
   const linesQuery = (status) => useQuery({
     queryKey: ['recon-lines', id, status],
-    queryFn:  () => api.get(`/reconciliation/runs/${id}/lines?${status ? `status=${status}&` : ''}limit=500`).then(r => r.data),
-    enabled:  activeTab !== 'overview',
+    queryFn:  () => api.get(`/reconciliation/runs/${id}/lines?${status ? `status=${status}&` : ''}limit=500&t=${Date.now()}`).then(r => r.data),
+    enabled:   activeTab !== 'overview',
+    staleTime: 0,
+    cacheTime: 0,
   });
 
   const allLines       = linesQuery('').data?.lines       || [];
   const unmatchedLines = linesQuery('unmatched').data?.lines || [];
+  const warningLines   = linesQuery('warning').data?.lines   || [];
   const matchedLines   = linesQuery('matched').data?.lines   || [];
   const correctedLines = linesQuery('corrected').data?.lines || [];
 
@@ -2323,6 +3428,7 @@ export default function RunDetailPage() {
   const tabs = [
     { key: 'overview',   label: 'Overview' },
     { key: 'unmatched',  label: `Needs Review (${run?.unmatched_count || 0})`, alert: (run?.unmatched_count || 0) > 0 },
+    { key: 'warning',    label: `Warnings (${run?.warning_count || 0})`, warn: (run?.warning_count || 0) > 0 },
     { key: 'matched',    label: `Matched (${run?.matched_count || 0})` },
     { key: 'corrected',  label: `Corrected (${run?.corrected_count || 0})` },
     { key: 'all',        label: 'All Lines' },
@@ -2332,13 +3438,14 @@ export default function RunDetailPage() {
 
   const currentLines = {
     unmatched: unmatchedLines,
+    warning:   warningLines,
     matched:   matchedLines,
     corrected: correctedLines,
     all:       allLines,
   }[activeTab] || [];
 
   if (runLoading) {
-    return <div style={{ color: '#666', fontSize: 13, padding: 40 }}>Loading…</div>;
+    return <div style={{ color: '#64748B', fontSize: 13, padding: 40 }}>Loading…</div>;
   }
   if (!run) {
     return <div style={{ color: '#FF5252', fontSize: 13, padding: 40 }}>Run not found</div>;
@@ -2351,31 +3458,81 @@ export default function RunDetailPage() {
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+      {/* Processing banner — shown while background reconciliation thread is running */}
+      {run?.status === 'processing' && (
+        <div style={{ background: 'rgba(121,170,255,0.12)', border: '1px solid rgba(121,170,255,0.35)',
+          borderRadius: 8, padding: '12px 18px', marginBottom: 16,
+          display: 'flex', alignItems: 'center', gap: 10, color: '#79AAFF', fontWeight: 600, fontSize: 13 }}>
+          <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} />
+          Processing invoice… pricing engine is running. Results will appear automatically when complete.
+        </div>
+      )}
       {/* Back + header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24 }}>
         <button onClick={() => navigate('/reconciliation')} style={{ ...btnGhost, padding: '7px 10px' }}>
           <ArrowLeft size={15} />
         </button>
         <div style={{ flex: 1 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#E6EDF3', margin: 0 }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#0F172A', margin: 0 }}>
             {run.carrier_name} — {run.invoice_ref || `Run #${run.id}`}
           </h1>
-          <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
+          <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
             {run.invoice_date ? new Date(run.invoice_date).toLocaleDateString('en-GB') : '—'} · Started {new Date(run.created_at).toLocaleDateString('en-GB')}
             {run.status === 'processing' && <span style={{ color: '#79AAFF', marginLeft: 10 }}><RefreshCw size={11} style={{ display: 'inline' }} /> Processing…</span>}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {run.finalized && (
-            <span style={{ color: '#00C853', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
-              <Lock size={13} />Finalized
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ color: '#00C853', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <Lock size={13} />Finalized
+              </span>
+              <button
+                style={{ ...btnRed, padding: '4px 10px', fontSize: 11, opacity: unfinalizing ? 0.7 : 1 }}
+                onClick={handleUnfinalize}
+                disabled={unfinalizing}
+                title='Reset run — deletes the billing snapshot so you can fix lines and re-finalize'
+              >
+                {unfinalizing ? <RefreshCw size={11} /> : <X size={11} />}
+                {unfinalizing ? 'Resetting…' : 'Reset Run'}
+              </button>
+            </div>
           )}
           {run.status === 'failed' && (
             <span style={{ color: '#FF5252', fontSize: 12, fontWeight: 700 }}>✗ Run Failed</span>
           )}
-          {!run.finalized && run.status === 'needs_review' && (
-            <span style={{ color: '#FFB300', fontSize: 12, fontWeight: 700 }}>⚠ Needs Review</span>
+          {!run.finalized && (run.unmatched_count || 0) > 0 && (
+            <span style={{ color: '#FF5252', fontSize: 12, fontWeight: 700 }}>✗ Needs Review</span>
+          )}
+          {!run.finalized && (run.unmatched_count || 0) === 0 && (run.warning_count || 0) > 0 && (
+            <span style={{ color: '#FFB300', fontSize: 12, fontWeight: 700 }}>⚠ {run.warning_count} Unbilled Surcharge{(run.warning_count || 0) > 1 ? 's' : ''}</span>
+          )}
+          {!run.finalized && (
+            <>
+              {repairMsg && (
+                <span style={{
+                  fontSize: 11, fontWeight: 600,
+                  color: repairMsg.startsWith('✓') ? '#00C853' : repairMsg.startsWith('⚠') ? '#FFB300' : '#FF5252',
+                }}>
+                  {repairMsg}
+                </span>
+              )}
+              <button
+                onClick={handleRepairAndRefresh}
+                disabled={repairing}
+                title="Re-price and insert missing fuel & surcharges for carrier-direct multi-parcel shipments"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  fontSize: 11, fontWeight: 600, cursor: repairing ? 'default' : 'pointer',
+                  background: repairing ? 'rgba(0,0,0,0.04)' : 'rgba(59,130,246,0.08)',
+                  border: '1px solid rgba(59,130,246,0.3)',
+                  color: repairing ? '#94A3B8' : '#3B82F6',
+                  borderRadius: 5, padding: '5px 10px',
+                }}
+              >
+                {repairing ? '⟳ Repairing…' : '⟳ Repair & Refresh'}
+              </button>
+            </>
           )}
           {!run.finalized && run.unmatched_count === 0 && (run.status === 'complete' || run.status === 'needs_review') && (
             <button
@@ -2395,33 +3552,34 @@ export default function RunDetailPage() {
         {/* Pool size — first tile, most diagnostic value */}
         {(() => {
           const ps = run.pool_size;
-          const psColor  = ps == null ? '#555' : ps === 0 ? '#FF5252' : '#00C853';
+          const psColor  = ps == null ? '#475569' : ps === 0 ? '#FF5252' : '#00C853';
           const psValue  = ps == null ? 'Pending…' : ps.toLocaleString();
           const psBorder = ps === 0 ? '1px solid rgba(213,0,0,0.4)' : card.border;
           return (
             <div key="pool" style={{ ...card, border: psBorder }}>
-              <div style={{ fontSize: 10, color: '#666', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Verified Pool</div>
+              <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Verified Pool</div>
               <div style={{ fontSize: 20, fontWeight: 800, color: psColor }}>{psValue}</div>
               {ps === 0 && <div style={{ fontSize: 10, color: '#FF5252', marginTop: 4 }}>Carrier name mismatch?</div>}
             </div>
           );
         })()}
         {[
-          { label: 'Total Lines', value: total.toLocaleString(), color: '#E6EDF3' },
+          { label: 'Total Lines', value: total.toLocaleString(), color: '#0F172A' },
           { label: 'Matched', value: `${run.matched_count || 0} (${matchedPct}%)`, color: '#00C853' },
           { label: 'Corrected', value: `${run.corrected_count || 0} (${correctedPct}%)`, color: '#FF8F00' },
-          { label: 'Unmatched', value: `${run.unmatched_count || 0} (${unmatchedPct}%)`, color: (run.unmatched_count || 0) > 0 ? '#FFB300' : '#555' },
+          { label: 'Unmatched', value: `${run.unmatched_count || 0} (${unmatchedPct}%)`, color: (run.unmatched_count || 0) > 0 ? '#FF5252' : '#475569' },
+          { label: 'Warnings', value: `${run.warning_count || 0}`, color: (run.warning_count || 0) > 0 ? '#FFB300' : '#475569' },
           { label: 'Automation Rate', value: run.automation_rate != null ? `${run.automation_rate}%` : '—', color: parseFloat(run.automation_rate) >= 80 ? '#00C853' : '#FFB300' },
         ].map(({ label, value, color }) => (
           <div key={label} style={card}>
-            <div style={{ fontSize: 10, color: '#666', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>{label}</div>
+            <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>{label}</div>
             <div style={{ fontSize: 20, fontWeight: 800, color }}>{value}</div>
           </div>
         ))}
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: 0 }}>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid rgba(0,0,0,0.06)', paddingBottom: 0 }}>
         {tabs.map(tab => (
           <button
             key={tab.key}
@@ -2429,12 +3587,13 @@ export default function RunDetailPage() {
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
               padding: '8px 16px', fontSize: 13, fontWeight: 600,
-              color: activeTab === tab.key ? '#E6EDF3' : '#666',
-              borderBottom: `2px solid ${activeTab === tab.key ? '#00C853' : 'transparent'}`,
+              color: activeTab === tab.key ? '#0F172A' : '#666',
+              borderBottom: `2px solid ${activeTab === tab.key ? (tab.warn ? '#FFB300' : '#00C853') : 'transparent'}`,
               display: 'flex', alignItems: 'center', gap: 6,
             }}
           >
-            {tab.alert && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#FFB300', display: 'inline-block' }} />}
+            {tab.alert && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#FF5252', display: 'inline-block' }} />}
+            {tab.warn  && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#FFB300', display: 'inline-block' }} />}
             {tab.label}
           </button>
         ))}
@@ -2446,7 +3605,7 @@ export default function RunDetailPage() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           {/* Breakdown chart */}
           <div style={card}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#E6EDF3', marginBottom: 16 }}>Result breakdown</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', marginBottom: 16 }}>Result breakdown</div>
             {[
               { label: 'Matched',   count: run.matched_count   || 0, color: '#00C853' },
               { label: 'Corrected', count: run.corrected_count || 0, color: '#FF8F00' },
@@ -2454,10 +3613,10 @@ export default function RunDetailPage() {
             ].map(({ label, count, color }) => (
               <div key={label} style={{ marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5 }}>
-                  <span style={{ color: '#AAA' }}>{label}</span>
+                  <span style={{ color: '#64748B' }}>{label}</span>
                   <span style={{ color, fontWeight: 700 }}>{count.toLocaleString()} / {total.toLocaleString()}</span>
                 </div>
-                <div style={{ height: 5, background: 'rgba(255,255,255,0.06)', borderRadius: 99 }}>
+                <div style={{ height: 5, background: 'rgba(0,0,0,0.06)', borderRadius: 99 }}>
                   <div style={{ width: `${total > 0 ? (count / total) * 100 : 0}%`, height: '100%', background: color, borderRadius: 99 }} />
                 </div>
               </div>
@@ -2466,7 +3625,7 @@ export default function RunDetailPage() {
 
           {/* Run details */}
           <div style={card}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#E6EDF3', marginBottom: 16 }}>Run details</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', marginBottom: 16 }}>Run details</div>
             {[
               ['Carrier',       run.carrier_name],
               ['Invoice ref',   run.invoice_ref || '—'],
@@ -2475,9 +3634,9 @@ export default function RunDetailPage() {
               ['Completed',     run.completed_at ? new Date(run.completed_at).toLocaleString('en-GB') : '—'],
               ['Created by',    run.created_by_name || 'System'],
             ].map(([label, value]) => (
-              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid rgba(255,255,255,0.04)', fontSize: 12 }}>
-                <span style={{ color: '#888' }}>{label}</span>
-                <span style={{ color: '#E6EDF3' }}>{value}</span>
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid rgba(0,0,0,0.03)', fontSize: 12 }}>
+                <span style={{ color: '#64748B' }}>{label}</span>
+                <span style={{ color: '#0F172A' }}>{value}</span>
               </div>
             ))}
           </div>
@@ -2496,7 +3655,7 @@ export default function RunDetailPage() {
                 <div style={{ fontSize: 14, fontWeight: 700, color: '#FFB300' }}>
                   {run.unmatched_count} line{run.unmatched_count !== 1 ? 's' : ''} need manual review
                 </div>
-                <div style={{ fontSize: 12, color: '#888', marginTop: 3 }}>
+                <div style={{ fontSize: 12, color: '#64748B', marginTop: 3 }}>
                   Resolve all Unmatched lines before finalizing
                 </div>
               </div>
@@ -2510,7 +3669,7 @@ export default function RunDetailPage() {
           {run.status === 'failed' && (
             <div style={{ ...card, border: '1px solid rgba(213,0,0,0.4)', background: 'rgba(213,0,0,0.06)', gridColumn: 'span 2' }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: '#FF5252', marginBottom: 4 }}>✗ Run Failed</div>
-              <div style={{ fontSize: 12, color: '#888' }}>
+              <div style={{ fontSize: 12, color: '#64748B' }}>
                 The reconciliation engine encountered an error during processing. Check Railway logs for details, then delete this run and re-upload the CSV.
               </div>
             </div>
@@ -2521,7 +3680,7 @@ export default function RunDetailPage() {
             <div style={{ ...card, border: '1px solid rgba(0,200,83,0.25)', background: 'rgba(0,200,83,0.06)', gridColumn: 'span 2', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: '#00C853' }}>Ready to finalize</div>
-                <div style={{ fontSize: 12, color: '#888', marginTop: 3 }}>
+                <div style={{ fontSize: 12, color: '#64748B', marginTop: 3 }}>
                   All lines resolved. Finalize to create the immutable billing snapshot and enable Xero push.
                 </div>
               </div>
@@ -2550,6 +3709,35 @@ export default function RunDetailPage() {
       {/* Unmatched tab — service code mapping banner + lines table */}
       {activeTab === 'unmatched' && (
         <>
+          {/* Bulk surcharge resolver — shown when there are price-mismatch lines */}
+          <BulkSurchargeResolver
+            unmatchedLines={unmatchedLines}
+            runId={parseInt(id)}
+            courierId={run.carrier_id}
+            onResolved={() => {
+              qc.invalidateQueries({ queryKey: ['recon-run', id] });
+              qc.invalidateQueries({ queryKey: ['recon-lines', id] });
+            }}
+          />
+
+          {/* Cancelled booking notice — download is on the main reconciliation page */}
+          {unmatchedLines.some(l => l.unmatched_reason === 'cancelled_booking_invoiced') && (
+            <div style={{
+              background: 'rgba(213,0,0,0.07)', border: '1px solid rgba(213,0,0,0.25)',
+              borderRadius: 8, padding: '10px 14px', marginBottom: 16,
+              display: 'flex', alignItems: 'center', gap: 10,
+            }}>
+              <span style={{ fontSize: 15, lineHeight: 1 }}>🚫</span>
+              <div style={{ fontSize: 12, color: '#7F1D1D', lineHeight: 1.5 }}>
+                <strong style={{ color: '#B71C1C' }}>
+                  {unmatchedLines.filter(l => l.unmatched_reason === 'cancelled_booking_invoiced').length} cancelled booking{unmatchedLines.filter(l => l.unmatched_reason === 'cancelled_booking_invoiced').length !== 1 ? 's' : ''} invoiced by DPD
+                </strong>
+                {' '}— DPD charged for these but the parcel was never sent. They will not be billed to the customer.
+                Resolve each line using <strong>Applying for credit with Courier</strong> once you have claimed the refund from DPD,
+                or use <strong>Download DPD Credit Request</strong> on the reconciliation home page to export all outstanding lines as a CSV.
+              </div>
+            </div>
+          )}
           <ServiceCodeMappingBanner
             unmatchedLines={unmatchedLines}
             runId={parseInt(id)}
@@ -2582,13 +3770,27 @@ export default function RunDetailPage() {
           : <CustomerPreviewPanel runId={parseInt(id)} />
       )}
 
+      {/* Warning tab — carrier surcharges with no sell-side customer charge */}
+      {activeTab === 'warning' && (
+        <WarningTab
+          lines={warningLines}
+          runId={id}
+          onResolved={() => {
+            qc.invalidateQueries({ queryKey: ['recon-run', id] });
+            qc.invalidateQueries({ queryKey: ['recon-lines', id] });
+            qc.invalidateQueries({ queryKey: ['recon-customers-preview', parseInt(id)] });
+          }}
+          onOpenDrawer={(line) => { setDefaultResolveType('map_to_surcharge'); setResolvingLine(line); }}
+        />
+      )}
+
       {/* Carrier Queries tab */}
       {activeTab === 'queries' && (
         <CourierQueriesPanel runId={parseInt(id)} carrierId={run.carrier_id} />
       )}
 
       {/* Line tables for other tabs */}
-      {activeTab !== 'overview' && activeTab !== 'unmatched' && activeTab !== 'customers' && activeTab !== 'queries' && (
+      {activeTab !== 'overview' && activeTab !== 'unmatched' && activeTab !== 'warning' && activeTab !== 'customers' && activeTab !== 'queries' && (
         <div style={card}>
           <LinesTable
             lines={currentLines}
@@ -2612,6 +3814,7 @@ export default function RunDetailPage() {
           onResolved={() => {
             qc.invalidateQueries({ queryKey: ['recon-run', id] });
             qc.invalidateQueries({ queryKey: ['recon-lines', id] });
+            qc.invalidateQueries({ queryKey: ['recon-customers-preview', parseInt(id)] });
             setResolvingLine(null);
             setDefaultResolveType(null);
           }}

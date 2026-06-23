@@ -16,10 +16,10 @@ import {
 } from 'lucide-react';
 
 const C = {
-  bg:       '#0A0B1E',
+  bg:       '#F8FAFC',
   surface:  '#10122A',
   card:     '#141628',
-  border:   'rgba(255,255,255,0.07)',
+  border:   'rgba(0,0,0,0.07)',
   amber:    '#F59E0B',
   amberDim: 'rgba(245,158,11,0.10)',
   green:    '#00C853',

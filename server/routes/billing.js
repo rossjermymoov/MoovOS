@@ -486,11 +486,46 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
 
   const distinctZones = zonesRes.rows.map(r => r.zone_name);
   let zoneName;
+
+  // GOLDEN RULE: always resolve the zone from the postcode using the carrier's
+  // zone definitions, then look up a rate for that resolved zone.
+  //
+  // The old shortcut (distinctZones.length === 1 → use that zone) is WRONG for
+  // multi-zone services where the customer simply hasn't set rates for all zones
+  // yet.  It would price Zone A parcels at Zone C rates if Zone C was the only
+  // zone present in customer_rates — silently undercharging or overcharging the
+  // customer and producing charges with incorrect zone labels.
+  //
+  // The ONLY safe shortcut is for services that are genuinely single-zone at the
+  // carrier level (no postcode rules, only one zone exists).  We detect that by
+  // checking how many zones the carrier has defined for this service.  If the
+  // carrier itself defines only one zone we can skip the postcode lookup.
+  // Otherwise we always resolve via zoneForPostcode, and if the resolved zone has
+  // no customer rate we return an explicit failure — never silently substituting
+  // a different zone.
   if (distinctZones.length === 1) {
-    zoneName = distinctZones[0];
+    // Only use the shortcut if the carrier also has just one zone for this service
+    // (true single-zone service like DHLPUK-72 "Out of Area").
+    const carrierZoneCount = await query(`
+      SELECT COUNT(DISTINCT z.id) AS cnt
+      FROM zones z
+      JOIN courier_services cs ON cs.id = z.courier_service_id
+      WHERE cs.service_code ILIKE $1
+    `, [serviceCode]);
+    const carrierZones = parseInt(carrierZoneCount.rows[0]?.cnt || 0, 10);
+    if (carrierZones <= 1) {
+      // Carrier is single-zone — shortcut is safe
+      zoneName = distinctZones[0];
+    } else {
+      // Multi-zone carrier, customer has rates for one zone only.
+      // Still resolve from postcode — if the resolved zone has no rate, fail.
+      const resolved = await zoneForPostcode(serviceCode, postcode, iso);
+      if (!resolved) return { rate: null, reason: `no matching zone for postcode "${postcode || 'none'}" (iso: ${iso})` };
+      zoneName = resolved;
+    }
   } else {
     const resolved = await zoneForPostcode(serviceCode, postcode, iso);
-    if (!resolved) return { rate: null, reason: `no matching zone for postcode "${postcode}" (iso: ${iso})` };
+    if (!resolved) return { rate: null, reason: `no matching zone for postcode "${postcode || 'none'}" (iso: ${iso})` };
     zoneName = resolved;
   }
 
@@ -577,15 +612,14 @@ async function lookupViaCustomerRates(customerId, serviceCode, weightKg, postcod
   };
 }
 
-// ── Main lookup — tries new model first, falls back to legacy ─────────────────
-// serviceName is accepted for backwards-compat but NEVER used for matching.
-// iso defaults to 'GB' for domestic; pass ship_to_country_iso for correct zone lookup.
+// ── Main lookup — explicit customer_rates only ────────────────────────────────
+// Pricing is always explicit: one zone, one weight band, one price per customer.
+// If a price is not explicitly set in customer_rates, pricing fails.
+// No fallbacks, no guessing, no secondary models.
+// serviceName is accepted for backwards-compat but never used for matching.
 async function lookupRateWithReason(customerId, serviceCode, _serviceName, weightKg, postcode, iso = 'GB') {
   if (!customerId) return { rate: null, reason: 'No matching customer' };
   if (!serviceCode) return { rate: null, reason: 'No service code' };
-
-  const newResult = await lookupViaServicePricing(customerId, serviceCode, weightKg, postcode, iso);
-  if (newResult !== null) return newResult;
 
   return lookupViaCustomerRates(customerId, serviceCode, weightKg, postcode, iso);
 }
@@ -695,7 +729,9 @@ function testCondition(f, data) {
     case 'lt':       return parseFloat(val) < parseFloat(f.value);
     case 'gte':      return parseFloat(val) >= parseFloat(f.value);
     case 'lte':      return parseFloat(val) <= parseFloat(f.value);
-    case 'contains': return val.toLowerCase().includes(String(f.value || '').toLowerCase());
+    case 'contains':     return val.toLowerCase().includes(String(f.value || '').toLowerCase());
+    case 'starts_with':  return val.toLowerCase().startsWith(String(f.value || '').toLowerCase());
+    case 'ends_with':    return val.toLowerCase().endsWith(String(f.value || '').toLowerCase());
     default:         return true;
   }
 }
@@ -846,11 +882,11 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData, 
         carrierSurchargeCost = carrierCostRate;
       }
 
-      // Absorbed surcharges (reconciliation_excluded = true, e.g. Carriage) are costs
-      // we pay the carrier but never pass on to the customer.  Set sell price (price) to
-      // zero so they reduce margin correctly without inflating revenue.  The cost still
-      // flows through cost_price so profitability figures are accurate from booking day.
-      const sellPrice = surcharge.reconciliation_excluded ? 0 : price;
+      // reconciliation_excluded = true means the carrier does NOT invoice us for this
+      // surcharge (e.g. EPS — we charge it to customers but DHL never bills us back).
+      // It does NOT mean "don't charge the customer" — that was a previous mis-reading.
+      // The reconciliation engine ignores these surcharges independently via the flag.
+      const sellPrice = price;
 
       await query(`
         INSERT INTO charges
@@ -971,7 +1007,7 @@ async function repriceSurchargesForShipment(shipmentId, customerId, dcServiceId,
     // Get active surcharges for this courier — same two-category logic as applySurcharges:
     // always-apply surcharges + any absorbed-cost (reconciliation_excluded) surcharges.
     const { rows: surcharges } = await query(`
-      SELECT s.id, s.name, s.calc_type, s.charge_per, s.default_value, s.reconciliation_excluded
+      SELECT s.id, s.name, s.calc_type, s.charge_per, s.default_value, s.cost_price, s.reconciliation_excluded
       FROM surcharges s
       WHERE s.active = true
         AND s.courier_id = $1
@@ -1002,11 +1038,10 @@ async function repriceSurchargesForShipment(shipmentId, customerId, dcServiceId,
         : parseFloat(surcharge.default_value);
 
       // Recalculate using current charge_per / calc_type.
-      // Absorbed surcharges (reconciliation_excluded) are never billed to customers — sell price = 0.
+      // reconciliation_excluded = true only means the carrier doesn't invoice us for
+      // this surcharge — we still charge the customer the full calculated price.
       let newPrice;
-      if (surcharge.reconciliation_excluded) {
-        newPrice = 0;
-      } else if (surcharge.calc_type === 'percentage') {
+      if (surcharge.calc_type === 'percentage') {
         newPrice = parseFloat(((baseSellPrice || 0) * effectiveValue / 100).toFixed(2));
       } else if (surcharge.charge_per === 'parcel') {
         newPrice = parseFloat((effectiveValue * (parcelQty || 1)).toFixed(2));
@@ -1014,8 +1049,10 @@ async function repriceSurchargesForShipment(shipmentId, customerId, dcServiceId,
         newPrice = effectiveValue;
       }
 
-      // Cost side: re-use default_value as carrier cost
-      const carrierDefault = parseFloat(surcharge.default_value || 0);
+      // Cost side: use cost_price if explicitly set, otherwise fall back to default_value.
+      // For reconciliation_excluded surcharges (e.g. EPS), cost_price = 0 because the
+      // carrier never invoices us — using default_value would incorrectly record a cost.
+      const carrierDefault = parseFloat(surcharge.cost_price ?? surcharge.default_value ?? 0);
       let newCost;
       if (surcharge.calc_type === 'percentage') {
         newCost = parseFloat(((baseSellPrice || 0) * carrierDefault / 100).toFixed(2));
@@ -1196,6 +1233,11 @@ router.post('/webhook', (req, res) => {
     const primaryTrackingCode = trackingCodes[0] || null;
     const trackingHashVal = computeTrackingHash(primaryTrackingCode, collectionDate);
 
+    // Voila tracking request credentials — needed for on-demand tracking API calls.
+    // These sit at the top level of the parsed response JSON alongside tracking_codes.
+    const voilaTrackingRequestId   = responseParsed.tracking_request_id   ? parseInt(responseParsed.tracking_request_id, 10)   : null;
+    const voilaTrackingRequestHash = responseParsed.tracking_request_hash ? parseInt(responseParsed.tracking_request_hash, 10) : null;
+
     // Carrier surcharge cost — from DC billing block (used by applySurcharges until surcharge cost calc moves to rate cards)
     const dcSurchargeCosts          = Array.isArray(billingResp.surcharges) ? billingResp.surcharges : (billingResp.surcharges != null ? [billingResp.surcharges] : []);
     const totalCarrierSurchargeCost = dcSurchargeCosts.reduce((s, c) => s + (parseFloat(c) || 0), 0);
@@ -1254,10 +1296,36 @@ router.post('/webhook', (req, res) => {
         if (cr5.rows.length) customerId = cr5.rows[0].id;
       } catch (_) {}
     }
+    // Step 7: customerDcId → billing_aliases
+    // Covers test/dev accounts where the DC customer ID is stored as an alias
+    // rather than as the primary dc_customer_id on the customer record.
+    if (!customerId && customerDcId) {
+      try {
+        const cr6 = await query(
+          `SELECT id FROM customers WHERE EXISTS (SELECT 1 FROM unnest(billing_aliases) a WHERE LOWER(a) = LOWER($1)) LIMIT 1`,
+          [customerDcId.trim().toLowerCase()]
+        );
+        if (cr6.rows.length) customerId = cr6.rows[0].id;
+      } catch (_) {}
+    }
 
     // Effective account identifier to store — prefer accountNumber, fall back to customerDcId
     // so the relink-customers endpoint can find unlinked shipments later.
     const effectiveAccount = accountNumber || customerDcId || null;
+
+    // Test account check — if this customer is flagged as a test account, all
+    // charges are forced to £0 and surcharges are skipped entirely.
+    let isTestAccount = false;
+    if (customerId) {
+      const testRes = await query(
+        `SELECT is_test_account FROM customers WHERE id = $1`,
+        [customerId]
+      );
+      isTestAccount = testRes.rows[0]?.is_test_account === true;
+      if (isTestAccount) {
+        console.log(`[billing/webhook] test account ${customerId} — forcing £0 charge, skipping surcharges`);
+      }
+    }
 
     // Extract additional fields for dimension/value/hs_code surcharge rule filtering
     const addl = extractAdditionalShipmentFields(payload);
@@ -1272,26 +1340,29 @@ router.post('/webhook', (req, res) => {
          reference, reference_2,
          parcel_count, total_weight_kg, collection_date, tracking_codes,
          tracking_hash,
+         voila_tracking_request_id, voila_tracking_request_hash,
          ship_from_country_iso,
          dim_length_cm, dim_width_cm, dim_height_cm, parcel_weight_kg,
          total_declared_value, parcel_declared_value, hs_codes,
          raw_payload)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)
       ON CONFLICT (platform_shipment_id) DO UPDATE SET
-        customer_id           = COALESCE(EXCLUDED.customer_id, shipments.customer_id),
-        customer_account      = COALESCE(EXCLUDED.customer_account, shipments.customer_account),
-        service_name          = COALESCE(EXCLUDED.service_name, shipments.service_name),
-        tracking_codes        = COALESCE(EXCLUDED.tracking_codes, shipments.tracking_codes),
-        tracking_hash         = COALESCE(EXCLUDED.tracking_hash, shipments.tracking_hash),
-        ship_from_country_iso = COALESCE(EXCLUDED.ship_from_country_iso, shipments.ship_from_country_iso),
-        dim_length_cm         = COALESCE(EXCLUDED.dim_length_cm, shipments.dim_length_cm),
-        dim_width_cm          = COALESCE(EXCLUDED.dim_width_cm, shipments.dim_width_cm),
-        dim_height_cm         = COALESCE(EXCLUDED.dim_height_cm, shipments.dim_height_cm),
-        parcel_weight_kg      = COALESCE(EXCLUDED.parcel_weight_kg, shipments.parcel_weight_kg),
-        total_declared_value  = COALESCE(EXCLUDED.total_declared_value, shipments.total_declared_value),
-        parcel_declared_value = COALESCE(EXCLUDED.parcel_declared_value, shipments.parcel_declared_value),
-        hs_codes              = COALESCE(EXCLUDED.hs_codes, shipments.hs_codes),
-        updated_at            = NOW()
+        customer_id                   = COALESCE(EXCLUDED.customer_id, shipments.customer_id),
+        customer_account              = COALESCE(EXCLUDED.customer_account, shipments.customer_account),
+        service_name                  = COALESCE(EXCLUDED.service_name, shipments.service_name),
+        tracking_codes                = COALESCE(EXCLUDED.tracking_codes, shipments.tracking_codes),
+        tracking_hash                 = COALESCE(EXCLUDED.tracking_hash, shipments.tracking_hash),
+        voila_tracking_request_id     = COALESCE(EXCLUDED.voila_tracking_request_id, shipments.voila_tracking_request_id),
+        voila_tracking_request_hash   = COALESCE(EXCLUDED.voila_tracking_request_hash, shipments.voila_tracking_request_hash),
+        ship_from_country_iso         = COALESCE(EXCLUDED.ship_from_country_iso, shipments.ship_from_country_iso),
+        dim_length_cm                 = COALESCE(EXCLUDED.dim_length_cm, shipments.dim_length_cm),
+        dim_width_cm                  = COALESCE(EXCLUDED.dim_width_cm, shipments.dim_width_cm),
+        dim_height_cm                 = COALESCE(EXCLUDED.dim_height_cm, shipments.dim_height_cm),
+        parcel_weight_kg              = COALESCE(EXCLUDED.parcel_weight_kg, shipments.parcel_weight_kg),
+        total_declared_value          = COALESCE(EXCLUDED.total_declared_value, shipments.total_declared_value),
+        parcel_declared_value         = COALESCE(EXCLUDED.parcel_declared_value, shipments.parcel_declared_value),
+        hs_codes                      = COALESCE(EXCLUDED.hs_codes, shipments.hs_codes),
+        updated_at                    = NOW()
       RETURNING id
     `, [
       platformId || null, eventType,
@@ -1302,6 +1373,7 @@ router.post('/webhook', (req, res) => {
       parcelCount, totalWeightKg || null, collectionDate,
       trackingCodes.length ? trackingCodes : null,
       trackingHashVal,
+      voilaTrackingRequestId, voilaTrackingRequestHash,
       addl.shipFromCountryIso,
       addl.dimLength, addl.dimWidth, addl.dimHeight, addl.parcelWeightKg,
       addl.totalDeclaredValue, addl.parcelDeclaredValue,
@@ -1321,29 +1393,25 @@ router.post('/webhook', (req, res) => {
     }
 
     // Look up rate card — pass destination postcode + country for zone resolution
-    const { rate, reason: priceFailReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, shipToPostcode, shipToCountry || 'GB');
-    const pricingMode = rate ? await getParcelPricingMode(customerId) : 'sub';
-    const unitPrice   = rate ? rate.price : null;
-    const totalPrice  = unitPrice != null
-      ? parseFloat(calcTotal(rate, parcelCount, pricingMode).toFixed(2))
-      : null;
-
-    // Idempotency guard — if a courier charge already exists for this order_id
-    // (same customer), skip creating a new one and return the existing charge id.
-    // This prevents duplicate charges when the webhook fires more than once for
-    // the same shipment (e.g. DPD retries after a slow acknowledgement).
-    if (reference) {
-      const existing = await query(
-        `SELECT id FROM charges
-         WHERE order_id = $1 AND customer_id = $2 AND charge_type = 'courier' AND cancelled = false
-         LIMIT 1`,
-        [String(reference), customerId]
-      );
-      if (existing.rows.length) {
-        console.log(`[billing] idempotency: courier charge already exists for order ${reference}, skipping`);
-        return; // duplicate — response already sent above
-      }
+    // Test accounts bypass rate lookup entirely — all charges are £0.
+    let rate = null, priceFailReason = null, totalPrice = null;
+    if (isTestAccount) {
+      totalPrice = 0;
+    } else {
+      const result = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, shipToPostcode, shipToCountry || 'GB');
+      rate             = result.rate;
+      priceFailReason  = result.reason;
+      const pricingMode = rate ? await getParcelPricingMode(customerId) : 'sub';
+      const unitPrice   = rate ? rate.price : null;
+      totalPrice        = unitPrice != null
+        ? parseFloat(calcTotal(rate, parcelCount, pricingMode).toFixed(2))
+        : null;
     }
+
+    // NOTE: order_id idempotency guard removed — it incorrectly blocked sub-parcel
+    // webhooks on multi-parcel orders (e.g. Europa first+sub) where both parcels share
+    // the same order reference but have distinct platform_shipment_ids and tracking codes.
+    // The shipment_id guard above (line ~1386) already handles true webhook retries.
 
     // Insert charge — rate_id is UUID on the charges table so we leave it null;
     // zone_name + weight_class_name carry the human-readable pricing reference.
@@ -1360,7 +1428,7 @@ router.post('/webhook', (req, res) => {
       shipmentId, customerId, 'courier',
       reference, parcelCount, serviceName,
       totalPrice,
-      calcCostTotal(rate, parcelCount, await isAllSubParcelPricing(dcServiceId)),
+      isTestAccount ? 0 : calcCostTotal(rate, parcelCount, await isAllSubParcelPricing(dcServiceId)),
       rate?.zone_name || null,
       rate?.weight_class_name || null,
       rate != null,
@@ -1368,6 +1436,11 @@ router.post('/webhook', (req, res) => {
     ]);
 
     // Apply surcharges (fuel, clearance, congestion, etc.) — non-blocking
+    // Skipped entirely for test accounts.
+    if (isTestAccount) {
+      console.log(`[billing/webhook] test account — surcharges skipped for shipment ${shipmentId}`);
+      return;
+    }
     await applySurcharges(shipmentId, customerId, totalPrice, {
       courier,
       dc_service_id:          dcServiceId,
@@ -2050,14 +2123,18 @@ router.post('/batch-reprice', async (req, res, next) => {
   try {
     const charges = await query(`
       SELECT c.id AS charge_id, c.customer_id, c.parcel_qty,
+             cust.is_test_account,
              s.id AS shipment_id,
              s.dc_service_id, s.service_name AS s_service_name,
              s.total_weight_kg, s.parcel_count,
              s.customer_account, s.ship_to_postcode, s.ship_to_country_iso, s.raw_payload
       FROM charges c
       LEFT JOIN shipments s ON s.id = c.shipment_id
-      WHERE c.price IS NULL
+      LEFT JOIN customers cust ON cust.id = c.customer_id
+      WHERE (c.price IS NULL OR c.price = 0)
         AND c.cancelled = false
+        AND c.charge_type = 'courier'
+        AND (c.source IS NULL OR c.source != 'carrier_direct')
       ORDER BY c.created_at ASC
     `);
 
@@ -2102,6 +2179,20 @@ router.post('/batch-reprice', async (req, res, next) => {
           summary.no_customer++;
           await query(`UPDATE charges SET price_failure_reason = $1, updated_at = NOW() WHERE id = $2`,
             ['No matching customer', row.charge_id]);
+          continue;
+        }
+
+        // Test accounts always bill at £0 — restore and skip rather than failing rate lookup
+        if (row.is_test_account === true) {
+          await query(`
+            UPDATE charges
+            SET price                = 0,
+                price_auto           = false,
+                price_failure_reason = NULL,
+                updated_at           = NOW()
+            WHERE id = $1
+          `, [row.charge_id]);
+          summary.priced++;
           continue;
         }
 
@@ -2180,32 +2271,41 @@ router.post('/batch-reprice', async (req, res, next) => {
 //
 router.post('/full-reprice', async (req, res, next) => {
   try {
-    const costOnly = req.query.cost_only === 'true';
+    const costOnly   = req.query.cost_only   === 'true';
+    const customerId = req.query.customer_id || null;   // scope to one customer when set
+
+    const conds = [
+      `c.charge_type = 'courier'`,
+      `c.cancelled   = false`,
+      `(c.source IS NULL OR c.source != 'carrier_direct')`,
+    ];
+    const vals = [];
+    if (customerId) { vals.push(customerId); conds.push(`c.customer_id = $${vals.length}`); }
 
     const { rows: charges } = await query(`
       SELECT c.id AS charge_id, c.customer_id, c.parcel_qty, c.price AS current_price,
-             c.billed, c.source,
+             c.billed, c.source, c.price_auto,
+             cust.is_test_account,
              s.id AS shipment_id,
              s.dc_service_id, s.service_name AS s_service_name,
              s.total_weight_kg, s.parcel_count, s.parcel_weight_kg,
              s.customer_account, s.ship_to_postcode, s.ship_to_country_iso, s.raw_payload
       FROM charges c
       LEFT JOIN shipments s ON s.id = c.shipment_id
-      WHERE c.charge_type = 'courier'
-        AND c.cancelled   = false
-        AND (c.source IS NULL OR c.source != 'carrier_direct')
-        ${costOnly ? '' : 'AND c.billed = false'}
+      LEFT JOIN customers cust ON cust.id = c.customer_id
+      WHERE ${conds.join(' AND ')}
       ORDER BY c.created_at ASC
-    `);
+    `, vals);
 
-    // Respond immediately so nginx proxy timeout can't kill the request.
-    // The actual repricing runs in the background — check server logs for completion.
-    // timestamp prevents Express from returning a cached 304 when the charge count hasn't changed.
+    // When scoped to one customer: run synchronously and return real results.
+    // When global: respond immediately and run in background to avoid proxy timeouts.
     res.set('Cache-Control', 'no-store');
-    res.json({ started: true, total: charges.length, ts: Date.now(), note: 'Reprice running in background — refresh in a moment to see updates' });
+    if (!customerId) {
+      res.json({ started: true, total: charges.length, ts: Date.now(), note: 'Reprice running in background — refresh in a moment to see updates' });
+    }
 
-    // ── Background processing ─────────────────────────────────────────────────
-    (async () => {
+    // ── Processing (sync for customer-scoped, background for global) ──────────
+    const runReprice = async () => {
     const summary = {
       total:              charges.length,
       repriced:           0,
@@ -2213,6 +2313,7 @@ router.post('/full-reprice', async (req, res, next) => {
       fuel_no_group:      0,   // courier service has no fuel group configured
       fuel_no_charge_row: 0,   // no existing fuel charge row to update
       no_rate:            0,
+      no_rate_cleared:    0,   // auto-priced charges whose price was cleared (golden rule)
       no_customer:        0,
       errors:             0,
       changed:            0,   // courier price actually changed
@@ -2242,6 +2343,24 @@ router.post('/full-reprice', async (req, res, next) => {
 
         if (!customerId) { summary.no_customer++; continue; }
 
+        // Test accounts always bill at £0 — skip rate lookup and restore £0 if the
+        // price was incorrectly cleared by a previous reprice run.
+        const isTestAccount = row.is_test_account === true;
+        if (isTestAccount) {
+          if (row.current_price == null) {
+            await query(`
+              UPDATE charges
+              SET price                = 0,
+                  price_auto           = false,
+                  price_failure_reason = NULL,
+                  updated_at           = NOW()
+              WHERE id = $1
+            `, [row.charge_id]);
+            summary.repriced++;
+          }
+          continue;
+        }
+
         const dcServiceId      = row.dc_service_id || extracted.dcServiceId;
         const serviceName      = row.s_service_name || extracted.serviceName;
         const parcelQty        = row.parcel_qty || row.parcel_count || extracted.parcelCount || 1;
@@ -2253,6 +2372,22 @@ router.post('/full-reprice', async (req, res, next) => {
         if (!rate) {
           summary.no_rate++;
           summary.no_rate_details.push({ charge_id: row.charge_id, service_code: dcServiceId, weight_kg: weightPerParcel, reason: noRateReason });
+
+          // Golden rule: if the charge was auto-priced and we no longer have a rate card entry,
+          // clear the price so it is visibly unpriced rather than silently carrying a stale value.
+          // Manually-set prices (price_auto = false) are left untouched — they are explicit overrides.
+          // cost_only mode is also excluded — we are only adjusting cost prices, not sell prices.
+          if (!costOnly && row.price_auto !== false && row.price_auto !== 'false') {
+            await query(`
+              UPDATE charges
+              SET price                = NULL,
+                  price_auto           = false,
+                  price_failure_reason = $1,
+                  updated_at           = NOW()
+              WHERE id = $2
+            `, [noRateReason || 'No rate found', row.charge_id]);
+            summary.no_rate_cleared++;
+          }
           continue;
         }
 
@@ -2294,7 +2429,15 @@ router.post('/full-reprice', async (req, res, next) => {
             }
           }
         } else {
-          // Standard mode: update sell price + cost_price + labels (billed=false only)
+          // Standard mode: update sell price + cost_price + labels — billed charges only only
+          // (billed = true means the charge has been included in a customer invoice and
+          // the price must not change — we cannot alter what was invoiced after the fact).
+          if (row.billed) {
+            // Skip billed charges — their sell price is fixed on the invoice.
+            // Cost-only corrections should use ?cost_only=true instead.
+            continue;
+          }
+
           const pricingMode = await getParcelPricingMode(customerId);
           const newPrice    = parseFloat(calcTotal(rate, parcelQty, pricingMode).toFixed(2));
 
@@ -2318,6 +2461,7 @@ router.post('/full-reprice', async (req, res, next) => {
             try {
               const fuelRes = await query(`
                 SELECT fg.id AS fuel_group_id,
+                       fg.name AS fuel_group_name,
                        fg.standard_sell_pct, fg.fuel_surcharge_pct AS carrier_pct,
                        cfgp.sell_pct AS customer_sell_pct
                 FROM courier_services cs
@@ -2357,7 +2501,7 @@ router.post('/full-reprice', async (req, res, next) => {
                         (shipment_id, customer_id, charge_type, service_name,
                          price, cost_price, price_auto, parcel_qty)
                       VALUES ($1, $2, 'fuel', $3, $4, $5, true, 1)
-                    `, [row.shipment_id, customerId, row.s_service_name || serviceName, newFuelPrice, newFuelCost]);
+                    `, [row.shipment_id, customerId, `${fg.fuel_group_name} Fuel`, newFuelPrice, newFuelCost]);
                     summary.fuel_updated++;
                   }
                 }
@@ -2386,7 +2530,17 @@ router.post('/full-reprice', async (req, res, next) => {
       fuel_updated: summary.fuel_updated, no_rate: summary.no_rate,
       errors: summary.errors, changed: summary.changed,
     }));
-    })().catch(err => console.error('[full-reprice] background error:', err.message));
+    return summary;
+    };
+
+    if (customerId) {
+      // Synchronous — customer-scoped, small set, return real results
+      const summary = await runReprice();
+      res.json({ ok: true, ...summary });
+    } else {
+      // Background — global reprice, already responded above
+      runReprice().catch(err => console.error('[full-reprice] background error:', err.message));
+    }
 
   } catch (err) { next(err); }
 });
@@ -3294,8 +3448,11 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
 
     const { rate, reason: failReason } = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, row.ship_to_postcode, row.ship_to_country_iso || 'GB');
     if (!rate) {
-      await query(`UPDATE charges SET price_failure_reason = $1, updated_at = NOW() WHERE id = $2`,
-        [failReason, id]);
+      // Clear the price so the UI shows "no price found" rather than a stale value.
+      await query(
+        `UPDATE charges SET price = NULL, price_auto = false, price_failure_reason = $1, updated_at = NOW() WHERE id = $2`,
+        [failReason, id]
+      );
       return res.json({ ok: false, message: failReason || 'No matching rate found' });
     }
 
@@ -3330,6 +3487,7 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
       if (shipmentId && dcServiceId && customerId) {
         const fuelRes = await query(`
           SELECT fg.id AS fuel_group_id,
+                 fg.name AS fuel_group_name,
                  fg.standard_sell_pct, fg.fuel_surcharge_pct AS carrier_pct,
                  cfgp.sell_pct AS customer_sell_pct
           FROM courier_services cs
@@ -3374,7 +3532,7 @@ router.post('/charges/:id/reprice', async (req, res, next) => {
                   (shipment_id, customer_id, charge_type, service_name,
                    price, cost_price, price_auto, parcel_qty)
                 VALUES ($1, $2, 'fuel', $3, $4, $5, true, 1)
-              `, [shipmentId, customerId, chgSvcName || serviceName, newFuelPrice, newFuelCost]);
+              `, [shipmentId, customerId, `${fg.fuel_group_name} Fuel`, newFuelPrice, newFuelCost]);
               fuelUpdated = true;
               fuelNote    = 'created';
             }
@@ -3668,22 +3826,23 @@ router.put('/settings', async (req, res, next) => {
       enabled,
       volume_mix_refresh_day,
       volume_mix_refresh_hour,
+      xero_domestic_account_code,
+      xero_international_account_code,
     } = req.body;
 
-    const r = await query(`
-      UPDATE billing_settings SET
-        billing_day_of_week      = COALESCE($1, billing_day_of_week),
-        billing_hour             = COALESCE($2, billing_hour),
-        billing_minute           = COALESCE($3, billing_minute),
-        fortnightly_parity       = COALESCE($4, fortnightly_parity),
-        monthly_billing_date     = COALESCE($5, monthly_billing_date),
-        enabled                  = COALESCE($6, enabled),
-        volume_mix_refresh_day   = COALESCE($7, volume_mix_refresh_day),
-        volume_mix_refresh_hour  = COALESCE($8, volume_mix_refresh_hour),
-        updated_at               = NOW()
-      WHERE id = 1
-      RETURNING *
-    `, [
+    // Build dynamic SET clause — xero codes can be explicitly cleared to null
+    const sets = [
+      `billing_day_of_week     = COALESCE($1, billing_day_of_week)`,
+      `billing_hour            = COALESCE($2, billing_hour)`,
+      `billing_minute          = COALESCE($3, billing_minute)`,
+      `fortnightly_parity      = COALESCE($4, fortnightly_parity)`,
+      `monthly_billing_date    = COALESCE($5, monthly_billing_date)`,
+      `enabled                 = COALESCE($6, enabled)`,
+      `volume_mix_refresh_day  = COALESCE($7, volume_mix_refresh_day)`,
+      `volume_mix_refresh_hour = COALESCE($8, volume_mix_refresh_hour)`,
+      `updated_at              = NOW()`,
+    ];
+    const vals = [
       billing_day_of_week      ?? null,
       billing_hour             ?? null,
       billing_minute           ?? null,
@@ -3692,7 +3851,21 @@ router.put('/settings', async (req, res, next) => {
       enabled                  ?? null,
       volume_mix_refresh_day   ?? null,
       volume_mix_refresh_hour  ?? null,
-    ]);
+    ];
+
+    // Xero nominal codes: include in SET only if present in request body (allows explicit null clear)
+    if ('xero_domestic_account_code' in req.body) {
+      vals.push(xero_domestic_account_code || null);
+      sets.splice(-1, 0, `xero_domestic_account_code = $${vals.length}`);
+    }
+    if ('xero_international_account_code' in req.body) {
+      vals.push(xero_international_account_code || null);
+      sets.splice(-1, 0, `xero_international_account_code = $${vals.length}`);
+    }
+
+    const r = await query(`
+      UPDATE billing_settings SET ${sets.join(', ')} WHERE id = 1 RETURNING *
+    `, vals);
     res.json(r.rows[0]);
   } catch (err) { next(err); }
 });

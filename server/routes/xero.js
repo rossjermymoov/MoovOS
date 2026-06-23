@@ -602,27 +602,41 @@ router.post('/invoices/:id/push', async (req, res, next) => {
     }
 
     const { rows: lines } = await query(
-      `SELECT * FROM invoice_line_items WHERE invoice_id = $1 ORDER BY id`,
+      `SELECT ili.*, s.ship_to_country_iso
+       FROM invoice_line_items ili
+       LEFT JOIN charges ch ON ch.id = ili.charge_id
+       LEFT JOIN shipments s ON s.id = ch.shipment_id
+       WHERE ili.invoice_id = $1 ORDER BY ili.id`,
       [invId]
     );
 
-    // Map line items to Xero format
-    const lineItems = lines.map(l => ({
-      Description: l.description,
-      Quantity:    l.quantity,
-      UnitAmount:  parseFloat(l.unit_price),
-      AccountCode: process.env.XERO_ACCOUNT_CODE || '200',  // Sales account
-      TaxType:     inv.vat_enabled ? 'OUTPUT2' : 'NONE',
-    }));
+    // Load nominal codes from billing settings
+    const xeroSettingsRes = await query(`SELECT xero_domestic_account_code, xero_international_account_code FROM billing_settings WHERE id = 1`);
+    const xeroSettings = xeroSettingsRes.rows[0] || {};
+    const fallbackCode      = process.env.XERO_ACCOUNT_CODE || '200';
+    const domesticCode      = xeroSettings.xero_domestic_account_code     || fallbackCode;
+    const internationalCode = xeroSettings.xero_international_account_code || fallbackCode;
 
-    // If no line items, create a single summary line
+    // Map line items — domestic (GB→GB) gets OUTPUT2 + domestic code, international gets NONE + international code
+    const lineItems = lines.map(l => {
+      const isDomestic = l.ship_to_country_iso === 'GB';
+      return {
+        Description: l.description,
+        Quantity:    l.quantity,
+        UnitAmount:  parseFloat(l.unit_price),
+        AccountCode: isDomestic ? domesticCode : internationalCode,
+        TaxType:     isDomestic ? 'OUTPUT2' : 'NONE',
+      };
+    });
+
+    // If no line items, create a single summary line (fall back to customer vat_enabled flag)
     if (!lineItems.length) {
       lineItems.push({
         Description: `Parcel delivery services — ${inv.billing_period_start} to ${inv.billing_period_end}`,
         Quantity:    1,
         UnitAmount:  parseFloat(inv.total),
-        AccountCode: process.env.XERO_ACCOUNT_CODE || '200',
-        TaxType:     'NONE',
+        AccountCode: domesticCode,
+        TaxType:     inv.vat_enabled ? 'OUTPUT2' : 'NONE',
       });
     }
 
@@ -633,7 +647,7 @@ router.post('/invoices/:id/push', async (req, res, next) => {
       DueDate:       dueDateFromGenerated(inv.generated_at),
       InvoiceNumber: inv.invoice_number,
       LineItems:     lineItems,
-      Status:        'AUTHORISED',
+      Status:        'DRAFT',
       Reference:     `MoovOS ${inv.invoice_number}`,
     };
 
@@ -733,7 +747,8 @@ router.post('/reconciliation-runs/:runId/push', async (req, res, next) => {
       SELECT
         f.*,
         cu.xero_contact_id,
-        cu.business_name AS xero_customer_name
+        cu.business_name        AS xero_customer_name,
+        cu.payment_terms_days   AS payment_terms_days
       FROM   finalized_billing_lines f
       LEFT JOIN customers cu ON cu.id = f.customer_id
       WHERE  f.run_id = $1 ${custFilter}
@@ -746,10 +761,11 @@ router.post('/reconciliation-runs/:runId/push', async (req, res, next) => {
       const key = String(line.customer_id);
       if (!byCustomer.has(key)) {
         byCustomer.set(key, {
-          customer_id:      line.customer_id,
-          customer_name:    line.xero_customer_name || line.customer_name,
-          xero_contact_id:  line.xero_contact_id,
-          lines:            [],
+          customer_id:        line.customer_id,
+          customer_name:      line.xero_customer_name || line.customer_name,
+          xero_contact_id:    line.xero_contact_id,
+          payment_terms_days: parseInt(line.payment_terms_days || 7),
+          lines:              [],
         });
       }
       byCustomer.get(key).lines.push(line);
@@ -759,9 +775,29 @@ router.post('/reconciliation-runs/:runId/push', async (req, res, next) => {
     const skipped  = [];
     const errors   = [];
     const today    = new Date().toISOString().split('T')[0];
-    const dueDate  = dueDateFromGenerated(new Date());
-    const xeroAccountCode = process.env.XERO_ACCOUNT_CODE || '200';
-    const reference = `MoovOS Recon Run #${runId}${run.invoice_ref ? ` — ${run.invoice_ref}` : ''}`;
+
+    // Load nominal codes from billing settings
+    const settingsRes = await query(`SELECT xero_domestic_account_code, xero_international_account_code FROM billing_settings WHERE id = 1`);
+    const settings = settingsRes.rows[0] || {};
+    const fallbackCode     = process.env.XERO_ACCOUNT_CODE || '200';
+    const domesticCode     = settings.xero_domestic_account_code     || fallbackCode;
+    const internationalCode = settings.xero_international_account_code || fallbackCode;
+
+    // Enrich finalized lines with ship_to_country_iso via charges → shipments
+    const lineIds = linesRes.rows.map(l => l.id);
+    let countryByLineId = {};
+    if (lineIds.length > 0) {
+      const countryRes = await query(`
+        SELECT fbl.id AS line_id, s.ship_to_country_iso
+        FROM finalized_billing_lines fbl
+        JOIN charges ch ON ch.id = fbl.charge_id
+        JOIN shipments s ON s.id = ch.shipment_id
+        WHERE fbl.id = ANY($1::int[])
+      `, [lineIds]);
+      for (const row of countryRes.rows) {
+        countryByLineId[row.line_id] = row.ship_to_country_iso;
+      }
+    }
 
     for (const [, cust] of byCustomer) {
       if (!cust.xero_contact_id) {
@@ -774,37 +810,122 @@ router.post('/reconciliation-runs/:runId/push', async (req, res, next) => {
       }
 
       try {
-        // Build Xero line items — one per shipment
-        const lineItems = cust.lines.map(l => {
-          const parts = [
-            l.tracking_number || l.order_reference || '',
-            l.service_name    || '',
-            l.weight_kg       ? `${parseFloat(l.weight_kg).toFixed(2)}kg` : '',
-            l.recipient_postcode || '',
-          ].filter(Boolean).join(' — ');
+        // Build summary line items:
+        //   - One freight line per service type (base only, not fuel)
+        //   - One fuel line totalled across all services
+        //   - One line per named surcharge (GEC, Long Length, etc.) totalled across all services
+        const summaryGroups = {};
 
-          return {
-            Description: parts || 'Parcel delivery service',
+        for (const l of cust.lines) {
+          const destCountry = countryByLineId[l.id] || null;
+          const isDomestic  = destCountry === 'GB';
+          const accountCode = isDomestic ? domesticCode : internationalCode;
+          const taxType     = isDomestic ? 'OUTPUT2' : 'NONE';
+          const serviceName = l.service_name || 'Parcel Delivery';
+
+          // DDP Admin Fee — own dedicated line, not vatable
+          if (l.source === 'ddp_admin') {
+            const ddpAmt = parseFloat(l.sell_base_amount || 0);
+            if (ddpAmt !== 0) {
+              if (!summaryGroups['ddp_admin']) {
+                summaryGroups['ddp_admin'] = {
+                  sortOrder: 3, description: 'DDP Admin Fee', count: 0, total: 0,
+                  accountCode, taxType: 'NONE',
+                };
+              }
+              summaryGroups['ddp_admin'].count++;
+              summaryGroups['ddp_admin'].total += ddpAmt;
+            }
+            continue; // skip freight/fuel/surcharge processing for this line
+          }
+
+          // Freight — base sell only, one line per service name
+          const baseAmt = parseFloat(l.sell_base_amount || 0);
+          if (baseAmt !== 0) {
+            const freightKey = `freight|${isDomestic}|${serviceName}`;
+            if (!summaryGroups[freightKey]) {
+              summaryGroups[freightKey] = {
+                sortOrder: 0, description: serviceName, count: 0, total: 0, accountCode, taxType,
+              };
+            }
+            summaryGroups[freightKey].count++;
+            summaryGroups[freightKey].total += baseAmt;
+          }
+
+          // Fuel — combined total across all services (one line)
+          const fuelAmt = parseFloat(l.sell_fuel_amount || 0);
+          if (fuelAmt > 0) {
+            if (!summaryGroups['fuel']) {
+              summaryGroups['fuel'] = {
+                sortOrder: 2, description: 'Fuel Surcharge', count: 0, total: 0, accountCode, taxType,
+              };
+            }
+            summaryGroups['fuel'].count++;
+            summaryGroups['fuel'].total += fuelAmt;
+          }
+
+          // Named surcharges — from surcharge_detail JSONB, one line per surcharge name
+          const detail = l.surcharge_detail
+            ? (Array.isArray(l.surcharge_detail)
+                ? l.surcharge_detail
+                : JSON.parse(l.surcharge_detail))
+            : [];
+
+          for (const s of detail) {
+            if (s.charge_type !== 'surcharge') continue; // fuel entries already handled above
+            const sAmt = parseFloat(s.sell_amount || 0);
+            if (sAmt <= 0) continue;
+            const sName = s.surcharge_name || 'Additional Surcharges';
+            const surchargeKey = `surcharge|${sName}`;
+            if (!summaryGroups[surchargeKey]) {
+              summaryGroups[surchargeKey] = {
+                sortOrder: 1, description: sName, count: 0, total: 0, accountCode, taxType,
+              };
+            }
+            summaryGroups[surchargeKey].count++;
+            summaryGroups[surchargeKey].total += sAmt;
+          }
+        }
+
+        const lineItems = Object.values(summaryGroups)
+          .filter(g => g.total > 0)
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .map(g => ({
+            Description: `${g.description} — ${g.count} ${g.count === 1 ? 'parcel' : 'parcels'}`,
             Quantity:    1,
-            UnitAmount:  parseFloat(l.sell_total_amount || 0),
-            AccountCode: xeroAccountCode,
-            TaxType:     'NONE',
-          };
-        });
+            UnitAmount:  Math.round(g.total * 100) / 100,
+            AccountCode: g.accountCode,
+            TaxType:     g.taxType,
+          }));
 
         // Deduplicate: collapse pure-zero lines
         const nonZeroLines = lineItems.filter(l => l.UnitAmount !== 0);
         const itemsToSend  = nonZeroLines.length > 0 ? nonZeroLines : lineItems;
 
+        // Due date from customer payment terms (default 7 days)
+        const custDueDate = new Date(today);
+        custDueDate.setDate(custDueDate.getDate() + cust.payment_terms_days);
+        const custDueDateStr = custDueDate.toISOString().split('T')[0];
+
+        // Invoice number: abbreviated customer name + DDMMYY from run invoice date
+        const custAbbrev = (cust.customer_name || '')
+          .replace(/[^a-zA-Z0-9]/g, '')
+          .toUpperCase()
+          .slice(0, 10);
+        const runDate = run.invoice_date ? new Date(run.invoice_date) : new Date(today);
+        const dd = String(runDate.getDate()).padStart(2, '0');
+        const mm = String(runDate.getMonth() + 1).padStart(2, '0');
+        const yy = String(runDate.getFullYear()).slice(-2);
+        const invoiceNumber = `${custAbbrev}-${dd}${mm}${yy}`;
+
         const xeroInvoice = {
-          Type:         'ACCREC',
-          Contact:      { ContactID: cust.xero_contact_id },
-          Date:         today,
-          DueDate:      dueDate,
-          LineItems:    itemsToSend,
-          Status:       'AUTHORISED',
-          Reference:    reference,
-          InvoiceNumber: `MO-REC-${runId}-${String(cust.customer_id).slice(0, 6).toUpperCase()}`,
+          Type:          'ACCREC',
+          Contact:       { ContactID: cust.xero_contact_id },
+          Date:          today,
+          DueDate:       custDueDateStr,
+          LineItems:     itemsToSend,
+          Status:        'DRAFT',
+          InvoiceNumber: invoiceNumber,
         };
 
         const data = await xeroRequest('POST', '/Invoices', { Invoices: [xeroInvoice] });

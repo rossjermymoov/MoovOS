@@ -1,31 +1,31 @@
 /**
- * Moov OS Design Tokens
+ * Moov OS Design Tokens — Light Mode
  * Sourced from MoveNinja V2 Design Language & Product Brief
  */
 export const colors = {
   bg: {
-    primary: '#0A0B1E',
-    secondary: '#14162A',
-    surface: '#1A1D35',
-    surfaceHover: '#20244A',
+    primary: '#F8FAFC',
+    secondary: '#FFFFFF',
+    surface: '#F1F5F9',
+    surfaceHover: '#E2E8F0',
   },
   accent: {
     green: '#00C853',
     purple: '#7B2FBE',
     magenta: '#E91E8C',
-    amber: '#FFC107',
+    amber: '#F59E0B',
     teal: '#00BCD4',
-    greenDim: 'rgba(0,200,83,0.15)',
-    magentaDim: 'rgba(233,30,140,0.15)',
-    amberDim: 'rgba(255,193,7,0.15)',
+    greenDim: 'rgba(0,200,83,0.12)',
+    magentaDim: 'rgba(233,30,140,0.12)',
+    amberDim: 'rgba(245,158,11,0.12)',
   },
   text: {
-    primary: '#FFFFFF',
-    secondary: '#AAAAAA',
-    dark: '#222222',
+    primary: '#0F172A',
+    secondary: '#64748B',
+    dark: '#0F172A',
   },
   border: {
-    subtle: 'rgba(255,255,255,0.08)',
+    subtle: 'rgba(0,0,0,0.08)',
     green: 'rgba(0,200,83,0.4)',
   },
 };
@@ -42,15 +42,15 @@ export const healthScoreColor = {
 };
 
 export const accountStatusColor = {
-  active:     { text: colors.accent.green,   bg: colors.accent.greenDim,   label: 'Active' },
+  active:     { text: '#166534',             bg: '#dcfce7',                label: 'Active' },
   on_stop:    { text: colors.accent.magenta, bg: colors.accent.magentaDim, label: 'On Stop' },
-  suspended:  { text: colors.accent.amber,   bg: colors.accent.amberDim,   label: 'Suspended' },
-  churned:    { text: colors.text.secondary, bg: 'rgba(170,170,170,0.1)',  label: 'Churned' },
+  suspended:  { text: '#92400e',             bg: '#fef3c7',                label: 'Suspended' },
+  churned:    { text: colors.text.secondary, bg: 'rgba(0,0,0,0.06)',       label: 'Churned' },
 };
 
 export const tierColor = {
-  bronze:     { text: '#CD7F32', bg: 'rgba(205,127,50,0.15)' },
-  silver:     { text: '#AAAAAA', bg: 'rgba(170,170,170,0.15)' },
-  gold:       { text: colors.accent.amber,  bg: colors.accent.amberDim },
-  enterprise: { text: colors.accent.purple, bg: 'rgba(123,47,190,0.15)' },
+  bronze:     { text: '#92400e', bg: 'rgba(205,127,50,0.12)' },
+  silver:     { text: '#475569', bg: 'rgba(100,116,139,0.12)' },
+  gold:       { text: '#92400e', bg: '#fef3c7' },
+  enterprise: { text: colors.accent.purple, bg: 'rgba(123,47,190,0.10)' },
 };

@@ -148,3 +148,45 @@ export async function probeShipmentByReference(reference, paramName = 'reference
   const params = reference && paramName ? { [paramName]: reference } : {};
   return voilaGet('/shipments.json', params);
 }
+
+// ─── Request tracking update for a single shipment ───────────────────────────
+//
+// Calls the Voila on-demand tracking endpoint.  The tracking_request_id and
+// tracking_request_hash come from the original shipment.created webhook response
+// and are stored on the shipments row (added in migration 236).
+//
+// Endpoint: POST https://app.heyvoila.io/api/couriers/v1/get-tracking
+// Body: { tracking_request_id, tracking_request_hash }
+//
+// Returns the raw JSON response from Voila (tracking events / status data).
+export async function requestTrackingUpdate(trackingRequestId, trackingRequestHash) {
+  if (!trackingRequestId || !trackingRequestHash) {
+    throw new Error('trackingRequestId and trackingRequestHash are both required');
+  }
+  if (!VOILA_USER || !VOILA_TOKEN) {
+    throw new Error('DC_API_USER / DC_API_TOKEN env vars not set');
+  }
+
+  // Note: tracking endpoint uses api-user / api-token headers, not Basic Auth
+  const url = `${VOILA_BASE}/couriers/v1/get-tracking`;
+  const res = await fetch(url, {
+    method:  'POST',
+    headers: {
+      'api-user':     VOILA_USER,
+      'api-token':    VOILA_TOKEN,
+      'Content-Type': 'application/json',
+      'Accept':       'application/json',
+    },
+    body: JSON.stringify({
+      tracking_request_id:   trackingRequestId,
+      tracking_request_hash: trackingRequestHash,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Voila tracking API ${res.status}: ${body.slice(0, 300)}`);
+  }
+
+  return res.json();
+}

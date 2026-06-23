@@ -14,10 +14,10 @@
 
 import express from 'express';
 import { query } from '../db/index.js';
-import { processReconciliationRun, ageUnmatchedLines, reprocessMappedLines } from '../services/reconciliationEngine.js';
-import { finalizeRun, getCustomerSummaries, generateCustomerCSV, getMarginReport } from '../services/finalizationService.js';
+import { processReconciliationRun, ageUnmatchedLines, reprocessMappedLines, createCarrierDirectSurcharges } from '../services/reconciliationEngine.js';
+import { finalizeRun, reSnapshot, reSnapshotCustomer, getCustomerSummaries, generateCustomerCSV, getMarginReport } from '../services/finalizationService.js';
 import { fetchShipmentById, fetchShipmentByReference, fetchShipmentByReferenceAndTracking, probeShipmentRaw } from '../services/voilaClient.js';
-import { processShipment, insertCharges } from '../services/pricingEngine.js';
+import { processShipment, insertCharges, computeGhostCharge, lookupCustomerSellPrice } from '../services/pricingEngine.js';
 
 const router = express.Router();
 
@@ -502,6 +502,133 @@ router.post('/bulk-lookup', async (req, res) => {
   }
 });
 
+// ─── GET /debug/boorieur ─────────────────────────────────────────────────────
+// MUST be declared before /debug/:reference (dynamic route) or it is swallowed.
+// Returns the state of BOORIEUR-270526 and tracking 4652548311 for diagnosis.
+
+router.get('/debug/boorieur', async (req, res) => {
+  try {
+    const tracking = req.query.tracking || '4652548311';
+
+    // ── Find the run that contains this tracking number ───────────────────────
+    // invoice_ref in the DB is the raw DHL invoice number (numeric), NOT the
+    // human-readable "BOORIEUR-270526" label.  Search by tracking number instead.
+    // reconciliation_runs has no customer_id — derive customer from the lines
+    const runRes = await query(`
+      SELECT rr.id, rr.invoice_ref, rr.status, rr.finalized, rr.finalized_at,
+             rr.matched_count, rr.corrected_count, rr.unmatched_count, rr.total_lines,
+             cu.business_name AS customer_name
+      FROM   reconciliation_runs rr
+      JOIN   reconciliation_lines rl ON rl.run_id = rr.id
+      LEFT JOIN customers cu ON cu.id = rl.customer_id
+      WHERE  rl.tracking_number ILIKE $1
+      ORDER  BY rr.id DESC
+      LIMIT  1
+    `, [`%${tracking}%`]);
+
+    if (!runRes.rows.length) {
+      // Nothing found — return runs that contain any Boori EUR line as fallback
+      const booriRuns = await query(`
+        SELECT DISTINCT rr.id, rr.invoice_ref, rr.status, rr.finalized,
+               cu.business_name
+        FROM   reconciliation_runs rr
+        JOIN   reconciliation_lines rl ON rl.run_id = rr.id
+        JOIN   customers cu ON cu.id = rl.customer_id
+        WHERE  rl.customer_id = '1b42c791-27e5-4f7d-9d6a-8f524bcad6b3'
+        ORDER  BY rr.id DESC
+        LIMIT  10
+      `);
+      return res.json({
+        error: `No run found containing tracking ${tracking}`,
+        boori_eur_runs: booriRuns.rows,
+      });
+    }
+    const run = runRes.rows[0];
+
+    const rlRes = await query(`
+      SELECT rl.id, rl.tracking_number, rl.status, rl.corrected_by,
+             rl.customer_id, rl.corrected_sell_price, rl.carrier_amount,
+             rl.is_fuel, rl.surcharge_id, rl.unmatched_reason, rl.source, rl.charge_id,
+             cu.business_name AS customer_name
+      FROM   reconciliation_lines rl
+      LEFT JOIN customers cu ON cu.id = rl.customer_id
+      WHERE  rl.run_id = $1
+        AND  rl.tracking_number ILIKE $2
+      ORDER  BY rl.id
+    `, [run.id, `%${tracking}%`]);
+
+    const fblRes = await query(`
+      SELECT fbl.id, fbl.tracking_number, fbl.reconciliation_line_id,
+             fbl.customer_id, fbl.customer_name,
+             fbl.sell_base_amount, fbl.sell_fuel_amount,
+             fbl.sell_surcharge_amount, fbl.sell_total_amount,
+             fbl.carrier_base_amount, fbl.carrier_fuel_amount,
+             fbl.carrier_surcharge_amount, fbl.carrier_total_amount,
+             fbl.margin_amount, fbl.recon_status
+      FROM   finalized_billing_lines fbl
+      WHERE  fbl.run_id = $1
+        AND  fbl.tracking_number ILIKE $2
+      ORDER  BY fbl.id
+    `, [run.id, `%${tracking}%`]);
+
+    const marginRes = await query(`
+      SELECT
+        COUNT(*) AS total_fbl_rows,
+        COUNT(*) FILTER (WHERE sell_total_amount > 0) AS freight_rows,
+        COUNT(*) FILTER (WHERE sell_total_amount = 0) AS zero_sell_rows,
+        ROUND(SUM(sell_total_amount)::numeric, 2)    AS total_sell,
+        ROUND(SUM(carrier_total_amount)::numeric, 2) AS total_carrier,
+        ROUND(SUM(margin_amount)::numeric, 2)        AS total_margin
+      FROM finalized_billing_lines
+      WHERE run_id = $1
+    `, [run.id]);
+
+    // ── Customer breakdown — how many recon lines per customer in this run ──
+    const customerBreakdownRes = await query(`
+      SELECT cu.business_name, rl.customer_id,
+             COUNT(*) FILTER (WHERE rl.is_fuel = false AND rl.surcharge_id IS NULL) AS freight_lines,
+             COUNT(*) AS total_lines,
+             SUM(CASE WHEN rl.is_fuel = false AND rl.surcharge_id IS NULL THEN 1 ELSE 0 END) AS recon_freight_lines
+      FROM   reconciliation_lines rl
+      LEFT JOIN customers cu ON cu.id = rl.customer_id
+      WHERE  rl.run_id = $1
+      GROUP  BY cu.business_name, rl.customer_id
+      ORDER  BY total_lines DESC
+    `, [run.id]);
+
+    // ── Nearby runs — helps spot if there's a separate Europa run ───────────
+    const nearbyRunsRes = await query(`
+      SELECT rr.id, rr.invoice_ref, rr.status, rr.finalized, rr.total_lines,
+        CASE
+          WHEN (SELECT COUNT(DISTINCT rl2.customer_id) FROM reconciliation_lines rl2
+                WHERE rl2.run_id = rr.id AND rl2.customer_id IS NOT NULL) = 1
+          THEN (SELECT cu2.business_name FROM reconciliation_lines rl2
+                JOIN customers cu2 ON cu2.id = rl2.customer_id
+                WHERE rl2.run_id = rr.id AND rl2.customer_id IS NOT NULL LIMIT 1)
+          WHEN (SELECT COUNT(DISTINCT rl2.customer_id) FROM reconciliation_lines rl2
+                WHERE rl2.run_id = rr.id AND rl2.customer_id IS NOT NULL) > 1
+          THEN 'Mixed'
+          ELSE 'Unknown'
+        END AS customer_display
+      FROM reconciliation_runs rr
+      WHERE rr.id BETWEEN $1 - 10 AND $1 + 10
+      ORDER BY rr.id DESC
+    `, [run.id]);
+
+    return res.json({
+      run,
+      recon_lines_for_tracking: rlRes.rows,
+      fbl_rows_for_tracking:    fblRes.rows,
+      run_margin_summary:       marginRes.rows[0],
+      customer_breakdown:       customerBreakdownRes.rows,
+      nearby_runs:              nearbyRunsRes.rows,
+    });
+  } catch (err) {
+    console.error('[debug/boorieur] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── GET /debug/:reference ────────────────────────────────────────────────────
 // Diagnostic endpoint — shows exactly what the DB contains for a shipment so
 // we can see why band lookup or cost totals might not match expectations.
@@ -692,13 +819,19 @@ router.delete('/service-mappings/:id', async (req, res) => {
 
 router.get('/runs', async (req, res) => {
   try {
-    const { carrier_id, limit = 50, offset = 0 } = req.query;
+    const { carrier_id, limit = 50, offset = 0, show_archived = 'false' } = req.query;
     const params = [];
-    let where = '';
+    const conditions = [];
+
     if (carrier_id) {
       params.push(parseInt(carrier_id));
-      where = `WHERE rr.carrier_id = $${params.length}`;
+      conditions.push(`rr.carrier_id = $${params.length}`);
     }
+    if (show_archived !== 'true') {
+      conditions.push(`rr.archived = false`);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     params.push(parseInt(limit), parseInt(offset));
 
     const result = await query(`
@@ -706,7 +839,27 @@ router.get('/runs', async (req, res) => {
         rr.*,
         c.name AS carrier_name,
         c.code AS carrier_code,
-        s.full_name AS created_by_name
+        s.full_name AS created_by_name,
+        CASE
+          WHEN (SELECT COUNT(DISTINCT rl.customer_id)
+                FROM reconciliation_lines rl
+                WHERE rl.run_id = rr.id AND rl.customer_id IS NOT NULL) = 1
+          THEN (SELECT cust.business_name
+                FROM reconciliation_lines rl
+                JOIN customers cust ON cust.id = rl.customer_id
+                WHERE rl.run_id = rr.id AND rl.customer_id IS NOT NULL
+                LIMIT 1)
+          WHEN (SELECT COUNT(DISTINCT rl.customer_id)
+                FROM reconciliation_lines rl
+                WHERE rl.run_id = rr.id AND rl.customer_id IS NOT NULL) > 1
+          THEN 'Mixed'
+          ELSE NULL
+        END AS customer_display,
+        (
+          SELECT COUNT(DISTINCT f.customer_id)::int
+          FROM   finalized_billing_lines f
+          WHERE  f.run_id = rr.id AND f.xero_invoice_id IS NOT NULL
+        ) AS xero_pushed_customers
       FROM   reconciliation_runs rr
       LEFT JOIN couriers c ON c.id = rr.carrier_id
       LEFT JOIN staff    s ON s.id = rr.created_by
@@ -717,7 +870,7 @@ router.get('/runs', async (req, res) => {
 
     const countRes = await query(
       `SELECT COUNT(*) FROM reconciliation_runs rr ${where}`,
-      carrier_id ? [parseInt(carrier_id)] : []
+      params.slice(0, -2)
     );
 
     return res.json({
@@ -878,7 +1031,7 @@ router.get('/runs/:id/lines', async (req, res) => {
     const result = await query(`
       SELECT
         rl.*,
-        cs.name              AS service_name,
+        CASE WHEN rl.source = 'ddp_admin' THEN 'DPD Surcharge' ELSE cs.name END AS service_name,
         cs.service_code      AS service_code_internal,
         cu.business_name     AS customer_name,
         s.full_name          AS resolved_by_name,
@@ -888,13 +1041,82 @@ router.get('/runs/:id/lines', async (req, res) => {
         rm.resolution_type  AS mapping_resolution_type,
         rm.resolution_value AS mapping_resolution_value,
         rm.match_field      AS mapping_match_field,
-        rm.match_value      AS mapping_match_value
+        rm.match_value      AS mapping_match_value,
+        -- Declared weight: prefer direct charge link (matched lines), then
+        -- tracking-code lookup (unmatched/corrected), then shipment total weight
+        COALESCE(
+          ch_direct.weight_charged_kg,
+          ch_lookup.weight_charged_kg,
+          sh.total_weight_kg
+        ) AS declared_weight_kg,
+        -- For warning (sell_surcharge_missing) lines: the surcharge name and the
+        -- customer's configured sell price (override → default_value).
+        -- Handles charge_per='parcel' by multiplying by parcel_count.
+        sur.name AS surcharge_name,
+        -- suggested_sell_price: computed from surcharge definition, with fallback to
+        -- carrier_amount when the result is 0 (covers pass-through surcharges like
+        -- Congestion where default_value=0 and no customer override exists).
+        COALESCE(
+          NULLIF(CASE
+            WHEN sur.id IS NULL THEN NULL
+            WHEN sur.calc_type = 'percentage'
+              THEN ROUND(rl.carrier_amount * COALESCE(cso.override_value, sur.default_value) / 100, 2)
+            WHEN sur.charge_per = 'parcel'
+              THEN ROUND(COALESCE(cso.override_value, sur.default_value, 0) * GREATEST(1, COALESCE(rl.parcel_count, 1)), 2)
+            ELSE COALESCE(cso.override_value, sur.default_value)
+          END, 0),
+          CASE WHEN sur.id IS NOT NULL AND rl.carrier_amount > 0 THEN rl.carrier_amount ELSE NULL END
+        ) AS suggested_sell_price,
+        -- ── Enriched sell + PII from matched charge/shipment ─────────────────
+        -- Available immediately once charge_id is set — no finalization needed.
+        COALESCE(ch_direct.sell_price, ch_direct.price) AS enriched_sell_base,
+        sh.ship_to_name       AS enriched_recipient_name,
+        sh.ship_to_postcode   AS enriched_recipient_postcode,
+        COALESCE(ch_direct.despatch_date, sh.collection_date) AS enriched_despatch_date,
+        COALESCE((
+          SELECT SUM(cf.price)
+          FROM   charges cf
+          WHERE  cf.shipment_id = ch_direct.shipment_id
+            AND  cf.charge_type = 'fuel'
+            AND  cf.cancelled   = false
+            AND  ch_direct.shipment_id IS NOT NULL
+        ), 0) AS enriched_sell_fuel,
+        COALESCE((
+          SELECT SUM(cf.price)
+          FROM   charges cf
+          JOIN   surcharges sx ON sx.id = cf.surcharge_id
+          WHERE  cf.shipment_id = ch_direct.shipment_id
+            AND  cf.charge_type = 'surcharge'
+            AND  cf.cancelled   = false
+            AND  COALESCE(cf.source, '') != 'recon_surcharge'
+            AND  ch_direct.shipment_id IS NOT NULL
+        ), 0) AS enriched_sell_surcharge
       FROM   reconciliation_lines rl
       LEFT JOIN courier_services      cs     ON cs.id     = rl.service_id
       LEFT JOIN courier_services      cs_sug ON cs_sug.id = rl.suggested_service_id
       LEFT JOIN customers             cu     ON cu.id      = rl.customer_id
       LEFT JOIN staff                 s      ON s.id       = rl.resolved_by
       LEFT JOIN reconciliation_mappings rm   ON rm.id      = rl.mapping_id
+      -- Surcharge definition for warning lines
+      LEFT JOIN surcharges sur ON sur.id = rl.surcharge_id
+      -- Customer-specific surcharge price override (active only)
+      LEFT JOIN customer_surcharge_overrides cso
+             ON cso.surcharge_id = rl.surcharge_id
+            AND cso.customer_id  = rl.customer_id
+            AND cso.active       = true
+      -- Direct charge join for matched lines (charge_id is populated)
+      LEFT JOIN charges ch_direct ON ch_direct.id = rl.charge_id
+      -- Shipment weight from the matched charge's shipment
+      LEFT JOIN shipments sh      ON sh.id  = ch_direct.shipment_id
+      -- Fallback: find a charge by tracking code (case-insensitive) for unmatched lines
+      LEFT JOIN LATERAL (
+        SELECT weight_charged_kg
+        FROM   charges
+        WHERE  UPPER(tracking_code) = UPPER(rl.tracking_number)
+          AND  rl.charge_id IS NULL
+        ORDER  BY created_at DESC
+        LIMIT  1
+      ) ch_lookup ON true
       WHERE  ${conditions.join(' AND ')}
       ORDER  BY rl.aged DESC, rl.carrier_amount DESC
       LIMIT  $${params.length - 1} OFFSET $${params.length}
@@ -916,6 +1138,366 @@ router.get('/runs/:id/lines', async (req, res) => {
   }
 });
 
+// ─── GET /api/reconciliation/runs/:id/lines/:lineId/fuel-rate ────────────────
+// Returns the applicable fuel sell % for a line's customer + carrier combo.
+// Used by the manual_price resolve UI to show a live fuel calculation.
+// Falls back to the most-used fuel group across the customer's verified charges.
+
+router.get('/runs/:id/lines/:lineId/fuel-rate', async (req, res) => {
+  try {
+    const lineId = parseInt(req.params.lineId);
+    const lineRes = await query(
+      `SELECT rl.customer_id, rr.carrier_id
+       FROM   reconciliation_lines rl
+       JOIN   reconciliation_runs  rr ON rr.id = rl.run_id
+       WHERE  rl.id = $1`,
+      [lineId]
+    );
+    if (!lineRes.rows.length) return res.status(404).json({ error: 'Line not found' });
+    const { customer_id, carrier_id } = lineRes.rows[0];
+
+    // Find the most-used fuel group for this customer + carrier
+    const fuelRes = await query(`
+      SELECT COALESCE(cfgp.sell_pct, fg.standard_sell_pct) AS sell_pct,
+             fg.name AS fuel_group_name
+      FROM   charges c
+      JOIN   courier_services cs  ON cs.id  = c.service_id
+      JOIN   fuel_groups      fg  ON fg.id  = cs.fuel_group_id
+      LEFT JOIN customer_fuel_group_pricing cfgp
+                ON cfgp.fuel_group_id = fg.id AND cfgp.customer_id = $1
+      WHERE  c.customer_id = $1
+        AND  cs.carrier_id = $2
+        AND  c.status      = 'verified'
+        AND  c.service_id  IS NOT NULL
+      GROUP  BY fg.id, fg.name, fg.standard_sell_pct, cfgp.sell_pct
+      ORDER  BY COUNT(*) DESC
+      LIMIT  1
+    `, [customer_id, carrier_id]);
+
+    if (!fuelRes.rows.length) {
+      // No historical verified charges for this customer + carrier.
+      // Fall back to the carrier's standard fuel group rate (most common group
+      // by service count, preferring the domestic group if name contains 'domestic').
+      const fallbackRes = await query(`
+        SELECT COALESCE(cfgp.sell_pct, fg.standard_sell_pct) AS sell_pct,
+               fg.name AS fuel_group_name
+        FROM   fuel_groups fg
+        LEFT JOIN customer_fuel_group_pricing cfgp
+                  ON cfgp.fuel_group_id = fg.id AND cfgp.customer_id = $1
+        WHERE  fg.courier_id = $2
+        ORDER  BY
+          -- prefer domestic group
+          CASE WHEN fg.name ILIKE '%domestic%' THEN 0 ELSE 1 END,
+          fg.standard_sell_pct DESC
+        LIMIT  1
+      `, [customer_id, carrier_id]);
+
+      if (fallbackRes.rows.length) {
+        return res.json({
+          fuel_pct:        parseFloat(fallbackRes.rows[0].sell_pct || 0),
+          fuel_group_name: fallbackRes.rows[0].fuel_group_name,
+          source:          'carrier_standard',
+        });
+      }
+      return res.json({ fuel_pct: 0, fuel_group_name: null, source: 'none' });
+    }
+    const { sell_pct, fuel_group_name } = fuelRes.rows[0];
+    return res.json({
+      fuel_pct:        parseFloat(sell_pct || 0),
+      fuel_group_name,
+      source:          'customer_history',
+    });
+  } catch (err) {
+    console.error('[reconciliation/fuel-rate]', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/reconciliation/runs/:id/lines/:lineId/resolve-preview ───────────
+// Returns a dry-run preview of the charge that would be created if the operator
+// resolves this line with the given surcharge mapping.
+// Query params:
+//   type=map_to_surcharge  value=<surchargeId UUID>
+//   type=remap_service     value=<serviceId integer>
+//
+// Response (map_to_surcharge): {
+//   carrier_cost, customer_id, customer_name, customer_source,
+//   surcharge_name, surcharge_code, parcel_count,
+//   calculated_sell, has_override, has_freight, freight_sell, freight_cost
+// }
+// Response (remap_service): {
+//   carrier_cost, customer_id, customer_name,
+//   service_name, service_code, parcel_count, weight_kg,
+//   calculated_sell, zone_name, no_rate
+// }
+router.get('/runs/:id/lines/:lineId/resolve-preview', async (req, res) => {
+  try {
+    const lineId = parseInt(req.params.lineId);
+    const { type, value } = req.query;
+
+    if (!['map_to_surcharge', 'remap_service'].includes(type) || !value) {
+      return res.status(400).json({ error: 'type (map_to_surcharge or remap_service) and value are required' });
+    }
+
+    // ── remap_service preview ─────────────────────────────────────────────────
+    if (type === 'remap_service') {
+      const serviceId = parseInt(value);
+      if (!serviceId) return res.status(400).json({ error: 'remap_service requires a numeric serviceId' });
+
+      // Fetch the recon line
+      const lineRes = await query(
+        `SELECT rl.*, rr.carrier_id
+         FROM   reconciliation_lines rl
+         JOIN   reconciliation_runs  rr ON rr.id = rl.run_id
+         WHERE  rl.id = $1`,
+        [lineId]
+      );
+      if (!lineRes.rows.length) return res.status(404).json({ error: 'Line not found' });
+      const line = lineRes.rows[0];
+
+      // Fetch the target service
+      const svcRes = await query(
+        `SELECT id, service_code, name FROM courier_services WHERE id = $1`,
+        [serviceId]
+      );
+      if (!svcRes.rows.length) return res.status(404).json({ error: 'Service not found' });
+      const targetService = svcRes.rows[0];
+
+      // Determine zone name:
+      //   1. From the charge linked to this line (most accurate)
+      //   2. Fall back to the first zone of the target service (covers unmatched lines)
+      let zoneName = null;
+      if (line.charge_id) {
+        const zoneRes = await query(
+          `SELECT z.name
+           FROM   charges c
+           JOIN   zones   z ON z.id = c.zone_id
+           WHERE  c.id = $1`,
+          [line.charge_id]
+        );
+        zoneName = zoneRes.rows[0]?.name || null;
+      }
+      if (!zoneName) {
+        const fallbackZone = await query(
+          `SELECT z.name FROM zones z WHERE z.courier_service_id = $1 ORDER BY z.id LIMIT 1`,
+          [serviceId]
+        );
+        zoneName = fallbackZone.rows[0]?.name || 'Mainland';
+      }
+
+      // Compute per-parcel weight for the rate lookup
+      const totalWeightKg = parseFloat(line.carrier_billed_weight_kg || 0);
+      const parcelCount   = Math.max(1, parseInt(line.parcel_count || 1) || 1);
+      const perParcelKg   = totalWeightKg > 0 ? totalWeightKg / parcelCount : 0;
+
+      // Fetch customer name
+      let customerName = null;
+      if (line.customer_id) {
+        const custRes = await query(
+          `SELECT business_name FROM customers WHERE id = $1`,
+          [line.customer_id]
+        );
+        customerName = custRes.rows[0]?.business_name || null;
+      }
+
+      // Look up the customer sell price on the target service
+      let calculatedSell = null;
+      let noRate = false;
+      if (line.customer_id && perParcelKg > 0) {
+        const sellResult = await lookupCustomerSellPrice(
+          line.customer_id,
+          targetService.service_code,
+          perParcelKg,
+          zoneName,
+          null
+        );
+        if (sellResult?.sellPrice != null) {
+          calculatedSell = Math.round(sellResult.sellPrice * parcelCount * 100) / 100;
+        } else {
+          noRate = true;
+        }
+      } else if (!line.customer_id) {
+        noRate = true;
+      }
+
+      return res.json({
+        carrier_cost:    parseFloat(line.carrier_amount || 0),
+        customer_id:     line.customer_id || null,
+        customer_name:   customerName,
+        service_name:    targetService.name,
+        service_code:    targetService.service_code,
+        parcel_count:    parcelCount,
+        weight_kg:       totalWeightKg,
+        zone_name:       zoneName,
+        calculated_sell: calculatedSell,
+        no_rate:         noRate,
+      });
+    }
+
+    // Fetch the recon line
+    const lineRes = await query(
+      `SELECT rl.*, rr.carrier_id
+       FROM   reconciliation_lines rl
+       JOIN   reconciliation_runs  rr ON rr.id = rl.run_id
+       WHERE  rl.id = $1`,
+      [lineId]
+    );
+    if (!lineRes.rows.length) return res.status(404).json({ error: 'Line not found' });
+    const line = lineRes.rows[0];
+
+    // Fetch the surcharge
+    const surchargeRes = await query(
+      `SELECT id, name, code, default_value, calc_type, charge_per, cost_price
+       FROM   surcharges WHERE id = $1`,
+      [value]
+    );
+    if (!surchargeRes.rows.length) return res.status(404).json({ error: 'Surcharge not found' });
+    const surcharge = surchargeRes.rows[0];
+
+    // Look up the freight counterpart line for this tracking number to provide
+    // the Base Freight Cost/Sell rows in the ledger preview.
+    // JOIN to charges so we get the actual cost_price/sell_price split rather
+    // than carrier_amount (which for carrier_direct is the carrier invoice row total).
+    const freightCounterpartRes = await query(
+      `SELECT rl.corrected_sell_price, rl.corrected_cost_price, rl.carrier_amount,
+              ch.sell_price  AS charge_sell,
+              ch.cost_price  AS charge_cost
+       FROM   reconciliation_lines rl
+       LEFT   JOIN charges ch ON ch.id = rl.charge_id
+       WHERE  rl.run_id          = $1
+         AND  rl.tracking_number = $2
+         AND  rl.surcharge_id   IS NULL
+       ORDER  BY rl.id
+       LIMIT  1`,
+      [line.run_id, line.tracking_number]
+    );
+    const freightLine = freightCounterpartRes.rows[0] || null;
+    const freightSell = parseFloat(freightLine?.corrected_sell_price ?? freightLine?.charge_sell ?? 0);
+    const freightCost = parseFloat(freightLine?.corrected_cost_price ?? freightLine?.charge_cost ?? freightLine?.carrier_amount ?? 0);
+
+    // For the surcharge being resolved, look up its existing charge record so
+    // we can show the real cost_price (e.g. £5.00 for Long Length) rather than
+    // the carrier invoice row total stored in carrier_amount on the reconciliation line.
+    const surchargeCostRes = await query(
+      `SELECT cost_price FROM charges
+       WHERE  surcharge_id  = $1
+         AND  (tracking_code = $2
+               OR shipment_id IN (
+                 SELECT id FROM shipments
+                 WHERE  $2 = ANY(tracking_codes)
+               ))
+         AND  cancelled = false
+       ORDER  BY created_at DESC
+       LIMIT  1`,
+      [value, line.tracking_number]
+    );
+    // Derive the actual surcharge cost:
+    // 1. Use pre-existing surcharge charge cost_price (fuel/GEC charges created by engine)
+    // 2. If no charge exists (e.g. conditional surcharges like Long Length that aren't
+    //    auto-created), derive from the difference: carrier total − base freight cost.
+    //    DHL repeats the shipment total on every surcharge row, so line.carrier_amount
+    //    = full row total (e.g. £9.36) and freightCost = base only (£4.36) → diff = £5.00.
+    // 3. Final fallback: raw carrier_amount (covers cases where carrier does put per-item amounts)
+    const rawCarrierAmt = parseFloat(line.carrier_amount || 0);
+    let actualSurchargeCost;
+    if (surchargeCostRes.rows[0]?.cost_price != null) {
+      actualSurchargeCost = parseFloat(surchargeCostRes.rows[0].cost_price);
+    } else if (freightCost > 0 && rawCarrierAmt > freightCost) {
+      actualSurchargeCost = Math.round((rawCarrierAmt - freightCost) * 100) / 100;
+    } else {
+      actualSurchargeCost = rawCarrierAmt;
+    }
+
+    // Determine customer_id — direct or inherited from freight counterpart
+    let customerId     = line.customer_id || null;
+    let customerSource = 'direct';
+    if (!customerId) {
+      const custRes = await query(
+        `SELECT customer_id FROM reconciliation_lines
+         WHERE  run_id          = $1
+           AND  tracking_number = $2
+           AND  surcharge_id   IS NULL
+           AND  customer_id    IS NOT NULL
+         LIMIT 1`,
+        [line.run_id, line.tracking_number]
+      );
+      customerId = custRes.rows[0]?.customer_id || null;
+      if (customerId) customerSource = 'derived from tracking lookup';
+    }
+
+    // Fetch customer name
+    let customerName = null;
+    if (customerId) {
+      const custNameRes = await query(
+        `SELECT business_name FROM customers WHERE id = $1`,
+        [customerId]
+      );
+      customerName = custNameRes.rows[0]?.business_name || null;
+    }
+
+    // Check for customer override and resolve sell value
+    let hasOverride = false;
+    let sellValue   = parseFloat(surcharge.default_value || 0);
+    if (customerId) {
+      const overrideRes = await query(
+        `SELECT override_value FROM customer_surcharge_overrides
+         WHERE  surcharge_id = $1 AND customer_id = $2 AND active = true
+         LIMIT 1`,
+        [value, customerId]
+      );
+      if (overrideRes.rows.length) {
+        hasOverride = true;
+        sellValue   = parseFloat(overrideRes.rows[0].override_value);
+      }
+    }
+
+    // Calculate sell price.
+    // For per-parcel surcharges, infer the carrier-charged parcel count from
+    // actualSurchargeCost ÷ surcharge.cost_price (what the carrier charges per parcel).
+    // This handles DHL Long Length where the carrier may only charge for 2 of 3 parcels:
+    //   actualSurchargeCost=£10 / cost_price=£5 → inferredParcels=2 (not shipment parcel_count=3).
+    // Fall back to line.parcel_count when cost_price is 0 or not a per-parcel surcharge.
+    const surchargeCarrierCostPerUnit = parseFloat(surcharge.cost_price || 0);
+    let parcels;
+    if (surcharge.charge_per === 'parcel' && surchargeCarrierCostPerUnit > 0 && actualSurchargeCost > 0) {
+      parcels = Math.max(1, Math.round(actualSurchargeCost / surchargeCarrierCostPerUnit));
+    } else {
+      parcels = Math.max(1, parseInt(line.parcel_count || 1) || 1);
+    }
+
+    let calculatedSell;
+    if (surcharge.calc_type === 'percentage') {
+      // Base the percentage on the freight sell price, not the carrier invoice row total.
+      // Fall back to carrier_amount if freight sell isn't available.
+      const pctBase = freightSell > 0 ? freightSell : parseFloat(line.carrier_amount || 0);
+      calculatedSell = Math.round(pctBase * (sellValue / 100) * 100) / 100;
+    } else if (surcharge.charge_per === 'parcel') {
+      calculatedSell = Math.round(sellValue * parcels * 100) / 100;
+    } else {
+      calculatedSell = sellValue;
+    }
+
+    return res.json({
+      carrier_cost:    actualSurchargeCost,
+      customer_id:     customerId,
+      customer_name:   customerName,
+      customer_source: customerSource,
+      surcharge_name:  surcharge.name,
+      surcharge_code:  surcharge.code,
+      parcel_count:    parcels,
+      calculated_sell: calculatedSell,
+      has_override:    hasOverride,
+      // Freight counterpart — for the full Base Freight / Surcharge / Total ledger
+      has_freight:     !!freightLine,
+      freight_sell:    freightSell,
+      freight_cost:    freightCost,
+    });
+  } catch (err) {
+    console.error('[reconciliation/resolve-preview]', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── POST /api/reconciliation/runs/:id/lines/:lineId/resolve ──────────────────
 // Human resolution of an Unmatched line.
 // Body: { resolution_type, resolution_value, scope: 'once'|'always', notes? }
@@ -926,7 +1508,17 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
     const { resolution_type, resolution_value, scope = 'once', notes, mapping_type, customer_id } = req.body;
 
     if (!resolution_type) return res.status(400).json({ error: 'resolution_type is required' });
-    if (!resolution_value) return res.status(400).json({ error: 'resolution_value is required' });
+    // credit_request: no value needed — type itself is the value
+    // manual_price:   resolution_value = base freight sell price (numeric string)
+    const noValueTypes = new Set(['credit_request', 'manual_price']);
+    const effective_resolution_value = noValueTypes.has(resolution_type)
+      ? resolution_type
+      : resolution_value;
+    if (!effective_resolution_value) return res.status(400).json({ error: 'resolution_value is required' });
+    if (resolution_type === 'manual_price') {
+      const base = parseFloat(resolution_value);
+      if (isNaN(base) || base <= 0) return res.status(400).json({ error: 'manual_price requires a positive base freight amount' });
+    }
     if (!['once', 'always'].includes(scope)) {
       return res.status(400).json({ error: 'scope must be once or always' });
     }
@@ -942,24 +1534,401 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
     if (!lineRes.rows.length) return res.status(404).json({ error: 'Line not found' });
 
     const line = lineRes.rows[0];
-    if (line.status !== 'unmatched') {
-      return res.status(400).json({ error: 'Line is not Unmatched — cannot resolve' });
+    // Allow resolving:
+    //  • 'unmatched' lines — standard review queue
+    //  • 'warning' lines  — sell_surcharge_missing (carrier billed, customer not yet charged)
+    //  • 'corrected' carrier_direct surcharge lines — auto-corrected by the engine with the
+    //    right surcharge but wrong amounts (e.g. DHL repeating the total on every invoice row).
+    //    These can't be edited in the standard UI so re-resolving is the only path.
+    const isResolvable =
+      ['unmatched', 'warning'].includes(line.status) ||
+      (line.status === 'corrected' &&
+       line.source  === 'carrier_direct' &&
+       line.surcharge_id != null);
+    if (!isResolvable) {
+      return res.status(400).json({ error: 'Line is not in a resolvable state (must be Unmatched or Warning)' });
+    }
+
+    // ── map_to_surcharge: set corrected_sell_price from customer's surcharge price ─
+    // When a human maps a reconciliation line to a surcharge, we need to know what
+    // to charge the customer. Look up: customer override → surcharge default_value.
+    let surchargeSell = null;
+    let resolvedSurchargeCost = null;   // actual surcharge cost (derived, not raw carrier_amount)
+    if (resolution_type === 'map_to_surcharge' && resolution_value) {
+      const surchargeId = resolution_value; // surcharge UUID
+
+      // Fetch surcharge including cost_price (carrier cost per unit) so we can
+      // infer how many parcels the carrier actually charged.
+      const sellRes = await query(`
+        SELECT COALESCE(cso.override_value, s.default_value) AS sell_price,
+               s.calc_type, s.charge_per,
+               s.default_value, s.cost_price
+        FROM   surcharges s
+        LEFT JOIN customer_surcharge_overrides cso
+                  ON cso.surcharge_id = s.id AND cso.customer_id = $2 AND cso.active = true
+        WHERE  s.id = $1
+      `, [surchargeId, line.customer_id]);
+
+      if (sellRes.rows.length) {
+        const sp = sellRes.rows[0];
+        const sellVal  = parseFloat(sp.sell_price  || 0);
+        const rawAmt   = parseFloat(line.carrier_amount || 0);
+
+        // Derive actual surcharge cost by subtracting the base freight cost
+        // (DHL repeats the shipment total on every invoice row, so carrier_amount
+        //  is the shipment total not just the surcharge).
+        let actualSurchargeCost = rawAmt;
+        if (sp.charge_per === 'parcel' || sp.calc_type === 'flat') {
+          const fcRes = await query(`
+            SELECT rl.corrected_cost_price,
+                   ch.cost_price AS charge_cost,
+                   rl.carrier_amount AS fc_carrier_amount
+            FROM   reconciliation_lines rl
+            LEFT   JOIN charges ch ON ch.id = rl.charge_id
+            WHERE  rl.run_id          = $1
+              AND  rl.tracking_number = $2
+              AND  rl.surcharge_id   IS NULL
+              AND  rl.source        != 'ddp_admin'
+            ORDER  BY rl.id
+            LIMIT  1
+          `, [line.run_id, line.tracking_number]);
+          const fcLine   = fcRes.rows[0];
+          const freightC = parseFloat(fcLine?.corrected_cost_price ?? fcLine?.charge_cost ?? 0);
+          if (freightC > 0 && rawAmt > freightC) {
+            actualSurchargeCost = Math.round((rawAmt - freightC) * 100) / 100;
+          }
+        }
+        resolvedSurchargeCost = actualSurchargeCost;
+
+        // For per-parcel surcharges, infer carrier-charged parcel count from
+        // actualSurchargeCost ÷ surcharge.cost_price (carrier cost per parcel).
+        // e.g. £10 ÷ £5/parcel = 2 parcels (not necessarily shipment parcel_count).
+        const surchargeCarrierCostPerUnit = parseFloat(sp.cost_price || 0);
+        let parcels;
+        if (sp.charge_per === 'parcel' && surchargeCarrierCostPerUnit > 0 && actualSurchargeCost > 0) {
+          parcels = Math.max(1, Math.round(actualSurchargeCost / surchargeCarrierCostPerUnit));
+        } else {
+          parcels = Math.max(1, parseInt(line.parcel_count || 1) || 1);
+        }
+
+        if (sp.calc_type === 'percentage') {
+          // % of the carrier_amount
+          surchargeSell = Math.round(rawAmt * (sellVal / 100) * 100) / 100;
+        } else if (sp.charge_per === 'parcel') {
+          // flat rate × inferred carrier-charged parcel count
+          surchargeSell = Math.round(sellVal * parcels * 100) / 100;
+        } else {
+          surchargeSell = sellVal;
+        }
+      }
+    }
+
+    // ── map_to_customer: assign line to a customer and look up their existing charge ─
+    // resolution_value = customer UUID.
+    // Finds the matching charge for that customer by tracking number and uses its
+    // sell_price as corrected_sell_price. Also sets customer_id on the recon line.
+    let mappedCustomerId   = null;
+    let mappedSell         = null;
+    let mappedChargeId     = null;
+    if (resolution_type === 'map_to_customer' && resolution_value) {
+      mappedCustomerId = resolution_value; // customer UUID
+      // Look up the charge for this tracking number under that customer
+      const chRes = await query(`
+        SELECT c.id, COALESCE(c.sell_price, c.price, 0) AS sell_price
+        FROM   charges c
+        JOIN   shipments s ON s.id = c.shipment_id
+        WHERE  s.tracking_codes @> ARRAY[$1::text]
+          AND  c.customer_id  = $2
+          AND  c.charge_type  = 'courier'
+          AND  c.cancelled    = false
+        ORDER  BY c.created_at DESC
+        LIMIT  1
+      `, [line.tracking_number, mappedCustomerId]);
+
+      if (chRes.rows.length) {
+        mappedChargeId = chRes.rows[0].id;
+        mappedSell     = parseFloat(chRes.rows[0].sell_price || 0);
+      } else {
+        // No charge found — still assign the customer, leave sell price null
+        console.log(`[reconciliation/resolve] map_to_customer: no charge found for tracking=${line.tracking_number} customer=${mappedCustomerId}`);
+      }
+    }
+
+    // ── remap_service: recompute sell price from a different service's rate card ─
+    // resolution_value = service_id (integer). Used when a carrier invoices a line
+    // under the wrong service code and the operator wants to price it as a different
+    // service (e.g. DPD Drop Off Next Day misidentified as 2-day → reclassify as
+    // DPD-11DROP so the customer is charged the correct 2-day rate).
+    let remapServiceSell = null;
+    if (resolution_type === 'remap_service' && resolution_value) {
+      const targetServiceId = parseInt(resolution_value);
+      try {
+        // Fetch the target service code
+        const tSvcRes = await query(
+          `SELECT service_code FROM courier_services WHERE id = $1`,
+          [targetServiceId]
+        );
+        const targetServiceCode = tSvcRes.rows[0]?.service_code || null;
+
+        if (targetServiceCode && line.customer_id) {
+          // Determine zone name from the linked charge, or fall back to the first
+          // zone on the target service (covers unmatched lines with no charge_id).
+          let zoneName = null;
+          if (line.charge_id) {
+            const zRes = await query(
+              `SELECT z.name FROM charges c JOIN zones z ON z.id = c.zone_id WHERE c.id = $1`,
+              [line.charge_id]
+            );
+            zoneName = zRes.rows[0]?.name || null;
+          }
+          if (!zoneName) {
+            const fzRes = await query(
+              `SELECT z.name FROM zones z WHERE z.courier_service_id = $1 ORDER BY z.id LIMIT 1`,
+              [targetServiceId]
+            );
+            zoneName = fzRes.rows[0]?.name || 'Mainland';
+          }
+
+          const totalWeightKg = parseFloat(line.carrier_billed_weight_kg || 0);
+          const parcelCount   = Math.max(1, parseInt(line.parcel_count || 1) || 1);
+          const perParcelKg   = totalWeightKg > 0 ? totalWeightKg / parcelCount : 0;
+
+          if (perParcelKg > 0) {
+            const sellResult = await lookupCustomerSellPrice(
+              line.customer_id,
+              targetServiceCode,
+              perParcelKg,
+              zoneName,
+              null
+            );
+            if (sellResult?.sellPrice != null) {
+              remapServiceSell = Math.round(sellResult.sellPrice * parcelCount * 100) / 100;
+              console.log(`[reconciliation/resolve] remap_service: ${targetServiceCode} zone="${zoneName}" ${totalWeightKg}kg/${parcelCount}pcs → sell=£${remapServiceSell} for customer=${line.customer_id}`);
+            } else {
+              console.warn(`[reconciliation/resolve] remap_service: no customer rate found for ${targetServiceCode} zone="${zoneName}" ${perParcelKg}kg customer=${line.customer_id}`);
+            }
+          }
+        }
+      } catch (rsErr) {
+        console.warn(`[reconciliation/resolve] remap_service lookup failed:`, rsErr.message);
+        // Non-fatal — resolvedSell will be null, human can use manual_price as fallback
+      }
+    }
+
+    // ── manual_price: set corrected_sell_price and link the charge ──────────────
+    let manualSell = null;
+    let manualChargeId = null;
+    if (resolution_type === 'manual_price') {
+      const basePence = parseFloat(resolution_value);
+
+      // Look up fuel sell % for this customer + carrier
+      const fuelRes = await query(`
+        SELECT COALESCE(cfgp.sell_pct, fg.standard_sell_pct, 0) AS sell_pct
+        FROM   charges c
+        JOIN   courier_services cs  ON cs.id  = c.service_id
+        JOIN   fuel_groups      fg  ON fg.id  = cs.fuel_group_id
+        LEFT JOIN customer_fuel_group_pricing cfgp
+                  ON cfgp.fuel_group_id = fg.id AND cfgp.customer_id = $1
+        WHERE  c.customer_id = $1
+          AND  cs.carrier_id = $2
+          AND  c.status      = 'verified'
+          AND  c.service_id  IS NOT NULL
+        GROUP  BY fg.id, fg.standard_sell_pct, cfgp.sell_pct
+        ORDER  BY COUNT(*) DESC
+        LIMIT  1
+      `, [line.customer_id, line.carrier_id]);
+
+      const fuelPct = parseFloat(fuelRes.rows[0]?.sell_pct || 0);
+      manualSell    = Math.round((basePence * (1 + fuelPct / 100)) * 100) / 100;
+
+      // Try to find the linked charge via tracking number.
+      // Only link freight charges (charge_type = 'courier') for freight lines.
+      // Surcharge / fuel lines (is_fuel=true or surcharge_id set or charge_type != base)
+      // should NOT overwrite the freight charge sell price.
+      const isFreightLine = !line.is_fuel && !line.surcharge_id && (line.charge_type === 'base' || line.charge_type === 'courier' || !line.charge_type);
+      if (line.tracking_number && isFreightLine) {
+        const chargeRes = await query(`
+          SELECT c.id
+          FROM   charges c
+          JOIN   shipments s ON s.id = c.shipment_id
+          WHERE  s.tracking_codes @> ARRAY[$1::text]
+            AND  c.customer_id   = $2
+            AND  c.charge_type   = 'courier'
+          ORDER  BY c.created_at DESC
+          LIMIT  1
+        `, [line.tracking_number, line.customer_id]);
+        manualChargeId = chargeRes.rows[0]?.id || null;
+      }
+    }
+
+    // ── map_to_surcharge: create the surcharge charge immediately ──────────────
+    // The charge must exist in the charges table right now so the customer record
+    // shows it at once — before finalization. Step 0.5 in finalizationService will
+    // detect the existing charge and skip re-creation (idempotent).
+    let surchargeChargeId     = null;
+    let inheritedCustomerId   = null;  // set when customer_id is inherited from freight counterpart
+    if (resolution_type === 'map_to_surcharge' && surchargeSell && surchargeSell > 0) {
+      try {
+        // Find shipment_id via the freight counterpart line in the same run
+        const freightRes = await query(`
+          SELECT ch.shipment_id, sh.despatch_date
+          FROM   reconciliation_lines rl2
+          JOIN   charges ch ON ch.id = rl2.charge_id
+          LEFT JOIN shipments sh ON sh.id = ch.shipment_id
+          WHERE  rl2.run_id          = $1
+            AND  rl2.tracking_number = $2
+            AND  rl2.surcharge_id   IS NULL
+            AND  rl2.charge_id      IS NOT NULL
+          LIMIT 1
+        `, [line.run_id, line.tracking_number]);
+
+        let scShipmentId   = freightRes.rows[0]?.shipment_id || null;
+        let scDespatchDate = freightRes.rows[0]?.despatch_date || line.shipment_date || null;
+        // Use the derived surcharge cost (carrier_amount minus freight cost) rather than
+        // the raw carrier_amount, which for DHL is the shipment total repeated on every row.
+        const scCostAmt    = resolvedSurchargeCost != null
+          ? resolvedSurchargeCost
+          : parseFloat(line.carrier_amount || 0);
+
+        // Fallback: if no freight line in this run has a charge_id, look up
+        // the shipment directly by tracking number (handles unmatched freight lines).
+        if (!scShipmentId && line.tracking_number) {
+          const trackRes = await query(
+            `SELECT s.id AS shipment_id, s.despatch_date
+             FROM   shipments s
+             WHERE  $1 = ANY(s.tracking_codes)
+             LIMIT 1`,
+            [line.tracking_number]
+          );
+          if (trackRes.rows.length) {
+            scShipmentId   = trackRes.rows[0].shipment_id;
+            scDespatchDate = trackRes.rows[0].despatch_date || scDespatchDate;
+          }
+        }
+
+        // If the surcharge line has no customer_id (unattributed), inherit it from
+        // the freight counterpart in the same run. This happens when a carrier
+        // account number isn't in billing_aliases but the freight line was matched
+        // via the pool (carrier_direct) and already has the customer set.
+        let scCustomerId = line.customer_id;
+        if (!scCustomerId) {
+          const custRes = await query(`
+            SELECT customer_id FROM reconciliation_lines
+            WHERE  run_id          = $1
+              AND  tracking_number = $2
+              AND  surcharge_id   IS NULL
+              AND  customer_id    IS NOT NULL
+            LIMIT 1
+          `, [line.run_id, line.tracking_number]);
+          scCustomerId = custRes.rows[0]?.customer_id || null;
+          if (scCustomerId) {
+            inheritedCustomerId = scCustomerId;
+            console.log(`[reconciliation/resolve] Inherited customer_id=${scCustomerId} from freight line for tracking=${line.tracking_number}`);
+          }
+        }
+
+        // Create the charge — even without shipment_id the charge appears under
+        // the customer so billing is correct.
+        if (scCustomerId) {
+          // Idempotency check — don't double-insert if already created
+          const existRes = await query(`
+            SELECT id FROM charges
+            WHERE  customer_id  = $1
+              AND  surcharge_id = $2
+              AND  charge_type  = 'surcharge'
+              AND  cancelled    = false
+              AND  ($3::uuid IS NULL OR shipment_id = $3::uuid)
+            LIMIT 1
+          `, [scCustomerId, resolution_value, scShipmentId]);
+
+          if (existRes.rows.length) {
+            surchargeChargeId = existRes.rows[0].id;
+            console.log(`[reconciliation/resolve] Surcharge charge already exists: id=${surchargeChargeId} surcharge=${resolution_value} tracking=${line.tracking_number}`);
+          } else {
+            const scChargeRes = await query(`
+              INSERT INTO charges (
+                customer_id, shipment_id, charge_type,
+                surcharge_id, cost_price, sell_price, price,
+                status, verified, despatch_date, source
+              ) VALUES ($1,$2,'surcharge',$3,$4,$5,$5,'verified',true,$6,'recon_surcharge')
+              RETURNING id
+            `, [scCustomerId, scShipmentId, resolution_value, scCostAmt, surchargeSell, scDespatchDate]);
+            surchargeChargeId = scChargeRes.rows[0]?.id || null;
+            if (surchargeChargeId) {
+              console.log(`[reconciliation/resolve] Surcharge charge created: id=${surchargeChargeId} surcharge=${resolution_value} sell=£${surchargeSell} tracking=${line.tracking_number}`);
+            }
+          }
+        } else {
+          console.warn(`[reconciliation/resolve] Cannot create surcharge charge — no customer_id for tracking=${line.tracking_number}`);
+        }
+      } catch (scErr) {
+        console.warn(`[reconciliation/resolve] Surcharge charge creation failed for tracking=${line.tracking_number}:`, scErr.message);
+        // Non-fatal — charge will be created at finalization via Step 0.5
+      }
     }
 
     // Mark line as resolved.
     // Zero out the delta — the human has accepted the carrier's charge as correct.
     // expected_amount is set to carrier_amount so the Corrected tab shows £0.00 delta.
+    // Determine corrected_sell_price across all resolution types that set one
+    const resolvedSell = manualSell ?? surchargeSell ?? mappedSell ?? remapServiceSell ?? null;
+    // corrected_cost_price: for manual_price, map_to_surcharge, map_to_customer and
+    // remap_service — set to carrier_amount (we accept what the carrier billed)
+    const resolvedCost = (resolution_type === 'manual_price' || resolution_type === 'map_to_surcharge' || resolution_type === 'map_to_customer' || resolution_type === 'remap_service')
+      ? parseFloat(line.carrier_amount || 0)
+      : null;
+    // Effective charge_id: manual_price, map_to_customer, or newly created surcharge charge
+    const resolvedChargeId = manualChargeId || mappedChargeId || surchargeChargeId || null;
+    // Effective customer_id: from map_to_customer, inherited freight counterpart, or original line value
+    const resolvedCustomerId = mappedCustomerId || inheritedCustomerId || line.customer_id || null;
+    // Effective surcharge_id: set on the recon line when map_to_surcharge so that
+    // finalization Step 0.5 knows to skip/trace the surcharge charge for this line.
+    const resolvedSurchargeId = resolution_type === 'map_to_surcharge' ? resolution_value : null;
+
+    // Never silently discard an unattributed surcharge — keep it visible on the dashboard
+    // with status = 'unmatched' and a specific reason so the operator can come back to it
+    // once the freight counterpart has been attributed (or use map_to_customer to assign).
+    const resolvedStatus = (resolution_type === 'map_to_surcharge' && !resolvedCustomerId)
+      ? 'unmatched'
+      : 'corrected';
+    const resolvedUnmatchedReason = resolvedStatus === 'unmatched'
+      ? 'unassigned_surcharge_customer'
+      : null;
+
+    if (resolvedStatus === 'unmatched') {
+      console.warn(`[reconciliation/resolve] Surcharge mapped but no customer found for tracking=${line.tracking_number} — keeping line unmatched (unassigned_surcharge_customer)`);
+    }
+
+    // Compute corrected_by in JS to avoid passing resolvedStatus ($10) into both
+    // a CASE WHEN comparison (text) and a SET status assignment (enum) in the same
+    // query — PostgreSQL throws "inconsistent types deduced for parameter $10".
+    const resolvedCorrectedBy = resolvedStatus === 'corrected' ? 'human' : null;
+
     await query(`
       UPDATE reconciliation_lines
-      SET    status           = 'corrected',
-             corrected_by     = 'human',
-             resolved_by      = $2,
-             resolved_at      = NOW(),
-             resolution_notes = $3,
-             expected_amount  = carrier_amount,
-             delta            = 0
+      SET    status                = $10,
+             corrected_by          = COALESCE($11, corrected_by),
+             resolved_by           = $2,
+             resolved_at           = NOW(),
+             resolution_notes      = $3,
+             expected_amount       = carrier_amount,
+             delta                 = 0,
+             customer_id           = $7,
+             corrected_sell_price  = COALESCE($4, corrected_sell_price),
+             corrected_cost_price  = COALESCE($5, corrected_cost_price),
+             charge_id             = COALESCE($6, charge_id),
+             surcharge_id          = COALESCE($8, surcharge_id),
+             unmatched_reason      = COALESCE($9, unmatched_reason)
       WHERE  id = $1
-    `, [lineId, req.user?.id || null, notes || null]);
+    `, [lineId, req.user?.id || null, notes || null,
+        resolvedSell,
+        resolvedCost,
+        resolvedChargeId,
+        resolvedCustomerId,
+        resolvedSurchargeId,
+        resolvedUnmatchedReason,
+        resolvedStatus,
+        resolvedCorrectedBy]);
 
     // If scope = 'always', save a mapping rule
     let mappingId = null;
@@ -978,12 +1947,52 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
         line.unmatched_reason === 'delta_acceptance' ? 'charge_type' : 'raw_service_code',
         line.raw_service_code || line.charge_type || '*',
         resolution_type,
-        resolution_value,
+        effective_resolution_value,
         line.customer_id || null,
         lineId,
         req.user?.id || null,
       ]);
       mappingId = mRes.rows[0]?.id || null;
+    }
+
+    // ── credit_request apply-to-all: mark all cancelled_booking_invoiced lines in this run ─
+    if (scope === 'always' && resolution_type === 'credit_request') {
+      const bulkCreditRes = await query(`
+        UPDATE reconciliation_lines
+        SET    status       = 'corrected',
+               corrected_by = 'human',
+               resolved_at  = NOW(),
+               resolution_notes = 'Bulk: Applying for credit with Courier',
+               expected_amount  = carrier_amount,
+               delta            = 0
+        WHERE  run_id           = $1
+          AND  unmatched_reason = 'cancelled_booking_invoiced'
+          AND  status           = 'unmatched'
+          AND  id              <> $2
+        RETURNING id
+      `, [line.run_id, lineId]);
+      const creditBulk = bulkCreditRes.rowCount || 0;
+      if (creditBulk > 0) {
+        console.log(`[reconciliation/resolve] credit_request bulk-applied to ${creditBulk} cancelled line(s) in run ${line.run_id}`);
+      }
+    }
+
+    // ── map_to_customer with scope=always: save carrier account → customer mapping ─
+    if (scope === 'always' && resolution_type === 'map_to_customer' && mappedCustomerId && line.carrier_account_no) {
+      await query(`
+        INSERT INTO reconciliation_mappings
+          (mapping_type, carrier_id, match_field, match_value,
+           resolution_type, resolution_value, customer_id,
+           created_from_line_id, created_by)
+        VALUES ('account_number',$1,'carrier_account_no',$2,'map_to_customer',$3,$3,$4,$5)
+        ON CONFLICT DO NOTHING
+      `, [
+        line.carrier_id,
+        line.carrier_account_no,
+        mappedCustomerId,
+        lineId,
+        req.user?.id || null,
+      ]);
     }
 
     // If this was an unknown_service_code, save to courier_service_code_mappings.
@@ -1090,7 +2099,32 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
       WHERE  id = $1
     `, [line.run_id]);
 
-    return res.json({ resolved: true, mapping_id: mappingId, bulk_applied: bulkApplied });
+    // Build confirmed charge summary for post-resolve UI confirmation card.
+    // Only populated for map_to_surcharge resolutions where we know the sell price.
+    let confirmed = null;
+    if (resolution_type === 'map_to_surcharge' && resolvedSurchargeId && resolvedSell != null) {
+      const [surchargeNameRes, customerNameRes] = await Promise.all([
+        query(`SELECT name FROM surcharges WHERE id = $1 LIMIT 1`, [resolvedSurchargeId]),
+        resolvedCustomerId
+          ? query(`SELECT business_name FROM customers WHERE id = $1 LIMIT 1`, [resolvedCustomerId])
+          : Promise.resolve({ rows: [] }),
+      ]);
+      confirmed = {
+        status:         resolvedStatus,
+        surcharge_name: surchargeNameRes.rows[0]?.name || null,
+        customer_name:  customerNameRes.rows[0]?.business_name || null,
+        corrected_sell: resolvedSell,
+        carrier_cost:   parseFloat(line.carrier_amount || 0),
+      };
+    }
+
+    return res.json({
+      resolved:      true,
+      mapping_id:    mappingId,
+      bulk_applied:  bulkApplied,
+      confirmed,
+      ...(resolvedSell != null && { corrected_sell_price: resolvedSell }),
+    });
   } catch (err) {
     console.error('[reconciliation/resolve] POST error:', err);
     return res.status(500).json({ error: err.message });
@@ -1100,6 +2134,283 @@ router.post('/runs/:id/lines/:lineId/resolve', async (req, res) => {
 // ─── POST /api/reconciliation/runs/:id/bulk-map-service-codes ─────────────────
 // Save multiple service code mappings at once and immediately apply them to all
 // matching unmatched lines in this run. Designed for the "Map Unknown Codes"
+// ─── POST /api/reconciliation/runs/:id/lines/:lineId/reopen ─────────────────
+// Revert a corrected line back to unmatched so it can be re-resolved.
+// Clears corrected_sell_price, corrected_cost_price, charge_id, resolution
+// fields, and recounts run stats. Does NOT delete any mapping rules that
+// were saved — those need to be removed separately if no longer wanted.
+
+router.post('/runs/:id/lines/:lineId/reopen', async (req, res) => {
+  try {
+    const lineId = parseInt(req.params.lineId);
+
+    const lineRes = await query(
+      `SELECT rl.*, rr.carrier_id
+       FROM   reconciliation_lines rl
+       JOIN   reconciliation_runs  rr ON rr.id = rl.run_id
+       WHERE  rl.id = $1`,
+      [lineId]
+    );
+    if (!lineRes.rows.length) return res.status(404).json({ error: 'Line not found' });
+    const line = lineRes.rows[0];
+
+    if (line.status === 'matched') {
+      return res.status(400).json({ error: 'Cannot reopen a matched line — only corrected lines can be reopened' });
+    }
+    if (line.status === 'unmatched' || line.status === 'warning') {
+      return res.status(400).json({ error: 'Line is already open' });
+    }
+
+    // Revert to original open status:
+    // - Warning lines (sell_surcharge_missing) go back to 'warning'
+    // - All other lines go back to 'unmatched'
+    const revertStatus = line.unmatched_reason === 'sell_surcharge_missing' ? 'warning' : 'unmatched';
+
+    // Revert to original status, clear all resolution fields
+    await query(`
+      UPDATE reconciliation_lines
+      SET    status                = $2,
+             corrected_by          = NULL,
+             corrected_sell_price  = NULL,
+             corrected_cost_price  = NULL,
+             charge_id             = NULL,
+             mapping_id            = NULL,
+             resolved_by           = NULL,
+             resolved_at           = NULL,
+             resolution_notes      = NULL,
+             expected_amount       = NULL,
+             delta                 = NULL
+      WHERE  id = $1
+    `, [lineId, revertStatus]);
+
+    // Recount run stats
+    await query(`
+      UPDATE reconciliation_runs rr
+      SET    matched_count   = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'matched'),
+             corrected_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'corrected'),
+             unmatched_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'unmatched'),
+             automation_rate = CASE WHEN rr.total_lines > 0 THEN
+               ROUND(
+                 (SELECT COUNT(*)::numeric FROM reconciliation_lines WHERE run_id = rr.id AND status IN ('matched','corrected'))
+                 / rr.total_lines * 100, 2
+               )
+             ELSE 0 END,
+             status = 'needs_review'
+      WHERE  id = $1
+    `, [line.run_id]);
+
+    return res.json({ reopened: true });
+  } catch (err) {
+    console.error('[reconciliation/reopen]', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/reconciliation/runs/:id/resolve-all-warnings ─────────────────
+// One-click: accept all sell_surcharge_missing warning lines at each customer's
+// configured surcharge sell price. Lines without a surcharge_id are skipped.
+// Returns { resolved, skipped } counts.
+
+router.post('/runs/:id/resolve-all-warnings', async (req, res) => {
+  try {
+    const runId = parseInt(req.params.id);
+
+    // Fetch all warning lines for this run that have a surcharge_id
+    const linesRes = await query(`
+      SELECT
+        rl.id,
+        rl.tracking_number,
+        rl.carrier_amount,
+        rl.parcel_count,
+        rl.customer_id,
+        rl.surcharge_id,
+        sur.calc_type,
+        sur.charge_per,
+        sur.default_value,
+        COALESCE(cso.override_value, sur.default_value) AS sell_price_base
+      FROM   reconciliation_lines rl
+      JOIN   surcharges sur ON sur.id = rl.surcharge_id
+      LEFT JOIN customer_surcharge_overrides cso
+             ON cso.surcharge_id = rl.surcharge_id
+            AND cso.customer_id  = rl.customer_id
+            AND cso.active       = true
+      WHERE  rl.run_id = $1
+        AND  rl.status = 'warning'
+        AND  rl.unmatched_reason = 'sell_surcharge_missing'
+        AND  rl.surcharge_id IS NOT NULL
+    `, [runId]);
+
+    if (!linesRes.rows.length) {
+      return res.json({ resolved: 0, skipped: 0 });
+    }
+
+    let resolved = 0;
+    let skipped  = 0;
+
+    for (const line of linesRes.rows) {
+      const sellBase   = parseFloat(line.sell_price_base || 0);
+      const carrierAmt = parseFloat(line.carrier_amount  || 0);
+      const parcels    = Math.max(1, parseInt(line.parcel_count || 1) || 1);
+
+      let surchargeSell;
+      if (line.calc_type === 'percentage') {
+        surchargeSell = Math.round(carrierAmt * (sellBase / 100) * 100) / 100;
+      } else if (line.charge_per === 'parcel') {
+        surchargeSell = Math.round(sellBase * parcels * 100) / 100;
+      } else {
+        surchargeSell = Math.round(sellBase * 100) / 100;
+      }
+
+      if (surchargeSell <= 0) { skipped++; continue; }
+
+      await query(`
+        UPDATE reconciliation_lines
+        SET    status               = 'corrected',
+               corrected_by         = 'human',
+               resolved_at          = NOW(),
+               resolution_notes     = 'Accepted at standard price',
+               expected_amount      = carrier_amount,
+               delta                = 0,
+               corrected_sell_price = $2,
+               corrected_cost_price = $3
+        WHERE  id = $1
+      `, [line.id, surchargeSell, carrierAmt]);
+
+      resolved++;
+    }
+
+    // Recount run stats
+    const runRes = await query(`SELECT run_id FROM reconciliation_lines WHERE id = $1`, [linesRes.rows[0].id]);
+    await query(`
+      UPDATE reconciliation_runs rr
+      SET    warning_count   = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'warning'),
+             corrected_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'corrected'),
+             automation_rate = CASE WHEN rr.total_lines > 0 THEN
+               ROUND(
+                 (SELECT COUNT(*)::numeric FROM reconciliation_lines WHERE run_id = rr.id AND status IN ('matched','corrected','warning'))
+                 / rr.total_lines * 100, 2
+               )
+             ELSE 0 END
+      WHERE  id = $1
+    `, [runId]);
+
+    return res.json({ resolved, skipped });
+  } catch (err) {
+    console.error('[reconciliation/resolve-all-warnings]', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/reconciliation/runs/:id/bulk-resolve-as-surcharge ─────────────
+// One-click: resolve all unmatched (price-mismatch) lines in a run as a named
+// surcharge. The surcharge sell price is added ON TOP of each line's existing
+// freight charge sell price, so the customer is billed freight + surcharge.
+//
+// Body: { surcharge_id }
+// Returns: { resolved, skipped }
+
+router.post('/runs/:id/bulk-resolve-as-surcharge', async (req, res) => {
+  try {
+    const runId = parseInt(req.params.id);
+    const { surcharge_id } = req.body;
+    if (!surcharge_id) return res.status(400).json({ error: 'surcharge_id is required' });
+
+    // Fetch all unmatched lines for this run that have a linked charge
+    const linesRes = await query(`
+      SELECT
+        rl.id,
+        rl.carrier_amount,
+        rl.parcel_count,
+        rl.customer_id,
+        -- Existing freight sell price (what the customer was going to be charged)
+        COALESCE(ch.sell_price, ch.price, 0) AS existing_sell_price
+      FROM   reconciliation_lines rl
+      LEFT JOIN charges ch ON ch.id = rl.charge_id
+      WHERE  rl.run_id = $1
+        AND  rl.status = 'unmatched'
+    `, [runId]);
+
+    if (!linesRes.rows.length) return res.json({ resolved: 0, skipped: 0 });
+
+    // Fetch the surcharge definition once
+    const surRes = await query(`
+      SELECT id, calc_type, charge_per, default_value, name
+      FROM   surcharges
+      WHERE  id = $1
+    `, [surcharge_id]);
+    if (!surRes.rows.length) return res.status(404).json({ error: 'Surcharge not found' });
+    const sur = surRes.rows[0];
+
+    let resolved = 0;
+    let skipped  = 0;
+
+    for (const line of linesRes.rows) {
+      const existingSell = parseFloat(line.existing_sell_price || 0);
+      const carrierAmt   = parseFloat(line.carrier_amount || 0);
+      const parcels      = Math.max(1, parseInt(line.parcel_count || 1) || 1);
+
+      // Look up customer-specific surcharge override if set
+      let surchargeBase = parseFloat(sur.default_value || 0);
+      if (line.customer_id) {
+        const overRes = await query(`
+          SELECT override_value FROM customer_surcharge_overrides
+          WHERE  surcharge_id = $1 AND customer_id = $2 AND active = true
+          LIMIT  1
+        `, [surcharge_id, line.customer_id]);
+        if (overRes.rows.length) surchargeBase = parseFloat(overRes.rows[0].override_value || surchargeBase);
+      }
+
+      let surchargeAdd;
+      if (sur.calc_type === 'percentage') {
+        surchargeAdd = Math.round(carrierAmt * (surchargeBase / 100) * 100) / 100;
+      } else if (sur.charge_per === 'parcel') {
+        surchargeAdd = Math.round(surchargeBase * parcels * 100) / 100;
+      } else {
+        surchargeAdd = Math.round(surchargeBase * 100) / 100;
+      }
+
+      if (surchargeAdd < 0) { skipped++; continue; }
+
+      // New sell = existing freight sell + surcharge sell
+      const newSell = Math.round((existingSell + surchargeAdd) * 100) / 100;
+
+      await query(`
+        UPDATE reconciliation_lines
+        SET    status               = 'corrected',
+               corrected_by         = 'human',
+               resolved_at          = NOW(),
+               resolution_notes     = $2,
+               expected_amount      = carrier_amount,
+               delta                = 0,
+               corrected_sell_price = $3,
+               corrected_cost_price = carrier_amount
+        WHERE  id = $1
+      `, [line.id, `Bulk surcharge: ${sur.name}`, newSell]);
+
+      resolved++;
+    }
+
+    // Recount run stats
+    await query(`
+      UPDATE reconciliation_runs rr
+      SET    corrected_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'corrected'),
+             unmatched_count = (SELECT COUNT(*) FROM reconciliation_lines WHERE run_id = rr.id AND status = 'unmatched'),
+             automation_rate = CASE WHEN rr.total_lines > 0 THEN
+               ROUND(
+                 (SELECT COUNT(*)::numeric FROM reconciliation_lines WHERE run_id = rr.id AND status IN ('matched','corrected','warning'))
+                 / rr.total_lines * 100, 2
+               )
+             ELSE 0 END
+      WHERE  id = $1
+    `, [runId]);
+
+    return res.json({ resolved, skipped });
+  } catch (err) {
+    console.error('[reconciliation/bulk-resolve-as-surcharge]', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // banner that groups lines by raw_service_code so the user can map them in bulk.
 //
 // Body: { mappings: [{ raw_service_code, service_id, customer_id? }] }
@@ -1221,24 +2532,27 @@ router.get('/service-code-mappings', async (req, res) => {
 
 router.post('/service-code-mappings', async (req, res) => {
   try {
-    const { carrier_id, courier_code, service_id, notes, customer_id } = req.body;
+    const { carrier_id, courier_code, service_id, notes, customer_id, product_code } = req.body;
     if (!carrier_id)   return res.status(400).json({ error: 'carrier_id is required' });
     if (!courier_code) return res.status(400).json({ error: 'courier_code is required' });
     if (!service_id)   return res.status(400).json({ error: 'service_id is required' });
 
     const normCode     = courier_code.trim().toUpperCase();
+    const normProduct  = product_code ? product_code.trim().toUpperCase() : null;
     const carrierIdInt = parseInt(carrier_id);
     const serviceIdInt = parseInt(service_id);
     const custId       = customer_id || null;
 
-    // Check for an existing row matching the same (carrier, code, customer scope)
+    // Check for an existing row matching the same (carrier, code, product_code, customer scope)
     const existing = await query(`
       SELECT id FROM courier_service_code_mappings
       WHERE  carrier_id   = $1
         AND  courier_code = $2
-        AND  ($3::uuid IS NULL AND customer_id IS NULL
-              OR customer_id = $3::uuid)
-    `, [carrierIdInt, normCode, custId]);
+        AND  ($3::text IS NULL AND product_code IS NULL
+              OR product_code = $3::text)
+        AND  ($4::uuid IS NULL AND customer_id IS NULL
+              OR customer_id = $4::uuid)
+    `, [carrierIdInt, normCode, normProduct, custId]);
 
     let result;
     if (existing.rows.length) {
@@ -1251,10 +2565,10 @@ router.post('/service-code-mappings', async (req, res) => {
     } else {
       result = await query(`
         INSERT INTO courier_service_code_mappings
-          (carrier_id, courier_code, service_id, notes, customer_id, created_by)
-        VALUES ($1,$2,$3,$4,$5,$6)
+          (carrier_id, courier_code, product_code, service_id, notes, customer_id, created_by)
+        VALUES ($1,$2,$3,$4,$5,$6,$7)
         RETURNING *
-      `, [carrierIdInt, normCode, serviceIdInt, notes || null, custId, req.user?.id || null]);
+      `, [carrierIdInt, normCode, normProduct, serviceIdInt, notes || null, custId, req.user?.id || null]);
     }
 
     return res.status(201).json(result.rows[0]);
@@ -1652,6 +2966,221 @@ router.post('/runs/:id/finalize', async (req, res) => {
   }
 });
 
+// ─── POST /api/reconciliation/runs/:id/unfinalize ────────────────────────────
+// Resets a finalized run back to editable state.
+// Deletes finalized_billing_lines for this run and clears the finalized flag.
+// Use when the finalized snapshot contains errors that need correcting.
+
+router.post('/runs/:id/unfinalize', async (req, res) => {
+  try {
+    const runId = parseInt(req.params.id);
+
+    const runCheck = await query(
+      `SELECT id, finalized, invoice_ref FROM reconciliation_runs WHERE id = $1`,
+      [runId]
+    );
+    if (!runCheck.rows.length) return res.status(404).json({ error: 'Run not found' });
+    if (!runCheck.rows[0].finalized) return res.status(400).json({ error: 'Run is not finalized' });
+
+    // Delete the snapshot
+    const delRes = await query(
+      `DELETE FROM finalized_billing_lines WHERE run_id = $1`,
+      [runId]
+    );
+
+    // Reset finalization state on the run
+    await query(`
+      UPDATE reconciliation_runs
+      SET finalized    = false,
+          finalized_at = NULL,
+          finalized_by = NULL,
+          status       = 'needs_review'
+      WHERE id = $1
+    `, [runId]);
+
+    console.log(`[reconciliation/unfinalize] Run ${runId} reset — ${delRes.rowCount} snapshot lines deleted`);
+    return res.json({ ok: true, run_id: runId, lines_deleted: delRes.rowCount });
+  } catch (err) {
+    console.error('[reconciliation/unfinalize] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/reconciliation/runs/:id/re-snapshot ───────────────────────────
+// Recovery: re-runs the snapshot INSERT step for a finalized run that has
+// empty or partial finalized_billing_lines (e.g. due to a DB error during
+// the original finalization). Safe to re-run — uses ON CONFLICT DO NOTHING.
+// Returns { inserted, skipped, errors[] } so we can see what went wrong.
+
+router.post('/runs/:id/re-snapshot', async (req, res) => {
+  try {
+    const runId = parseInt(req.params.id);
+    const result = await reSnapshot(runId);
+    return res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error('[reconciliation/re-snapshot] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/reconciliation/runs/:id/re-snapshot-customer/:customerId ───────
+// Deletes and re-builds finalized_billing_lines for one customer in a finalized
+// run.  Used after charge corrections (cancelled surcharges, repriced parcels)
+// to refresh the snapshot without re-running the full reconciliation.
+// Returns { deleted, inserted, errors[] }.
+
+router.post('/runs/:id/re-snapshot-customer/:customerId', async (req, res) => {
+  try {
+    const runId      = parseInt(req.params.id);
+    const customerId = req.params.customerId;
+    const result     = await reSnapshotCustomer(runId, customerId);
+    return res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error('[reconciliation/re-snapshot-customer] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/reconciliation/runs/:id/archive ───────────────────────────────
+// Archive a finalized run so it no longer appears in the default runs list.
+// Can be undone via ?unarchive=true.
+
+router.post('/runs/:id/archive', async (req, res) => {
+  try {
+    const runId     = parseInt(req.params.id);
+    const unarchive = req.query.unarchive === 'true';
+
+    const runCheck = await query(
+      `SELECT id, finalized, archived FROM reconciliation_runs WHERE id = $1`,
+      [runId]
+    );
+    if (!runCheck.rows.length) return res.status(404).json({ error: 'Run not found' });
+
+    if (!unarchive && !runCheck.rows[0].finalized) {
+      return res.status(400).json({ error: 'Only finalized runs can be archived' });
+    }
+
+    await query(
+      `UPDATE reconciliation_runs SET archived = $1 WHERE id = $2`,
+      [!unarchive, runId]
+    );
+
+    return res.json({ ok: true, run_id: runId, archived: !unarchive });
+  } catch (err) {
+    console.error('[reconciliation/archive] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/reconciliation/totals ──────────────────────────────────────────
+// Aggregate financial totals across all runs (revenue, carrier cost, margin)
+// plus a count of runs that are ready to finalize.
+// Source: reconciliation_lines for all matched/corrected lines (works whether
+// or not a run is finalized — uses corrected_sell_price / carrier_amount).
+
+router.get('/totals', async (req, res) => {
+  try {
+    // Use the same logic as /customers/preview but across ALL runs:
+    // freight sell (corrected_sell_price or booking price) + fuel & surcharge
+    // charges from the charges table — this matches what each run detail page
+    // shows per-customer and gives fully accurate revenue/cost figures without
+    // needing runs to be finalized first.
+    const totalsResult = await query(`
+      SELECT
+        ROUND(
+          COALESCE(SUM(
+            COALESCE(rl.corrected_sell_price, base.sell_price, base.price, 0)
+            + COALESCE((
+                SELECT SUM(sc.price)
+                FROM   charges sc
+                WHERE  sc.shipment_id  = base.shipment_id
+                  AND  sc.charge_type IN ('fuel', 'surcharge')
+                  AND  sc.cancelled    = false
+              ), 0)
+          ), 0)::numeric, 2
+        ) AS total_revenue,
+        ROUND(
+          COALESCE(SUM(
+            COALESCE(base.cost_price, 0)
+            + COALESCE((
+                SELECT SUM(sc.cost_price)
+                FROM   charges sc
+                WHERE  sc.shipment_id  = base.shipment_id
+                  AND  sc.charge_type IN ('fuel', 'surcharge')
+                  AND  sc.cancelled    = false
+              ), 0)
+          ), 0)::numeric, 2
+        ) AS total_carrier_cost
+      FROM   reconciliation_lines rl
+      LEFT JOIN charges base
+             ON base.id          = rl.charge_id
+            AND base.charge_type = 'courier'
+            AND base.cancelled   = false
+      WHERE  rl.status  IN ('matched', 'corrected')
+        AND  rl.is_fuel  = false
+    `);
+
+    const finalizableResult = await query(`
+      SELECT COUNT(*)::int AS finalizable_count
+      FROM reconciliation_runs
+      WHERE finalized      = false
+        AND unmatched_count = 0
+        AND status IN ('complete', 'needs_review')
+    `);
+
+    const { total_revenue, total_carrier_cost } = totalsResult.rows[0];
+    const rev  = parseFloat(total_revenue)      || 0;
+    const cost = parseFloat(total_carrier_cost) || 0;
+
+    return res.json({
+      total_revenue:       rev,
+      total_carrier_cost:  cost,
+      total_margin:        Math.round((rev - cost) * 100) / 100,
+      finalizable_count:   finalizableResult.rows[0].finalizable_count,
+    });
+  } catch (err) {
+    console.error('[reconciliation/totals] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/reconciliation/finalize-all ────────────────────────────────────
+// Finalize every run that is ready (unmatched_count=0, not yet finalized,
+// status complete or needs_review). Calls finalizeRun for each in sequence.
+
+router.post('/finalize-all', async (req, res) => {
+  try {
+    const readyRuns = await query(`
+      SELECT id FROM reconciliation_runs
+      WHERE finalized      = false
+        AND unmatched_count = 0
+        AND status IN ('complete', 'needs_review')
+      ORDER BY id
+    `);
+
+    if (readyRuns.rows.length === 0) {
+      return res.json({ ok: true, finalized: [], message: 'No runs ready to finalize' });
+    }
+
+    const finalized = [];
+    const errors    = [];
+
+    for (const row of readyRuns.rows) {
+      try {
+        await finalizeRun(row.id, req.user?.id || null);
+        finalized.push(row.id);
+      } catch (err) {
+        errors.push({ run_id: row.id, error: err.message });
+      }
+    }
+
+    return res.json({ ok: true, finalized, errors });
+  } catch (err) {
+    console.error('[reconciliation/finalize-all] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── GET /api/reconciliation/runs/:id/customers ───────────────────────────────
 // Customer summary for a finalized run — aggregated sell totals per customer.
 
@@ -1796,34 +3325,90 @@ router.get('/runs/:id/customers/preview', async (req, res) => {
   try {
     const runId = parseInt(req.params.id);
     const result = await query(`
-      -- Each reconciliation line is now one shipment (freight + all surcharges rolled in).
-      -- corrected_sell_price = total sell (freight sell + all surcharge sells).
-      -- carrier_amount       = total cost (freight + all surcharges including absorbed).
-      -- No separate surcharge lines exist; the charge_prices CTE is no longer needed.
+      -- Full sell = freight sell + fuel surcharge + standing surcharges from charges table.
+      -- corrected_sell_price covers only the freight (base rate at billed weight).
+      -- Fuel and surcharge charge rows are separate and must be added, mirroring
+      -- what buildSnapshot does at finalization time.
       SELECT
         rl.customer_id,
         cu.business_name                                                                    AS customer_name,
         COUNT(*)::int                                                                       AS line_count,
-        -- total_sell: corrected_sell_price is the full shipment sell (engine-computed).
-        -- Falls back to booking-time sell from charges, then carrier_amount (0 margin).
-        COALESCE(
-          SUM(COALESCE(rl.corrected_sell_price, COALESCE(base.sell_price, base.price))),
-          SUM(rl.carrier_amount)
-        )                                                                                   AS total_sell,
-        -- Legacy columns kept for API compatibility — set to 0 since surcharges are now
-        -- rolled into corrected_sell_price rather than tracked separately.
-        0                                                                                   AS total_base,
-        0                                                                                   AS total_fuel,
-        0                                                                                   AS total_surcharge,
+        -- total_base: freight sell only (corrected at billed weight, or booking-time price)
+        SUM(COALESCE(rl.corrected_sell_price, base.sell_price, base.price, 0))             AS total_base,
+        -- total_fuel: fuel surcharge sell for each linked shipment
+        SUM(COALESCE((
+          SELECT SUM(sc.price)
+          FROM   charges sc
+          WHERE  sc.shipment_id = base.shipment_id
+            AND  sc.charge_type = 'fuel'
+            AND  sc.cancelled   = false
+        ), 0))                                                                              AS total_fuel,
+        -- total_surcharge: non-fuel surcharge sell.
+        -- Two paths: (a) via freight shipment_id (standard OMS bookings),
+        --            (b) directly via charge_id on resolved surcharge recon lines
+        --                (carrier_direct where freight charge has null shipment_id).
+        SUM(COALESCE((
+          SELECT SUM(sc.price)
+          FROM   charges sc
+          WHERE  sc.charge_type = 'surcharge'
+            AND  sc.cancelled   = false
+            AND  (
+              (base.shipment_id IS NOT NULL AND sc.shipment_id = base.shipment_id)
+              OR sc.id IN (
+                SELECT rl3.charge_id
+                FROM   reconciliation_lines rl3
+                WHERE  rl3.run_id           = $1
+                  AND  rl3.tracking_number  = rl.tracking_number
+                  AND  rl3.surcharge_id    IS NOT NULL
+                  AND  rl3.status           = 'corrected'
+                  AND  rl3.charge_id       IS NOT NULL
+              )
+            )
+        ), 0))                                                                              AS total_surcharge,
         0                                                                                   AS total_recon_surcharge,
-        -- Cost: carrier_amount is the full carrier invoice total per shipment.
-        SUM(rl.carrier_amount)                                                              AS total_our_cost
+        -- total_sell: sum of all three components
+        SUM(
+          COALESCE(rl.corrected_sell_price, base.sell_price, base.price, 0)
+          + COALESCE((
+              SELECT SUM(sc.price)
+              FROM   charges sc
+              WHERE  sc.charge_type IN ('fuel', 'surcharge')
+                AND  sc.cancelled   = false
+                AND  (
+                  (base.shipment_id IS NOT NULL AND sc.shipment_id = base.shipment_id)
+                  OR (sc.charge_type = 'surcharge' AND sc.id IN (
+                    SELECT rl3.charge_id
+                    FROM   reconciliation_lines rl3
+                    WHERE  rl3.run_id          = $1
+                      AND  rl3.tracking_number = rl.tracking_number
+                      AND  rl3.surcharge_id   IS NOT NULL
+                      AND  rl3.status          = 'corrected'
+                      AND  rl3.charge_id      IS NOT NULL
+                  ))
+                )
+            ), 0)
+        )                                                                                   AS total_sell,
+        -- Cost: use total_cost_price (base + fuel + surcharge charges) to match Finance page.
+        -- carrier_amount on the freight line only covers base for carriers like DPD where
+        -- fuel and carriage overhead rows are billed separately and auto-corrected with no
+        -- customer_id — summing carrier_amount alone gives an overstated margin.
+        SUM(
+          COALESCE(base.cost_price, 0)
+          + COALESCE((
+              SELECT SUM(sc.cost_price)
+              FROM   charges sc
+              WHERE  sc.shipment_id = base.shipment_id
+                AND  sc.charge_type IN ('fuel','surcharge')
+                AND  sc.cancelled   = false
+            ), 0)
+        )                                                                                   AS total_our_cost
       FROM   reconciliation_lines rl
       LEFT JOIN customers cu   ON cu.id   = rl.customer_id
       LEFT JOIN charges   base ON base.id = rl.charge_id AND base.charge_type = 'courier' AND base.cancelled = false
       WHERE  rl.run_id = $1
         AND  rl.status IN ('matched', 'corrected')
         AND  rl.is_fuel = false
+        AND  rl.surcharge_id IS NULL   -- exclude surcharge recon lines; their amounts are in the charges table
       GROUP  BY rl.customer_id, cu.business_name
       ORDER  BY cu.business_name
     `, [runId]);
@@ -1841,12 +3426,21 @@ router.get('/runs/:id/customers/preview', async (req, res) => {
 router.get('/runs/:id/customers/preview/lines', async (req, res) => {
   try {
     const runId      = parseInt(req.params.id);
-    const customerId = req.query.customer_id || null;
+    // customer_id may be:
+    //   absent / undefined  → no filter (return all lines)
+    //   'null' or ''        → filter for lines where customer_id IS NULL (unattributed group)
+    //   a UUID string       → filter for that specific customer
+    const rawCustId  = req.query.customer_id;
     const params     = [runId];
     let   custFilter = '';
-    if (customerId) {
-      params.push(customerId);
-      custFilter = `AND rl.customer_id = $${params.length}`;
+    if (rawCustId !== undefined) {
+      const isUnattributed = !rawCustId || rawCustId === 'null';
+      if (isUnattributed) {
+        custFilter = `AND rl.customer_id IS NULL`;
+      } else {
+        params.push(rawCustId);
+        custFilter = `AND rl.customer_id = $${params.length}`;
+      }
     }
 
     const result = await query(`
@@ -1861,16 +3455,143 @@ router.get('/runs/:id/customers/preview/lines', async (req, res) => {
         rl.charge_type,
         rl.parcel_count,
         rl.carrier_billed_weight_kg,
+        rl.unmatched_reason,
         cs.name                                                          AS service_name,
-        COALESCE(
-          rl.corrected_sell_price,
-          COALESCE(base.sell_price, base.price),
-          rl.carrier_amount
-        )                                                                AS sell_total,
-        rl.carrier_amount                                                AS cost_total
+        -- Does this freight line have corrected surcharge lines (sell_surcharge_missing
+        -- warnings OR manually mapped map_to_surcharge lines)?
+        EXISTS(
+          SELECT 1 FROM reconciliation_lines wl
+          WHERE  wl.run_id           = rl.run_id
+            AND  wl.tracking_number  = rl.tracking_number
+            AND  wl.surcharge_id    IS NOT NULL
+            AND  wl.status           = 'corrected'
+            AND  wl.id              != rl.id
+        )                                                                AS has_warning_correction,
+        -- Corrected surcharge names for tooltip (comma-separated)
+        (
+          SELECT STRING_AGG(DISTINCT COALESCE(sur2.name, 'Surcharge'), ', ')
+          FROM   reconciliation_lines wl
+          JOIN   surcharges sur2 ON sur2.id = wl.surcharge_id
+          WHERE  wl.run_id           = rl.run_id
+            AND  wl.tracking_number  = rl.tracking_number
+            AND  wl.surcharge_id    IS NOT NULL
+            AND  wl.status           = 'corrected'
+            AND  wl.id              != rl.id
+        )                                                                AS corrected_surcharge_names,
+        -- sell_base: freight sell price
+        COALESCE(rl.corrected_sell_price, base.sell_price, base.price, 0) AS sell_base,
+        -- sell_fuel: standard path via shipment_id, fallback via tracking_code for carrier_direct
+        COALESCE((
+          SELECT SUM(sc.price)
+          FROM   charges sc
+          WHERE  sc.charge_type = 'fuel'
+            AND  sc.cancelled   = false
+            AND  (
+              (base.shipment_id IS NOT NULL AND sc.shipment_id = base.shipment_id)
+              OR (base.shipment_id IS NULL   AND sc.tracking_code = rl.tracking_number AND sc.shipment_id IS NULL)
+            )
+        ), 0)                                                            AS sell_fuel,
+        -- sell_surcharge: two paths to find the surcharge charge +
+        -- a fallback for when no charge was created yet (charge_id IS NULL).
+        -- Path A: via freight charge shipment_id (standard OMS bookings).
+        -- Path B: directly via charge_id on the resolved surcharge recon line
+        --         (carrier-direct where freight charge has null shipment_id).
+        COALESCE((
+          SELECT SUM(sc.price)
+          FROM   charges sc
+          WHERE  sc.charge_type = 'surcharge'
+            AND  sc.cancelled   = false
+            AND  (
+              (base.shipment_id IS NOT NULL AND sc.shipment_id = base.shipment_id)
+              OR (base.shipment_id IS NULL   AND sc.tracking_code = rl.tracking_number AND sc.shipment_id IS NULL)
+              OR sc.id IN (
+                SELECT rl3.charge_id
+                FROM   reconciliation_lines rl3
+                WHERE  rl3.run_id          = rl.run_id
+                  AND  rl3.tracking_number = rl.tracking_number
+                  AND  rl3.surcharge_id   IS NOT NULL
+                  AND  rl3.status          = 'corrected'
+                  AND  rl3.charge_id      IS NOT NULL
+              )
+            )
+        ), 0)
+        + COALESCE((
+          SELECT SUM(wl.corrected_sell_price)
+          FROM   reconciliation_lines wl
+          WHERE  wl.run_id           = rl.run_id
+            AND  wl.tracking_number  = rl.tracking_number
+            AND  wl.surcharge_id    IS NOT NULL
+            AND  wl.status           = 'corrected'
+            AND  wl.charge_id       IS NULL
+            AND  wl.id              != rl.id
+        ), 0)                                                            AS sell_surcharge,
+        -- sell_total
+        COALESCE(rl.corrected_sell_price, base.sell_price, base.price, 0)
+        + COALESCE((
+            SELECT SUM(sc.price)
+            FROM   charges sc
+            WHERE  sc.charge_type IN ('fuel', 'surcharge')
+              AND  sc.cancelled   = false
+              AND  (
+                (base.shipment_id IS NOT NULL AND sc.shipment_id = base.shipment_id)
+                OR (sc.charge_type = 'surcharge' AND sc.id IN (
+                  SELECT rl3.charge_id
+                  FROM   reconciliation_lines rl3
+                  WHERE  rl3.run_id          = rl.run_id
+                    AND  rl3.tracking_number = rl.tracking_number
+                    AND  rl3.surcharge_id   IS NOT NULL
+                    AND  rl3.status          = 'corrected'
+                    AND  rl3.charge_id      IS NOT NULL
+                ))
+              )
+          ), 0)
+        + COALESCE((
+            SELECT SUM(wl.corrected_sell_price)
+            FROM   reconciliation_lines wl
+            WHERE  wl.run_id           = rl.run_id
+              AND  wl.tracking_number  = rl.tracking_number
+              AND  wl.surcharge_id    IS NOT NULL
+              AND  wl.status           = 'corrected'
+              AND  wl.charge_id       IS NULL   -- fallback: charge creation failed
+              AND  wl.id              != rl.id
+          ), 0)                                                          AS sell_total,
+        -- cost_total: carrier cost + charges + recon-line fallback for unresolved surcharge lines
+        COALESCE(base.cost_price, 0)
+        + COALESCE((
+            SELECT SUM(sc.cost_price)
+            FROM   charges sc
+            WHERE  sc.shipment_id = base.shipment_id
+              AND  sc.charge_type IN ('fuel','surcharge')
+              AND  sc.cancelled   = false
+          ), 0)
+        + COALESCE((
+            SELECT SUM(wl.carrier_amount)
+            FROM   reconciliation_lines wl
+            WHERE  wl.run_id           = rl.run_id
+              AND  wl.tracking_number  = rl.tracking_number
+              AND  wl.surcharge_id    IS NOT NULL
+              AND  wl.status           = 'corrected'
+              AND  wl.charge_id       IS NULL   -- fallback: no charge created yet
+              AND  wl.id              != rl.id
+          ), 0)                                                          AS cost_total
       FROM   reconciliation_lines rl
-      LEFT JOIN courier_services cs   ON cs.id  = rl.service_id
-      LEFT JOIN charges          base ON base.id = rl.charge_id AND base.charge_type = 'courier' AND base.cancelled = false
+      LEFT JOIN courier_services cs ON cs.id = rl.service_id
+      -- Prefer the linked charge; fall back to most-recent carrier_direct courier
+      -- charge for this tracking when charge_id points to a deleted row (scorched-earth purge).
+      LEFT JOIN LATERAL (
+        SELECT c.id, c.sell_price, c.price, c.cost_price, c.shipment_id
+        FROM   charges c
+        WHERE  c.cancelled      = false
+          AND  c.charge_type    = 'courier'
+          AND  (
+            c.id = rl.charge_id
+            OR (rl.charge_id IS NULL OR NOT EXISTS (SELECT 1 FROM charges cx WHERE cx.id = rl.charge_id))
+               AND c.tracking_code = rl.tracking_number
+               AND c.source        = 'carrier_direct'
+          )
+        ORDER  BY CASE WHEN c.id = rl.charge_id THEN 0 ELSE 1 END, c.created_at DESC
+        LIMIT  1
+      ) base ON true
       WHERE  rl.run_id = $1
         AND  rl.status IN ('matched', 'corrected')
         AND  rl.is_fuel = false
@@ -1955,76 +3676,71 @@ router.get('/runs/:id/export/preview-csv', async (req, res) => {
         rl.status,
         cs.name                                                   AS service_name,
         cu.business_name                                          AS customer_name,
-        -- Sell amounts
-        COALESCE(rl.corrected_sell_price, ch.sell_price, ch.price, rl.carrier_amount) AS sell_base,
-        COALESCE(fuel.corrected_sell_price, fuel_ch.sell_price, fuel_ch.price, 0)     AS sell_fuel,
+        -- Sell amounts: base from recon line (corrected) or charge price
+        COALESCE(rl.corrected_sell_price, ch.price, rl.carrier_amount) AS sell_base,
+        -- Fuel sell: direct from charges table (same shipment, charge_type='fuel')
+        -- This is correct for DPD separate_fuel_rows mode where fuel overhead rows
+        -- are NOT tagged is_fuel=true in reconciliation_lines.
+        COALESCE((
+          SELECT SUM(sc.price)
+          FROM   charges sc
+          WHERE  sc.shipment_id = ch.shipment_id
+            AND  sc.charge_type = 'fuel'
+            AND  sc.cancelled   = false
+        ), 0)                                                     AS sell_fuel,
+        -- Surcharge sell total: direct from charges table (standing charges, GEC etc.)
+        COALESCE((
+          SELECT SUM(sc.price)
+          FROM   charges sc
+          WHERE  sc.shipment_id = ch.shipment_id
+            AND  sc.charge_type = 'surcharge'
+            AND  sc.cancelled   = false
+            AND  NOT EXISTS (
+              SELECT 1 FROM surcharges sx
+              WHERE sx.id = sc.surcharge_id AND sx.reconciliation_excluded = true
+            )
+        ), 0)                                                     AS sell_surcharge_total,
         -- Charge metadata
         ch.order_id                                               AS order_reference,
-        ch.ship_to_name                                           AS recipient_name,
-        ch.ship_to_postcode                                       AS postcode,
-        COALESCE(rl.carrier_billed_weight_kg, sh.total_weight_kg) AS weight_kg,
-        -- Surcharge info (for surcharge lines)
-        s.name                                                    AS surcharge_name,
-        COALESCE(rl.corrected_sell_price, rl.expected_amount)     AS surcharge_sell
+        -- Recipient name: charges table → shipments table → recon line (CSV extract)
+        COALESCE(ch.ship_to_name, sh.ship_to_name, rl.ship_to_name) AS recipient_name,
+        -- Postcode: charges table → shipments table → recon line (CSV extract)
+        COALESCE(ch.ship_to_postcode, sh.ship_to_postcode, rl.ship_to_postcode) AS postcode,
+        COALESCE(rl.carrier_billed_weight_kg, sh.total_weight_kg) AS weight_kg
       FROM   reconciliation_lines rl
       LEFT JOIN courier_services cs  ON cs.id  = rl.service_id
       LEFT JOIN customers        cu  ON cu.id  = rl.customer_id
       LEFT JOIN charges          ch  ON ch.id  = rl.charge_id AND ch.charge_type = 'courier' AND ch.cancelled = false
       LEFT JOIN shipments        sh  ON sh.id  = ch.shipment_id
-      -- Fuel line for same tracking number in this run
-      LEFT JOIN reconciliation_lines fuel
-             ON fuel.run_id         = rl.run_id
-            AND fuel.tracking_number = rl.tracking_number
-            AND fuel.customer_id    = rl.customer_id
-            AND fuel.is_fuel        = true
-      LEFT JOIN charges fuel_ch ON fuel_ch.id = fuel.charge_id AND fuel_ch.cancelled = false
-      LEFT JOIN surcharges s    ON s.id = rl.surcharge_id
       WHERE  rl.run_id      = $1
         AND  rl.customer_id = $2
         AND  rl.status      IN ('matched', 'corrected')
         AND  rl.is_fuel     = false
+        AND  rl.surcharge_id IS NULL
       ORDER  BY rl.shipment_date ASC NULLS LAST, rl.tracking_number, rl.charge_type
     `, [runId, customer_id]);
 
     const allLines = linesRes.rows;
     if (!allLines.length) return res.status(404).json({ error: 'No matched/corrected lines for this customer' });
 
-    // Separate freight and surcharge rows; group surcharges by tracking number
-    const freightLines  = allLines.filter(l => !l.surcharge_id);
-    const surchargeRows = allLines.filter(l =>  l.surcharge_id);
-
-    // Collect distinct surcharge names for dynamic columns
-    const surchargeNames = [...new Set(surchargeRows.map(s => s.surcharge_name).filter(Boolean))].sort();
-
-    // Build per-tracking surcharge map
-    const surchMap = {};
-    for (const s of surchargeRows) {
-      const k = s.tracking_number;
-      if (!surchMap[k]) surchMap[k] = {};
-      surchMap[k][s.surcharge_name] = (surchMap[k][s.surcharge_name] || 0) + parseFloat(s.surcharge_sell || 0);
-    }
-
     const esc = v => { const s = String(v == null ? '' : v); return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s; };
 
     const headers = [
       'Tracking Number', 'Order Reference', 'Despatch Date',
-      'Recipient Name', 'Postcode', 'Service', 'Weight (kg)',
+      'Recipient Name', 'Postcode', 'Service', 'Parcels', 'Weight (kg)',
       'Base Charge (£)', 'Fuel Charge (£)',
-      ...surchargeNames.map(n => `${n} (£)`),
       'Total Surcharges (£)', 'Line Total (£)', 'Status',
     ];
 
-    let totalBase = 0, totalFuel = 0, totalSurch = 0;
-    const surchargeColTotals = Object.fromEntries(surchargeNames.map(n => [n, 0]));
+    let totalBase = 0, totalFuel = 0, totalSurch = 0, totalParcels = 0;
 
-    const rows = freightLines.map(l => {
-      const base  = parseFloat(l.sell_base || 0);
-      const fuel  = parseFloat(l.sell_fuel || 0);
-      const sm    = surchMap[l.tracking_number] || {};
-      const surch = surchargeNames.reduce((s, n) => s + (sm[n] || 0), 0);
+    const rows = allLines.map(l => {
+      const base  = parseFloat(l.sell_base         || 0);
+      const fuel  = parseFloat(l.sell_fuel         || 0);
+      const surch = parseFloat(l.sell_surcharge_total || 0);
       const total = base + fuel + surch;
       totalBase  += base; totalFuel += fuel; totalSurch += surch;
-      surchargeNames.forEach(n => { surchargeColTotals[n] += (sm[n] || 0); });
+      totalParcels += (parseInt(l.parcel_count) || 0);
       return [
         l.tracking_number   || '',
         l.order_reference   || '',
@@ -2032,10 +3748,10 @@ router.get('/runs/:id/export/preview-csv', async (req, res) => {
         l.recipient_name    || '',
         l.postcode          || '',
         l.service_name      || '',
+        l.parcel_count != null ? l.parcel_count : '',
         l.weight_kg != null ? parseFloat(l.weight_kg).toFixed(3) : '',
         base.toFixed(2),
         fuel.toFixed(2),
-        ...surchargeNames.map(n => (sm[n] || 0).toFixed(2)),
         surch.toFixed(2),
         total.toFixed(2),
         l.status            || '',
@@ -2043,9 +3759,9 @@ router.get('/runs/:id/export/preview-csv', async (req, res) => {
     });
 
     rows.push([]);
-    rows.push(['TOTAL', '', '', '', '', '', '',
+    rows.push(['TOTAL', '', '', '', '', '',
+      totalParcels > 0 ? totalParcels : '', '',
       totalBase.toFixed(2), totalFuel.toFixed(2),
-      ...surchargeNames.map(n => surchargeColTotals[n].toFixed(2)),
       totalSurch.toFixed(2),
       (totalBase + totalFuel + totalSurch).toFixed(2), '',
     ]);
@@ -2071,6 +3787,84 @@ router.get('/runs/:id/export/preview-csv', async (req, res) => {
   }
 });
 
+// ─── GET /api/reconciliation/cancelled-credit-request ────────────────────────
+// Generates a consolidated CSV of ALL cancelled_booking_invoiced lines across
+// every reconciliation run, for sending to the carrier as a single credit request.
+// Deduplicates by tracking number so a line re-processed across multiple runs
+// only appears once (keeps the row with the highest carrier_amount).
+// Fields: Invoice Ref, Account No, Tracking Number, Collection Date, Recipient,
+//         Postcode, Parcels, Amount Charged (GBP), Our Reference, Customer, Reason
+
+router.get('/cancelled-credit-request', async (req, res) => {
+  try {
+    const { rows } = await query(`
+      SELECT DISTINCT ON (rl.tracking_number)
+        rr.invoice_ref,
+        rl.carrier_account_no,
+        rl.tracking_number,
+        COALESCE(s.collection_date, rl.shipment_date)  AS collection_date,
+        rl.ship_to_name,
+        rl.ship_to_postcode,
+        COALESCE(rl.parcel_count, 1)                   AS parcel_count,
+        rl.carrier_amount,
+        s.reference                                    AS shipment_reference,
+        cu.business_name                               AS customer_name
+      FROM   reconciliation_lines rl
+      JOIN   reconciliation_runs rr ON rr.id = rl.run_id
+      LEFT JOIN charges ch ON ch.id = rl.charge_id
+      LEFT JOIN shipments s  ON s.id  = ch.shipment_id
+      LEFT JOIN customers cu ON cu.id = rl.customer_id
+      WHERE  rl.unmatched_reason = 'cancelled_booking_invoiced'
+      ORDER  BY rl.tracking_number, rl.carrier_amount DESC
+    `);
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'No cancelled-booking lines found' });
+    }
+
+    const today    = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const filename = `dpd_credit_request_all_${today}.csv`;
+
+    const escape = v => {
+      if (v == null) return '';
+      const s = String(v);
+      return s.includes(',') || s.includes('"') || s.includes('\n')
+        ? `"${s.replace(/"/g, '""')}"`
+        : s;
+    };
+    const fmt = d => d ? new Date(d).toLocaleDateString('en-GB') : '';
+
+    const header = [
+      'Invoice Ref', 'Account No', 'Tracking Number', 'Collection Date',
+      'Recipient Name', 'Recipient Postcode', 'Parcels', 'Amount Charged (GBP)',
+      'Our Reference', 'Customer', 'Reason',
+    ];
+    const csvLines = [
+      header.map(escape).join(','),
+      ...rows.map(r => [
+        r.invoice_ref        || '',
+        r.carrier_account_no || '',
+        r.tracking_number,
+        fmt(r.collection_date),
+        r.ship_to_name       || '',
+        r.ship_to_postcode   || '',
+        r.parcel_count,
+        parseFloat(r.carrier_amount).toFixed(2),
+        r.shipment_reference || '',
+        r.customer_name      || '',
+        'Cancelled booking — credit requested',
+      ].map(escape).join(',')),
+    ];
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csvLines.join('\r\n'));
+  } catch (err) {
+    console.error('[reconciliation/cancelled-credit-request] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── GET /api/reconciliation/runs/:id/export/csv ─────────────────────────────
 // Generate and download an itemized CSV for one customer.
 // Query param: customer_id (required)
@@ -2082,12 +3876,19 @@ router.get('/runs/:id/export/csv', async (req, res) => {
 
     const csv = await generateCustomerCSV(parseInt(req.params.id), customer_id);
 
-    // Get customer name for the filename
+    // Build filename using the same Xero invoice number formula: CUSTABBREV-DDMMYY
+    const runRes  = await query(`SELECT invoice_date FROM reconciliation_runs WHERE id = $1`, [req.params.id]);
     const custRes = await query(`SELECT business_name FROM customers WHERE id = $1`, [customer_id]);
-    const custName = (custRes.rows[0]?.business_name || 'customer').replace(/[^a-z0-9]/gi, '_');
+    const custAbbrev = (custRes.rows[0]?.business_name || 'CUST')
+      .toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+    const runDate = runRes.rows[0]?.invoice_date ? new Date(runRes.rows[0].invoice_date) : new Date();
+    const dd  = String(runDate.getDate()).padStart(2, '0');
+    const mm  = String(runDate.getMonth() + 1).padStart(2, '0');
+    const yy  = String(runDate.getFullYear()).slice(-2);
+    const filename = `${custAbbrev}-${dd}${mm}${yy}.csv`;
 
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="recon_run_${req.params.id}_${custName}.csv"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     return res.send(csv);
   } catch (err) {
     console.error('[reconciliation/export/csv] error:', err.message);
@@ -3966,6 +5767,732 @@ router.get('/customer-volume', async (req, res) => {
     });
   } catch (err) {
     console.error('[customer-volume] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/reconciliation/zero-margin-audit ───────────────────────────────
+//
+// Returns all reconciliation lines across every run where the corrected sell
+// price equals the corrected cost price (i.e. the parcel was billed to the
+// customer at pure carrier cost — zero margin).  These are "sneaked through"
+// because a rate card entry was missing and the engine fell back to cost.
+//
+// Also returns lines where corrected_sell_price IS NULL (no rate found at all,
+// unmatched/no_rate) so missing rate card entries are surfaced in one place.
+//
+// Optional query params:
+//   ?customer=<partial name>   — filter to one customer
+//   ?run=<run_id>              — filter to one run
+router.get('/zero-margin-audit', async (req, res) => {
+  try {
+    const { customer, run } = req.query;
+    const params  = [];
+    const clauses = [`rl.customer_id IS NOT NULL`];
+
+    // Only care about matched/corrected lines (not intentional unmatched lines)
+    clauses.push(`rl.status IN ('matched', 'corrected', 'unmatched')`);
+
+    // Zero-margin: sell ≈ cost, OR no sell at all
+    clauses.push(`(
+      (rl.corrected_sell_price IS NOT NULL
+        AND rl.corrected_cost_price IS NOT NULL
+        AND ABS(rl.corrected_sell_price - rl.corrected_cost_price) < 0.02)
+      OR
+      (rl.corrected_sell_price IS NULL AND rl.status IN ('matched', 'corrected'))
+      OR
+      (rl.unmatched_reason = 'no_rate')
+    )`);
+
+    if (customer) {
+      params.push(`%${customer}%`);
+      clauses.push(`cu.business_name ILIKE $${params.length}`);
+    }
+    if (run) {
+      params.push(parseInt(run, 10));
+      clauses.push(`rl.run_id = $${params.length}`);
+    }
+
+    const where = `WHERE ${clauses.join(' AND ')}`;
+
+    const result = await query(`
+      SELECT
+        r.id                                    AS run_id,
+        r.invoice_filename,
+        r.created_at                            AS run_date,
+        cu.account_number,
+        cu.business_name                        AS customer_name,
+        rl.tracking_number,
+        rl.status,
+        rl.corrected_by,
+        rl.unmatched_reason,
+        rl.carrier_amount,
+        ROUND(rl.corrected_sell_price::numeric, 2) AS sell_price,
+        ROUND(rl.corrected_cost_price::numeric, 2) AS cost_price,
+        CASE
+          WHEN rl.corrected_sell_price IS NULL THEN NULL
+          WHEN rl.corrected_cost_price IS NULL THEN NULL
+          ELSE ROUND((rl.corrected_sell_price - rl.corrected_cost_price)::numeric, 2)
+        END                                     AS margin,
+        CASE
+          WHEN rl.unmatched_reason = 'no_rate'                       THEN 'no_rate'
+          WHEN rl.corrected_sell_price IS NULL                       THEN 'no_sell_price'
+          WHEN ABS(rl.corrected_sell_price - rl.corrected_cost_price) < 0.02 THEN 'zero_margin'
+          ELSE 'other'
+        END                                     AS issue_type
+      FROM   reconciliation_lines rl
+      JOIN   reconciliation_runs r ON r.id = rl.run_id
+      JOIN   customers cu ON cu.id = rl.customer_id
+      ${where}
+      ORDER  BY r.created_at DESC, cu.business_name, rl.tracking_number
+    `, params);
+
+    // Summary by customer
+    const byCustomer = {};
+    for (const row of result.rows) {
+      const key = row.customer_name;
+      if (!byCustomer[key]) {
+        byCustomer[key] = {
+          customer_name:   row.customer_name,
+          account_number:  row.account_number,
+          zero_margin:     0,
+          no_rate:         0,
+          no_sell_price:   0,
+          total:           0,
+        };
+      }
+      byCustomer[key][row.issue_type] = (byCustomer[key][row.issue_type] || 0) + 1;
+      byCustomer[key].total++;
+    }
+
+    return res.json({
+      total:       result.rows.length,
+      by_customer: Object.values(byCustomer).sort((a, b) => b.total - a.total),
+      lines:       result.rows,
+    });
+  } catch (err) {
+    console.error('[zero-margin-audit] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/reconciliation/backfill-carrier-direct-surcharges ──────────────
+// Repair backfill: find carrier_direct freight charges missing fuel / GEC
+// surcharges and create them.  Handles two cases:
+//
+//   1. sell_price IS NULL (pricing_error — broken charge from before multi-parcel
+//      fix): re-prices from the rate card using computeGhostCharge, updates the
+//      charge, then inserts the missing surcharges.
+//
+//   2. sell_price > 0 but fuel charge is absent: inserts the missing surcharges
+//      directly (e.g. shipment was created before fuel groups were configured).
+//
+// Safe to re-run — createCarrierDirectSurcharges is idempotent (skips charges
+// that already exist for the shipment).
+//
+// Query params:
+//   ?customer_id=<uuid>  — optional filter to one customer
+//   ?broad=1             — also include non-carrier_direct courier charges
+//                          (requires customer_id)
+
+router.post('/backfill-carrier-direct-surcharges', async (req, res) => {
+  try {
+    const { customer_id, broad } = req.query;
+    const isBroad = broad === '1' || broad === 'true';
+
+    function round2(n) { return Math.round(n * 100) / 100; }
+
+    // ── Pre-pass: link null-shipment carrier_direct charges ───────────────────
+    // Charges created before the task-69 fix can have shipment_id = NULL because
+    // the fallback shipment lookup used event_type = 'carrier_direct' and missed
+    // OMS-originated shipments.  Without a shipment_id, createCarrierDirectSurcharges
+    // can never run, and the main loop below silently skips those charges.
+    // We link them here (to an existing shipment or a freshly-created one) so
+    // the main loop picks them up on this same run.
+    {
+      const ppParams = [];
+      let   ppFilter = `c.charge_type   = 'courier'
+        AND c.source        = 'carrier_direct'
+        AND c.shipment_id   IS NULL
+        AND c.cancelled     = false
+        AND c.tracking_code IS NOT NULL`;
+      if (customer_id) {
+        ppParams.push(customer_id);
+        ppFilter += ` AND c.customer_id = $${ppParams.length}`;
+      }
+
+      const { rows: nullRows } = await query(`
+        SELECT c.id, c.customer_id, c.tracking_code,
+               c.ship_to_postcode, c.ship_to_country_iso, c.ship_to_name,
+               c.despatch_date, c.parcel_count
+        FROM   charges c
+        WHERE  ${ppFilter}
+      `, ppParams);
+
+      let preLinked = 0;
+      for (const nr of nullRows) {
+        try {
+          // 1. Try to find an existing shipment for this tracking code (any event_type)
+          const { rows: found } = await query(
+            `SELECT id FROM shipments WHERE $1 = ANY(tracking_codes) ORDER BY created_at DESC LIMIT 1`,
+            [nr.tracking_code]
+          );
+          let shipmentId = found[0]?.id || null;
+
+          // 2. Create a new carrier_direct shipment if none exists
+          if (!shipmentId) {
+            const { rows: created } = await query(`
+              INSERT INTO shipments (
+                event_type, customer_id, tracking_codes,
+                ship_to_postcode, ship_to_country_iso, ship_to_name,
+                collection_date, parcel_count
+              ) VALUES ('carrier_direct', $1, $2, $3, $4, $5, $6, $7)
+              ON CONFLICT DO NOTHING RETURNING id
+            `, [
+              nr.customer_id,
+              [nr.tracking_code],
+              nr.ship_to_postcode    || null,
+              nr.ship_to_country_iso || 'GB',
+              nr.ship_to_name        || null,
+              nr.despatch_date       || null,
+              nr.parcel_count        || 1,
+            ]);
+            shipmentId = created[0]?.id;
+
+            // ON CONFLICT can fire if another process won the race — fetch it
+            if (!shipmentId) {
+              const { rows: lb } = await query(
+                `SELECT id FROM shipments WHERE $1 = ANY(tracking_codes) ORDER BY created_at DESC LIMIT 1`,
+                [nr.tracking_code]
+              );
+              shipmentId = lb[0]?.id;
+            }
+          }
+
+          if (shipmentId) {
+            await query(
+              `UPDATE charges SET shipment_id = $1, updated_at = NOW() WHERE id = $2`,
+              [shipmentId, nr.id]
+            );
+            preLinked++;
+          } else {
+            console.warn(`[backfill-cd-surcharges] pre-pass: no shipment found/created for charge ${nr.id} (tracking=${nr.tracking_code})`);
+          }
+        } catch (err) {
+          console.warn(`[backfill-cd-surcharges] pre-pass charge ${nr.id}:`, err.message);
+        }
+      }
+
+      if (nullRows.length > 0) {
+        console.log(`[backfill-cd-surcharges] pre-pass: ${nullRows.length} null-shipment charge(s) found, ${preLinked} linked`);
+      }
+    }
+
+    // Find ALL carrier_direct freight charges missing a fuel charge.
+    // This now includes sell_price = null charges (pricing_error) which
+    // the old query excluded — those are the broken multi-parcel charges
+    // that need re-pricing before surcharges can be inserted.
+    // The pre-pass above ensures null-shipment charges are now linked, so
+    // this query will pick them up too.
+    const params  = [];
+    let   where   = `c.charge_type = 'courier'
+      AND c.cancelled          = false
+      AND c.shipment_id        IS NOT NULL
+      AND c.courier_service_id IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM charges fc
+        WHERE  fc.shipment_id = c.shipment_id
+          AND  fc.charge_type = 'fuel'
+          AND  fc.cancelled   = false
+      )`;
+
+    if (!isBroad) {
+      where = `c.source = 'carrier_direct'\n      AND ` + where;
+    }
+
+    if (customer_id) {
+      params.push(customer_id);
+      where += ` AND c.customer_id = $${params.length}`;
+    } else if (isBroad) {
+      return res.status(400).json({ error: 'customer_id is required when broad=1' });
+    }
+
+    const { rows } = await query(`
+      SELECT c.id, c.shipment_id, c.customer_id, c.courier_service_id,
+             c.sell_price, c.cost_price,
+             c.weight_charged_kg,
+             c.ship_to_postcode, c.ship_to_country_iso,
+             cs.courier_id,
+             COALESCE(c.parcel_count, s.parcel_count, 1) AS parcel_count
+      FROM   charges c
+      JOIN   courier_services cs ON cs.id = c.courier_service_id
+      LEFT JOIN shipments s ON s.id = c.shipment_id
+      WHERE  ${where}
+      ORDER  BY c.created_at
+    `, params);
+
+    console.log(`[backfill-cd-surcharges] Found ${rows.length} carrier_direct charge(s) missing fuel (incl. unpriced)`);
+
+    let processed = 0;
+    let repriced  = 0;
+    let errors    = 0;
+
+    for (const row of rows) {
+      try {
+        let freightSellPrice = row.sell_price != null ? parseFloat(row.sell_price) : null;
+
+        // ── Case 1: sell_price is null — re-price from rate card ──────────────
+        // This covers charges created when the multi-parcel all_sub pricing was
+        // broken (sell_price was forced to null because hasSellRate was false
+        // for parcelCount > 1 when only sell_sub was set on the rate card).
+        if (freightSellPrice == null || freightSellPrice === 0) {
+          const parcelCount = parseInt(row.parcel_count) || 1;
+          const carrierId   = row.courier_id;
+          const kg          = parseFloat(row.weight_charged_kg) || 0;
+
+          // Determine if this is an all_sub carrier (DPD) so we use per-parcel kg
+          const profileRes = await query(
+            `SELECT column_map FROM carrier_csv_profiles
+             WHERE  carrier_id = $1 AND is_default = true LIMIT 1`,
+            [carrierId]
+          );
+          const isAllSub    = profileRes.rows[0]?.column_map?.parcel_pricing === 'all_sub';
+          const perParcelKg = (isAllSub && parcelCount > 1) ? round2(kg / parcelCount) : kg;
+
+          if (perParcelKg > 0) {
+            const pricing = await computeGhostCharge(
+              row.courier_service_id,
+              row.customer_id,
+              perParcelKg,
+              row.ship_to_postcode   || null,
+              row.ship_to_country_iso || 'GB'
+            );
+
+            if (!pricing.error) {
+              const hasSubSell = isAllSub && parcelCount > 1 && pricing.sell_sub != null;
+              if (hasSubSell) {
+                freightSellPrice = round2(pricing.sell_sub * parcelCount);
+              } else if (pricing.sell_price != null) {
+                freightSellPrice = round2(pricing.sell_price * parcelCount);
+              }
+
+              if (freightSellPrice != null && freightSellPrice > 0) {
+                await query(
+                  `UPDATE charges
+                   SET    sell_price = $1, price = $1, status = 'verified', updated_at = NOW()
+                   WHERE  id = $2`,
+                  [freightSellPrice, row.id]
+                );
+                repriced++;
+                console.log(`[backfill-cd-surcharges] repriced charge ${row.id}: sell=£${freightSellPrice} (${parcelCount} parcel(s) @ ${isAllSub ? 'all_sub' : 'standard'})`);
+              } else {
+                console.warn(`[backfill-cd-surcharges] charge ${row.id}: repricing returned 0/null — rate card may be missing`);
+              }
+            } else {
+              console.warn(`[backfill-cd-surcharges] charge ${row.id}: pricing error — ${pricing.error} (${pricing.detail})`);
+            }
+          }
+        }
+
+        // ── Case 2: we now have a valid sell price — insert surcharges ────────
+        if (freightSellPrice != null && freightSellPrice > 0) {
+          await createCarrierDirectSurcharges({
+            shipmentId:       row.shipment_id,
+            customerId:       row.customer_id,
+            carrierId:        row.courier_id,
+            serviceId:        row.courier_service_id,
+            freightSellPrice,
+            freightCostPrice: parseFloat(row.cost_price || 0),
+            parcelCount:      parseInt(row.parcel_count) || 1,
+          });
+          processed++;
+        }
+      } catch (err) {
+        console.error(`[backfill-cd-surcharges] charge ${row.id}:`, err.message);
+        errors++;
+      }
+    }
+
+    console.log(`[backfill-cd-surcharges] Done: ${rows.length} found, ${repriced} repriced, ${processed} surcharges inserted, ${errors} errors`);
+    return res.json({ ok: true, found: rows.length, repriced, processed, errors });
+  } catch (err) {
+    console.error('[backfill-cd-surcharges] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/reconciliation/carrier-direct-fuel-audit ──────────────────────
+// Audit: lists every customer that has carrier_direct courier charges with
+// no shipment_id (and therefore no fuel/surcharge charges).
+// Use this to see who needs fixing before running the bulk fix below.
+
+router.get('/carrier-direct-fuel-audit', async (req, res) => {
+  try {
+    const { rows } = await query(`
+      SELECT
+        cu.id                                         AS customer_id,
+        cu.business_name                              AS customer_name,
+        COUNT(*)::int                                 AS unlinked_charges,
+        MIN(c.created_at)::date                       AS earliest,
+        MAX(c.created_at)::date                       AS latest
+      FROM   charges c
+      JOIN   customers cu ON cu.id = c.customer_id
+      WHERE  c.charge_type   = 'courier'
+        AND  c.source        = 'carrier_direct'
+        AND  c.shipment_id   IS NULL
+        AND  c.cancelled     = false
+        AND  c.tracking_code IS NOT NULL
+      GROUP  BY cu.id, cu.business_name
+      ORDER  BY COUNT(*) DESC
+    `);
+    return res.json({ customers: rows, total_unlinked: rows.reduce((s, r) => s + r.unlinked_charges, 0) });
+  } catch (err) {
+    console.error('[carrier-direct-fuel-audit] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/reconciliation/link-carrier-direct-shipments ─────────────────
+// For carrier_direct charges that have no shipment_id (shipment creation failed
+// during reconciliation), this endpoint:
+//   1. Creates a shipment record linked to the tracking code
+//   2. Updates the freight charge to set shipment_id
+//   3. Creates fuel + always-apply surcharge charges for the new shipment
+//
+// Required: ?customer_id=<uuid>
+// Optional: ?dry_run=1
+
+router.post('/link-carrier-direct-shipments', async (req, res) => {
+  try {
+    const { customer_id, dry_run } = req.query;
+    const isDry = dry_run === '1' || dry_run === 'true';
+
+    // Find carrier_direct freight charges without a shipment_id
+    const params = [];
+    let custFilter = '';
+    if (customer_id) {
+      params.push(customer_id);
+      custFilter = `AND c.customer_id = $${params.length}`;
+    }
+    const { rows: unlinked } = await query(`
+      SELECT c.id, c.customer_id, c.tracking_code, c.courier_service_id, c.sell_price, c.price,
+             c.cost_price, c.ship_to_postcode, c.ship_to_country_iso, c.ship_to_name,
+             c.despatch_date, c.order_id, c.parcel_count,
+             cs.courier_id
+      FROM   charges c
+      JOIN   courier_services cs ON cs.id = c.courier_service_id
+      WHERE  c.charge_type  = 'courier'
+        AND  c.source       = 'carrier_direct'
+        AND  c.shipment_id  IS NULL
+        AND  c.cancelled    = false
+        AND  c.tracking_code IS NOT NULL
+        ${custFilter}
+    `, params);
+
+    console.log(`[link-carrier-direct-shipments] ${unlinked.length} unlinked carrier_direct charges${customer_id ? ` for customer ${customer_id}` : ' (all customers)'}`);
+
+    let linked = 0, fuelCreated = 0, errors = 0;
+    for (const row of unlinked) {
+      const rowCustomerId = row.customer_id;
+      try {
+        // Check if a shipment already exists for this tracking code
+        const { rows: existingShip } = await query(
+          `SELECT id FROM shipments WHERE $1 = ANY(tracking_codes) AND event_type = 'carrier_direct' LIMIT 1`,
+          [row.tracking_code]
+        );
+
+        let shipmentId = existingShip[0]?.id || null;
+
+        if (!shipmentId && !isDry) {
+          // Create the shipment
+          const { rows: newShip } = await query(`
+            INSERT INTO shipments (
+              event_type, customer_id, tracking_codes,
+              ship_to_postcode, ship_to_country_iso, ship_to_name,
+              collection_date
+            ) VALUES ('carrier_direct', $1, $2, $3, $4, $5, $6)
+            ON CONFLICT DO NOTHING
+            RETURNING id
+          `, [
+            rowCustomerId,
+            [row.tracking_code],
+            row.ship_to_postcode   || null,
+            row.ship_to_country_iso || 'GB',
+            row.ship_to_name       || null,
+            row.despatch_date      || null,
+          ]);
+          shipmentId = newShip[0]?.id || null;
+
+          // If ON CONFLICT fired, look it up
+          if (!shipmentId) {
+            const { rows: lookup } = await query(
+              `SELECT id FROM shipments WHERE $1 = ANY(tracking_codes) AND event_type = 'carrier_direct' LIMIT 1`,
+              [row.tracking_code]
+            );
+            shipmentId = lookup[0]?.id || null;
+          }
+        }
+
+        if (!shipmentId) {
+          console.log(`[link-carrier-direct-shipments] ${isDry ? '[DRY] ' : ''}no shipment for tracking=${row.tracking_code}`);
+          continue;
+        }
+
+        console.log(`[link-carrier-direct-shipments] ${isDry ? '[DRY] ' : ''}link charge ${row.id} → shipment ${shipmentId} (tracking=${row.tracking_code})`);
+
+        if (!isDry) {
+          // Link the freight charge to the shipment
+          await query(`UPDATE charges SET shipment_id = $1 WHERE id = $2`, [shipmentId, row.id]);
+          linked++;
+
+          // Create fuel + surcharge charges for this shipment
+          const freightSell = parseFloat(row.sell_price ?? row.price ?? 0);
+          const freightCost = parseFloat(row.cost_price ?? 0);
+          if (freightSell > 0 && row.courier_service_id) {
+            await createCarrierDirectSurcharges({
+              shipmentId:       shipmentId,
+              customerId:       rowCustomerId,
+              carrierId:        row.courier_id,
+              serviceId:        row.courier_service_id,
+              freightSellPrice: freightSell,
+              freightCostPrice: freightCost,
+              parcelCount:      row.parcel_count || 1,
+            });
+            fuelCreated++;
+          }
+        } else {
+          linked++;
+        }
+      } catch (err) {
+        console.error(`[link-carrier-direct-shipments] charge ${row.id}:`, err.message);
+        errors++;
+      }
+    }
+
+    return res.json({ ok: true, dry_run: isDry, found: unlinked.length, linked, fuel_created: fuelCreated, errors });
+  } catch (err) {
+    console.error('[link-carrier-direct-shipments] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/reconciliation/diagnose-fuel ───────────────────────────────────
+// Diagnostic: breakdown of a customer's courier charges by data completeness.
+// Tells us exactly why fuel isn't showing.
+// Required: ?customer_id=<uuid>
+
+router.get('/diagnose-fuel', async (req, res) => {
+  try {
+    const { customer_id } = req.query;
+    if (!customer_id) return res.status(400).json({ error: 'customer_id is required' });
+
+    const { rows } = await query(`
+      SELECT
+        COUNT(*)::int                                              AS total_courier_charges,
+        COUNT(*) FILTER (WHERE c.shipment_id IS NOT NULL)::int    AS has_shipment_id,
+        COUNT(*) FILTER (WHERE c.shipment_id IS NULL)::int        AS no_shipment_id,
+        COUNT(*) FILTER (WHERE c.courier_service_id IS NOT NULL)::int AS has_service_id,
+        COUNT(*) FILTER (WHERE c.sell_price IS NOT NULL AND c.sell_price > 0)::int AS has_sell_price,
+        COUNT(*) FILTER (WHERE c.sell_price IS NULL OR c.sell_price = 0)::int      AS no_sell_price,
+        COUNT(*) FILTER (WHERE EXISTS (
+          SELECT 1 FROM charges f WHERE f.shipment_id = c.shipment_id AND f.charge_type='fuel' AND f.cancelled=false
+        ) AND c.shipment_id IS NOT NULL)::int AS has_fuel_via_shipment,
+        COUNT(*) FILTER (WHERE NOT EXISTS (
+          SELECT 1 FROM charges f WHERE f.shipment_id = c.shipment_id AND f.charge_type='fuel' AND f.cancelled=false
+        ) AND c.shipment_id IS NOT NULL)::int AS missing_fuel_via_shipment,
+        COUNT(*) FILTER (WHERE c.source = 'carrier_direct')::int  AS carrier_direct,
+        COUNT(*) FILTER (WHERE c.source IS NULL OR c.source != 'carrier_direct')::int AS oms_booked,
+        COUNT(*) FILTER (WHERE c.verified = true)::int            AS verified,
+        -- Sample of sources
+        array_agg(DISTINCT c.source) FILTER (WHERE c.source IS NOT NULL) AS sources
+      FROM charges c
+      WHERE c.customer_id  = $1
+        AND c.charge_type  = 'courier'
+        AND c.cancelled    = false
+    `, [customer_id]);
+
+    // Also grab a sample of 3 charges with their shipment_id and sell_price
+    const { rows: samples } = await query(`
+      SELECT c.id, c.tracking_code, c.shipment_id, c.courier_service_id,
+             c.sell_price, c.price, c.source, c.verified, c.created_at::date AS created_date,
+             EXISTS (
+               SELECT 1 FROM charges f WHERE f.shipment_id = c.shipment_id AND f.charge_type='fuel' AND f.cancelled=false
+             ) AS has_fuel
+      FROM charges c
+      WHERE c.customer_id = $1 AND c.charge_type = 'courier' AND c.cancelled = false
+      ORDER BY c.created_at DESC
+      LIMIT 5
+    `, [customer_id]);
+
+    return res.json({ summary: rows[0], samples });
+  } catch (err) {
+    console.error('[diagnose-fuel] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/reconciliation/repair-zero-fuel ───────────────────────────────
+// Repairs fuel (and GEC/always-apply surcharge) charges that exist but have
+// price = 0 because the freight charge had sell_price = 0 when billing.js
+// first created them (i.e. rates weren't set up at booking time).
+//
+// For each zero-priced fuel charge, we:
+//   1. Look up the current sell price on the linked freight charge
+//   2. Look up the customer's fuel group sell % via the service's fuel_group_id
+//   3. Recalculate and UPDATE the fuel charge to the correct price
+//
+// Similarly for zero-priced surcharge charges — looks up current default_value
+// or customer override and updates.
+//
+// Required query param: ?customer_id=<uuid>
+// Optional: ?dry_run=1  — logs what would change without writing anything
+
+router.post('/repair-zero-fuel', async (req, res) => {
+  try {
+    const { customer_id, dry_run } = req.query;
+    if (!customer_id) return res.status(400).json({ error: 'customer_id is required' });
+    const isDry = dry_run === '1' || dry_run === 'true';
+
+    // ── Step 1: Find zero-priced fuel charges linked to a shipment with a freight charge ──
+    const { rows: zeroFuelRows } = await query(`
+      SELECT
+        fc.id         AS fuel_charge_id,
+        fc.shipment_id,
+        fc.service_name,
+        -- Current freight sell price for this shipment
+        COALESCE(bc.sell_price, bc.price, 0) AS freight_sell,
+        COALESCE(bc.cost_price, 0)           AS freight_cost,
+        bc.courier_service_id,
+        cs.courier_id
+      FROM   charges fc
+      JOIN   charges bc ON bc.shipment_id = fc.shipment_id
+                        AND bc.charge_type = 'courier'
+                        AND bc.cancelled   = false
+      JOIN   courier_services cs ON cs.id = bc.courier_service_id
+      WHERE  fc.customer_id  = $1
+        AND  fc.charge_type  = 'fuel'
+        AND  fc.cancelled    = false
+        AND  COALESCE(fc.price, 0) = 0
+    `, [customer_id]);
+
+    console.log(`[repair-zero-fuel] Found ${zeroFuelRows.length} zero-priced fuel charge(s) for customer ${customer_id}`);
+
+    let fuelFixed = 0, fuelErrors = 0;
+    for (const row of zeroFuelRows) {
+      try {
+        const freightSell = parseFloat(row.freight_sell) || 0;
+        if (freightSell <= 0) continue; // freight also repriced to 0 — skip
+
+        // Get fuel group sell % for this service + customer
+        const { rows: fgRows } = await query(`
+          SELECT fg.standard_sell_pct, fg.fuel_surcharge_pct AS carrier_pct,
+                 cfgp.sell_pct AS customer_sell_pct
+          FROM   courier_services cs
+          JOIN   fuel_groups fg ON fg.id = cs.fuel_group_id
+          LEFT JOIN customer_fuel_group_pricing cfgp
+                    ON cfgp.fuel_group_id = fg.id AND cfgp.customer_id = $2
+          WHERE  cs.id = $1 LIMIT 1
+        `, [row.courier_service_id, customer_id]);
+
+        if (!fgRows.length) continue;
+        const fg      = fgRows[0];
+        const sellPct = parseFloat(fg.customer_sell_pct ?? fg.standard_sell_pct ?? 0);
+        const costPct = parseFloat(fg.carrier_pct ?? 0);
+        if (sellPct <= 0) continue;
+
+        const newSell = Math.round(freightSell * sellPct / 100 * 100) / 100;
+        const newCost = costPct > 0
+          ? Math.round(parseFloat(row.freight_cost) * costPct / 100 * 100) / 100
+          : null;
+
+        console.log(`[repair-zero-fuel] fuel charge ${row.fuel_charge_id}: price 0 → £${newSell} (${sellPct}% of £${freightSell})${isDry ? ' [DRY RUN]' : ''}`);
+        if (!isDry) {
+          await query(
+            `UPDATE charges SET price = $1, sell_price = $1, cost_price = COALESCE($2, cost_price), price_auto = true
+             WHERE id = $3`,
+            [newSell, newCost, row.fuel_charge_id]
+          );
+        }
+        fuelFixed++;
+      } catch (err) {
+        console.error(`[repair-zero-fuel] fuel charge ${row.fuel_charge_id}:`, err.message);
+        fuelErrors++;
+      }
+    }
+
+    // ── Step 2: Find zero-priced always-apply surcharge charges ──────────────
+    const { rows: zeroSurRows } = await query(`
+      SELECT
+        sc.id          AS surcharge_charge_id,
+        sc.shipment_id,
+        sc.surcharge_id,
+        COALESCE(bc.sell_price, bc.price, 0) AS freight_sell,
+        COALESCE(bc.cost_price, 0)           AS freight_cost,
+        s.calc_type, s.default_value, s.cost_price AS surcharge_cost,
+        s.charge_per, s.name AS surcharge_name
+      FROM   charges sc
+      JOIN   surcharges s ON s.id = sc.surcharge_id
+      JOIN   charges bc ON bc.shipment_id = sc.shipment_id
+                        AND bc.charge_type = 'courier'
+                        AND bc.cancelled   = false
+      WHERE  sc.customer_id  = $1
+        AND  sc.charge_type  = 'surcharge'
+        AND  sc.cancelled    = false
+        AND  COALESCE(sc.price, 0) = 0
+        AND  (s.applies_when = 'always' OR s.applies_when IS NULL)
+    `, [customer_id]);
+
+    console.log(`[repair-zero-fuel] Found ${zeroSurRows.length} zero-priced surcharge charge(s)`);
+
+    let surFixed = 0, surErrors = 0;
+    for (const row of zeroSurRows) {
+      try {
+        const freightSell = parseFloat(row.freight_sell) || 0;
+        if (freightSell <= 0) continue;
+
+        // Customer override
+        const { rows: ov } = await query(
+          `SELECT override_value FROM customer_surcharge_overrides WHERE customer_id=$1 AND surcharge_id=$2 AND active=true`,
+          [customer_id, row.surcharge_id]
+        );
+        const effectiveVal = ov.length
+          ? parseFloat(ov[0].override_value)
+          : parseFloat(row.default_value);
+        const costRate = parseFloat(row.surcharge_cost ?? row.default_value ?? 0);
+
+        let newSell, newCost;
+        if (row.calc_type === 'percentage') {
+          newSell = Math.round(freightSell * effectiveVal / 100 * 100) / 100;
+          newCost = Math.round(parseFloat(row.freight_cost) * costRate / 100 * 100) / 100;
+        } else {
+          newSell = effectiveVal;
+          newCost = costRate;
+        }
+
+        if (newSell <= 0) continue;
+
+        console.log(`[repair-zero-fuel] surcharge ${row.surcharge_charge_id} "${row.surcharge_name}": price 0 → £${newSell}${isDry ? ' [DRY RUN]' : ''}`);
+        if (!isDry) {
+          await query(
+            `UPDATE charges SET price = $1, sell_price = $1, cost_price = $2, price_auto = true WHERE id = $3`,
+            [newSell, newCost, row.surcharge_charge_id]
+          );
+        }
+        surFixed++;
+      } catch (err) {
+        console.error(`[repair-zero-fuel] surcharge ${row.surcharge_charge_id}:`, err.message);
+        surErrors++;
+      }
+    }
+
+    return res.json({
+      ok: true,
+      dry_run: isDry,
+      fuel:       { found: zeroFuelRows.length, fixed: fuelFixed, errors: fuelErrors },
+      surcharges: { found: zeroSurRows.length,  fixed: surFixed,  errors: surErrors },
+    });
+  } catch (err) {
+    console.error('[repair-zero-fuel] error:', err.message);
     return res.status(500).json({ error: err.message });
   }
 });

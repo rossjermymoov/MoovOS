@@ -6,6 +6,7 @@
  * DELETE /api/customer-rates/rate/:rateId             — delete a single rate row
  * POST   /api/customer-rates/:customerId              — add a new rate row for a customer
  * POST   /api/customer-rates/:customerId/sub-rates    — bulk apply sub rates by service_code + zone_name
+ * POST   /api/customer-rates/:customerId/apply-markup — bulk delete + re-insert all zones at markup % from carrier card
  */
 
 import express from 'express';
@@ -82,17 +83,98 @@ router.post('/:customerId', async (req, res, next) => {
       return res.status(400).json({ error: 'service_id, zone_name, and price are required' });
     }
 
-    // Pull numeric weight bounds from dc_weight_classes if available.
-    // This makes the carrier rate card the source of truth rather than
-    // relying on the weight_class_name text to be parsed at pricing time.
+    // Normalise weight_class_name to lowercase so that uppercase variants (e.g.
+    // "0-0.5KG" from old client code) never create duplicate rows.  The unique
+    // constraint on (customer_id, service_id, zone_name, weight_class_name) is
+    // case-sensitive, so without this normalisation an uppercase submission would
+    // create a phantom duplicate alongside any existing lowercase row.
+    const normWeightClassName = typeof weight_class_name === 'string'
+      ? weight_class_name.toLowerCase()
+      : weight_class_name;
+
+    // Resolve numeric weight bounds for this band.
+    //
+    // Strategy (first match wins):
+    //   1. dc_weight_classes — for bands stored in the old DC platform name format
+    //   2. weight_bands table — for services whose zones/bands are defined in the
+    //      carrier rate card (domestic DPD, Yodel, etc.)
+    //   3. Parse weight_class_name directly — bandLabel() format is "0-2KG", "2-5KG",
+    //      "10KG+" etc., so we can extract bounds reliably when neither table matches.
+    //
+    // Without numeric bounds, rateCoversWeight() treats every row as a catch-all and
+    // the billing engine can pick the wrong (more expensive) band.
+
+    let resolvedMin = null;
+    let resolvedMax = null;
+
+    // 1. dc_weight_classes
     const wcRes = await query(
       `SELECT min_weight_kg, max_weight_kg
        FROM dc_weight_classes
        WHERE service_code = $1 AND weight_class_name = $2
        LIMIT 1`,
-      [service_code, weight_class_name]
+      [service_code, normWeightClassName]
     );
-    const wc = wcRes.rows[0] || {};
+    if (wcRes.rows[0]) {
+      resolvedMin = wcRes.rows[0].min_weight_kg;
+      resolvedMax = wcRes.rows[0].max_weight_kg;
+    }
+
+    // 2. weight_bands for this service + zone
+    if (resolvedMin == null && resolvedMax == null && zone_name) {
+      const wbRes = await query(
+        `SELECT wb.min_weight_kg, wb.max_weight_kg
+         FROM weight_bands wb
+         JOIN zones z             ON z.id  = wb.zone_id
+         JOIN courier_services cs ON cs.id = z.courier_service_id
+         WHERE cs.service_code ILIKE $1
+           AND z.name          ILIKE $2
+           AND (
+             -- Match by wb.name (e.g. 'Medium Bagit', 'Parcel', 'Small Bagit')
+             (wb.name IS NOT NULL AND wb.name NOT IN ('None','') AND wb.name ILIKE $3)
+             OR
+             -- Match by numeric bounds derived from the bandLabel name (e.g. '0-2KG')
+             (wb.min_weight_kg IS NOT NULL AND wb.max_weight_kg IS NOT NULL AND
+              CONCAT(
+                CASE WHEN wb.min_weight_kg = floor(wb.min_weight_kg)
+                     THEN floor(wb.min_weight_kg)::int::text
+                     ELSE round(wb.min_weight_kg::numeric,1)::text END,
+                '-',
+                CASE WHEN wb.max_weight_kg = floor(wb.max_weight_kg)
+                     THEN floor(wb.max_weight_kg)::int::text
+                     ELSE round(wb.max_weight_kg::numeric,1)::text END,
+                'KG'
+              ) ILIKE $3)
+             OR
+             (wb.max_weight_kg IS NULL AND
+              CONCAT(
+                CASE WHEN wb.min_weight_kg = floor(wb.min_weight_kg)
+                     THEN floor(wb.min_weight_kg)::int::text
+                     ELSE round(wb.min_weight_kg::numeric,1)::text END,
+                'KG+'
+              ) ILIKE $3)
+           )
+         LIMIT 1`,
+        [service_code, zone_name, normWeightClassName]
+      );
+      if (wbRes.rows[0]) {
+        resolvedMin = wbRes.rows[0].min_weight_kg;
+        resolvedMax = wbRes.rows[0].max_weight_kg;
+      }
+    }
+
+    // 3. Parse bandLabel format directly: "0-2kg", "2-5kg", "10kg+"
+    if (resolvedMin == null && resolvedMax == null) {
+      const rangeMatch = normWeightClassName.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)kg$/i);
+      const openMatch  = normWeightClassName.match(/^(\d+(?:\.\d+)?)kg\+$/i);
+      if (rangeMatch) {
+        resolvedMin = parseFloat(rangeMatch[1]);
+        resolvedMax = parseFloat(rangeMatch[2]);
+      } else if (openMatch) {
+        resolvedMin = parseFloat(openMatch[1]);
+        resolvedMax = null; // open-ended upper band
+      }
+    }
 
     const result = await query(`
       INSERT INTO customer_rates
@@ -104,20 +186,174 @@ router.post('/:customerId', async (req, res, next) => {
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
       ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
       DO UPDATE SET
-        price         = EXCLUDED.price,
-        price_sub     = EXCLUDED.price_sub,
-        min_weight_kg = COALESCE(customer_rates.min_weight_kg, EXCLUDED.min_weight_kg),
-        max_weight_kg = COALESCE(customer_rates.max_weight_kg, EXCLUDED.max_weight_kg)
+        price             = EXCLUDED.price,
+        price_sub         = EXCLUDED.price_sub,
+        min_weight_kg     = COALESCE(customer_rates.min_weight_kg, EXCLUDED.min_weight_kg),
+        max_weight_kg     = COALESCE(customer_rates.max_weight_kg, EXCLUDED.max_weight_kg)
       RETURNING *
     `, [customerId, courier_id, courier_code, courier_name,
         service_id, service_code, service_name,
-        zone_name, weight_class_name,
-        wc.min_weight_kg ?? null, wc.max_weight_kg ?? null,
+        zone_name, normWeightClassName,
+        resolvedMin ?? null, resolvedMax ?? null,
         parseFloat(price),
         price_sub != null ? parseFloat(price_sub) : null]);
 
     res.status(201).json(result.rows[0]);
   } catch (err) { next(err); }
+});
+
+// ─── POST /:customerId/apply-markup — bulk delete + re-insert from carrier ────
+//
+// The "Apply to all zones" operation.  Runs as a single DB transaction:
+//   1. Delete ALL existing customer_rates rows for (customer, service_code).
+//   2. Walk every (zone, weight_band) in the carrier rate card and insert a new row
+//      with price = carrier_price_first × (1 + markup_pct / 100).
+//
+// Body: {
+//   service_code          — e.g. "DPD-60DDP"
+//   service_id            — legacy billing ID (stored in customer_rates.service_id)
+//   service_name          — display name
+//   courier_id            — couriers.id for this service
+//   courier_code          — e.g. "DPD"
+//   courier_name          — e.g. "DPD"
+//   carrier_rate_card_id  — which carrier_rate_cards row to source prices from
+//   markup_pct            — e.g. 10 (meaning 10 %)
+// }
+// Returns: { deleted, inserted, zones, weight_classes }
+router.post('/:customerId/apply-markup', async (req, res, next) => {
+  const client = await (await import('../db/index.js')).getClient();
+  try {
+    const { customerId } = req.params;
+    const {
+      service_code, service_id, service_name,
+      courier_id = 0, courier_code = '', courier_name = '',
+      carrier_rate_card_id,
+      markup_pct,
+    } = req.body;
+
+    if (!service_code || !service_id || carrier_rate_card_id == null || markup_pct == null) {
+      return res.status(400).json({ error: 'service_code, service_id, carrier_rate_card_id, and markup_pct are required' });
+    }
+
+    const pct = parseFloat(markup_pct);
+    if (isNaN(pct) || pct < 0) {
+      return res.status(400).json({ error: 'markup_pct must be a non-negative number' });
+    }
+    const multiplier = 1 + pct / 100;
+
+    // Fetch all (zone, band) pairs from the carrier rate card for this service.
+    // Band name: use wb.name when meaningful, otherwise compute from min/max (same
+    // logic as GET /zones/:serviceCode so labels stay consistent everywhere).
+    const bandsRes = await client.query(`
+      SELECT
+        z.name  AS zone_name,
+        CASE
+          -- Multi-band zone: always use computed label so every chip gets a unique
+          -- weight_class_name even when all bands share wb.name = 'Parcel'.
+          WHEN COUNT(*) OVER (PARTITION BY z.id) > 1 THEN
+            CASE
+              WHEN wb.max_weight_kg IS NOT NULL THEN
+                (CASE WHEN wb.min_weight_kg = floor(wb.min_weight_kg)
+                      THEN floor(wb.min_weight_kg)::int::text
+                      ELSE round(wb.min_weight_kg::numeric, 1)::text END)
+                || '-' ||
+                (CASE WHEN wb.max_weight_kg = floor(wb.max_weight_kg)
+                      THEN floor(wb.max_weight_kg)::int::text
+                      ELSE round(wb.max_weight_kg::numeric, 1)::text END)
+                || 'kg'
+              ELSE
+                (CASE WHEN wb.min_weight_kg = floor(wb.min_weight_kg)
+                      THEN floor(wb.min_weight_kg)::int::text
+                      ELSE round(wb.min_weight_kg::numeric, 1)::text END)
+                || 'kg+'
+            END
+          -- Single-band zone: keep wb.name when meaningful
+          WHEN wb.name IS NOT NULL AND wb.name NOT IN ('None', '') THEN wb.name
+          WHEN wb.max_weight_kg IS NOT NULL THEN
+            (CASE WHEN wb.min_weight_kg = floor(wb.min_weight_kg)
+                  THEN floor(wb.min_weight_kg)::int::text
+                  ELSE round(wb.min_weight_kg::numeric, 1)::text END)
+            || '-' ||
+            (CASE WHEN wb.max_weight_kg = floor(wb.max_weight_kg)
+                  THEN floor(wb.max_weight_kg)::int::text
+                  ELSE round(wb.max_weight_kg::numeric, 1)::text END)
+            || 'kg'
+          ELSE
+            (CASE WHEN wb.min_weight_kg = floor(wb.min_weight_kg)
+                  THEN floor(wb.min_weight_kg)::int::text
+                  ELSE round(wb.min_weight_kg::numeric, 1)::text END)
+            || 'kg+'
+        END                   AS weight_class_name,
+        wb.min_weight_kg,
+        wb.max_weight_kg,
+        wb.price_first,
+        wb.price_sub
+      FROM courier_services cs
+      JOIN zones       z  ON z.courier_service_id = cs.id
+      JOIN weight_bands wb ON wb.zone_id = z.id
+      WHERE cs.service_code ILIKE $1
+        AND wb.carrier_rate_card_id = $2
+      ORDER BY z.name, wb.min_weight_kg
+    `, [service_code, carrier_rate_card_id]);
+
+    if (!bandsRes.rows.length) {
+      return res.status(404).json({ error: `No carrier bands found for ${service_code} on rate card ${carrier_rate_card_id}` });
+    }
+
+    await client.query('BEGIN');
+
+    // 1. Delete all existing customer rates for this service
+    const delRes = await client.query(
+      `DELETE FROM customer_rates WHERE customer_id = $1 AND service_code = $2`,
+      [customerId, service_code]
+    );
+    const deleted = delRes.rowCount;
+
+    // 2. Bulk-insert new rates
+    let inserted = 0;
+    for (const band of bandsRes.rows) {
+      const sellPrice = parseFloat((parseFloat(band.price_first) * multiplier).toFixed(2));
+      const sellSub   = band.price_sub != null
+        ? parseFloat((parseFloat(band.price_sub) * multiplier).toFixed(2))
+        : null;
+
+      await client.query(`
+        INSERT INTO customer_rates
+          (customer_id, courier_id, courier_code, courier_name,
+           service_id, service_code, service_name,
+           zone_name, weight_class_name,
+           min_weight_kg, max_weight_kg,
+           price, price_sub)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+        ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
+        DO UPDATE SET
+          price         = EXCLUDED.price,
+          price_sub     = EXCLUDED.price_sub,
+          min_weight_kg = COALESCE(customer_rates.min_weight_kg, EXCLUDED.min_weight_kg),
+          max_weight_kg = COALESCE(customer_rates.max_weight_kg, EXCLUDED.max_weight_kg)
+      `, [
+        customerId,
+        courier_id, courier_code, courier_name,
+        service_id, service_code, service_name,
+        band.zone_name, band.weight_class_name,
+        band.min_weight_kg, band.max_weight_kg,
+        sellPrice, sellSub,
+      ]);
+      inserted++;
+    }
+
+    await client.query('COMMIT');
+
+    const zones         = new Set(bandsRes.rows.map(b => b.zone_name)).size;
+    const weight_classes = new Set(bandsRes.rows.map(b => b.weight_class_name)).size;
+
+    res.json({ deleted, inserted, zones, weight_classes });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(err);
+  } finally {
+    client.release();
+  }
 });
 
 // ─── POST /:customerId/sub-rates — bulk apply sub rates ───────
@@ -176,7 +412,75 @@ router.get('/zones/:serviceCode', async (req, res, next) => {
   try {
     const { serviceCode } = req.params;
 
-    // Primary: existing customer_rates for this service (any customer)
+    // Primary: weight_bands table — the authoritative source for domestic services.
+    // Each zone can have multiple bands (2KG, 5KG, 10KG…) stored here.
+    // Returns one row per (zone, band). Uses wb.name when meaningful (not null/'None'/empty),
+    // otherwise falls back to the computed bandLabel format ("0-2KG", "2-5KG", "10KG+").
+    // This ensures the template label matches what gets stored in customer_rates, so the
+    // POST resolution logic can always resolve min/max bounds from the band name.
+    // Groups across all carrier rate cards so the template is card-agnostic.
+    const weightBandResult = await query(`
+      -- Multi-band zones always use computed min–max labels, never wb.name.
+      -- The old MAX(wb.name) logic collapsed every chip to weight_class_name='Parcel'
+      -- when all bands in a zone shared the same name (e.g. from a rate-card import),
+      -- causing multiWeight=false in the UI and all chips sharing one customer_rates row.
+      WITH grouped_bands AS (
+        SELECT
+          z.id          AS zone_id,
+          z.name        AS zone_name,
+          wb.min_weight_kg,
+          wb.max_weight_kg,
+          MAX(wb.name)  AS band_name,
+          BOOL_OR(wb.price_sub IS NOT NULL) AS has_sub_price
+        FROM courier_services cs
+        JOIN zones       z  ON z.courier_service_id = cs.id
+        JOIN weight_bands wb ON wb.zone_id = z.id
+        WHERE cs.service_code ILIKE $1
+        GROUP BY z.id, z.name, wb.min_weight_kg, wb.max_weight_kg
+      ),
+      band_counts AS (
+        SELECT zone_id, COUNT(*) AS band_count
+        FROM grouped_bands
+        GROUP BY zone_id
+      )
+      SELECT
+        gb.zone_name,
+        CASE
+          -- Single-band zone: keep the name if meaningful ('Parcel', 'Small Bagit', etc.)
+          WHEN bc.band_count = 1
+               AND gb.band_name IS NOT NULL
+               AND gb.band_name NOT IN ('None', '')
+            THEN gb.band_name
+          -- Multi-band zone (or unnamed single-band): always use computed label
+          -- to guarantee distinct weight_class_name values per chip.
+          WHEN gb.max_weight_kg IS NOT NULL THEN
+            (CASE WHEN gb.min_weight_kg = floor(gb.min_weight_kg)
+                  THEN floor(gb.min_weight_kg)::int::text
+                  ELSE round(gb.min_weight_kg::numeric, 1)::text END)
+            || '-' ||
+            (CASE WHEN gb.max_weight_kg = floor(gb.max_weight_kg)
+                  THEN floor(gb.max_weight_kg)::int::text
+                  ELSE round(gb.max_weight_kg::numeric, 1)::text END)
+            || 'kg'
+          ELSE
+            (CASE WHEN gb.min_weight_kg = floor(gb.min_weight_kg)
+                  THEN floor(gb.min_weight_kg)::int::text
+                  ELSE round(gb.min_weight_kg::numeric, 1)::text END)
+            || 'kg+'
+        END                       AS weight_class_name,
+        gb.has_sub_price
+      FROM grouped_bands gb
+      JOIN band_counts bc ON bc.zone_id = gb.zone_id
+      ORDER BY gb.zone_name, gb.min_weight_kg
+    `, [serviceCode]);
+
+    if (weightBandResult.rows.length > 0) {
+      return res.json(weightBandResult.rows.map(({ sort_weight, ...rest }) => rest));
+    }
+
+    // Secondary: existing customer_rates for this service (any customer).
+    // Used for international services where zones are stored directly in
+    // customer_rates — no weight_bands table entries exist for these.
     const ratesResult = await query(`
       SELECT   zone_name, weight_class_name,
                BOOL_OR(price_sub IS NOT NULL) AS has_sub_price
@@ -236,6 +540,40 @@ router.get('/:customerId', async (req, res, next) => {
       ORDER BY COALESCE(c.name, cr.courier_name), cr.service_name
     `, [customerId]);
 
+    // Also include services the customer has selected (customer_services) but hasn't
+    // priced yet — so they appear in the UI with 0 rates, ready for markup application.
+    // Only fetches services NOT already covered by customer_rates above.
+    const existingCodes = new Set(summaryRes.rows.map(r => r.service_code));
+    const unPricedRes = await query(`
+      SELECT
+        co.id   AS courier_id,
+        co.code AS courier_code,
+        co.name AS courier_name,
+        -- Fall back to courier_services.id as the legacy service_id when no rates exist
+        COALESCE(
+          (SELECT cr2.service_id FROM customer_rates cr2
+           WHERE cr2.service_code = cs.service_code LIMIT 1),
+          cs.id
+        ) AS service_id,
+        cs.service_code,
+        cs.name         AS service_name,
+        0               AS rate_count,
+        cs.service_type::text AS service_type,
+        false           AS has_sub_rates
+      FROM customer_services cust_svc
+      JOIN courier_services cs ON cs.id = cust_svc.courier_service_id
+      JOIN couriers         co ON co.id = cs.courier_id
+      WHERE cust_svc.customer_id = $1
+        AND cs.service_type = 'international'
+      ORDER BY co.name, cs.name
+    `, [customerId]);
+
+    // Merge: add unpriced services that aren't already represented
+    const allSummaryRows = [
+      ...summaryRes.rows,
+      ...unPricedRes.rows.filter(r => !existingCodes.has(r.service_code)),
+    ];
+
     // All rate rows (include id, price_sub for edit/delete)
     // Sort weight bands numerically by extracting the leading number from the
     // weight_class_name (e.g. "2KG"→2, "5KG"→5, "10KG"→10) so that "2KG" sorts
@@ -270,7 +608,7 @@ router.get('/:customerId', async (req, res, next) => {
       });
     }
 
-    const services = summaryRes.rows.map(s => ({
+    const services = allSummaryRows.map(s => ({
       courier_id:    s.courier_id,
       courier_code:  s.courier_code,
       courier_name:  s.courier_name,

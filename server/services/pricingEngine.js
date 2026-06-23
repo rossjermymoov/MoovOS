@@ -12,8 +12,11 @@
  *   lower bound  EXCLUSIVE  →  weight  >  COALESCE(min_weight_kg, 0)
  *   upper bound  INCLUSIVE  →  weight  <= max_weight_kg
  *
+ * If weight is EXACTLY on a band boundary it stays in the CURRENT (lower) band.
+ * e.g. a 1–1.5kg band: exactly 1.5kg uses this band, not the next one.
+ *
  * Two-pass cost lookup:
- *   Pass 1 — weight fits inside a finite band  (max IS NOT NULL, weight <= max)
+ *   Pass 1 — weight fits within a finite band  (weight > min, weight <= max)
  *   Pass 2 — weight exceeds every ceiling band  →  price_first + overageKg × cost_per_kg
  */
 
@@ -192,9 +195,9 @@ async function calcWeight(serviceId, parcel) {
 // Mirrors reconciliationEngine.lookupCarrierBandCost exactly.
 //
 // Pass 1 — weight sits within a band's finite ceiling:
-//   weight > COALESCE(min_weight_kg, 0)  (exclusive lower)
-//   weight <= max_weight_kg              (inclusive upper)
-//   max_weight_kg IS NOT NULL            (finite bands only — open-ended bands block Pass 2 if included)
+//   weight >  COALESCE(min_weight_kg, 0)  (exclusive lower)
+//   weight <= max_weight_kg               (inclusive upper — on boundary → stays in this band)
+//   max_weight_kg IS NOT NULL             (finite bands only — open-ended bands block Pass 2 if included)
 //
 // Pass 2 — weight exceeds every ceiling:
 //   Finds the band with the highest finite max, then:
@@ -296,8 +299,8 @@ export async function lookupCarrierBandCost(serviceId, weightKg, zoneId) {
 //
 // Reads customer_rates (the same table billing.js uses for reprice).
 // Identical boundary convention to lookupCarrierBandCost:
-//   weight > COALESCE(min_weight_kg, 0)  (exclusive lower)
-//   weight <= max_weight_kg              (inclusive upper, Pass 1 — finite bands only)
+//   weight >  COALESCE(min_weight_kg, 0)  (exclusive lower)
+//   weight <= max_weight_kg               (inclusive upper — on boundary → stays in this band)
 //
 // If no finite band matches, tries open-ended bands (max IS NULL) as a catch-all.
 // Per-kg overage (per_kg_rate / per_kg_threshold_kg) is applied on top when present.
@@ -326,9 +329,11 @@ export async function lookupCustomerSellPrice(customerId, serviceCode, weightKg,
 
     if (p1.rows.length) {
       const r = p1.rows[0];
-      let sellPrice = round2(parseFloat(r.price || 0));
+      // Preserve null: price=null means "not configured" (different from price=0).
+      // all_sub DPD rate cards often leave price null for bands used only as sub-rate.
+      let sellPrice = r.price != null ? round2(parseFloat(r.price)) : null;
       let overageKg = null;
-      if (r.per_kg_rate != null && r.per_kg_threshold_kg != null && weightKg > parseFloat(r.per_kg_threshold_kg)) {
+      if (sellPrice != null && r.per_kg_rate != null && r.per_kg_threshold_kg != null && weightKg > parseFloat(r.per_kg_threshold_kg)) {
         overageKg = round2(weightKg - parseFloat(r.per_kg_threshold_kg));
         sellPrice = round2(sellPrice + overageKg * parseFloat(r.per_kg_rate));
       }
@@ -358,9 +363,10 @@ export async function lookupCustomerSellPrice(customerId, serviceCode, weightKg,
 
     if (p2.rows.length) {
       const r = p2.rows[0];
-      let sellPrice = round2(parseFloat(r.price || 0));
+      // Preserve null: price=null means "not configured" (different from price=0).
+      let sellPrice = r.price != null ? round2(parseFloat(r.price)) : null;
       let overageKg = null;
-      if (r.per_kg_rate != null && r.per_kg_threshold_kg != null && weightKg > parseFloat(r.per_kg_threshold_kg)) {
+      if (sellPrice != null && r.per_kg_rate != null && r.per_kg_threshold_kg != null && weightKg > parseFloat(r.per_kg_threshold_kg)) {
         overageKg = round2(weightKg - parseFloat(r.per_kg_threshold_kg));
         sellPrice = round2(sellPrice + overageKg * parseFloat(r.per_kg_rate));
       }
@@ -529,6 +535,12 @@ export async function processShipment(payload) {
       customerId        = row.id;
       multi_box_pricing = row.multi_box_pricing;
     };
+
+    // Direct override — carrier-direct path passes customer_id when already known
+    if (payload.customerId) {
+      const r = await query('SELECT id, multi_box_pricing FROM customers WHERE id = $1 LIMIT 1', [payload.customerId]);
+      if (r.rows.length) pickCustomer(r.rows[0]);
+    }
 
     // Step 1: account_number → customers.account_number
     if (accountNumber) {
@@ -779,7 +791,9 @@ export async function processShipment(payload) {
       // For carriers with all_sub_parcel_pricing (e.g. DPD), every parcel in a
       // multi-parcel shipment — including the first — is billed at price_sub.
       // Standard carriers use price_first for parcel 1, price_sub for the rest.
-      const forceSubRate = allSubParcelPricing && totalParcels > 1;
+      // Customers with multi_box_pricing=true use the same all-sub model at the
+      // customer level: 1 parcel → price_first; 2+ parcels → ALL at price_sub.
+      const forceSubRate = (allSubParcelPricing || multi_box_pricing) && totalParcels > 1;
       const useFirstParcel = forceSubRate ? false : (isFirst || !multi_box_pricing);
       const baseCost = useFirstParcel
         ? costResult.cost
@@ -999,10 +1013,10 @@ export async function insertCharges(charges, shipmentId = null) {
          customer_id, voila_shipment_id, order_id, tracking_code,
          courier_service_id, zone_id, charge_type, parcel_number,
          weight_actual_kg, weight_dimensional_kg, weight_charged_kg,
-         cost_price, sell_price, price, status,
+         cost_price, sell_price, price, status, verified,
          despatch_date, ship_to_postcode, ship_to_country_iso, ship_to_name,
          parcel_count, raw_payload, pricing_logic_trace, shipment_id, source
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
        ON CONFLICT DO NOTHING
        RETURNING *`,
       [
@@ -1014,6 +1028,7 @@ export async function insertCharges(charges, shipmentId = null) {
         c.cost_price, c.sell_price,
         c.sell_price,            // price = sell_price — legacy column read by UI + billing engine
         c.status,
+        c.source === 'carrier_direct' ? true : (c.verified ?? false), // carrier_direct always verified
         c.despatch_date         || null,
         c.ship_to_postcode      || null,
         c.ship_to_country_iso   || null,
@@ -1096,8 +1111,8 @@ export async function computeGhostCharge(serviceId, customerId, weightKg, postco
     cost_price:            costResult.cost,         // price_first — single-parcel / first-parcel rate
     cost_sub:              costResult.costSub,      // price_sub   — per-parcel rate for all_sub carriers; null if not set
     band_label:            costResult.bandLabel,    // e.g. "0–2kg" — for trace/diagnostics
-    sell_price:            sellResult?.sellPrice || null,
-    sell_sub:              sellResult?.sellSub   || null,  // price_sub sell — for all_sub multi-parcel sell calc
+    sell_price:            sellResult?.sellPrice ?? null,   // null = price not configured on rate card
+    sell_sub:              sellResult?.sellSub   ?? null,  // price_sub sell — for all_sub multi-parcel sell calc
     fallback_service_code: fallbackServiceCode,            // propagated for use in correctedSell helpers
   };
 }

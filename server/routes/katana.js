@@ -6,7 +6,7 @@
  * PATCH  /api/katana/sources/:id      — update (toggle active, edit content)
  * DELETE /api/katana/sources/:id      — delete source
  * POST   /api/katana/sources/:id/sync — re-fetch URL content
- * POST   /api/katana/chat             — main chat endpoint (Anthropic tool-use + live DB)
+ * POST   /api/katana/chat             — main chat endpoint (Gemini function-calling + live DB)
  */
 
 import express from 'express';
@@ -14,8 +14,8 @@ import { query } from '../db/index.js';
 
 const router = express.Router();
 
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-const ANTHROPIC_MODEL   = 'claude-haiku-4-5-20251001';
+const GEMINI_URL =
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 // ─── DB schema description for Katana's system prompt ────────────────────────
 const DB_SCHEMA = `
@@ -156,110 +156,77 @@ RULES:
 - You know everything about the business from the database. Never say you don't have access to data — use run_query to find it.`;
 }
 
-// ─── Anthropic tool-use loop ──────────────────────────────────────────────────
+// ─── Gemini function-calling loop ─────────────────────────────────────────────
+// Run the read-only SQL tool. Shared by the loop below.
+async function execRunQuery(args) {
+  try {
+    const sql = (args?.sql || '').trim();
+    if (!/^SELECT\b/i.test(sql)) return { error: 'Only SELECT queries are permitted.' };
+    const { rows } = await query(sql + (sql.toLowerCase().includes('limit') ? '' : ' LIMIT 50'));
+    return { rows, count: rows.length };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
 async function runKatanaChat(messages, knowledgeSources) {
-  const tools = [
-    {
+  const tools = [{
+    functionDeclarations: [{
       name: 'run_query',
       description: 'Run a read-only SELECT SQL query against the Moov Parcel PostgreSQL database. Returns rows as JSON. Always use this to look up live data.',
-      input_schema: {
-        type: 'object',
+      parameters: {
+        type: 'OBJECT',
         properties: {
-          sql: {
-            type: 'string',
-            description: 'A valid PostgreSQL SELECT query. Must start with SELECT. Limit results to 50 rows max.',
-          },
-          description: {
-            type: 'string',
-            description: 'Brief description of what this query is fetching (for logging).',
-          },
+          sql:         { type: 'STRING', description: 'A valid PostgreSQL SELECT query. Must start with SELECT. Limit results to 50 rows max.' },
+          description: { type: 'STRING', description: 'Brief description of what this query is fetching (for logging).' },
         },
         required: ['sql'],
       },
-    },
-  ];
+    }],
+  }];
 
-  const systemPrompt = buildSystemPrompt(knowledgeSources);
+  if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not configured');
+  const systemInstruction = { parts: [{ text: buildSystemPrompt(knowledgeSources) }] };
 
-  let currentMessages = [...messages];
+  // Convert incoming {role:'user'|'assistant', content:text} turns to Gemini
+  // contents (Gemini uses role 'model' for the assistant; parts carry text).
+  let contents = messages.map(m => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) }],
+  }));
 
-  // Agentic loop — keep going until Anthropic stops using tools
+  // Agentic loop — keep going until Gemini stops calling the tool.
   for (let i = 0; i < 8; i++) {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(process.env.GEMINI_API_KEY)}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: ANTHROPIC_MODEL,
-        max_tokens: 2048,
-        system: systemPrompt,
+        systemInstruction,
         tools,
-        messages: currentMessages,
+        contents,
+        generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
       }),
     });
+    if (!resp.ok) throw new Error(`Gemini API error: ${await resp.text()}`);
 
-    if (!response.ok) {
-      const err = await response.text();
-      throw new Error(`Anthropic API error: ${err}`);
+    const data  = await resp.json();
+    const parts = data.candidates?.[0]?.content?.parts || [];
+    const calls = parts.filter(p => p.functionCall);
+
+    // No tool calls → final text answer.
+    if (!calls.length) {
+      return parts.filter(p => p.text).map(p => p.text).join('') || 'No response generated.';
     }
 
-    const data = await response.json();
-
-    if (data.stop_reason === 'end_turn') {
-      // Extract text from response
-      const text = data.content
-        .filter(b => b.type === 'text')
-        .map(b => b.text)
-        .join('');
-      return text;
+    // Echo the model's function-call turn, then append our function responses.
+    contents.push({ role: 'model', parts });
+    const responseParts = [];
+    for (const c of calls) {
+      const fc = c.functionCall;
+      const result = fc.name === 'run_query' ? await execRunQuery(fc.args) : { error: `Unknown tool: ${fc.name}` };
+      responseParts.push({ functionResponse: { name: fc.name, response: result } });
     }
-
-    if (data.stop_reason === 'tool_use') {
-      // Execute all tool calls
-      const toolUseBlocks = data.content.filter(b => b.type === 'tool_use');
-      const toolResults = [];
-
-      for (const toolUse of toolUseBlocks) {
-        if (toolUse.name === 'run_query') {
-          let result;
-          try {
-            const sql = toolUse.input.sql.trim();
-            // Safety: only allow SELECT
-            if (!/^SELECT\b/i.test(sql)) {
-              result = { error: 'Only SELECT queries are permitted.' };
-            } else {
-              const { rows } = await query(sql + (sql.toLowerCase().includes('limit') ? '' : ' LIMIT 50'));
-              result = { rows, count: rows.length };
-            }
-          } catch (e) {
-            result = { error: e.message };
-          }
-
-          toolResults.push({
-            type: 'tool_result',
-            tool_use_id: toolUse.id,
-            content: JSON.stringify(result),
-          });
-        }
-      }
-
-      // Add assistant message + tool results and loop
-      currentMessages = [
-        ...currentMessages,
-        { role: 'assistant', content: data.content },
-        { role: 'user', content: toolResults },
-      ];
-    } else {
-      // Unexpected stop reason
-      const text = (data.content || [])
-        .filter(b => b.type === 'text')
-        .map(b => b.text)
-        .join('');
-      return text || 'No response generated.';
-    }
+    contents.push({ role: 'user', parts: responseParts });
   }
 
   return 'I reached the maximum number of steps. Please try a more specific question.';
@@ -413,7 +380,7 @@ router.post('/chat', async (req, res) => {
     console.error('[Katana chat error]', e.message);
     // Return a user-friendly message so the widget shows something meaningful
     // rather than just "oops something went wrong"
-    const friendly = e.message?.includes('Anthropic API error')
+    const friendly = e.message?.includes('Gemini API error')
       ? 'I had trouble reaching the AI service. Please try again in a moment.'
       : e.message?.includes('context_length_exceeded') || e.message?.includes('too long')
       ? 'That conversation got too long for me to process. Try clearing the chat and asking again.'
