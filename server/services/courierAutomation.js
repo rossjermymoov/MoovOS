@@ -12,6 +12,7 @@ import { query } from '../db/index.js';
 import { extractTriage, geminiGenerate, isLikelyTracking } from './geminiService.js';
 import { matchTemplate, fillTemplate } from './courierTemplates.js';
 import { isAutopilotEnabled, isLockedCategory } from './workflowTrust.js';
+import { getMatchedRule } from './automationEngine.js';
 
 const DEFAULT_SLA_HOURS = 24;
 const SUPPORT_FROM = 'service@moovparcel.co.uk';
@@ -238,6 +239,26 @@ export async function processCustomerEmail(queryId, { subject = '', body = '' } 
     return { status: 'autopilot_completed', reason: 'no reply required (automated/non-actionable)', triage };
   }
 
+  // Honour the matched automation rule's autopilot mode:
+  //   off   → no AI drafting at all (e.g. an "account on stop" billing rule); hand
+  //           straight to a human and NEVER spin up a courier inquiry.
+  //   draft → create QA-Bay drafts, send nothing (default).
+  //   full  → may auto-send, still gated by the workflow_trust streak below.
+  const autoRule = await getMatchedRule(queryId);
+  const autopilotMode = autoRule?.autopilot_mode || 'draft';
+  if (autopilotMode === 'off') {
+    await query(
+      `UPDATE queries
+          SET internal_automation_state = 'action_required',
+              requires_attention = true,
+              attention_reason = $2,
+              updated_at = NOW()
+        WHERE id = $1`,
+      [queryId, `Automation rule "${autoRule?.name || 'rule'}" is set to no auto-drafting — handle manually.`],
+    );
+    return { status: 'rule_autopilot_off', rule: autoRule?.name || null, triage };
+  }
+
   // Resolve courier — never surface AGL (the wholesaler we buy Evri/Yodel from).
   // Strip it, then let the tracking-number shape decide Evri vs Yodel.
   let courierCode = String(triage.courier_code || ticket.courier_code || '').toLowerCase();
@@ -379,7 +400,7 @@ export async function processCustomerEmail(queryId, { subject = '', body = '' } 
   // a locked category (claims/complaints) — dispatch both faces autonomously: mark
   // sent, flip tracks, and log a true autopilot_dispatch (no QA stop).
   const intent = 'courier_chase';
-  if (!isLockedCategory(intent, ticket.group_name) && await isAutopilotEnabled(courierCode, intent)) {
+  if (autopilotMode === 'full' && !isLockedCategory(intent, ticket.group_name) && await isAutopilotEnabled(courierCode, intent)) {
     await query(
       `UPDATE query_emails SET is_ai_draft = false, ai_draft_edited = false,
               ai_draft_approved_at = NOW(), sent_at = NOW()

@@ -102,7 +102,7 @@ const GROUP_BY_TICKET_TYPE = {
 
 import { getAuthedClient, getConfig, updateLastSync } from './gmailService.js';
 import { query } from '../db/index.js';
-import { applySlaTriggers } from './slaEngine.js';
+import { evaluateAutomationRules } from './automationEngine.js';
 import { triagePriority } from './triageEngine.js';
 import { isLikelyTracking } from './geminiService.js';
 import { identifyCourierByTracking, getAllTrackingExamples, draftCustomerUpdateFromCourier } from './courierAutomation.js';
@@ -382,16 +382,16 @@ async function upsertTicket(msg, gmail = null) {
     ]);
     queryId = ticketRes.rows[0].id;
 
-    // IF/THEN SLA triggers — may override priority and start the SLA clock.
+    // Automation rules — first-match rule may override priority + start the SLA clock.
     let triggerPriority = null;
     try {
-      const sla = await applySlaTriggers(queryId, { subject, senderEmail, courierCode, body, customerTier: customer?.tier });
-      triggerPriority = sla.priority;
+      const sla = await evaluateAutomationRules(queryId, { subject, senderEmail, courierCode, body, customerTier: customer?.tier });
+      triggerPriority = sla.rule?.set_priority || null;
     } catch (e) {
-      console.warn('[Gmail sync] SLA trigger evaluation failed:', e.message);
+      console.warn('[Gmail sync] Automation rule evaluation failed:', e.message);
     }
 
-    // Hybrid triage — only when no hard SLA trigger already forced a priority.
+    // Hybrid triage — only when no automation rule already forced a priority.
     // Phase 1 hard rules (P1 → urgent) then Phase 2 Gemini grader (high/medium/low).
     if (!triggerPriority) {
       try {

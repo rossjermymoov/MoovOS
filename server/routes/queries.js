@@ -15,7 +15,7 @@ import EmailReplyParser from 'email-reply-parser';
 import { parse as parseHtml } from 'node-html-parser';
 import { processCustomerEmail, recordCourierReply, getCourierTemplates, stitch } from '../services/courierAutomation.js';
 import { geminiGenerate } from '../services/geminiService.js';
-import { applySlaTriggers } from '../services/slaEngine.js';
+import { evaluateAutomationRules } from '../services/automationEngine.js';
 import { triagePriority } from '../services/triageEngine.js';
 import { aiAutonomouslyLearnPreference } from '../services/learningEngine.js';
 import { recordApproval } from '../services/workflowTrust.js';
@@ -1279,7 +1279,7 @@ router.post('/', async (req, res, next) => {
         customerTier = cr.rows[0]?.tier || null;
       }
 
-      const { matched } = await applySlaTriggers(newQuery.id, {
+      const { matched } = await evaluateAutomationRules(newQuery.id, {
         subject,
         senderEmail: sender_email,
         courierCode: courier_code,

@@ -20,10 +20,9 @@ export function SettingsNav() {
   const { pathname } = useLocation();
   const tabs = [
     { to: '/settings/staff',       label: 'Staff' },
-    { to: '/settings/rules',       label: 'SLA Rules Engine' },
+    { to: '/settings/automation-rules', label: 'Automation Rules' },
     { to: '/settings/onboarding-templates', label: 'Onboarding Templates' },
     { to: '/settings/comms-templates', label: 'Comms Templates' },
-    { to: '/settings/switchboard',     label: 'SLA & Autopilot' },
     { to: '/settings/volumetric',  label: 'Volumetric Weight' },
     { to: '/settings/billing',     label: 'Billing' },
     { to: '/settings/xero',        label: 'Xero' },

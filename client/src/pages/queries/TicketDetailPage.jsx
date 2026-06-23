@@ -855,9 +855,12 @@ export default function TicketDetailPage() {
   const isCourierDir = e => String(e.direction || '').includes('courier');
   const customerEmails = allEmails.filter(e => !isCourierDir(e));
   const courierEmails  = allEmails.filter(e => isCourierDir(e));
-  // Courier tabs only make sense for parcel-led work (Queries/Claims). Billing &
-  // Technical tickets render as a clean internal CRM view with no courier track.
-  const showCourierTab = !['Billing', 'Technical'].includes(ticket?.group_name);
+  // Courier lane only shows when a courier is genuinely involved — a courier is
+  // assigned OR courier correspondence already exists. Billing/Technical and pure
+  // account matters (e.g. "on stop") render as a clean internal CRM view with no
+  // courier track, even if mis-grouped.
+  const courierInvolved = Boolean(ticket?.courier_code) || courierEmails.length > 0;
+  const showCourierTab = !['Billing', 'Technical'].includes(ticket?.group_name) && courierInvolved;
   const effectiveTab   = showCourierTab ? convTab : 'customer';
   const visibleEmails  = effectiveTab === 'courier' ? courierEmails : customerEmails;
 
@@ -961,7 +964,7 @@ export default function TicketDetailPage() {
             {/* Track A — Customer Face */}
             <div className="flex min-h-0 flex-col border-r border-slate-200 bg-white">
               <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-3">
-                <span className="text-xs font-extrabold uppercase tracking-wide text-blue-600">👤 Customer Face</span>
+                <span className="text-xs font-extrabold uppercase tracking-wide text-blue-600">👤 Customer comms</span>
                 <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-700">{customerEmails.length}</span>
               </div>
               <div ref={messagesRef} className="min-h-0 flex-1 overflow-y-auto p-6">
@@ -982,7 +985,7 @@ export default function TicketDetailPage() {
               <div className="flex min-h-0 flex-col bg-white">
                 <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-3">
                   <span className="text-xs font-extrabold uppercase tracking-wide text-amber-600">
-                    🚚 Courier Face{ticket.courier_name ? ` · ${ticket.courier_name}` : ''}
+                    🚚 Courier comms{ticket.courier_name ? ` · ${ticket.courier_name}` : ''}
                   </span>
                   <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-700">{courierEmails.length}</span>
                 </div>
