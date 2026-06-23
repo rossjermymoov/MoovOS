@@ -10,6 +10,7 @@
 
 import express from 'express';
 import { query } from '../db/index.js';
+import { TRUST_CAP, isLockedCategory } from './../services/workflowTrust.js';
 
 const router = express.Router();
 
@@ -56,6 +57,72 @@ router.put('/couriers/:courier_code/templates', async (req, res, next) => {
     );
     if (!result.rows.length) return res.status(404).json({ error: `No courier routing rule for '${code}'` });
     res.json(result.rows[0]);
+  } catch (err) { next(err); }
+});
+
+// ─── SLA & Autopilot Switchboard ──────────────────────────────────────────────
+
+// GET /api/settings/sla-configs
+router.get('/sla-configs', async (req, res, next) => {
+  try {
+    const r = await query(`SELECT * FROM sla_configs ORDER BY response_target_minutes ASC`);
+    res.json(r.rows);
+  } catch (err) { next(err); }
+});
+
+// PUT /api/settings/sla-configs/:group
+router.put('/sla-configs/:group', async (req, res, next) => {
+  try {
+    const allowed = ['response_target_minutes', 'warning_buffer_minutes', 'scream_to_google_chat'];
+    const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));
+    if (!updates.length) return res.status(400).json({ error: 'No valid fields' });
+    const set    = updates.map(([k], i) => `${k} = $${i + 2}`).join(', ');
+    const values = [req.params.group, ...updates.map(([, v]) => v)];
+    const r = await query(`UPDATE sla_configs SET ${set}, updated_at = NOW() WHERE workflow_group = $1 RETURNING *`, values);
+    if (!r.rows.length) return res.status(404).json({ error: 'SLA config not found' });
+    res.json(r.rows[0]);
+  } catch (err) { next(err); }
+});
+
+// GET /api/settings/workflow-trust — per-category calibration + autopilot state.
+router.get('/workflow-trust', async (req, res, next) => {
+  try {
+    const r = await query(`SELECT * FROM workflow_trust ORDER BY courier_code, intent`);
+    const cap = TRUST_CAP;
+    res.json(r.rows.map(w => ({
+      ...w,
+      cap,
+      ready: w.consecutive_clean_approvals >= cap,
+      locked: isLockedCategory(w.intent, null),
+      stage: w.autopilot_enabled ? 'full_autopilot'
+           : w.consecutive_clean_approvals >= cap ? 'autopilot_ready' : 'probation',
+    })));
+  } catch (err) { next(err); }
+});
+
+// PUT /api/settings/workflow-trust/:courier/:intent/toggle  { enabled }
+router.put('/workflow-trust/:courier/:intent/toggle', async (req, res, next) => {
+  try {
+    const courier = (req.params.courier || '').toLowerCase();
+    const intent  = (req.params.intent || '').toLowerCase();
+    const enable  = req.body.enabled === true || req.body.enabled === 'true';
+
+    if (enable && isLockedCategory(intent, null)) {
+      return res.status(400).json({ error: 'Claims / complaints cannot run on Autopilot.' });
+    }
+    if (enable) {
+      const r = await query(`SELECT consecutive_clean_approvals FROM workflow_trust WHERE courier_code = $1 AND intent = $2`, [courier, intent]);
+      if (!r.rows.length || r.rows[0].consecutive_clean_approvals < TRUST_CAP) {
+        return res.status(400).json({ error: `Not calibrated yet — needs ${TRUST_CAP} consecutive clean approvals.` });
+      }
+    }
+    const upd = await query(
+      `UPDATE workflow_trust SET autopilot_enabled = $3, updated_at = NOW()
+        WHERE courier_code = $1 AND intent = $2 RETURNING *`,
+      [courier, intent, enable],
+    );
+    if (!upd.rows.length) return res.status(404).json({ error: 'Workflow category not found' });
+    res.json(upd.rows[0]);
   } catch (err) { next(err); }
 });
 

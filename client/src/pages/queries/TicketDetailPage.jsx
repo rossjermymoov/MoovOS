@@ -951,54 +951,54 @@ export default function TicketDetailPage() {
       {/* ── Body ── */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
 
-        {/* ── Left: thread + compose ── */}
+        {/* ── Left: parallel dual-track conversation + compose ── */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, overflow: 'hidden', background: '#F8FAFC' }}>
 
-          {/* Split-timeline tabs — only for parcel-led tickets (Queries/Claims).
-              Billing/Technical hide the courier track for a clean CRM view. */}
-          {showCourierTab && (
-          <div className="flex shrink-0 items-center gap-2 border-b border-slate-100 bg-white px-8 pt-4">
-            {[
-              { key: 'customer', label: 'Customer Conversation', count: customerEmails.length, active: 'border-blue-500 text-blue-700',  badge: 'bg-blue-50 text-blue-700' },
-              { key: 'courier',  label: 'Courier Correspondence', count: courierEmails.length,  active: 'border-amber-500 text-amber-700', badge: 'bg-amber-50 text-amber-700' },
-            ].map(t => {
-              const on = convTab === t.key;
-              return (
-                <button
-                  key={t.key}
-                  onClick={() => setConvTab(t.key)}
-                  className={`flex items-center gap-2 border-b-2 px-3 pb-3 text-sm font-medium transition
-                    ${on ? t.active : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-                >
-                  {t.label}
-                  <span className={`rounded-full px-2 text-xs font-semibold ${on ? t.badge : 'bg-slate-100 text-slate-500'}`}>
-                    {t.count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          )}
+          {/* Two lanes, side by side: Customer Face (Track A) + Courier Face (Track B).
+              Billing/Technical tickets hide the courier lane for a clean CRM view. */}
+          <div className={`grid min-h-0 flex-1 gap-0 overflow-hidden ${showCourierTab ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
 
-          {/* Thread */}
-          <div ref={messagesRef} className="min-h-0 flex-1 overflow-y-auto bg-white p-8">
-            {visibleEmails.length === 0 ? (
-              <div style={{ padding: '48px 0', textAlign: 'center', color: C.muted, alignSelf: 'center', width: '100%' }}>
-                <Mail size={24} style={{ marginBottom: 10, opacity: 0.2, display: 'block', margin: '0 auto 10px' }} />
-                <div style={{ fontSize: 13 }}>
-                  {convTab === 'courier' ? 'No courier correspondence yet' : 'No customer messages yet'}
+            {/* Track A — Customer Face */}
+            <div className="flex min-h-0 flex-col border-r border-slate-200 bg-white">
+              <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-3">
+                <span className="text-xs font-extrabold uppercase tracking-wide text-blue-600">👤 Customer Face</span>
+                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-700">{customerEmails.length}</span>
+              </div>
+              <div ref={messagesRef} className="min-h-0 flex-1 overflow-y-auto p-6">
+                {customerEmails.length === 0 ? (
+                  <div className="py-12 text-center text-sm text-slate-400">No customer messages yet</div>
+                ) : customerEmails.map(email => (
+                  <ThreadItem
+                    key={email.id} email={email} queryId={id}
+                    courierName={ticket.courier_name} courierCode={ticket.courier_code}
+                    onApproved={() => qc.invalidateQueries(['ticket', id])}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Track B — Courier Face */}
+            {showCourierTab && (
+              <div className="flex min-h-0 flex-col bg-white">
+                <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-3">
+                  <span className="text-xs font-extrabold uppercase tracking-wide text-amber-600">
+                    🚚 Courier Face{ticket.courier_name ? ` · ${ticket.courier_name}` : ''}
+                  </span>
+                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-700">{courierEmails.length}</span>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto p-6">
+                  {courierEmails.length === 0 ? (
+                    <div className="py-12 text-center text-sm text-slate-400">No courier correspondence yet</div>
+                  ) : courierEmails.map(email => (
+                    <ThreadItem
+                      key={email.id} email={email} queryId={id}
+                      courierName={ticket.courier_name} courierCode={ticket.courier_code}
+                      onApproved={() => qc.invalidateQueries(['ticket', id])}
+                    />
+                  ))}
                 </div>
               </div>
-            ) : visibleEmails.map(email => (
-              <ThreadItem
-                key={email.id}
-                email={email}
-                queryId={id}
-                courierName={ticket.courier_name}
-                courierCode={ticket.courier_code}
-                onApproved={() => qc.invalidateQueries(['ticket', id])}
-              />
-            ))}
+            )}
           </div>
 
           {/* Compose */}

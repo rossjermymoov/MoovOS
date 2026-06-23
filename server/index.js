@@ -38,6 +38,7 @@ import onboardingTemplatesRouter from './routes/onboardingTemplates.js';
 import integrationSoftwareRouter from './routes/integrationSoftware.js';
 import teamsRouter from './routes/teams.js';
 import { startGmailSync, backfillEmailBodiesOnce, backfillSentRepliesOnce } from './services/gmailSync.js';
+import { runSlaScreamScan } from './services/slaMonitor.js';
 
 dotenv.config();
 
@@ -130,6 +131,8 @@ async function start() {
     // Webhook health monitor — checks every 5 minutes during UK business hours
     startWebhookHealthMonitor();
     startGmailSync(3 * 60 * 1000); // poll every 3 minutes
+    // SLA scream monitor — escalate breached tickets to Google Chat every 5 min.
+    setInterval(() => { runSlaScreamScan().catch(e => console.warn('[SLA] scan error:', e.message)); }, 5 * 60 * 1000);
     // One-time repair of emails imported before the body-parsing fix.
     // Fire-and-forget so it can never delay or crash startup.
     backfillEmailBodiesOnce().catch(e => console.warn('[Email backfill] skipped:', e.message));

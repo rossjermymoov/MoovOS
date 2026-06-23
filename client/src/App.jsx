@@ -9,6 +9,7 @@ import CustomerAI from './pages/customers/CustomerAI';
 import StaffSettings from './pages/settings/StaffSettings';
 import RulesSettings from './pages/settings/RulesSettings';
 import CommsTemplates from './pages/settings/CommsTemplates';
+import Switchboard from './pages/settings/Switchboard';
 import BillingSettings from './pages/settings/BillingSettings';
 import XeroSettings from './pages/settings/XeroSettings';
 import VolumetricSettings from './pages/settings/VolumetricSettings';
@@ -117,6 +118,7 @@ function AppRoutes() {
           <Route path="rules"       element={<RulesSettings />} />
           <Route path="onboarding-templates" element={<OnboardingTemplates />} />
           <Route path="comms-templates" element={<CommsTemplates />} />
+          <Route path="switchboard"     element={<Switchboard />} />
           <Route path="volumetric"  element={<VolumetricSettings />} />
           <Route path="billing"     element={<BillingSettings />} />
           <Route path="xero"        element={<XeroSettings />} />
