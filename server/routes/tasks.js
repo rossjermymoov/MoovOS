@@ -206,10 +206,23 @@ router.post('/:id/comments', async (req, res, next) => {
     await query(`INSERT INTO task_comments (task_id, author_id, body) VALUES ($1,$2,$3)`,
       [req.params.id, req.body.author_id || null, req.body.body.trim()]);
     const full = await getTaskFull(req.params.id);
-
-    // Notify the assignee and the creator (notify() skips the comment's own author)
     const author = req.body.author_id;
+    const mentionIds = Array.isArray(req.body.mention_ids) ? req.body.mention_ids.filter(Boolean) : [];
+    const mentioned = new Set(mentionIds.map(String));
+    const snippet = req.body.body.trim().slice(0, 140);
+
+    // @mentions are direct asks — notify them first, in amber.
+    for (const uid of new Set(mentionIds)) {
+      await notify({
+        user_id: uid, actor_id: author,
+        type: 'mention', severity: 'amber',
+        title: 'Mentioned you in a comment', body: snippet,
+        entity_type: 'task', entity_id: full.id, route: `/tasks?task=${full.id}`,
+      });
+    }
+    // Assignee + creator get a plain comment note — unless they were already @-mentioned.
     for (const uid of new Set([full.assignee_id, full.created_by].filter(Boolean))) {
+      if (mentioned.has(String(uid))) continue;
       await notify({
         user_id: uid, actor_id: author,
         type: 'comment', severity: 'info',

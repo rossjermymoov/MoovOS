@@ -177,7 +177,8 @@
 .mt-comment{display:flex;gap:11px;margin-bottom:18px;}
 .mt-comment-name{font-size:13px;font-weight:600;color:var(--mt-text);}
 .mt-comment-time{font-size:11.5px;color:var(--mt-muted);}
-.mt-comment-text{font-size:13px;line-height:1.6;color:var(--mt-text2);}
+.mt-comment-text{font-size:13px;line-height:1.6;color:var(--mt-text2);white-space:pre-wrap;}
+.mt-mention{color:var(--mt-blue);font-weight:600;background:#E7EEFD;padding:0 4px;border-radius:4px;}
 .mt-comment-box{display:flex;gap:11px;align-items:flex-start;margin-top:6px;}
 .mt-input{width:100%;border:1px solid var(--mt-strong);border-radius:10px;padding:10px 12px;font-size:13px;font-family:inherit;color:var(--mt-text);outline:0;background:#fff;box-shadow:var(--mt-input-shadow);transition:.12s;}
 .mt-input::placeholder{color:var(--mt-faint);}
