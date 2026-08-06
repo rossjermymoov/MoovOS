@@ -39,6 +39,7 @@ import onboardingTemplatesRouter from './routes/onboardingTemplates.js';
 import integrationSoftwareRouter from './routes/integrationSoftware.js';
 import teamsRouter from './routes/teams.js';
 import tasksRouter from './routes/tasks.js';
+import notificationsRouter from './routes/notifications.js';
 import { startGmailSync, backfillEmailBodiesOnce, backfillSentRepliesOnce } from './services/gmailSync.js';
 import { runSlaScreamScan } from './services/slaMonitor.js';
 
@@ -72,6 +73,7 @@ app.use('/api/customer-rate-cards',   customerRateCardsRouter);
 app.use('/api/carrier-data',          carrierDataRouter);
 app.use('/api/queries',               queriesRouter);
 app.use('/api/tasks',                  tasksRouter);
+app.use('/api/notifications',          notificationsRouter);
 app.use('/api/surcharges',            surchargesRouter);
 app.use('/api/customer-carrier-links', customerCarrierLinksRouter);
 app.use('/api/sla',                   slaRulesRouter);

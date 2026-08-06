@@ -19,6 +19,7 @@
 
 import express from 'express';
 import { query } from '../db/index.js';
+import { notify } from './notifications.js';
 
 const router = express.Router();
 
@@ -130,6 +131,16 @@ router.post('/', async (req, res, next) => {
        Number.isFinite(b.progress) ? b.progress : 0]);
     const id = ins.rows[0].id;
 
+    // Notify the assignee (unless they assigned it to themselves)
+    if (b.assignee_id) {
+      await notify({
+        user_id: b.assignee_id, actor_id: b.created_by,
+        type: 'assigned', severity: 'amber',
+        title: 'You were assigned a task', body: b.title.trim(),
+        entity_type: 'task', entity_id: id, route: `/tasks?task=${id}`,
+      });
+    }
+
     // Optional links supplied at creation: [{ link_type, ref }]
     if (Array.isArray(b.links)) {
       for (const lnk of b.links) {
@@ -162,7 +173,18 @@ router.patch('/:id', async (req, res, next) => {
     const upd = await query(
       `UPDATE tasks SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${values.length} RETURNING id`, values);
     if (!upd.rows.length) return res.status(404).json({ error: 'Task not found' });
-    res.json(await getTaskFull(req.params.id));
+    const full = await getTaskFull(req.params.id);
+
+    // Notify on (re)assignment — actor_id is passed by the client, not stored on the task
+    if ('assignee_id' in req.body && req.body.assignee_id) {
+      await notify({
+        user_id: req.body.assignee_id, actor_id: req.body.actor_id,
+        type: 'assigned', severity: 'amber',
+        title: 'A task was assigned to you', body: full.title,
+        entity_type: 'task', entity_id: full.id, route: `/tasks?task=${full.id}`,
+      });
+    }
+    res.json(full);
   } catch (err) { next(err); }
 });
 
@@ -181,7 +203,19 @@ router.post('/:id/comments', async (req, res, next) => {
     if (!req.body?.body?.trim()) return res.status(400).json({ error: 'body is required' });
     await query(`INSERT INTO task_comments (task_id, author_id, body) VALUES ($1,$2,$3)`,
       [req.params.id, req.body.author_id || null, req.body.body.trim()]);
-    res.status(201).json(await getTaskFull(req.params.id));
+    const full = await getTaskFull(req.params.id);
+
+    // Notify the assignee and the creator (notify() skips the comment's own author)
+    const author = req.body.author_id;
+    for (const uid of new Set([full.assignee_id, full.created_by].filter(Boolean))) {
+      await notify({
+        user_id: uid, actor_id: author,
+        type: 'comment', severity: 'info',
+        title: 'New comment on a task', body: full.title,
+        entity_type: 'task', entity_id: full.id, route: `/tasks?task=${full.id}`,
+      });
+    }
+    res.status(201).json(full);
   } catch (err) { next(err); }
 });
 
