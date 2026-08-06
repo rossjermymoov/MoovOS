@@ -192,19 +192,94 @@ function SideSelect({ label, current, options, onPick }) {
   );
 }
 
+// ── @mention helpers ────────────────────────────────────────────────────────────
+// Detects an in-progress "@query" immediately before the caret.
+function activeMention(value, caret) {
+  const upto = value.slice(0, caret);
+  const m = /(^|\s)@([^\s@]*)$/.exec(upto);
+  if (!m) return null;
+  const query = m[2];
+  return { query, start: caret - query.length - 1, end: caret };
+}
+// Renders comment text, styling "@Name" for any known staff name as a mention chip.
+function renderMentions(text, names) {
+  if (!text) return text;
+  const valid = (names || []).filter(Boolean);
+  if (!valid.length) return text;
+  const esc = valid.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).sort((a, b) => b.length - a.length);
+  const re = new RegExp('@(' + esc.join('|') + ')', 'g');
+  const out = []; let last = 0, m, i = 0;
+  while ((m = re.exec(text))) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    out.push(<span className="mt-mention" key={'m' + (i++)}>@{m[1]}</span>);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+// ── comment composer with @mention autocomplete ─────────────────────────────────
+function CommentComposer({ staffList, onSend, sending }) {
+  const [text, setText] = useState('');
+  const [mentioned, setMentioned] = useState([]); // {id, name} picked this draft
+  const [mq, setMq] = useState(null);              // active @query, or null
+  const taRef = useRef(null);
+
+  const onChange = (e) => { setText(e.target.value); setMq(activeMention(e.target.value, e.target.selectionStart)); };
+  const results = mq ? (staffList || []).filter(s => s.full_name.toLowerCase().includes(mq.query.toLowerCase())).slice(0, 6) : [];
+
+  const pick = (s) => {
+    const before = text.slice(0, mq.start), after = text.slice(mq.end);
+    const insert = '@' + s.full_name + ' ';
+    setText(before + insert + after);
+    setMentioned(m => m.some(x => x.id === s.id) ? m : [...m, { id: s.id, name: s.full_name }]);
+    setMq(null);
+    const caret = (before + insert).length;
+    requestAnimationFrame(() => { if (taRef.current) { taRef.current.focus(); taRef.current.setSelectionRange(caret, caret); } });
+  };
+
+  const send = () => {
+    const body = text.trim(); if (!body) return;
+    // Only notify people whose @mention still survives in the final text.
+    const ids = [...new Set(mentioned.filter(m => body.includes('@' + m.name)).map(m => m.id))];
+    onSend(body, ids);
+    setText(''); setMentioned([]); setMq(null);
+  };
+
+  return (
+    <div style={{ flex: 1, position: 'relative' }}>
+      <textarea ref={taRef} className="mt-input" placeholder="Write a comment…  Type @ to mention someone" value={text}
+        onChange={onChange} onKeyDown={e => { if (e.key === 'Escape') setMq(null); }} />
+      {mq && results.length > 0 && (
+        <div className="mt-drop" style={{ top: 'auto', bottom: 'calc(100% + 4px)' }}>
+          <div className="mt-drop-head">Mention someone — they’ll be notified</div>
+          {results.map(s => (
+            <div key={s.id} className="mt-drop-row" onMouseDown={e => { e.preventDefault(); pick(s); }}>
+              <Avatar name={s.full_name} id={s.id} size={22} />
+              <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 600 }}>{s.full_name}</div><div style={{ fontSize: 11, color: '#94A3B8' }}>{(s.role || '—').replace(/_/g, ' ')}</div></div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+        <button className="mt-btn primary" disabled={!text.trim() || sending} onClick={send}>{sending ? 'Sending…' : 'Send'}</button>
+      </div>
+    </div>
+  );
+}
+
 // ── task detail (full-screen) ───────────────────────────────────────────────────
-function TaskDetail({ taskId, me, onClose, navigate }) {
+function TaskDetail({ taskId, me, staffList, onClose, navigate }) {
   const qc = useQueryClient();
   const { data: task, isLoading } = useQuery({ queryKey: ['task', taskId], queryFn: () => tasksApi.get(taskId), enabled: !!taskId });
   const [assignOpen, setAssignOpen] = useState(false);
   const [showLink, setShowLink] = useState(false);
   const [lkUrl, setLkUrl] = useState(''); const [lkName, setLkName] = useState('');
-  const [comment, setComment] = useState('');
   const fileRef = useRef(null);
 
   const refresh = () => { qc.invalidateQueries(['task', taskId]); qc.invalidateQueries(['tasks']); };
   const mUpdate = useMutation({ mutationFn: (body) => tasksApi.update(taskId, body), onSuccess: refresh });
-  const mComment = useMutation({ mutationFn: (body) => tasksApi.addComment(taskId, body), onSuccess: () => { setComment(''); refresh(); } });
+  const mComment = useMutation({ mutationFn: (body) => tasksApi.addComment(taskId, body), onSuccess: refresh });
   const mLink = useMutation({ mutationFn: (body) => tasksApi.addLink(taskId, body), onSuccess: refresh });
   const mUnlink = useMutation({ mutationFn: (linkId) => tasksApi.removeLink(taskId, linkId), onSuccess: refresh });
   const mAttach = useMutation({ mutationFn: (body) => tasksApi.addAttachment(taskId, body), onSuccess: () => { setShowLink(false); setLkUrl(''); setLkName(''); refresh(); } });
@@ -288,14 +363,13 @@ function TaskDetail({ taskId, me, onClose, navigate }) {
                 <Avatar name={c.author_name || 'You'} id={c.author_id} size={32} />
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}><span className="mt-comment-name">{c.author_name || 'You'}</span><span className="mt-comment-time">{fmtDate(c.created_at)}</span></div>
-                  <div className="mt-comment-text">{c.body}</div>
+                  <div className="mt-comment-text">{renderMentions(c.body, (staffList || []).map(s => s.full_name))}</div>
                 </div>
               </div>
             ))}
             <div className="mt-comment-box">
               <Avatar name={'You'} id={'me'} size={32} />
-              <textarea className="mt-input" placeholder="Write a comment…" value={comment} onChange={e => setComment(e.target.value)} />
-              <button className="mt-btn primary" disabled={!comment.trim()} style={{ alignSelf: 'stretch' }} onClick={() => mComment.mutate({ body: comment.trim(), author_id: me })}>Send</button>
+              <CommentComposer staffList={staffList} sending={mComment.isLoading} onSend={(body, ids) => mComment.mutate({ body, author_id: me, mention_ids: ids })} />
             </div>
             </div>
           </div>
@@ -783,7 +857,7 @@ export default function TasksPage() {
             </div>
           )}
 
-      {openId && <TaskDetail taskId={openId} me={me} navigate={navigate} onClose={closeDetail} />}
+      {openId && <TaskDetail taskId={openId} me={me} staffList={staffList} navigate={navigate} onClose={closeDetail} />}
       {creating && <CreateModal defaultSpace={space} currentUserId={me} onClose={() => setCreating(false)} onCreated={(t) => { setCreating(false); if (t?.id) setOpenId(t.id); }} />}
       {showSettings && <SettingsModal initSpaces={curSpaces} initStatuses={curStatuses} spaceCounts={spaceCounts} statusCounts={statusCounts} saving={mSaveConfig.isLoading} onSave={(d) => mSaveConfig.mutate(d)} onClose={() => setShowSettings(false)} />}
     </div>

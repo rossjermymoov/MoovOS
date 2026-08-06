@@ -9,7 +9,7 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, AlertTriangle, Clock, MessageSquare, UserPlus, Check, Dot } from 'lucide-react';
+import { Bell, AlertTriangle, Clock, MessageSquare, UserPlus, Check, Dot, AtSign } from 'lucide-react';
 import { useMe } from '../hooks/useMe';
 import { notificationsApi } from '../api/notifications';
 
@@ -40,6 +40,7 @@ function dueLabel(due) {
 }
 function typeIcon(type) {
   if (type === 'assigned') return <UserPlus size={15} />;
+  if (type === 'mention') return <AtSign size={15} />;
   if (type === 'comment') return <MessageSquare size={15} />;
   return <Dot size={15} />;
 }
