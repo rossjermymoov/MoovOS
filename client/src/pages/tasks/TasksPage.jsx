@@ -499,7 +499,7 @@ function MyTasksView({ myTasks, me, bypass, staffList, onOpen, onNew }) {
   const inProgress = notDone.filter(t => t.status !== FIRST_STATUS).length;
 
   const Tile = ({ label, count, colour, soft, icon }) => (
-    <div style={{ flex: 1, minWidth: 160, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '15px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
+    <div style={{ flex: 1, minWidth: 160, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 14, padding: '15px 18px', display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 1px 3px rgba(15,23,42,.05), 0 1px 2px rgba(15,23,42,.03)' }}>
       <div style={{ width: 42, height: 42, borderRadius: 11, background: soft, color: colour, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icon}</div>
       <div>
         <div style={{ fontSize: 26, fontWeight: 800, lineHeight: 1, color: count > 0 ? colour : '#0F172A' }}>{count}</div>
@@ -512,9 +512,9 @@ function MyTasksView({ myTasks, me, bypass, staffList, onOpen, onNew }) {
     const od = isOverdue(t);
     return (
       <div className="mt-myrow" onClick={() => onOpen(t.id)}
-        style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 11, cursor: 'pointer', marginBottom: 8 }}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = '#CBD5E1'; e.currentTarget.style.background = '#FBFCFD'; }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = '#E2E8F0'; e.currentTarget.style.background = '#fff'; }}>
+        style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: '#fff', border: '1px solid #E5E7EB', borderRadius: 11, cursor: 'pointer', marginBottom: 8, boxShadow: '0 1px 3px rgba(15,23,42,.05), 0 1px 2px rgba(15,23,42,.03)', transition: 'box-shadow .14s, border-color .14s' }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = '#D3DBE3'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(15,23,42,.08), 0 2px 5px rgba(15,23,42,.04)'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = '#E5E7EB'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(15,23,42,.05), 0 1px 2px rgba(15,23,42,.03)'; }}>
         <span className="dot" style={{ width: 9, height: 9, background: STATUS[t.status]?.colour }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13.5, fontWeight: 600, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</div>
