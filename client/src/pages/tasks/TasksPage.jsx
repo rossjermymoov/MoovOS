@@ -12,34 +12,65 @@ import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import { useMe, setViewAs } from '../../hooks/useMe';
 import { tasksApi } from '../../api/tasks';
+import { taskConfigApi } from '../../api/taskConfig';
 import {
   Plus, X, ChevronDown, Calendar, MessageSquare, Paperclip, Link2,
   List as ListIcon, LayoutGrid, User, ExternalLink, AlertCircle,
   AlertTriangle, Clock, CheckCircle2, CircleDashed,
+  Settings, Trash2, ArrowUp, ArrowDown, Check,
 } from 'lucide-react';
 import './tasks.css';
 
 const api = axios.create({ baseURL: '/api' });
 
-const SPACES = {
-  cs:      { label: 'Customer Service', colour: '#00BCD4' },
-  sales:   { label: 'Sales',            colour: '#E91E8C' },
-  ops:     { label: 'Operations',       colour: '#F59E0B' },
-  product: { label: 'Product & Data',   colour: '#7B2FBE' },
-};
-const STATUS = {
-  todo:     { label: 'To do',       colour: '#94A3B8', soft: '#EEF2F6', text: '#64748B' },
-  progress: { label: 'In progress', colour: '#F59E0B', soft: '#FEF3E2', text: '#B45309' },
-  review:   { label: 'In review',   colour: '#7B2FBE', soft: '#F1E9F8', text: '#6B21A8' },
-  done:     { label: 'Complete',    colour: '#00C853', soft: '#E7F8EE', text: '#047857' },
-};
+// Spaces and statuses are user-configurable (edited in board Settings, persisted
+// server-side). Keys are stable — renaming only changes the label, so existing
+// tasks keep working. These defaults seed a board that has never been configured.
+const DEFAULT_SPACES = [
+  { key: 'cs',      label: 'Customer Service', colour: '#00BCD4' },
+  { key: 'sales',   label: 'Sales',            colour: '#E91E8C' },
+  { key: 'ops',     label: 'Operations',       colour: '#F59E0B' },
+  { key: 'product', label: 'Product & Data',   colour: '#7B2FBE' },
+];
+const DEFAULT_STATUSES = [
+  { key: 'todo',     label: 'To do',       colour: '#94A3B8', isComplete: false },
+  { key: 'progress', label: 'In progress', colour: '#F59E0B', isComplete: false },
+  { key: 'review',   label: 'In review',   colour: '#7B2FBE', isComplete: false },
+  { key: 'done',     label: 'Complete',    colour: '#00C853', isComplete: true },
+];
 const PRIORITY = {
   urgent: { label: 'Urgent', colour: '#EF4444', soft: '#FDECEC', text: '#B91C1C' },
   high:   { label: 'High',   colour: '#F59E0B', soft: '#FEF3E2', text: '#B45309' },
   medium: { label: 'Medium', colour: '#2563EB', soft: '#E7EEFD', text: '#1D4ED8' },
   low:    { label: 'Low',    colour: '#94A3B8', soft: '#EEF2F6', text: '#64748B' },
 };
-const COLUMNS = [['todo', 'To do'], ['progress', 'In progress'], ['review', 'In review'], ['done', 'Complete']];
+
+// ── colour helpers — derive a soft background + readable text from any base hex ──
+function hexToRgb(hex) { const h = String(hex || '#000').replace('#', ''); const f = h.length === 3 ? h.split('').map(c => c + c).join('') : h; const n = parseInt(f, 16); return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 }; }
+function softBg(hex) { const { r, g, b } = hexToRgb(hex); return `rgba(${r},${g},${b},0.15)`; }
+function darken(hex, amt) { const { r, g, b } = hexToRgb(hex); const f = x => Math.round(x * (1 - amt)); return `rgb(${f(r)},${f(g)},${f(b)})`; }
+function chipColours(hex) { return { colour: hex, soft: softBg(hex), text: darken(hex, 0.4) }; }
+
+// Live board config — rebuilt from server config by applyConfig(); all render
+// code reads these module bindings, so a config change re-colours the whole board.
+let SPACES = {};
+let STATUS = {};
+let COLUMNS = [];
+let SPACE_ORDER = [];
+let COMPLETE = new Set();
+let FIRST_STATUS = 'todo';
+
+function applyConfig(data) {
+  const spaces   = (Array.isArray(data?.spaces)   && data.spaces.length)   ? data.spaces   : DEFAULT_SPACES;
+  const statuses = (Array.isArray(data?.statuses) && data.statuses.length) ? data.statuses : DEFAULT_STATUSES;
+  SPACES = {}; SPACE_ORDER = [];
+  spaces.forEach(s => { SPACES[s.key] = { label: s.label, colour: s.colour }; SPACE_ORDER.push(s.key); });
+  STATUS = {}; COLUMNS = []; COMPLETE = new Set();
+  statuses.forEach(s => { STATUS[s.key] = { label: s.label, ...chipColours(s.colour) }; COLUMNS.push([s.key, s.label]); if (s.isComplete) COMPLETE.add(s.key); });
+  if (COMPLETE.size === 0 && statuses.length) COMPLETE.add(statuses[statuses.length - 1].key);
+  FIRST_STATUS = statuses[0]?.key || 'todo';
+}
+applyConfig(null); // seed defaults at load
 const AV_PALETTE = ['#7B2FBE', '#00BCD4', '#E91E8C', '#00C853', '#F59E0B', '#2563EB', '#EA4335', '#0F9D58', '#B45309', '#6B4423'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -49,9 +80,9 @@ function colourFor(id) { const s = String(id || ''); let h = 0; for (let i = 0; 
 const shortId = (id) => 'TSK-' + String(id || '').replace(/-/g, '').slice(0, 5).toUpperCase();
 function fmtDate(d) { if (!d) return '—'; const dt = new Date(d); const now = new Date(); return dt.getDate() + ' ' + MONTHS[dt.getMonth()] + (dt.getFullYear() !== now.getFullYear() ? ' ' + dt.getFullYear() : ''); }
 function toISO(d) { if (!d) return ''; const dt = new Date(d); if (isNaN(dt)) return ''; return dt.toISOString().slice(0, 10); }
-function isOverdue(t) { return t.status !== 'done' && t.due_date && new Date(t.due_date) < new Date(new Date().toDateString()); }
+function isOverdue(t) { return !COMPLETE.has(t.status) && t.due_date && new Date(t.due_date) < new Date(new Date().toDateString()); }
 function fmtSize(b) { b = +b || 0; return b < 1024 ? b + ' B' : (b < 1048576 ? (b / 1024).toFixed(0) + ' KB' : (b / 1048576).toFixed(1) + ' MB'); }
-function progColour(t) { return t.status === 'done' ? '#00C853' : t.status === 'progress' ? '#F59E0B' : (t.progress === 0 ? '#EF4444' : '#7B2FBE'); }
+function progColour(t) { return COMPLETE.has(t.status) ? '#00C853' : (STATUS[t.status]?.colour || '#7B2FBE'); }
 
 function Avatar({ name, id, size = 26 }) {
   return <span className="avatar" style={{ width: size, height: size, fontSize: Math.round(size * 0.38), background: colourFor(id || name) }} title={name || ''}>{initials(name)}</span>;
@@ -272,7 +303,7 @@ function TaskDetail({ taskId, me, onClose, navigate }) {
           <div className="mt-side">
             <SideSelect label="Status" current={<StatusTag k={task.status} />}
               options={Object.keys(STATUS).map(k => ({ key: k, render: <StatusTag k={k} /> }))}
-              onPick={(k) => set({ status: k, ...(k === 'done' ? { progress: 100 } : {}) })} />
+              onPick={(k) => set({ status: k, ...(COMPLETE.has(k) ? { progress: 100 } : {}) })} />
 
             <div className="mt-prop">
               <div className="mt-plabel">Assignee</div>
@@ -320,7 +351,7 @@ function TaskDetail({ taskId, me, onClose, navigate }) {
 function CreateModal({ defaultSpace, currentUserId, onClose, onCreated }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [space, setSpace] = useState(defaultSpace === 'all' ? 'cs' : defaultSpace);
+  const [space, setSpace] = useState(defaultSpace === 'all' ? (SPACE_ORDER[0] || 'cs') : defaultSpace);
   const [priority, setPriority] = useState('medium');
   const [due, setDue] = useState('');
   const [assignee, setAssignee] = useState(null);
@@ -348,7 +379,7 @@ function CreateModal({ defaultSpace, currentUserId, onClose, onCreated }) {
     picked.query.forEach(q => links.push({ link_type: 'query', ref: q.ref }));
     picked.tracking.forEach(t => links.push({ link_type: 'tracking', ref: t.ref }));
     mCreate.mutate({
-      title: title.trim(), description: description.trim() || null, status: 'todo', priority, space,
+      title: title.trim(), description: description.trim() || null, status: FIRST_STATUS, priority, space,
       assignee_id: assignee?.id || null, created_by: currentUserId || null,
       start_date: toISO(new Date()), due_date: due || null, progress: 0, links,
     });
@@ -424,7 +455,7 @@ function TaskCard({ task, onOpen, navigate }) {
       <div className="mt-card-top"><Pill map={PRIORITY} k={task.priority} /><span className="mt-card-id">{shortId(task.id)}</span></div>
       <div className="mt-card-title">{task.title}</div>
       {chip ? <div className="mt-card-meta">{chip}</div> : null}
-      {task.status !== 'todo' ? <div className="mt-progress" style={{ marginBottom: 11 }}><div style={{ width: task.progress + '%', background: progColour(task) }} /></div> : null}
+      {task.status !== FIRST_STATUS ? <div className="mt-progress" style={{ marginBottom: 11 }}><div style={{ width: task.progress + '%', background: progColour(task) }} /></div> : null}
       <div className="mt-card-foot">
         <div className="mt-foot-left">
           <span className="mt-ico"><MessageSquare size={14} />{task.comment_count || 0}</span>
@@ -467,13 +498,13 @@ function MyTasksView({ myTasks, me, bypass, staffList, onOpen, onNew }) {
   const today = new Date(new Date().toDateString());
   const in7 = new Date(today); in7.setDate(in7.getDate() + 7);
   const dayOf = (d) => new Date(new Date(d).toDateString());
-  const notDone = myTasks.filter(t => t.status !== 'done');
+  const notDone = myTasks.filter(t => !COMPLETE.has(t.status));
   const overdue = notDone.filter(isOverdue);
   const dueToday = notDone.filter(t => t.due_date && dayOf(t.due_date).getTime() === today.getTime());
   const thisWeek = notDone.filter(t => t.due_date && dayOf(t.due_date) > today && dayOf(t.due_date) <= in7);
   const later = notDone.filter(t => !overdue.includes(t) && !dueToday.includes(t) && !thisWeek.includes(t));
-  const done = myTasks.filter(t => t.status === 'done');
-  const inProgress = notDone.filter(t => t.status === 'progress' || t.status === 'review').length;
+  const done = myTasks.filter(t => COMPLETE.has(t.status));
+  const inProgress = notDone.filter(t => t.status !== FIRST_STATUS).length;
 
   const Tile = ({ label, count, colour, soft, icon }) => (
     <div style={{ flex: 1, minWidth: 160, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '15px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -549,21 +580,124 @@ function MyTasksView({ myTasks, me, bypass, staffList, onOpen, onNew }) {
   );
 }
 
+// ── board settings (edit spaces & statuses) ─────────────────────────────────────
+function SettingsModal({ initSpaces, initStatuses, spaceCounts, statusCounts, saving, onSave, onClose }) {
+  const [spaces, setSpaces] = useState(() => initSpaces.map(s => ({ ...s })));
+  const [statuses, setStatuses] = useState(() => initStatuses.map(s => ({ ...s })));
+  const [err, setErr] = useState('');
+
+  const move = (arr, setArr, i, dir) => { const j = i + dir; if (j < 0 || j >= arr.length) return; const c = arr.slice(); [c[i], c[j]] = [c[j], c[i]]; setArr(c); };
+  const upd = (arr, setArr, i, patch) => setArr(arr.map((x, idx) => idx === i ? { ...x, ...patch } : x));
+  const del = (arr, setArr, i) => setArr(arr.filter((_, idx) => idx !== i));
+  const slug = (s) => (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 20);
+
+  const finalise = (arr) => {
+    const used = new Set(); const out = [];
+    for (const it of arr) {
+      const label = (it.label || '').trim();
+      if (!label) return { error: 'Every row needs a name.' };
+      let key = it.key || slug(label) || ('k' + (used.size + 1));
+      let base = key, n = 2; while (used.has(key)) key = base + '_' + n++;
+      used.add(key); out.push({ ...it, key, label });
+    }
+    return { list: out };
+  };
+
+  const save = () => {
+    setErr('');
+    if (!spaces.length) return setErr('You need at least one space.');
+    if (!statuses.length) return setErr('You need at least one status column.');
+    const s = finalise(spaces); if (s.error) return setErr('Spaces: ' + s.error);
+    const st = finalise(statuses); if (st.error) return setErr('Statuses: ' + st.error);
+    if (!st.list.some(x => x.isComplete)) return setErr('Mark at least one status as “Complete” — that’s the column that means the work is finished (used for overdue and progress).');
+    onSave({ spaces: s.list, statuses: st.list });
+  };
+
+  const swatch = (colour, onChange) => (
+    <input type="color" value={colour || '#2563EB'} onChange={e => onChange(e.target.value)}
+      style={{ width: 34, height: 32, border: '1px solid #E2E8F0', borderRadius: 8, padding: 2, background: '#fff', cursor: 'pointer', flexShrink: 0 }} title="Pick a colour" />
+  );
+  const iconBtn = (child, onClick, disabled, title) => (
+    <button onClick={onClick} disabled={disabled} title={title} style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: disabled ? 'not-allowed' : 'pointer', color: disabled ? '#CBD5E1' : '#64748B', flexShrink: 0 }}>{child}</button>
+  );
+
+  const renderSection = ({ title, hint, arr, setArr, counts, isStatus }) => (
+    <div style={{ marginBottom: 22 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <label className="mt-fld-label" style={{ marginBottom: 0 }}>{title}</label>
+        <button className="mt-btn" style={{ padding: '5px 10px' }} onClick={() => setArr([...arr, isStatus ? { key: '', label: '', colour: '#2563EB', isComplete: false } : { key: '', label: '', colour: '#2563EB' }])}><Plus size={13} />Add {isStatus ? 'status' : 'space'}</button>
+      </div>
+      <div className="mt-hint" style={{ marginBottom: 10 }}>{hint}</div>
+      {arr.map((it, i) => {
+        const inUse = it.key ? (counts[it.key] || 0) : 0;
+        const canDelete = arr.length > 1 && inUse === 0;
+        return (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            {swatch(it.colour, v => upd(arr, setArr, i, { colour: v }))}
+            <input className="mt-input" value={it.label} placeholder={isStatus ? 'Status name' : 'Space name'} onChange={e => upd(arr, setArr, i, { label: e.target.value })} style={{ flex: 1 }} />
+            {isStatus && (
+              <button onClick={() => upd(arr, setArr, i, { isComplete: !it.isComplete })} title="Tasks in this column count as complete"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 600, padding: '6px 9px', borderRadius: 7, cursor: 'pointer', flexShrink: 0, border: '1px solid ' + (it.isComplete ? '#00C853' : '#E2E8F0'), background: it.isComplete ? '#E7F8EE' : '#fff', color: it.isComplete ? '#047857' : '#94A3B8' }}>
+                <Check size={12} />Complete
+              </button>
+            )}
+            <span style={{ fontSize: 11, color: '#94A3B8', width: 54, textAlign: 'right', flexShrink: 0 }}>{inUse > 0 ? `${inUse} task${inUse === 1 ? '' : 's'}` : ''}</span>
+            {iconBtn(<ArrowUp size={13} />, () => move(arr, setArr, i, -1), i === 0)}
+            {iconBtn(<ArrowDown size={13} />, () => move(arr, setArr, i, 1), i === arr.length - 1)}
+            {iconBtn(<Trash2 size={13} />, () => del(arr, setArr, i), !canDelete, inUse > 0 ? `${inUse} task(s) use this — reassign them first` : (arr.length <= 1 ? 'Keep at least one' : 'Remove'))}
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  return (
+    <div className="mt-modal-scrim open" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="mt-modal" style={{ width: 680 }}>
+        <div className="mt-modal-head"><h3>Board settings</h3><div className="mt-iconbtn" onClick={onClose}><X size={16} /></div></div>
+        <div className="mt-modal-body">
+          {renderSection({ title: 'Spaces', isStatus: false, arr: spaces, setArr: setSpaces, counts: spaceCounts,
+            hint: 'Spaces group your work (teams, functions, projects). Rename, recolour, reorder, add or remove them — renaming keeps existing tasks intact.' })}
+          {renderSection({ title: 'Status columns', isStatus: true, arr: statuses, setArr: setStatuses, counts: statusCounts,
+            hint: 'These are your board columns, left to right. Mark the column(s) that mean “done” as Complete — that drives overdue flags, progress and the My Tasks view.' })}
+          {err && <div style={{ fontSize: 12.5, color: '#B91C1C', background: '#FDECEC', border: '1px solid #FCA5A5', borderRadius: 9, padding: '9px 12px', display: 'flex', gap: 7, alignItems: 'flex-start' }}><AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />{err}</div>}
+        </div>
+        <div className="mt-modal-foot">
+          <span style={{ fontSize: 12, color: '#94A3B8' }}>Changes apply for the whole team.</span>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button className="mt-btn" onClick={onClose}>Cancel</button>
+            <button className="mt-btn primary" disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save settings'}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── page ────────────────────────────────────────────────────────────────────────
 export default function TasksPage() {
   const { canAccess, bypass } = useAuth();
   const { id: me } = useMe();
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [view, setView] = useState('board');     // board | list | mine
   const [space, setSpace] = useState('all');
   const [openId, setOpenId] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   const allowed = bypass || canAccess('tasks');
   const tasksQuery = useQuery({ queryKey: ['tasks'], queryFn: () => tasksApi.list() });
   const staffQuery = useQuery({ queryKey: ['staff-directory'], queryFn: () => api.get('/staff').then(r => normList(r.data)) });
+  const configQuery = useQuery({ queryKey: ['task-config'], queryFn: () => taskConfigApi.get() });
   const staffList = staffQuery.data || [];
+
+  // Rebuild the live board maps whenever server config changes.
+  useMemo(() => applyConfig(configQuery.data), [configQuery.data]);
+  const curSpaces = (Array.isArray(configQuery.data?.spaces) && configQuery.data.spaces.length) ? configQuery.data.spaces : DEFAULT_SPACES;
+  const curStatuses = (Array.isArray(configQuery.data?.statuses) && configQuery.data.statuses.length) ? configQuery.data.statuses : DEFAULT_STATUSES;
+  const mSaveConfig = useMutation({ mutationFn: (data) => taskConfigApi.update(data), onSuccess: () => { qc.invalidateQueries(['task-config']); setShowSettings(false); } });
 
   // Deep-link: /tasks?task=<id> opens that task (used by the notification bell)
   useEffect(() => { const t = searchParams.get('task'); if (t) setOpenId(t); }, [searchParams]);
@@ -580,15 +714,21 @@ export default function TasksPage() {
   const myTasks = me ? tasks.filter(t => t.assignee_id === me) : [];
   const myOverdue = myTasks.filter(isOverdue).length;
 
+  const spaceCounts = {}; const statusCounts = {};
+  tasks.forEach(t => { spaceCounts[t.space] = (spaceCounts[t.space] || 0) + 1; statusCounts[t.status] = (statusCounts[t.status] || 0) + 1; });
+
   const spacePills = [['all', 'All spaces', null], ...Object.entries(SPACES).map(([k, v]) => [k, v.label, v.colour])];
-  const sub = view === 'mine' ? 'My tasks · everything assigned to you' : (space === 'all' ? 'Team overview · all active work across Moov' : SPACES[space].label + ' space · this team’s board');
+  const sub = view === 'mine' ? 'My tasks · everything assigned to you' : (space === 'all' ? 'Team overview · all active work across Moov' : (SPACES[space]?.label || space) + ' space · this team’s board');
 
   return (
     <div className="moov-tasks">
       <div className="mt-head">
         <div className="mt-title-row">
           <div><div className="mt-title">Tasks</div><div className="mt-sub">{sub}</div></div>
-          <button className="mt-btn primary" onClick={() => setCreating(true)}><Plus size={15} />New task</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="mt-btn" onClick={() => setShowSettings(true)} title="Board settings — edit spaces & statuses"><Settings size={15} /></button>
+            <button className="mt-btn primary" onClick={() => setCreating(true)}><Plus size={15} />New task</button>
+          </div>
         </div>
         <div className="mt-spaces">
           {spacePills.map(([k, label, colour]) => {
@@ -652,6 +792,7 @@ export default function TasksPage() {
 
       {openId && <TaskDetail taskId={openId} me={me} navigate={navigate} onClose={closeDetail} />}
       {creating && <CreateModal defaultSpace={space} currentUserId={me} onClose={() => setCreating(false)} onCreated={(t) => { setCreating(false); if (t?.id) setOpenId(t.id); }} />}
+      {showSettings && <SettingsModal initSpaces={curSpaces} initStatuses={curStatuses} spaceCounts={spaceCounts} statusCounts={statusCounts} saving={mSaveConfig.isLoading} onSave={(d) => mSaveConfig.mutate(d)} onClose={() => setShowSettings(false)} />}
     </div>
   );
 }
