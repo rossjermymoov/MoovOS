@@ -5,15 +5,17 @@
  * tracking into every picker, and persists tasks + links + comments + attachments
  * through /api/tasks. Gated by the per-user 'tasks' page permission.
  */
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, Navigate } from 'react-router-dom';
+import { useNavigate, Navigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
+import { useMe, setViewAs } from '../../hooks/useMe';
 import { tasksApi } from '../../api/tasks';
 import {
-  Plus, X, ChevronDown, Calendar, MessageSquare, Paperclip, Link2, Users,
-  List as ListIcon, LayoutGrid, User, ExternalLink, AlertCircle, Filter,
+  Plus, X, ChevronDown, Calendar, MessageSquare, Paperclip, Link2,
+  List as ListIcon, LayoutGrid, User, ExternalLink, AlertCircle,
+  AlertTriangle, Clock, CheckCircle2, CircleDashed,
 } from 'lucide-react';
 import './tasks.css';
 
@@ -161,7 +163,7 @@ function SideSelect({ label, current, options, onPick }) {
 }
 
 // ── task detail (full-screen) ───────────────────────────────────────────────────
-function TaskDetail({ taskId, staffMap, onClose, navigate }) {
+function TaskDetail({ taskId, me, onClose, navigate }) {
   const qc = useQueryClient();
   const { data: task, isLoading } = useQuery({ queryKey: ['task', taskId], queryFn: () => tasksApi.get(taskId), enabled: !!taskId });
   const [assignOpen, setAssignOpen] = useState(false);
@@ -262,7 +264,7 @@ function TaskDetail({ taskId, staffMap, onClose, navigate }) {
             <div className="mt-comment-box">
               <Avatar name={'You'} id={'me'} size={32} />
               <textarea className="mt-input" placeholder="Write a comment…" value={comment} onChange={e => setComment(e.target.value)} />
-              <button className="mt-btn primary" disabled={!comment.trim()} style={{ alignSelf: 'stretch' }} onClick={() => mComment.mutate({ body: comment.trim() })}>Send</button>
+              <button className="mt-btn primary" disabled={!comment.trim()} style={{ alignSelf: 'stretch' }} onClick={() => mComment.mutate({ body: comment.trim(), author_id: me })}>Send</button>
             </div>
           </div>
 
@@ -278,7 +280,7 @@ function TaskDetail({ taskId, staffMap, onClose, navigate }) {
                 {task.assignee_id ? <><Avatar name={task.assignee_name} id={task.assignee_id} size={20} /><span>{task.assignee_name}</span></> : <span style={{ color: '#94A3B8' }}>Unassigned</span>}
                 <span className="chev"><ChevronDown size={14} /></span>
               </div>
-              {assignOpen && <div style={{ marginTop: 6 }}><Picker type="staff" autoFocus onPick={(s) => { set({ assignee_id: s.id }); setAssignOpen(false); }} /></div>}
+              {assignOpen && <div style={{ marginTop: 6 }}><Picker type="staff" autoFocus onPick={(s) => { set({ assignee_id: s.id, actor_id: me }); setAssignOpen(false); }} /></div>}
             </div>
 
             <SideSelect label="Priority" current={<Pill map={PRIORITY} k={task.priority} />}
@@ -435,10 +437,124 @@ function TaskCard({ task, onOpen, navigate }) {
   );
 }
 
+// ── my tasks (personal RAG view) ────────────────────────────────────────────────
+function MyTasksView({ myTasks, me, bypass, staffList, onOpen, onNew }) {
+  // Bypass mode has no real identity — let the user pick who they're viewing as.
+  const viewAsControl = bypass ? (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18, fontSize: 12.5, color: '#64748B' }}>
+      <User size={14} />
+      <span>Viewing as</span>
+      <select value={me || ''} onChange={(e) => setViewAs(e.target.value)} className="mt-date" style={{ width: 'auto', fontWeight: 600 }}>
+        <option value="">— choose a team member —</option>
+        {staffList.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+      </select>
+      <span style={{ color: '#94A3B8' }}>(passwords aren’t set yet, so pick who “you” are to preview your tasks)</span>
+    </div>
+  ) : null;
+
+  if (!me) {
+    return (
+      <div className="mt-list-wrap">
+        {viewAsControl}
+        <div className="mt-empty" style={{ padding: 60 }}>
+          <User size={26} style={{ opacity: .5 }} /><br />
+          Sign in as a team member to see the tasks assigned to you.
+        </div>
+      </div>
+    );
+  }
+
+  const today = new Date(new Date().toDateString());
+  const in7 = new Date(today); in7.setDate(in7.getDate() + 7);
+  const dayOf = (d) => new Date(new Date(d).toDateString());
+  const notDone = myTasks.filter(t => t.status !== 'done');
+  const overdue = notDone.filter(isOverdue);
+  const dueToday = notDone.filter(t => t.due_date && dayOf(t.due_date).getTime() === today.getTime());
+  const thisWeek = notDone.filter(t => t.due_date && dayOf(t.due_date) > today && dayOf(t.due_date) <= in7);
+  const later = notDone.filter(t => !overdue.includes(t) && !dueToday.includes(t) && !thisWeek.includes(t));
+  const done = myTasks.filter(t => t.status === 'done');
+  const inProgress = notDone.filter(t => t.status === 'progress' || t.status === 'review').length;
+
+  const Tile = ({ label, count, colour, soft, icon }) => (
+    <div style={{ flex: 1, minWidth: 160, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '15px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
+      <div style={{ width: 42, height: 42, borderRadius: 11, background: soft, color: colour, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icon}</div>
+      <div>
+        <div style={{ fontSize: 26, fontWeight: 800, lineHeight: 1, color: count > 0 ? colour : '#0F172A' }}>{count}</div>
+        <div style={{ fontSize: 12.5, color: '#64748B', marginTop: 4, fontWeight: 600 }}>{label}</div>
+      </div>
+    </div>
+  );
+
+  const Row = ({ t }) => {
+    const od = isOverdue(t);
+    return (
+      <div className="mt-myrow" onClick={() => onOpen(t.id)}
+        style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 11, cursor: 'pointer', marginBottom: 8 }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = '#CBD5E1'; e.currentTarget.style.background = '#FBFCFD'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = '#E2E8F0'; e.currentTarget.style.background = '#fff'; }}>
+        <span className="dot" style={{ width: 9, height: 9, background: STATUS[t.status]?.colour }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</div>
+          <div style={{ fontSize: 11.5, color: '#94A3B8' }}>{shortId(t.id)} · {SPACES[t.space]?.label}</div>
+        </div>
+        <Pill map={PRIORITY} k={t.priority} />
+        <span className={'mt-due' + (od ? ' overdue' : '')} style={{ fontSize: 12.5, minWidth: 96, justifyContent: 'flex-end' }}><Calendar size={13} />{fmtDate(t.due_date)}</span>
+        <StatusTag k={t.status} />
+      </div>
+    );
+  };
+
+  const groups = [
+    { key: 'overdue', label: 'Overdue', colour: '#EF4444', items: overdue },
+    { key: 'today', label: 'Due today', colour: '#F59E0B', items: dueToday },
+    { key: 'week', label: 'Due this week', colour: '#F59E0B', items: thisWeek },
+    { key: 'later', label: 'Later & no date', colour: '#94A3B8', items: later },
+    { key: 'done', label: 'Completed', colour: '#00C853', items: done },
+  ];
+
+  return (
+    <div className="mt-list-wrap">
+      {viewAsControl}
+
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 22 }}>
+        <Tile label="Overdue" count={overdue.length} colour="#EF4444" soft="#FDECEC" icon={<AlertTriangle size={20} />} />
+        <Tile label="Due this week" count={dueToday.length + thisWeek.length} colour="#F59E0B" soft="#FEF3E2" icon={<Clock size={20} />} />
+        <Tile label="In progress" count={inProgress} colour="#2563EB" soft="#E7EEFD" icon={<CircleDashed size={20} />} />
+        <Tile label="Completed" count={done.length} colour="#00C853" soft="#E7F8EE" icon={<CheckCircle2 size={20} />} />
+      </div>
+
+      {overdue.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#FDECEC', color: '#B91C1C', border: '1px solid #FCA5A5', borderRadius: 10, padding: '10px 14px', marginBottom: 20, fontSize: 13, fontWeight: 600 }}>
+          <AlertTriangle size={15} />
+          You have {overdue.length} overdue task{overdue.length === 1 ? '' : 's'}. These are past their due date — worth clearing first.
+        </div>
+      )}
+
+      {myTasks.length === 0 ? (
+        <div className="mt-empty" style={{ padding: 50 }}>
+          Nothing assigned to you yet.
+          <div style={{ marginTop: 12 }}><button className="mt-btn primary" onClick={onNew} style={{ display: 'inline-flex' }}><Plus size={15} />Create a task</button></div>
+        </div>
+      ) : groups.filter(g => g.items.length).map(g => (
+        <div key={g.key} style={{ marginBottom: 22 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 11 }}>
+            <span className="dot" style={{ width: 10, height: 10, background: g.colour }} />
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>{g.label}</span>
+            <span className="mt-count">{g.items.length}</span>
+          </div>
+          {g.items.map(t => <Row key={t.id} t={t} />)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── page ────────────────────────────────────────────────────────────────────────
 export default function TasksPage() {
-  const { canAccess, bypass, user } = useAuth();
+  const { canAccess, bypass } = useAuth();
+  const { id: me } = useMe();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [view, setView] = useState('board');     // board | list | mine
   const [space, setSpace] = useState('all');
   const [openId, setOpenId] = useState(null);
@@ -447,17 +563,25 @@ export default function TasksPage() {
   const allowed = bypass || canAccess('tasks');
   const tasksQuery = useQuery({ queryKey: ['tasks'], queryFn: () => tasksApi.list() });
   const staffQuery = useQuery({ queryKey: ['staff-directory'], queryFn: () => api.get('/staff').then(r => normList(r.data)) });
-  const staffMap = useMemo(() => Object.fromEntries((staffQuery.data || []).map(s => [s.id, s])), [staffQuery.data]);
+  const staffList = staffQuery.data || [];
+
+  // Deep-link: /tasks?task=<id> opens that task (used by the notification bell)
+  useEffect(() => { const t = searchParams.get('task'); if (t) setOpenId(t); }, [searchParams]);
+  const closeDetail = () => {
+    setOpenId(null);
+    if (searchParams.get('task')) { searchParams.delete('task'); setSearchParams(searchParams, { replace: true }); }
+  };
 
   if (!allowed) return <Navigate to="/" replace />;
 
   const tasks = tasksQuery.data || [];
-  const currentUserId = user?.id || null;
   const spaceTasks = space === 'all' ? tasks : tasks.filter(t => t.space === space);
-  const viewTasks = view === 'mine' ? spaceTasks.filter(t => t.assignee_id && t.assignee_id === currentUserId) : spaceTasks;
+  const viewTasks = spaceTasks;
+  const myTasks = me ? tasks.filter(t => t.assignee_id === me) : [];
+  const myOverdue = myTasks.filter(isOverdue).length;
 
   const spacePills = [['all', 'All spaces', null], ...Object.entries(SPACES).map(([k, v]) => [k, v.label, v.colour])];
-  const sub = view === 'mine' ? 'My tasks · assigned to me' : (space === 'all' ? 'Team overview · all active work across Moov' : SPACES[space].label + ' space · this team’s board');
+  const sub = view === 'mine' ? 'My tasks · everything assigned to you' : (space === 'all' ? 'Team overview · all active work across Moov' : SPACES[space].label + ' space · this team’s board');
 
   return (
     <div className="moov-tasks">
@@ -479,14 +603,16 @@ export default function TasksPage() {
           <div className="mt-tabs">
             <div className={'mt-tab' + (view === 'board' ? ' active' : '')} onClick={() => setView('board')}><LayoutGrid size={14} />Board</div>
             <div className={'mt-tab' + (view === 'list' ? ' active' : '')} onClick={() => setView('list')}><ListIcon size={14} />List</div>
-            <div className={'mt-tab' + (view === 'mine' ? ' active' : '')} onClick={() => setView('mine')}><User size={14} />My tasks</div>
+            <div className={'mt-tab' + (view === 'mine' ? ' active' : '')} onClick={() => setView('mine')}><User size={14} />My tasks{myOverdue > 0 && <span style={{ marginLeft: 2, background: '#EF4444', color: '#fff', fontSize: 10, fontWeight: 700, borderRadius: 99, padding: '1px 6px' }}>{myOverdue}</span>}</div>
           </div>
         </div>
       </div>
 
       {tasksQuery.isLoading ? <div className="mt-loading" style={{ marginTop: 60 }}>Loading tasks…</div>
         : tasksQuery.isError ? <div className="mt-loading" style={{ marginTop: 60, color: '#EF4444' }}>Couldn’t load tasks. Is the API deployed?</div>
-          : view === 'list' ? (
+          : view === 'mine' ? (
+            <MyTasksView myTasks={myTasks} me={me} bypass={bypass} staffList={staffList} onOpen={setOpenId} onNew={() => setCreating(true)} />
+          ) : view === 'list' ? (
             <div className="mt-list-wrap">
               <table>
                 <thead><tr><th style={{ width: '34%' }}>Task</th><th>Assignee</th><th>Priority</th><th>Status</th><th>Due</th><th style={{ textAlign: 'center' }}>Activity</th></tr></thead>
@@ -524,8 +650,8 @@ export default function TasksPage() {
             </div>
           )}
 
-      {openId && <TaskDetail taskId={openId} staffMap={staffMap} navigate={navigate} onClose={() => setOpenId(null)} />}
-      {creating && <CreateModal defaultSpace={space} currentUserId={currentUserId} onClose={() => setCreating(false)} onCreated={(t) => { setCreating(false); if (t?.id) setOpenId(t.id); }} />}
+      {openId && <TaskDetail taskId={openId} me={me} navigate={navigate} onClose={closeDetail} />}
+      {creating && <CreateModal defaultSpace={space} currentUserId={me} onClose={() => setCreating(false)} onCreated={(t) => { setCreating(false); if (t?.id) setOpenId(t.id); }} />}
     </div>
   );
 }

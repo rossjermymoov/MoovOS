@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Search, Bell, Settings } from 'lucide-react';
+import { Search, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import NotificationBell from '../NotificationBell';
 
 const BORDER = 'rgba(255,255,255,0.08)';
 const MUTED  = 'rgba(255,255,255,0.40)';
@@ -80,23 +81,19 @@ export default function TopBar() {
       </div>
 
       {/* Utility icons */}
-      <div style={{ display: 'flex', gap: 6 }}>
-        {[
-          { Icon: Bell, action: null },
-          { Icon: Settings, action: () => navigate('/settings') },
-        ].map(({ Icon, action }, i) => (
-          <button key={i} onClick={action} style={{
-            width: 32, height: 32, borderRadius: 8,
-            background: 'transparent', border: 'none',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', color: MUTED,
-          }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.10)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-          >
-            <Icon size={16} strokeWidth={1.5} />
-          </button>
-        ))}
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <NotificationBell />
+        <button onClick={() => navigate('/settings')} style={{
+          width: 32, height: 32, borderRadius: 8,
+          background: 'transparent', border: 'none',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', color: MUTED,
+        }}
+          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.10)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+        >
+          <Settings size={16} strokeWidth={1.5} />
+        </button>
       </div>
 
       {/* User avatar */}
