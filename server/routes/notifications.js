@@ -46,6 +46,17 @@ router.get('/', async (req, res, next) => {
     const me = meId(req);
     if (!me) return res.json({ items: [], nudges: [], unread_count: 0 });
 
+    // Which status keys mean "complete"? Read the team's board config (defaults to 'done').
+    let completeKeys = ['done'];
+    try {
+      const cfgRes = await query(`SELECT data FROM task_config WHERE id = 1`);
+      const cfg = cfgRes.rows[0]?.data;
+      if (cfg && Array.isArray(cfg.statuses)) {
+        const ck = cfg.statuses.filter(s => s.isComplete).map(s => s.key);
+        if (ck.length) completeKeys = ck;
+      }
+    } catch { /* task_config may not exist yet — fall back to 'done' */ }
+
     const [itemsRes, nudgeRes] = await Promise.all([
       query(
         `SELECT n.id, n.type, n.severity, n.title, n.body, n.entity_type, n.entity_id,
@@ -60,10 +71,10 @@ router.get('/', async (req, res, next) => {
                 CASE WHEN t.due_date < CURRENT_DATE THEN 'overdue' ELSE 'due_soon' END AS kind
          FROM tasks t
          WHERE t.assignee_id = $1
-           AND t.status <> 'done'
+           AND NOT (t.status = ANY($2::text[]))
            AND t.due_date IS NOT NULL
            AND t.due_date <= CURRENT_DATE + INTERVAL '2 day'
-         ORDER BY t.due_date ASC`, [me]),
+         ORDER BY t.due_date ASC`, [me, completeKeys]),
     ]);
 
     const items = itemsRes.rows;

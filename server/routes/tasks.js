@@ -23,8 +23,10 @@ import { notify } from './notifications.js';
 
 const router = express.Router();
 
-const STATUSES   = ['todo', 'progress', 'review', 'done'];
+const STATUSES   = ['todo', 'progress', 'review', 'done']; // defaults; statuses are now user-configurable
 const PRIORITIES = ['urgent', 'high', 'medium', 'low'];
+// Status keys are user-defined in board settings, so validate by format, not an allowlist.
+const isStatusKey = (s) => typeof s === 'string' && /^[a-z0-9_]{1,20}$/.test(s);
 const LINK_TYPES = ['customer', 'carrier', 'query', 'tracking'];
 const LINK_COL   = { customer: 'customer_id', carrier: 'courier_id', query: 'query_id', tracking: 'parcel_id' };
 
@@ -120,7 +122,7 @@ router.post('/', async (req, res, next) => {
   try {
     const b = req.body || {};
     if (!b.title?.trim()) return res.status(400).json({ error: 'title is required' });
-    const status   = STATUSES.includes(b.status)     ? b.status   : 'todo';
+    const status   = isStatusKey(b.status)           ? b.status   : 'todo';
     const priority = PRIORITIES.includes(b.priority) ? b.priority : 'medium';
 
     const ins = await query(
@@ -162,7 +164,7 @@ router.patch('/:id', async (req, res, next) => {
     const values = [];
     for (const key of allowed) {
       if (key in req.body) {
-        if (key === 'status'   && !STATUSES.includes(req.body[key]))   return res.status(400).json({ error: 'invalid status' });
+        if (key === 'status'   && !isStatusKey(req.body[key]))         return res.status(400).json({ error: 'invalid status' });
         if (key === 'priority' && !PRIORITIES.includes(req.body[key])) return res.status(400).json({ error: 'invalid priority' });
         values.push(req.body[key] === '' ? null : req.body[key]);
         sets.push(`${key} = $${values.length}`);
