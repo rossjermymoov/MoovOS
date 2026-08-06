@@ -82,7 +82,6 @@ function fmtDate(d) { if (!d) return '—'; const dt = new Date(d); const now = 
 function toISO(d) { if (!d) return ''; const dt = new Date(d); if (isNaN(dt)) return ''; return dt.toISOString().slice(0, 10); }
 function isOverdue(t) { return !COMPLETE.has(t.status) && t.due_date && new Date(t.due_date) < new Date(new Date().toDateString()); }
 function fmtSize(b) { b = +b || 0; return b < 1024 ? b + ' B' : (b < 1048576 ? (b / 1024).toFixed(0) + ' KB' : (b / 1048576).toFixed(1) + ' MB'); }
-function progColour(t) { return COMPLETE.has(t.status) ? '#00C853' : (STATUS[t.status]?.colour || '#7B2FBE'); }
 
 function Avatar({ name, id, size = 26 }) {
   return <span className="avatar" style={{ width: size, height: size, fontSize: Math.round(size * 0.38), background: colourFor(id || name) }} title={name || ''}>{initials(name)}</span>;
@@ -303,7 +302,7 @@ function TaskDetail({ taskId, me, onClose, navigate }) {
           <div className="mt-side">
             <SideSelect label="Status" current={<StatusTag k={task.status} />}
               options={Object.keys(STATUS).map(k => ({ key: k, render: <StatusTag k={k} /> }))}
-              onPick={(k) => set({ status: k, ...(COMPLETE.has(k) ? { progress: 100 } : {}) })} />
+              onPick={(k) => set({ status: k })} />
 
             <div className="mt-prop">
               <div className="mt-plabel">Assignee</div>
@@ -329,12 +328,6 @@ function TaskDetail({ taskId, me, onClose, navigate }) {
                 <label style={{ flex: 1 }}><span className="mt-minilbl">Due</span><input type="date" className={'mt-date' + (od ? ' overdue' : '')} defaultValue={toISO(task.due_date)} onChange={e => set({ due_date: e.target.value || null })} /></label>
               </div>
               {od && <div style={{ fontSize: 11.5, color: '#EF4444', fontWeight: 600, marginTop: 5 }}>Overdue</div>}
-            </div>
-
-            <div className="mt-prop">
-              <div className="mt-plabel">Completion · {task.progress}%</div>
-              <div className="mt-progress" style={{ margin: '0 0 9px' }}><div style={{ width: task.progress + '%', background: progColour(task) }} /></div>
-              <input type="range" min="0" max="100" step="5" defaultValue={task.progress} style={{ width: '100%', accentColor: '#00C853' }} onChange={e => set({ progress: Number(e.target.value) })} />
             </div>
 
             {task.created_by_name && (
@@ -381,7 +374,7 @@ function CreateModal({ defaultSpace, currentUserId, onClose, onCreated }) {
     mCreate.mutate({
       title: title.trim(), description: description.trim() || null, status: FIRST_STATUS, priority, space,
       assignee_id: assignee?.id || null, created_by: currentUserId || null,
-      start_date: toISO(new Date()), due_date: due || null, progress: 0, links,
+      start_date: toISO(new Date()), due_date: due || null, links,
     });
   };
 
@@ -455,7 +448,6 @@ function TaskCard({ task, onOpen, navigate }) {
       <div className="mt-card-top"><Pill map={PRIORITY} k={task.priority} /><span className="mt-card-id">{shortId(task.id)}</span></div>
       <div className="mt-card-title">{task.title}</div>
       {chip ? <div className="mt-card-meta">{chip}</div> : null}
-      {task.status !== FIRST_STATUS ? <div className="mt-progress" style={{ marginBottom: 11 }}><div style={{ width: task.progress + '%', background: progColour(task) }} /></div> : null}
       <div className="mt-card-foot">
         <div className="mt-foot-left">
           <span className="mt-ico"><MessageSquare size={14} />{task.comment_count || 0}</span>
@@ -641,10 +633,9 @@ function SettingsModal({ initSpaces, initStatuses, spaceCounts, statusCounts, sa
                 <Check size={12} />Complete
               </button>
             )}
-            <span style={{ fontSize: 11, color: '#94A3B8', width: 54, textAlign: 'right', flexShrink: 0 }}>{inUse > 0 ? `${inUse} task${inUse === 1 ? '' : 's'}` : ''}</span>
             {iconBtn(<ArrowUp size={13} />, () => move(arr, setArr, i, -1), i === 0)}
             {iconBtn(<ArrowDown size={13} />, () => move(arr, setArr, i, 1), i === arr.length - 1)}
-            {iconBtn(<Trash2 size={13} />, () => del(arr, setArr, i), !canDelete, inUse > 0 ? `${inUse} task(s) use this — reassign them first` : (arr.length <= 1 ? 'Keep at least one' : 'Remove'))}
+            {iconBtn(<Trash2 size={13} />, () => del(arr, setArr, i), !canDelete, inUse > 0 ? 'In use by existing tasks — reassign them first' : (arr.length <= 1 ? 'Keep at least one' : 'Remove'))}
           </div>
         );
       })}
