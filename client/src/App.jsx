@@ -18,6 +18,7 @@ import EmailSettings from './pages/settings/EmailSettings';
 import GmailSettings from './pages/settings/GmailSettings';
 import CarrierManagement from './pages/carriers/CarrierManagement';
 import TrackingPage from './pages/tracking/TrackingPage';
+import TasksPage from './pages/tasks/TasksPage';
 import FinancePage from './pages/finance/FinancePage';
 import QueriesPage from './pages/queries/QueriesPage';
 import TicketDetailPage from './pages/queries/TicketDetailPage';
@@ -97,6 +98,7 @@ function AppRoutes() {
         </Route>
         <Route path="onboarding" element={<OnboardingBoard />} />
         <Route path="tracking"  element={<TrackingPage />} />
+        <Route path="tasks"     element={<TasksPage />} />
         <Route path="finance"   element={<FinancePage />} />
         <Route path="queries">
           <Route index element={<QueriesPage />} />

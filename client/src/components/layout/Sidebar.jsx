@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   Users, Tag, Truck, BarChart2, FileText,
   AlertTriangle, BookOpen, Settings, LayoutDashboard,
-  UserCheck, LogOut, GitCompare, MessageSquare, Rocket,
+  UserCheck, LogOut, GitCompare, MessageSquare, Rocket, CheckSquare,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -12,13 +12,14 @@ export const NAV_ITEMS = [
   { to: '/onboarding', icon: Rocket,         label: 'Onboarding', key: 'onboarding' },
   { to: '/tracking',  icon: Truck,           label: 'Tracking',   key: 'tracking'  },
   { to: '/queries',   icon: MessageSquare,   label: 'Queries',    key: 'queries'   },
+  { to: '/tasks',     icon: CheckSquare,     label: 'Tasks',      key: 'tasks'     },
   { to: '/carriers',  icon: Truck,           label: 'Carriers',   key: 'carriers'  },
   { to: '/settings',  icon: Settings,        label: 'Settings',   key: 'settings'  },
 ];
 
 // Section groupings — operational workspace vs. system/config.
 const GROUPS = [
-  { label: 'Workspace', keys: ['dashboard', 'customers', 'onboarding', 'tracking', 'queries', 'carriers'] },
+  { label: 'Workspace', keys: ['dashboard', 'customers', 'onboarding', 'tracking', 'queries', 'tasks', 'carriers'] },
   { label: 'System',    keys: ['settings'] },
 ];
 

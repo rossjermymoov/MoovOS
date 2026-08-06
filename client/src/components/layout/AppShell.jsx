@@ -4,7 +4,7 @@ import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import KatanaWidget from '../katana/KatanaWidget';
 
-const FULL_HEIGHT_ROUTES = ['/queries'];
+const FULL_HEIGHT_ROUTES = ['/queries', '/tasks'];
 
 export default function AppShell() {
   const scrollRef = useRef(null);

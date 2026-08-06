@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Moov OS – Tasks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg-page:#F1F5F9; --bg-card:#FFFFFF; --sidebar:#18181B;
+    --text-primary:#0F172A; --text-secondary:#334155; --text-muted:#94A3B8;
+    --border:#E2E8F0; --border-soft:rgba(0,0,0,0.06);
+    --green:#00C853; --amber:#F59E0B; --red:#EF4444; --purple:#7B2FBE; --teal:#00BCD4; --blue:#2563EB;
+    --green-soft:#E7F8EE; --amber-soft:#FEF3E2; --red-soft:#FDECEC; --purple-soft:#F1E9F8; --teal-soft:#E2F7FA; --slate-soft:#EEF2F6;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
+  html,body{height:100%;}
+  body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg-page);color:var(--text-primary);overflow:hidden;}
+  ::-webkit-scrollbar{width:6px;height:6px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:99px;}
+
+  .app{display:flex;height:100vh;overflow:hidden;}
+
+  /* ── SIDEBAR ── */
+  .sidebar{width:200px;height:100vh;background:var(--sidebar);display:flex;flex-direction:column;flex-shrink:0;}
+  .logo{padding:22px 20px 18px;font-size:16px;font-weight:600;letter-spacing:-.3px;color:#fff;}
+  .logo span{color:rgba(255,255,255,.35);font-weight:400;}
+  .nav{flex:1;padding:0 8px;overflow-y:auto;}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;margin-bottom:2px;color:rgba(255,255,255,.55);font-size:13.5px;font-weight:500;cursor:pointer;transition:.12s;text-decoration:none;}
+  .nav-item:hover{background:rgba(255,255,255,.06);color:rgba(255,255,255,.9);}
+  .nav-item.active{background:rgba(255,255,255,.10);color:#fff;}
+  .nav-item svg{width:17px;height:17px;flex-shrink:0;stroke-width:2;}
+  .nav-foot{padding:12px 8px;border-top:1px solid rgba(255,255,255,.06);}
+
+  /* ── MAIN ── */
+  .main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden;}
+  .topbar{height:56px;flex-shrink:0;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px;}
+  .topbar .crumb{font-size:13px;color:var(--text-muted);}
+  .topbar .crumb b{color:var(--text-primary);font-weight:600;}
+  .search{display:flex;align-items:center;gap:8px;background:var(--bg-page);border:1px solid var(--border);border-radius:8px;padding:6px 12px;width:260px;color:var(--text-muted);font-size:13px;}
+  .search input{border:0;background:transparent;outline:0;font-size:13px;font-family:inherit;color:var(--text-primary);width:100%;}
+  .top-right{display:flex;align-items:center;gap:14px;}
+  .avatar{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;font-weight:700;color:#fff;flex-shrink:0;letter-spacing:.02em;}
+
+  .content{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
+
+  /* ── MODULE HEADER ── */
+  .mod-head{padding:20px 24px 0;flex-shrink:0;}
+  .mod-title-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+  .mod-title{font-size:22px;font-weight:700;letter-spacing:-.4px;}
+  .mod-sub{font-size:13px;color:var(--text-muted);margin-top:2px;}
+  .btn{display:inline-flex;align-items:center;gap:7px;font-family:inherit;font-size:13px;font-weight:600;padding:9px 15px;border-radius:9px;border:1px solid var(--border);background:#fff;color:var(--text-secondary);cursor:pointer;transition:.12s;}
+  .btn:hover{background:var(--bg-page);}
+  .btn.primary{background:var(--green);border-color:var(--green);color:#fff;box-shadow:0 1px 3px rgba(0,200,83,.35);}
+  .btn.primary:hover{background:#00b34a;}
+  .btn svg{width:15px;height:15px;stroke-width:2.4;}
+
+  /* ── TABS + FILTERS ── */
+  .controls{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+  .tabs{display:flex;gap:2px;background:var(--slate-soft);padding:3px;border-radius:10px;}
+  .tab{font-size:13px;font-weight:600;color:var(--text-muted);padding:6px 14px;border-radius:8px;cursor:pointer;transition:.12s;display:flex;align-items:center;gap:6px;}
+  .tab.active{background:#fff;color:var(--text-primary);box-shadow:0 1px 2px rgba(0,0,0,.08);}
+  .tab svg{width:14px;height:14px;stroke-width:2;}
+  .filters{display:flex;align-items:center;gap:8px;}
+  /* ── SPACES ── */
+  .spaces{display:flex;align-items:center;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px;}
+  .space-pill{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--text-secondary);padding:7px 13px;border-radius:9px;border:1px solid transparent;cursor:pointer;white-space:nowrap;transition:.12s;}
+  .space-pill:hover{background:#fff;}
+  .space-pill.active{background:#fff;border-color:var(--border);box-shadow:0 1px 2px rgba(0,0,0,.06);color:var(--text-primary);}
+  .space-pill svg{width:14px;height:14px;color:var(--text-muted);}
+  .space-count{font-size:11px;font-weight:600;color:var(--text-muted);background:var(--slate-soft);border-radius:99px;padding:1px 7px;}
+  .space-pill.active .space-count{color:var(--text-secondary);}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:var(--text-secondary);padding:6px 11px;border-radius:8px;border:1px solid var(--border);background:#fff;cursor:pointer;transition:.12s;}
+  .chip:hover{background:var(--bg-page);}
+  .chip svg{width:13px;height:13px;color:var(--text-muted);}
+
+  /* ── BOARD ── */
+  .board-wrap{flex:1;min-height:0;overflow-x:auto;overflow-y:hidden;padding:18px 24px 24px;}
+  .board{display:flex;gap:16px;height:100%;min-width:min-content;}
+  .col{width:296px;flex-shrink:0;display:flex;flex-direction:column;height:100%;}
+  .col-head{display:flex;align-items:center;justify-content:space-between;padding:0 4px 12px;}
+  .col-title{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--text-secondary);}
+  .dot{width:9px;height:9px;border-radius:50%;}
+  .col-count{font-size:12px;font-weight:600;color:var(--text-muted);background:var(--slate-soft);border-radius:99px;padding:1px 8px;}
+  .col-body{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:2px 4px 40px;}
+
+  .card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:13px;cursor:pointer;transition:.13s;}
+  .card:hover{box-shadow:0 4px 18px rgba(0,0,0,.07);border-color:#CBD5E1;transform:translateY(-1px);}
+  .card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+  .pill{font-size:10.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:3px 8px;border-radius:6px;display:inline-flex;align-items:center;gap:4px;}
+  .card-id{font-size:11px;font-weight:600;color:var(--text-muted);}
+  .card-title{font-size:13.5px;font-weight:600;line-height:1.4;color:var(--text-primary);margin-bottom:10px;}
+  .card-tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:11px;}
+  .tag{font-size:11px;font-weight:500;color:var(--text-secondary);background:var(--slate-soft);border-radius:6px;padding:2px 8px;}
+  .card-meta{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
+  .gdoc{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;color:var(--text-secondary);background:#fff;border:1px solid var(--border);border-radius:6px;padding:2px 7px 2px 5px;}
+  .gdoc img{width:12px;height:12px;}
+  .card-foot{display:flex;align-items:center;justify-content:space-between;margin-top:11px;padding-top:11px;border-top:1px solid var(--border-soft);}
+  .card-foot-left{display:flex;align-items:center;gap:12px;color:var(--text-muted);}
+  .icoc{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;}
+  .icoc svg{width:14px;height:14px;stroke-width:2;}
+  .due{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;color:var(--text-secondary);}
+  .due svg{width:13px;height:13px;stroke-width:2;}
+  .due.overdue{color:var(--red);}
+  .progressbar{height:5px;border-radius:99px;background:var(--slate-soft);overflow:hidden;margin-top:11px;}
+  .progressbar > div{height:100%;border-radius:99px;background:var(--green);}
+
+  /* ── LIST VIEW ── */
+  .list-wrap{flex:1;min-height:0;overflow:auto;padding:18px 24px 24px;}
+  table{width:100%;border-collapse:separate;border-spacing:0;background:#fff;border:1px solid var(--border);border-radius:14px;overflow:hidden;}
+  thead th{text-align:left;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted);padding:13px 16px;background:#FBFCFD;border-bottom:1px solid var(--border);position:sticky;top:0;}
+  tbody td{padding:13px 16px;border-bottom:1px solid var(--border-soft);font-size:13px;color:var(--text-secondary);vertical-align:middle;}
+  tbody tr{cursor:pointer;transition:.1s;}
+  tbody tr:hover{background:#FBFCFD;}
+  tbody tr:last-child td{border-bottom:0;}
+  .t-title{font-weight:600;color:var(--text-primary);}
+  .t-id{font-size:11px;color:var(--text-muted);font-weight:600;}
+  .assignee-cell{display:flex;align-items:center;gap:8px;}
+  .status-tag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;display:inline-flex;align-items:center;gap:5px;}
+
+  /* ── DETAIL SLIDE-OVER ── */
+  .scrim{position:fixed;inset:0;background:rgba(15,23,42,.35);opacity:0;pointer-events:none;transition:.2s;z-index:40;}
+  .scrim.open{opacity:1;pointer-events:auto;}
+  .drawer{position:fixed;top:0;right:0;height:100vh;width:560px;max-width:92vw;background:#fff;box-shadow:-8px 0 40px rgba(0,0,0,.16);transform:translateX(100%);transition:transform .26s cubic-bezier(.4,0,.2,1);z-index:50;display:flex;flex-direction:column;}
+  .drawer.open{transform:translateX(0);}
+  .drawer-head{padding:18px 24px 16px;border-bottom:1px solid var(--border);flex-shrink:0;}
+  .drawer-head-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  .dh-left{display:flex;align-items:center;gap:10px;}
+  .iconbtn{width:30px;height:30px;border-radius:8px;border:1px solid var(--border);background:#fff;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-secondary);transition:.12s;}
+  .iconbtn:hover{background:var(--bg-page);}
+  .iconbtn svg{width:16px;height:16px;stroke-width:2;}
+  .drawer-title{font-size:19px;font-weight:700;line-height:1.35;letter-spacing:-.3px;padding:0 24px;}
+  .drawer-body{flex:1;overflow-y:auto;padding:20px 24px 32px;}
+
+  .props{display:grid;grid-template-columns:120px 1fr;row-gap:14px;column-gap:12px;align-items:center;margin-bottom:22px;}
+  .prop-label{font-size:12.5px;color:var(--text-muted);font-weight:600;display:flex;align-items:center;gap:7px;}
+  .prop-label svg{width:14px;height:14px;stroke-width:2;}
+  .prop-val{font-size:13px;color:var(--text-primary);font-weight:500;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .selecty{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:12.5px;font-weight:600;cursor:pointer;background:#fff;}
+  .selecty svg{width:13px;height:13px;color:var(--text-muted);}
+
+  .sec-label{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);margin:22px 0 12px;display:flex;align-items:center;gap:7px;}
+  .sec-label svg{width:14px;height:14px;stroke-width:2;}
+  .desc{font-size:13.5px;line-height:1.7;color:var(--text-secondary);}
+
+  .doc-row{display:flex;align-items:center;gap:11px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;cursor:pointer;transition:.12s;}
+  .doc-row:hover{background:#FBFCFD;border-color:#CBD5E1;}
+  .doc-ico{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .doc-ico img{width:17px;height:17px;}
+  .doc-name{font-size:13px;font-weight:600;color:var(--text-primary);}
+  .doc-sub{font-size:11.5px;color:var(--text-muted);}
+  .doc-ext{margin-left:auto;color:var(--text-muted);}
+  .doc-ext svg{width:15px;height:15px;stroke-width:2;}
+
+  .chat-link{display:flex;align-items:center;gap:11px;padding:11px 13px;border:1px solid var(--border);border-radius:10px;background:linear-gradient(90deg,#F6FBF7,#fff);cursor:pointer;}
+  .chat-link:hover{border-color:var(--green);}
+
+  .comment{display:flex;gap:11px;margin-bottom:18px;}
+  .comment-body{flex:1;}
+  .comment-head{display:flex;align-items:center;gap:8px;margin-bottom:4px;}
+  .comment-name{font-size:13px;font-weight:600;color:var(--text-primary);}
+  .comment-time{font-size:11.5px;color:var(--text-muted);}
+  .comment-text{font-size:13px;line-height:1.6;color:var(--text-secondary);}
+  .comment-text .mention{color:var(--purple);font-weight:600;}
+  .comment-box{display:flex;gap:11px;align-items:flex-start;margin-top:6px;}
+  .comment-input{flex:1;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13px;font-family:inherit;color:var(--text-primary);outline:0;resize:none;min-height:40px;transition:.12s;}
+  .comment-input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(0,200,83,.12);}
+
+  .empty{padding:60px 20px;text-align:center;color:var(--text-muted);font-size:13px;}
+
+  /* ── LINKED RECORD CHIPS ── */
+  .rec{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border);border-radius:8px;padding:5px 10px 5px 7px;font-size:12.5px;font-weight:600;color:var(--text-primary);background:#fff;cursor:pointer;transition:.12s;}
+  .rec:hover{border-color:#CBD5E1;background:#FBFCFD;}
+  .rec .sub{font-weight:500;color:var(--text-muted);font-size:11.5px;}
+  .rec .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;}
+  .rec-sq{width:20px;height:20px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:800;flex-shrink:0;}
+  .badge{font-size:9.5px;font-weight:800;letter-spacing:.03em;padding:2px 6px;border-radius:5px;text-transform:uppercase;}
+  .rec-x{margin-left:2px;color:var(--text-muted);display:inline-flex;cursor:pointer;}
+  .rec-x svg{width:12px;height:12px;stroke-width:2.5;}
+  .rec-link{cursor:pointer;}
+  .rec-link:hover{border-color:#93C5FD;background:#F5F9FF;}
+  .rec .lk{opacity:0;color:var(--blue);display:inline-flex;transition:.12s;margin-left:1px;}
+  .rec .lk svg{width:12px;height:12px;stroke-width:2;}
+  .rec-link:hover .lk{opacity:1;}
+  /* toast */
+  #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:#0F172A;color:#fff;font-size:13px;font-weight:500;padding:11px 15px;border-radius:11px;box-shadow:0 12px 34px rgba(0,0,0,.28);display:flex;align-items:center;gap:10px;opacity:0;pointer-events:none;transition:.2s;z-index:80;max-width:82vw;}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  #toast .t-ico{width:22px;height:22px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
+  #toast .t-path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:#94A3B8;}
+  .rec-group{display:flex;flex-direction:column;gap:8px;}
+  .rec-line{display:flex;align-items:center;gap:8px;}
+  .rec-line-label{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted);width:74px;flex-shrink:0;}
+  .rec-chips{display:flex;flex-wrap:wrap;gap:6px;}
+
+  /* ── CREATE MODAL ── */
+  .modal-scrim{position:fixed;inset:0;background:rgba(15,23,42,.4);opacity:0;pointer-events:none;transition:.18s;z-index:60;display:flex;align-items:flex-start;justify-content:center;padding:48px 20px;overflow-y:auto;}
+  .modal-scrim.open{opacity:1;pointer-events:auto;}
+  .modal{width:620px;max-width:100%;background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.25);transform:translateY(12px);transition:.2s;overflow:visible;}
+  .modal-scrim.open .modal{transform:translateY(0);}
+  .modal-head{display:flex;align-items:center;justify-content:space-between;padding:20px 24px 0;}
+  .modal-head h3{font-size:18px;font-weight:700;letter-spacing:-.3px;}
+  .modal-body{padding:16px 24px 4px;}
+  .modal-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 24px 20px;border-top:1px solid var(--border);margin-top:12px;}
+  .fld{margin-bottom:15px;}
+  .fld-label{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px;display:block;}
+  .fld-label .req{color:var(--red);margin-left:3px;}
+  .inp{width:100%;border:1px solid var(--border);border-radius:9px;padding:10px 12px;font-size:13.5px;font-family:inherit;color:var(--text-primary);outline:0;transition:.12s;background:#fff;}
+  .inp:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(0,200,83,.12);}
+  textarea.inp{resize:vertical;min-height:56px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .seg{display:flex;gap:6px;flex-wrap:wrap;}
+  .seg-opt{font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:8px;border:1px solid var(--border);cursor:pointer;color:var(--text-secondary);display:inline-flex;align-items:center;gap:7px;transition:.12s;}
+  .seg-opt:hover{background:var(--bg-page);}
+  .seg-opt.sel{border-color:var(--text-primary);background:#0F172A;color:#fff;}
+  .link-panel{background:#FBFCFD;border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-top:4px;}
+  .link-panel .hint{font-size:11.5px;color:var(--text-muted);margin-bottom:12px;line-height:1.5;}
+  .lookup{position:relative;margin-bottom:12px;}
+  .lookup:last-child{margin-bottom:0;}
+  .lookup-selected{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;}
+  .drop{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.12);z-index:5;max-height:220px;overflow-y:auto;padding:5px;}
+  .drop-row{display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:8px;cursor:pointer;font-size:13px;}
+  .drop-row:hover{background:var(--bg-page);}
+  .drop-none{padding:12px 11px;font-size:12.5px;color:var(--red);display:flex;align-items:flex-start;gap:8px;line-height:1.45;}
+  .drop-none svg{width:15px;height:15px;stroke-width:2;flex-shrink:0;margin-top:1px;}
+  .drop-head{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);padding:7px 9px 4px;}
+
+.embedded .sidebar,.embedded .topbar{display:none !important;}
+  .embedded .app{height:100vh;}
+  .embedded .content{height:100vh;}
+  .hidden{display:none !important;}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="logo">Moov<span> OS</span></div>
+    <nav class="nav">
+      <a class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
+      <a class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>Customers</a>
+      <a class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>Tracking</a>
+      <a class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Queries</a>
+      <a class="nav-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Tasks</a>
+      <a class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>Carriers</a>
+      <a class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</a>
+    </nav>
+    <div class="nav-foot">
+      <div class="nav-item" style="cursor:default;">
+        <span class="avatar" style="width:26px;height:26px;font-size:10px;background:var(--purple);">RJ</span>
+        <span style="color:rgba(255,255,255,.85);">Ross J.</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb">Moov OS &nbsp;/&nbsp; <b>Tasks</b></div>
+      <div class="search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><input placeholder="Search tasks, people, docs…" /></div>
+      <div class="top-right">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <span class="avatar" style="width:30px;height:30px;font-size:11px;background:var(--purple);">RJ</span>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="mod-head">
+        <div class="mod-title-row">
+          <div>
+            <div class="mod-title">Tasks</div>
+            <div class="mod-sub" id="modSub">Team overview · all active work across Moov</div>
+          </div>
+          <button class="btn primary" onclick="openCreate()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>New task</button>
+        </div>
+        <div class="spaces" id="spaces"></div>
+        <div class="controls">
+          <div class="tabs">
+            <div class="tab active" data-view="board" onclick="setView('board',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="6" height="18" rx="1"/><rect x="10" y="3" width="6" height="12" rx="1"/><rect x="17" y="3" width="4" height="9" rx="1"/></svg>Board</div>
+            <div class="tab" data-view="list" onclick="setView('list',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>List</div>
+            <div class="tab" data-view="mine" onclick="setView('mine',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>My tasks</div>
+          </div>
+          <div class="filters">
+            <div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>Filter</div>
+            <div class="chip" id="assigneeFilter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Assignee: All</div>
+            <div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>Sort: Due date</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOARD -->
+      <div class="board-wrap" id="boardView">
+        <div class="board" id="board"></div>
+      </div>
+
+      <!-- LIST -->
+      <div class="list-wrap hidden" id="listView">
+        <table>
+          <thead><tr>
+            <th style="width:34%;">Task</th><th>Assignee</th><th>Priority</th><th>Status</th><th>Due</th><th style="text-align:center;">Activity</th>
+          </tr></thead>
+          <tbody id="listBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- CREATE TASK MODAL -->
+<div class="modal-scrim" id="createScrim" onclick="if(event.target===this)closeCreate()">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>New task</h3>
+      <div class="iconbtn" onclick="closeCreate()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12"/></svg></div>
+    </div>
+    <div class="modal-body">
+      <div class="fld"><label class="fld-label">Task title<span class="req">*</span></label><input class="inp" id="ntTitle" placeholder="What needs doing?" oninput="validateCreate()" autocomplete="off"></div>
+      <div class="fld"><label class="fld-label">Description</label><textarea class="inp" id="ntDesc" placeholder="Add any detail…"></textarea></div>
+      <div class="row2">
+        <div class="fld"><label class="fld-label">Space</label><div class="seg" id="ntSpace"></div></div>
+        <div class="fld"><label class="fld-label">Priority</label><div class="seg" id="ntPrio"></div></div>
+      </div>
+      <div class="row2">
+        <div class="fld"><label class="fld-label">Assignee</label><div class="seg" id="ntAssignee"></div></div>
+        <div class="fld"><label class="fld-label">Due date</label><input type="date" class="inp" id="ntDue" value="2026-08-15"></div>
+      </div>
+      <label class="fld-label" style="margin-top:4px;">Link to Moov records</label>
+      <div class="link-panel">
+        <div class="hint">Search runs against your live Moov databases — you can only link records that already exist. To raise a task about a new customer, create the customer in Moov first.</div>
+        <div class="lookup" id="lk-customer"></div>
+        <div class="lookup" id="lk-carrier"></div>
+        <div class="lookup" id="lk-query"></div>
+        <div class="lookup" id="lk-tracking"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <span style="font-size:12px;color:var(--text-muted);">Linking is optional — add what's relevant.</span>
+      <div style="display:flex;gap:10px;">
+        <button class="btn" onclick="closeCreate()">Cancel</button>
+        <button class="btn primary" id="ntCreate" onclick="createTask()">Create task</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL DRAWER -->
+<div class="scrim" id="scrim" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-head">
+    <div class="drawer-head-top">
+      <div class="dh-left">
+        <span class="card-id" id="dId">TSK-000</span>
+        <span id="dStatusTag"></span>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <div class="iconbtn" title="Share"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg></div>
+        <div class="iconbtn" onclick="closeDrawer()" title="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12"/></svg></div>
+      </div>
+    </div>
+  </div>
+  <div class="drawer-title" id="dTitle"></div>
+  <div class="drawer-body" id="drawerBody"></div>
+</div>
+
+<script>
+const TODAY = new Date(2026,7,6); // 6 Aug 2026
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+const PEOPLE = {
+  RJ:{name:'Ross Jermy',   colour:'#7B2FBE'},
+  AO:{name:'Amara Okafor', colour:'#00BCD4'},
+  BC:{name:'Ben Carter',   colour:'#E91E8C'},
+  CD:{name:'Chloe Diaz',   colour:'#00C853'},
+  DE:{name:'Dan Evans',    colour:'#F59E0B'},
+};
+
+// RAG-driven statuses: red = not started/overdue, amber = in progress, purple = review, green = complete
+const STATUS = {
+  todo:    {label:'To do',       colour:'#94A3B8', soft:'var(--slate-soft)',  text:'#64748B'},
+  progress:{label:'In progress', colour:'var(--amber)', soft:'var(--amber-soft)', text:'#B45309'},
+  review:  {label:'In review',   colour:'var(--purple)',soft:'var(--purple-soft)',text:'#6B21A8'},
+  done:    {label:'Complete',    colour:'var(--green)', soft:'var(--green-soft)', text:'#047857'},
+};
+const PRIORITY = {
+  urgent:{label:'Urgent', colour:'var(--red)',   soft:'var(--red-soft)',   text:'#B91C1C'},
+  high:  {label:'High',   colour:'var(--amber)', soft:'var(--amber-soft)', text:'#B45309'},
+  medium:{label:'Medium', colour:'var(--blue)',  soft:'#E7EEFD',           text:'#1D4ED8'},
+  low:   {label:'Low',    colour:'var(--text-muted)', soft:'var(--slate-soft)', text:'#64748B'},
+};
+// Spaces = separate boards per team, all living under the Tasks module
+const SPACES = {
+  cs:     {label:'Customer Service', colour:'#00BCD4'},
+  sales:  {label:'Sales',            colour:'#E91E8C'},
+  ops:    {label:'Operations',       colour:'#F59E0B'},
+  product:{label:'Product & Data',   colour:'#7B2FBE'},
+};
+
+/* ── LIVE MOOV RECORDS (in a real build these are fetched from the Moov databases) ── */
+const CUSTOMERS = [
+  {id:'ACC-2048', name:'Meridian Brands',    tier:'Enterprise', city:'Manchester'},
+  {id:'ACC-1875', name:'Fenwick & Sons',     tier:'Gold',       city:'Leeds'},
+  {id:'ACC-1642', name:'Halcyon Interiors',  tier:'Silver',     city:'Bristol'},
+  {id:'ACC-1590', name:'Bright & Co',        tier:'Bronze',     city:'Birmingham'},
+  {id:'ACC-2103', name:'Caldwell Logistics', tier:'Gold',       city:'Glasgow'},
+  {id:'ACC-1988', name:'Orchard Foods',      tier:'Silver',     city:'Norwich'},
+  {id:'ACC-2210', name:'Vertex Supplies',    tier:'Enterprise', city:'London'},
+  {id:'ACC-1723', name:'Pennine Textiles',   tier:'Bronze',     city:'Sheffield'},
+];
+const TIER = {Enterprise:'#7B2FBE', Gold:'#F59E0B', Silver:'#64748B', Bronze:'#B45309'};
+
+const CARRIERS = [
+  {code:'DPD', name:'DPD',        colour:'#E91E8C'},
+  {code:'DHL', name:'DHL',        colour:'#D97706'},
+  {code:'EVRI',name:'Evri',       colour:'#7B2FBE'},
+  {code:'UPS', name:'UPS',        colour:'#6B4423'},
+  {code:'RM',  name:'Royal Mail', colour:'#E11D48'},
+];
+
+const QSTATUS = {Open:{c:'var(--amber)',s:'var(--amber-soft)',t:'#B45309'}, Pending:{c:'var(--amber)',s:'var(--amber-soft)',t:'#B45309'}, Resolved:{c:'var(--green)',s:'var(--green-soft)',t:'#047857'}};
+const QUERIES = [
+  {id:'QRY-1042', title:'Missing high-value item — insurance claim', customer:'Meridian Brands',   status:'Open'},
+  {id:'QRY-1036', title:'Auto-billing charged twice — urgent reversal', customer:'Meridian Brands', status:'Open'},
+  {id:'QRY-1031', title:'Delivery delayed — customer chasing ETA',    customer:'Fenwick & Sons',   status:'Open'},
+  {id:'QRY-1024', title:'Damaged parcel reported on arrival',         customer:'Halcyon Interiors',status:'Pending'},
+  {id:'QRY-1035', title:'Export CSV encoding breaks on special chars',customer:'Internal',         status:'Resolved'},
+];
+
+const TSTATUS = {
+  in_transit:{label:'In transit',c:'#7B2FBE'}, out_for_delivery:{label:'Out for delivery',c:'#F59E0B'},
+  delivered:{label:'Delivered',c:'#00C853'}, exception:{label:'Address issue',c:'#EF4444'},
+  failed_delivery:{label:'Failed attempt',c:'#EF4444'}, booked:{label:'Booked',c:'#00BCD4'},
+};
+const TRACKING = [
+  {id:'60120241068230', carrier:'DPD',  customer:'Meridian Brands',    postcode:'M15 4FN',  recipient:'Meridian Brands — Warehouse',   status:'in_transit'},
+  {id:'60120288120557', carrier:'DPD',  customer:'Meridian Brands',    postcode:'M15 4FN',  recipient:'Meridian Brands — Returns',      status:'delivered'},
+  {id:'60120299087641', carrier:'DPD',  customer:'Meridian Brands',    postcode:'SW1A 1AA', recipient:'Meridian Brands — London office',status:'exception'},
+  {id:'60120259931104', carrier:'DPD',  customer:'Fenwick & Sons',     postcode:'LS9 8AG',  recipient:'Fenwick & Sons Ltd',            status:'out_for_delivery'},
+  {id:'JD0002216998145',carrier:'DHL',  customer:'Vertex Supplies',    postcode:'EC2A 4NE', recipient:'Vertex Supplies',               status:'exception'},
+  {id:'H7Y8K2P4Q1',     carrier:'EVRI', customer:'Orchard Foods',      postcode:'NR3 1AB',  recipient:'Orchard Foods',                 status:'delivered'},
+  {id:'PB1234567GB',    carrier:'RM',   customer:'Bright & Co',        postcode:'B1 1AA',   recipient:'Bright & Co',                   status:'failed_delivery'},
+  {id:'60120277340918', carrier:'DPD',  customer:'Caldwell Logistics', postcode:'G2 8JX',   recipient:'Caldwell Logistics',            status:'booked'},
+];
+function customerById(n){return CUSTOMERS.find(c=>c.name===n);}
+function carrierByCode(c){return CARRIERS.find(x=>x.code===c);}
+const GCOL={doc:'#4285F4',sheet:'#0F9D58',slide:'#F4B400',pdf:'#EA4335',drive:'#1FA463'};
+function gicon(type,size){
+  const c=GCOL[type]||'#64748B';
+  const inner={
+    doc:'<rect x="5.5" y="6.5" width="7" height="1.3" rx=".6" fill="#fff"/><rect x="5.5" y="9.2" width="7" height="1.3" rx=".6" fill="#fff"/><rect x="5.5" y="11.9" width="4.5" height="1.3" rx=".6" fill="#fff"/>',
+    sheet:'<rect x="5.5" y="6.5" width="7" height="7" rx=".6" fill="none" stroke="#fff" stroke-width="1.2"/><line x1="9" y1="6.5" x2="9" y2="13.5" stroke="#fff" stroke-width="1.1"/><line x1="5.5" y1="10" x2="12.5" y2="10" stroke="#fff" stroke-width="1.1"/>',
+    slide:'<rect x="5.3" y="7" width="7.4" height="5" rx=".8" fill="#fff"/>',
+    pdf:'<rect x="5.5" y="6.5" width="7" height="1.3" rx=".6" fill="#fff"/><rect x="5.5" y="9.2" width="7" height="1.3" rx=".6" fill="#fff"/><rect x="5.5" y="11.9" width="4.5" height="1.3" rx=".6" fill="#fff"/>',
+    drive:'<path d="M9 4.5l4.2 7.3H4.8L9 4.5z" fill="#fff" opacity=".95"/>'
+  }[type]||'';
+  return `<svg width="${size}" height="${size}" viewBox="0 0 18 18" style="flex-shrink:0;"><rect x="2.5" y="2" width="13" height="14" rx="2.5" fill="${c}"/>${inner}</svg>`;
+}
+
+const TASKS = [
+  { id:'TSK-1042', title:'Onboard Fenwick & Sons to the new carrier portal', status:'progress', priority:'high',
+    assignee:'AO', assigner:'RJ', due:new Date(2026,7,11), start:new Date(2026,7,4), progress:45,
+    tags:['Onboarding','Carriers'], comments:4, docs:2,
+    desc:'Walk the Fenwick ops team through the portal, migrate their 3 active routes and confirm the API keys are live. Blocker: waiting on their IT to whitelist our webhook domain.',
+    files:[{t:'doc',name:'Fenwick onboarding runbook',sub:'Google Doc · edited 2 days ago'},{t:'sheet',name:'Route migration tracker',sub:'Google Sheet · 3 routes'}],
+    chat:'Fenwick onboarding',
+    thread:[
+      {who:'RJ',t:'2 days ago',m:'Nice progress. Have we heard back from their IT on the webhook whitelist yet?'},
+      {who:'AO',t:'1 day ago',m:'@Ross Jermy chasing today — I\'ll flag if we\'re still blocked by Thursday.'},
+      {who:'BC',t:'6 hours ago',m:'I\'ve got a contact at Fenwick IT, happy to jump on a call if it helps.'},
+      {who:'AO',t:'3 hours ago',m:'Amazing, thanks Ben — will loop you in.'},
+    ]},
+  { id:'TSK-1039', title:'Q3 carrier performance review deck for the board', status:'todo', priority:'urgent',
+    assignee:'BC', assigner:'RJ', due:new Date(2026,7,3), start:new Date(2026,7,1), progress:0,
+    tags:['Reporting','Board'], comments:2, docs:1,
+    desc:'Pull on-time delivery, cost-per-mile and claims data for all carriers and build the board summary. Needs sign-off from Ross before Friday.',
+    files:[{t:'slide',name:'Q3 board review',sub:'Google Slides · draft'}],
+    chat:'Board reporting',
+    thread:[
+      {who:'RJ',t:'4 days ago',m:'This one\'s the priority for the week — shout if you need the raw figures.'},
+      {who:'BC',t:'2 days ago',m:'On it. Data pull done, building the narrative now.'},
+    ]},
+  { id:'TSK-1036', title:'Investigate repeated tracking sync failures on DPD lane', status:'progress', priority:'urgent',
+    assignee:'DE', assigner:'AO', due:new Date(2026,7,7), start:new Date(2026,7,5), progress:60,
+    tags:['Bug','Tracking'], comments:6, docs:1,
+    desc:'Tracking events from DPD have been dropping intermittently since the weekend. Reproduce, find the root cause and confirm a fix. ~14 shipments currently showing stale.',
+    files:[{t:'sheet',name:'Affected shipments log',sub:'Google Sheet · 14 rows'}],
+    chat:'Tracking incidents',
+    thread:[
+      {who:'AO',t:'yesterday',m:'Raised by two customers this morning, bumping to urgent.'},
+      {who:'DE',t:'5 hours ago',m:'Found it — their payload changed a field name. Patch in testing now.'},
+    ]},
+  { id:'TSK-1031', title:'Draft SLA terms for the Meridian contract renewal', status:'review', priority:'medium',
+    assignee:'RJ', assigner:'RJ', due:new Date(2026,7,14), start:new Date(2026,6,28), progress:80,
+    tags:['Legal','Sales'], comments:3, docs:2,
+    desc:'Redraft the SLA section with the new delivery windows and penalty clauses. Ready for Chloe to review before it goes to Meridian.',
+    files:[{t:'doc',name:'Meridian SLA v3',sub:'Google Doc · in review'},{t:'pdf',name:'Current signed contract',sub:'PDF · 2024'}],
+    chat:'Meridian renewal',
+    thread:[
+      {who:'RJ',t:'yesterday',m:'@Chloe Diaz can you sanity-check the penalty clause in section 4?'},
+      {who:'CD',t:'4 hours ago',m:'Looking now — one wording tweak, otherwise good to send.'},
+    ]},
+  { id:'TSK-1028', title:'Set up automated weekly customer NPS export', status:'done', priority:'low',
+    assignee:'DE', assigner:'RJ', due:new Date(2026,7,1), start:new Date(2026,6,25), progress:100,
+    tags:['Automation'], comments:1, docs:1,
+    desc:'Scheduled export of NPS responses into the shared drive every Monday. Verified running for 2 weeks.',
+    files:[{t:'sheet',name:'NPS weekly export',sub:'Google Sheet · auto-updated'}],
+    chat:'Data & automation',
+    thread:[{who:'DE',t:'5 days ago',m:'Live and verified — first two runs landed correctly. Closing this off.'}]},
+  { id:'TSK-1025', title:'Renew UK operating licence documentation with DVSA', status:'todo', priority:'high',
+    assignee:'CD', assigner:'RJ', due:new Date(2026,7,20), start:new Date(2026,7,6), progress:0,
+    tags:['Compliance'], comments:0, docs:1,
+    desc:'Gather the vehicle records and submit the annual operator licence renewal. Deadline is firm.',
+    files:[{t:'doc',name:'DVSA renewal checklist',sub:'Google Doc'}],
+    chat:'Compliance',
+    thread:[]},
+  { id:'TSK-1021', title:'Rework the customer query triage flow in Moov OS', status:'progress', priority:'medium',
+    assignee:'RJ', assigner:'AO', due:new Date(2026,7,12), start:new Date(2026,7,2), progress:35,
+    tags:['Product','Queries'], comments:5, docs:1,
+    desc:'Redesign how incoming queries get auto-assigned so nothing sits unowned for more than 2 hours. Spec first, then hand to Dan to build.',
+    files:[{t:'doc',name:'Triage flow spec',sub:'Google Doc · draft'}],
+    chat:'Product',
+    thread:[
+      {who:'AO',t:'3 days ago',m:'This would save the support team a ton of manual sorting.'},
+      {who:'RJ',t:'yesterday',m:'Agreed. Writing the spec now — will share for feedback tomorrow.'},
+    ]},
+  { id:'TSK-1018', title:'Negotiate better rates with Northgate Haulage', status:'review', priority:'high',
+    assignee:'BC', assigner:'RJ', due:new Date(2026,7,9), start:new Date(2026,6,30), progress:70,
+    tags:['Carriers','Cost'], comments:2, docs:1,
+    desc:'Push for a 6% reduction on the Midlands routes given our increased volume. Proposal sent, awaiting their response.',
+    files:[{t:'sheet',name:'Rate comparison model',sub:'Google Sheet'}],
+    chat:'Carrier negotiations',
+    thread:[
+      {who:'RJ',t:'2 days ago',m:'How\'s Northgate looking? We\'ve got leverage with the extra volume.'},
+      {who:'BC',t:'1 day ago',m:'Sent them the model. Optimistic on 4-5%, pushing for 6.'},
+    ]},
+  { id:'TSK-1014', title:'Fix mislabelled delivery zones for Scotland routes', status:'done', priority:'medium',
+    assignee:'AO', assigner:'DE', due:new Date(2026,6,30), start:new Date(2026,6,24), progress:100,
+    tags:['Bug','Tracking'], comments:2, docs:0,
+    desc:'Several Highland postcodes were mapped to the wrong delivery zone. Corrected and verified against the carrier zone map.',
+    files:[], chat:'Tracking incidents',
+    thread:[{who:'DE',t:'1 week ago',m:'Verified against the master zone map — all 40 miles of the Highland routes now correct.'}]},
+];
+
+// Assign each task to a space
+const TASK_SPACE={'TSK-1021':'cs','TSK-1036':'cs','TSK-1031':'sales','TSK-1018':'sales','TSK-1039':'sales','TSK-1042':'ops','TSK-1025':'ops','TSK-1028':'product','TSK-1014':'product'};
+TASKS.forEach(t=>t.space=TASK_SPACE[t.id]||'ops');
+
+// Link tasks to live Moov records (customer / carrier / queries / tracking)
+const TASK_LINKS={
+  'TSK-1042':{customer:'Fenwick & Sons'},
+  'TSK-1036':{customer:'Meridian Brands', carrier:'DPD', queries:['QRY-1042'], tracking:['60120241068230']},
+  'TSK-1031':{customer:'Meridian Brands'},
+  'TSK-1021':{queries:['QRY-1036']},
+  'TSK-1018':{carrier:'DPD'},
+  'TSK-1014':{carrier:'DPD', tracking:['60120259931104']},
+};
+TASKS.forEach(t=>t.links=TASK_LINKS[t.id]||{});
+
+let currentView='board';
+let mineOnly=false;
+let currentSpace='all';
+const ASSIGNEE_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+
+/* ── HELPERS ── */
+function fmtDate(d){return d.getDate()+' '+MONTHS[d.getMonth()]+(d.getFullYear()!==TODAY.getFullYear()?' '+d.getFullYear():'');}
+function isOverdue(t){return t.status!=='done' && t.due < TODAY;}
+function av(code,size,fs){const p=PEOPLE[code];return `<span class="avatar" style="width:${size}px;height:${size}px;font-size:${fs}px;background:${p.colour};" title="${p.name}">${code}</span>`;}
+function pill(map,key){const s=map[key];return `<span class="pill" style="background:${s.soft};color:${s.text};"><span class="dot" style="width:6px;height:6px;background:${s.colour};"></span>${s.label}</span>`;}
+function statusTag(key){const s=STATUS[key];return `<span class="status-tag" style="background:${s.soft};color:${s.text};"><span class="dot" style="width:6px;height:6px;background:${s.colour};"></span>${s.label}</span>`;}
+function initials(n){return n.split(' ').filter(w=>/[A-Za-z0-9]/.test(w)).map(w=>w[0]).slice(0,2).join('').toUpperCase();}
+function carCode(c){return c==='RM'?'RM':c.slice(0,3);}
+const RX=`<span class="rec-x" onclick="event.stopPropagation();`;
+const XSVG=`<svg viewBox='0 0 24 24' fill='none' stroke='currentColor'><path d='M18 6L6 18M6 6l12 12'/></svg></span>`;
+const LINKICON=`<span class="lk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14L21 3"/></svg></span>`;
+// Deep-link routes into the rest of Moov OS — every linked record jumps to its page
+const RECMETA={
+  customer:{label:'Customers', route:id=>`/customers/${id}`, colour:'#1D4ED8'},
+  carrier: {label:'Carriers',  route:id=>`/carriers/${id}`,  colour:'#7B2FBE'},
+  query:   {label:'Queries',   route:id=>`/queries/${id}`,   colour:'#F59E0B'},
+  tracking:{label:'Tracking',  route:id=>`/tracking/${id}`,  colour:'#00BCD4'},
+  staff:   {label:'Team',      route:id=>`/team/${id}`,      colour:'#7B2FBE'},
+};
+let toastTimer;
+function openRecord(type,id,label){try{if(window.parent&&window.parent!==window)window.parent.postMessage({type:'moov-navigate',route:RECMETA[type].route(id),label:label,recordType:type},'*');}catch(e){}const m=RECMETA[type];const el=document.getElementById('toast');
+  el.innerHTML=`<span class="t-ico" style="background:${m.colour};"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14L21 3"/></svg></span><span>Opening <b>${label}</b> in ${m.label}</span><span class="t-path">${m.route(id)}</span>`;
+  el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2400);}
+function recChipCustomer(name,rm){const c=customerById(name);if(!c)return '';const k=!rm;return `<span class="rec ${k?'rec-link':''}"${k?` onclick="openRecord('customer','${c.id}','${c.name}')" title="Open in Customers · /customers/${c.id}"`:''}><span class="rec-sq" style="background:#1D4ED8;">${initials(c.name)}</span>${c.name}<span class="sub">${c.id}</span><span class="badge" style="background:${TIER[c.tier]}1A;color:${TIER[c.tier]};">${c.tier}</span>${k?LINKICON:''}${rm?`${RX}lookupRemove('customer','${name}')">${XSVG}`:''}</span>`;}
+function recChipCarrier(code,rm){const c=carrierByCode(code);if(!c)return '';const k=!rm;return `<span class="rec ${k?'rec-link':''}"${k?` onclick="openRecord('carrier','${c.code}','${c.name}')" title="Open in Carriers · /carriers/${c.code}"`:''}><span class="rec-sq" style="background:${c.colour};">${carCode(c.code)}</span>${c.name}${k?LINKICON:''}${rm?`${RX}lookupRemove('carrier','${code}')">${XSVG}`:''}</span>`;}
+function recChipQuery(id,rm){const q=QUERIES.find(x=>x.id===id);if(!q)return '';const s=QSTATUS[q.status];const k=!rm;return `<span class="rec ${k?'rec-link':''}"${k?` onclick="openRecord('query','${q.id}','${q.id}')" title="Open in Queries · /queries/${q.id}"`:''}><span class="mono" style="color:var(--text-secondary);font-weight:700;">${q.id}</span>${q.title.length>32?q.title.slice(0,32)+'…':q.title}<span class="badge" style="background:${s.s};color:${s.t};">${q.status}</span>${k?LINKICON:''}${rm?`${RX}lookupRemove('query','${id}')">${XSVG}`:''}</span>`;}
+function recChipTracking(id,rm){const tr=TRACKING.find(x=>x.id===id);if(!tr)return '';const s=TSTATUS[tr.status];const car=carrierByCode(tr.carrier);const k=!rm;return `<span class="rec ${k?'rec-link':''}"${k?` onclick="openRecord('tracking','${tr.id}','${tr.id}')" title="Open in Tracking · /tracking/${tr.id}"`:''}><span class="rec-sq" style="background:${car.colour};font-size:8px;">${carCode(car.code)}</span><span class="mono">${id}</span><span class="badge" style="background:${s.c}1A;color:${s.c};">${s.label}</span>${k?LINKICON:''}${rm?`${RX}lookupRemove('tracking','${id}')">${XSVG}`:''}</span>`;}
+function lineRow(label,chips){return `<div class="rec-line"><span class="rec-line-label">${label}</span><span class="rec-chips">${chips}</span></div>`;}
+function linkedRecordsHTML(t){const L=t.links||{};const has=L.customer||L.carrier||(L.queries&&L.queries.length)||(L.tracking&&L.tracking.length);let r='';if(L.customer)r+=lineRow('Customer',recChipCustomer(L.customer,false));if(L.carrier)r+=lineRow('Carrier',recChipCarrier(L.carrier,false));if(L.queries&&L.queries.length)r+=lineRow('Queries',L.queries.map(q=>recChipQuery(q,false)).join(''));if(L.tracking&&L.tracking.length)r+=lineRow('Tracking',L.tracking.map(x=>recChipTracking(x,false)).join(''));return has?`<div class="rec-group">${r}</div>`:`<div style="font-size:13px;color:var(--text-muted);">No linked records yet. <span style="color:var(--green);font-weight:600;cursor:pointer;">+ Link a customer, query, tracking number or carrier</span></div>`;}
+
+function visibleTasks(){
+  let list = currentSpace==='all' ? TASKS : TASKS.filter(t=>t.space===currentSpace);
+  if(mineOnly) list = list.filter(t=>t.assignee==='RJ');
+  return list;
+}
+function renderSpaces(){
+  const el=document.getElementById('spaces');
+  const rows=[['all','All spaces',null]].concat(Object.entries(SPACES).map(([k,v])=>[k,v.label,v.colour]));
+  el.innerHTML=rows.map(([k,label,colour])=>{
+    const count=k==='all'?TASKS.length:TASKS.filter(t=>t.space===k).length;
+    const icon=colour?`<span class="dot" style="width:8px;height:8px;background:${colour};"></span>`
+      :'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>';
+    return `<div class="space-pill ${currentSpace===k?'active':''}" onclick="setSpace('${k}')">${icon}${label}<span class="space-count">${count}</span></div>`;
+  }).join('');
+}
+function setSpace(k){currentSpace=k;renderSpaces();updateHeader();if(currentView==='list')renderList();else renderBoard();}
+function updateHeader(){
+  const sub=document.getElementById('modSub');
+  const sp=currentSpace==='all'?null:SPACES[currentSpace].label;
+  if(mineOnly) sub.textContent='My tasks · '+(sp?sp+' · ':'')+'work assigned to Ross Jermy';
+  else if(currentView==='list') sub.textContent=(sp||'Team overview')+' · every task in one list';
+  else sub.textContent=sp?sp+' space · this team’s board':'Team overview · all active work across Moov';
+  document.getElementById('assigneeFilter').innerHTML=ASSIGNEE_ICON+(mineOnly?'Assignee: Ross J.':'Assignee: All');
+}
+
+/* ── BOARD ── */
+function renderBoard(){
+  const cols=[['todo','To do'],['progress','In progress'],['review','In review'],['done','Complete']];
+  const board=document.getElementById('board');
+  board.innerHTML=cols.map(([key,label])=>{
+    const items=visibleTasks().filter(t=>t.status===key);
+    const s=STATUS[key];
+    return `<div class="col">
+      <div class="col-head">
+        <div class="col-title"><span class="dot" style="background:${s.colour};"></span>${label}</div>
+        <span class="col-count">${items.length}</span>
+      </div>
+      <div class="col-body">
+        ${items.map(cardHTML).join('')||'<div class="empty" style="padding:24px 8px;">Nothing here</div>'}
+      </div>
+    </div>`;
+  }).join('');
+}
+function cardHTML(t){
+  const od=isOverdue(t);
+  const docChip=t.files&&t.files.length?`<span class="gdoc">${gicon(t.files[0].t,13)}${t.files[0].name.length>20?t.files[0].name.slice(0,20)+'…':t.files[0].name}</span>`:'';
+  const L=t.links||{};
+  let linkChip='';
+  if(L.customer){const c=customerById(L.customer);linkChip=`<span class="gdoc rec-link" onclick="event.stopPropagation();openRecord('customer','${c.id}','${c.name}')" title="Open in Customers · /customers/${c.id}"><span class="rec-sq" style="width:14px;height:14px;font-size:7px;background:#1D4ED8;">${initials(c.name)}</span>${c.name}</span>`;}
+  else if(L.carrier){const c=carrierByCode(L.carrier);linkChip=`<span class="gdoc rec-link" onclick="event.stopPropagation();openRecord('carrier','${c.code}','${c.name}')" title="Open in Carriers · /carriers/${c.code}"><span class="rec-sq" style="width:14px;height:14px;font-size:7px;background:${c.colour};">${carCode(c.code)}</span>${c.name}</span>`;}
+  return `<div class="card" onclick="openDrawer('${t.id}')">
+    <div class="card-top">${pill(PRIORITY,t.priority)}<span class="card-id">${t.id}</span></div>
+    <div class="card-title">${t.title}</div>
+    <div class="card-tags">${t.tags.map(x=>`<span class="tag">${x}</span>`).join('')}</div>
+    ${(docChip||linkChip)?`<div class="card-meta">${linkChip}${docChip}</div>`:''}
+    ${t.status!=='todo'?`<div class="progressbar"><div style="width:${t.progress}%;background:${t.status==='done'?'var(--green)':t.status==='progress'?'var(--amber)':'var(--purple)'};"></div></div>`:''}
+    <div class="card-foot">
+      <div class="card-foot-left">
+        <span class="icoc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>${t.comments}</span>
+        <span class="icoc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>${t.docs}</span>
+        <span class="due ${od?'overdue':''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>${fmtDate(t.due)}</span>
+      </div>
+      ${av(t.assignee,26,10)}
+    </div>
+  </div>`;
+}
+
+/* ── LIST ── */
+function renderList(){
+  const body=document.getElementById('listBody');
+  body.innerHTML=visibleTasks().map(t=>{
+    const od=isOverdue(t);
+    return `<tr onclick="openDrawer('${t.id}')">
+      <td><div class="t-title">${t.title}</div><div class="t-id">${t.id} · ${t.tags.join(', ')}</div></td>
+      <td><div class="assignee-cell">${av(t.assignee,24,9)}<span>${PEOPLE[t.assignee].name}</span></div></td>
+      <td>${pill(PRIORITY,t.priority)}</td>
+      <td>${statusTag(t.status)}</td>
+      <td><span class="due ${od?'overdue':''}" style="font-size:12.5px;">${fmtDate(t.due)}${od?' · overdue':''}</span></td>
+      <td style="text-align:center;color:var(--text-muted);font-weight:600;font-size:12px;">${t.comments}💬 · ${t.docs}📎</td>
+    </tr>`;
+  }).join('');
+}
+
+/* ── VIEW SWITCH ── */
+function setView(v,el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  if(v==='mine'){mineOnly=true;currentView='board';}
+  else{mineOnly=false;currentView=v;}
+  document.getElementById('boardView').classList.toggle('hidden', currentView==='list');
+  document.getElementById('listView').classList.toggle('hidden', currentView!=='list');
+  updateHeader();
+  if(currentView==='list')renderList();else renderBoard();
+}
+
+/* ── DRAWER ── */
+function openDrawer(id){
+  const t=TASKS.find(x=>x.id===id);
+  document.getElementById('dId').textContent=t.id;
+  document.getElementById('dStatusTag').innerHTML=statusTag(t.status);
+  document.getElementById('dTitle').textContent=t.title;
+  const od=isOverdue(t);
+  const filesHTML=t.files&&t.files.length? t.files.map(f=>`
+    <div class="doc-row">
+      <div class="doc-ico" style="background:#F8FAFC;">${gicon(f.t,18)}</div>
+      <div><div class="doc-name">${f.name}</div><div class="doc-sub">${f.sub}</div></div>
+      <div class="doc-ext"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14L21 3"/></svg></div>
+    </div>`).join('') : '<div style="font-size:13px;color:var(--text-muted);">No documents attached yet.</div>';
+
+  const threadHTML=t.thread.length? t.thread.map(c=>`
+    <div class="comment">
+      ${av(c.who,32,11)}
+      <div class="comment-body">
+        <div class="comment-head"><span class="comment-name">${PEOPLE[c.who].name}</span><span class="comment-time">${c.t}</span></div>
+        <div class="comment-text">${c.m.replace(/@([A-Za-z]+ [A-Za-z]+)/g,'<span class="mention">@$1</span>')}</div>
+      </div>
+    </div>`).join('') : '<div style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">No comments yet. Start the conversation.</div>';
+
+  document.getElementById('drawerBody').innerHTML=`
+    <div class="props">
+      <div class="prop-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Assignee</div>
+      <div class="prop-val"><span class="selecty">${av(t.assignee,20,8)} ${PEOPLE[t.assignee].name}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9l6 6 6-6"/></svg></span><span style="font-size:11.5px;color:var(--text-muted);">reassign</span></div>
+
+      <div class="prop-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Status</div>
+      <div class="prop-val"><span class="selecty">${statusTag(t.status)}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9l6 6 6-6"/></svg></span></div>
+
+      <div class="prop-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>Priority</div>
+      <div class="prop-val">${pill(PRIORITY,t.priority)}</div>
+
+      <div class="prop-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>Space</div>
+      <div class="prop-val"><span class="selecty"><span class="dot" style="width:8px;height:8px;background:${SPACES[t.space].colour};"></span>${SPACES[t.space].label}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9l6 6 6-6"/></svg></span></div>
+
+      <div class="prop-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Dates</div>
+      <div class="prop-val">Start ${fmtDate(t.start)} &nbsp;→&nbsp; <span class="${od?'':''}" style="${od?'color:var(--red);font-weight:600;':''}">Due ${fmtDate(t.due)}${od?' · overdue':''}</span></div>
+
+      <div class="prop-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>Completion</div>
+      <div class="prop-val" style="gap:10px;"><div class="progressbar" style="width:120px;margin:0;"><div style="width:${t.progress}%;background:${t.status==='done'?'var(--green)':t.status==='progress'?'var(--amber)':t.progress===0?'var(--red)':'var(--purple)'};"></div></div><span style="font-size:12px;font-weight:600;color:var(--text-secondary);">${t.progress}%</span></div>
+
+      <div class="prop-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Assigned by</div>
+      <div class="prop-val"><span class="rec-link" style="display:inline-flex;align-items:center;gap:8px;border-radius:8px;padding:3px 7px;margin:-3px -7px;" onclick="openRecord('staff','${t.assigner}','${PEOPLE[t.assigner].name}')" title="Open in Team · /team/${t.assigner}">${av(t.assigner,20,8)} ${PEOPLE[t.assigner].name}${LINKICON}</span></div>
+    </div>
+
+    <div class="sec-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Linked Moov records</div>
+    ${linkedRecordsHTML(t)}
+
+    <div class="sec-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>Description</div>
+    <div class="desc">${t.desc}</div>
+
+    <div class="sec-label">${gicon('drive',15)} Documents &amp; attachments</div>
+    ${filesHTML}
+
+    <div class="sec-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Linked Google Chat</div>
+    <div class="chat-link">
+      <div class="doc-ico" style="background:#E7F8EE;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#00A344" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+      <div><div class="doc-name">${t.chat}</div><div class="doc-sub">Google Chat space · jump to conversation</div></div>
+      <div class="doc-ext" style="margin-left:auto;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14L21 3"/></svg></div>
+    </div>
+
+    <div class="sec-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Comments · ${t.thread.length}</div>
+    <div id="threadList">${threadHTML}</div>
+    <div class="comment-box">
+      ${av('RJ',32,11)}
+      <textarea class="comment-input" id="newComment" placeholder="Write a comment…  use @ to mention a teammate"></textarea>
+      <button class="btn primary" style="align-self:stretch;" onclick="addComment('${t.id}')">Send</button>
+    </div>`;
+
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('scrim').classList.add('open');
+}
+function addComment(id){
+  const box=document.getElementById('newComment');
+  const val=box.value.trim();
+  if(!val)return;
+  const t=TASKS.find(x=>x.id===id);
+  t.thread.push({who:'RJ',t:'just now',m:val});
+  t.comments++;
+  openDrawer(id);
+}
+function closeDrawer(){
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('scrim').classList.remove('open');
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeDrawer();closeCreate();}});
+
+/* ── CREATE TASK MODAL ── */
+const NT={space:'cs',prio:'medium',assignee:'AO',customer:null,carrier:null,query:[],tracking:[]};
+let trackMode='number';
+const SEGOPTS={};
+function setTrackMode(m){trackMode=m;renderLookup('tracking');const i=document.getElementById('in-tracking');if(i)i.focus();}
+function renderSeg(id,opts,field){
+  if(opts)SEGOPTS[id]={opts,field};
+  const {opts:O,field:F}=SEGOPTS[id];
+  document.getElementById(id).innerHTML=O.map(([k,label,colour])=>`<div class="seg-opt ${NT[F]===k?'sel':''}" onclick="segPick('${id}','${k}')">${colour?`<span class="dot" style="width:8px;height:8px;background:${colour};"></span>`:''}${label}</div>`).join('');
+}
+function segPick(id,k){const f=SEGOPTS[id].field;NT[f]=k;renderSeg(id);if(f==='space')renderLookup('customer');validateCreate();}
+
+const LK={
+  customer:{label:'Customer',ph:'Search customers by name or account number…',multi:false,data:()=>CUSTOMERS,key:x=>x.name,
+    match:(x,q)=>(x.name+' '+x.id+' '+x.city).toLowerCase().includes(q),
+    row:x=>`<span class="rec-sq" style="background:#1D4ED8;">${initials(x.name)}</span><div style="flex:1;"><div style="font-weight:600;">${x.name}</div><div style="font-size:11px;color:var(--text-muted);">${x.id} · ${x.city}</div></div><span class="badge" style="background:${TIER[x.tier]}1A;color:${TIER[x.tier]};">${x.tier}</span>`,
+    chip:v=>recChipCustomer(v,true),
+    empty:'No matching customer in Moov. You can only link a customer that already exists — create the customer record first.'},
+  carrier:{label:'Carrier',ph:'Search carriers…',multi:false,data:()=>CARRIERS,key:x=>x.code,
+    match:(x,q)=>x.name.toLowerCase().includes(q),
+    row:x=>`<span class="rec-sq" style="background:${x.colour};">${carCode(x.code)}</span><div style="font-weight:600;">${x.name}</div>`,
+    chip:v=>recChipCarrier(v,true),
+    empty:'No matching carrier in Moov.'},
+  query:{label:'Queries',ph:'Search queries by reference or subject…',multi:true,data:()=>QUERIES,key:x=>x.id,
+    match:(x,q)=>(x.id+' '+x.title+' '+x.customer).toLowerCase().includes(q),
+    row:x=>`<span class="mono" style="color:var(--text-secondary);font-weight:700;">${x.id}</span><div style="flex:1;">${x.title}<div style="font-size:11px;color:var(--text-muted);">${x.customer}</div></div><span class="badge" style="background:${QSTATUS[x.status].s};color:${QSTATUS[x.status].t};">${x.status}</span>`,
+    chip:v=>recChipQuery(v,true),
+    empty:'No matching query in Moov.'},
+  tracking:{label:'Tracking numbers',ph:'Enter or paste a tracking / consignment number…',multi:true,data:()=>TRACKING,key:x=>x.id,
+    match:(x,q)=>(x.id+' '+x.customer+' '+x.carrier+' '+x.postcode).toLowerCase().includes(q),
+    row:x=>`<span class="rec-sq" style="background:${carrierByCode(x.carrier).colour};font-size:8px;">${carCode(x.carrier)}</span><div style="flex:1;min-width:0;"><div class="mono" style="font-weight:600;">${x.id}</div><div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${x.recipient} · ${x.postcode}</div></div><span class="badge" style="margin-left:auto;background:${TSTATUS[x.status].c}1A;color:${TSTATUS[x.status].c};">${TSTATUS[x.status].label}</span>`,
+    chip:v=>recChipTracking(v,true),
+    empty:'No matching tracking number in Moov.'},
+};
+function renderLookup(key){
+  const cfg=LK[key];
+  const sel=cfg.multi?NT[key]:(NT[key]?[NT[key]]:[]);
+  const chips=sel.map(v=>cfg.chip(v)).join('');
+  const showInput=cfg.multi||sel.length===0;
+  const req=key==='customer'&&NT.space==='cs';
+  const needNote=req&&!NT.customer;
+  const ph=key==='tracking'?(trackMode==='number'?'Enter or paste a tracking / consignment number…':'Search by customer name or delivery postcode…'):cfg.ph;
+  const trackToggle=key==='tracking'?`<div class="seg" style="margin-bottom:8px;"><div class="seg-opt ${trackMode==='number'?'sel':''}" style="padding:5px 11px;font-size:12px;" onclick="setTrackMode('number')">By tracking no.</div><div class="seg-opt ${trackMode==='cust'?'sel':''}" style="padding:5px 11px;font-size:12px;" onclick="setTrackMode('cust')">By customer / postcode</div></div>`:'';
+  document.getElementById('lk-'+key).innerHTML=`
+    <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">${cfg.label}${req?'<span style="color:var(--red);margin-left:2px;">*</span>':''}${cfg.multi?' <span style="color:var(--text-muted);font-weight:500;">(add one or more)</span>':''}</label>
+    ${sel.length?`<div class="lookup-selected">${chips}</div>`:''}
+    ${trackToggle}
+    ${showInput?`<input class="inp" id="in-${key}" placeholder="${ph}" autocomplete="off" oninput="onLookupInput('${key}',this.value)" onfocus="onLookupInput('${key}',this.value)">`:''}
+    ${needNote?`<div style="font-size:11.5px;color:#B45309;margin-top:6px;display:flex;align-items:center;gap:6px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#B45309" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>A customer is required for Customer Service tasks.</div>`:''}
+    <div class="drop hidden" id="drop-${key}"></div>`;
+}
+function onLookupInput(key,val){
+  const cfg=LK[key];const q=val.trim().toLowerCase();const drop=document.getElementById('drop-'+key);
+  const selected=cfg.multi?NT[key]:[];
+  let items=cfg.data().filter(x=>!(cfg.multi&&selected.includes(cfg.key(x))));
+  let matcher=cfg.match, emptyMsg=cfg.empty;
+  if(key==='tracking'){
+    if(trackMode==='number'){matcher=(x,qq)=>x.id.toLowerCase().includes(qq);emptyMsg='No parcel with that tracking number in Moov. Check the number, or switch to “By customer / postcode”.';}
+    else{matcher=(x,qq)=>(x.customer+' '+x.postcode+' '+(x.recipient||'')).toLowerCase().includes(qq);emptyMsg='No parcels found for that customer or postcode in Moov.';}
+  }
+  if(q)items=items.filter(x=>matcher(x,q));
+  if(q&&items.length===0){
+    drop.innerHTML=`<div class="drop-none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>${emptyMsg}</div>`;
+    drop.classList.remove('hidden');return;
+  }
+  const head=key==='tracking'?`${items.length} ${items.length===1?'parcel':'parcels'}${q?' matching “'+val+'”':''}`:`${items.length} in Moov${q?' matching “'+val+'”':''}`;
+  drop.innerHTML=`<div class="drop-head">${head}</div>`+items.slice(0,6).map(x=>`<div class="drop-row" onclick="lookupSelect('${key}',&quot;${cfg.key(x)}&quot;)">${cfg.row(x)}</div>`).join('');
+  drop.classList.remove('hidden');
+}
+function lookupSelect(key,id){
+  const cfg=LK[key];
+  if(cfg.multi){if(!NT[key].includes(id))NT[key].push(id);}else NT[key]=id;
+  renderLookup(key);validateCreate();
+}
+function lookupRemove(key,id){
+  const cfg=LK[key];
+  if(cfg.multi)NT[key]=NT[key].filter(v=>v!==id);else NT[key]=null;
+  renderLookup(key);validateCreate();
+}
+document.addEventListener('click',e=>{if(!e.target.closest('.lookup'))document.querySelectorAll('.drop').forEach(d=>d.classList.add('hidden'));});
+
+function openCreate(){
+  NT.space=currentSpace==='all'?'cs':currentSpace;NT.prio='medium';NT.assignee='AO';
+  NT.customer=null;NT.carrier=null;NT.query=[];NT.tracking=[];trackMode='number';
+  document.getElementById('ntTitle').value='';document.getElementById('ntDesc').value='';
+  renderSeg('ntSpace',Object.entries(SPACES).map(([k,v])=>[k,v.label,v.colour]),'space');
+  renderSeg('ntPrio',Object.entries(PRIORITY).map(([k,v])=>[k,v.label,v.colour]),'prio');
+  renderSeg('ntAssignee',Object.keys(PEOPLE).map(k=>[k,PEOPLE[k].name.split(' ')[0],PEOPLE[k].colour]),'assignee');
+  ['customer','carrier','query','tracking'].forEach(renderLookup);
+  validateCreate();
+  document.getElementById('createScrim').classList.add('open');
+}
+function closeCreate(){document.getElementById('createScrim').classList.remove('open');}
+function validateCreate(){
+  const title=document.getElementById('ntTitle').value.trim().length>0;
+  const custOk=NT.space!=='cs'||!!NT.customer;
+  const ok=title&&custOk;
+  const b=document.getElementById('ntCreate');
+  b.style.opacity=ok?'1':'.5';b.style.pointerEvents=ok?'auto':'none';
+  b.title=custOk?'':'Customer Service tasks need a linked customer';
+}
+function createTask(){
+  const title=document.getElementById('ntTitle').value.trim();if(!title)return;
+  if(NT.space==='cs'&&!NT.customer)return;
+  const desc=document.getElementById('ntDesc').value.trim();
+  const dv=document.getElementById('ntDue').value.split('-');
+  const due=dv.length===3?new Date(+dv[0],+dv[1]-1,+dv[2]):new Date(2026,7,15);
+  const id='TSK-'+(1043+TASKS.length);
+  const links={};
+  if(NT.customer)links.customer=NT.customer;
+  if(NT.carrier)links.carrier=NT.carrier;
+  if(NT.query.length)links.queries=NT.query.slice();
+  if(NT.tracking.length)links.tracking=NT.tracking.slice();
+  TASKS.unshift({id,title,status:'todo',priority:NT.prio,assignee:NT.assignee,assigner:'RJ',
+    due,start:TODAY,progress:0,tags:[SPACES[NT.space].label],comments:0,docs:0,
+    desc:desc||'—',files:[],chat:SPACES[NT.space].label,thread:[],space:NT.space,links});
+  closeCreate();renderSpaces();updateHeader();
+  if(currentView==='list')renderList();else renderBoard();
+  openDrawer(id);
+}
+
+if(window.self!==window.top)document.body.classList.add('embedded');
+renderSpaces();
+updateHeader();
+renderBoard();
+</script>
+</body>
+</html>
