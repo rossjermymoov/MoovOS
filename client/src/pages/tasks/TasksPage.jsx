@@ -17,7 +17,7 @@ import {
   Plus, X, ChevronDown, Calendar, MessageSquare, Paperclip, Link2,
   List as ListIcon, LayoutGrid, User, ExternalLink, AlertCircle,
   AlertTriangle, Clock, CheckCircle2, CircleDashed,
-  Settings, Trash2, ArrowUp, ArrowDown, Check,
+  Settings, Trash2, ArrowUp, ArrowDown, Check, ListChecks, CornerUpLeft,
 } from 'lucide-react';
 import './tasks.css';
 
@@ -268,8 +268,31 @@ function CommentComposer({ staffList, onSend, sending }) {
   );
 }
 
+// ── add-subtask row (title + allocate to a person) ──────────────────────────────
+function SubtaskAdder({ onAdd, adding }) {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState('');
+  const [assignee, setAssignee] = useState(null);
+  if (!open) return <button className="mt-attach-btn" style={{ marginTop: 4 }} onClick={() => setOpen(true)}><Plus size={14} />Add subtask</button>;
+  const submit = () => { const t = title.trim(); if (!t) return; onAdd(t, assignee?.id || null); setTitle(''); setAssignee(null); setOpen(false); };
+  return (
+    <div className="mt-sub-add">
+      <input className="mt-input" placeholder="Subtask title" value={title} autoFocus
+        onChange={e => setTitle(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') setOpen(false); }} />
+      <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          {assignee ? <span className="mt-rec"><Avatar name={assignee.name} id={assignee.id} size={20} />{assignee.name}<span className="mt-recx" onClick={() => setAssignee(null)}><X size={12} /></span></span>
+            : <Picker type="staff" onPick={setAssignee} />}
+        </div>
+        <button className="mt-btn primary" disabled={!title.trim() || adding} onClick={submit}>Add</button>
+        <button className="mt-btn" onClick={() => { setOpen(false); setTitle(''); setAssignee(null); }}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
 // ── task detail (full-screen) ───────────────────────────────────────────────────
-function TaskDetail({ taskId, me, staffList, onClose, navigate }) {
+function TaskDetail({ taskId, me, staffList, onOpenTask, onClose, navigate }) {
   const qc = useQueryClient();
   const { data: task, isLoading } = useQuery({ queryKey: ['task', taskId], queryFn: () => tasksApi.get(taskId), enabled: !!taskId });
   const [assignOpen, setAssignOpen] = useState(false);
@@ -284,6 +307,9 @@ function TaskDetail({ taskId, me, staffList, onClose, navigate }) {
   const mUnlink = useMutation({ mutationFn: (linkId) => tasksApi.removeLink(taskId, linkId), onSuccess: refresh });
   const mAttach = useMutation({ mutationFn: (body) => tasksApi.addAttachment(taskId, body), onSuccess: () => { setShowLink(false); setLkUrl(''); setLkName(''); refresh(); } });
   const mUnattach = useMutation({ mutationFn: (attId) => tasksApi.removeAttachment(taskId, attId), onSuccess: refresh });
+  const mAddSub = useMutation({ mutationFn: (body) => tasksApi.create(body), onSuccess: refresh });
+  const mSubUpdate = useMutation({ mutationFn: ({ id, body }) => tasksApi.update(id, body), onSuccess: refresh });
+  const doneKey = [...COMPLETE][0] || 'done';
 
   if (!task) {
     return (<><div className="mt-scrim open" onClick={onClose} /><div className="mt-drawer open"><div className="mt-loading" style={{ margin: 'auto' }}>{isLoading ? 'Loading task…' : 'Task not found'}</div></div></>);
@@ -306,12 +332,49 @@ function TaskDetail({ taskId, me, staffList, onClose, navigate }) {
           {/* main */}
           <div className="mt-main">
             <div className="mt-sheet">
+            {task.parent_id && (
+              <div className="mt-crumb" onClick={() => onOpenTask && onOpenTask(task.parent_id)}>
+                <CornerUpLeft size={13} />Subtask of&nbsp;<strong>{task.parent_title || 'parent task'}</strong>
+              </div>
+            )}
             <input className="mt-title-input" defaultValue={task.title} placeholder="Task title"
               onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== task.title) set({ title: v }); }} />
 
             <div className="mt-sec"><MessageSquare size={14} />Description</div>
             <textarea className="mt-desc" defaultValue={task.description || ''} placeholder="Add a description…"
               onBlur={(e) => { const v = e.target.value; if (v !== (task.description || '')) set({ description: v }); }} />
+
+            {!task.parent_id && (() => {
+              const subs = task.subtasks || [];
+              const doneCount = subs.filter(s => COMPLETE.has(s.status)).length;
+              return (
+                <>
+                  <div className="mt-sec"><ListChecks size={14} />Subtasks{subs.length ? ` · ${doneCount}/${subs.length} done` : ''}</div>
+                  {subs.map(s => {
+                    const isDone = COMPLETE.has(s.status);
+                    return (
+                      <div className="mt-sub-row" key={s.id} onClick={() => onOpenTask && onOpenTask(s.id)}>
+                        <span className={'mt-sub-check' + (isDone ? ' done' : '')}
+                          title={isDone ? 'Mark not done' : 'Mark done'}
+                          onClick={(e) => { e.stopPropagation(); mSubUpdate.mutate({ id: s.id, body: { status: isDone ? FIRST_STATUS : doneKey } }); }}>
+                          {isDone ? <Check size={12} /> : null}
+                        </span>
+                        <span className={'mt-sub-title' + (isDone ? ' done' : '')}>{s.title}</span>
+                        <span className="mt-sub-meta">
+                          {s.comment_count ? <span className="mt-ico"><MessageSquare size={13} />{s.comment_count}</span> : null}
+                          <StatusTag k={s.status} />
+                          {s.assignee_id
+                            ? <Avatar name={s.assignee_name} id={s.assignee_id} size={22} />
+                            : <span className="avatar" style={{ width: 22, height: 22, fontSize: 9, background: '#CBD5E1' }} title="Unassigned">–</span>}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  <SubtaskAdder adding={mAddSub.isLoading}
+                    onAdd={(title, assignee_id) => mAddSub.mutate({ title, parent_id: task.id, space: task.space, status: FIRST_STATUS, assignee_id, created_by: me })} />
+                </>
+              );
+            })()}
 
             <div className="mt-sec"><Link2 size={14} />Linked Moov records</div>
             {links.length === 0 && <div style={{ fontSize: 13, color: '#94A3B8', marginBottom: 10 }}>No linked records yet.</div>}
@@ -510,7 +573,7 @@ function CreateModal({ defaultSpace, currentUserId, onClose, onCreated }) {
 }
 
 // ── card ────────────────────────────────────────────────────────────────────────
-function TaskCard({ task, onOpen, navigate }) {
+function TaskCard({ task, onOpen, navigate, sub }) {
   const od = isOverdue(task);
   const custom = (task.links || []).find(l => l.type === 'customer');
   const carrier = (task.links || []).find(l => l.type === 'carrier');
@@ -528,6 +591,7 @@ function TaskCard({ task, onOpen, navigate }) {
         <div className="mt-foot-left">
           <span className="mt-ico"><MessageSquare size={14} />{task.comment_count || 0}</span>
           <span className="mt-ico"><Paperclip size={14} />{task.attachment_count || 0}</span>
+          {sub && sub.total ? <span className="mt-ico" title="Subtasks complete" style={{ color: sub.done === sub.total ? '#00A344' : undefined }}><ListChecks size={14} />{sub.done}/{sub.total}</span> : null}
           <span className={'mt-due' + (od ? ' overdue' : '')}><Calendar size={13} />{fmtDate(task.due_date)}</span>
         </div>
         {task.assignee_id ? <Avatar name={task.assignee_name} id={task.assignee_id} size={26} /> : <span className="avatar" style={{ width: 26, height: 26, fontSize: 10, background: '#CBD5E1' }} title="Unassigned">–</span>}
@@ -537,7 +601,7 @@ function TaskCard({ task, onOpen, navigate }) {
 }
 
 // ── my tasks (personal RAG view) ────────────────────────────────────────────────
-function MyTasksView({ myTasks, me, bypass, staffList, onOpen, onNew }) {
+function MyTasksView({ myTasks, me, bypass, staffList, taskById, onOpen, onNew }) {
   // Bypass mode has no real identity — let the user pick who they're viewing as.
   const viewAsControl = bypass ? (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18, fontSize: 12.5, color: '#64748B' }}>
@@ -594,7 +658,7 @@ function MyTasksView({ myTasks, me, bypass, staffList, onOpen, onNew }) {
         <span className="dot" style={{ width: 9, height: 9, background: STATUS[t.status]?.colour }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13.5, fontWeight: 600, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</div>
-          <div style={{ fontSize: 11.5, color: '#94A3B8' }}>{shortId(t.id)} · {SPACES[t.space]?.label}</div>
+          <div style={{ fontSize: 11.5, color: '#94A3B8' }}>{shortId(t.id)} · {t.parent_id ? <>↳ {taskById?.[t.parent_id]?.title || 'subtask'}</> : (SPACES[t.space]?.label || t.space)}</div>
         </div>
         <Pill map={PRIORITY} k={t.priority} />
         <span className={'mt-due' + (od ? ' overdue' : '')} style={{ fontSize: 12.5, minWidth: 96, justifyContent: 'flex-end' }}><Calendar size={13} />{fmtDate(t.due_date)}</span>
@@ -776,9 +840,14 @@ export default function TasksPage() {
   if (!allowed) return <Navigate to="/" replace />;
 
   const tasks = tasksQuery.data || [];
-  const spaceTasks = space === 'all' ? tasks : tasks.filter(t => t.space === space);
+  const topTasks = tasks.filter(t => !t.parent_id);          // board/list show top-level only
+  const taskById = Object.fromEntries(tasks.map(t => [t.id, t]));
+  const subCounts = {};                                       // { parentId: {done, total} }
+  tasks.forEach(t => { if (t.parent_id) { const e = subCounts[t.parent_id] || (subCounts[t.parent_id] = { done: 0, total: 0 }); e.total++; if (COMPLETE.has(t.status)) e.done++; } });
+
+  const spaceTasks = space === 'all' ? topTasks : topTasks.filter(t => t.space === space);
   const viewTasks = spaceTasks;
-  const myTasks = me ? tasks.filter(t => t.assignee_id === me) : [];
+  const myTasks = me ? tasks.filter(t => t.assignee_id === me) : [];   // includes subtasks assigned to me
   const myOverdue = myTasks.filter(isOverdue).length;
 
   const spaceCounts = {}; const statusCounts = {};
@@ -799,7 +868,7 @@ export default function TasksPage() {
         </div>
         <div className="mt-spaces">
           {spacePills.map(([k, label, colour]) => {
-            const count = k === 'all' ? tasks.length : tasks.filter(t => t.space === k).length;
+            const count = k === 'all' ? topTasks.length : topTasks.filter(t => t.space === k).length;
             return <div key={k} className={'mt-space' + (space === k ? ' active' : '')} onClick={() => setSpace(k)}>
               {colour ? <span className="dot" style={{ width: 8, height: 8, background: colour }} /> : <LayoutGrid size={14} />}
               {label}<span className="mt-count">{count}</span>
@@ -818,7 +887,7 @@ export default function TasksPage() {
       {tasksQuery.isLoading ? <div className="mt-loading" style={{ marginTop: 60 }}>Loading tasks…</div>
         : tasksQuery.isError ? <div className="mt-loading" style={{ marginTop: 60, color: '#EF4444' }}>Couldn’t load tasks. Is the API deployed?</div>
           : view === 'mine' ? (
-            <MyTasksView myTasks={myTasks} me={me} bypass={bypass} staffList={staffList} onOpen={setOpenId} onNew={() => setCreating(true)} />
+            <MyTasksView myTasks={myTasks} me={me} bypass={bypass} staffList={staffList} taskById={taskById} onOpen={setOpenId} onNew={() => setCreating(true)} />
           ) : view === 'list' ? (
             <div className="mt-list-wrap">
               <table>
@@ -848,7 +917,7 @@ export default function TasksPage() {
                   return <div className="mt-col" key={key}>
                     <div className="mt-col-head"><div className="mt-col-title"><span className="dot" style={{ width: 9, height: 9, background: s.colour }} />{label}</div><span className="mt-count">{items.length}</span></div>
                     <div className="mt-col-body">
-                      {items.map(t => <TaskCard key={t.id} task={t} onOpen={setOpenId} navigate={navigate} />)}
+                      {items.map(t => <TaskCard key={t.id} task={t} onOpen={setOpenId} navigate={navigate} sub={subCounts[t.id]} />)}
                       {items.length === 0 && <div className="mt-empty">Nothing here</div>}
                     </div>
                   </div>;
@@ -857,7 +926,7 @@ export default function TasksPage() {
             </div>
           )}
 
-      {openId && <TaskDetail taskId={openId} me={me} staffList={staffList} navigate={navigate} onClose={closeDetail} />}
+      {openId && <TaskDetail taskId={openId} me={me} staffList={staffList} onOpenTask={setOpenId} navigate={navigate} onClose={closeDetail} />}
       {creating && <CreateModal defaultSpace={space} currentUserId={me} onClose={() => setCreating(false)} onCreated={(t) => { setCreating(false); if (t?.id) setOpenId(t.id); }} />}
       {showSettings && <SettingsModal initSpaces={curSpaces} initStatuses={curStatuses} spaceCounts={spaceCounts} statusCounts={statusCounts} saving={mSaveConfig.isLoading} onSave={(d) => mSaveConfig.mutate(d)} onClose={() => setShowSettings(false)} />}
     </div>
