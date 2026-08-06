@@ -124,8 +124,8 @@
   /* ── DETAIL SLIDE-OVER ── */
   .scrim{position:fixed;inset:0;background:rgba(15,23,42,.35);opacity:0;pointer-events:none;transition:.2s;z-index:40;}
   .scrim.open{opacity:1;pointer-events:auto;}
-  .drawer{position:fixed;top:0;right:0;height:100vh;width:560px;max-width:92vw;background:#fff;box-shadow:-8px 0 40px rgba(0,0,0,.16);transform:translateX(100%);transition:transform .26s cubic-bezier(.4,0,.2,1);z-index:50;display:flex;flex-direction:column;}
-  .drawer.open{transform:translateX(0);}
+  .drawer{position:fixed;top:50%;left:50%;transform:translate(-50%,-47%);width:min(1180px,95vw);height:92vh;background:#fff;border-radius:16px;box-shadow:0 30px 90px rgba(0,0,0,.30);z-index:50;display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:opacity .18s ease, transform .18s ease;overflow:hidden;}
+  .drawer.open{opacity:1;pointer-events:auto;transform:translate(-50%,-50%);}
   .drawer-head{padding:18px 24px 16px;border-bottom:1px solid var(--border);flex-shrink:0;}
   .drawer-head-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
   .dh-left{display:flex;align-items:center;gap:10px;}
@@ -169,6 +169,34 @@
   .comment-input{flex:1;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13px;font-family:inherit;color:var(--text-primary);outline:0;resize:none;min-height:40px;transition:.12s;}
   .comment-input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(0,200,83,.12);}
 
+  /* ── DETAIL MODAL (ClickUp-style, fills most of the screen) ── */
+  .detail-body{flex:1;display:flex;min-height:0;}
+  .detail-main{flex:1;min-width:0;overflow-y:auto;padding:22px 30px 48px;}
+  .detail-side{width:322px;flex-shrink:0;border-left:1px solid var(--border);background:#FBFCFD;overflow-y:auto;padding:22px 22px 48px;}
+  .title-input{width:100%;border:1px solid transparent;border-radius:9px;outline:0;font-family:inherit;font-size:24px;font-weight:700;letter-spacing:-.4px;color:var(--text-primary);padding:5px 9px;margin:0 -9px 2px;background:transparent;transition:.12s;}
+  .title-input:hover{background:#F1F5F9;}
+  .title-input:focus{background:#fff;border-color:var(--green);box-shadow:0 0 0 3px rgba(0,200,83,.12);}
+  .desc-edit{width:calc(100% + 20px);border:1px solid transparent;border-radius:9px;padding:9px 10px;margin:0 -10px;font-family:inherit;font-size:13.5px;line-height:1.7;color:var(--text-secondary);resize:vertical;min-height:58px;outline:0;background:transparent;transition:.12s;}
+  .desc-edit:hover{background:#F8FAFC;}
+  .desc-edit:focus{background:#fff;border-color:var(--green);box-shadow:0 0 0 3px rgba(0,200,83,.12);}
+  .side-prop{margin-bottom:18px;}
+  .side-label{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted);margin-bottom:7px;}
+  .side-control{display:flex;align-items:center;gap:8px;width:100%;border:1px solid var(--border);border-radius:9px;padding:8px 11px;font-size:13px;font-weight:600;color:var(--text-primary);cursor:pointer;background:#fff;transition:.12s;}
+  .side-control:hover{border-color:#CBD5E1;background:#FBFCFD;}
+  .side-control .chev{margin-left:auto;color:var(--text-muted);display:inline-flex;}
+  .side-control .chev svg{width:14px;height:14px;}
+  .side-menu{margin-top:6px;border:1px solid var(--border);border-radius:10px;background:#fff;box-shadow:0 10px 28px rgba(0,0,0,.12);padding:5px;}
+  .menu-opt{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;}
+  .menu-opt:hover{background:var(--bg-page);}
+  .mini-lbl{display:block;font-size:10px;font-weight:600;color:var(--text-muted);margin-bottom:3px;text-transform:uppercase;letter-spacing:.03em;}
+  .date-inp{width:100%;border:1px solid var(--border);border-radius:8px;padding:7px 9px;font-family:inherit;font-size:12.5px;color:var(--text-primary);outline:0;background:#fff;}
+  .date-inp:focus{border-color:var(--green);}
+  .date-inp.overdue-inp{color:var(--red);border-color:#FCA5A5;}
+  .attach-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+  .attach-btn{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:8px 12px;border:1px dashed var(--border);border-radius:9px;cursor:pointer;color:var(--text-secondary);background:#fff;transition:.12s;}
+  .attach-btn:hover{border-color:var(--green);color:var(--text-primary);background:#F6FBF7;}
+  .attach-btn svg{width:14px;height:14px;stroke-width:2.2;}
+  .link-form{display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap;}
   .empty{padding:60px 20px;text-align:center;color:var(--text-muted);font-size:13px;}
 
   /* ── LINKED RECORD CHIPS ── */
@@ -362,8 +390,10 @@
       </div>
     </div>
   </div>
-  <div class="drawer-title" id="dTitle"></div>
-  <div class="drawer-body" id="drawerBody"></div>
+  <div class="detail-body">
+    <div class="detail-main" id="detailMain"></div>
+    <div class="detail-side" id="detailSide"></div>
+  </div>
 </div>
 
 <script>
@@ -446,7 +476,7 @@ const TRACKING = [
 ];
 function customerById(n){return CUSTOMERS.find(c=>c.name===n);}
 function carrierByCode(c){return CARRIERS.find(x=>x.code===c);}
-const GCOL={doc:'#4285F4',sheet:'#0F9D58',slide:'#F4B400',pdf:'#EA4335',drive:'#1FA463'};
+const GCOL={doc:'#4285F4',sheet:'#0F9D58',slide:'#F4B400',pdf:'#EA4335',drive:'#1FA463',file:'#64748B',link:'#00BCD4'};
 function gicon(type,size){
   const c=GCOL[type]||'#64748B';
   const inner={
@@ -454,95 +484,14 @@ function gicon(type,size){
     sheet:'<rect x="5.5" y="6.5" width="7" height="7" rx=".6" fill="none" stroke="#fff" stroke-width="1.2"/><line x1="9" y1="6.5" x2="9" y2="13.5" stroke="#fff" stroke-width="1.1"/><line x1="5.5" y1="10" x2="12.5" y2="10" stroke="#fff" stroke-width="1.1"/>',
     slide:'<rect x="5.3" y="7" width="7.4" height="5" rx=".8" fill="#fff"/>',
     pdf:'<rect x="5.5" y="6.5" width="7" height="1.3" rx=".6" fill="#fff"/><rect x="5.5" y="9.2" width="7" height="1.3" rx=".6" fill="#fff"/><rect x="5.5" y="11.9" width="4.5" height="1.3" rx=".6" fill="#fff"/>',
-    drive:'<path d="M9 4.5l4.2 7.3H4.8L9 4.5z" fill="#fff" opacity=".95"/>'
+    drive:'<path d="M9 4.5l4.2 7.3H4.8L9 4.5z" fill="#fff" opacity=".95"/>',
+    file:'<rect x="5.5" y="6.5" width="7" height="1.3" rx=".6" fill="#fff"/><rect x="5.5" y="9.2" width="7" height="1.3" rx=".6" fill="#fff"/><rect x="5.5" y="11.9" width="4.5" height="1.3" rx=".6" fill="#fff"/>',
+    link:'<path d="M7.5 9a2 2 0 0 1 0 0l1.2-1.2a2.2 2.2 0 0 1 3.1 3.1l-.6.6M10.5 9a2 2 0 0 1 0 0L9.3 10.2a2.2 2.2 0 0 1-3.1-3.1l.6-.6" stroke="#fff" stroke-width="1.2" fill="none" stroke-linecap="round"/>'
   }[type]||'';
   return `<svg width="${size}" height="${size}" viewBox="0 0 18 18" style="flex-shrink:0;"><rect x="2.5" y="2" width="13" height="14" rx="2.5" fill="${c}"/>${inner}</svg>`;
 }
 
-const TASKS = [
-  { id:'TSK-1042', title:'Onboard Fenwick & Sons to the new carrier portal', status:'progress', priority:'high',
-    assignee:'AO', assigner:'RJ', due:new Date(2026,7,11), start:new Date(2026,7,4), progress:45,
-    tags:['Onboarding','Carriers'], comments:4, docs:2,
-    desc:'Walk the Fenwick ops team through the portal, migrate their 3 active routes and confirm the API keys are live. Blocker: waiting on their IT to whitelist our webhook domain.',
-    files:[{t:'doc',name:'Fenwick onboarding runbook',sub:'Google Doc · edited 2 days ago'},{t:'sheet',name:'Route migration tracker',sub:'Google Sheet · 3 routes'}],
-    chat:'Fenwick onboarding',
-    thread:[
-      {who:'RJ',t:'2 days ago',m:'Nice progress. Have we heard back from their IT on the webhook whitelist yet?'},
-      {who:'AO',t:'1 day ago',m:'@Ross Jermy chasing today — I\'ll flag if we\'re still blocked by Thursday.'},
-      {who:'BC',t:'6 hours ago',m:'I\'ve got a contact at Fenwick IT, happy to jump on a call if it helps.'},
-      {who:'AO',t:'3 hours ago',m:'Amazing, thanks Ben — will loop you in.'},
-    ]},
-  { id:'TSK-1039', title:'Q3 carrier performance review deck for the board', status:'todo', priority:'urgent',
-    assignee:'BC', assigner:'RJ', due:new Date(2026,7,3), start:new Date(2026,7,1), progress:0,
-    tags:['Reporting','Board'], comments:2, docs:1,
-    desc:'Pull on-time delivery, cost-per-mile and claims data for all carriers and build the board summary. Needs sign-off from Ross before Friday.',
-    files:[{t:'slide',name:'Q3 board review',sub:'Google Slides · draft'}],
-    chat:'Board reporting',
-    thread:[
-      {who:'RJ',t:'4 days ago',m:'This one\'s the priority for the week — shout if you need the raw figures.'},
-      {who:'BC',t:'2 days ago',m:'On it. Data pull done, building the narrative now.'},
-    ]},
-  { id:'TSK-1036', title:'Investigate repeated tracking sync failures on DPD lane', status:'progress', priority:'urgent',
-    assignee:'DE', assigner:'AO', due:new Date(2026,7,7), start:new Date(2026,7,5), progress:60,
-    tags:['Bug','Tracking'], comments:6, docs:1,
-    desc:'Tracking events from DPD have been dropping intermittently since the weekend. Reproduce, find the root cause and confirm a fix. ~14 shipments currently showing stale.',
-    files:[{t:'sheet',name:'Affected shipments log',sub:'Google Sheet · 14 rows'}],
-    chat:'Tracking incidents',
-    thread:[
-      {who:'AO',t:'yesterday',m:'Raised by two customers this morning, bumping to urgent.'},
-      {who:'DE',t:'5 hours ago',m:'Found it — their payload changed a field name. Patch in testing now.'},
-    ]},
-  { id:'TSK-1031', title:'Draft SLA terms for the Meridian contract renewal', status:'review', priority:'medium',
-    assignee:'RJ', assigner:'RJ', due:new Date(2026,7,14), start:new Date(2026,6,28), progress:80,
-    tags:['Legal','Sales'], comments:3, docs:2,
-    desc:'Redraft the SLA section with the new delivery windows and penalty clauses. Ready for Chloe to review before it goes to Meridian.',
-    files:[{t:'doc',name:'Meridian SLA v3',sub:'Google Doc · in review'},{t:'pdf',name:'Current signed contract',sub:'PDF · 2024'}],
-    chat:'Meridian renewal',
-    thread:[
-      {who:'RJ',t:'yesterday',m:'@Chloe Diaz can you sanity-check the penalty clause in section 4?'},
-      {who:'CD',t:'4 hours ago',m:'Looking now — one wording tweak, otherwise good to send.'},
-    ]},
-  { id:'TSK-1028', title:'Set up automated weekly customer NPS export', status:'done', priority:'low',
-    assignee:'DE', assigner:'RJ', due:new Date(2026,7,1), start:new Date(2026,6,25), progress:100,
-    tags:['Automation'], comments:1, docs:1,
-    desc:'Scheduled export of NPS responses into the shared drive every Monday. Verified running for 2 weeks.',
-    files:[{t:'sheet',name:'NPS weekly export',sub:'Google Sheet · auto-updated'}],
-    chat:'Data & automation',
-    thread:[{who:'DE',t:'5 days ago',m:'Live and verified — first two runs landed correctly. Closing this off.'}]},
-  { id:'TSK-1025', title:'Renew UK operating licence documentation with DVSA', status:'todo', priority:'high',
-    assignee:'CD', assigner:'RJ', due:new Date(2026,7,20), start:new Date(2026,7,6), progress:0,
-    tags:['Compliance'], comments:0, docs:1,
-    desc:'Gather the vehicle records and submit the annual operator licence renewal. Deadline is firm.',
-    files:[{t:'doc',name:'DVSA renewal checklist',sub:'Google Doc'}],
-    chat:'Compliance',
-    thread:[]},
-  { id:'TSK-1021', title:'Rework the customer query triage flow in Moov OS', status:'progress', priority:'medium',
-    assignee:'RJ', assigner:'AO', due:new Date(2026,7,12), start:new Date(2026,7,2), progress:35,
-    tags:['Product','Queries'], comments:5, docs:1,
-    desc:'Redesign how incoming queries get auto-assigned so nothing sits unowned for more than 2 hours. Spec first, then hand to Dan to build.',
-    files:[{t:'doc',name:'Triage flow spec',sub:'Google Doc · draft'}],
-    chat:'Product',
-    thread:[
-      {who:'AO',t:'3 days ago',m:'This would save the support team a ton of manual sorting.'},
-      {who:'RJ',t:'yesterday',m:'Agreed. Writing the spec now — will share for feedback tomorrow.'},
-    ]},
-  { id:'TSK-1018', title:'Negotiate better rates with Northgate Haulage', status:'review', priority:'high',
-    assignee:'BC', assigner:'RJ', due:new Date(2026,7,9), start:new Date(2026,6,30), progress:70,
-    tags:['Carriers','Cost'], comments:2, docs:1,
-    desc:'Push for a 6% reduction on the Midlands routes given our increased volume. Proposal sent, awaiting their response.',
-    files:[{t:'sheet',name:'Rate comparison model',sub:'Google Sheet'}],
-    chat:'Carrier negotiations',
-    thread:[
-      {who:'RJ',t:'2 days ago',m:'How\'s Northgate looking? We\'ve got leverage with the extra volume.'},
-      {who:'BC',t:'1 day ago',m:'Sent them the model. Optimistic on 4-5%, pushing for 6.'},
-    ]},
-  { id:'TSK-1014', title:'Fix mislabelled delivery zones for Scotland routes', status:'done', priority:'medium',
-    assignee:'AO', assigner:'DE', due:new Date(2026,6,30), start:new Date(2026,6,24), progress:100,
-    tags:['Bug','Tracking'], comments:2, docs:0,
-    desc:'Several Highland postcodes were mapped to the wrong delivery zone. Corrected and verified against the carrier zone map.',
-    files:[], chat:'Tracking incidents',
-    thread:[{who:'DE',t:'1 week ago',m:'Verified against the master zone map — all 40 miles of the Highland routes now correct.'}]},
-];
+const TASKS = [];
 
 // Assign each task to a space
 const TASK_SPACE={'TSK-1021':'cs','TSK-1036':'cs','TSK-1031':'sales','TSK-1018':'sales','TSK-1039':'sales','TSK-1042':'ops','TSK-1025':'ops','TSK-1028':'product','TSK-1014':'product'};
@@ -690,93 +639,124 @@ function setView(v,el){
 }
 
 /* ── DRAWER ── */
-function openDrawer(id){
-  const t=TASKS.find(x=>x.id===id);
-  document.getElementById('dId').textContent=t.id;
-  document.getElementById('dStatusTag').innerHTML=statusTag(t.status);
-  document.getElementById('dTitle').textContent=t.title;
-  const od=isOverdue(t);
-  const filesHTML=t.files&&t.files.length? t.files.map(f=>`
-    <div class="doc-row">
-      <div class="doc-ico" style="background:#F8FAFC;">${gicon(f.t,18)}</div>
-      <div><div class="doc-name">${f.name}</div><div class="doc-sub">${f.sub}</div></div>
-      <div class="doc-ext"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14L21 3"/></svg></div>
-    </div>`).join('') : '<div style="font-size:13px;color:var(--text-muted);">No documents attached yet.</div>';
+let currentTaskId=null, sideEditing=null, showLinkForm=false;
+function currentTask(){return TASKS.find(x=>x.id===currentTaskId);}
+function toISO(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function fmtSize(b){return b<1024?b+' B':(b<1048576?(b/1024).toFixed(0)+' KB':(b/1048576).toFixed(1)+' MB');}
+function progColour(t){return t.status==='done'?'var(--green)':(t.status==='progress'?'var(--amber)':(t.progress===0?'var(--red)':'var(--purple)'));}
+const CHEV='<span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>';
+function menu(items){return `<div class="side-menu">${items.join('')}</div>`;}
+function opt(inner,onclick){return `<div class="menu-opt" onclick="${onclick}">${inner}</div>`;}
 
-  const threadHTML=t.thread.length? t.thread.map(c=>`
-    <div class="comment">
-      ${av(c.who,32,11)}
-      <div class="comment-body">
-        <div class="comment-head"><span class="comment-name">${PEOPLE[c.who].name}</span><span class="comment-time">${c.t}</span></div>
-        <div class="comment-text">${c.m.replace(/@([A-Za-z]+ [A-Za-z]+)/g,'<span class="mention">@$1</span>')}</div>
-      </div>
-    </div>`).join('') : '<div style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">No comments yet. Start the conversation.</div>';
+function fileRow(f,i){
+  return `<div class="doc-row" ${f.url?`onclick="openExt('${(f.url||'').replace(/'/g,'')}')"`:''}>
+    <div class="doc-ico" style="background:#F8FAFC;">${gicon(f.t,18)}</div>
+    <div style="min-width:0;flex:1;"><div class="doc-name">${f.name}</div><div class="doc-sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${f.sub||''}</div></div>
+    <div class="doc-ext" title="Remove" onclick="event.stopPropagation();removeFile(${i})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6L6 18M6 6l12 12"/></svg></div>
+  </div>`;
+}
+function openExt(u){try{window.open(u,'_blank');}catch(e){}}
+function removeFile(i){const t=currentTask();if(!t)return;t.files.splice(i,1);t.docs=(t.files||[]).length;renderBoard();if(currentView==='list')renderList();refreshMain();}
 
-  document.getElementById('drawerBody').innerHTML=`
-    <div class="props">
-      <div class="prop-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Assignee</div>
-      <div class="prop-val"><span class="selecty">${av(t.assignee,20,8)} ${PEOPLE[t.assignee].name}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9l6 6 6-6"/></svg></span><span style="font-size:11.5px;color:var(--text-muted);">reassign</span></div>
-
-      <div class="prop-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Status</div>
-      <div class="prop-val"><span class="selecty">${statusTag(t.status)}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9l6 6 6-6"/></svg></span></div>
-
-      <div class="prop-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>Priority</div>
-      <div class="prop-val">${pill(PRIORITY,t.priority)}</div>
-
-      <div class="prop-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>Space</div>
-      <div class="prop-val"><span class="selecty"><span class="dot" style="width:8px;height:8px;background:${SPACES[t.space].colour};"></span>${SPACES[t.space].label}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9l6 6 6-6"/></svg></span></div>
-
-      <div class="prop-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Dates</div>
-      <div class="prop-val">Start ${fmtDate(t.start)} &nbsp;→&nbsp; <span class="${od?'':''}" style="${od?'color:var(--red);font-weight:600;':''}">Due ${fmtDate(t.due)}${od?' · overdue':''}</span></div>
-
-      <div class="prop-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>Completion</div>
-      <div class="prop-val" style="gap:10px;"><div class="progressbar" style="width:120px;margin:0;"><div style="width:${t.progress}%;background:${t.status==='done'?'var(--green)':t.status==='progress'?'var(--amber)':t.progress===0?'var(--red)':'var(--purple)'};"></div></div><span style="font-size:12px;font-weight:600;color:var(--text-secondary);">${t.progress}%</span></div>
-
-      <div class="prop-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Assigned by</div>
-      <div class="prop-val"><span class="rec-link" style="display:inline-flex;align-items:center;gap:8px;border-radius:8px;padding:3px 7px;margin:-3px -7px;" onclick="openRecord('staff','${t.assigner}','${PEOPLE[t.assigner].name}')" title="Open in Team · /team/${t.assigner}">${av(t.assigner,20,8)} ${PEOPLE[t.assigner].name}${LINKICON}</span></div>
-    </div>
+function renderMain(t){
+  const filesHTML=(t.files&&t.files.length)?t.files.map((f,i)=>fileRow(f,i)).join(''):'<div style="font-size:13px;color:var(--text-muted);">No attachments yet.</div>';
+  const threadHTML=t.thread.length?t.thread.map(c=>`<div class="comment">${av(c.who,32,11)}<div class="comment-body"><div class="comment-head"><span class="comment-name">${PEOPLE[c.who].name}</span><span class="comment-time">${c.t}</span></div><div class="comment-text">${c.m.replace(/@([A-Za-z]+ [A-Za-z]+)/g,'<span class="mention">@$1</span>')}</div></div></div>`).join(''):'<div style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">No comments yet. Start the conversation.</div>';
+  return `
+    <input class="title-input" value="${(t.title||'').replace(/"/g,'&quot;')}" placeholder="Task title" onchange="renameTask(this.value)">
+    <div class="sec-label" style="margin-top:16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>Description</div>
+    <textarea class="desc-edit" placeholder="Add a description…" onchange="saveDesc(this.value)">${t.desc&&t.desc!=='—'?t.desc:''}</textarea>
 
     <div class="sec-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Linked Moov records</div>
     ${linkedRecordsHTML(t)}
 
-    <div class="sec-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>Description</div>
-    <div class="desc">${t.desc}</div>
-
-    <div class="sec-label">${gicon('drive',15)} Documents &amp; attachments</div>
-    ${filesHTML}
-
-    <div class="sec-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Linked Google Chat</div>
-    <div class="chat-link">
-      <div class="doc-ico" style="background:#E7F8EE;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#00A344" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
-      <div><div class="doc-name">${t.chat}</div><div class="doc-sub">Google Chat space · jump to conversation</div></div>
-      <div class="doc-ext" style="margin-left:auto;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14L21 3"/></svg></div>
+    <div class="sec-label">${gicon('drive',15)} Attachments${(t.files&&t.files.length)?' · '+t.files.length:''}</div>
+    <div>${filesHTML}</div>
+    <div class="attach-actions">
+      <label class="attach-btn"><input type="file" multiple style="display:none" onchange="addFiles(this.files)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>Attach file</label>
+      <button class="attach-btn" onclick="toggleLinkForm()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Add link / Google Drive</button>
     </div>
+    ${showLinkForm?`<div class="link-form">
+      <input class="inp" id="lfUrl" placeholder="Paste a link (Google Drive, Doc, URL…)" style="flex:2;min-width:180px;">
+      <input class="inp" id="lfName" placeholder="Label (optional)" style="flex:1;min-width:120px;">
+      <button class="btn primary" onclick="addLink()">Add</button>
+    </div>`:''}
 
     <div class="sec-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Comments · ${t.thread.length}</div>
-    <div id="threadList">${threadHTML}</div>
+    <div>${threadHTML}</div>
     <div class="comment-box">
       ${av('RJ',32,11)}
       <textarea class="comment-input" id="newComment" placeholder="Write a comment…  use @ to mention a teammate"></textarea>
-      <button class="btn primary" style="align-self:stretch;" onclick="addComment('${t.id}')">Send</button>
+      <button class="btn primary" style="align-self:stretch;" onclick="addComment(currentTaskId)">Send</button>
     </div>`;
+}
 
+function renderSide(t){
+  const od=isOverdue(t);
+  return `
+    <div class="side-prop">
+      <div class="side-label">Status</div>
+      <div class="side-control" onclick="toggleEdit('status')">${statusTag(t.status)}${CHEV}</div>
+      ${sideEditing==='status'?menu(Object.keys(STATUS).map(k=>opt(statusTag(k),`setField('status','${k}')`))):''}
+    </div>
+    <div class="side-prop">
+      <div class="side-label">Assignee</div>
+      <div class="side-control" onclick="toggleEdit('assignee')">${av(t.assignee,20,8)} <span>${PEOPLE[t.assignee].name}</span>${CHEV}</div>
+      ${sideEditing==='assignee'?menu(Object.keys(PEOPLE).map(k=>opt(`${av(k,20,8)} ${PEOPLE[k].name}`,`setField('assignee','${k}')`))):''}
+    </div>
+    <div class="side-prop">
+      <div class="side-label">Priority</div>
+      <div class="side-control" onclick="toggleEdit('priority')">${pill(PRIORITY,t.priority)}${CHEV}</div>
+      ${sideEditing==='priority'?menu(Object.keys(PRIORITY).map(k=>opt(pill(PRIORITY,k),`setField('priority','${k}')`))):''}
+    </div>
+    <div class="side-prop">
+      <div class="side-label">Space</div>
+      <div class="side-control" onclick="toggleEdit('space')"><span class="dot" style="width:8px;height:8px;background:${SPACES[t.space].colour};"></span>${SPACES[t.space].label}${CHEV}</div>
+      ${sideEditing==='space'?menu(Object.keys(SPACES).map(k=>opt(`<span class="dot" style="width:8px;height:8px;background:${SPACES[k].colour};"></span>${SPACES[k].label}`,`setField('space','${k}')`))):''}
+    </div>
+    <div class="side-prop">
+      <div class="side-label">Dates</div>
+      <div style="display:flex;gap:8px;">
+        <label style="flex:1;"><span class="mini-lbl">Start</span><input type="date" class="date-inp" value="${toISO(t.start)}" onchange="setDate('start',this.value)"></label>
+        <label style="flex:1;"><span class="mini-lbl">Due</span><input type="date" class="date-inp ${od?'overdue-inp':''}" value="${toISO(t.due)}" onchange="setDate('due',this.value)"></label>
+      </div>
+      ${od?'<div style="font-size:11.5px;color:var(--red);font-weight:600;margin-top:5px;">Overdue</div>':''}
+    </div>
+    <div class="side-prop">
+      <div class="side-label">Completion · <span id="pctLbl">${t.progress}%</span></div>
+      <div class="progressbar" style="margin:0 0 9px;"><div style="width:${t.progress}%;background:${progColour(t)};"></div></div>
+      <input type="range" min="0" max="100" step="5" value="${t.progress}" style="width:100%;accent-color:#00C853;" oninput="var l=document.getElementById('pctLbl');if(l)l.textContent=this.value+'%'" onchange="setField('progress',Number(this.value))">
+    </div>
+    <div class="side-prop">
+      <div class="side-label">Assigned by</div>
+      <div class="side-control rec-link" onclick="openRecord('staff','${t.assigner}','${PEOPLE[t.assigner].name}')" title="Open in Team · /team/${t.assigner}">${av(t.assigner,20,8)} ${PEOPLE[t.assigner].name}</div>
+    </div>`;
+}
+
+function refreshMain(){const t=currentTask();if(t)document.getElementById('detailMain').innerHTML=renderMain(t);}
+function refreshSide(){const t=currentTask();if(t)document.getElementById('detailSide').innerHTML=renderSide(t);}
+function toggleEdit(fld){sideEditing=(sideEditing===fld?null:fld);refreshSide();}
+function setField(field,val){const t=currentTask();if(!t)return;t[field]=val;if(field==='status'&&val==='done')t.progress=100;sideEditing=null;document.getElementById('dStatusTag').innerHTML=statusTag(t.status);renderBoard();if(currentView==='list')renderList();refreshSide();}
+function setDate(which,val){const t=currentTask();if(!t||!val)return;const p=val.split('-').map(Number);t[which]=new Date(p[0],p[1]-1,p[2]);renderBoard();if(currentView==='list')renderList();refreshSide();}
+function renameTask(v){const t=currentTask();if(!t)return;t.title=v.trim()||t.title;renderBoard();if(currentView==='list')renderList();}
+function saveDesc(v){const t=currentTask();if(!t)return;t.desc=v.trim()||'—';}
+function toggleLinkForm(){showLinkForm=!showLinkForm;refreshMain();if(showLinkForm){var i=document.getElementById('lfUrl');if(i)i.focus();}}
+function addFiles(list){const t=currentTask();if(!t)return;t.files=t.files||[];for(const f of list){t.files.push({t:'file',name:f.name,sub:fmtSize(f.size)});}t.docs=t.files.length;renderBoard();refreshMain();}
+function addLink(){const t=currentTask();if(!t)return;const u=(document.getElementById('lfUrl').value||'').trim();if(!u)return;const nm=(document.getElementById('lfName').value||'').trim()||u;const type=/drive\.google|docs\.google/.test(u)?'drive':'link';t.files=t.files||[];t.files.push({t:type,name:nm,sub:u,url:u});t.docs=t.files.length;showLinkForm=false;renderBoard();refreshMain();}
+
+function openDrawer(id){
+  currentTaskId=id;sideEditing=null;showLinkForm=false;
+  const t=TASKS.find(x=>x.id===id);if(!t)return;
+  document.getElementById('dId').textContent=t.id;
+  document.getElementById('dStatusTag').innerHTML=statusTag(t.status);
+  document.getElementById('detailMain').innerHTML=renderMain(t);
+  document.getElementById('detailSide').innerHTML=renderSide(t);
   document.getElementById('drawer').classList.add('open');
   document.getElementById('scrim').classList.add('open');
 }
-function addComment(id){
-  const box=document.getElementById('newComment');
-  const val=box.value.trim();
-  if(!val)return;
-  const t=TASKS.find(x=>x.id===id);
-  t.thread.push({who:'RJ',t:'just now',m:val});
-  t.comments++;
-  openDrawer(id);
-}
-function closeDrawer(){
-  document.getElementById('drawer').classList.remove('open');
-  document.getElementById('scrim').classList.remove('open');
-}
+function addComment(id){const t=TASKS.find(x=>x.id===id);if(!t)return;const box=document.getElementById('newComment');const val=(box.value||'').trim();if(!val)return;t.thread.push({who:'RJ',t:'just now',m:val});t.comments=(t.comments||0)+1;renderBoard();if(currentView==='list')renderList();refreshMain();}
+function closeDrawer(){currentTaskId=null;sideEditing=null;document.getElementById('drawer').classList.remove('open');document.getElementById('scrim').classList.remove('open');}
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeDrawer();closeCreate();}});
+document.addEventListener('click',e=>{if(currentTaskId&&sideEditing&&!e.target.closest('.side-prop')){sideEditing=null;refreshSide();}});
 
 /* ── CREATE TASK MODAL ── */
 const NT={space:'cs',prio:'medium',assignee:'AO',customer:null,carrier:null,query:[],tracking:[]};
