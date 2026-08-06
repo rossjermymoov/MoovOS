@@ -79,7 +79,7 @@ async function getTaskFull(id) {
   const taskRes = await query(`${TASK_SELECT} WHERE t.id = $1`, [id]);
   if (!taskRes.rows.length) return null;
   const task = taskRes.rows[0];
-  const [comments, attachments] = await Promise.all([
+  const [comments, attachments, subtasks] = await Promise.all([
     query(
       `SELECT c.id, c.body, c.created_at, c.author_id, s.full_name AS author_name
        FROM task_comments c LEFT JOIN staff s ON s.id = c.author_id
@@ -87,9 +87,20 @@ async function getTaskFull(id) {
     query(
       `SELECT id, kind, name, url, size_bytes, created_at
        FROM task_attachments WHERE task_id = $1 ORDER BY created_at ASC`, [id]),
+    query(
+      `SELECT t.id, t.title, t.status, t.priority, t.due_date, t.assignee_id,
+              s.full_name AS assignee_name,
+              (SELECT COUNT(*)::int FROM task_comments tc WHERE tc.task_id = t.id) AS comment_count
+       FROM tasks t LEFT JOIN staff s ON s.id = t.assignee_id
+       WHERE t.parent_id = $1 ORDER BY t.created_at ASC`, [id]),
   ]);
   task.comments = comments.rows;
   task.attachments = attachments.rows;
+  task.subtasks = subtasks.rows;
+  if (task.parent_id) {
+    const p = await query(`SELECT title FROM tasks WHERE id = $1`, [task.parent_id]);
+    task.parent_title = p.rows[0]?.title || null;
+  }
   return task;
 }
 
@@ -126,11 +137,11 @@ router.post('/', async (req, res, next) => {
     const priority = PRIORITIES.includes(b.priority) ? b.priority : 'medium';
 
     const ins = await query(
-      `INSERT INTO tasks (title, description, status, priority, space, assignee_id, created_by, start_date, due_date, progress)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+      `INSERT INTO tasks (title, description, status, priority, space, assignee_id, created_by, start_date, due_date, progress, parent_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
       [b.title.trim(), b.description || null, status, priority, b.space || 'cs',
        b.assignee_id || null, b.created_by || null, b.start_date || null, b.due_date || null,
-       Number.isFinite(b.progress) ? b.progress : 0]);
+       Number.isFinite(b.progress) ? b.progress : 0, b.parent_id || null]);
     const id = ins.rows[0].id;
 
     // Notify the assignee (unless they assigned it to themselves)

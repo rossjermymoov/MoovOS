@@ -135,6 +135,20 @@
 .mt-sec{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mt-header);margin:22px 0 12px;display:flex;align-items:center;gap:7px;}
 .mt-sec svg{width:14px;height:14px;color:var(--mt-text2);}
 
+/* subtasks */
+.mt-crumb{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--mt-muted);background:#F1F5F9;border:1px solid var(--mt-strong);border-radius:8px;padding:6px 11px;margin-bottom:14px;cursor:pointer;transition:.12s;}
+.mt-crumb:hover{background:#E2E8F0;color:var(--mt-text);}
+.mt-crumb strong{color:var(--mt-text);font-weight:700;}
+.mt-sub-row{display:flex;align-items:center;gap:11px;padding:9px 12px;border:1px solid var(--mt-strong);border-radius:10px;background:#fff;margin-bottom:7px;cursor:pointer;transition:.12s;box-shadow:var(--mt-shadow);}
+.mt-sub-row:hover{border-color:#AEBAC8;box-shadow:var(--mt-shadow-md);}
+.mt-sub-check{width:19px;height:19px;border-radius:6px;border:1.5px solid #B4C0CE;background:#fff;display:inline-flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0;cursor:pointer;transition:.12s;}
+.mt-sub-check:hover{border-color:var(--mt-green);}
+.mt-sub-check.done{background:var(--mt-green);border-color:var(--mt-green);}
+.mt-sub-title{flex:1;min-width:0;font-size:13px;font-weight:600;color:var(--mt-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mt-sub-title.done{color:var(--mt-muted);text-decoration:line-through;}
+.mt-sub-meta{display:flex;align-items:center;gap:9px;flex-shrink:0;color:var(--mt-muted);}
+.mt-sub-add{margin-top:6px;border:1px solid var(--mt-strong);border-radius:10px;background:var(--mt-track);padding:11px 12px;}
+
 .mt-prop{margin-bottom:18px;}
 .mt-plabel{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--mt-label);margin-bottom:7px;}
 .mt-control{display:flex;align-items:center;gap:8px;width:100%;border:1px solid var(--mt-strong);border-radius:9px;padding:9px 11px;font-size:13px;font-weight:600;color:var(--mt-text);cursor:pointer;background:#fff;transition:.12s;box-shadow:var(--mt-shadow);}
