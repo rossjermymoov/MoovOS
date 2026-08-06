@@ -230,6 +230,7 @@ function TaskDetail({ taskId, me, onClose, navigate }) {
         <div className="mt-dbody">
           {/* main */}
           <div className="mt-main">
+            <div className="mt-sheet">
             <input className="mt-title-input" defaultValue={task.title} placeholder="Task title"
               onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== task.title) set({ title: v }); }} />
 
@@ -295,6 +296,7 @@ function TaskDetail({ taskId, me, onClose, navigate }) {
               <Avatar name={'You'} id={'me'} size={32} />
               <textarea className="mt-input" placeholder="Write a comment…" value={comment} onChange={e => setComment(e.target.value)} />
               <button className="mt-btn primary" disabled={!comment.trim()} style={{ alignSelf: 'stretch' }} onClick={() => mComment.mutate({ body: comment.trim(), author_id: me })}>Send</button>
+            </div>
             </div>
           </div>
 
