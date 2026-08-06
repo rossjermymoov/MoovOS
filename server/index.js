@@ -37,6 +37,7 @@ import onboardingRouter from './routes/onboarding.js';
 import onboardingTemplatesRouter from './routes/onboardingTemplates.js';
 import integrationSoftwareRouter from './routes/integrationSoftware.js';
 import teamsRouter from './routes/teams.js';
+import tasksRouter from './routes/tasks.js';
 import { startGmailSync, backfillEmailBodiesOnce, backfillSentRepliesOnce } from './services/gmailSync.js';
 
 dotenv.config();
@@ -68,6 +69,7 @@ app.use('/api/carrier-rate-cards',    carrierRateCardsRouter);
 app.use('/api/customer-rate-cards',   customerRateCardsRouter);
 app.use('/api/carrier-data',          carrierDataRouter);
 app.use('/api/queries',               queriesRouter);
+app.use('/api/tasks',                  tasksRouter);
 app.use('/api/surcharges',            surchargesRouter);
 app.use('/api/customer-carrier-links', customerCarrierLinksRouter);
 app.use('/api/sla',                   slaRulesRouter);
