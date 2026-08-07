@@ -298,6 +298,7 @@ function TaskDetail({ taskId, me, staffList, onOpenTask, focusComments, onClose,
   const [assignOpen, setAssignOpen] = useState(false);
   const [showLink, setShowLink] = useState(false);
   const [lkUrl, setLkUrl] = useState(''); const [lkName, setLkName] = useState('');
+  const [confirmDel, setConfirmDel] = useState(false);
   const fileRef = useRef(null);
 
   const refresh = () => { qc.invalidateQueries(['task', taskId]); qc.invalidateQueries(['tasks']); };
@@ -310,6 +311,7 @@ function TaskDetail({ taskId, me, staffList, onOpenTask, focusComments, onClose,
   const mAddSub = useMutation({ mutationFn: (body) => tasksApi.create(body), onSuccess: refresh });
   const mSubUpdate = useMutation({ mutationFn: ({ id, body }) => tasksApi.update(id, body), onSuccess: refresh });
   const doneKey = [...COMPLETE][0] || 'done';
+  const mDelete = useMutation({ mutationFn: () => tasksApi.remove(taskId), onSuccess: () => qc.invalidateQueries(['tasks']) });
 
   // When opened from a comment/mention notification, jump to the comment thread.
   const commentsRef = useRef(null);
@@ -327,6 +329,10 @@ function TaskDetail({ taskId, me, staffList, onOpenTask, focusComments, onClose,
   const links = task.links || [];
   const linksByType = (t) => links.filter(l => l.type === t);
   const set = (patch) => mUpdate.mutate(patch);
+  const del = () => {
+    const parent = task.parent_id;
+    mDelete.mutate(undefined, { onSuccess: () => { setConfirmDel(false); if (parent && onOpenTask) onOpenTask(parent); else onClose(); } });
+  };
 
   return (
     <>
@@ -334,7 +340,20 @@ function TaskDetail({ taskId, me, staffList, onOpenTask, focusComments, onClose,
       <div className="mt-drawer open">
         <div className="mt-dhead">
           <div className="mt-dhead-left"><span className="mt-card-id">{shortId(task.id)}</span><StatusTag k={task.status} /></div>
-          <div className="mt-iconbtn" onClick={onClose} title="Close"><X size={16} /></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {confirmDel ? (
+              <>
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: '#B91C1C' }}>
+                  Delete this task{task.subtasks?.length ? ` and its ${task.subtasks.length} subtask${task.subtasks.length === 1 ? '' : 's'}` : ''}?
+                </span>
+                <button className="mt-btn" style={{ background: '#EF4444', borderColor: '#EF4444', color: '#fff' }} disabled={mDelete.isLoading} onClick={del}>{mDelete.isLoading ? 'Deleting…' : 'Delete'}</button>
+                <button className="mt-btn" onClick={() => setConfirmDel(false)}>Cancel</button>
+              </>
+            ) : (
+              <div className="mt-iconbtn" title="Delete task" style={{ color: '#B91C1C' }} onClick={() => setConfirmDel(true)}><Trash2 size={16} /></div>
+            )}
+            <div className="mt-iconbtn" onClick={onClose} title="Close"><X size={16} /></div>
+          </div>
         </div>
         <div className="mt-dbody">
           {/* main */}
