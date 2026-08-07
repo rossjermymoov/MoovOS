@@ -79,6 +79,7 @@ const initials = (n) => ((n || '?').split(' ').filter(w => /[A-Za-z0-9]/.test(w)
 function colourFor(id) { const s = String(id || ''); let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return AV_PALETTE[h % AV_PALETTE.length]; }
 const shortId = (id) => 'TSK-' + String(id || '').replace(/-/g, '').slice(0, 5).toUpperCase();
 function fmtDate(d) { if (!d) return '—'; const dt = new Date(d); const now = new Date(); return dt.getDate() + ' ' + MONTHS[dt.getMonth()] + (dt.getFullYear() !== now.getFullYear() ? ' ' + dt.getFullYear() : ''); }
+function fmtDateTime(d) { if (!d) return ''; const dt = new Date(d); if (isNaN(dt)) return ''; return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ', ' + dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); }
 function toISO(d) { if (!d) return ''; const dt = new Date(d); if (isNaN(dt)) return ''; return dt.toISOString().slice(0, 10); }
 function isOverdue(t) { return !COMPLETE.has(t.status) && t.due_date && new Date(t.due_date) < new Date(new Date().toDateString()); }
 function fmtSize(b) { b = +b || 0; return b < 1024 ? b + ' B' : (b < 1048576 ? (b / 1024).toFixed(0) + ' KB' : (b / 1048576).toFixed(1) + ' MB'); }
@@ -313,12 +314,13 @@ function TaskDetail({ taskId, me, staffList, onOpenTask, focusComments, onClose,
   const doneKey = [...COMPLETE][0] || 'done';
   const mDelete = useMutation({ mutationFn: () => tasksApi.remove(taskId), onSuccess: () => qc.invalidateQueries(['tasks']) });
 
-  // When opened from a comment/mention notification, jump to the comment thread.
+  // When opened from a comment/mention notification, scroll down to the comment
+  // thread (newest comment is at the top). Wait out the modal open animation first.
   const commentsRef = useRef(null);
   useEffect(() => {
-    if (focusComments && task && commentsRef.current) {
-      requestAnimationFrame(() => commentsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-    }
+    if (!focusComments || !task) return;
+    const t = setTimeout(() => commentsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 240);
+    return () => clearTimeout(t);
   }, [focusComments, task?.id]);
 
   if (!task) {
@@ -448,11 +450,11 @@ function TaskDetail({ taskId, me, staffList, onOpenTask, focusComments, onClose,
 
             <div className="mt-sec" ref={commentsRef}><MessageSquare size={14} />Comments · {task.comments?.length || 0}</div>
             {(task.comments || []).length === 0 && <div style={{ fontSize: 13, color: '#94A3B8', marginBottom: 12 }}>No comments yet. Start the conversation.</div>}
-            {(task.comments || []).map(c => (
+            {[...(task.comments || [])].reverse().map(c => (
               <div className="mt-comment" key={c.id}>
                 <Avatar name={c.author_name || 'You'} id={c.author_id} size={32} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}><span className="mt-comment-name">{c.author_name || 'You'}</span><span className="mt-comment-time">{fmtDate(c.created_at)}</span></div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}><span className="mt-comment-name">{c.author_name || 'You'}</span><span className="mt-comment-time">{fmtDateTime(c.created_at)}</span></div>
                   <div className="mt-comment-text">{renderMentions(c.body, (staffList || []).map(s => s.full_name))}</div>
                 </div>
               </div>
