@@ -314,6 +314,18 @@ function TaskDetail({ taskId, me, staffList, onOpenTask, focusComments, onClose,
   const doneKey = [...COMPLETE][0] || 'done';
   const mDelete = useMutation({ mutationFn: () => tasksApi.remove(taskId), onSuccess: () => qc.invalidateQueries(['tasks']) });
 
+  // Remember the height the user drags the description box to (shared preference).
+  const descRef = useRef(null);
+  useEffect(() => {
+    const el = descRef.current;
+    if (!el) return;
+    const saved = parseInt(localStorage.getItem('moov_desc_height') || '', 10);
+    if (saved && saved > 0) el.style.height = saved + 'px';
+    const ro = new ResizeObserver(() => { if (el.offsetHeight) localStorage.setItem('moov_desc_height', String(el.offsetHeight)); });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [task?.id]);
+
   // When opened from a comment/mention notification, scroll down to the comment
   // thread (newest comment is at the top). Wait out the modal open animation first.
   const commentsRef = useRef(null);
@@ -370,7 +382,7 @@ function TaskDetail({ taskId, me, staffList, onOpenTask, focusComments, onClose,
               onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== task.title) set({ title: v }); }} />
 
             <div className="mt-sec"><MessageSquare size={14} />Description</div>
-            <textarea className="mt-desc" defaultValue={task.description || ''} placeholder="Add a description…"
+            <textarea ref={descRef} className="mt-desc" defaultValue={task.description || ''} placeholder="Add a description…"
               onBlur={(e) => { const v = e.target.value; if (v !== (task.description || '')) set({ description: v }); }} />
 
             {!task.parent_id && (() => {
@@ -981,7 +993,7 @@ export default function TasksPage() {
             </div>
           )}
 
-      {openId && <TaskDetail taskId={openId} me={me} staffList={staffList} onOpenTask={setOpenId} focusComments={searchParams.get('focus') === 'comments'} navigate={navigate} onClose={closeDetail} />}
+      {openId && <TaskDetail key={openId} taskId={openId} me={me} staffList={staffList} onOpenTask={setOpenId} focusComments={searchParams.get('focus') === 'comments'} navigate={navigate} onClose={closeDetail} />}
       {creating && <CreateModal defaultSpace={space} currentUserId={me} onClose={() => setCreating(false)} onCreated={(t) => { setCreating(false); if (t?.id) setOpenId(t.id); }} />}
       {showSettings && <SettingsModal initSpaces={curSpaces} initStatuses={curStatuses} spaceCounts={spaceCounts} statusCounts={statusCounts} saving={mSaveConfig.isLoading} onSave={(d) => mSaveConfig.mutate(d)} onClose={() => setShowSettings(false)} />}
     </div>
