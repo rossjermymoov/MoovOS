@@ -31,6 +31,7 @@ import MarginReportPage from './pages/reconciliation/MarginReportPage';
 import ServiceCodeMappingsPage from './pages/reconciliation/ServiceCodeMappingsPage';
 import OnboardingBoard from './pages/onboarding/OnboardingBoard';
 import OnboardingTemplates from './pages/settings/OnboardingTemplates';
+import TodayPage from './pages/today/TodayPage';
 
 // Placeholder pages for other sections (to be built)
 const Placeholder = ({ name }) => (
@@ -80,7 +81,7 @@ function AppRoutes() {
           </RequireAuth>
         }
       >
-        <Route path="/" element={<Placeholder name="Dashboard" />} />
+        <Route path="/" element={<TodayPage />} />
 
         {/* Customers — nested so "new" is always resolved before ":id" */}
         <Route path="customers">
