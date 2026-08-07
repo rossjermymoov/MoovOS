@@ -695,7 +695,7 @@ export default function CustomerAI() {
   if (done && result) return <SuccessScreen customer={result.customer} rateResults={result.rates} navigate={navigate} />;
 
   return (
-    <div style={{ maxWidth: 880, margin: '0 auto' }}>
+    <div className="moov-ds" style={{ padding: '8px 0 48px', maxWidth: 880, margin: '0 auto' }}>
       <style>{`@keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }`}</style>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>

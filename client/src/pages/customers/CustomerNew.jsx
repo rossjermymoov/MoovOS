@@ -480,7 +480,7 @@ export default function CustomerNew() {
   if (done && newCustomer) return <SuccessScreen customer={newCustomer} navigate={navigate} />;
 
   return (
-    <div style={{ maxWidth: 760, margin: '0 auto' }}>
+    <div className="moov-ds" style={{ padding: '8px 0 48px', maxWidth: 760, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
         <button onClick={() => navigate('/customers')}
           style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>

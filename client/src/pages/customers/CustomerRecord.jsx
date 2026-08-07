@@ -47,32 +47,32 @@ const gbp = (n) => `£${parseFloat(n || 0).toLocaleString('en-GB', { minimumFrac
 
 // ─── Shared field components ─────────────────────────────────
 const inp = (extra = {}) => ({
-  background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
-  borderRadius: 9999, padding: '5px 14px', color: '#0F172A', fontSize: 12,
-  outline: 'none', width: '100%', boxSizing: 'border-box', ...extra,
+  background: '#FFFFFF', border: '1px solid var(--color-text)',
+  borderRadius: 0, padding: '5px 10px', color: 'var(--color-text)', fontSize: 12,
+  outline: 'none', width: '100%', boxSizing: 'border-box', fontFamily: 'var(--font-body)', ...extra,
 });
 const sel = () => inp({ cursor: 'pointer' });
 
 function Row({ label, value, edit, editNode }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, minHeight: 26 }}>
-      <span style={{ fontSize: 12, color: '#64748B', flexShrink: 0, whiteSpace: 'nowrap', minWidth: 110 }}>{label}</span>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, minHeight: 34, padding: '5px 0', borderBottom: 'var(--ds-hairline)' }}>
+      <span style={{ fontSize: 11, color: 'var(--ds-muted)', flexShrink: 0, whiteSpace: 'nowrap', minWidth: 120 }}>{label}</span>
       {edit
-        ? <div style={{ width: 180, flexShrink: 0 }}>{editNode}</div>
-        : <span style={{ fontSize: 12, color: '#0F172A', textAlign: 'right', wordBreak: 'break-word' }}>{value || '—'}</span>}
+        ? <div style={{ width: 200, flexShrink: 0 }}>{editNode}</div>
+        : <span style={{ fontSize: 13, color: 'var(--color-text)', textAlign: 'right', wordBreak: 'break-word', fontWeight: 500 }}>{value || '—'}</span>}
     </div>
   );
 }
 
 function SectionTitle({ children }) {
-  return <h3 style={{ fontSize: 11, fontWeight: 700, color: '#7B2FBE', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>{children}</h3>;
+  return <h3 style={{ fontSize: 9, fontWeight: 600, color: 'var(--color-accent)', textTransform: 'uppercase', letterSpacing: '.15em', margin: 0 }}>{children}</h3>;
 }
 
 function InfoCard({ title, children }) {
   return (
-    <div className="moov-card" style={{ padding: '16px 18px' }}>
+    <div style={{ marginBottom: 8 }}>
       <SectionTitle>{title}</SectionTitle>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{children}</div>
+      <div style={{ borderTop: '2px solid var(--color-divider)', marginTop: 8 }}>{children}</div>
     </div>
   );
 }
@@ -299,18 +299,18 @@ function TestAccountSection({ customer, onToggle }) {
   return (
     <div className="moov-card" style={{
       marginBottom: 16, padding: '14px 18px',
-      border: enabled ? '1px solid rgba(239,68,68,0.35)' : '1px solid rgba(0,0,0,0.08)',
-      background: enabled ? 'rgba(239,68,68,0.05)' : undefined,
+      border: enabled ? '1px solid rgba(233,30,140,0.35)' : '1px solid rgba(0,0,0,0.08)',
+      background: enabled ? 'rgba(233,30,140,0.05)' : undefined,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <FlaskConical size={18} color={enabled ? '#EF4444' : '#94A3B8'} strokeWidth={1.5} />
+        <FlaskConical size={18} color={enabled ? '#E91E8C' : '#94A3B8'} strokeWidth={1.5} />
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Test Account</span>
             {enabled && (
               <span style={{
-                fontSize: 11, fontWeight: 700, color: '#EF4444',
-                background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)',
+                fontSize: 11, fontWeight: 700, color: '#E91E8C',
+                background: 'rgba(233,30,140,0.12)', border: '1px solid rgba(233,30,140,0.35)',
                 borderRadius: 12, padding: '2px 8px', letterSpacing: '0.3px',
               }}>ACTIVE — ALL CHARGES £0</span>
             )}
@@ -326,7 +326,7 @@ function TestAccountSection({ customer, onToggle }) {
           style={{ background: 'none', border: 'none', cursor: busy ? 'wait' : 'pointer', padding: 4, opacity: busy ? 0.5 : 1 }}
         >
           {enabled
-            ? <ToggleRight size={32} color="#EF4444" strokeWidth={1.5} />
+            ? <ToggleRight size={32} color="#E91E8C" strokeWidth={1.5} />
             : <ToggleLeft  size={32} color="#94A3B8" strokeWidth={1.5} />}
         </button>
       </div>
@@ -560,13 +560,13 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10, gap: 8 }}>
         {edit ? (
           <>
-            <button className="btn-ghost" onClick={() => setEdit(false)} style={{ fontSize: 12 }}><X size={12} /> Cancel</button>
-            <button className="btn-primary" onClick={() => save.mutate()} disabled={save.isPending} style={{ fontSize: 12 }}>
-              <Check size={12} /> {save.isPending ? 'Saving…' : 'Save Changes'}
+            <button className="ds-btn ds-btn-secondary" onClick={() => setEdit(false)}><X size={13} /> Cancel</button>
+            <button className="ds-btn ds-btn-primary" onClick={() => save.mutate()} disabled={save.isPending}>
+              <Check size={13} /> {save.isPending ? 'Saving…' : 'Save changes'}
             </button>
           </>
         ) : (
-          <button className="btn-ghost" onClick={startEdit} style={{ fontSize: 12 }}><Pencil size={12} /> Edit Details</button>
+          <button className="ds-btn ds-btn-secondary" onClick={startEdit}><Pencil size={13} /> Edit details</button>
         )}
       </div>
 
@@ -705,8 +705,8 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
                   </span>
                 </label>
               } />
-            <Row label="Account Status"    value={<AccountStatusBadge status={c.account_status} />} />
-            <Row label="Health Score"      value={<HealthBadge score={c.health_score} />} />
+            <Row label="Account status" value={(() => { const M = { active: ['settled', 'Active'], onboarding: ['progress', 'Onboarding'], on_stop: ['attention', 'On stop'], suspended: ['waiting', 'Suspended'], churned: ['waiting', 'Churned'] }; const m = M[c.account_status] || ['waiting', (c.account_status || '').replace(/_/g, ' ')]; return <span className={'ds-status ds-status--' + m[0]}><span className={'ds-mark ds-mark--' + m[0]} />{m[1]}</span>; })()} />
+            <Row label="Health" value={(() => { const m = c.health_score === 'green' ? ['settled', 'Healthy'] : (c.health_score === 'amber' ? ['attention', 'Watch'] : ['attention', 'At risk']); return <span className={'ds-status ds-status--' + m[0]}><span className={'ds-mark ds-mark--' + m[0]} />{m[1]}</span>; })()} />
           </InfoCard>
 
           <IntegrationOnboardingCard c={c} edit={edit} form={form} set={set} />
@@ -722,7 +722,7 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
 
           {c.health_score_summary && (
             <InfoCard title="Health Score Detail">
-              <p style={{ fontSize: 12, color: '#DDDDDD', lineHeight: 1.6 }}>{c.health_score_summary}</p>
+              <p style={{ fontSize: 12, color: '#201e1d', lineHeight: 1.6 }}>{c.health_score_summary}</p>
               {c.health_score_updated && (
                 <p style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
                   Last calculated: {format(new Date(c.health_score_updated), 'dd MMM yyyy, HH:mm')}
@@ -984,8 +984,8 @@ function PerformanceTab({ customerId }) {
                   { k: 'revenue',  v: d?.revenue != null ? `£${parseFloat(d.revenue).toFixed(2)}` : '—',  c: '#A5B4FC' },
                   { k: 'cost',     v: d?.cost     != null ? `£${parseFloat(d.cost).toFixed(2)}`    : '—',  c: '#B39DDB' },
                   { k: 'profit',   v: d?.profit   != null ? `£${parseFloat(d.profit).toFixed(2)}`  : '—',
-                    c: parseFloat(d?.profit || 0) >= 0 ? '#34D399' : '#EF4444' },
-                  ...(d?.missing_cost_count > 0 ? [{ k: '⚠ missing cost', v: `${d.missing_cost_count} charges`, c: '#EF4444' }] : []),
+                    c: parseFloat(d?.profit || 0) >= 0 ? '#34D399' : '#E91E8C' },
+                  ...(d?.missing_cost_count > 0 ? [{ k: '⚠ missing cost', v: `${d.missing_cost_count} charges`, c: '#E91E8C' }] : []),
                 ].map(({ k, v, c }) => (
                   <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
                     <span style={{ color: '#64748B' }}>{k}</span>
@@ -1023,14 +1023,14 @@ function PerformanceTab({ customerId }) {
                       <td style={{ padding: '3px 6px', textAlign: 'right', color: '#64748B', fontFamily: 'monospace' }}>{row.charges}</td>
                       <td style={{ padding: '3px 6px', textAlign: 'right', color: '#A5B4FC', fontFamily: 'monospace' }}>£{parseFloat(row.revenue).toFixed(2)}</td>
                       <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace',
-                        color: noCost ? '#EF4444' : '#B39DDB' }}>
+                        color: noCost ? '#E91E8C' : '#B39DDB' }}>
                         £{parseFloat(row.cost).toFixed(2)}
-                        {noCost && <span style={{ marginLeft: 4, fontSize: 9, color: '#EF4444' }}>⚠ null</span>}
+                        {noCost && <span style={{ marginLeft: 4, fontSize: 9, color: '#E91E8C' }}>⚠ null</span>}
                       </td>
                       <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace',
-                        color: pft >= 0 ? '#34D399' : '#EF4444' }}>£{pft.toFixed(2)}</td>
+                        color: pft >= 0 ? '#34D399' : '#E91E8C' }}>£{pft.toFixed(2)}</td>
                       <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace',
-                        color: mgn === '—' ? '#475569' : parseFloat(mgn) < 0 ? '#EF4444' : parseFloat(mgn) < 15 ? '#F59E0B' : '#34D399' }}>
+                        color: mgn === '—' ? '#475569' : parseFloat(mgn) < 0 ? '#E91E8C' : parseFloat(mgn) < 15 ? '#F59E0B' : '#34D399' }}>
                         {mgn === '—' ? '—' : `${mgn}%`}
                       </td>
                     </tr>
@@ -1069,7 +1069,7 @@ function PerformanceTab({ customerId }) {
         ].map(({ label, value }) => (
           <div key={label} className="moov-card" style={{ padding: 16, textAlign: 'center' }}>
             <div style={{ fontSize: 11, color: '#64748B', marginBottom: 4 }}>{label}</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#DDDDDD' }}>{value}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: '#201e1d' }}>{value}</div>
           </div>
         ))}
       </div>
@@ -1097,7 +1097,7 @@ function PerformanceTab({ customerId }) {
             <tbody>
               {perfData.by_courier.map(row => (
                 <tr key={row.service_name}>
-                  <td style={{ color: '#DDDDDD', fontWeight: 500 }}>{row.service_name}</td>
+                  <td style={{ color: '#201e1d', fontWeight: 500 }}>{row.service_name}</td>
                   <td style={{ textAlign: 'right', color: '#64748B' }}>{row.charges}</td>
                   <td style={{ textAlign: 'right', color: '#00C853', fontWeight: 600 }}>{gbp(row.revenue)}</td>
                   <td style={{ textAlign: 'right', color: '#64748B' }}>{gbp(row.cost)}</td>
@@ -1176,7 +1176,7 @@ function FinancialTab({ c }) {
 
   const pct    = credit?.utilisation_pct ?? 0;
   const status = credit?.credit_status ?? 'ok';
-  const barCol = status === 'over_limit' ? '#EF4444' : status === 'warning' ? '#F59E0B' : '#00C853';
+  const barCol = status === 'over_limit' ? '#E91E8C' : status === 'warning' ? '#F59E0B' : '#00C853';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -1251,7 +1251,7 @@ function FinancialTab({ c }) {
 
             {/* Warning banner */}
             {status === 'over_limit' && (
-              <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#EF4444', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <div style={{ background: 'rgba(233,30,140,0.1)', border: '1px solid rgba(233,30,140,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#E91E8C', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                 <AlertTriangle size={14} />
                 <strong>Credit limit exceeded</strong> — this customer should be placed on stop.
               </div>
@@ -1288,7 +1288,7 @@ function FinancialTab({ c }) {
                   status !== 'ok' && !showStopForm && (
                     <button
                       onClick={() => setShowStopForm(true)}
-                      style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#EF4444', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                      style={{ background: 'rgba(233,30,140,0.1)', border: '1px solid rgba(233,30,140,0.3)', color: '#E91E8C', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
                     >
                       Apply On Stop
                     </button>
@@ -1299,7 +1299,7 @@ function FinancialTab({ c }) {
 
             {/* On-stop reason form */}
             {showStopForm && (
-              <div style={{ marginTop: 12, background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, padding: 14 }}>
+              <div style={{ marginTop: 12, background: 'rgba(233,30,140,0.05)', border: '1px solid rgba(233,30,140,0.2)', borderRadius: 8, padding: 14 }}>
                 <div style={{ fontSize: 12, color: '#64748B', marginBottom: 8 }}>Reason for placing on stop:</div>
                 <textarea
                   value={stopReason}
@@ -1313,7 +1313,7 @@ function FinancialTab({ c }) {
                   <button
                     onClick={() => onStopMutation.mutate({ reason: stopReason })}
                     disabled={!stopReason.trim() || onStopMutation.isPending}
-                    style={{ background: '#EF4444', border: 'none', color: '#FFF', borderRadius: 6, padding: '5px 14px', fontSize: 12, fontWeight: 700, cursor: stopReason.trim() ? 'pointer' : 'not-allowed', opacity: stopReason.trim() ? 1 : 0.5 }}
+                    style={{ background: '#E91E8C', border: 'none', color: '#FFF', borderRadius: 6, padding: '5px 14px', fontSize: 12, fontWeight: 700, cursor: stopReason.trim() ? 'pointer' : 'not-allowed', opacity: stopReason.trim() ? 1 : 0.5 }}
                   >
                     {onStopMutation.isPending ? 'Applying…' : 'Confirm On Stop'}
                   </button>
@@ -1330,7 +1330,7 @@ function FinancialTab({ c }) {
           <h3 style={{ fontSize: 13, fontWeight: 700, color: '#7B2FBE', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 14 }}>
             Outstanding Invoices
             {credit.invoices?.length > 0 && (
-              <span style={{ marginLeft: 8, fontSize: 11, background: 'rgba(239,68,68,0.15)', color: '#EF4444', padding: '2px 7px', borderRadius: 4, fontWeight: 700, textTransform: 'none', letterSpacing: 0 }}>
+              <span style={{ marginLeft: 8, fontSize: 11, background: 'rgba(233,30,140,0.15)', color: '#E91E8C', padding: '2px 7px', borderRadius: 4, fontWeight: 700, textTransform: 'none', letterSpacing: 0 }}>
                 {credit.invoices.length}
               </span>
             )}
@@ -1362,15 +1362,15 @@ function FinancialTab({ c }) {
                   <tr key={inv.id}>
                     <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{inv.number || '—'}</td>
                     <td style={{ fontSize: 12 }}>{inv.date || '—'}</td>
-                    <td style={{ fontSize: 12, color: inv.is_overdue ? '#EF4444' : '#64748B' }}>
+                    <td style={{ fontSize: 12, color: inv.is_overdue ? '#E91E8C' : '#64748B' }}>
                       {inv.due_date || '—'}
                     </td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: inv.is_overdue ? '#EF4444' : '#1E293B' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: inv.is_overdue ? '#E91E8C' : '#1E293B' }}>
                       {gbp(inv.amount_due)}
                     </td>
                     <td>
                       {inv.is_overdue
-                        ? <span style={{ fontSize: 11, background: 'rgba(239,68,68,0.15)', color: '#EF4444', padding: '2px 7px', borderRadius: 4, fontWeight: 700 }}>Overdue</span>
+                        ? <span style={{ fontSize: 11, background: 'rgba(233,30,140,0.15)', color: '#E91E8C', padding: '2px 7px', borderRadius: 4, fontWeight: 700 }}>Overdue</span>
                         : <span style={{ fontSize: 11, background: 'rgba(245,158,11,0.12)', color: '#F59E0B', padding: '2px 7px', borderRadius: 4, fontWeight: 700 }}>Outstanding</span>
                       }
                     </td>
@@ -1660,7 +1660,7 @@ export default function CustomerRecord() {
         </div>
       </div>
 
-      <div style={{ padding: '22px 40px 48px' }}>
+      <div className="moov-ds" style={{ background: 'transparent', padding: '22px 40px 48px' }}>
         {activeTab === 'overview' && <OverviewTab c={c} onSaved={handleCustomerSaved} onDeleteRequest={() => { setDeleteModal(true); setDeleteConfirm(''); }} />}
         {activeTab === 'onboarding' && <CustomerOnboardingTab customerId={id} customer={c} />}
         {activeTab === 'contacts' && <ContactsTab customerId={id} contacts={contacts} onRefresh={refetch} />}
