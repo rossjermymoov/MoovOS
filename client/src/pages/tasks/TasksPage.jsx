@@ -559,7 +559,7 @@ function CreateModal({ defaultSpace, currentUserId, onClose, onCreated }) {
         <div className="mt-modal-head"><h3>New task</h3><div className="mt-iconbtn" onClick={onClose}><X size={16} /></div></div>
         <div className="mt-modal-body">
           <div className="mt-fld"><label className="mt-fld-label">Task title<span className="req">*</span></label><input className="mt-input" placeholder="What needs doing?" value={title} onChange={e => setTitle(e.target.value)} autoFocus /></div>
-          <div className="mt-fld"><label className="mt-fld-label">Description</label><textarea className="mt-input" style={{ minHeight: 56, resize: 'vertical' }} placeholder="Add any detail…" value={description} onChange={e => setDescription(e.target.value)} /></div>
+          <div className="mt-fld"><label className="mt-fld-label">Description</label><textarea className="mt-input" style={{ minHeight: 120, resize: 'vertical' }} placeholder="Add any detail…" value={description} onChange={e => setDescription(e.target.value)} /></div>
           <div className="mt-row2">
             <div className="mt-fld"><label className="mt-fld-label">Space</label>{seg(space, setSpace, SPACES)}</div>
             <div className="mt-fld"><label className="mt-fld-label">Priority</label>{seg(priority, setPriority, PRIORITY)}</div>
