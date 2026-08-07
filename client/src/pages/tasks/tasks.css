@@ -66,8 +66,12 @@
 .mt-col-head .mt-count{background:#fff;border:1px solid var(--mt-strong);color:var(--mt-text2);}
 .mt-col-body{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:2px 8px 12px;}
 
-.mt-card{background:var(--mt-card);border:1px solid var(--mt-strong);border-radius:12px;padding:13px;cursor:pointer;transition:box-shadow .14s,border-color .14s,transform .14s;box-shadow:var(--mt-shadow);}
+.mt-card{background:var(--mt-card);border:1px solid var(--mt-strong);border-radius:12px;padding:13px;cursor:grab;transition:box-shadow .14s,border-color .14s,transform .14s;box-shadow:var(--mt-shadow);}
 .mt-card:hover{box-shadow:var(--mt-shadow-md);border-color:#AEBAC8;transform:translateY(-1px);}
+.mt-card:active{cursor:grabbing;}
+.mt-card.dragging{opacity:.4;box-shadow:none;cursor:grabbing;}
+.mt-col.over{border-color:var(--mt-green);background:#E9F8EF;box-shadow:0 0 0 3px rgba(0,200,83,.14);}
+.mt-col.over .mt-col-body .mt-empty{border-color:var(--mt-green);color:#047857;background:rgba(0,200,83,.06);}
 .mt-card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
 .mt-pill{font-size:10.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:3px 8px;border-radius:6px;display:inline-flex;align-items:center;gap:4px;}
 .mt-card-id{font-size:11px;font-weight:600;color:var(--mt-faint);}
