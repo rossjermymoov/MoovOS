@@ -761,139 +761,81 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
 const BLANK_CONTACT = { full_name: '', job_title: '', phone_number: '', email_address: '', is_main_contact: false, is_finance_contact: false };
 
 function ContactsTab({ customerId, contacts = [], onRefresh }) {
-  const [editingId, setEditingId]   = useState(null);
-  const [editForm,  setEditForm]    = useState({});
-  const [adding,    setAdding]      = useState(false);
-  const [addForm,   setAddForm]     = useState(BLANK_CONTACT);
-  const [delConfirm, setDelConfirm] = useState(null); // contact id pending delete
-
+  const [adding, setAdding] = useState(false);
+  const [addForm, setAddForm] = useState(BLANK_CONTACT);
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const [delConfirm, setDelConfirm] = useState(null);
   const qc = useQueryClient();
   const invalidate = () => { qc.invalidateQueries(['customer', customerId]); onRefresh?.(); };
 
-  const patchContact = useMutation({
-    mutationFn: ({ id, data }) => fetch(`/api/customers/${customerId}/contacts/${id}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
-    }).then(r => r.json()),
-    onSuccess: () => { setEditingId(null); invalidate(); },
-  });
-
-  const deleteContact = useMutation({
-    mutationFn: (id) => fetch(`/api/customers/${customerId}/contacts/${id}`, { method: 'DELETE' }).then(r => r.json()),
-    onSuccess: () => { setDelConfirm(null); invalidate(); },
-  });
-
-  const addContact = useMutation({
-    mutationFn: (data) => fetch(`/api/customers/${customerId}/contacts`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
-    }).then(r => r.json()),
-    onSuccess: () => { setAdding(false); setAddForm(BLANK_CONTACT); invalidate(); },
-  });
+  const addContact = useMutation({ mutationFn: (data) => fetch(`/api/customers/${customerId}/contacts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(r => r.json()), onSuccess: () => { setAdding(false); setAddForm(BLANK_CONTACT); invalidate(); } });
+  const patchContact = useMutation({ mutationFn: ({ id, data }) => fetch(`/api/customers/${customerId}/contacts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(r => r.json()), onSuccess: () => { setEditingId(null); invalidate(); } });
+  const deleteContact = useMutation({ mutationFn: (id) => fetch(`/api/customers/${customerId}/contacts/${id}`, { method: 'DELETE' }).then(r => r.json()), onSuccess: () => { setDelConfirm(null); invalidate(); } });
 
   const startEdit = (ct) => { setEditingId(ct.id); setEditForm({ full_name: ct.full_name, job_title: ct.job_title || '', phone_number: ct.phone_number || '', email_address: ct.email_address, is_main_contact: ct.is_main_contact, is_finance_contact: ct.is_finance_contact }); };
-
-  const inputStyle = { background: '#1A1A2E', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 6, color: '#0F172A', fontSize: 13, padding: '5px 10px', width: '100%' };
-  const flagBtn = (active, label) => ({
-    fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
-    background: active ? 'rgba(0,200,83,0.2)' : 'rgba(0,0,0,0.06)',
-    border: active ? '1px solid rgba(0,200,83,0.4)' : '1px solid rgba(0,0,0,0.08)',
-    color: active ? '#00C853' : '#64748B',
-  });
+  const gets = (ct) => ct.is_main_contact ? 'All updates' : ct.is_finance_contact ? 'Invoices' : 'Nothing automated';
+  const primary = (ct) => ct.is_main_contact ? ['settled', 'Primary'] : ct.is_finance_contact ? ['progress', 'Finance'] : ['waiting', '—'];
+  const fld = (v, on, ph) => <input className="ds-field" value={v} placeholder={ph} onChange={e => on(e.target.value)} style={{ borderBottom: '1px solid var(--color-text)' }} />;
 
   return (
-    <div className="moov-card" style={{ overflow: 'hidden' }}>
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(0,0,0,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3 style={{ fontSize: 15, fontWeight: 600, color: '#7B2FBE' }}>Contacts</h3>
-        {!adding && <button className="btn-ghost" style={{ fontSize: 13 }} onClick={() => setAdding(true)}>+ Add Contact</button>}
+    <div style={{ maxWidth: 1040 }}>
+      <div className="ds-pagehead" style={{ paddingBottom: 12 }}>
+        <div className="ds-blurb">Who to ring, and who signs. The primary contact gets every automated update.</div>
+        <div className="actions">{!adding && <button className="ds-btn ds-btn-primary" onClick={() => setAdding(true)}><Plus size={15} />Add contact</button>}</div>
       </div>
 
-      {/* Add form */}
       {adding && (
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(0,0,0,0.06)', background: 'rgba(123,47,190,0.06)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
-            {[['full_name','Full Name *'],['job_title','Job Title'],['phone_number','Phone'],['email_address','Email *']].map(([k,lbl]) => (
-              <div key={k}><label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 3 }}>{lbl}</label>
-                <input style={inputStyle} value={addForm[k]} onChange={e => setAddForm(f => ({ ...f, [k]: e.target.value }))} placeholder={lbl.replace(' *','')} />
-              </div>
-            ))}
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button style={flagBtn(addForm.is_main_contact, 'Main')} onClick={() => setAddForm(f => ({ ...f, is_main_contact: !f.is_main_contact }))}>Main Contact</button>
-            <button style={flagBtn(addForm.is_finance_contact, 'Finance')} onClick={() => setAddForm(f => ({ ...f, is_finance_contact: !f.is_finance_contact }))}>Finance Contact</button>
+        <div style={{ borderTop: '2px solid var(--color-divider)', padding: '16px 0', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 14 }}>
+          {[['full_name', 'Name'], ['job_title', 'Role'], ['email_address', 'Email'], ['phone_number', 'Phone']].map(([k, l]) => (
+            <div key={k}><div className="ds-label" style={{ marginBottom: 6 }}>{l}</div>{fld(addForm[k], v => setAddForm(f => ({ ...f, [k]: v })), l)}</div>
+          ))}
+          <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+            <button className={'ds-chip' + (addForm.is_main_contact ? ' ds-chip--sel' : '')} onClick={() => setAddForm(f => ({ ...f, is_main_contact: !f.is_main_contact }))}>Primary contact</button>
+            <button className={'ds-chip' + (addForm.is_finance_contact ? ' ds-chip--sel' : '')} onClick={() => setAddForm(f => ({ ...f, is_finance_contact: !f.is_finance_contact }))}>Finance contact</button>
             <div style={{ flex: 1 }} />
-            <button onClick={() => addContact.mutate(addForm)} disabled={addContact.isPending || !addForm.full_name || !addForm.email_address} className="btn-primary" style={{ fontSize: 12, height: 30, padding: '0 14px' }}><Check size={12} style={{ marginRight: 4 }} />Save</button>
-            <button onClick={() => { setAdding(false); setAddForm(BLANK_CONTACT); }} className="btn-ghost" style={{ fontSize: 12, height: 30, padding: '0 12px' }}>Cancel</button>
+            <button className="ds-btn ds-btn-secondary" onClick={() => { setAdding(false); setAddForm(BLANK_CONTACT); }}>Cancel</button>
+            <button className="ds-btn ds-btn-primary" disabled={!addForm.full_name || !addForm.email_address || addContact.isPending} onClick={() => addContact.mutate(addForm)}>Save contact</button>
           </div>
         </div>
       )}
 
-      {contacts.length === 0 && !adding ? (
-        <div style={{ padding: 32, textAlign: 'center', color: '#64748B', fontSize: 13 }}>No contacts added yet</div>
-      ) : (
-        <table className="moov-table">
-          <thead>
-            <tr><th>Name</th><th>Role</th><th>Phone</th><th>Email</th><th>Flags</th><th style={{ width: 80 }}></th></tr>
-          </thead>
-          <tbody>
-            {contacts.map(ct => {
-              const isEditing = editingId === ct.id;
-              const isPendingDelete = delConfirm === ct.id;
-              return (
-                <tr key={ct.id}>
-                  {isEditing ? (
-                    <>
-                      <td><input style={inputStyle} value={editForm.full_name}    onChange={e => setEditForm(f=>({...f, full_name: e.target.value}))} /></td>
-                      <td><input style={inputStyle} value={editForm.job_title}    onChange={e => setEditForm(f=>({...f, job_title: e.target.value}))} placeholder="Job title" /></td>
-                      <td><input style={inputStyle} value={editForm.phone_number} onChange={e => setEditForm(f=>({...f, phone_number: e.target.value}))} placeholder="Phone" /></td>
-                      <td><input style={inputStyle} value={editForm.email_address} onChange={e => setEditForm(f=>({...f, email_address: e.target.value}))} /></td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 5 }}>
-                          <button style={flagBtn(editForm.is_main_contact)} onClick={() => setEditForm(f=>({...f, is_main_contact: !f.is_main_contact}))}>Main</button>
-                          <button style={flagBtn(editForm.is_finance_contact)} onClick={() => setEditForm(f=>({...f, is_finance_contact: !f.is_finance_contact}))}>Finance</button>
-                        </div>
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          <button onClick={() => patchContact.mutate({ id: ct.id, data: editForm })} disabled={patchContact.isPending} title="Save" style={{ background: 'rgba(0,200,83,0.15)', border: '1px solid rgba(0,200,83,0.3)', borderRadius: 5, padding: '4px 6px', cursor: 'pointer', color: '#00C853' }}><Check size={13} /></button>
-                          <button onClick={() => setEditingId(null)} title="Cancel" style={{ background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 5, padding: '4px 6px', cursor: 'pointer', color: '#64748B' }}><X size={13} /></button>
-                        </div>
-                      </td>
-                    </>
-                  ) : isPendingDelete ? (
-                    <>
-                      <td colSpan={5} style={{ color: '#E91E8C', fontSize: 13 }}>Delete <strong>{ct.full_name}</strong>? This cannot be undone.</td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          <button onClick={() => deleteContact.mutate(ct.id)} disabled={deleteContact.isPending} style={{ background: 'rgba(233,30,140,0.2)', border: '1px solid rgba(233,30,140,0.4)', borderRadius: 5, padding: '4px 8px', cursor: 'pointer', color: '#E91E8C', fontSize: 12, fontWeight: 700 }}>Delete</button>
-                          <button onClick={() => setDelConfirm(null)} style={{ background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 5, padding: '4px 6px', cursor: 'pointer', color: '#64748B' }}><X size={13} /></button>
-                        </div>
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td style={{ fontWeight: 600 }}>{ct.full_name}</td>
-                      <td style={{ color: '#64748B' }}>{ct.job_title || '—'}</td>
-                      <td style={{ color: '#64748B' }}>{ct.phone_number || '—'}</td>
-                      <td style={{ color: '#00BCD4' }}>{ct.email_address}</td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          {ct.is_main_contact    && <span style={{ background: 'rgba(0,200,83,0.15)',  color: '#00C853', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4 }}>Main</span>}
-                          {ct.is_finance_contact && <span style={{ background: 'rgba(123,47,190,0.2)', color: '#7B2FBE', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4 }}>Finance</span>}
-                        </div>
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          <button onClick={() => startEdit(ct)} title="Edit" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: '4px 5px' }}><Pencil size={13} /></button>
-                          <button onClick={() => setDelConfirm(ct.id)} title="Delete" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#E91E8C', padding: '4px 5px' }}><Trash2 size={13} /></button>
-                        </div>
-                      </td>
-                    </>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
+      <table className="ds-table" style={{ marginTop: adding ? 8 : 14 }}>
+        <thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Phone</th><th>Gets</th><th>Primary</th><th style={{ width: 66 }}></th></tr></thead>
+        <tbody>
+          {contacts.length === 0 && !adding && <tr><td colSpan={7} className="ds-muted" style={{ padding: 24 }}>No contacts yet. Add the person who signs and the person you ring.</td></tr>}
+          {contacts.map(ct => {
+            if (editingId === ct.id) return (
+              <tr key={ct.id}>
+                <td>{fld(editForm.full_name, v => setEditForm(f => ({ ...f, full_name: v })), 'Name')}</td>
+                <td>{fld(editForm.job_title, v => setEditForm(f => ({ ...f, job_title: v })), 'Role')}</td>
+                <td>{fld(editForm.email_address, v => setEditForm(f => ({ ...f, email_address: v })), 'Email')}</td>
+                <td>{fld(editForm.phone_number, v => setEditForm(f => ({ ...f, phone_number: v })), 'Phone')}</td>
+                <td colSpan={2}><div style={{ display: 'flex', gap: 6 }}><button className={'ds-chip' + (editForm.is_main_contact ? ' ds-chip--sel' : '')} onClick={() => setEditForm(f => ({ ...f, is_main_contact: !f.is_main_contact }))}>Primary</button><button className={'ds-chip' + (editForm.is_finance_contact ? ' ds-chip--sel' : '')} onClick={() => setEditForm(f => ({ ...f, is_finance_contact: !f.is_finance_contact }))}>Finance</button></div></td>
+                <td><div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}><button className="ds-btn ds-btn-primary" style={{ padding: '5px 8px' }} onClick={() => patchContact.mutate({ id: ct.id, data: editForm })}><Check size={13} /></button><button className="ds-btn ds-btn-secondary" style={{ padding: '5px 8px' }} onClick={() => setEditingId(null)}><X size={13} /></button></div></td>
+              </tr>
+            );
+            if (delConfirm === ct.id) return (
+              <tr key={ct.id}>
+                <td colSpan={5} style={{ fontSize: 13, color: 'var(--moov-magenta-deep)', fontWeight: 600 }}>Delete {ct.full_name}? This can’t be undone.</td>
+                <td colSpan={2}><div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}><button className="ds-btn ds-btn-danger" onClick={() => deleteContact.mutate(ct.id)}>Delete</button><button className="ds-btn ds-btn-secondary" onClick={() => setDelConfirm(null)}>Keep</button></div></td>
+              </tr>
+            );
+            const pr = primary(ct);
+            return (
+              <tr key={ct.id}>
+                <td style={{ fontWeight: 600 }}>{ct.full_name}</td>
+                <td className="ds-muted">{ct.job_title || '—'}</td>
+                <td>{ct.email_address}</td>
+                <td className="ds-num">{ct.phone_number || '—'}</td>
+                <td className="ds-muted">{gets(ct)}</td>
+                <td><span className={'ds-status ds-status--' + pr[0]}><span className={'ds-mark ds-mark--' + pr[0]} />{pr[1]}</span></td>
+                <td><div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}><button title="Edit" onClick={() => startEdit(ct)} style={{ background: 'none', border: 0, cursor: 'pointer', color: 'var(--ds-muted)' }}><Pencil size={14} /></button><button title="Delete" onClick={() => setDelConfirm(ct.id)} style={{ background: 'none', border: 0, cursor: 'pointer', color: 'var(--moov-magenta-deep)' }}><Trash2 size={14} /></button></div></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -1406,9 +1348,9 @@ const DIR_CFG = {
 };
 
 function CustomerCommsTab({ customerId }) {
-  const [items, setItems]       = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState(null);
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [expanded, setExpanded] = useState(null);
 
   useEffect(() => {
@@ -1420,108 +1362,39 @@ function CustomerCommsTab({ customerId }) {
       .finally(() => setLoading(false));
   }, [customerId]);
 
-  if (loading) return (
-    <div className="moov-card" style={{ padding: 32, textAlign: 'center', color: '#475569' }}>
-      <MessageSquare size={24} style={{ margin: '0 auto 10px', display: 'block', opacity: 0.4 }} />
-      Loading correspondence…
-    </div>
-  );
-
-  if (error) return (
-    <div className="moov-card" style={{ padding: 24, color: '#E53935' }}>
-      Could not load correspondence: {error}
-    </div>
-  );
-
-  if (!items.length) return (
-    <div className="moov-card" style={{ padding: 32, textAlign: 'center', color: '#475569' }}>
-      <MessageSquare size={32} style={{ margin: '0 auto 12px', display: 'block', opacity: 0.3 }} />
-      No correspondence yet.
-    </div>
-  );
+  const isNote = (it) => /note|internal/i.test(it.direction || '') || it.source === 'internal_note';
+  const tagOf = (it) => {
+    if (isNote(it)) return ['Internal note', 'var(--color-accent)'];
+    const inbound = /in/i.test(it.direction || '') && !/internal/i.test(it.direction || '');
+    if (inbound) return [(DIR_CFG[it.direction]?.label) || 'Inbound', 'var(--moov-green-deep)'];
+    return [(DIR_CFG[it.direction]?.label) || 'Outbound', 'var(--ds-muted)'];
+  };
+  const who = (it) => it.from_address || it.to_address || '—';
+  const when = (it) => it.created_at ? new Date(it.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {items.map(item => {
-        const dir    = DIR_CFG[item.direction] || { label: item.direction || '—', color: '#9E9E9E', bg: 'rgba(158,158,158,0.08)' };
-        const isOpen = expanded === item.id;
-        const preview = (item.body_text || '').substring(0, 160);
-        const date    = item.created_at
-          ? new Date(item.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-          : '—';
-
+    <div style={{ maxWidth: 820 }}>
+      <div className="ds-blurb" style={{ marginBottom: 6 }}>Everything said to and about this account, in one thread — customer, courier and internal.</div>
+      {loading && <div className="ds-muted" style={{ padding: '18px 0' }}>Reading the thread…</div>}
+      {error && <div style={{ padding: '18px 0', color: 'var(--moov-magenta-deep)' }}>Could not load correspondence: {error}</div>}
+      {!loading && !error && !items.length && <div className="ds-muted" style={{ padding: '18px 0' }}>Nothing said yet. Emails, courier replies and internal notes will appear here.</div>}
+      {items.map(it => {
+        const t = tagOf(it); const note = isNote(it); const open = expanded === it.id;
         return (
-          <div key={item.id}
-            className="moov-card"
-            style={{ padding: 0, overflow: 'hidden', cursor: 'pointer',
-              border: `1px solid rgba(0,0,0,0.06)`,
-              borderLeft: `3px solid ${dir.color}` }}
-            onClick={() => setExpanded(isOpen ? null : item.id)}
-          >
-            {/* Header row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
-              background: isOpen ? 'rgba(0,0,0,0.03)' : 'transparent' }}>
-
-              {/* Direction badge */}
-              <span style={{ fontSize: 10, fontWeight: 700, color: dir.color,
-                background: dir.bg, padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                {dir.label}
-              </span>
-
-              {/* Source / query context */}
-              {item.source === 'query_email' && item.consignment_number && (
-                <span style={{ fontSize: 10, color: '#64748B', background: 'rgba(0,0,0,0.04)',
-                  padding: '2px 7px', borderRadius: 3, fontFamily: 'monospace', flexShrink: 0 }}>
-                  {item.consignment_number}
-                </span>
-              )}
-              {item.source === 'query_email' && item.query_type && (
-                <span style={{ fontSize: 10, color: '#475569', flexShrink: 0, textTransform: 'capitalize' }}>
-                  {item.query_type.replace(/_/g,' ')}
-                </span>
-              )}
-
-              {/* Subject */}
-              <span style={{ flex: 1, fontSize: 13, color: '#334155', fontWeight: 600,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {item.subject || '(no subject)'}
-              </span>
-
-              {/* Date */}
-              <span style={{ fontSize: 11, color: '#64748B', flexShrink: 0 }}>{date}</span>
+          <div key={it.id} onClick={() => setExpanded(open ? null : it.id)} style={{ padding: note ? '17px 0 19px 16px' : '17px 0 19px', borderBottom: 'var(--ds-hairline)', borderLeft: note ? '3px solid var(--color-accent)' : 'none', cursor: 'pointer' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: t[1], flexShrink: 0 }}>{t[0]}</span>
+              <span style={{ fontSize: 12.5, fontWeight: 600, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.subject || who(it)}</span>
+              <span className="ds-muted" style={{ fontSize: 10.5, whiteSpace: 'nowrap', flexShrink: 0 }}>{when(it)}</span>
             </div>
-
-            {/* Expanded body */}
-            {isOpen && (
-              <div style={{ padding: '0 14px 14px', borderTop: '1px solid rgba(0,0,0,0.06)' }}>
-                {item.from_address && (
-                  <div style={{ fontSize: 11, color: '#64748B', padding: '8px 0 6px' }}>
-                    From: <span style={{ color: '#64748B' }}>{item.from_address}</span>
-                    {item.to_address && <> · To: <span style={{ color: '#64748B' }}>{item.to_address}</span></>}
-                  </div>
-                )}
-                <pre style={{ margin: 0, fontSize: 12, color: '#334155', lineHeight: 1.6,
-                  whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit' }}>
-                  {item.body_text || '(no body)'}
-                </pre>
-                {item.source === 'query_email' && item.query_id && (
-                  <div style={{ marginTop: 10 }}>
-                    <a href={`/queries?id=${item.query_id}`}
-                      style={{ fontSize: 11, color: '#2979FF', textDecoration: 'none' }}
-                      onClick={e => e.stopPropagation()}>
-                      Open in Queries inbox →
-                    </a>
-                  </div>
-                )}
+            {open ? (
+              <div style={{ marginTop: 8 }}>
+                {(it.from_address || it.to_address) && <div className="ds-muted" style={{ fontSize: 11, marginBottom: 6 }}>{it.from_address ? `From ${it.from_address}` : ''}{it.to_address ? ` · To ${it.to_address}` : ''}</div>}
+                <div style={{ fontSize: 13.5, lineHeight: 1.6, color: 'var(--color-text)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{it.body_text || '(no body)'}</div>
+                {it.source === 'query_email' && it.query_id && <a href={`/queries?id=${it.query_id}`} onClick={e => e.stopPropagation()} style={{ display: 'inline-block', marginTop: 10, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--color-accent)', textDecoration: 'none' }}>Open in queries →</a>}
               </div>
-            )}
-
-            {/* Collapsed preview */}
-            {!isOpen && item.body_text && (
-              <div style={{ padding: '0 14px 10px', fontSize: 11, color: '#64748B',
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {preview}
-              </div>
+            ) : (
+              it.body_text && <div className="ds-muted" style={{ fontSize: 13, marginTop: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{(it.body_text || '').slice(0, 160)}</div>
             )}
           </div>
         );
