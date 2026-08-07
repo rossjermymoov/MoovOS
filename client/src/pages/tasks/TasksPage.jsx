@@ -292,7 +292,7 @@ function SubtaskAdder({ onAdd, adding }) {
 }
 
 // ── task detail (full-screen) ───────────────────────────────────────────────────
-function TaskDetail({ taskId, me, staffList, onOpenTask, onClose, navigate }) {
+function TaskDetail({ taskId, me, staffList, onOpenTask, focusComments, onClose, navigate }) {
   const qc = useQueryClient();
   const { data: task, isLoading } = useQuery({ queryKey: ['task', taskId], queryFn: () => tasksApi.get(taskId), enabled: !!taskId });
   const [assignOpen, setAssignOpen] = useState(false);
@@ -310,6 +310,14 @@ function TaskDetail({ taskId, me, staffList, onOpenTask, onClose, navigate }) {
   const mAddSub = useMutation({ mutationFn: (body) => tasksApi.create(body), onSuccess: refresh });
   const mSubUpdate = useMutation({ mutationFn: ({ id, body }) => tasksApi.update(id, body), onSuccess: refresh });
   const doneKey = [...COMPLETE][0] || 'done';
+
+  // When opened from a comment/mention notification, jump to the comment thread.
+  const commentsRef = useRef(null);
+  useEffect(() => {
+    if (focusComments && task && commentsRef.current) {
+      requestAnimationFrame(() => commentsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
+  }, [focusComments, task?.id]);
 
   if (!task) {
     return (<><div className="mt-scrim open" onClick={onClose} /><div className="mt-drawer open"><div className="mt-loading" style={{ margin: 'auto' }}>{isLoading ? 'Loading task…' : 'Task not found'}</div></div></>);
@@ -419,7 +427,7 @@ function TaskDetail({ taskId, me, staffList, onOpenTask, onClose, navigate }) {
               </div>
             )}
 
-            <div className="mt-sec"><MessageSquare size={14} />Comments · {task.comments?.length || 0}</div>
+            <div className="mt-sec" ref={commentsRef}><MessageSquare size={14} />Comments · {task.comments?.length || 0}</div>
             {(task.comments || []).length === 0 && <div style={{ fontSize: 13, color: '#94A3B8', marginBottom: 12 }}>No comments yet. Start the conversation.</div>}
             {(task.comments || []).map(c => (
               <div className="mt-comment" key={c.id}>
@@ -834,7 +842,7 @@ export default function TasksPage() {
   useEffect(() => { const t = searchParams.get('task'); if (t) setOpenId(t); }, [searchParams]);
   const closeDetail = () => {
     setOpenId(null);
-    if (searchParams.get('task')) { searchParams.delete('task'); setSearchParams(searchParams, { replace: true }); }
+    if (searchParams.get('task') || searchParams.get('focus')) { searchParams.delete('task'); searchParams.delete('focus'); setSearchParams(searchParams, { replace: true }); }
   };
 
   if (!allowed) return <Navigate to="/" replace />;
@@ -926,7 +934,7 @@ export default function TasksPage() {
             </div>
           )}
 
-      {openId && <TaskDetail taskId={openId} me={me} staffList={staffList} onOpenTask={setOpenId} navigate={navigate} onClose={closeDetail} />}
+      {openId && <TaskDetail taskId={openId} me={me} staffList={staffList} onOpenTask={setOpenId} focusComments={searchParams.get('focus') === 'comments'} navigate={navigate} onClose={closeDetail} />}
       {creating && <CreateModal defaultSpace={space} currentUserId={me} onClose={() => setCreating(false)} onCreated={(t) => { setCreating(false); if (t?.id) setOpenId(t.id); }} />}
       {showSettings && <SettingsModal initSpaces={curSpaces} initStatuses={curStatuses} spaceCounts={spaceCounts} statusCounts={statusCounts} saving={mSaveConfig.isLoading} onSave={(d) => mSaveConfig.mutate(d)} onClose={() => setShowSettings(false)} />}
     </div>
