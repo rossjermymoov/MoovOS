@@ -1271,7 +1271,7 @@ function CarrierAccountRow({ account, customerId }) {
       <button
         onClick={removeAccount}
         title="Remove this account"
-        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', padding: '2px 4px', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#E91E8C', padding: '2px 4px', display: 'flex', alignItems: 'center', flexShrink: 0 }}
       >
         <Trash2 size={11} />
       </button>

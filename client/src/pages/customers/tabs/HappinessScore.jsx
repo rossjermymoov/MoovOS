@@ -5,7 +5,7 @@ import { Truck, AlertOctagon, MessageCircle } from 'lucide-react';
 const T = {
   green:   { bg: 'rgba(0,200,83,0.10)',   text: '#059669', dot: '#00C853', bar: '#00C853'  },
   amber:   { bg: 'rgba(245,158,11,0.10)', text: '#D97706', dot: '#F59E0B', bar: '#F59E0B'  },
-  red:     { bg: 'rgba(239,68,68,0.10)',  text: '#DC2626', dot: '#EF4444', bar: '#EF4444'  },
+  red:     { bg: 'rgba(233,30,140,0.10)',  text: '#DC2626', dot: '#E91E8C', bar: '#E91E8C'  },
   pending: { bg: 'rgba(100,116,139,0.08)',text: '#64748B', dot: '#94A3B8', bar: '#CBD5E1'  },
 };
 const G = { text: '#64748B', muted: '#94A3B8', border: 'rgba(0,0,0,0.08)', card: '#FFFFFF' };
@@ -97,7 +97,7 @@ export default function HappinessScore({ customer = {} }) {
         {/* Score bar */}
         <div style={{ position: 'relative', marginBottom: 18 }}>
           <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden' }}>
-            <div style={{ flex: 40, background: 'rgba(239,68,68,0.18)' }} />
+            <div style={{ flex: 40, background: 'rgba(233,30,140,0.18)' }} />
             <div style={{ flex: 30, background: 'rgba(245,158,11,0.18)' }} />
             <div style={{ flex: 30, background: 'rgba(0,200,83,0.18)' }} />
           </div>
