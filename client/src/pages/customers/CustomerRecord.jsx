@@ -1582,321 +1582,141 @@ export default function CustomerRecord() {
   const addressDisplay = addressParts.length ? addressParts.join(', ') : c.postcode;
 
   return (
-    <div>
-      <button onClick={() => navigate('/customers')}
-        style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, marginBottom: 16 }}>
-        <ArrowLeft size={14} /> All Customers
-      </button>
+    <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', background: 'var(--color-bg)' }}>
+      <div className="moov-ds" style={{ background: 'transparent', padding: '28px 40px 8px' }}>
+        <button onClick={() => navigate('/customers')} className="ds-btn" style={{ padding: '2px 0', color: 'var(--ds-muted)' }}>
+          <ArrowLeft size={14} /> All customers
+        </button>
 
-      {c.is_on_stop && (
-        <div style={{ background: 'rgba(233,30,140,0.12)', border: '1.5px solid #E91E8C', borderRadius: 12, padding: '14px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <AlertTriangle size={20} style={{ color: '#E91E8C', flexShrink: 0 }} />
-          <div style={{ flex: 1 }}>
-            <span style={{ color: '#E91E8C', fontWeight: 700, fontSize: 15 }}>Account On Stop</span>
-            <span style={{ color: '#64748B', fontSize: 13, marginLeft: 12 }}>Shipment access blocked · Reason: {c.on_stop_reason}</span>
+        {c.is_on_stop && (
+          <div style={{ borderLeft: '3px solid var(--moov-magenta)', padding: '10px 16px', margin: '14px 0', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span className="ds-status ds-status--attention"><span className="ds-mark ds-mark--attention" />Account on stop</span>
+            <span className="ds-muted" style={{ fontSize: 13, flex: 1 }}>Shipment access blocked · {c.on_stop_reason}</span>
+            <button className="ds-btn ds-btn-secondary" onClick={() => setOnStopModal('remove')}>Remove on stop</button>
           </div>
-          <button className="btn-ghost" style={{ fontSize: 13 }} onClick={() => setOnStopModal('remove')}>Remove On Stop</button>
-        </div>
-      )}
-
-      {parseFloat(c.bond_amount_held) > 0 && (
-        <div style={{ background: 'rgba(255,193,7,0.08)', border: '1.5px solid #FFC107', borderRadius: 12, padding: '14px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <ShieldCheck size={20} style={{ color: '#D97706', flexShrink: 0 }} />
-          <div style={{ flex: 1 }}>
-            <span style={{ color: '#D97706', fontWeight: 700, fontSize: 15 }}>Bond Held</span>
-            <span style={{ color: '#64748B', fontSize: 13, marginLeft: 12 }}>
-              Amount: {gbp(c.bond_amount_held)}
-            </span>
+        )}
+        {parseFloat(c.bond_amount_held) > 0 && (
+          <div className="ds-muted" style={{ fontSize: 13, margin: '12px 0 0' }}>Bond held · <span className="ds-num" style={{ color: 'var(--color-text)', fontWeight: 600 }}>{gbp(c.bond_amount_held)}</span></div>
+        )}
+        {active_volume_alert && (
+          <div style={{ margin: '12px 0 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span className="ds-status ds-status--attention"><span className="ds-mark ds-mark--attention" />Volume {active_volume_alert.drop_percentage != null ? active_volume_alert.drop_percentage.toFixed(0) : '?'}% below the 13-week baseline</span>
           </div>
-        </div>
-      )}
+        )}
 
-      {active_volume_alert && (
-        <div style={{ background: 'rgba(255,193,7,0.1)', border: '1px solid #FFC107', borderRadius: 12, padding: '12px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <AlertTriangle size={16} style={{ color: '#D97706' }} />
-          <span style={{ color: '#D97706', fontSize: 13 }}>
-            Volume alert: {active_volume_alert.drop_percentage?.toFixed(0)}% below 13-week baseline
-          </span>
-        </div>
-      )}
-
-      {/* Header card */}
-      <div className="moov-card" style={{ padding: 24, marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20 }}>
-          <div style={{ width: 56, height: 56, borderRadius: '50%', flexShrink: 0, background: 'linear-gradient(135deg, #7B2FBE, #00C853)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 700, color: '#fff' }}>
-            {c.business_name.charAt(0)}
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <h2 style={{ fontSize: 22, fontWeight: 700 }}>{c.business_name}</h2>
-              <span style={{ color: '#00BCD4', fontSize: 13, fontWeight: 600 }}>{c.account_number}</span>
-              <TierBadge tier={c.tier} />
-            </div>
-            <div style={{ display: 'flex', gap: 16, marginTop: 8, flexWrap: 'wrap' }}>
-              <span style={{ color: '#64748B', fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>
-                <Mail size={12} /> {c.primary_email}
-              </span>
-              <span style={{ color: '#64748B', fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>
-                <Phone size={12} /> {c.phone_number}
-              </span>
-              <span style={{ color: '#64748B', fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>
-                <MapPin size={12} /> {addressDisplay}
-              </span>
+        <div className="ds-pagehead" style={{ marginTop: 16 }}>
+          <div style={{ minWidth: 0 }}>
+            <div className="ds-kicker ds-num">{c.account_number} · {(c.tier || '').toUpperCase()}</div>
+            <h1 className="ds-h1" style={{ margin: '7px 0 10px' }}>{c.business_name}</h1>
+            <div className="ds-blurb" style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+              <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}><Mail size={13} />{c.primary_email}</span>
+              <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}><Phone size={13} />{c.phone_number}</span>
+              <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}><MapPin size={13} />{addressDisplay}</span>
             </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
-            <HealthBadge score={c.health_score} />
-            <AccountStatusBadge status={c.account_status} />
-            {!c.is_on_stop ? (
-              <button onClick={() => setOnStopModal('apply')} style={{
-                display: 'inline-flex', alignItems: 'center', gap: 5,
-                height: 22, padding: '0 9px', borderRadius: 11,
-                background: 'rgba(233,30,140,0.15)', border: '1px solid #E91E8C',
-                fontSize: 11, fontWeight: 700, color: '#E91E8C',
-                cursor: 'pointer', whiteSpace: 'nowrap', lineHeight: 1,
-              }}>
-                Place On Stop
-              </button>
-            ) : (
-              <button onClick={() => setOnStopModal('remove')} style={{
-                display: 'inline-flex', alignItems: 'center', gap: 5,
-                height: 22, padding: '0 9px', borderRadius: 11,
-                background: 'rgba(0,200,83,0.12)', border: '1px solid #00C853',
-                fontSize: 11, fontWeight: 700, color: '#00C853',
-                cursor: 'pointer', whiteSpace: 'nowrap', lineHeight: 1,
-              }}>
-                Remove On Stop
-              </button>
-            )}
+          <div className="actions" style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
+            {(() => { const M = { active: ['settled', 'Active'], onboarding: ['progress', 'Onboarding'], on_stop: ['attention', 'On stop'], suspended: ['waiting', 'Suspended'], churned: ['waiting', 'Churned'] }; const mm = M[c.account_status] || ['waiting', (c.account_status || '').replace(/_/g, ' ')]; return <span className={'ds-status ds-status--' + mm[0]}><span className={'ds-mark ds-mark--' + mm[0]} />{mm[1]}</span>; })()}
+            {!c.is_on_stop
+              ? <button className="ds-btn ds-btn-danger" onClick={() => setOnStopModal('apply')}>Place on stop</button>
+              : <button className="ds-btn ds-btn-secondary" onClick={() => setOnStopModal('remove')}>Remove on stop</button>}
           </div>
         </div>
+        <hr className="ds-rule" />
 
-        {/* Metrics strip */}
-        <div style={{ display: 'flex', gap: 0, marginTop: 20, borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 16 }}>
+        <div className="ds-figures" style={{ padding: '20px 0' }}>
           {[
-            { label: 'Outstanding',     value: gbp(c.outstanding_balance), warn: parseFloat(c.outstanding_balance) > 0 },
-            { label: 'Credit Limit',    value: gbp(c.credit_limit) },
-            { label: 'Billing Period',  value: BILLING_PERIOD_LABELS[c.billing_cycle] || c.billing_cycle || '—' },
-            { label: 'Payment Terms',   value: `${c.payment_terms_days} days` },
-            { label: 'Account Manager', value: c.account_manager_name || 'Unmanaged' },
-            { label: 'Salesperson',     value: c.salesperson_name || '—' },
-          ].map(({ label, value, warn }) => (
-            <div key={label} style={{ flex: 1, padding: '0 16px', borderRight: '1px solid rgba(0,0,0,0.06)' }}>
-              <div style={{ fontSize: 11, color: '#64748B', marginBottom: 4 }}>{label}</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: warn ? '#E91E8C' : '#fff' }}>{value}</div>
+            { label: 'Outstanding', value: gbp(c.outstanding_balance), warn: parseFloat(c.outstanding_balance) > 0, num: true },
+            { label: 'Credit limit', value: gbp(c.credit_limit), num: true },
+            { label: 'Credit used', value: (Math.round(parseFloat(c.credit_utilisation_pct) || 0)) + '%', num: true },
+            { label: 'Billing', value: BILLING_PERIOD_LABELS[c.billing_cycle] || c.billing_cycle || '—' },
+            { label: 'Terms', value: (c.payment_terms_days != null ? c.payment_terms_days : '—') + ' days' },
+            { label: 'Account manager', value: c.account_manager_name || 'Unmanaged' },
+          ].map(f => (
+            <div className="ds-figure" key={f.label}>
+              <div className="ds-label">{f.label}</div>
+              <div className="val" style={{ fontSize: 20, margin: '8px 0 0', color: f.warn ? 'var(--moov-magenta-deep)' : 'var(--color-text)', fontVariantNumeric: f.num ? 'tabular-nums' : 'normal' }}>{f.value}</div>
             </div>
+          ))}
+        </div>
+        <hr className="ds-rule" />
+
+        {comm_summary && (
+          <div style={{ padding: '16px 0' }}>
+            <div className="ds-kicker" style={{ marginBottom: 6 }}>AI summary · {format(new Date(comm_summary.generated_at), 'd MMM, HH:mm')}</div>
+            <p className="ds-blurb">{comm_summary.summary_text}</p>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 2, borderBottom: '2px solid var(--color-divider)', marginTop: 8, flexWrap: 'wrap' }}>
+          {TABS.map(({ key, label }) => (
+            <button key={key} onClick={() => setActiveTab(key)} style={{
+              background: 'none', border: 0, cursor: 'pointer', fontFamily: 'var(--font-body)',
+              fontSize: 13, fontWeight: activeTab === key ? 800 : 500,
+              color: activeTab === key ? 'var(--color-text)' : 'var(--ds-muted)',
+              padding: '10px 14px', marginBottom: -2,
+              borderBottom: activeTab === key ? '2px solid var(--color-accent)' : '2px solid transparent',
+            }}>{label}</button>
           ))}
         </div>
       </div>
 
-      {/* AI summary */}
-      {/* Debug toggle */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-        <button
-          onClick={() => setShowDebug(d => !d)}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px',
-            borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer',
-            background: showDebug ? 'rgba(245,158,11,0.15)' : 'rgba(0,0,0,0.04)',
-            border: `1px solid ${showDebug ? 'rgba(245,158,11,0.45)' : 'rgba(0,0,0,0.08)'}`,
-            color: showDebug ? '#F59E0B' : '#475569' }}>
-          <Bug size={11} /> {showDebug ? 'Hide debug' : 'Debug data'}
-        </button>
+      <div style={{ padding: '22px 40px 48px' }}>
+        {activeTab === 'overview' && <OverviewTab c={c} onSaved={handleCustomerSaved} onDeleteRequest={() => { setDeleteModal(true); setDeleteConfirm(''); }} />}
+        {activeTab === 'onboarding' && <CustomerOnboardingTab customerId={id} customer={c} />}
+        {activeTab === 'contacts' && <ContactsTab customerId={id} contacts={contacts} onRefresh={refetch} />}
+        {activeTab === 'volume' && <PerformanceTab customerId={c.id} />}
+        {activeTab === 'financial' && <FinancialTab c={c} />}
+        {activeTab === 'comms' && <CustomerCommsTab customerId={id} />}
+        {activeTab === 'happiness' && <HappinessScore customer={c} />}
+        {activeTab === 'pricing' && <CustomerPricingTab customer={c} onCustomerUpdate={(updated) => queryClient.setQueryData(['customer', id], d => ({ ...d, customer: { ...d.customer, ...updated } }))} />}
       </div>
 
-      {/* Debug panel */}
-      {showDebug && (() => {
-        const sections = [
-          {
-            key: 'customer',
-            label: 'Customer record',
-            color: '#00C853',
-            rows: Object.entries(c).map(([k, v]) => ({ k, v })),
-          },
-          {
-            key: 'contacts',
-            label: `Contacts (${contacts?.length ?? 0})`,
-            color: '#42A5F5',
-            rows: contacts?.map((ct, i) => ({ k: `[${i}]`, v: ct })) ?? [],
-          },
-          {
-            key: 'comm_summary',
-            label: 'Comm summary',
-            color: '#AB47BC',
-            rows: comm_summary ? Object.entries(comm_summary).map(([k, v]) => ({ k, v })) : [{ k: '—', v: 'null' }],
-          },
-          {
-            key: 'volume_snapshots',
-            label: `Volume snapshots (${volume_snapshots?.length ?? 0})`,
-            color: '#F59E0B',
-            rows: volume_snapshots?.slice(0, 10).map((s, i) => ({ k: `[${i}]`, v: s })) ?? [],
-            note: volume_snapshots?.length > 10 ? `…${volume_snapshots.length - 10} more rows` : null,
-          },
-          {
-            key: 'active_volume_alert',
-            label: 'Active volume alert',
-            color: '#EF4444',
-            rows: active_volume_alert ? Object.entries(active_volume_alert).map(([k, v]) => ({ k, v })) : [{ k: '—', v: 'none' }],
-          },
-        ];
-
-        const toggleSection = (key) => setDebugSection(s => {
-          const n = new Set(s);
-          n.has(key) ? n.delete(key) : n.add(key);
-          return n;
-        });
-
-        const renderVal = (v) => {
-          if (v === null || v === undefined) return <span style={{ color: '#64748B' }}>null</span>;
-          if (typeof v === 'boolean') return <span style={{ color: v ? '#00C853' : '#EF4444', fontWeight: 700 }}>{String(v)}</span>;
-          if (typeof v === 'object') return <span style={{ color: '#64748B', fontFamily: 'monospace', fontSize: 10 }}>{JSON.stringify(v)}</span>;
-          if (String(v).length > 80) return <span style={{ color: '#334155', wordBreak: 'break-all', fontFamily: 'monospace', fontSize: 11 }}>{String(v)}</span>;
-          return <span style={{ color: '#334155', fontFamily: 'monospace', fontSize: 11 }}>{String(v)}</span>;
-        };
-
-        return (
-          <div style={{ marginBottom: 20, border: '1px solid rgba(245,158,11,0.25)', borderRadius: 10, overflow: 'hidden' }}>
-            <div style={{ padding: '8px 14px', background: 'rgba(245,158,11,0.07)', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Bug size={12} style={{ color: '#F59E0B' }} />
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#F59E0B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Debug — raw API data for {c.account_number}
-              </span>
-            </div>
-            {sections.map(sec => (
-              <div key={sec.key} style={{ borderTop: '1px solid rgba(0,0,0,0.04)' }}>
-                <div
-                  onClick={() => toggleSection(sec.key)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px',
-                    cursor: 'pointer', background: 'rgba(0,0,0,0.02)' }}>
-                  {debugSection.has(sec.key)
-                    ? <ChevronDown size={12} color="#475569" />
-                    : <ChevronRight size={12} color="#475569" />}
-                  <span style={{ fontSize: 12, fontWeight: 700, color: sec.color }}>{sec.label}</span>
-                </div>
-                {debugSection.has(sec.key) && (
-                  <div style={{ padding: '0 0 8px' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                      <tbody>
-                        {sec.rows.map(({ k, v }, i) => (
-                          <tr key={i} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
-                            <td style={{ padding: '3px 14px 3px 22px', color: '#64748B', fontFamily: 'monospace',
-                              width: 200, flexShrink: 0, verticalAlign: 'top', whiteSpace: 'nowrap' }}>{k}</td>
-                            <td style={{ padding: '3px 14px', verticalAlign: 'top' }}>{renderVal(v)}</td>
-                          </tr>
-                        ))}
-                        {sec.note && (
-                          <tr><td colSpan={2} style={{ padding: '4px 22px', color: '#64748B', fontStyle: 'italic', fontSize: 10 }}>{sec.note}</td></tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        );
-      })()}
-
-      {comm_summary && (
-        <div className="moov-card" style={{ padding: 16, marginBottom: 20, border: '1px solid rgba(0,200,83,0.2)', background: 'rgba(0,200,83,0.04)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <Zap size={14} style={{ color: '#00C853' }} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#00C853' }}>AI SUMMARY</span>
-            <span style={{ fontSize: 11, color: '#64748B' }}>Updated {format(new Date(comm_summary.generated_at), 'dd MMM, HH:mm')}</span>
-          </div>
-          <p style={{ fontSize: 13, color: '#DDDDDD', lineHeight: 1.6, fontStyle: 'italic' }}>{comm_summary.summary_text}</p>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: '#FFFFFF', borderRadius: 12, padding: 4 }}>
-        {TABS.map(({ key, label, icon: Icon }) => (
-          <button key={key} onClick={() => setActiveTab(key)} style={{
-            flex: 1, padding: '9px 12px',
-            background: activeTab === key ? '#00C853' : 'transparent',
-            color: activeTab === key ? '#000' : '#64748B',
-            border: 'none', borderRadius: 9, cursor: 'pointer',
-            fontSize: 13, fontWeight: 700,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-          }}>
-            <Icon size={14} />{label}
-          </button>
-        ))}
-      </div>
-
-      {activeTab === 'overview'  && <OverviewTab c={c} onSaved={handleCustomerSaved} onDeleteRequest={() => { setDeleteModal(true); setDeleteConfirm(''); }} />}
-      {activeTab === 'onboarding' && <CustomerOnboardingTab customerId={id} customer={c} />}
-      {activeTab === 'contacts'  && <ContactsTab customerId={id} contacts={contacts} onRefresh={refetch} />}
-      {activeTab === 'volume'    && <PerformanceTab customerId={c.id} />}
-      {activeTab === 'financial' && <FinancialTab c={c} />}
-      {activeTab === 'comms'     && <CustomerCommsTab customerId={id} />}
-      {activeTab === 'happiness' && <HappinessScore customer={c} />}
-      {activeTab === 'pricing'   && (
-        <CustomerPricingTab customer={c}
-          onCustomerUpdate={(updated) => queryClient.setQueryData(['customer', id], d => ({ ...d, customer: { ...d.customer, ...updated } }))}
-        />
-      )}
-
-      {/* Delete confirmation modal */}
       {deleteModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="moov-card" style={{ width: 460, padding: 28, border: '2px solid #E91E8C' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <Trash2 size={18} style={{ color: '#E91E8C' }} />
-              <h3 style={{ fontSize: 17, fontWeight: 700, color: '#E91E8C', margin: 0 }}>Delete {c.business_name}?</h3>
+        <div className="moov-ds ds-modal-scrim">
+          <div className="ds-modal" style={{ width: 460 }}>
+            <div className="ds-modal-head">
+              <div className="ds-kicker" style={{ color: 'var(--moov-magenta-deep)' }}>Destructive</div>
+              <h3 className="ds-h1" style={{ fontSize: 22, margin: '6px 0 8px' }}>Delete {c.business_name}?</h3>
+              <p className="ds-blurb">This permanently deletes the account and all its contacts, rates and communications. It cannot be undone.</p>
             </div>
-            <p style={{ color: '#64748B', fontSize: 13, marginBottom: 20, lineHeight: 1.6 }}>
-              This will permanently delete this customer and all associated contacts, rates, and communications.
-              This action <strong style={{ color: '#0F172A' }}>cannot be undone</strong>.
-            </p>
-            <label style={{ fontSize: 12, color: '#64748B', display: 'block', marginBottom: 6 }}>
-              Type <strong style={{ color: '#0F172A', fontFamily: 'monospace' }}>{c.account_number}</strong> to confirm
-            </label>
-            <input
-              value={deleteConfirm}
-              onChange={e => setDeleteConfirm(e.target.value)}
-              placeholder={c.account_number}
-              style={{ width: '100%', background: '#FFFFFF', border: '1px solid rgba(233,30,140,0.4)', borderRadius: 6, padding: '9px 12px', color: '#0F172A', fontSize: 13, fontFamily: 'monospace', boxSizing: 'border-box', outline: 'none' }}
-            />
-            <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
-              <button className="btn-ghost" onClick={() => { setDeleteModal(false); setDeleteConfirm(''); }}>Cancel</button>
-              <button
-                disabled={deleteConfirm !== c.account_number || deleteCustomer.isPending}
-                onClick={() => deleteCustomer.mutate()}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 6, background: deleteConfirm === c.account_number ? '#E91E8C' : 'rgba(233,30,140,0.2)', border: 'none', color: '#0F172A', fontSize: 13, fontWeight: 700, cursor: deleteConfirm === c.account_number ? 'pointer' : 'not-allowed' }}
-              >
-                <Trash2 size={13} /> {deleteCustomer.isPending ? 'Deleting…' : 'Delete Customer'}
-              </button>
+            <div className="ds-modal-body" style={{ paddingBottom: 12 }}>
+              <div className="ds-label" style={{ marginBottom: 6 }}>Type {c.account_number} to confirm</div>
+              <input className="ds-field ds-num" value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} placeholder={c.account_number} />
             </div>
-            {deleteCustomer.isError && (
-              <p style={{ marginTop: 10, fontSize: 12, color: '#E91E8C' }}>Failed to delete. Please try again.</p>
-            )}
+            <div className="ds-modal-foot">
+              <span className="ds-muted" style={{ fontSize: 12 }}>{deleteConfirm === c.account_number ? 'Recorded against your name.' : 'Type the account number to enable delete.'}</span>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button className="ds-btn ds-btn-secondary" onClick={() => { setDeleteModal(false); setDeleteConfirm(''); }}>Cancel</button>
+                <button className="ds-btn ds-btn-danger" disabled={deleteConfirm !== c.account_number || deleteCustomer.isPending} onClick={() => deleteCustomer.mutate()}>{deleteCustomer.isPending ? 'Deleting…' : 'Delete customer'}</button>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* On Stop Modal */}
       {onStopModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="moov-card" style={{ width: 480, padding: 28, border: '2px solid #00C853' }}>
-            <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8, color: onStopModal === 'apply' ? '#E91E8C' : '#00C853' }}>
-              {onStopModal === 'apply' ? 'Place Account On Stop' : 'Remove On Stop'}
-            </h3>
-            <p style={{ color: '#64748B', fontSize: 13, marginBottom: 20 }}>
-              {onStopModal === 'apply'
-                ? 'This will block all shipment access for this customer. A reason is required and will be logged.'
-                : 'A note is required confirming the reason for removal. This will be logged in the audit trail.'}
-            </p>
-            <textarea value={onStopInput} onChange={e => setOnStopInput(e.target.value)}
-              placeholder={onStopModal === 'apply' ? 'Reason for placing On Stop…' : 'Reason for removal…'}
-              style={{ width: '100%', minHeight: 100, background: '#F1F5F9', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 8, padding: 12, color: '#0F172A', fontSize: 14, resize: 'vertical', fontFamily: 'inherit' }}
-            />
-            <div style={{ display: 'flex', gap: 10, marginTop: 16, justifyContent: 'flex-end' }}>
-              <button className="btn-ghost" onClick={() => { setOnStopModal(null); setOnStopInput(''); }}>Cancel</button>
-              <button className={onStopModal === 'apply' ? 'btn-danger' : 'btn-primary'}
-                disabled={!onStopInput.trim()}
-                onClick={() => { if (onStopModal === 'apply') applyOnStop.mutate({ reason: onStopInput }); else removeOnStop.mutate({ note: onStopInput }); }}>
-                {onStopModal === 'apply' ? 'Confirm On Stop' : 'Confirm Removal'}
-              </button>
+        <div className="moov-ds ds-modal-scrim">
+          <div className="ds-modal" style={{ width: 480 }}>
+            <div className="ds-modal-head">
+              <div className="ds-kicker" style={{ color: onStopModal === 'apply' ? 'var(--moov-magenta-deep)' : 'var(--moov-green-deep)' }}>{onStopModal === 'apply' ? 'Needs a decision' : 'Lift the stop'}</div>
+              <h3 className="ds-h1" style={{ fontSize: 22, margin: '6px 0 8px' }}>{onStopModal === 'apply' ? 'Place account on stop' : 'Remove on stop'}</h3>
+              <p className="ds-blurb">{onStopModal === 'apply' ? 'This blocks all shipment access for this customer. The reason is logged against your name.' : 'Confirm why the stop is being lifted. This is logged in the audit trail.'}</p>
+              {onStopModal === 'apply' && (
+                <div className="ds-figures" style={{ marginTop: 14 }}>
+                  <div className="ds-figure"><div className="ds-label">Outstanding</div><div className="val" style={{ fontSize: 18, marginTop: 6 }}>{gbp(c.outstanding_balance)}</div></div>
+                  <div className="ds-figure"><div className="ds-label">Credit limit</div><div className="val" style={{ fontSize: 18, marginTop: 6 }}>{gbp(c.credit_limit)}</div></div>
+                </div>
+              )}
+            </div>
+            <div className="ds-modal-body" style={{ paddingBottom: 12 }}>
+              <textarea className="ds-field" style={{ minHeight: 90, resize: 'vertical' }} value={onStopInput} onChange={e => setOnStopInput(e.target.value)} placeholder={onStopModal === 'apply' ? 'Why is this account going on stop?' : 'Why is the stop being lifted?'} />
+            </div>
+            <div className="ds-modal-foot">
+              <span className="ds-muted" style={{ fontSize: 12 }}>{onStopInput.trim() ? 'Recorded against your name.' : 'A reason is required.'}</span>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button className="ds-btn ds-btn-secondary" onClick={() => { setOnStopModal(null); setOnStopInput(''); }}>Cancel</button>
+                <button className={'ds-btn ' + (onStopModal === 'apply' ? 'ds-btn-danger' : 'ds-btn-primary')} disabled={!onStopInput.trim()} onClick={() => { if (onStopModal === 'apply') applyOnStop.mutate({ reason: onStopInput }); else removeOnStop.mutate({ note: onStopInput }); }}>{onStopModal === 'apply' ? 'Confirm on stop' : 'Confirm removal'}</button>
+              </div>
             </div>
           </div>
         </div>
