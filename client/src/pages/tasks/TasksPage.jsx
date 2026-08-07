@@ -581,7 +581,7 @@ function CreateModal({ defaultSpace, currentUserId, onClose, onCreated }) {
 }
 
 // ── card ────────────────────────────────────────────────────────────────────────
-function TaskCard({ task, onOpen, navigate, sub }) {
+function TaskCard({ task, onOpen, navigate, sub, dragging, onDragStart, onDragEnd }) {
   const od = isOverdue(task);
   const custom = (task.links || []).find(l => l.type === 'customer');
   const carrier = (task.links || []).find(l => l.type === 'carrier');
@@ -591,7 +591,8 @@ function TaskCard({ task, onOpen, navigate, sub }) {
       ? <span className="mt-gchip" onClick={(e) => { e.stopPropagation(); carrier.route && navigate(carrier.route); }}><span className="mt-sq" style={{ width: 14, height: 14, fontSize: 7, background: colourFor(carrier.sub || carrier.label) }}>{String(carrier.sub || carrier.label || '').slice(0, 3).toUpperCase()}</span>{carrier.label}</span>
       : null;
   return (
-    <div className="mt-card" onClick={() => onOpen(task.id)}>
+    <div className={'mt-card' + (dragging ? ' dragging' : '')} draggable onClick={() => onOpen(task.id)}
+      onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; onDragStart && onDragStart(); }} onDragEnd={() => onDragEnd && onDragEnd()}>
       <div className="mt-card-top"><Pill map={PRIORITY} k={task.priority} /><span className="mt-card-id">{shortId(task.id)}</span></div>
       <div className="mt-card-title">{task.title}</div>
       {chip ? <div className="mt-card-meta">{chip}</div> : null}
@@ -825,6 +826,8 @@ export default function TasksPage() {
   const [openId, setOpenId] = useState(null);
   const [creating, setCreating] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [dragId, setDragId] = useState(null);   // card being dragged
+  const [overCol, setOverCol] = useState(null);  // column being dragged over
 
   const allowed = bypass || canAccess('tasks');
   const tasksQuery = useQuery({ queryKey: ['tasks'], queryFn: () => tasksApi.list() });
@@ -837,6 +840,19 @@ export default function TasksPage() {
   const curSpaces = (Array.isArray(configQuery.data?.spaces) && configQuery.data.spaces.length) ? configQuery.data.spaces : DEFAULT_SPACES;
   const curStatuses = (Array.isArray(configQuery.data?.statuses) && configQuery.data.statuses.length) ? configQuery.data.statuses : DEFAULT_STATUSES;
   const mSaveConfig = useMutation({ mutationFn: (data) => taskConfigApi.update(data), onSuccess: () => { qc.invalidateQueries(['task-config']); setShowSettings(false); } });
+
+  // Drag a card to another status column — optimistic move + persist, roll back on error.
+  const mMove = useMutation({
+    mutationFn: ({ id, status }) => tasksApi.update(id, { status }),
+    onMutate: async ({ id, status }) => {
+      await qc.cancelQueries(['tasks']);
+      const prev = qc.getQueryData(['tasks']);
+      qc.setQueryData(['tasks'], (old) => (old || []).map(t => t.id === id ? { ...t, status } : t));
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(['tasks'], ctx.prev); },
+    onSettled: () => qc.invalidateQueries(['tasks']),
+  });
 
   // Deep-link: /tasks?task=<id> opens that task (used by the notification bell)
   useEffect(() => { const t = searchParams.get('task'); if (t) setOpenId(t); }, [searchParams]);
@@ -852,6 +868,13 @@ export default function TasksPage() {
   const taskById = Object.fromEntries(tasks.map(t => [t.id, t]));
   const subCounts = {};                                       // { parentId: {done, total} }
   tasks.forEach(t => { if (t.parent_id) { const e = subCounts[t.parent_id] || (subCounts[t.parent_id] = { done: 0, total: 0 }); e.total++; if (COMPLETE.has(t.status)) e.done++; } });
+
+  const handleDrop = (statusKey) => {
+    const id = dragId; setDragId(null); setOverCol(null);
+    if (!id) return;
+    const t = taskById[id];
+    if (t && t.status !== statusKey) mMove.mutate({ id, status: statusKey });
+  };
 
   const spaceTasks = space === 'all' ? topTasks : topTasks.filter(t => t.space === space);
   const viewTasks = spaceTasks;
@@ -922,11 +945,14 @@ export default function TasksPage() {
                 {COLUMNS.map(([key, label]) => {
                   const items = viewTasks.filter(t => t.status === key);
                   const s = STATUS[key];
-                  return <div className="mt-col" key={key}>
+                  return <div className={'mt-col' + (overCol === key && dragId ? ' over' : '')} key={key}
+                    onDragOver={dragId ? (e) => { e.preventDefault(); if (overCol !== key) setOverCol(key); } : undefined}
+                    onDrop={dragId ? (e) => { e.preventDefault(); handleDrop(key); } : undefined}>
                     <div className="mt-col-head"><div className="mt-col-title"><span className="dot" style={{ width: 9, height: 9, background: s.colour }} />{label}</div><span className="mt-count">{items.length}</span></div>
                     <div className="mt-col-body">
-                      {items.map(t => <TaskCard key={t.id} task={t} onOpen={setOpenId} navigate={navigate} sub={subCounts[t.id]} />)}
-                      {items.length === 0 && <div className="mt-empty">Nothing here</div>}
+                      {items.map(t => <TaskCard key={t.id} task={t} onOpen={setOpenId} navigate={navigate} sub={subCounts[t.id]}
+                        dragging={dragId === t.id} onDragStart={() => setDragId(t.id)} onDragEnd={() => { setDragId(null); setOverCol(null); }} />)}
+                      {items.length === 0 && <div className="mt-empty">{dragId ? 'Drop here' : 'Nothing here'}</div>}
                     </div>
                   </div>;
                 })}
