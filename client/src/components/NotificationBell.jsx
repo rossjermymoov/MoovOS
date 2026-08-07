@@ -52,6 +52,7 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const btnRef = useRef(null);
   const [pos, setPos] = useState({ top: 56, right: 16 });
+  const panelRef = useRef(null);
 
   const { data } = useQuery({
     queryKey: ['notifications', me],
@@ -67,7 +68,11 @@ export default function NotificationBell() {
 
   useEffect(() => {
     if (!open) return;
-    const onDoc = (e) => { if (btnRef.current && !btnRef.current.contains(e.target)) setOpen(false); };
+    const onDoc = (e) => {
+      const inBtn = btnRef.current?.contains(e.target);
+      const inPanel = panelRef.current?.contains(e.target);
+      if (!inBtn && !inPanel) setOpen(false);
+    };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
@@ -88,7 +93,7 @@ export default function NotificationBell() {
   const markAll = () => notificationsApi.markAllRead(me).then(() => qc.invalidateQueries(['notifications', me]));
 
   const panel = (
-    <div style={{
+    <div ref={panelRef} style={{
       position: 'fixed', top: pos.top, right: pos.right, width: 380, maxHeight: '70vh',
       background: '#fff', borderRadius: 14, boxShadow: '0 18px 50px rgba(0,0,0,.22)',
       border: '1px solid #E2E8F0', zIndex: 1000, overflow: 'hidden', display: 'flex', flexDirection: 'column',

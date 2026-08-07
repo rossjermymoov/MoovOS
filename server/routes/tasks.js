@@ -228,7 +228,7 @@ router.post('/:id/comments', async (req, res, next) => {
         user_id: uid, actor_id: author,
         type: 'mention', severity: 'amber',
         title: 'Mentioned you in a comment', body: snippet,
-        entity_type: 'task', entity_id: full.id, route: `/tasks?task=${full.id}`,
+        entity_type: 'task', entity_id: full.id, route: `/tasks?task=${full.id}&focus=comments`,
       });
     }
     // Assignee + creator get a plain comment note — unless they were already @-mentioned.
@@ -238,7 +238,7 @@ router.post('/:id/comments', async (req, res, next) => {
         user_id: uid, actor_id: author,
         type: 'comment', severity: 'info',
         title: 'New comment on a task', body: full.title,
-        entity_type: 'task', entity_id: full.id, route: `/tasks?task=${full.id}`,
+        entity_type: 'task', entity_id: full.id, route: `/tasks?task=${full.id}&focus=comments`,
       });
     }
     res.status(201).json(full);
