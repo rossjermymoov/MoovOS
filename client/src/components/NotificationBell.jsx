@@ -13,11 +13,11 @@ import { Bell, AlertTriangle, Clock, MessageSquare, UserPlus, Check, Dot, AtSign
 import { useMe } from '../hooks/useMe';
 import { notificationsApi } from '../api/notifications';
 
-const MUTED = 'rgba(255,255,255,0.40)';
+const MUTED = 'rgba(32,30,29,0.55)';
 
 // RAG-aligned severities: red = overdue/bad, amber = due soon / in progress, green = good, slate = info
 const SEV = {
-  red:   { colour: '#EF4444', soft: '#FDECEC' },
+  red:   { colour: '#E91E8C', soft: '#FDECEC' },
   amber: { colour: '#F59E0B', soft: '#FEF3E2' },
   green: { colour: '#00C853', soft: '#E7F8EE' },
   info:  { colour: '#2563EB', soft: '#E7EEFD' },
@@ -166,17 +166,17 @@ export default function NotificationBell() {
   return (
     <div ref={btnRef} style={{ position: 'relative' }}>
       <button onClick={toggle} style={{
-        width: 32, height: 32, borderRadius: 8, background: open ? 'rgba(255,255,255,0.10)' : 'transparent',
+        width: 32, height: 32, borderRadius: 8, background: open ? 'rgba(32,30,29,0.08)' : 'transparent',
         border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: MUTED, position: 'relative',
       }}
-        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.10)'}
-        onMouseLeave={e => e.currentTarget.style.background = open ? 'rgba(255,255,255,0.10)' : 'transparent'}>
+        onMouseEnter={e => e.currentTarget.style.background = 'rgba(32,30,29,0.08)'}
+        onMouseLeave={e => e.currentTarget.style.background = open ? 'rgba(32,30,29,0.08)' : 'transparent'}>
         <Bell size={16} strokeWidth={1.5} />
         {count > 0 && (
           <span style={{
             position: 'absolute', top: 2, right: 2, minWidth: 15, height: 15, padding: '0 4px',
-            borderRadius: 99, background: '#EF4444', color: '#fff', fontSize: 9.5, fontWeight: 700,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 0 2px #1A1A1F',
+            borderRadius: 99, background: '#E91E8C', color: '#fff', fontSize: 9.5, fontWeight: 700,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 0 2px #f3f2f2',
           }}>{count > 99 ? '99+' : count}</span>
         )}
       </button>

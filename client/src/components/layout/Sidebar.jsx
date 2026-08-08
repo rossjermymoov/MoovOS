@@ -1,26 +1,26 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  Users, Tag, Truck, BarChart2, FileText,
-  AlertTriangle, BookOpen, Settings, LayoutDashboard,
-  UserCheck, LogOut, GitCompare, MessageSquare, Rocket, CheckSquare,
+  Users, Tag, Truck, Settings, LayoutDashboard,
+  LogOut, MessageSquare, Rocket, CheckSquare,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 export const NAV_ITEMS = [
-  { to: '/',          icon: LayoutDashboard, label: 'Dashboard',  key: 'dashboard' },
-  { to: '/customers', icon: Users,           label: 'Customers',  key: 'customers' },
-  { to: '/onboarding', icon: Rocket,         label: 'Onboarding', key: 'onboarding' },
-  { to: '/tracking',  icon: Truck,           label: 'Tracking',   key: 'tracking'  },
-  { to: '/queries',   icon: MessageSquare,   label: 'Queries',    key: 'queries'   },
-  { to: '/tasks',     icon: CheckSquare,     label: 'Tasks',      key: 'tasks'     },
-  { to: '/carriers',  icon: Truck,           label: 'Carriers',   key: 'carriers'  },
-  { to: '/settings',  icon: Settings,        label: 'Settings',   key: 'settings'  },
+  { to: '/',           icon: LayoutDashboard, label: 'Today',      key: 'dashboard' },
+  { to: '/customers',  icon: Users,           label: 'Customers',  key: 'customers' },
+  { to: '/onboarding', icon: Rocket,          label: 'Onboarding', key: 'onboarding' },
+  { to: '/tracking',   icon: Truck,           label: 'Tracking',   key: 'tracking' },
+  { to: '/queries',    icon: MessageSquare,   label: 'Queries',    key: 'queries' },
+  { to: '/tasks',      icon: CheckSquare,     label: 'Tasks',      key: 'tasks' },
+  { to: '/pricing',    icon: Tag,             label: 'Pricing',    key: 'pricing' },
+  { to: '/carriers',   icon: Truck,           label: 'Carriers',   key: 'carriers' },
+  { to: '/settings',   icon: Settings,        label: 'Settings',   key: 'settings' },
 ];
 
-// Section groupings — operational workspace vs. system/config.
+// Workspace = day-to-day operations · Network = configuration
 const GROUPS = [
-  { label: 'Workspace', keys: ['dashboard', 'customers', 'onboarding', 'tracking', 'queries', 'tasks', 'carriers'] },
-  { label: 'System',    keys: ['settings'] },
+  { label: 'Workspace', keys: ['dashboard', 'customers', 'onboarding', 'tracking', 'queries', 'tasks', 'pricing'] },
+  { label: 'Network',   keys: ['carriers', 'settings'] },
 ];
 
 export default function Sidebar() {
@@ -36,65 +36,37 @@ export default function Sidebar() {
     .map(g => ({ ...g, items: NAV_ITEMS.filter(i => g.keys.includes(i.key) && canAccess(i.key)) }))
     .filter(g => g.items.length);
 
+  const initials = user?.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'MO';
+
   return (
-    <aside className="flex h-screen w-64 shrink-0 flex-col justify-between border-r border-slate-800 bg-slate-900 p-5 text-slate-400">
+    <aside className="mv-rail">
+      <div className="mv-rail-brand">
+        <div className="mv-rail-wordmark">MOOV<span className="mv-rail-dot" /></div>
+        <div className="mv-rail-sub">Operations System</div>
+      </div>
 
-      {/* Top — brand + grouped nav */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {/* Brand */}
-        <div className="mb-8 flex items-center gap-2 px-2 text-xl font-black tracking-wider text-white">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600 text-sm font-black text-white">M</span>
-          Moov <span className="font-light text-slate-500">OS</span>
-        </div>
-
-        {/* Grouped navigation */}
+      <div className="mv-rail-scroll">
         {groups.map(group => (
-          <div key={group.label} className="mb-6">
-            <div className="mb-2 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              {group.label}
-            </div>
-            <div className="space-y-1.5">
-              {group.items.map(({ to, icon: Icon, label }) => (
-                <NavLink key={to} to={to} end={to === '/'} className="block no-underline">
-                  {({ isActive }) => (
-                    <div
-                      className={`group relative flex items-center gap-3.5 rounded-xl px-3 py-3 text-sm font-semibold tracking-wide transition-all duration-150 ${
-                        isActive
-                          ? 'bg-slate-800/70 text-white'
-                          : 'text-slate-400 hover:bg-slate-800/40 hover:text-slate-200'
-                      }`}
-                    >
-                      {isActive && <span className="absolute left-0 h-5 w-1 rounded-r-md bg-blue-500" />}
-                      <Icon size={18} strokeWidth={isActive ? 2.2 : 1.8} className="shrink-0" />
-                      {label}
-                    </div>
-                  )}
-                </NavLink>
-              ))}
-            </div>
+          <div className="mv-rail-group" key={group.label}>
+            <div className="mv-rail-group-label">{group.label}</div>
+            {group.items.map(({ to, icon: Icon, label }) => (
+              <NavLink key={to} to={to} end={to === '/'} className={({ isActive }) => 'mv-rail-item' + (isActive ? ' is-active' : '')}>
+                <Icon size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+                <span style={{ flex: 1 }}>{label}</span>
+              </NavLink>
+            ))}
           </div>
         ))}
       </div>
 
-      {/* Bottom — profile + sign out pinned to the base */}
       {!bypass && user && (
-        <div className="mt-auto flex flex-col gap-1 border-t border-slate-800/60 pt-6">
-          <div className="flex items-center gap-3 rounded-xl px-3 py-2.5">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-700 text-sm font-bold text-white">
-              {user.full_name?.charAt(0).toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <div className="truncate text-sm font-semibold text-slate-200">{user.full_name?.split(' ')[0]}</div>
-              <div className="truncate text-[11px] text-slate-500">{user.email || 'Signed in'}</div>
-            </div>
+        <div className="mv-rail-foot">
+          <div className="mv-avatar">{initials}</div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 12.5, letterSpacing: '-.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.full_name || 'Signed in'}</div>
+            <div style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>{user.role ? user.role.replace(/_/g, ' ') : 'Operations'}</div>
           </div>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-3.5 rounded-xl px-3 py-3 text-sm font-semibold tracking-wide text-slate-400 transition-all duration-150 hover:bg-slate-800/40 hover:text-slate-200"
-          >
-            <LogOut size={18} strokeWidth={1.8} className="shrink-0" />
-            Sign out
-          </button>
+          <button onClick={handleLogout} className="mv-icon-btn" title="Sign out"><LogOut size={16} /></button>
         </div>
       )}
     </aside>
