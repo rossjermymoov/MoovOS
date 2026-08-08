@@ -407,7 +407,7 @@ function ContactsTab({ customerId, contacts = [], onRefresh, adding, setAdding }
   const primary = (ct) => ct.is_main_contact ? ['settled', 'Primary'] : ct.is_finance_contact ? ['flight', 'Finance'] : ['waiting', '—'];
   const fld = (v, on, ph) => <input className="mv-input" value={v} placeholder={ph} onChange={e => on(e.target.value)} />;
   return (
-    <div style={{ maxWidth: 1040 }}>
+    <div>
       {adding && (
         <div style={{ borderTop: '2px solid var(--mv-divider)', padding: '16px 0', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16 }}>
           {[['full_name', 'Name'], ['job_title', 'Role'], ['email_address', 'Email'], ['phone_number', 'Phone']].map(([k, l]) => (
@@ -635,7 +635,7 @@ function CustomerCommsTab({ customerId }) {
   const who = (it) => it.from_address || it.to_address || '—';
   const when = (it) => it.created_at ? new Date(it.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
   return (
-    <div style={{ maxWidth: 860 }}>
+    <div style={{ maxWidth: 980 }}>
       {loading && <div className="mv-blurb" style={{ padding: '18px 0' }}>Reading the thread…</div>}
       {error && <div className="mv-blurb" style={{ padding: '18px 0', color: 'var(--mv-magenta-deep)' }}>Could not load correspondence: {error}</div>}
       {!loading && !error && !items.length && <div className="mv-blurb" style={{ padding: '18px 0' }}>Nothing said yet. Emails, courier replies and internal notes will appear here.</div>}
