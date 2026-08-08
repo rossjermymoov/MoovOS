@@ -2,17 +2,14 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, AlertTriangle, Phone, Mail, MapPin, Building2,
-  Users, MessageSquare, TrendingUp, DollarSign, Zap, Info,
-  Pencil, X, Check, ShieldCheck, Trash2, Bug, ChevronDown, ChevronRight, RefreshCw,
-  ToggleLeft, ToggleRight, Plus, FlaskConical, Heart, Rocket,
+  ArrowLeft, AlertTriangle, Phone, Mail, MapPin,
+  X, Check, Trash2, Bug, RefreshCw, Plus, FlaskConical,
 } from 'lucide-react';
 import axios from 'axios';
 
 const api = axios.create({ baseURL: '/api' });
 import { customersApi } from '../../api/customers';
 import { customerRateCardsApi } from '../../api/customerRateCards';
-import { HealthBadge, AccountStatusBadge, TierBadge, CreditUtilisationBar } from '../../components/ui/StatusBadge';
 import CustomerPricingTab from './tabs/CustomerPricingTab';
 import HappinessScore from './tabs/HappinessScore';
 import CustomerOnboardingTab from './tabs/CustomerOnboardingTab';
@@ -21,14 +18,14 @@ import { integrationSoftwareApi } from '../../api/integrationSoftware';
 import { format } from 'date-fns';
 
 const TABS = [
-  { key: 'overview',  label: 'Overview',        icon: Building2 },
-  { key: 'onboarding', label: 'Onboarding',      icon: Rocket },
-  { key: 'contacts',  label: 'Contacts',         icon: Users },
-  { key: 'comms',     label: 'Communications',   icon: MessageSquare },
-  { key: 'volume',    label: 'Performance',      icon: TrendingUp },
-  { key: 'financial', label: 'Financial',        icon: DollarSign },
-  { key: 'pricing',   label: 'Pricing',          icon: Zap },
-  { key: 'happiness', label: 'Happiness',        icon: Heart },
+  { key: 'overview',   label: 'Overview' },
+  { key: 'onboarding', label: 'Onboarding' },
+  { key: 'contacts',   label: 'Contacts' },
+  { key: 'comms',      label: 'Communications' },
+  { key: 'volume',     label: 'Performance' },
+  { key: 'financial',  label: 'Financial' },
+  { key: 'pricing',    label: 'Pricing' },
+  { key: 'happiness',  label: 'Happiness' },
 ];
 
 const COMPANY_TYPE_LABELS = {
@@ -45,34 +42,42 @@ const BILLING_PERIOD_LABELS = {
 
 const gbp = (n) => `£${parseFloat(n || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-// ─── Shared field components ─────────────────────────────────
-const inp = (extra = {}) => ({
-  background: '#FFFFFF', border: '1px solid var(--color-text)',
-  borderRadius: 0, padding: '5px 10px', color: 'var(--color-text)', fontSize: 12,
-  outline: 'none', width: '100%', boxSizing: 'border-box', fontFamily: 'var(--font-body)', ...extra,
-});
-const sel = () => inp({ cursor: 'pointer' });
-
-function Row({ label, value, edit, editNode }) {
+// status_key → the one status language (four marks, fixed meanings)
+const STATUS_MARK = {
+  active:     ['settled',   'Active'],
+  onboarding: ['waiting',   'Onboarding'],
+  on_stop:    ['attention', 'On stop'],
+  suspended:  ['attention', 'Suspended'],
+  churned:    ['waiting',   'Churned'],
+};
+function StateMark({ status }) {
+  const [mk, label] = STATUS_MARK[status] || ['waiting', (status || '').replace(/_/g, ' ')];
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, minHeight: 34, padding: '5px 0', borderBottom: 'var(--ds-hairline)' }}>
-      <span style={{ fontSize: 11, color: 'var(--ds-muted)', flexShrink: 0, whiteSpace: 'nowrap', minWidth: 120 }}>{label}</span>
-      {edit
-        ? <div style={{ width: 200, flexShrink: 0 }}>{editNode}</div>
-        : <span style={{ fontSize: 13, color: 'var(--color-text)', textAlign: 'right', wordBreak: 'break-word', fontWeight: 500 }}>{value || '—'}</span>}
+    <span className={`mv-state mv-state--${mk}`}>
+      <span className={`mv-mark mv-mark--${mk}`} />
+      <span className="mv-state-label">{label}</span>
+    </span>
+  );
+}
+
+// ─── Shared field + section components ───────────────────────
+function Section({ title, children, style }) {
+  return (
+    <div style={{ marginBottom: 22, ...style }}>
+      <div className="mv-section">{title}</div>
+      <div className="mv-rule" style={{ marginBottom: 2 }} />
+      <div className="mv-facts">{children}</div>
     </div>
   );
 }
 
-function SectionTitle({ children }) {
-  return <h3 style={{ fontSize: 9, fontWeight: 600, color: 'var(--color-accent)', textTransform: 'uppercase', letterSpacing: '.15em', margin: 0 }}>{children}</h3>;
-}
-
-function InfoCard({ title, children }) {
+function Row({ label, value, edit, editNode }) {
   return (
-    <div style={{ marginBottom: 8 }}>
-      <SectionTitle>{title}</SectionTitle>
-      <div style={{ borderTop: '2px solid var(--color-divider)', marginTop: 8 }}>{children}</div>
+    <div className="mv-fact">
+      <span className="mv-fact-k">{label}</span>
+      {edit
+        ? <span style={{ width: 220, flexShrink: 0 }}>{editNode}</span>
+        : <span className="mv-fact-v" style={{ textAlign: 'right', wordBreak: 'break-word' }}>{value ?? '—'}</span>}
     </div>
   );
 }
@@ -91,7 +96,6 @@ function CustomerRateCardAssignments({ customerId }) {
     enabled: !!customerId,
   });
 
-  // Update a specific link (by link_id) — rate card, account number, or label
   const updateLink = useMutation({
     mutationFn: ({ linkId, ...fields }) =>
       fetch(`/api/customer-carrier-links/${customerId}/link/${linkId}`, {
@@ -102,7 +106,6 @@ function CustomerRateCardAssignments({ customerId }) {
     onSuccess: () => qc.invalidateQueries(['customer-carrier-links', customerId]),
   });
 
-  // Remove a specific link by ID
   const removeLink = useMutation({
     mutationFn: (linkId) =>
       fetch(`/api/customer-carrier-links/${customerId}/link/${linkId}`, { method: 'DELETE' })
@@ -110,7 +113,6 @@ function CustomerRateCardAssignments({ customerId }) {
     onSuccess: () => qc.invalidateQueries(['customer-carrier-links', customerId]),
   });
 
-  // Add a new account to an existing carrier
   const addAccount = useMutation({
     mutationFn: ({ courierId, accountNumber, label }) =>
       fetch(`/api/customer-carrier-links/${customerId}`, {
@@ -121,158 +123,23 @@ function CustomerRateCardAssignments({ customerId }) {
     onSuccess: () => qc.invalidateQueries(['customer-carrier-links', customerId]),
   });
 
-  if (isLoading) return null;
-  if (isError) return (
-    <InfoCard title="Rate Cards">
-      <span style={{ fontSize: 12, color: '#E91E8C', fontStyle: 'italic' }}>Error loading carrier links.</span>
-    </InfoCard>
-  );
-
-  const activeCarriers = carrierLinks.filter(link => link.active === true);
-
-  if (!activeCarriers.length) return (
-    <InfoCard title="Rate Cards">
-      <span style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic' }}>No active carrier links — link carriers to assign rate cards.</span>
-    </InfoCard>
-  );
+  if (isLoading) return <Section title="Carrier accounts"><div className="mv-blurb" style={{ marginTop: 0 }}>Loading…</div></Section>;
+  if (isError) return <Section title="Carrier accounts"><div className="mv-blurb" style={{ marginTop: 0, color: 'var(--mv-magenta-deep)' }}>Could not load carrier accounts.</div></Section>;
 
   return (
-    <InfoCard title="Rate Cards">
-      {activeCarriers.map(carrier => (
-        <CarrierAccountsRow
-          key={carrier.courier_id}
-          carrier={carrier}
-          customerId={customerId}
-          onUpdateLink={updateLink}
-          onRemoveLink={removeLink}
-          onAddAccount={addAccount}
-        />
+    <Section title="Carrier accounts">
+      {carrierLinks.length === 0 && <div className="mv-fact"><span className="mv-fact-k">No carriers linked yet.</span></div>}
+      {carrierLinks.map(link => (
+        <div className="mv-fact" key={link.link_id || link.id}>
+          <span className="mv-fact-k">{link.carrier_name || link.courier_name}{link.label ? ` · ${link.label}` : ''}</span>
+          <span className="mv-fact-v mv-num">{link.account_number || '—'}</span>
+        </div>
       ))}
-      <p style={{ fontSize:11, color:'#475569', marginTop:6, fontStyle:'italic' }}>
-        Master is the default rate card. Select an alternative to use custom pricing for this customer.
-      </p>
-    </InfoCard>
+    </Section>
   );
 }
 
-function CarrierAccountsRow({ carrier, customerId, onUpdateLink, onRemoveLink, onAddAccount }) {
-  const [addingAccount, setAddingAccount] = useState(false);
-  const [newAcctNum,    setNewAcctNum]    = useState('');
-  const [newLabel,      setNewLabel]      = useState('');
-
-  const inpSt = { fontSize: 11, padding: '3px 6px', border: '1px solid rgba(0,0,0,0.15)', borderRadius: 4, background: '#fff', color: '#0F172A' };
-
-  return (
-    <div style={{ marginBottom: 10 }}>
-      {/* Carrier name header row */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>{carrier.courier_name}</span>
-        <button
-          onClick={() => setAddingAccount(v => !v)}
-          title="Add another account number for this carrier"
-          style={{ fontSize: 11, padding: '2px 8px', border: '1px solid rgba(0,0,0,0.15)', borderRadius: 4, background: 'none', cursor: 'pointer', color: '#475569' }}
-        >
-          + Add account
-        </button>
-      </div>
-
-      {/* Each account row */}
-      {(carrier.accounts || []).map(acct => (
-        <div key={acct.link_id} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, paddingLeft: 8 }}>
-          {/* Label (editable inline) */}
-          <input
-            defaultValue={acct.label || ''}
-            placeholder="Label (e.g. Perishable)"
-            onBlur={e => {
-              const val = e.target.value.trim();
-              if (val !== (acct.label || '')) onUpdateLink.mutate({ linkId: acct.link_id, label: val });
-            }}
-            style={{ ...inpSt, width: 120 }}
-          />
-          {/* Account number (editable inline) */}
-          <input
-            defaultValue={acct.account_number || ''}
-            placeholder="Account no."
-            onBlur={e => {
-              const val = e.target.value.trim();
-              if (val !== (acct.account_number || '')) onUpdateLink.mutate({ linkId: acct.link_id, account_number: val });
-            }}
-            style={{ ...inpSt, width: 110, fontFamily: 'monospace' }}
-          />
-          {/* Rate card selector */}
-          <select
-            value={String(acct.carrier_rate_card_id ?? carrier.master_card_id ?? '')}
-            onChange={e => onUpdateLink.mutate({ linkId: acct.link_id, carrier_rate_card_id: parseInt(e.target.value) })}
-            style={{ ...inpSt, minWidth: 130 }}
-          >
-            {(carrier.available_cards || []).map(card => (
-              <option key={card.id} value={card.id}>
-                {card.name}{card.is_master ? ' (Master)' : ''}
-              </option>
-            ))}
-          </select>
-          {/* Remove this account (only if there are multiple, or always allow) */}
-          <button
-            onClick={() => {
-              if (window.confirm(`Remove this account${acct.account_number ? ` (${acct.account_number})` : ''}?`)) {
-                onRemoveLink.mutate(acct.link_id);
-              }
-            }}
-            title="Remove this account"
-            style={{ fontSize: 11, padding: '2px 6px', border: '1px solid rgba(233,30,140,0.3)', borderRadius: 4, background: 'none', cursor: 'pointer', color: '#E91E8C' }}
-          >
-            ✕
-          </button>
-        </div>
-      ))}
-
-      {/* Add account form (shown when + Add account is clicked) */}
-      {addingAccount && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 8, marginTop: 4 }}>
-          <input
-            value={newLabel}
-            onChange={e => setNewLabel(e.target.value)}
-            placeholder="Label (e.g. Perishable)"
-            style={{ ...inpSt, width: 120 }}
-          />
-          <input
-            value={newAcctNum}
-            onChange={e => setNewAcctNum(e.target.value)}
-            placeholder="Account no."
-            style={{ ...inpSt, width: 110, fontFamily: 'monospace' }}
-          />
-          <button
-            onClick={() => {
-              if (!newAcctNum.trim()) return;
-              onAddAccount.mutate({
-                courierId: carrier.courier_id,
-                accountNumber: newAcctNum.trim(),
-                label: newLabel.trim() || null,
-              });
-              setNewAcctNum('');
-              setNewLabel('');
-              setAddingAccount(false);
-            }}
-            style={{ fontSize: 11, padding: '3px 10px', border: '1px solid rgba(0,200,83,0.4)', borderRadius: 4, background: 'none', cursor: 'pointer', color: '#00C853', fontWeight: 600 }}
-          >
-            Save
-          </button>
-          <button
-            onClick={() => { setAddingAccount(false); setNewAcctNum(''); setNewLabel(''); }}
-            style={{ fontSize: 11, padding: '3px 8px', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 4, background: 'none', cursor: 'pointer', color: '#64748B' }}
-          >
-            Cancel
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Overview Tab ────────────────────────────────────────────
-// ─── Test Account Section ────────────────────────────────────────────────────
-// Toggle that marks a customer as a test/developer account. All incoming
-// charges are forced to £0 and surcharges are skipped.
+// ─── Test Account Section ────────────────────────────────────
 function TestAccountSection({ customer, onToggle }) {
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
@@ -297,45 +164,28 @@ function TestAccountSection({ customer, onToggle }) {
   }
 
   return (
-    <div className="moov-card" style={{
-      marginBottom: 16, padding: '14px 18px',
-      border: enabled ? '1px solid rgba(233,30,140,0.35)' : '1px solid rgba(0,0,0,0.08)',
-      background: enabled ? 'rgba(233,30,140,0.05)' : undefined,
+    <div style={{
+      marginBottom: 18, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14,
+      borderLeft: `3px solid ${enabled ? 'var(--mv-magenta)' : 'var(--mv-divider)'}`,
+      background: enabled ? 'rgba(233,30,140,.06)' : 'transparent',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <FlaskConical size={18} color={enabled ? '#E91E8C' : '#94A3B8'} strokeWidth={1.5} />
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Test Account</span>
-            {enabled && (
-              <span style={{
-                fontSize: 11, fontWeight: 700, color: '#E91E8C',
-                background: 'rgba(233,30,140,0.12)', border: '1px solid rgba(233,30,140,0.35)',
-                borderRadius: 12, padding: '2px 8px', letterSpacing: '0.3px',
-              }}>ACTIVE — ALL CHARGES £0</span>
-            )}
-          </div>
-          <p style={{ fontSize: 12, color: '#64748B', margin: '3px 0 0' }}>
-            When enabled, all incoming shipment charges are forced to £0 and surcharges are skipped.
-            Add Moov IDs or DCIDs below to route multiple test accounts here.
-          </p>
+      <FlaskConical size={18} color={enabled ? 'var(--mv-magenta)' : 'var(--mv-ink-45)'} strokeWidth={1.5} />
+      <div style={{ flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 13.5, fontWeight: 800 }}>Test account</span>
+          {enabled && <span className="mv-state-label" style={{ color: 'var(--mv-magenta-deep)' }}>All charges £0</span>}
         </div>
-        <button
-          onClick={toggle}
-          disabled={busy}
-          style={{ background: 'none', border: 'none', cursor: busy ? 'wait' : 'pointer', padding: 4, opacity: busy ? 0.5 : 1 }}
-        >
-          {enabled
-            ? <ToggleRight size={32} color="#E91E8C" strokeWidth={1.5} />
-            : <ToggleLeft  size={32} color="#94A3B8" strokeWidth={1.5} />}
-        </button>
+        <p className="mv-blurb" style={{ margin: '3px 0 0', maxWidth: 620 }}>
+          When enabled, all incoming shipment charges are forced to £0 and surcharges are skipped.
+          Add Moov IDs or DCIDs below to route multiple test accounts here.
+        </p>
       </div>
+      <div className={'mv-switch' + (enabled ? ' is-on' : '')} onClick={busy ? undefined : toggle} style={{ opacity: busy ? 0.5 : 1 }}><span /></div>
     </div>
   );
 }
 
-// ─── Linked Moov IDs Section ──────────────────────────────────────────────────
-// Manage billing_aliases — the Moov IDs / DCIDs that route to this customer.
+// ─── Linked Moov IDs Section ─────────────────────────────────
 function LinkedIdsSection({ customer }) {
   const qc = useQueryClient();
   const [aliases, setAliases] = useState(customer.billing_aliases || []);
@@ -371,60 +221,38 @@ function LinkedIdsSection({ customer }) {
   }
 
   return (
-    <div className="moov-card" style={{ marginBottom: 16, padding: '14px 18px' }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', marginBottom: 10 }}>
-        Linked Moov IDs / DCIDs
-      </div>
-      <p style={{ fontSize: 12, color: '#64748B', margin: '0 0 12px' }}>
+    <div style={{ marginBottom: 22 }}>
+      <div className="mv-section">Linked Moov IDs / DCIDs</div>
+      <div className="mv-rule" style={{ marginBottom: 10 }} />
+      <p className="mv-blurb" style={{ marginTop: 0, maxWidth: 620 }}>
         Any Moov ID or DCID added here will route incoming shipments to this account.
         Use this to consolidate multiple test accounts under one record.
       </p>
 
-      {/* Add new alias */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+      <div style={{ display: 'flex', gap: 8, margin: '12px 0', alignItems: 'flex-end' }}>
         <input
+          className="mv-input"
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && addAlias()}
           placeholder="e.g. MOOV-0042 or DC-00123"
-          style={{
-            flex: 1, padding: '6px 12px', borderRadius: 8, fontSize: 12,
-            border: '1px solid rgba(0,0,0,0.12)', outline: 'none', color: '#0F172A',
-            fontFamily: 'monospace',
-          }}
+          style={{ fontFamily: 'monospace', maxWidth: 300 }}
         />
-        <button
-          onClick={addAlias}
-          disabled={adding || !input.trim()}
-          style={{
-            padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-            background: '#00C853', color: '#000', border: 'none', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: 4, opacity: adding || !input.trim() ? 0.5 : 1,
-          }}
-        >
+        <button className="mv-btn mv-btn--sm" onClick={addAlias} disabled={adding || !input.trim()}
+          style={adding || !input.trim() ? { opacity: 0.5, pointerEvents: 'none' } : undefined}>
           <Plus size={12} /> Add
         </button>
       </div>
 
-      {/* Existing aliases */}
       {aliases.length === 0 ? (
-        <span style={{ fontSize: 12, color: '#94A3B8' }}>No linked IDs yet.</span>
+        <span className="mv-blurb" style={{ marginTop: 0 }}>No linked IDs yet.</span>
       ) : (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {aliases.map(alias => (
-            <div key={alias} style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              background: 'rgba(0,0,0,0.05)', border: '1px solid rgba(0,0,0,0.10)',
-              borderRadius: 8, padding: '4px 10px', fontSize: 12,
-            }}>
-              <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#0F172A' }}>{alias}</span>
-              <button
-                onClick={() => removeAlias(alias)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', lineHeight: 1 }}
-              >
-                <X size={12} color="#94A3B8" />
-              </button>
-            </div>
+            <span key={alias} className="mv-chip" style={{ cursor: 'default', gap: 6, fontFamily: 'monospace', display: 'inline-flex', alignItems: 'center' }}>
+              {alias}
+              <button onClick={() => removeAlias(alias)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', color: 'var(--mv-ink-45)' }}><X size={12} /></button>
+            </span>
           ))}
         </div>
       )}
@@ -442,7 +270,6 @@ function IntegrationOnboardingCard({ c, edit, form, set }) {
   const method = edit ? form.integration_method : c.integration_method;
   const activeTemplates = templates.filter(t => t.is_active);
 
-  // Auto-suggest a template from the customer's tier + integration method.
   const tier = edit ? form.tier : c.tier;
   const suggested = activeTemplates.find(t =>
     (t.applicable_methods || []).includes(method) || (t.applicable_tiers || []).includes(tier));
@@ -450,10 +277,10 @@ function IntegrationOnboardingCard({ c, edit, form, set }) {
   const showSuggest = edit && suggested && suggested.id !== chosenId;
 
   return (
-    <InfoCard title="Integration & Onboarding">
+    <Section title="Integration & Onboarding">
       <Row label="Integration" value={INTEGRATION_LABELS[c.integration_method] || '—'} edit={edit}
         editNode={
-          <select style={sel()} value={form.integration_method} onChange={e => set('integration_method', e.target.value)}>
+          <select className="mv-input" value={form.integration_method} onChange={e => set('integration_method', e.target.value)}>
             <option value="moov_ninja">Moov Ninja</option>
             <option value="moov_api">Moov API</option>
             <option value="third_party">Third-party software</option>
@@ -464,7 +291,7 @@ function IntegrationOnboardingCard({ c, edit, form, set }) {
         <Row label="Software" value={c.third_party_software} edit={edit}
           editNode={
             <>
-              <input style={inp()} list="moov-software-list" value={form.third_party_software}
+              <input className="mv-input" list="moov-software-list" value={form.third_party_software}
                 onChange={e => set('third_party_software', e.target.value)} placeholder="e.g. ShipStation" />
               <datalist id="moov-software-list">
                 {software.map(s => <option key={s.id} value={s.name} />)}
@@ -475,19 +302,19 @@ function IntegrationOnboardingCard({ c, edit, form, set }) {
 
       <Row label="Template" value={c.onboarding_template_name || 'Not set'} edit={edit}
         editNode={
-          <select style={sel()} value={form.onboarding_template_id} onChange={e => set('onboarding_template_id', e.target.value)}>
+          <select className="mv-input" value={form.onboarding_template_id} onChange={e => set('onboarding_template_id', e.target.value)}>
             <option value="">Not set</option>
             {activeTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
         } />
 
       {showSuggest && (
-        <div style={{ fontSize: 11, color: '#7B2FBE', marginTop: 4, paddingLeft: 2, cursor: 'pointer' }}
+        <div style={{ fontSize: 11, color: 'var(--mv-purple)', marginTop: 6, cursor: 'pointer' }}
           onClick={() => set('onboarding_template_id', suggested.id)}>
           Suggested: <strong>{suggested.name}</strong> — click to apply
         </div>
       )}
-    </InfoCard>
+    </Section>
   );
 }
 
@@ -552,116 +379,102 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
 
   return (
     <div>
-      {/* Test Account toggle + Linked IDs */}
       <TestAccountSection customer={c} onToggle={onSaved} />
       <LinkedIdsSection customer={c} />
 
       {/* Edit / Save bar */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10, gap: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14, gap: 8 }}>
         {edit ? (
           <>
-            <button className="ds-btn ds-btn-secondary" onClick={() => setEdit(false)}><X size={13} /> Cancel</button>
-            <button className="ds-btn ds-btn-primary" onClick={() => save.mutate()} disabled={save.isPending}>
+            <button className="mv-btn mv-btn--sm" onClick={() => setEdit(false)}><X size={13} /> Cancel</button>
+            <button className="mv-btn mv-btn--sm mv-btn--primary" onClick={() => save.mutate()} disabled={save.isPending}>
               <Check size={13} /> {save.isPending ? 'Saving…' : 'Save changes'}
             </button>
           </>
         ) : (
-          <button className="ds-btn ds-btn-secondary" onClick={startEdit}><Pencil size={13} /> Edit details</button>
+          <button className="mv-btn mv-btn--sm" onClick={startEdit}>Edit details</button>
         )}
       </div>
 
       {save.isError && (
-        <div style={{ marginBottom: 10, padding: 8, background: 'rgba(233,30,140,0.1)', border: '1px solid #E91E8C', borderRadius: 6, fontSize: 12, color: '#E91E8C' }}>
-          Failed to save. Please try again.
+        <div className="mv-banner" style={{ marginBottom: 16 }}>
+          <div className="mv-banner-title">Couldn’t save</div>
+          <div className="mv-banner-sub">Something went wrong saving these changes. Please try again.</div>
         </div>
       )}
 
-      {/* Two-column grid — same as before */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      {/* Two-column grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40 }}>
 
         {/* LEFT COLUMN */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-          <InfoCard title="Business Details">
-            <Row label="Business Name" value={c.business_name} edit={edit}
-              editNode={<input style={inp()} value={form.business_name} onChange={e => set('business_name', e.target.value)} />} />
-            <Row label="Company Type" value={COMPANY_TYPE_LABELS[c.company_type]} edit={edit}
+        <div>
+          <Section title="Business details">
+            <Row label="Business name" value={c.business_name} edit={edit}
+              editNode={<input className="mv-input" value={form.business_name} onChange={e => set('business_name', e.target.value)} />} />
+            <Row label="Company type" value={COMPANY_TYPE_LABELS[c.company_type]} edit={edit}
               editNode={
-                <select style={sel()} value={form.company_type} onChange={e => set('company_type', e.target.value)}>
+                <select className="mv-input" value={form.company_type} onChange={e => set('company_type', e.target.value)}>
                   <option value="limited_company">Limited Company (Ltd)</option>
                   <option value="partnership">Partnership / LLP</option>
                   <option value="sole_trader">Sole Trader</option>
                 </select>
               } />
-            <Row label="Company Reg. No." value={c.company_reg_number} edit={edit}
-              editNode={<input style={inp()} value={form.company_reg_number} onChange={e => set('company_reg_number', e.target.value)} placeholder="12345678" />} />
-            <Row label="VAT Number" value={c.vat_number} edit={edit}
-              editNode={<input style={inp()} value={form.vat_number} onChange={e => set('vat_number', e.target.value)} placeholder="GB123456789" />} />
+            <Row label="Company reg. no." value={c.company_reg_number} edit={edit}
+              editNode={<input className="mv-input" value={form.company_reg_number} onChange={e => set('company_reg_number', e.target.value)} placeholder="12345678" />} />
+            <Row label="VAT number" value={c.vat_number} edit={edit}
+              editNode={<input className="mv-input" value={form.vat_number} onChange={e => set('vat_number', e.target.value)} placeholder="GB123456789" />} />
             <Row label="Phone" value={c.phone_number} edit={edit}
-              editNode={<input style={inp()} value={form.phone_number} onChange={e => set('phone_number', e.target.value)} />} />
-            <Row label="Main Email" value={c.primary_email} edit={edit}
-              editNode={<input style={inp()} value={form.primary_email} onChange={e => set('primary_email', e.target.value)} />} />
-            <Row label="Accounts Email" value={c.accounts_email} edit={edit}
-              editNode={<input style={inp()} value={form.accounts_email} onChange={e => set('accounts_email', e.target.value)} placeholder="(same as main)" />} />
-          </InfoCard>
+              editNode={<input className="mv-input" value={form.phone_number} onChange={e => set('phone_number', e.target.value)} />} />
+            <Row label="Main email" value={c.primary_email} edit={edit}
+              editNode={<input className="mv-input" value={form.primary_email} onChange={e => set('primary_email', e.target.value)} />} />
+            <Row label="Accounts email" value={c.accounts_email} edit={edit}
+              editNode={<input className="mv-input" value={form.accounts_email} onChange={e => set('accounts_email', e.target.value)} placeholder="(same as main)" />} />
+          </Section>
 
-          <InfoCard title="Address">
-            <Row label="Address Line 1" value={c.address_line_1} edit={edit}
-              editNode={<input style={inp()} value={form.address_line_1} onChange={e => set('address_line_1', e.target.value)} />} />
-            <Row label="Address Line 2" value={c.address_line_2} edit={edit}
-              editNode={<input style={inp()} value={form.address_line_2} onChange={e => set('address_line_2', e.target.value)} />} />
-            <Row label="City / Town" value={c.city} edit={edit}
-              editNode={<input style={inp()} value={form.city} onChange={e => set('city', e.target.value)} />} />
+          <Section title="Address">
+            <Row label="Address line 1" value={c.address_line_1} edit={edit}
+              editNode={<input className="mv-input" value={form.address_line_1} onChange={e => set('address_line_1', e.target.value)} />} />
+            <Row label="Address line 2" value={c.address_line_2} edit={edit}
+              editNode={<input className="mv-input" value={form.address_line_2} onChange={e => set('address_line_2', e.target.value)} />} />
+            <Row label="City / town" value={c.city} edit={edit}
+              editNode={<input className="mv-input" value={form.city} onChange={e => set('city', e.target.value)} />} />
             <Row label="County" value={c.county} edit={edit}
-              editNode={<input style={inp()} value={form.county} onChange={e => set('county', e.target.value)} />} />
+              editNode={<input className="mv-input" value={form.county} onChange={e => set('county', e.target.value)} />} />
             <Row label="Postcode" value={c.postcode} edit={edit}
-              editNode={<input style={inp()} value={form.postcode} onChange={e => set('postcode', e.target.value.toUpperCase())} />} />
+              editNode={<input className="mv-input" value={form.postcode} onChange={e => set('postcode', e.target.value.toUpperCase())} />} />
             <Row label="Country" value={c.country} edit={edit}
-              editNode={<input style={inp()} value={form.country} onChange={e => set('country', e.target.value)} />} />
-          </InfoCard>
+              editNode={<input className="mv-input" value={form.country} onChange={e => set('country', e.target.value)} />} />
+          </Section>
 
           {(c.eori_number || c.ioss_number || edit) && (
-            <InfoCard title="International Trade">
-              <Row label="EORI Number" value={c.eori_number} edit={edit}
-                editNode={<input style={inp()} value={form.eori_number} onChange={e => set('eori_number', e.target.value)} placeholder="GB123456789000" />} />
-              <Row label="IOSS Number" value={c.ioss_number} edit={edit}
-                editNode={<input style={inp()} value={form.ioss_number} onChange={e => set('ioss_number', e.target.value)} placeholder="IM1234567890" />} />
-            </InfoCard>
+            <Section title="International trade">
+              <Row label="EORI number" value={c.eori_number} edit={edit}
+                editNode={<input className="mv-input" value={form.eori_number} onChange={e => set('eori_number', e.target.value)} placeholder="GB123456789000" />} />
+              <Row label="IOSS number" value={c.ioss_number} edit={edit}
+                editNode={<input className="mv-input" value={form.ioss_number} onChange={e => set('ioss_number', e.target.value)} placeholder="IM1234567890" />} />
+            </Section>
           )}
 
           {(c.dc_customer_id || edit) && (
-            <InfoCard title="API Integration">
-              <Row
-                label="DC Customer ID"
-                value={c.dc_customer_id}
-                edit={edit}
-                editNode={
-                  <input
-                    style={inp()}
-                    value={form.dc_customer_id}
-                    onChange={e => set('dc_customer_id', e.target.value)}
-                    placeholder="e.g. Europa"
-                  />
-                }
-              />
+            <Section title="API integration">
+              <Row label="DC customer ID" value={c.dc_customer_id} edit={edit}
+                editNode={<input className="mv-input" value={form.dc_customer_id} onChange={e => set('dc_customer_id', e.target.value)} placeholder="e.g. Europa" />} />
               {edit && (
-                <div style={{ fontSize: 11, color: '#64748B', marginTop: 4, paddingLeft: 2 }}>
+                <div className="mv-blurb" style={{ marginTop: 6 }}>
                   Set this to the identifier the customer sends as their account ID in API webhooks.
                   Billing will fall back to this if no standard account number is matched.
                 </div>
               )}
-            </InfoCard>
+            </Section>
           )}
-
         </div>
 
         {/* RIGHT COLUMN */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-          <InfoCard title="Account Settings">
+        <div>
+          <Section title="Account settings">
             <Row label="Tier" value={c.tier ? c.tier.charAt(0).toUpperCase() + c.tier.slice(1) : '—'} edit={edit}
               editNode={
-                <select style={sel()} value={form.tier} onChange={e => set('tier', e.target.value)}>
+                <select className="mv-input" value={form.tier} onChange={e => set('tier', e.target.value)}>
                   <option value="bronze">Bronze</option>
                   <option value="silver">Silver</option>
                   <option value="gold">Gold</option>
@@ -669,88 +482,81 @@ function OverviewTab({ c, onSaved, onDeleteRequest }) {
                   <option value="enterprise">Enterprise</option>
                 </select>
               } />
-            <Row label="Credit Limit" value={gbp(c.credit_limit)} edit={edit}
-              editNode={<input style={inp()} type="number" min="0" value={form.credit_limit} onChange={e => set('credit_limit', e.target.value)} />} />
-            <Row label="Bond Held" value={parseFloat(c.bond_amount_held) > 0 ? gbp(c.bond_amount_held) : 'None'} edit={edit}
-              editNode={<input style={inp()} type="number" min="0" step="0.01" value={form.bond_amount_held} onChange={e => set('bond_amount_held', e.target.value)} placeholder="0.00" />} />
-            <Row label="Billing Period" value={BILLING_PERIOD_LABELS[c.billing_cycle] || c.billing_cycle} edit={edit}
+            <Row label="Credit limit" value={gbp(c.credit_limit)} edit={edit}
+              editNode={<input className="mv-input" type="number" min="0" value={form.credit_limit} onChange={e => set('credit_limit', e.target.value)} />} />
+            <Row label="Bond held" value={parseFloat(c.bond_amount_held) > 0 ? gbp(c.bond_amount_held) : 'None'} edit={edit}
+              editNode={<input className="mv-input" type="number" min="0" step="0.01" value={form.bond_amount_held} onChange={e => set('bond_amount_held', e.target.value)} placeholder="0.00" />} />
+            <Row label="Billing period" value={BILLING_PERIOD_LABELS[c.billing_cycle] || c.billing_cycle} edit={edit}
               editNode={
-                <select style={sel()} value={form.billing_cycle} onChange={e => set('billing_cycle', e.target.value)}>
+                <select className="mv-input" value={form.billing_cycle} onChange={e => set('billing_cycle', e.target.value)}>
                   <option value="weekly">Weekly</option>
                   <option value="fortnightly">Fortnightly</option>
                   <option value="monthly">Monthly</option>
                 </select>
               } />
-            <Row label="Payment Terms" value={`${c.payment_terms_days} days`} edit={edit}
+            <Row label="Payment terms" value={`${c.payment_terms_days} days`} edit={edit}
               editNode={
-                <select style={sel()} value={form.payment_terms_days} onChange={e => set('payment_terms_days', e.target.value)}>
+                <select className="mv-input" value={form.payment_terms_days} onChange={e => set('payment_terms_days', e.target.value)}>
                   <option value={7}>7 days</option>
                   <option value={14}>14 days</option>
                   <option value={28}>28 days</option>
                   <option value={30}>30 days</option>
                 </select>
               } />
-            <Row label="Manual Billing" value={c.manual_billing ? (
-                <span style={{ color: '#D97706', fontWeight: 600, fontSize: 12 }}>● Manual — no webhook expected</span>
-              ) : (
-                <span style={{ color: '#00C853', fontWeight: 600, fontSize: 12 }}>● Platform — webhooks active</span>
-              )} edit={edit}
+            <Row label="Manual billing" value={c.manual_billing
+                ? <span style={{ color: 'var(--mv-ink-62)', fontWeight: 600 }}>Manual — no webhook expected</span>
+                : <span style={{ color: 'var(--mv-green-deep)', fontWeight: 600 }}>Platform — webhooks active</span>} edit={edit}
               editNode={
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
                   <input type="checkbox" checked={!!form.manual_billing}
                     onChange={e => set('manual_billing', e.target.checked)}
-                    style={{ width: 16, height: 16, accentColor: '#D97706' }} />
-                  <span style={{ fontSize: 13, color: form.manual_billing ? '#D97706' : '#64748B' }}>
+                    style={{ width: 16, height: 16, accentColor: 'var(--mv-purple)' }} />
+                  <span style={{ fontSize: 13, color: 'var(--mv-ink-62)' }}>
                     {form.manual_billing ? 'Manual — suppress aged alerts' : 'Platform — expect webhooks'}
                   </span>
                 </label>
               } />
-            <Row label="Account status" value={(() => { const M = { active: ['settled', 'Active'], onboarding: ['progress', 'Onboarding'], on_stop: ['attention', 'On stop'], suspended: ['waiting', 'Suspended'], churned: ['waiting', 'Churned'] }; const m = M[c.account_status] || ['waiting', (c.account_status || '').replace(/_/g, ' ')]; return <span className={'ds-status ds-status--' + m[0]}><span className={'ds-mark ds-mark--' + m[0]} />{m[1]}</span>; })()} />
-            <Row label="Health" value={(() => { const m = c.health_score === 'green' ? ['settled', 'Healthy'] : (c.health_score === 'amber' ? ['attention', 'Watch'] : ['attention', 'At risk']); return <span className={'ds-status ds-status--' + m[0]}><span className={'ds-mark ds-mark--' + m[0]} />{m[1]}</span>; })()} />
-          </InfoCard>
+            <Row label="Account status" value={<StateMark status={c.account_status} />} />
+            <Row label="Health" value={(() => {
+              const m = c.health_score === 'green' ? ['settled', 'Healthy'] : (c.health_score === 'amber' ? ['flight', 'Watch'] : ['attention', 'At risk']);
+              return <span className={`mv-state mv-state--${m[0]}`}><span className={`mv-mark mv-mark--${m[0]}`} /><span className="mv-state-label">{m[1]}</span></span>;
+            })()} />
+          </Section>
 
           <IntegrationOnboardingCard c={c} edit={edit} form={form} set={set} />
 
-          <InfoCard title="Team">
-            <Row label="Account Manager"   value={c.account_manager_name || 'Unmanaged'} />
+          <Section title="Team">
+            <Row label="Account manager"   value={c.account_manager_name || 'Unmanaged'} />
             <Row label="Salesperson"       value={c.salesperson_name || '—'} />
-            <Row label="Onboarding Person" value={c.onboarding_person_name || '—'} />
-            <Row label="Customer Since"    value={c.date_onboarded ? format(new Date(c.date_onboarded), 'dd MMM yyyy') : '—'} />
-          </InfoCard>
+            <Row label="Onboarding person" value={c.onboarding_person_name || '—'} />
+            <Row label="Customer since"    value={c.date_onboarded ? format(new Date(c.date_onboarded), 'dd MMM yyyy') : '—'} />
+          </Section>
 
           <CustomerRateCardAssignments customerId={c.id} />
 
           {c.health_score_summary && (
-            <InfoCard title="Health Score Detail">
-              <p style={{ fontSize: 12, color: '#201e1d', lineHeight: 1.6 }}>{c.health_score_summary}</p>
+            <Section title="Health score detail">
+              <p className="mv-blurb" style={{ marginTop: 0 }}>{c.health_score_summary}</p>
               {c.health_score_updated && (
-                <p style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
+                <p className="mv-blurb" style={{ marginTop: 4, fontSize: 11 }}>
                   Last calculated: {format(new Date(c.health_score_updated), 'dd MMM yyyy, HH:mm')}
                 </p>
               )}
-            </InfoCard>
+            </Section>
           )}
-
         </div>
       </div>
 
       {/* Danger zone */}
       {!edit && (
-        <div style={{ marginTop: 24, padding: '16px 18px', border: '1px solid rgba(233,30,140,0.25)', borderRadius: 10, background: 'rgba(233,30,140,0.04)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#E91E8C' }}>Delete Customer</div>
-              <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
-                Permanently removes this customer and all associated data. This cannot be undone.
-              </div>
-            </div>
-            <button
-              onClick={onDeleteRequest}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 6, background: 'rgba(233,30,140,0.12)', border: '1px solid #E91E8C', color: '#E91E8C', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-            >
-              <Trash2 size={13} /> Delete Customer
-            </button>
+        <div className="mv-banner" style={{ marginTop: 24, justifyContent: 'space-between' }}>
+          <div>
+            <div className="mv-banner-title">Delete customer</div>
+            <div className="mv-banner-sub">Permanently removes this customer and all associated data. This cannot be undone.</div>
           </div>
+          <button className="mv-btn mv-btn--danger mv-btn--sm" onClick={onDeleteRequest} style={{ flexShrink: 0 }}>
+            <Trash2 size={13} /> Delete customer
+          </button>
         </div>
       )}
     </div>
@@ -775,35 +581,35 @@ function ContactsTab({ customerId, contacts = [], onRefresh }) {
 
   const startEdit = (ct) => { setEditingId(ct.id); setEditForm({ full_name: ct.full_name, job_title: ct.job_title || '', phone_number: ct.phone_number || '', email_address: ct.email_address, is_main_contact: ct.is_main_contact, is_finance_contact: ct.is_finance_contact }); };
   const gets = (ct) => ct.is_main_contact ? 'All updates' : ct.is_finance_contact ? 'Invoices' : 'Nothing automated';
-  const primary = (ct) => ct.is_main_contact ? ['settled', 'Primary'] : ct.is_finance_contact ? ['progress', 'Finance'] : ['waiting', '—'];
-  const fld = (v, on, ph) => <input className="ds-field" value={v} placeholder={ph} onChange={e => on(e.target.value)} style={{ borderBottom: '1px solid var(--color-text)' }} />;
+  const primary = (ct) => ct.is_main_contact ? ['settled', 'Primary'] : ct.is_finance_contact ? ['flight', 'Finance'] : ['waiting', '—'];
+  const fld = (v, on, ph) => <input className="mv-input" value={v} placeholder={ph} onChange={e => on(e.target.value)} />;
 
   return (
     <div style={{ maxWidth: 1040 }}>
-      <div className="ds-pagehead" style={{ paddingBottom: 12 }}>
-        <div className="ds-blurb">Who to ring, and who signs. The primary contact gets every automated update.</div>
-        <div className="actions">{!adding && <button className="ds-btn ds-btn-primary" onClick={() => setAdding(true)}><Plus size={15} />Add contact</button>}</div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20, marginBottom: 14 }}>
+        <p className="mv-blurb" style={{ marginTop: 0 }}>Who to ring, and who signs. The primary contact gets every automated update.</p>
+        {!adding && <button className="mv-btn mv-btn--primary mv-btn--sm" onClick={() => setAdding(true)}><Plus size={14} />Add contact</button>}
       </div>
 
       {adding && (
-        <div style={{ borderTop: '2px solid var(--color-divider)', padding: '16px 0', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 14 }}>
+        <div style={{ borderTop: '2px solid var(--mv-divider)', padding: '16px 0', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16 }}>
           {[['full_name', 'Name'], ['job_title', 'Role'], ['email_address', 'Email'], ['phone_number', 'Phone']].map(([k, l]) => (
-            <div key={k}><div className="ds-label" style={{ marginBottom: 6 }}>{l}</div>{fld(addForm[k], v => setAddForm(f => ({ ...f, [k]: v })), l)}</div>
+            <div key={k}><div className="mv-label">{l}</div>{fld(addForm[k], v => setAddForm(f => ({ ...f, [k]: v })), l)}</div>
           ))}
           <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-            <button className={'ds-chip' + (addForm.is_main_contact ? ' ds-chip--sel' : '')} onClick={() => setAddForm(f => ({ ...f, is_main_contact: !f.is_main_contact }))}>Primary contact</button>
-            <button className={'ds-chip' + (addForm.is_finance_contact ? ' ds-chip--sel' : '')} onClick={() => setAddForm(f => ({ ...f, is_finance_contact: !f.is_finance_contact }))}>Finance contact</button>
+            <button className={'mv-chip' + (addForm.is_main_contact ? ' is-on' : '')} onClick={() => setAddForm(f => ({ ...f, is_main_contact: !f.is_main_contact }))}>Primary contact</button>
+            <button className={'mv-chip' + (addForm.is_finance_contact ? ' is-on' : '')} onClick={() => setAddForm(f => ({ ...f, is_finance_contact: !f.is_finance_contact }))}>Finance contact</button>
             <div style={{ flex: 1 }} />
-            <button className="ds-btn ds-btn-secondary" onClick={() => { setAdding(false); setAddForm(BLANK_CONTACT); }}>Cancel</button>
-            <button className="ds-btn ds-btn-primary" disabled={!addForm.full_name || !addForm.email_address || addContact.isPending} onClick={() => addContact.mutate(addForm)}>Save contact</button>
+            <button className="mv-btn mv-btn--sm" onClick={() => { setAdding(false); setAddForm(BLANK_CONTACT); }}>Cancel</button>
+            <button className="mv-btn mv-btn--primary mv-btn--sm" disabled={!addForm.full_name || !addForm.email_address || addContact.isPending} onClick={() => addContact.mutate(addForm)}>Save contact</button>
           </div>
         </div>
       )}
 
-      <table className="ds-table" style={{ marginTop: adding ? 8 : 14 }}>
+      <table className="mv-table" style={{ marginTop: adding ? 8 : 6 }}>
         <thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Phone</th><th>Gets</th><th>Primary</th><th style={{ width: 66 }}></th></tr></thead>
         <tbody>
-          {contacts.length === 0 && !adding && <tr><td colSpan={7} className="ds-muted" style={{ padding: 24 }}>No contacts yet. Add the person who signs and the person you ring.</td></tr>}
+          {contacts.length === 0 && !adding && <tr><td colSpan={7} className="mv-cell-dim" style={{ padding: '24px 0' }}>No contacts yet. Add the person who signs and the person you ring.</td></tr>}
           {contacts.map(ct => {
             if (editingId === ct.id) return (
               <tr key={ct.id}>
@@ -811,26 +617,26 @@ function ContactsTab({ customerId, contacts = [], onRefresh }) {
                 <td>{fld(editForm.job_title, v => setEditForm(f => ({ ...f, job_title: v })), 'Role')}</td>
                 <td>{fld(editForm.email_address, v => setEditForm(f => ({ ...f, email_address: v })), 'Email')}</td>
                 <td>{fld(editForm.phone_number, v => setEditForm(f => ({ ...f, phone_number: v })), 'Phone')}</td>
-                <td colSpan={2}><div style={{ display: 'flex', gap: 6 }}><button className={'ds-chip' + (editForm.is_main_contact ? ' ds-chip--sel' : '')} onClick={() => setEditForm(f => ({ ...f, is_main_contact: !f.is_main_contact }))}>Primary</button><button className={'ds-chip' + (editForm.is_finance_contact ? ' ds-chip--sel' : '')} onClick={() => setEditForm(f => ({ ...f, is_finance_contact: !f.is_finance_contact }))}>Finance</button></div></td>
-                <td><div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}><button className="ds-btn ds-btn-primary" style={{ padding: '5px 8px' }} onClick={() => patchContact.mutate({ id: ct.id, data: editForm })}><Check size={13} /></button><button className="ds-btn ds-btn-secondary" style={{ padding: '5px 8px' }} onClick={() => setEditingId(null)}><X size={13} /></button></div></td>
+                <td colSpan={2}><div style={{ display: 'flex', gap: 6 }}><button className={'mv-chip' + (editForm.is_main_contact ? ' is-on' : '')} onClick={() => setEditForm(f => ({ ...f, is_main_contact: !f.is_main_contact }))}>Primary</button><button className={'mv-chip' + (editForm.is_finance_contact ? ' is-on' : '')} onClick={() => setEditForm(f => ({ ...f, is_finance_contact: !f.is_finance_contact }))}>Finance</button></div></td>
+                <td><div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}><button className="mv-btn mv-btn--sm mv-btn--primary" style={{ padding: '0 8px' }} onClick={() => patchContact.mutate({ id: ct.id, data: editForm })}><Check size={13} /></button><button className="mv-btn mv-btn--sm" style={{ padding: '0 8px' }} onClick={() => setEditingId(null)}><X size={13} /></button></div></td>
               </tr>
             );
             if (delConfirm === ct.id) return (
               <tr key={ct.id}>
-                <td colSpan={5} style={{ fontSize: 13, color: 'var(--moov-magenta-deep)', fontWeight: 600 }}>Delete {ct.full_name}? This can’t be undone.</td>
-                <td colSpan={2}><div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}><button className="ds-btn ds-btn-danger" onClick={() => deleteContact.mutate(ct.id)}>Delete</button><button className="ds-btn ds-btn-secondary" onClick={() => setDelConfirm(null)}>Keep</button></div></td>
+                <td colSpan={5} style={{ fontSize: 13, color: 'var(--mv-magenta-deep)', fontWeight: 600 }}>Delete {ct.full_name}? This can’t be undone.</td>
+                <td colSpan={2}><div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}><button className="mv-btn mv-btn--danger mv-btn--sm" onClick={() => deleteContact.mutate(ct.id)}>Delete</button><button className="mv-btn mv-btn--sm" onClick={() => setDelConfirm(null)}>Keep</button></div></td>
               </tr>
             );
             const pr = primary(ct);
             return (
               <tr key={ct.id}>
-                <td style={{ fontWeight: 600 }}>{ct.full_name}</td>
-                <td className="ds-muted">{ct.job_title || '—'}</td>
+                <td className="mv-cell-strong">{ct.full_name}</td>
+                <td className="mv-cell-dim">{ct.job_title || '—'}</td>
                 <td>{ct.email_address}</td>
-                <td className="ds-num">{ct.phone_number || '—'}</td>
-                <td className="ds-muted">{gets(ct)}</td>
-                <td><span className={'ds-status ds-status--' + pr[0]}><span className={'ds-mark ds-mark--' + pr[0]} />{pr[1]}</span></td>
-                <td><div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}><button title="Edit" onClick={() => startEdit(ct)} style={{ background: 'none', border: 0, cursor: 'pointer', color: 'var(--ds-muted)' }}><Pencil size={14} /></button><button title="Delete" onClick={() => setDelConfirm(ct.id)} style={{ background: 'none', border: 0, cursor: 'pointer', color: 'var(--moov-magenta-deep)' }}><Trash2 size={14} /></button></div></td>
+                <td className="mv-num mv-cell-dim">{ct.phone_number || '—'}</td>
+                <td className="mv-cell-dim">{gets(ct)}</td>
+                <td><span className={`mv-state mv-state--${pr[0]}`}><span className={`mv-mark mv-mark--${pr[0]}`} /><span className="mv-state-label">{pr[1]}</span></span></td>
+                <td><div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}><button title="Edit" onClick={() => startEdit(ct)} style={{ background: 'none', border: 0, cursor: 'pointer', color: 'var(--mv-ink-45)' }}>Edit</button><button title="Delete" onClick={() => setDelConfirm(ct.id)} style={{ background: 'none', border: 0, cursor: 'pointer', color: 'var(--mv-magenta-deep)' }}><Trash2 size={14} /></button></div></td>
               </tr>
             );
           })}
@@ -840,7 +646,7 @@ function ContactsTab({ customerId, contacts = [], onRefresh }) {
   );
 }
 
-// ─── Performance tab ───────────────────────────────────────────────
+// ─── Performance tab ─────────────────────────────────────────
 function PerformanceTab({ customerId }) {
   const [showPerfDebug, setShowPerfDebug] = useState(false);
 
@@ -854,21 +660,8 @@ function PerformanceTab({ customerId }) {
     enabled: !!customerId,
   });
 
-  if (isLoading) {
-    return (
-      <div style={{ textAlign: 'center', color: '#64748B', padding: 32 }}>
-        Loading performance data…
-      </div>
-    );
-  }
-
-  if (isError || !perfData) {
-    return (
-      <div className="moov-card" style={{ padding: 24, color: '#E91E8C' }}>
-        Could not load performance data.
-      </div>
-    );
-  }
+  if (isLoading) return <div className="mv-blurb" style={{ padding: 24 }}>Loading performance data…</div>;
+  if (isError || !perfData) return <div className="mv-banner" style={{ marginTop: 8 }}><div className="mv-banner-title">Couldn’t load performance</div></div>;
 
   const profit30 = parseFloat(perfData.last30?.profit || 0);
   const revenue30 = parseFloat(perfData.last30?.revenue || 0);
@@ -876,174 +669,90 @@ function PerformanceTab({ customerId }) {
 
   return (
     <div>
-      {/* Debug toggle */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-        <button
-          onClick={() => setShowPerfDebug(d => !d)}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px',
-            borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer',
-            background: showPerfDebug ? 'rgba(245,158,11,0.15)' : 'rgba(0,0,0,0.04)',
-            border: `1px solid ${showPerfDebug ? 'rgba(245,158,11,0.45)' : 'rgba(0,0,0,0.08)'}`,
-            color: showPerfDebug ? '#F59E0B' : '#475569' }}>
-          <Bug size={11} /> {showPerfDebug ? 'Hide debug' : 'Debug numbers'}
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20, marginBottom: 16 }}>
+        <p className="mv-blurb" style={{ marginTop: 0 }}>Thirty days of parcels and revenue, and which carrier carried them.</p>
+        <button className="mv-btn mv-btn--sm" onClick={() => setShowPerfDebug(d => !d)}>
+          <Bug size={12} /> {showPerfDebug ? 'Hide debug' : 'Debug numbers'}
         </button>
       </div>
 
-      {/* Debug panel */}
       {showPerfDebug && (
-        <div style={{ marginBottom: 20, border: '1px solid rgba(245,158,11,0.25)', borderRadius: 10, overflow: 'hidden', fontSize: 11 }}>
-          <div style={{ padding: '8px 14px', background: 'rgba(245,158,11,0.07)', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Bug size={12} style={{ color: '#F59E0B' }} />
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#F59E0B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Performance debug — source &amp; assumptions
-            </span>
+        <div style={{ marginBottom: 20, border: '1px solid var(--mv-hairline-2)', overflow: 'hidden', fontSize: 11 }}>
+          <div style={{ padding: '8px 14px', background: 'var(--mv-purple-100)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Bug size={12} style={{ color: 'var(--mv-purple)' }} />
+            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--mv-purple-700)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Performance debug — source &amp; assumptions</span>
           </div>
-
-          {/* Assumptions */}
-          <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(0,0,0,0.04)', lineHeight: 1.8 }}>
-            <div style={{ fontWeight: 700, color: '#64748B', marginBottom: 4, fontSize: 10, textTransform: 'uppercase' }}>Data source</div>
-            <div style={{ color: '#64748B' }}>Table: <code style={{ color: '#00C853' }}>charges</code> WHERE <code style={{ color: '#F59E0B' }}>charge_type = 'courier'</code> AND <code style={{ color: '#F59E0B' }}>cancelled = false</code></div>
-            <div style={{ color: '#64748B', marginTop: 4 }}>
-              <span style={{ color: '#A5B4FC' }}>Revenue</span> = SUM(price) &nbsp;·&nbsp;
-              <span style={{ color: '#B39DDB' }}>Cost</span> = SUM(cost_price) &nbsp;·&nbsp;
-              <span style={{ color: '#34D399' }}>Profit</span> = revenue − cost &nbsp;·&nbsp;
-              <span style={{ color: '#00BCD4' }}>Parcels</span> = SUM(parcel_qty)
-            </div>
+          <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--mv-hairline)', lineHeight: 1.8, color: 'var(--mv-ink-62)' }}>
+            <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 10, textTransform: 'uppercase' }}>Data source</div>
+            <div>Table: <code>charges</code> WHERE <code>charge_type = 'courier'</code> AND <code>cancelled = false</code></div>
+            <div style={{ marginTop: 4 }}>Revenue = SUM(price) · Cost = SUM(cost_price) · Profit = revenue − cost · Parcels = SUM(parcel_qty)</div>
           </div>
-
-          {/* Period summary */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
-            {[
-              { label: 'Last 7 days', d: perfData.last7 },
-              { label: 'Last 30 days', d: perfData.last30 },
-              { label: 'All time', d: perfData.all },
-            ].map(({ label, d }) => (
-              <div key={label} style={{ padding: '10px 14px', borderRight: '1px solid rgba(0,0,0,0.04)' }}>
-                <div style={{ fontWeight: 700, color: '#64748B', fontSize: 10, textTransform: 'uppercase', marginBottom: 6 }}>{label}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderBottom: '1px solid var(--mv-hairline)' }}>
+            {[{ label: 'Last 7 days', d: perfData.last7 }, { label: 'Last 30 days', d: perfData.last30 }, { label: 'All time', d: perfData.all }].map(({ label, d }) => (
+              <div key={label} style={{ padding: '10px 14px', borderRight: '1px solid var(--mv-hairline)' }}>
+                <div style={{ fontWeight: 700, color: 'var(--mv-ink-62)', fontSize: 10, textTransform: 'uppercase', marginBottom: 6 }}>{label}</div>
                 {[
-                  { k: 'charges',  v: d?.charges,  c: '#64748B' },
-                  { k: 'parcels',  v: d?.parcels,  c: '#00BCD4' },
-                  { k: 'revenue',  v: d?.revenue != null ? `£${parseFloat(d.revenue).toFixed(2)}` : '—',  c: '#A5B4FC' },
-                  { k: 'cost',     v: d?.cost     != null ? `£${parseFloat(d.cost).toFixed(2)}`    : '—',  c: '#B39DDB' },
-                  { k: 'profit',   v: d?.profit   != null ? `£${parseFloat(d.profit).toFixed(2)}`  : '—',
-                    c: parseFloat(d?.profit || 0) >= 0 ? '#34D399' : '#E91E8C' },
-                  ...(d?.missing_cost_count > 0 ? [{ k: '⚠ missing cost', v: `${d.missing_cost_count} charges`, c: '#E91E8C' }] : []),
-                ].map(({ k, v, c }) => (
-                  <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                    <span style={{ color: '#64748B' }}>{k}</span>
-                    <span style={{ color: c, fontFamily: 'monospace', fontWeight: 600 }}>{v}</span>
+                  { k: 'charges', v: d?.charges },
+                  { k: 'parcels', v: d?.parcels },
+                  { k: 'revenue', v: d?.revenue != null ? `£${parseFloat(d.revenue).toFixed(2)}` : '—' },
+                  { k: 'cost', v: d?.cost != null ? `£${parseFloat(d.cost).toFixed(2)}` : '—' },
+                  { k: 'profit', v: d?.profit != null ? `£${parseFloat(d.profit).toFixed(2)}` : '—' },
+                  ...(d?.missing_cost_count > 0 ? [{ k: '⚠ missing cost', v: `${d.missing_cost_count} charges` }] : []),
+                ].map(({ k, v }) => (
+                  <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2, color: 'var(--mv-ink-62)' }}>
+                    <span>{k}</span><span className="mv-num" style={{ fontWeight: 600 }}>{v}</span>
                   </div>
                 ))}
               </div>
             ))}
           </div>
-
-          {/* Full by-service breakdown including null cost rows */}
-          <div style={{ padding: '10px 14px' }}>
-            <div style={{ fontWeight: 700, color: '#64748B', fontSize: 10, textTransform: 'uppercase', marginBottom: 8 }}>
-              All-time by service — {perfData.by_courier?.length ?? 0} services
-            </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-                  {['Service name', 'Charges', 'Revenue', 'Cost', 'Profit', 'Margin'].map(h => (
-                    <th key={h} style={{ padding: '3px 6px', textAlign: h === 'Service name' ? 'left' : 'right',
-                      color: '#64748B', fontWeight: 600, fontSize: 10 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {(perfData.by_courier || []).map((row, i) => {
-                  const rev = parseFloat(row.revenue || 0);
-                  const cst = parseFloat(row.cost    || 0);
-                  const pft = parseFloat(row.profit  || 0);
-                  const mgn = rev > 0 ? (pft / rev * 100).toFixed(1) : '—';
-                  const noCost = cst === 0 && rev > 0;
-                  return (
-                    <tr key={i} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
-                      <td style={{ padding: '3px 6px', color: '#334155' }}>{row.service_name || '—'}</td>
-                      <td style={{ padding: '3px 6px', textAlign: 'right', color: '#64748B', fontFamily: 'monospace' }}>{row.charges}</td>
-                      <td style={{ padding: '3px 6px', textAlign: 'right', color: '#A5B4FC', fontFamily: 'monospace' }}>£{parseFloat(row.revenue).toFixed(2)}</td>
-                      <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace',
-                        color: noCost ? '#E91E8C' : '#B39DDB' }}>
-                        £{parseFloat(row.cost).toFixed(2)}
-                        {noCost && <span style={{ marginLeft: 4, fontSize: 9, color: '#E91E8C' }}>⚠ null</span>}
-                      </td>
-                      <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace',
-                        color: pft >= 0 ? '#34D399' : '#E91E8C' }}>£{pft.toFixed(2)}</td>
-                      <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace',
-                        color: mgn === '—' ? '#475569' : parseFloat(mgn) < 0 ? '#E91E8C' : parseFloat(mgn) < 15 ? '#F59E0B' : '#34D399' }}>
-                        {mgn === '—' ? '—' : `${mgn}%`}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            <div style={{ marginTop: 8, fontSize: 10, color: '#64748B' }}>
-              ⚠ Red cost = £0.00 cost_price on those charges — profit will be inflated. Check carrier rate card linkage.
-            </div>
-          </div>
         </div>
       )}
 
-      {/* Top stats row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
+      {/* KPI strip */}
+      <div className="mv-kpis" style={{ marginBottom: 6 }}>
         {[
-          { label: 'Last 7 Days Revenue', value: gbp(perfData.last7?.revenue || 0), unit: '', color: '#00C853' },
-          { label: 'Last 30 Days Revenue', value: gbp(perfData.last30?.revenue || 0), unit: '', color: '#00C853' },
-          { label: 'Last 30 Days Profit', value: gbp(profit30), unit: '', color: profit30 >= 0 ? '#00C853' : '#E91E8C' },
-          { label: 'Total Charges', value: (perfData.all?.charges || 0).toLocaleString(), unit: '', color: '#00BCD4' },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="moov-card" style={{ padding: 16, textAlign: 'center' }}>
-            <div style={{ fontSize: 11, color: '#64748B', marginBottom: 4 }}>{label}</div>
-            <div style={{ fontSize: 24, fontWeight: 700, color }}>{value}</div>
+          { label: 'Parcels, 30 days', value: (perfData.last30?.parcels || 0).toLocaleString('en-GB'), sub: `${(perfData.last7?.parcels || 0).toLocaleString('en-GB')} in the last 7` },
+          { label: 'Revenue, 30 days', value: gbp(perfData.last30?.revenue || 0), sub: `${gbp(perfData.last7?.revenue || 0)} in the last 7` },
+          { label: 'Profit, 30 days', value: gbp(profit30), sub: `${profitMargin}% margin` },
+          { label: 'Total charges', value: (perfData.all?.charges || 0).toLocaleString('en-GB'), sub: 'all time' },
+        ].map(f => (
+          <div className="mv-kpi" key={f.label}>
+            <div className="mv-kpi-label">{f.label}</div>
+            <div className="mv-kpi-value">{f.value}</div>
+            <div className="mv-kpi-sub">{f.sub}</div>
           </div>
         ))}
       </div>
 
-      {/* Secondary stats row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 }}>
-        {[
-          { label: 'Last 7 Days Charges', value: (perfData.last7?.charges || 0).toLocaleString() },
-          { label: 'Last 30 Days Parcels', value: (perfData.last30?.parcels || 0).toLocaleString() },
-          { label: 'Profit Margin (30d)', value: profitMargin + '%' },
-        ].map(({ label, value }) => (
-          <div key={label} className="moov-card" style={{ padding: 16, textAlign: 'center' }}>
-            <div style={{ fontSize: 11, color: '#64748B', marginBottom: 4 }}>{label}</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#201e1d' }}>{value}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Daily chart */}
-      <div className="moov-card" style={{ padding: 20, marginBottom: 16 }}>
-        <h3 style={{ fontSize: 13, fontWeight: 700, color: '#7B2FBE', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Daily Revenue — Last 30 Days</h3>
+      {/* Daily revenue chart */}
+      <div style={{ marginTop: 26 }}>
+        <div className="mv-section" style={{ marginBottom: 0 }}>Daily revenue — last 30 days</div>
+        <div className="mv-rule" style={{ margin: '10px 0 0' }} />
         <MiniBarChart dailyData={perfData.daily || []} />
       </div>
 
       {/* Courier breakdown table */}
       {(perfData.by_courier || []).length > 0 && (
-        <div className="moov-card" style={{ padding: 20, overflow: 'hidden' }}>
-          <h3 style={{ fontSize: 13, fontWeight: 700, color: '#7B2FBE', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Breakdown by Courier</h3>
-          <table className="moov-table" style={{ width: '100%' }}>
+        <div style={{ marginTop: 26 }}>
+          <table className="mv-table">
             <thead>
               <tr>
                 <th>Service</th>
-                <th style={{ textAlign: 'right' }}>Charges</th>
-                <th style={{ textAlign: 'right' }}>Revenue</th>
-                <th style={{ textAlign: 'right' }}>Cost</th>
-                <th style={{ textAlign: 'right' }}>Profit</th>
+                <th className="is-right">Charges</th>
+                <th className="is-right">Revenue</th>
+                <th className="is-right">Cost</th>
+                <th className="is-right">Profit</th>
               </tr>
             </thead>
             <tbody>
               {perfData.by_courier.map(row => (
                 <tr key={row.service_name}>
-                  <td style={{ color: '#201e1d', fontWeight: 500 }}>{row.service_name}</td>
-                  <td style={{ textAlign: 'right', color: '#64748B' }}>{row.charges}</td>
-                  <td style={{ textAlign: 'right', color: '#00C853', fontWeight: 600 }}>{gbp(row.revenue)}</td>
-                  <td style={{ textAlign: 'right', color: '#64748B' }}>{gbp(row.cost)}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 600, color: parseFloat(row.profit) >= 0 ? '#00C853' : '#E91E8C' }}>{gbp(row.profit)}</td>
+                  <td className="mv-cell-strong">{row.service_name}</td>
+                  <td className="is-right mv-num mv-cell-dim">{row.charges}</td>
+                  <td className="is-right mv-num">{gbp(row.revenue)}</td>
+                  <td className="is-right mv-num mv-cell-dim">{gbp(row.cost)}</td>
+                  <td className="is-right mv-num" style={{ color: parseFloat(row.profit) >= 0 ? 'var(--mv-green-deep)' : 'var(--mv-magenta-deep)', fontWeight: 600 }}>{gbp(row.profit)}</td>
                 </tr>
               ))}
             </tbody>
@@ -1055,19 +764,19 @@ function PerformanceTab({ customerId }) {
 }
 
 function MiniBarChart({ dailyData }) {
-  if (!dailyData || !dailyData.length) {
-    return <p style={{ color: '#64748B', fontSize: 13 }}>No data yet</p>;
-  }
+  if (!dailyData || !dailyData.length) return <p className="mv-blurb">No data yet</p>;
   const max = Math.max(...dailyData.map(d => parseFloat(d.revenue || 0)), 1);
   const sortedData = [...dailyData].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const peak = Math.max(...sortedData.map(d => parseFloat(d.revenue || 0)));
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 80, marginTop: 12 }}>
-      {sortedData.map((d, i) => (
-        <div key={i}
-          title={`${format(new Date(d.date), 'dd MMM')}: ${gbp(d.revenue)}`}
-          style={{ flex: 1, borderRadius: '3px 3px 0 0', height: `${Math.max((parseFloat(d.revenue) / max) * 100, 4)}%`, background: `rgba(0,200,83,${0.3 + (parseFloat(d.revenue) / max) * 0.7})`, cursor: 'default' }}
-        />
-      ))}
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 120, marginTop: 16 }}>
+      {sortedData.map((d, i) => {
+        const v = parseFloat(d.revenue || 0);
+        return (
+          <div key={i} title={`${format(new Date(d.date), 'dd MMM')}: ${gbp(d.revenue)}`}
+            style={{ flex: 1, height: `${Math.max((v / max) * 100, 3)}%`, background: v >= peak * 0.98 ? 'var(--mv-green)' : 'rgba(32,30,29,.22)' }} />
+        );
+      })}
     </div>
   );
 }
@@ -1076,7 +785,7 @@ function daysAgo(dateStr) {
   return Math.floor((Date.now() - new Date(dateStr)) / 86400000);
 }
 
-// ─── Financial tab ────────────────────────────────────────────
+// ─── Financial tab ───────────────────────────────────────────
 function FinancialTab({ c }) {
   const queryClient = useQueryClient();
   const [stopReason, setStopReason] = useState('');
@@ -1085,237 +794,129 @@ function FinancialTab({ c }) {
   const { data: credit, isLoading: creditLoading, refetch: refetchCredit } = useQuery({
     queryKey: ['xero-credit-status', c.id],
     queryFn: () => fetch(`/api/xero/customers/${c.id}/credit-status`).then(r => r.json()),
-    refetchInterval: 5 * 60 * 1000, // refresh every 5 min
+    refetchInterval: 5 * 60 * 1000,
   });
 
   const onStopMutation = useMutation({
-    mutationFn: ({ reason }) =>
-      fetch(`/api/customers/${c.id}/on-stop`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason }),
-      }).then(r => r.json()),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['customer', c.id]);
-      queryClient.invalidateQueries(['xero-credit-status', c.id]);
-      setShowStopForm(false);
-      setStopReason('');
-    },
+    mutationFn: ({ reason }) => fetch(`/api/customers/${c.id}/on-stop`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }) }).then(r => r.json()),
+    onSuccess: () => { queryClient.invalidateQueries(['customer', c.id]); queryClient.invalidateQueries(['xero-credit-status', c.id]); setShowStopForm(false); setStopReason(''); },
   });
 
   const liftStopMutation = useMutation({
-    mutationFn: () =>
-      fetch(`/api/customers/${c.id}/on-stop`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ note: 'Lifted via Financial tab' }),
-      }).then(r => r.json()),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['customer', c.id]);
-      queryClient.invalidateQueries(['xero-credit-status', c.id]);
-    },
+    mutationFn: () => fetch(`/api/customers/${c.id}/on-stop`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note: 'Lifted via Financial tab' }) }).then(r => r.json()),
+    onSuccess: () => { queryClient.invalidateQueries(['customer', c.id]); queryClient.invalidateQueries(['xero-credit-status', c.id]); },
   });
 
   const pct    = credit?.utilisation_pct ?? 0;
   const status = credit?.credit_status ?? 'ok';
-  const barCol = status === 'over_limit' ? '#E91E8C' : status === 'warning' ? '#F59E0B' : '#00C853';
+  const barCls = status === 'over_limit' ? 'is-over' : status === 'warning' ? 'is-warn' : '';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div>
+      <p className="mv-blurb" style={{ marginTop: 0, marginBottom: 18 }}>Credit exposure first, then the invoices behind it. Exposure counts what is billed and what is not yet billed.</p>
 
-      {/* ── Credit exposure card ── */}
-      <div className="moov-card" style={{ padding: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <h3 style={{ fontSize: 13, fontWeight: 700, color: '#7B2FBE', textTransform: 'uppercase', letterSpacing: 1, margin: 0 }}>Credit Exposure</h3>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {credit && !credit.xero_linked && (
-              <span style={{ fontSize: 11, color: '#F59E0B', background: 'rgba(245,158,11,0.1)', padding: '2px 8px', borderRadius: 4, border: '1px solid rgba(245,158,11,0.2)' }}>
-                Not linked to Xero
-              </span>
-            )}
-            <button onClick={() => refetchCredit()} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: 4 }} title="Refresh">
-              <RefreshCw size={13} />
-            </button>
-          </div>
+      {/* KPI strip */}
+      <div className="mv-kpis" style={{ marginBottom: 18 }}>
+        <div className="mv-kpi">
+          <div className="mv-kpi-label">Total exposure</div>
+          <div className="mv-kpi-value" style={status !== 'ok' ? { color: 'var(--mv-magenta-deep)' } : undefined}>{gbp(credit?.total_exposure ?? 0)}</div>
+          <div className="mv-kpi-sub">{pct ? `${pct.toFixed(0)}% of the ${gbp(credit?.credit_limit ?? 0)} limit` : ''}</div>
         </div>
-
-        {creditLoading ? (
-          <div style={{ color: '#64748B', fontSize: 13 }}>Loading…</div>
-        ) : (
-          <>
-            {/* Utilisation bar */}
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span style={{ fontSize: 12, color: '#64748B' }}>Credit utilisation</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: barCol }}>{pct.toFixed(1)}%</span>
-              </div>
-              {/* Segmented bar: Xero outstanding + MoovOS unbilled */}
-              <div style={{ height: 10, borderRadius: 5, background: 'rgba(0,0,0,0.08)', overflow: 'hidden', position: 'relative' }}>
-                {credit?.credit_limit > 0 && (
-                  <>
-                    {/* Xero outstanding segment */}
-                    <div style={{
-                      position: 'absolute', left: 0, top: 0, bottom: 0,
-                      width: `${Math.min((credit.xero_outstanding / credit.credit_limit) * 100, 100)}%`,
-                      background: barCol, transition: 'width 0.4s',
-                    }} />
-                    {/* MoovOS unbilled segment stacked on top */}
-                    <div style={{
-                      position: 'absolute', top: 0, bottom: 0,
-                      left: `${Math.min((credit.xero_outstanding / credit.credit_limit) * 100, 100)}%`,
-                      width: `${Math.min((credit.moovos_unbilled / credit.credit_limit) * 100, 100 - Math.min((credit.xero_outstanding / credit.credit_limit) * 100, 100))}%`,
-                      background: barCol, opacity: 0.45, transition: 'all 0.4s',
-                    }} />
-                  </>
-                )}
-              </div>
-              {/* Bar legend */}
-              <div style={{ display: 'flex', gap: 16, marginTop: 6, fontSize: 11, color: '#64748B' }}>
-                <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: barCol, marginRight: 4 }} />Xero outstanding</span>
-                <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: barCol, opacity: 0.45, marginRight: 4 }} />MoovOS unbilled</span>
-              </div>
-            </div>
-
-            {/* Exposure breakdown */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
-              {[
-                { label: 'Xero outstanding', val: gbp(credit?.xero_outstanding ?? 0), color: '#1E293B' },
-                { label: `Unbilled (${credit?.moovos_unbilled_count ?? 0} charges)`, val: gbp(credit?.moovos_unbilled ?? 0), color: '#1E293B' },
-                { label: 'Total exposure',   val: gbp(credit?.total_exposure ?? 0),   color: barCol, bold: true },
-                { label: 'Credit limit',     val: gbp(credit?.credit_limit ?? 0),     color: '#64748B' },
-              ].map(({ label, val, color, bold }) => (
-                <div key={label} style={{ background: '#FFFFFF', borderRadius: 8, padding: '10px 12px', border: '1px solid rgba(0,200,83,0.18)', boxShadow: '0 0 10px rgba(0,200,83,0.06)' }}>
-                  <div style={{ fontSize: 11, color: '#64748B', marginBottom: 4 }}>{label}</div>
-                  <div style={{ fontSize: 15, fontWeight: bold ? 700 : 600, color }}>{val}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Warning banner */}
-            {status === 'over_limit' && (
-              <div style={{ background: 'rgba(233,30,140,0.1)', border: '1px solid rgba(233,30,140,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#E91E8C', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                <AlertTriangle size={14} />
-                <strong>Credit limit exceeded</strong> — this customer should be placed on stop.
-              </div>
-            )}
-            {status === 'warning' && (
-              <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#F59E0B', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                <AlertTriangle size={14} />
-                <strong>Approaching credit limit</strong> — {(100 - pct).toFixed(1)}% remaining.
-              </div>
-            )}
-
-            {/* Account status + on-stop controls */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-              <div style={{ display: 'flex', gap: 16, alignItems: 'center', fontSize: 12 }}>
-                <span style={{ color: '#64748B' }}>Status:</span>
-                <AccountStatusBadge status={c.account_status} />
-                {c.is_on_stop && c.on_stop_applied_at && (
-                  <span style={{ color: '#64748B' }}>since {format(new Date(c.on_stop_applied_at), 'dd MMM yyyy')}</span>
-                )}
-                {c.is_on_stop && c.on_stop_reason && (
-                  <span style={{ color: '#64748B', fontStyle: 'italic' }}>"{c.on_stop_reason}"</span>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {c.is_on_stop ? (
-                  <button
-                    onClick={() => liftStopMutation.mutate()}
-                    disabled={liftStopMutation.isPending}
-                    style={{ background: 'rgba(0,200,83,0.1)', border: '1px solid rgba(0,200,83,0.3)', color: '#00C853', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-                  >
-                    Lift On Stop
-                  </button>
-                ) : (
-                  status !== 'ok' && !showStopForm && (
-                    <button
-                      onClick={() => setShowStopForm(true)}
-                      style={{ background: 'rgba(233,30,140,0.1)', border: '1px solid rgba(233,30,140,0.3)', color: '#E91E8C', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-                    >
-                      Apply On Stop
-                    </button>
-                  )
-                )}
-              </div>
-            </div>
-
-            {/* On-stop reason form */}
-            {showStopForm && (
-              <div style={{ marginTop: 12, background: 'rgba(233,30,140,0.05)', border: '1px solid rgba(233,30,140,0.2)', borderRadius: 8, padding: 14 }}>
-                <div style={{ fontSize: 12, color: '#64748B', marginBottom: 8 }}>Reason for placing on stop:</div>
-                <textarea
-                  value={stopReason}
-                  onChange={e => setStopReason(e.target.value)}
-                  placeholder="e.g. Credit limit exceeded — awaiting payment of overdue invoices"
-                  rows={2}
-                  style={{ width: '100%', background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 6, color: '#1E293B', fontSize: 12, padding: '8px 10px', resize: 'vertical', boxSizing: 'border-box' }}
-                />
-                <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
-                  <button onClick={() => { setShowStopForm(false); setStopReason(''); }} style={{ background: 'none', border: '1px solid rgba(0,0,0,0.08)', color: '#64748B', borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: 'pointer' }}>Cancel</button>
-                  <button
-                    onClick={() => onStopMutation.mutate({ reason: stopReason })}
-                    disabled={!stopReason.trim() || onStopMutation.isPending}
-                    style={{ background: '#E91E8C', border: 'none', color: '#FFF', borderRadius: 6, padding: '5px 14px', fontSize: 12, fontWeight: 700, cursor: stopReason.trim() ? 'pointer' : 'not-allowed', opacity: stopReason.trim() ? 1 : 0.5 }}
-                  >
-                    {onStopMutation.isPending ? 'Applying…' : 'Confirm On Stop'}
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
+        <div className="mv-kpi">
+          <div className="mv-kpi-label">Xero outstanding</div>
+          <div className="mv-kpi-value">{gbp(credit?.xero_outstanding ?? 0)}</div>
+          <div className="mv-kpi-sub">{credit?.invoices?.length ? `${credit.invoices.length} invoices open` : 'nothing open'}</div>
+        </div>
+        <div className="mv-kpi">
+          <div className="mv-kpi-label">Unbilled charges</div>
+          <div className="mv-kpi-value">{gbp(credit?.moovos_unbilled ?? 0)}</div>
+          <div className="mv-kpi-sub">{`${credit?.moovos_unbilled_count ?? 0} charges`}</div>
+        </div>
+        <div className="mv-kpi">
+          <div className="mv-kpi-label">Days to pay</div>
+          <div className="mv-kpi-value">{c.payment_terms_days ?? '—'}</div>
+          <div className="mv-kpi-sub">{c.billing_cycle ? `billed ${c.billing_cycle}` : ''}</div>
+        </div>
       </div>
 
-      {/* ── Outstanding Xero invoices ── */}
+      {/* utilisation bar */}
+      {credit?.credit_limit > 0 && (
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+            <span className="mv-kpi-label">Credit utilisation</span>
+            <span className="mv-num" style={{ fontWeight: 700, color: barCls === 'is-over' ? 'var(--mv-magenta-deep)' : 'var(--mv-ink)' }}>{pct.toFixed(1)}%</span>
+          </div>
+          <div className="mv-bar" style={{ width: '100%', height: 4 }}>
+            <span className={barCls} style={{ width: `${Math.min(pct, 100)}%` }} />
+          </div>
+        </div>
+      )}
+
+      {status === 'over_limit' && (
+        <div className="mv-banner" style={{ marginBottom: 16 }}>
+          <AlertTriangle size={16} style={{ color: 'var(--mv-magenta-deep)', flexShrink: 0 }} />
+          <div><div className="mv-banner-title">Credit limit exceeded</div><div className="mv-banner-sub">This customer should be placed on stop.</div></div>
+        </div>
+      )}
+      {status === 'warning' && (
+        <div className="mv-banner mv-banner--note" style={{ marginBottom: 16 }}>
+          <AlertTriangle size={16} style={{ color: 'var(--mv-purple-700)', flexShrink: 0 }} />
+          <div><div className="mv-banner-title">Approaching credit limit</div><div className="mv-banner-sub">{(100 - pct).toFixed(1)}% remaining.</div></div>
+        </div>
+      )}
+
+      {/* on-stop controls */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
+        <div style={{ display: 'flex', gap: 14, alignItems: 'center', fontSize: 12 }}>
+          <span className="mv-kpi-label" style={{ marginBottom: 0 }}>Status</span>
+          <StateMark status={c.account_status} />
+          {c.is_on_stop && c.on_stop_applied_at && <span className="mv-cell-dim">since {format(new Date(c.on_stop_applied_at), 'dd MMM yyyy')}</span>}
+          {c.is_on_stop && c.on_stop_reason && <span className="mv-cell-dim" style={{ fontStyle: 'italic' }}>“{c.on_stop_reason}”</span>}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {c.is_on_stop ? (
+            <button className="mv-btn mv-btn--sm" onClick={() => liftStopMutation.mutate()} disabled={liftStopMutation.isPending}>Lift on stop</button>
+          ) : (status !== 'ok' && !showStopForm && (
+            <button className="mv-btn mv-btn--danger mv-btn--sm" onClick={() => setShowStopForm(true)}>Apply on stop</button>
+          ))}
+          <button className="mv-btn mv-btn--sm" onClick={() => refetchCredit()} title="Refresh"><RefreshCw size={13} /></button>
+        </div>
+      </div>
+
+      {showStopForm && (
+        <div style={{ marginBottom: 20, borderLeft: '3px solid var(--mv-magenta)', background: 'rgba(233,30,140,.05)', padding: 16 }}>
+          <div className="mv-label">Reason for placing on stop</div>
+          <textarea className="mv-input" value={stopReason} onChange={e => setStopReason(e.target.value)} rows={2}
+            placeholder="e.g. Credit limit exceeded — awaiting payment of overdue invoices" style={{ minHeight: 60 }} />
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, justifyContent: 'flex-end' }}>
+            <button className="mv-btn mv-btn--sm" onClick={() => { setShowStopForm(false); setStopReason(''); }}>Cancel</button>
+            <button className="mv-btn mv-btn--danger mv-btn--sm" onClick={() => onStopMutation.mutate({ reason: stopReason })} disabled={!stopReason.trim() || onStopMutation.isPending}>{onStopMutation.isPending ? 'Applying…' : 'Confirm on stop'}</button>
+          </div>
+        </div>
+      )}
+
+      {/* invoices */}
       {credit?.xero_linked && (
-        <div className="moov-card" style={{ padding: 20 }}>
-          <h3 style={{ fontSize: 13, fontWeight: 700, color: '#7B2FBE', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 14 }}>
-            Outstanding Invoices
-            {credit.invoices?.length > 0 && (
-              <span style={{ marginLeft: 8, fontSize: 11, background: 'rgba(233,30,140,0.15)', color: '#E91E8C', padding: '2px 7px', borderRadius: 4, fontWeight: 700, textTransform: 'none', letterSpacing: 0 }}>
-                {credit.invoices.length}
-              </span>
-            )}
-          </h3>
-
-          {!credit.xero_connected && (
-            <div style={{ fontSize: 13, color: '#64748B', fontStyle: 'italic' }}>Xero not connected — go to Settings → Xero to connect.</div>
-          )}
-
-          {credit.xero_connected && credit.invoices?.length === 0 && (
-            <div style={{ fontSize: 13, color: '#64748B', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ color: '#00C853' }}>✓</span> No outstanding invoices in Xero.
-            </div>
-          )}
-
+        <div>
+          <div className="mv-section">Outstanding invoices</div>
+          <div className="mv-rule" style={{ marginBottom: 2 }} />
+          {!credit.xero_connected && <div className="mv-blurb" style={{ marginTop: 8 }}>Xero not connected — go to Settings → Xero to connect.</div>}
+          {credit.xero_connected && credit.invoices?.length === 0 && <div className="mv-blurb" style={{ marginTop: 8 }}>No outstanding invoices in Xero.</div>}
           {credit.xero_connected && credit.invoices?.length > 0 && (
-            <table className="moov-table" style={{ width: '100%' }}>
+            <table className="mv-table" style={{ marginTop: 8 }}>
               <thead>
-                <tr>
-                  <th>Invoice</th>
-                  <th>Date</th>
-                  <th>Due</th>
-                  <th style={{ textAlign: 'right' }}>Amount due</th>
-                  <th>Status</th>
-                </tr>
+                <tr><th>Invoice</th><th>Date</th><th>Due</th><th className="is-right">Amount due</th><th>State</th></tr>
               </thead>
               <tbody>
                 {credit.invoices.map(inv => (
                   <tr key={inv.id}>
-                    <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{inv.number || '—'}</td>
-                    <td style={{ fontSize: 12 }}>{inv.date || '—'}</td>
-                    <td style={{ fontSize: 12, color: inv.is_overdue ? '#E91E8C' : '#64748B' }}>
-                      {inv.due_date || '—'}
-                    </td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: inv.is_overdue ? '#E91E8C' : '#1E293B' }}>
-                      {gbp(inv.amount_due)}
-                    </td>
-                    <td>
-                      {inv.is_overdue
-                        ? <span style={{ fontSize: 11, background: 'rgba(233,30,140,0.15)', color: '#E91E8C', padding: '2px 7px', borderRadius: 4, fontWeight: 700 }}>Overdue</span>
-                        : <span style={{ fontSize: 11, background: 'rgba(245,158,11,0.12)', color: '#F59E0B', padding: '2px 7px', borderRadius: 4, fontWeight: 700 }}>Outstanding</span>
-                      }
-                    </td>
+                    <td className="mv-cell-strong mv-num">{inv.number || '—'}</td>
+                    <td className="mv-num mv-cell-dim">{inv.date || '—'}</td>
+                    <td className="mv-num" style={{ color: inv.is_overdue ? 'var(--mv-magenta-deep)' : 'var(--mv-ink-62)' }}>{inv.due_date || '—'}</td>
+                    <td className="is-right mv-num" style={{ fontWeight: 700, color: inv.is_overdue ? 'var(--mv-magenta-deep)' : 'var(--mv-ink)' }}>{gbp(inv.amount_due)}</td>
+                    <td>{inv.is_overdue
+                      ? <span className="mv-state mv-state--attention"><span className="mv-mark mv-mark--attention" /><span className="mv-state-label">Overdue</span></span>
+                      : <span className="mv-state mv-state--waiting"><span className="mv-mark mv-mark--waiting" /><span className="mv-state-label">Open</span></span>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1323,28 +924,19 @@ function FinancialTab({ c }) {
           )}
         </div>
       )}
-
-      {/* ── Payment terms ── */}
-      <div className="moov-card" style={{ padding: 16 }}>
-        <div style={{ display: 'flex', gap: 24, fontSize: 12 }}>
-          <span><span style={{ color: '#64748B' }}>Payment terms: </span><span style={{ color: '#334155', fontWeight: 600 }}>{c.payment_terms_days} days</span></span>
-          <span><span style={{ color: '#64748B' }}>Billing: </span><span style={{ color: '#334155', fontWeight: 600 }}>{c.billing_cycle || '—'}</span></span>
-          {c.bond_amount_held > 0 && <span><span style={{ color: '#64748B' }}>Bond held: </span><span style={{ color: '#334155', fontWeight: 600 }}>{gbp(c.bond_amount_held)}</span></span>}
-        </div>
-      </div>
     </div>
   );
 }
 
-// ─── Direction colours / labels ──────────────────────────────────────────────
+// ─── Communications tab ──────────────────────────────────────
 const DIR_CFG = {
-  inbound_customer:  { label: 'From Customer',  color: '#2979FF', bg: 'rgba(41,121,255,0.10)' },
-  outbound_customer: { label: 'To Customer',    color: '#00C853', bg: 'rgba(0,200,83,0.10)'   },
-  inbound_courier:   { label: 'From Courier',   color: '#D97706', bg: 'rgba(255,193,7,0.10)'  },
-  outbound_courier:  { label: 'To Courier',     color: '#FF9800', bg: 'rgba(255,152,0,0.10)'  },
-  internal_note:     { label: 'Internal Note',  color: '#9E9E9E', bg: 'rgba(158,158,158,0.10)'},
-  inbound:           { label: 'Inbound',        color: '#2979FF', bg: 'rgba(41,121,255,0.10)' },
-  outbound:          { label: 'Outbound',       color: '#00C853', bg: 'rgba(0,200,83,0.10)'   },
+  inbound_customer:  { label: 'From Customer',  color: 'var(--mv-green-deep)' },
+  outbound_customer: { label: 'To Customer',    color: 'var(--mv-green-deep)' },
+  inbound_courier:   { label: 'From Courier',   color: 'var(--mv-teal-deep)' },
+  outbound_courier:  { label: 'To Courier',     color: 'var(--mv-teal-deep)' },
+  internal_note:     { label: 'Internal Note',  color: 'var(--mv-purple)' },
+  inbound:           { label: 'Inbound',        color: 'var(--mv-green-deep)' },
+  outbound:          { label: 'Outbound',       color: 'var(--mv-green-deep)' },
 };
 
 function CustomerCommsTab({ customerId }) {
@@ -1364,37 +956,37 @@ function CustomerCommsTab({ customerId }) {
 
   const isNote = (it) => /note|internal/i.test(it.direction || '') || it.source === 'internal_note';
   const tagOf = (it) => {
-    if (isNote(it)) return ['Internal note', 'var(--color-accent)'];
+    if (isNote(it)) return ['Internal note', 'var(--mv-purple)'];
     const inbound = /in/i.test(it.direction || '') && !/internal/i.test(it.direction || '');
-    if (inbound) return [(DIR_CFG[it.direction]?.label) || 'Inbound', 'var(--moov-green-deep)'];
-    return [(DIR_CFG[it.direction]?.label) || 'Outbound', 'var(--ds-muted)'];
+    if (inbound) return [(DIR_CFG[it.direction]?.label) || 'Inbound', DIR_CFG[it.direction]?.color || 'var(--mv-green-deep)'];
+    return [(DIR_CFG[it.direction]?.label) || 'Outbound', DIR_CFG[it.direction]?.color || 'var(--mv-ink-62)'];
   };
   const who = (it) => it.from_address || it.to_address || '—';
   const when = (it) => it.created_at ? new Date(it.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
 
   return (
-    <div style={{ maxWidth: 820 }}>
-      <div className="ds-blurb" style={{ marginBottom: 6 }}>Everything said to and about this account, in one thread — customer, courier and internal.</div>
-      {loading && <div className="ds-muted" style={{ padding: '18px 0' }}>Reading the thread…</div>}
-      {error && <div style={{ padding: '18px 0', color: 'var(--moov-magenta-deep)' }}>Could not load correspondence: {error}</div>}
-      {!loading && !error && !items.length && <div className="ds-muted" style={{ padding: '18px 0' }}>Nothing said yet. Emails, courier replies and internal notes will appear here.</div>}
+    <div style={{ maxWidth: 860 }}>
+      <p className="mv-blurb" style={{ marginTop: 0, marginBottom: 6 }}>Everything said to and about this account, in one thread — customer, courier and internal.</p>
+      {loading && <div className="mv-blurb" style={{ padding: '18px 0' }}>Reading the thread…</div>}
+      {error && <div className="mv-blurb" style={{ padding: '18px 0', color: 'var(--mv-magenta-deep)' }}>Could not load correspondence: {error}</div>}
+      {!loading && !error && !items.length && <div className="mv-blurb" style={{ padding: '18px 0' }}>Nothing said yet. Emails, courier replies and internal notes will appear here.</div>}
       {items.map(it => {
         const t = tagOf(it); const note = isNote(it); const open = expanded === it.id;
         return (
-          <div key={it.id} onClick={() => setExpanded(open ? null : it.id)} style={{ padding: note ? '17px 0 19px 16px' : '17px 0 19px', borderBottom: 'var(--ds-hairline)', borderLeft: note ? '3px solid var(--color-accent)' : 'none', cursor: 'pointer' }}>
+          <div key={it.id} onClick={() => setExpanded(open ? null : it.id)} style={{ padding: note ? '17px 0 19px 16px' : '17px 0 19px', borderBottom: '1px solid var(--mv-hairline)', borderLeft: note ? '3px solid var(--mv-purple)' : 'none', cursor: 'pointer' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: t[1], flexShrink: 0 }}>{t[0]}</span>
-              <span style={{ fontSize: 12.5, fontWeight: 600, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.subject || who(it)}</span>
-              <span className="ds-muted" style={{ fontSize: 10.5, whiteSpace: 'nowrap', flexShrink: 0 }}>{when(it)}</span>
+              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase', color: t[1], flexShrink: 0 }}>{t[0]}</span>
+              <span style={{ fontSize: 12.5, fontWeight: 800, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.subject || who(it)}</span>
+              <span className="mv-cell-dim" style={{ fontSize: 10.5, whiteSpace: 'nowrap', flexShrink: 0 }}>{when(it)}</span>
             </div>
             {open ? (
               <div style={{ marginTop: 8 }}>
-                {(it.from_address || it.to_address) && <div className="ds-muted" style={{ fontSize: 11, marginBottom: 6 }}>{it.from_address ? `From ${it.from_address}` : ''}{it.to_address ? ` · To ${it.to_address}` : ''}</div>}
-                <div style={{ fontSize: 13.5, lineHeight: 1.6, color: 'var(--color-text)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{it.body_text || '(no body)'}</div>
-                {it.source === 'query_email' && it.query_id && <a href={`/queries?id=${it.query_id}`} onClick={e => e.stopPropagation()} style={{ display: 'inline-block', marginTop: 10, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--color-accent)', textDecoration: 'none' }}>Open in queries →</a>}
+                {(it.from_address || it.to_address) && <div className="mv-cell-dim" style={{ fontSize: 11, marginBottom: 6 }}>{it.from_address ? `From ${it.from_address}` : ''}{it.to_address ? ` · To ${it.to_address}` : ''}</div>}
+                <div style={{ fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{it.body_text || '(no body)'}</div>
+                {it.source === 'query_email' && it.query_id && <a href={`/queries?id=${it.query_id}`} onClick={e => e.stopPropagation()} style={{ display: 'inline-block', marginTop: 10, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--mv-purple)' }}>Open in queries →</a>}
               </div>
             ) : (
-              it.body_text && <div className="ds-muted" style={{ fontSize: 13, marginTop: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{(it.body_text || '').slice(0, 160)}</div>
+              it.body_text && <div className="mv-cell-dim" style={{ fontSize: 13, marginTop: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{(it.body_text || '').slice(0, 160)}</div>
             )}
           </div>
         );
@@ -1403,7 +995,7 @@ function CustomerCommsTab({ customerId }) {
   );
 }
 
-// ─── Main component ───────────────────────────────────────────
+// ─── Main component ──────────────────────────────────────────
 export default function CustomerRecord() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -1414,8 +1006,6 @@ export default function CustomerRecord() {
   const [onStopInput, setOnStopInput] = useState('');
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState('');
-  const [showDebug, setShowDebug]     = useState(false);
-  const [debugSection, setDebugSection] = useState(new Set(['customer']));
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['customer', id],
@@ -1440,100 +1030,88 @@ export default function CustomerRecord() {
     onSuccess: () => navigate('/customers'),
   });
 
-  if (isLoading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: '#64748B' }}>
-      Loading customer record…
-    </div>
-  );
-  if (!data) return <div style={{ color: '#E91E8C', padding: 32 }}>Customer not found.</div>;
+  if (isLoading) return <div className="mv-page-inner" style={{ color: 'var(--mv-ink-62)' }}>Loading customer record…</div>;
+  if (!data) return <div className="mv-page-inner" style={{ color: 'var(--mv-magenta-deep)' }}>Customer not found.</div>;
 
   const { customer: c, contacts, comm_summary, volume_snapshots, active_volume_alert } = data;
-  const creditPct = parseFloat(c.credit_utilisation_pct) || 0;
 
-  // Build full address string for header
   const addressParts = [c.address_line_1, c.city, c.postcode].filter(Boolean);
   const addressDisplay = addressParts.length ? addressParts.join(', ') : c.postcode;
 
+  const onboardedStr = c.date_onboarded ? format(new Date(c.date_onboarded), 'dd MMM yyyy').toUpperCase() : null;
+
   return (
-    <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', background: 'var(--color-bg)' }}>
-      <div className="moov-ds" style={{ background: 'transparent', padding: '28px 40px 8px' }}>
-        <button onClick={() => navigate('/customers')} className="ds-btn" style={{ padding: '2px 0', color: 'var(--ds-muted)' }}>
-          <ArrowLeft size={14} /> All customers
-        </button>
+    <div className="mv-page-inner">
+      <button onClick={() => navigate('/customers')} style={{ background: 'none', border: 0, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--mv-purple)', fontSize: 10, fontWeight: 600, letterSpacing: '.13em', textTransform: 'uppercase', padding: 0, fontFamily: 'inherit' }}>
+        <ArrowLeft size={13} /> All customers
+      </button>
 
-        {c.is_on_stop && (
-          <div style={{ borderLeft: '3px solid var(--moov-magenta)', padding: '10px 16px', margin: '14px 0', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span className="ds-status ds-status--attention"><span className="ds-mark ds-mark--attention" />Account on stop</span>
-            <span className="ds-muted" style={{ fontSize: 13, flex: 1 }}>Shipment access blocked · {c.on_stop_reason}</span>
-            <button className="ds-btn ds-btn-secondary" onClick={() => setOnStopModal('remove')}>Remove on stop</button>
+      {c.is_on_stop && (
+        <div className="mv-banner" style={{ margin: '14px 0 0' }}>
+          <div style={{ flex: 1 }}>
+            <div className="mv-banner-title">Account on stop</div>
+            <div className="mv-banner-sub">Shipment access blocked · {c.on_stop_reason}</div>
           </div>
-        )}
-        {parseFloat(c.bond_amount_held) > 0 && (
-          <div className="ds-muted" style={{ fontSize: 13, margin: '12px 0 0' }}>Bond held · <span className="ds-num" style={{ color: 'var(--color-text)', fontWeight: 600 }}>{gbp(c.bond_amount_held)}</span></div>
-        )}
-        {active_volume_alert && (
-          <div style={{ margin: '12px 0 0', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span className="ds-status ds-status--attention"><span className="ds-mark ds-mark--attention" />Volume {active_volume_alert.drop_percentage != null ? active_volume_alert.drop_percentage.toFixed(0) : '?'}% below the 13-week baseline</span>
-          </div>
-        )}
+          <button className="mv-btn mv-btn--sm" onClick={() => setOnStopModal('remove')}>Remove on stop</button>
+        </div>
+      )}
+      {active_volume_alert && (
+        <div className="mv-banner" style={{ margin: '12px 0 0' }}>
+          <div className="mv-banner-title">Volume {active_volume_alert.drop_percentage != null ? active_volume_alert.drop_percentage.toFixed(0) : '?'}% below the 13-week baseline</div>
+        </div>
+      )}
 
-        <div className="ds-pagehead" style={{ marginTop: 16 }}>
-          <div style={{ minWidth: 0 }}>
-            <div className="ds-kicker ds-num">{c.account_number} · {(c.tier || '').toUpperCase()}</div>
-            <h1 className="ds-h1" style={{ margin: '7px 0 10px' }}>{c.business_name}</h1>
-            <div className="ds-blurb" style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
-              <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}><Mail size={13} />{c.primary_email}</span>
-              <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}><Phone size={13} />{c.phone_number}</span>
-              <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}><MapPin size={13} />{addressDisplay}</span>
-            </div>
-          </div>
-          <div className="actions" style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
-            {(() => { const M = { active: ['settled', 'Active'], onboarding: ['progress', 'Onboarding'], on_stop: ['attention', 'On stop'], suspended: ['waiting', 'Suspended'], churned: ['waiting', 'Churned'] }; const mm = M[c.account_status] || ['waiting', (c.account_status || '').replace(/_/g, ' ')]; return <span className={'ds-status ds-status--' + mm[0]}><span className={'ds-mark ds-mark--' + mm[0]} />{mm[1]}</span>; })()}
-            {!c.is_on_stop
-              ? <button className="ds-btn ds-btn-danger" onClick={() => setOnStopModal('apply')}>Place on stop</button>
-              : <button className="ds-btn ds-btn-secondary" onClick={() => setOnStopModal('remove')}>Remove on stop</button>}
+      <div className="mv-head" style={{ marginTop: 16 }}>
+        <div style={{ minWidth: 0 }}>
+          <div className="mv-kicker mv-num">{c.account_number} · {(c.tier || '').toUpperCase()} TIER{onboardedStr ? ` · ONBOARDED ${onboardedStr}` : ''}</div>
+          <h1 className="mv-title">{c.business_name}</h1>
+          <div className="mv-blurb" style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+            <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}><Mail size={13} />{c.primary_email}</span>
+            {c.phone_number && <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}><Phone size={13} />{c.phone_number}</span>}
+            {addressDisplay && <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}><MapPin size={13} />{addressDisplay}</span>}
           </div>
         </div>
-        <hr className="ds-rule" />
-
-        <div className="ds-figures" style={{ padding: '20px 0' }}>
-          {[
-            { label: 'Outstanding', value: gbp(c.outstanding_balance), warn: parseFloat(c.outstanding_balance) > 0, num: true },
-            { label: 'Credit limit', value: gbp(c.credit_limit), num: true },
-            { label: 'Credit used', value: (Math.round(parseFloat(c.credit_utilisation_pct) || 0)) + '%', num: true },
-            { label: 'Billing', value: BILLING_PERIOD_LABELS[c.billing_cycle] || c.billing_cycle || '—' },
-            { label: 'Terms', value: (c.payment_terms_days != null ? c.payment_terms_days : '—') + ' days' },
-            { label: 'Account manager', value: c.account_manager_name || 'Unmanaged' },
-          ].map(f => (
-            <div className="ds-figure" key={f.label}>
-              <div className="ds-label">{f.label}</div>
-              <div className="val" style={{ fontSize: 20, margin: '8px 0 0', color: f.warn ? 'var(--moov-magenta-deep)' : 'var(--color-text)', fontVariantNumeric: f.num ? 'tabular-nums' : 'normal' }}>{f.value}</div>
-            </div>
-          ))}
-        </div>
-        <hr className="ds-rule" />
-
-        {comm_summary && (
-          <div style={{ padding: '16px 0' }}>
-            <div className="ds-kicker" style={{ marginBottom: 6 }}>AI summary · {format(new Date(comm_summary.generated_at), 'd MMM, HH:mm')}</div>
-            <p className="ds-blurb">{comm_summary.summary_text}</p>
-          </div>
-        )}
-
-        <div style={{ display: 'flex', gap: 2, borderBottom: '2px solid var(--color-divider)', marginTop: 8, flexWrap: 'wrap' }}>
-          {TABS.map(({ key, label }) => (
-            <button key={key} onClick={() => setActiveTab(key)} style={{
-              background: 'none', border: 0, cursor: 'pointer', fontFamily: 'var(--font-body)',
-              fontSize: 13, fontWeight: activeTab === key ? 800 : 500,
-              color: activeTab === key ? 'var(--color-text)' : 'var(--ds-muted)',
-              padding: '10px 14px', marginBottom: -2,
-              borderBottom: activeTab === key ? '2px solid var(--color-accent)' : '2px solid transparent',
-            }}>{label}</button>
-          ))}
+        <div className="mv-actions" style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
+          <StateMark status={c.account_status} />
+          {!c.is_on_stop
+            ? <button className="mv-btn mv-btn--danger" onClick={() => setOnStopModal('apply')}>Place on stop</button>
+            : <button className="mv-btn" onClick={() => setOnStopModal('remove')}>Remove on stop</button>}
         </div>
       </div>
 
-      <div className="moov-ds" style={{ background: 'transparent', padding: '22px 40px 48px' }}>
+      {/* KPI strip */}
+      <div className="mv-kpis" style={{ marginTop: 4 }}>
+        {[
+          { label: 'Outstanding', value: gbp(c.outstanding_balance), attention: parseFloat(c.outstanding_balance) > 0 },
+          { label: 'Credit limit', value: gbp(c.credit_limit) },
+          { label: 'Credit used', value: (Math.round(parseFloat(c.credit_utilisation_pct) || 0)) + '%' },
+          { label: 'Billing', value: BILLING_PERIOD_LABELS[c.billing_cycle] || c.billing_cycle || '—' },
+          { label: 'Terms', value: (c.payment_terms_days != null ? c.payment_terms_days : '—') + ' days' },
+          { label: 'Account manager', value: c.account_manager_name || 'Unmanaged' },
+        ].map(f => (
+          <div className="mv-kpi" key={f.label}>
+            <div className="mv-kpi-label">{f.label}</div>
+            <div className={'mv-kpi-value' + (f.attention ? ' is-attention' : '')} style={{ fontSize: 22 }}>{f.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {comm_summary && (
+        <div style={{ padding: '16px 0 0' }}>
+          <div className="mv-kicker" style={{ marginBottom: 6 }}>AI summary · {format(new Date(comm_summary.generated_at), 'd MMM, HH:mm')}</div>
+          <p className="mv-blurb" style={{ marginTop: 0 }}>{comm_summary.summary_text}</p>
+        </div>
+      )}
+
+      {/* tabs */}
+      <div className="mv-tabs">
+        {TABS.map(({ key, label }) => (
+          <button key={key} className={'mv-tab' + (activeTab === key ? ' is-active' : '')} onClick={() => setActiveTab(key)}>{label}</button>
+        ))}
+      </div>
+
+      {/* tab body */}
+      <div style={{ paddingTop: 26 }}>
         {activeTab === 'overview' && <OverviewTab c={c} onSaved={handleCustomerSaved} onDeleteRequest={() => { setDeleteModal(true); setDeleteConfirm(''); }} />}
         {activeTab === 'onboarding' && <CustomerOnboardingTab customerId={id} customer={c} />}
         {activeTab === 'contacts' && <ContactsTab customerId={id} contacts={contacts} onRefresh={refetch} />}
@@ -1544,51 +1122,49 @@ export default function CustomerRecord() {
         {activeTab === 'pricing' && <CustomerPricingTab customer={c} onCustomerUpdate={(updated) => queryClient.setQueryData(['customer', id], d => ({ ...d, customer: { ...d.customer, ...updated } }))} />}
       </div>
 
+      {/* delete modal */}
       {deleteModal && (
-        <div className="moov-ds ds-modal-scrim">
-          <div className="ds-modal" style={{ width: 460 }}>
-            <div className="ds-modal-head">
-              <div className="ds-kicker" style={{ color: 'var(--moov-magenta-deep)' }}>Destructive</div>
-              <h3 className="ds-h1" style={{ fontSize: 22, margin: '6px 0 8px' }}>Delete {c.business_name}?</h3>
-              <p className="ds-blurb">This permanently deletes the account and all its contacts, rates and communications. It cannot be undone.</p>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(32,30,29,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+          <div style={{ background: 'var(--mv-bg)', width: 460, maxWidth: '100%', boxShadow: '0 22px 60px rgba(0,0,0,.32)', padding: '24px 26px 20px', borderTop: '3px solid var(--mv-magenta)' }}>
+            <div className="mv-kicker" style={{ color: 'var(--mv-magenta-deep)' }}>Destructive</div>
+            <h3 className="mv-title" style={{ fontSize: 22, margin: '6px 0 8px' }}>Delete {c.business_name}?</h3>
+            <p className="mv-blurb" style={{ marginTop: 0 }}>This permanently deletes the account and all its contacts, rates and communications. It cannot be undone.</p>
+            <div className="mv-field" style={{ marginTop: 16 }}>
+              <div className="mv-label">Type {c.account_number} to confirm</div>
+              <input className="mv-input mv-num" value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} placeholder={c.account_number} />
             </div>
-            <div className="ds-modal-body" style={{ paddingBottom: 12 }}>
-              <div className="ds-label" style={{ marginBottom: 6 }}>Type {c.account_number} to confirm</div>
-              <input className="ds-field ds-num" value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} placeholder={c.account_number} />
-            </div>
-            <div className="ds-modal-foot">
-              <span className="ds-muted" style={{ fontSize: 12 }}>{deleteConfirm === c.account_number ? 'Recorded against your name.' : 'Type the account number to enable delete.'}</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 8 }}>
+              <span className="mv-cell-dim" style={{ fontSize: 12 }}>{deleteConfirm === c.account_number ? 'Recorded against your name.' : 'Type the account number to enable delete.'}</span>
               <div style={{ display: 'flex', gap: 10 }}>
-                <button className="ds-btn ds-btn-secondary" onClick={() => { setDeleteModal(false); setDeleteConfirm(''); }}>Cancel</button>
-                <button className="ds-btn ds-btn-danger" disabled={deleteConfirm !== c.account_number || deleteCustomer.isPending} onClick={() => deleteCustomer.mutate()}>{deleteCustomer.isPending ? 'Deleting…' : 'Delete customer'}</button>
+                <button className="mv-btn mv-btn--sm" onClick={() => { setDeleteModal(false); setDeleteConfirm(''); }}>Cancel</button>
+                <button className="mv-btn mv-btn--danger mv-btn--sm" disabled={deleteConfirm !== c.account_number || deleteCustomer.isPending} onClick={() => deleteCustomer.mutate()}>{deleteCustomer.isPending ? 'Deleting…' : 'Delete customer'}</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
+      {/* on-stop modal */}
       {onStopModal && (
-        <div className="moov-ds ds-modal-scrim">
-          <div className="ds-modal" style={{ width: 480 }}>
-            <div className="ds-modal-head">
-              <div className="ds-kicker" style={{ color: onStopModal === 'apply' ? 'var(--moov-magenta-deep)' : 'var(--moov-green-deep)' }}>{onStopModal === 'apply' ? 'Needs a decision' : 'Lift the stop'}</div>
-              <h3 className="ds-h1" style={{ fontSize: 22, margin: '6px 0 8px' }}>{onStopModal === 'apply' ? 'Place account on stop' : 'Remove on stop'}</h3>
-              <p className="ds-blurb">{onStopModal === 'apply' ? 'This blocks all shipment access for this customer. The reason is logged against your name.' : 'Confirm why the stop is being lifted. This is logged in the audit trail.'}</p>
-              {onStopModal === 'apply' && (
-                <div className="ds-figures" style={{ marginTop: 14 }}>
-                  <div className="ds-figure"><div className="ds-label">Outstanding</div><div className="val" style={{ fontSize: 18, marginTop: 6 }}>{gbp(c.outstanding_balance)}</div></div>
-                  <div className="ds-figure"><div className="ds-label">Credit limit</div><div className="val" style={{ fontSize: 18, marginTop: 6 }}>{gbp(c.credit_limit)}</div></div>
-                </div>
-              )}
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(32,30,29,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+          <div style={{ background: 'var(--mv-bg)', width: 480, maxWidth: '100%', boxShadow: '0 22px 60px rgba(0,0,0,.32)', padding: '24px 26px 20px', borderTop: `3px solid ${onStopModal === 'apply' ? 'var(--mv-magenta)' : 'var(--mv-green)'}` }}>
+            <div className="mv-kicker" style={{ color: onStopModal === 'apply' ? 'var(--mv-magenta-deep)' : 'var(--mv-green-deep)' }}>{onStopModal === 'apply' ? 'Needs a decision' : 'Lift the stop'}</div>
+            <h3 className="mv-title" style={{ fontSize: 22, margin: '6px 0 8px' }}>{onStopModal === 'apply' ? 'Place account on stop' : 'Remove on stop'}</h3>
+            <p className="mv-blurb" style={{ marginTop: 0 }}>{onStopModal === 'apply' ? 'This blocks all shipment access for this customer. The reason is logged against your name.' : 'Confirm why the stop is being lifted. This is logged in the audit trail.'}</p>
+            {onStopModal === 'apply' && (
+              <div className="mv-kpis" style={{ marginTop: 14, marginBottom: 4 }}>
+                <div className="mv-kpi"><div className="mv-kpi-label">Outstanding</div><div className="mv-kpi-value" style={{ fontSize: 20 }}>{gbp(c.outstanding_balance)}</div></div>
+                <div className="mv-kpi"><div className="mv-kpi-label">Credit limit</div><div className="mv-kpi-value" style={{ fontSize: 20 }}>{gbp(c.credit_limit)}</div></div>
+              </div>
+            )}
+            <div className="mv-field" style={{ marginTop: 16 }}>
+              <textarea className="mv-input" style={{ minHeight: 90, resize: 'vertical' }} value={onStopInput} onChange={e => setOnStopInput(e.target.value)} placeholder={onStopModal === 'apply' ? 'Why is this account going on stop?' : 'Why is the stop being lifted?'} />
             </div>
-            <div className="ds-modal-body" style={{ paddingBottom: 12 }}>
-              <textarea className="ds-field" style={{ minHeight: 90, resize: 'vertical' }} value={onStopInput} onChange={e => setOnStopInput(e.target.value)} placeholder={onStopModal === 'apply' ? 'Why is this account going on stop?' : 'Why is the stop being lifted?'} />
-            </div>
-            <div className="ds-modal-foot">
-              <span className="ds-muted" style={{ fontSize: 12 }}>{onStopInput.trim() ? 'Recorded against your name.' : 'A reason is required.'}</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 8 }}>
+              <span className="mv-cell-dim" style={{ fontSize: 12 }}>{onStopInput.trim() ? 'Recorded against your name.' : 'A reason is required.'}</span>
               <div style={{ display: 'flex', gap: 10 }}>
-                <button className="ds-btn ds-btn-secondary" onClick={() => { setOnStopModal(null); setOnStopInput(''); }}>Cancel</button>
-                <button className={'ds-btn ' + (onStopModal === 'apply' ? 'ds-btn-danger' : 'ds-btn-primary')} disabled={!onStopInput.trim()} onClick={() => { if (onStopModal === 'apply') applyOnStop.mutate({ reason: onStopInput }); else removeOnStop.mutate({ note: onStopInput }); }}>{onStopModal === 'apply' ? 'Confirm on stop' : 'Confirm removal'}</button>
+                <button className="mv-btn mv-btn--sm" onClick={() => { setOnStopModal(null); setOnStopInput(''); }}>Cancel</button>
+                <button className={'mv-btn mv-btn--sm ' + (onStopModal === 'apply' ? 'mv-btn--danger' : 'mv-btn--primary')} disabled={!onStopInput.trim()} onClick={() => { if (onStopModal === 'apply') applyOnStop.mutate({ reason: onStopInput }); else removeOnStop.mutate({ note: onStopInput }); }}>{onStopModal === 'apply' ? 'Confirm on stop' : 'Confirm removal'}</button>
               </div>
             </div>
           </div>
