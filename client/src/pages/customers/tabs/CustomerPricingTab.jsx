@@ -999,36 +999,28 @@ function CourierToggleStrip({ carriers, customerId }) {
         : api.post(`/customer-carrier-links/${customerId}`, { courier_id }),
     onSuccess: () => qc.invalidateQueries(['customer-carrier-links', customerId]),
   });
-
   if (!carriers.length) return null;
-
+  const onCount = carriers.filter(c => c.active).length;
   return (
-    <div className="moov-card" style={{ marginBottom: 14, padding: '9px 16px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 10, color: 'rgba(32,30,29,0.62)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>Carriers</span>
+    <div style={{ marginBottom: 30 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+        <div className="mv-section" style={{ marginBottom: 0 }}>Carriers</div>
+        <span className="mv-num" style={{ fontSize: 11.5, color: 'var(--mv-ink-52)' }}>{onCount} of {carriers.length} on</span>
+      </div>
+      <div className="mv-rule" style={{ margin: '10px 0 0' }} />
+      <p className="mv-blurb" style={{ marginTop: 10 }}>Turn a carrier on to sell it to this customer. Accounts, fuel, surcharges and services all follow what is on.</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12, marginTop: 14 }}>
         {carriers.map(carrier => {
-          const logo = getCourierLogo(carrier.courier_code);
           const isActive = carrier.active;
+          const configured = (carrier.available_cards?.length || 0) > 0 || isActive;
+          const state = isActive ? 'ACTIVE' : (configured ? 'OFF' : 'NOT CONFIGURED');
           return (
-            <button
-              key={carrier.courier_id}
+            <button key={carrier.courier_id}
               onClick={() => toggle.mutate({ courier_id: carrier.courier_id, active: isActive })}
-              title={`${carrier.courier_name} — click to ${isActive ? 'deactivate' : 'activate'}`}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '5px 12px', borderRadius: 0, cursor: 'pointer',
-                border: `1.5px solid ${isActive ? 'rgba(0,200,83,0.5)' : 'rgba(0,0,0,0.07)'}`,
-                background: isActive ? 'rgba(0,200,83,0.07)' : 'transparent',
-                transition: 'all 0.15s', outline: 'none',
-              }}
-              onMouseEnter={e => { if (!isActive) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)'; }}
-              onMouseLeave={e => { if (!isActive) e.currentTarget.style.borderColor = 'rgba(0,0,0,0.07)'; }}
-            >
-              {logo
-                ? <img src={logo} alt={carrier.courier_name} style={{ height: 15, objectFit: 'contain', opacity: isActive ? 1 : 0.3, transition: 'opacity 0.15s' }} />
-                : <span style={{ fontSize: 12, fontWeight: 700, color: isActive ? '#00C853' : 'rgba(32,30,29,0.62)' }}>{carrier.courier_name}</span>
-              }
-              {isActive && <div style={{ width: 5, height: 5, borderRadius: 0, background: '#00C853', flexShrink: 0 }} />}
+              title={`${carrier.courier_name} — click to ${isActive ? 'turn off' : 'turn on'}`}
+              style={{ textAlign: 'left', padding: '16px 15px', cursor: 'pointer', border: `1.5px solid ${isActive ? 'var(--mv-ink)' : 'var(--mv-hairline-2)'}`, background: 'transparent', fontFamily: 'inherit' }}>
+              <div style={{ fontWeight: 800, fontSize: 13, letterSpacing: '-.01em', color: isActive ? 'var(--mv-ink)' : 'var(--mv-ink-45)' }}>{carrier.courier_name}</div>
+              <div className="mv-state-label" style={{ marginTop: 8, color: isActive ? 'var(--mv-green-deep)' : 'var(--mv-ink-45)' }}>{state}</div>
             </button>
           );
         })}
@@ -1037,13 +1029,12 @@ function CourierToggleStrip({ carriers, customerId }) {
   );
 }
 
-// ─── Customer fuel group row ──────────────────────────────────
+// ─── Customer fuel group row (contributes 3 grid cells) ──────
 function CustomerFuelRow({ fg, customerId }) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
-  const [val, setVal]         = useState('');
-  const inputRef              = useRef(null);
-
+  const [val, setVal] = useState('');
+  const inputRef = useRef(null);
   const setFuel = useMutation({
     mutationFn: ({ fuelGroupId, sell_pct }) =>
       sell_pct === null
@@ -1051,401 +1042,184 @@ function CustomerFuelRow({ fg, customerId }) {
         : api.put(`/customer-carrier-links/${customerId}/fuel/${fuelGroupId}`, { sell_pct }),
     onSuccess: () => qc.invalidateQueries(['customer-carrier-links', customerId]),
   });
-
-  function startEdit() {
-    setVal(fg.customer_pct != null ? String(fg.customer_pct) : '');
-    setEditing(true);
-    setTimeout(() => inputRef.current?.select(), 0);
-  }
-
+  function startEdit() { setVal(fg.customer_pct != null ? String(fg.customer_pct) : ''); setEditing(true); setTimeout(() => inputRef.current?.select(), 0); }
   function commit() {
-    const trimmed = val.trim();
-    if (trimmed === '') { setFuel.mutate({ fuelGroupId: fg.id, sell_pct: null }); setEditing(false); return; }
-    const parsed = parseFloat(trimmed);
-    if (isNaN(parsed) || parsed < 0) { setEditing(false); return; }
-    setFuel.mutate({ fuelGroupId: fg.id, sell_pct: parsed });
-    setEditing(false);
+    const t = val.trim();
+    if (t === '') { setFuel.mutate({ fuelGroupId: fg.id, sell_pct: null }); setEditing(false); return; }
+    const p = parseFloat(t);
+    if (isNaN(p) || p < 0) { setEditing(false); return; }
+    setFuel.mutate({ fuelGroupId: fg.id, sell_pct: p }); setEditing(false);
   }
-
   const hasOverride = fg.customer_pct != null;
-
+  const cell = { padding: '9px 0', borderTop: '1px solid var(--mv-hairline)' };
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 16px 6px 26px', borderTop: '1px solid rgba(0,0,0,0.03)' }}>
-      <span style={{ fontSize: 12, color: 'rgba(32,30,29,0.62)', flex: 1 }}>{fg.name}</span>
-      <span style={{ fontSize: 10, color: 'rgba(32,30,29,0.62)', fontFamily: 'monospace' }}>cost {parseFloat(fg.cost_pct || 0).toFixed(2)}%</span>
-      <span style={{ fontSize: 10, color: 'rgba(32,30,29,0.62)', fontFamily: 'monospace' }}>
-        std {fg.standard_sell_pct != null ? `${parseFloat(fg.standard_sell_pct).toFixed(2)}%` : '—'}
-      </span>
-      {editing ? (
-        <input
-          ref={inputRef}
-          value={val}
-          onChange={e => setVal(e.target.value)}
-          onBlur={commit}
-          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
-          placeholder="% (clear = reset to std)"
-          style={{ ...inp, width: 110, textAlign: 'right', color: '#7B2FBE', fontFamily: 'monospace', border: '1px solid rgba(123,47,190,0.6)', background: 'rgba(123,47,190,0.08)', fontSize: 11 }}
-        />
-      ) : (
-        <span
-          onClick={startEdit}
-          title={hasOverride ? 'Custom rate — click to edit, clear to revert to standard' : 'Click to set a customer-specific rate'}
-          style={{
-            fontSize: 12, fontWeight: hasOverride ? 700 : 400,
-            color: hasOverride ? '#7B2FBE' : '#444',
-            cursor: 'pointer', padding: '2px 8px', borderRadius: 0,
-            border: `1px solid ${hasOverride ? 'rgba(123,47,190,0.35)' : 'rgba(0,0,0,0.06)'}`,
-            background: hasOverride ? 'rgba(123,47,190,0.08)' : 'transparent',
-            fontFamily: 'monospace',
-          }}
-          onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(123,47,190,0.5)'}
-          onMouseLeave={e => e.currentTarget.style.borderColor = hasOverride ? 'rgba(123,47,190,0.35)' : 'rgba(0,0,0,0.06)'}
-        >
-          {hasOverride ? `${parseFloat(fg.customer_pct).toFixed(2)}%` : '+ Override'}
-        </span>
-      )}
-    </div>
+    <>
+      <div style={{ ...cell, fontSize: 12.5 }}>{fg.name}</div>
+      <div style={{ ...cell, textAlign: 'right' }} className="mv-num mv-cell-dim">{fg.standard_sell_pct != null ? `${parseFloat(fg.standard_sell_pct).toFixed(2)}%` : '—'}</div>
+      <div style={{ ...cell, textAlign: 'right' }}>
+        {editing
+          ? <input ref={inputRef} value={val} onChange={e => setVal(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }} style={{ ...inp, width: 72, textAlign: 'right', color: 'var(--mv-purple)', fontFamily: 'monospace', fontSize: 12 }} />
+          : <span onClick={startEdit} className="mv-num" title={hasOverride ? 'Custom rate — click to edit, clear to reset' : 'Click to set a customer rate'} style={{ cursor: 'pointer', fontWeight: hasOverride ? 700 : 400, color: hasOverride ? 'var(--mv-purple)' : 'var(--mv-ink-45)' }}>{hasOverride ? `${parseFloat(fg.customer_pct).toFixed(2)}%` : 'std %'}</span>}
+      </div>
+    </>
   );
 }
 
-// ─── Inline editable price field (used for both cost and sell in surcharge rows) ─
-function SurchargePriceField({ label, standardValue, overrideValue, isPct, accentColor, accentBg, accentBorder, onSave }) {
+// ─── Compact editable money/percent cell ─────────────────────
+function SurchargePriceField({ standardValue, overrideValue, isPct, onSave }) {
   const [editing, setEditing] = useState(false);
-  const [val, setVal]         = useState('');
-  const inputRef              = useRef(null);
-  const hasOverride           = overrideValue !== null && overrideValue !== undefined;
-  const fmt = (v) => isPct ? `${parseFloat(v).toFixed(2)}%` : `£${parseFloat(v).toFixed(2)}`;
-
-  function startEdit() {
-    setVal(hasOverride ? String(parseFloat(overrideValue).toFixed(2)) : String(parseFloat(standardValue || 0).toFixed(2)));
-    setEditing(true);
-    setTimeout(() => inputRef.current?.select(), 0);
-  }
-
-  function commit() {
-    const parsed = parseFloat(val);
-    if (isNaN(parsed) || parsed < 0) { setEditing(false); return; }
-    onSave(parsed);
-    setEditing(false);
-  }
-
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-      <span style={{ fontSize: 10, color: 'rgba(32,30,29,0.45)', minWidth: 26 }}>{label}</span>
-      <span style={{ fontSize: 11, color: 'rgba(32,30,29,0.62)', fontFamily: 'monospace' }}>{fmt(standardValue || 0)}</span>
-      <span style={{ fontSize: 9, color: 'rgba(32,30,29,0.45)' }}>→</span>
-      {editing ? (
-        <input
-          ref={inputRef}
-          value={val}
-          onChange={e => setVal(e.target.value)}
-          onBlur={commit}
-          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
-          style={{ ...inp, width: 64, textAlign: 'right', color: accentColor, fontFamily: 'monospace', border: `1px solid ${accentBorder}`, background: accentBg, fontSize: 11 }}
-        />
-      ) : (
-        <span
-          onClick={startEdit}
-          title="Click to override"
-          style={{
-            fontSize: 11, fontWeight: hasOverride ? 700 : 400,
-            color: hasOverride ? accentColor : 'rgba(32,30,29,0.62)',
-            cursor: 'pointer', padding: '1px 7px', borderRadius: 0,
-            border: `1px solid ${hasOverride ? accentBorder : 'rgba(0,0,0,0.06)'}`,
-            background: hasOverride ? accentBg : 'transparent',
-            fontFamily: 'monospace',
-          }}
-        >
-          {hasOverride ? fmt(overrideValue) : '+ Override'}
-        </span>
-      )}
-    </div>
-  );
+  const [val, setVal] = useState('');
+  const inputRef = useRef(null);
+  const hasOverride = overrideValue !== null && overrideValue !== undefined;
+  const shown = hasOverride ? overrideValue : standardValue;
+  const fmt = (v) => isPct ? `${parseFloat(v || 0).toFixed(2)}%` : `£${parseFloat(v || 0).toFixed(2)}`;
+  function startEdit() { setVal(String(parseFloat(shown || 0).toFixed(2))); setEditing(true); setTimeout(() => inputRef.current?.select(), 0); }
+  function commit() { const p = parseFloat(val); if (isNaN(p) || p < 0) { setEditing(false); return; } onSave(p); setEditing(false); }
+  if (editing) return <input ref={inputRef} value={val} onChange={e => setVal(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }} style={{ ...inp, width: 72, textAlign: 'right', color: 'var(--mv-purple)', fontFamily: 'monospace', fontSize: 12 }} />;
+  return <span onClick={startEdit} className="mv-num" title="Click to override" style={{ cursor: 'pointer', fontWeight: hasOverride ? 700 : 400, color: hasOverride ? 'var(--mv-purple)' : 'var(--mv-ink-62)' }}>{fmt(shown)}</span>;
 }
 
-// ─── Per-surcharge override row ───────────────────────────────
+// ─── Per-surcharge override row (contributes 3 grid cells) ───
 function SurchargeOverrideRow({ surcharge, override, customerId, onChanged }) {
   const qc = useQueryClient();
-
   const upsert = useMutation({
-    mutationFn: (body) =>
-      api.post(`/surcharges/customer-overrides/${customerId}`, { surcharge_id: surcharge.id, ...body }),
+    mutationFn: (body) => api.post(`/surcharges/customer-overrides/${customerId}`, { surcharge_id: surcharge.id, ...body }),
     onSuccess: () => { qc.invalidateQueries(['surcharge-overrides', customerId]); onChanged?.(); },
   });
-  const remove = useMutation({
-    mutationFn: () => api.delete(`/surcharges/customer-overrides/${customerId}/${override.id}`),
-    onSuccess: () => { qc.invalidateQueries(['surcharge-overrides', customerId]); onChanged?.(); },
-  });
-
-  const hasOverride = !!override;
   const isPct = surcharge.calc_type === 'percentage';
-
+  const cell = { padding: '9px 0', borderTop: '1px solid var(--mv-hairline)' };
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 8,
-      padding: '6px 6px', borderRadius: 0,
-      background: hasOverride ? 'rgba(123,47,190,0.03)' : 'transparent',
-    }}>
-      <span style={{ fontSize: 12, color: hasOverride ? '#201e1d' : 'rgba(32,30,29,0.62)', flex: 1, minWidth: 0 }}>{surcharge.name}</span>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        {/* Cost price override */}
-        <SurchargePriceField
-          label="Cost"
-          standardValue={surcharge.cost_price ?? surcharge.default_value}
-          overrideValue={override?.cost_price_override ?? null}
-          isPct={isPct}
-          accentColor="rgba(32,30,29,0.62)"
-          accentBg="rgba(100,116,139,0.08)"
-          accentBorder="rgba(100,116,139,0.35)"
-          onSave={(v) => upsert.mutate({ cost_price_override: v })}
-        />
-        {/* Sell price override */}
-        <SurchargePriceField
-          label="Sell"
-          standardValue={surcharge.default_value}
-          overrideValue={override?.override_value ?? null}
-          isPct={isPct}
-          accentColor="#7B2FBE"
-          accentBg="rgba(123,47,190,0.08)"
-          accentBorder="rgba(123,47,190,0.35)"
-          onSave={(v) => upsert.mutate({ override_value: v })}
-        />
+    <>
+      <div style={{ ...cell, fontSize: 12.5 }}>{surcharge.name}</div>
+      <div style={{ ...cell, textAlign: 'right' }}>
+        <SurchargePriceField standardValue={surcharge.cost_price ?? surcharge.default_value} overrideValue={override?.cost_price_override ?? null} isPct={isPct} onSave={(v) => upsert.mutate({ cost_price_override: v })} />
       </div>
-      {hasOverride && (
-        <button onClick={() => remove.mutate()} title="Remove all overrides"
-          style={{ background: 'none', border: 'none', color: 'rgba(32,30,29,0.30)', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center', flexShrink: 0 }}
-          onMouseEnter={e => e.currentTarget.style.color = '#E91E8C'}
-          onMouseLeave={e => e.currentTarget.style.color = 'rgba(32,30,29,0.30)'}
-        >
-          <Trash2 size={11} />
-        </button>
-      )}
-    </div>
+      <div style={{ ...cell, textAlign: 'right' }}>
+        <SurchargePriceField standardValue={surcharge.default_value} overrideValue={override?.override_value ?? null} isPct={isPct} onSave={(v) => upsert.mutate({ override_value: v })} />
+      </div>
+    </>
   );
 }
 
-// ─── Single account row (label + account number, inline editable) ─────────────
+// ─── Single account row (label + account number, inline editable) ─
 function CarrierAccountRow({ account, customerId }) {
   const qc = useQueryClient();
   const [labelVal, setLabelVal] = useState(account.label || '');
-  const [acctVal,  setAcctVal]  = useState(account.account_number || '');
-  const [saving,   setSaving]   = useState(false);
-
+  const [acctVal, setAcctVal] = useState(account.account_number || '');
+  const [saving, setSaving] = useState(false);
   async function savePatch(updates) {
     setSaving(true);
-    try {
-      await api.patch(`/customer-carrier-links/${customerId}/link/${account.link_id}`, updates);
-      qc.invalidateQueries(['customer-carrier-links', customerId]);
-    } catch (e) { console.error('Failed to update account:', e); }
+    try { await api.patch(`/customer-carrier-links/${customerId}/link/${account.link_id}`, updates); qc.invalidateQueries(['customer-carrier-links', customerId]); }
+    catch (e) { console.error('Failed to update account:', e); }
     finally { setSaving(false); }
   }
-
   async function removeAccount() {
     if (!window.confirm('Remove this account?')) return;
     await api.delete(`/customer-carrier-links/${customerId}/link/${account.link_id}`);
     qc.invalidateQueries(['customer-carrier-links', customerId]);
   }
-
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-      <input
-        value={labelVal}
-        onChange={e => setLabelVal(e.target.value)}
-        onBlur={() => { if (labelVal !== (account.label || '')) savePatch({ label: labelVal }); }}
-        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setLabelVal(account.label || ''); }}
-        placeholder="Label"
-        title="Account label (e.g. Perishable)"
-        style={{ ...inp, width: 100, fontSize: 11 }}
-        disabled={saving}
-      />
-      <input
-        value={acctVal}
-        onChange={e => setAcctVal(e.target.value)}
-        onBlur={() => { if (acctVal !== (account.account_number || '')) savePatch({ account_number: acctVal }); }}
-        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setAcctVal(account.account_number || ''); }}
-        placeholder="Account No."
-        title="Carrier account number"
-        style={{ ...inp, width: 100, fontSize: 11, fontFamily: 'monospace', color: '#00BCD4' }}
-        disabled={saving}
-      />
-      <button
-        onClick={removeAccount}
-        title="Remove this account"
-        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#E91E8C', padding: '2px 4px', display: 'flex', alignItems: 'center', flexShrink: 0 }}
-      >
-        <Trash2 size={11} />
-      </button>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderTop: '1px solid var(--mv-hairline)' }}>
+      <input value={labelVal} onChange={e => setLabelVal(e.target.value)} onBlur={() => { if (labelVal !== (account.label || '')) savePatch({ label: labelVal }); }} onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setLabelVal(account.label || ''); }} placeholder="Label" title="Account label" style={{ ...inp, flex: 1, fontSize: 12 }} disabled={saving} />
+      <input value={acctVal} onChange={e => setAcctVal(e.target.value)} onBlur={() => { if (acctVal !== (account.account_number || '')) savePatch({ account_number: acctVal }); }} onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setAcctVal(account.account_number || ''); }} placeholder="Account No." title="Carrier account number" style={{ ...inp, width: 120, fontSize: 12, fontFamily: 'monospace', color: 'var(--mv-teal-deep)' }} disabled={saving} />
+      <button onClick={removeAccount} title="Remove this account" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mv-magenta-deep)', padding: '2px 4px', display: 'flex', alignItems: 'center', flexShrink: 0 }}><Trash2 size={12} /></button>
     </div>
   );
 }
 
-// ─── Per-active-carrier section (account numbers + fuel + surcharges) ─────────
+// ─── Per-active-carrier section: Accounts | Fuel groups | Surcharges ─
 function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesChange }) {
-  const [fuelOpen,  setFuelOpen]  = useState(false);
-  const [surchOpen, setSurchOpen] = useState(true);  // open by default so surcharges are visible
-  // Multi-account: add-account inline form
   const [addingAccount, setAddingAccount] = useState(false);
-  const [newLabel,      setNewLabel]      = useState('');
-  const [newAcctNo,     setNewAcctNo]     = useState('');
-  const [addSaving,     setAddSaving]     = useState(false);
-
-  const logo    = getCourierLogo(carrier.courier_code);
-  // Only show fuel section for active (linked) carriers
+  const [newLabel, setNewLabel] = useState('');
+  const [newAcctNo, setNewAcctNo] = useState('');
+  const [addSaving, setAddSaving] = useState(false);
+  const logo = getCourierLogo(carrier.courier_code);
   const hasFuel = carrier.active && carrier.fuel_groups?.length > 0;
+  const qc = useQueryClient();
 
   const { data: surcharges = [] } = useQuery({
     queryKey: ['surcharges', carrier.courier_id],
-    queryFn:  () => api.get(`/surcharges?courier_id=${carrier.courier_id}`).then(r => r.data),
-    staleTime: 0,           // always re-fetch — surcharges change in carrier management
-    refetchOnWindowFocus: true,
+    queryFn: () => api.get(`/surcharges?courier_id=${carrier.courier_id}`).then(r => r.data),
+    staleTime: 0, refetchOnWindowFocus: true,
   });
+  const hasSurcharges = surcharges.length > 0;
 
-  const hasSurcharges    = surcharges.length > 0;
-  const carrierOverrides = allOverrides.filter(o => surcharges.some(s => s.id === o.surcharge_id));
-
-  const qc = useQueryClient();
   const changeCard = useMutation({
     mutationFn: (cardId) => api.patch(`/customer-carrier-links/${customerId}/${carrier.courier_id}`, { carrier_rate_card_id: cardId }),
-    onSuccess:  () => qc.invalidateQueries(['customer-carrier-links', customerId]),
+    onSuccess: () => qc.invalidateQueries(['customer-carrier-links', customerId]),
   });
 
   async function addAccount() {
     if (!newAcctNo.trim() && !newLabel.trim()) return;
     setAddSaving(true);
     try {
-      await api.post(`/customer-carrier-links/${customerId}`, {
-        courier_id:     carrier.courier_id,
-        account_number: newAcctNo.trim() || null,
-        label:          newLabel.trim()  || null,
-      });
+      await api.post(`/customer-carrier-links/${customerId}`, { courier_id: carrier.courier_id, account_number: newAcctNo.trim() || null, label: newLabel.trim() || null });
       qc.invalidateQueries(['customer-carrier-links', customerId]);
-      setNewLabel('');
-      setNewAcctNo('');
-      setAddingAccount(false);
+      setNewLabel(''); setNewAcctNo(''); setAddingAccount(false);
     } finally { setAddSaving(false); }
   }
 
+  const activeCard = (carrier.available_cards || []).find(c => String(c.id) === String(carrier.active_card_id)) || carrier.available_cards?.[0];
+  const colhead = { fontSize: 9, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--mv-ink-45)', textAlign: 'right', paddingBottom: 8, borderBottom: '2px solid var(--mv-divider)' };
+  const colheadL = { ...colhead, textAlign: 'left' };
+
   return (
-    <div className="moov-card" style={{ marginBottom: 10, overflow: 'hidden' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', background: 'rgba(0,200,83,0.03)', borderBottom: '1px solid rgba(0,0,0,0.04)', flexWrap: 'wrap' }}>
-        {logo && <img src={logo} alt={carrier.courier_name} style={{ height: 15, objectFit: 'contain', flexShrink: 0 }} />}
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#201e1d', flex: 1 }}>{carrier.courier_name}</span>
-
-        {/* Rate card selector */}
-        {carrier.available_cards?.length > 1 ? (
-          <select
-            value={String(carrier.active_card_id || '')}
-            onChange={e => changeCard.mutate(e.target.value)}
-            style={{ ...inp, fontSize: 11, width: 180 }}
-          >
-            {carrier.available_cards.map(card => (
-              <option key={card.id} value={String(card.id)}>{card.name}{card.is_master ? ' (Master)' : ''}</option>
-            ))}
+    <div style={{ marginBottom: 36 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        {logo && <img src={logo} alt={carrier.courier_name} style={{ height: 16, objectFit: 'contain' }} />}
+        <span style={{ fontWeight: 800, fontSize: 16, letterSpacing: '-.01em' }}>{carrier.courier_name}</span>
+        {activeCard && <span className="mv-cell-dim" style={{ fontSize: 11 }}>{activeCard.name}</span>}
+        {activeCard?.is_master && <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.1em', color: '#fff', background: 'var(--mv-purple)', padding: '2px 8px' }}>MASTER</span>}
+        {carrier.available_cards?.length > 1 && (
+          <select className="mv-input" style={{ marginLeft: 'auto', width: 200, fontSize: 12 }} value={String(carrier.active_card_id || '')} onChange={e => changeCard.mutate(e.target.value)}>
+            {carrier.available_cards.map(card => <option key={card.id} value={String(card.id)}>{card.name}{card.is_master ? ' (Master)' : ''}</option>)}
           </select>
-        ) : (
-          <span style={{ fontSize: 11, color: 'rgba(32,30,29,0.62)' }}>{carrier.available_cards?.[0]?.name || 'Master'}</span>
         )}
+      </div>
+      <div className="mv-rule" style={{ margin: '10px 0 0' }} />
 
-        {/* Account numbers — multi-account */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-          <span style={{ fontSize: 10, color: 'rgba(32,30,29,0.62)', textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0, paddingTop: 6 }}>Accts</span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {(carrier.accounts || []).map(acct => (
-              <CarrierAccountRow key={acct.link_id} account={acct} customerId={customerId} />
-            ))}
-            {addingAccount ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <input
-                  value={newLabel}
-                  onChange={e => setNewLabel(e.target.value)}
-                  placeholder="Label (optional)"
-                  style={{ ...inp, width: 100, fontSize: 11 }}
-                  autoFocus
-                  disabled={addSaving}
-                  onKeyDown={e => { if (e.key === 'Enter') addAccount(); if (e.key === 'Escape') setAddingAccount(false); }}
-                />
-                <input
-                  value={newAcctNo}
-                  onChange={e => setNewAcctNo(e.target.value)}
-                  placeholder="Account No."
-                  style={{ ...inp, width: 100, fontSize: 11, fontFamily: 'monospace', color: '#00BCD4' }}
-                  disabled={addSaving}
-                  onKeyDown={e => { if (e.key === 'Enter') addAccount(); if (e.key === 'Escape') setAddingAccount(false); }}
-                />
-                <button onClick={addAccount} disabled={addSaving} title="Save" style={{ background: 'rgba(0,200,83,0.15)', border: '1px solid rgba(0,200,83,0.4)', borderRadius: 0, color: '#00C853', padding: '3px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                  <Check size={11} />
-                </button>
-                <button onClick={() => { setAddingAccount(false); setNewLabel(''); setNewAcctNo(''); }} title="Cancel" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(32,30,29,0.62)', padding: '2px 4px', display: 'flex', alignItems: 'center' }}>
-                  <X size={11} />
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setAddingAccount(true)}
-                style={{ background: 'none', border: '1px dashed rgba(0,188,212,0.45)', borderRadius: 0, color: 'rgba(32,30,29,0.62)', padding: '2px 8px', cursor: 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', gap: 4, alignSelf: 'flex-start' }}
-              >
-                <Plus size={9} /> Add account
-              </button>
-            )}
-          </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '0.9fr 1.1fr 1.3fr', gap: 40, marginTop: 18, alignItems: 'start' }}>
+        {/* Accounts */}
+        <div>
+          <div className="mv-section mv-section--muted" style={{ marginBottom: 8 }}>Accounts</div>
+          <div style={{ borderBottom: '2px solid var(--mv-divider)' }} />
+          {(carrier.accounts || []).map(acct => <CarrierAccountRow key={acct.link_id} account={acct} customerId={customerId} />)}
+          {addingAccount ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingTop: 8 }}>
+              <input value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="Label" style={{ ...inp, flex: 1, fontSize: 12 }} autoFocus disabled={addSaving} onKeyDown={e => { if (e.key === 'Enter') addAccount(); if (e.key === 'Escape') setAddingAccount(false); }} />
+              <input value={newAcctNo} onChange={e => setNewAcctNo(e.target.value)} placeholder="Account No." style={{ ...inp, width: 110, fontSize: 12, fontFamily: 'monospace', color: 'var(--mv-teal-deep)' }} disabled={addSaving} onKeyDown={e => { if (e.key === 'Enter') addAccount(); if (e.key === 'Escape') setAddingAccount(false); }} />
+              <button onClick={addAccount} disabled={addSaving} title="Save" className="mv-btn mv-btn--sm" style={{ padding: '0 8px' }}><Check size={12} /></button>
+              <button onClick={() => { setAddingAccount(false); setNewLabel(''); setNewAcctNo(''); }} title="Cancel" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mv-ink-45)', display: 'flex' }}><X size={12} /></button>
+            </div>
+          ) : (
+            <button onClick={() => setAddingAccount(true)} style={{ background: 'none', border: 0, cursor: 'pointer', color: 'var(--mv-purple)', fontSize: 11.5, fontWeight: 600, padding: '10px 0 0', display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: 'inherit' }}><Plus size={12} /> Add an account</button>
+          )}
+        </div>
+
+        {/* Fuel groups */}
+        <div>
+          <div className="mv-section mv-section--muted" style={{ marginBottom: 8 }}>Fuel groups</div>
+          {hasFuel ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', columnGap: 18 }}>
+              <div style={colheadL}>Group</div><div style={colhead}>Standard</div><div style={colhead}>Theirs</div>
+              {carrier.fuel_groups.map(fg => <CustomerFuelRow key={fg.id} fg={fg} customerId={customerId} />)}
+            </div>
+          ) : (<><div style={{ borderBottom: '2px solid var(--mv-divider)' }} /><p className="mv-blurb" style={{ marginTop: 8 }}>No fuel groups on this carrier.</p></>)}
+          {hasFuel && <p className="mv-blurb" style={{ fontSize: 11, marginTop: 10 }}>Leave theirs blank and they pay the standard rate.</p>}
+        </div>
+
+        {/* Surcharge overrides */}
+        <div>
+          <div className="mv-section mv-section--muted" style={{ marginBottom: 8 }}>Surcharge overrides</div>
+          {hasSurcharges ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', columnGap: 18 }}>
+              <div style={colheadL}>Surcharge</div><div style={colhead}>Cost</div><div style={colhead}>Sell</div>
+              {surcharges.map(s => <SurchargeOverrideRow key={s.id} surcharge={s} override={allOverrides.find(o => o.surcharge_id === s.id)} customerId={customerId} onChanged={onOverridesChange} />)}
+            </div>
+          ) : (<><div style={{ borderBottom: '2px solid var(--mv-divider)' }} /><p className="mv-blurb" style={{ marginTop: 8 }}>No surcharges on this carrier.</p></>)}
+          {hasSurcharges && <p className="mv-blurb" style={{ fontSize: 11, marginTop: 10 }}>Cost is what the carrier bills us. Sell overrides the standard schedule; purple means edited.</p>}
         </div>
       </div>
-
-      {/* Fuel Groups */}
-      {hasFuel && (
-        <>
-          <div onClick={() => setFuelOpen(o => !o)}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', cursor: 'pointer',
-              borderBottom: fuelOpen ? '1px solid rgba(0,0,0,0.03)' : 'none',
-              background: fuelOpen ? 'rgba(123,47,190,0.04)' : 'transparent' }}>
-            {fuelOpen ? <ChevronDown size={11} color="#7B2FBE" /> : <ChevronRight size={11} color="rgba(32,30,29,0.62)" />}
-            <Zap size={11} color={fuelOpen ? '#7B2FBE' : 'rgba(32,30,29,0.62)'} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: fuelOpen ? '#7B2FBE' : 'rgba(32,30,29,0.62)', flex: 1 }}>
-              Fuel Groups ({carrier.fuel_groups.length})
-            </span>
-            {carrier.fuel_groups.some(fg => fg.customer_pct != null) && (
-              <span style={{ fontSize: 10, color: '#7B2FBE', fontWeight: 700 }}>Custom rates</span>
-            )}
-          </div>
-          {fuelOpen && carrier.fuel_groups.map(fg => (
-            <CustomerFuelRow key={fg.id} fg={fg} customerId={customerId} />
-          ))}
-        </>
-      )}
-
-      {/* Surcharge Overrides */}
-      {hasSurcharges && (
-        <>
-          <div onClick={() => setSurchOpen(o => !o)}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', cursor: 'pointer',
-              borderTop: hasFuel ? '1px solid rgba(0,0,0,0.03)' : 'none',
-              borderBottom: surchOpen ? '1px solid rgba(0,0,0,0.03)' : 'none',
-              background: surchOpen ? 'rgba(123,47,190,0.04)' : 'transparent' }}>
-            {surchOpen ? <ChevronDown size={11} color="#7B2FBE" /> : <ChevronRight size={11} color="rgba(32,30,29,0.62)" />}
-            <AlertCircle size={11} color={surchOpen ? '#7B2FBE' : 'rgba(32,30,29,0.62)'} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: surchOpen ? '#7B2FBE' : 'rgba(32,30,29,0.62)', flex: 1 }}>
-              Surcharge Overrides ({surcharges.length})
-            </span>
-            {carrierOverrides.length > 0 && (
-              <span style={{ fontSize: 10, color: '#7B2FBE', fontWeight: 700 }}>{carrierOverrides.length} custom</span>
-            )}
-          </div>
-          {surchOpen && (
-            <div style={{ padding: '6px 14px 10px' }}>
-              {surcharges.map(s => (
-                <SurchargeOverrideRow
-                  key={s.id}
-                  surcharge={s}
-                  override={allOverrides.find(o => o.surcharge_id === s.id)}
-                  customerId={customerId}
-                  onChanged={onOverridesChange}
-                />
-              ))}
-            </div>
-          )}
-        </>
-      )}
     </div>
   );
 }
