@@ -19,236 +19,59 @@ const inp = {
   outline: 'none', boxSizing: 'border-box', fontFamily: 'var(--mv-font)',
 };
 
-// ─── Inline editable price cell (first parcel — green) ────────
+// ─── Inline editable price cell (first parcel — ink, click to edit) ──
 function PriceCell({ rateId, initialPrice, onSaved, onDelete }) {
   const [editing, setEditing] = useState(false);
-  const [val, setVal]         = useState(String(parseFloat(initialPrice).toFixed(2)));
-  const [confirm, setConfirm] = useState(false);
+  const [val, setVal] = useState(String(parseFloat(initialPrice).toFixed(2)));
   const inputRef = useRef(null);
-
   function startEdit() { setEditing(true); setTimeout(() => inputRef.current?.select(), 0); }
-
   function commit() {
-    const parsed = parseFloat(val);
-    if (isNaN(parsed) || parsed < 0) { setVal(String(parseFloat(initialPrice).toFixed(2))); setEditing(false); return; }
-    onSaved(rateId, parsed);
-    setEditing(false);
+    const p = parseFloat(val);
+    if (isNaN(p) || p < 0) { setVal(String(parseFloat(initialPrice).toFixed(2))); setEditing(false); return; }
+    onSaved(rateId, p); setEditing(false);
   }
-
-  if (editing) {
-    return (
-      <input
-        ref={inputRef}
-        value={val}
-        onChange={e => setVal(e.target.value)}
-        onBlur={commit}
-        onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setVal(String(parseFloat(initialPrice).toFixed(2))); setEditing(false); } }}
-        style={{ ...inp, width: 80, textAlign: 'right', color: '#00C853', fontWeight: 700, fontFamily: 'monospace', border: '1px solid rgba(0,200,83,0.6)', background: 'rgba(0,200,83,0.08)' }}
-      />
-    );
-  }
-
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-      <span
-        onClick={startEdit}
-        title="Click to edit"
-        style={{
-          fontSize: 13, fontWeight: 700, color: '#00C853',
-          cursor: 'pointer', padding: '3px 10px', borderRadius: 0,
-          border: '1px solid rgba(0,200,83,0.35)',
-          background: 'rgba(0,200,83,0.08)',
-          fontFamily: 'monospace', display: 'inline-block',
-          transition: 'border-color 0.12s, background 0.12s',
-        }}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(0,200,83,0.7)'; e.currentTarget.style.background = 'rgba(0,200,83,0.15)'; }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,200,83,0.35)'; e.currentTarget.style.background = 'rgba(0,200,83,0.08)'; }}
-      >
-        {gbp(initialPrice)}
-      </span>
-      {confirm
-        ? <>
-            <button onClick={() => onDelete(rateId)} style={{ background: '#E91E8C', border: 'none', borderRadius: 0, color: '#fff', fontSize: 10, padding: '2px 6px', cursor: 'pointer' }}>Delete</button>
-            <button onClick={() => setConfirm(false)} style={{ background: 'none', border: 'none', color: 'rgba(32,30,29,0.62)', fontSize: 10, cursor: 'pointer' }}>✕</button>
-          </>
-        : <button onClick={() => setConfirm(true)} style={{ background: 'none', border: 'none', color: 'transparent', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
-            <Trash2 size={11} color="#333" />
-          </button>
-      }
-    </span>
-  );
+  if (editing) return <input ref={inputRef} value={val} onChange={e => setVal(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setVal(String(parseFloat(initialPrice).toFixed(2))); setEditing(false); } }} style={{ ...inp, width: 72, textAlign: 'right', color: 'var(--mv-ink)', fontWeight: 800, fontFamily: 'monospace', fontSize: 13.5 }} />;
+  return <span onClick={startEdit} title="Sell price — click to edit" className="mv-num" style={{ cursor: 'pointer', fontWeight: 800, fontSize: 13.5, color: 'var(--mv-ink)' }}>{gbp(initialPrice)}</span>;
 }
 
-// ─── Inline editable sub-price cell (2nd+ parcels — amber) ────
+// ─── Inline editable sub-price cell (2nd+ parcels — purple) ──
 function SubPriceCell({ rateId, initialSubPrice, onSaved }) {
   const [editing, setEditing] = useState(false);
-  const [val, setVal]         = useState(initialSubPrice != null ? String(parseFloat(initialSubPrice).toFixed(2)) : '');
+  const [val, setVal] = useState(initialSubPrice != null ? String(parseFloat(initialSubPrice).toFixed(2)) : '');
   const inputRef = useRef(null);
-
   const hasValue = initialSubPrice != null;
-
   function startEdit() { setEditing(true); setTimeout(() => inputRef.current?.select(), 0); }
-
   function commit() {
-    const trimmed = val.trim();
-    if (trimmed === '' || trimmed === '-') {
-      // Clear sub price
-      onSaved(rateId, null, true);
-      setEditing(false);
-      return;
-    }
-    const parsed = parseFloat(trimmed);
-    if (isNaN(parsed) || parsed < 0) {
-      setVal(hasValue ? String(parseFloat(initialSubPrice).toFixed(2)) : '');
-      setEditing(false);
-      return;
-    }
-    onSaved(rateId, parsed, true);
-    setEditing(false);
+    const t = val.trim();
+    if (t === '' || t === '-') { onSaved(rateId, null, true); setEditing(false); return; }
+    const p = parseFloat(t);
+    if (isNaN(p) || p < 0) { setVal(hasValue ? String(parseFloat(initialSubPrice).toFixed(2)) : ''); setEditing(false); return; }
+    onSaved(rateId, p, true); setEditing(false);
   }
-
-  if (editing) {
-    return (
-      <input
-        ref={inputRef}
-        value={val}
-        onChange={e => setVal(e.target.value)}
-        onBlur={commit}
-        placeholder="sub £"
-        onKeyDown={e => {
-          if (e.key === 'Enter') commit();
-          if (e.key === 'Escape') { setVal(hasValue ? String(parseFloat(initialSubPrice).toFixed(2)) : ''); setEditing(false); }
-        }}
-        style={{ ...inp, width: 72, textAlign: 'right', color: '#7B2FBE', fontWeight: 700, fontFamily: 'monospace', border: '1px solid rgba(123,47,190,0.6)', background: 'rgba(123,47,190,0.08)' }}
-      />
-    );
-  }
-
-  if (hasValue) {
-    return (
-      <span
-        onClick={startEdit}
-        title="Sub-parcel rate — click to edit, clear to remove"
-        style={{
-          fontSize: 12, fontWeight: 700, color: '#7B2FBE',
-          cursor: 'pointer', padding: '2px 8px', borderRadius: 0,
-          border: '1px solid rgba(123,47,190,0.35)',
-          background: 'rgba(123,47,190,0.08)',
-          fontFamily: 'monospace', display: 'inline-block',
-          transition: 'border-color 0.12s, background 0.12s',
-        }}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(123,47,190,0.7)'; e.currentTarget.style.background = 'rgba(123,47,190,0.15)'; }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(123,47,190,0.35)'; e.currentTarget.style.background = 'rgba(123,47,190,0.08)'; }}
-      >
-        {gbp(initialSubPrice)}
-      </span>
-    );
-  }
-
-  // No sub price set — show a faint add button
-  return (
-    <span
-      onClick={startEdit}
-      title="Add sub-parcel rate (2nd+ boxes)"
-      style={{
-        fontSize: 11, color: 'rgba(32,30,29,0.62)', cursor: 'pointer',
-        padding: '2px 7px', borderRadius: 0,
-        border: '1px dashed rgba(123,47,190,0.2)',
-        fontFamily: 'monospace',
-        transition: 'color 0.12s, border-color 0.12s',
-      }}
-      onMouseEnter={e => { e.currentTarget.style.color = '#7B2FBE'; e.currentTarget.style.borderColor = 'rgba(123,47,190,0.5)'; }}
-      onMouseLeave={e => { e.currentTarget.style.color = '#444'; e.currentTarget.style.borderColor = 'rgba(123,47,190,0.2)'; }}
-    >
-      + sub
-    </span>
-  );
+  if (editing) return <input ref={inputRef} value={val} onChange={e => setVal(e.target.value)} onBlur={commit} placeholder="2nd £" onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setVal(hasValue ? String(parseFloat(initialSubPrice).toFixed(2)) : ''); setEditing(false); } }} style={{ ...inp, width: 64, textAlign: 'right', color: 'var(--mv-purple)', fontWeight: 700, fontFamily: 'monospace', fontSize: 12 }} />;
+  if (hasValue) return <span onClick={startEdit} title="2nd+ parcel rate — click to edit, clear to remove" className="mv-num" style={{ cursor: 'pointer', fontWeight: 700, fontSize: 12, color: 'var(--mv-purple)' }}>{gbp(initialSubPrice)}</span>;
+  return <span onClick={startEdit} title="Add a 2nd+ parcel rate" className="mv-num" style={{ cursor: 'pointer', fontSize: 11, color: 'var(--mv-ink-45)' }}>+ 2nd</span>;
 }
 
-// ─── Inline editable per-kg rate cell (cyan) ──────────────────
+// ─── Inline editable per-kg rate cell (teal) ──
 function PerKgCell({ rateId, initialPerKgRate, onSaved }) {
   const [editing, setEditing] = useState(false);
-  const [val, setVal]         = useState(initialPerKgRate != null ? String(parseFloat(initialPerKgRate).toFixed(2)) : '');
+  const [val, setVal] = useState(initialPerKgRate != null ? String(parseFloat(initialPerKgRate).toFixed(2)) : '');
   const inputRef = useRef(null);
-
   const hasValue = initialPerKgRate != null;
-
   function startEdit() { setEditing(true); setTimeout(() => inputRef.current?.select(), 0); }
-
   function commit() {
-    const trimmed = val.trim();
-    if (trimmed === '' || trimmed === '-') {
-      onSaved(rateId, null);
-      setEditing(false);
-      return;
-    }
-    const parsed = parseFloat(trimmed);
-    if (isNaN(parsed) || parsed < 0) {
-      setVal(hasValue ? String(parseFloat(initialPerKgRate).toFixed(2)) : '');
-      setEditing(false);
-      return;
-    }
-    onSaved(rateId, parsed);
-    setEditing(false);
+    const t = val.trim();
+    if (t === '' || t === '-') { onSaved(rateId, null); setEditing(false); return; }
+    const p = parseFloat(t);
+    if (isNaN(p) || p < 0) { setVal(hasValue ? String(parseFloat(initialPerKgRate).toFixed(2)) : ''); setEditing(false); return; }
+    onSaved(rateId, p); setEditing(false);
   }
-
-  if (editing) {
-    return (
-      <input
-        ref={inputRef}
-        value={val}
-        onChange={e => setVal(e.target.value)}
-        onBlur={commit}
-        placeholder="£/kg"
-        onKeyDown={e => {
-          if (e.key === 'Enter') commit();
-          if (e.key === 'Escape') { setVal(hasValue ? String(parseFloat(initialPerKgRate).toFixed(2)) : ''); setEditing(false); }
-        }}
-        style={{ ...inp, width: 72, textAlign: 'right', color: '#00BCD4', fontWeight: 700, fontFamily: 'monospace', border: '1px solid rgba(0,188,212,0.6)', background: 'rgba(0,188,212,0.08)' }}
-      />
-    );
-  }
-
-  if (hasValue) {
-    return (
-      <span
-        onClick={startEdit}
-        title="Per-kg rate above threshold — click to edit, clear to remove"
-        style={{
-          fontSize: 11, fontWeight: 700, color: '#00BCD4',
-          cursor: 'pointer', padding: '2px 7px', borderRadius: 0,
-          border: '1px solid rgba(0,188,212,0.35)',
-          background: 'rgba(0,188,212,0.08)',
-          fontFamily: 'monospace', display: 'inline-block',
-          transition: 'border-color 0.12s, background 0.12s',
-        }}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(0,188,212,0.7)'; e.currentTarget.style.background = 'rgba(0,188,212,0.15)'; }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,188,212,0.35)'; e.currentTarget.style.background = 'rgba(0,188,212,0.08)'; }}
-      >
-        £{parseFloat(initialPerKgRate).toFixed(2)}/kg
-      </span>
-    );
-  }
-
-  // No per-kg rate set — show a faint add button
-  return (
-    <span
-      onClick={startEdit}
-      title="Add per-kg rate (above weight threshold)"
-      style={{
-        fontSize: 11, color: '#333', cursor: 'pointer',
-        padding: '2px 7px', borderRadius: 0,
-        border: '1px dashed rgba(0,188,212,0.15)',
-        fontFamily: 'monospace',
-        transition: 'color 0.12s, border-color 0.12s',
-      }}
-      onMouseEnter={e => { e.currentTarget.style.color = '#00BCD4'; e.currentTarget.style.borderColor = 'rgba(0,188,212,0.4)'; }}
-      onMouseLeave={e => { e.currentTarget.style.color = '#333'; e.currentTarget.style.borderColor = 'rgba(0,188,212,0.15)'; }}
-    >
-      + £/kg
-    </span>
-  );
+  if (editing) return <input ref={inputRef} value={val} onChange={e => setVal(e.target.value)} onBlur={commit} placeholder="£/kg" onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setVal(hasValue ? String(parseFloat(initialPerKgRate).toFixed(2)) : ''); setEditing(false); } }} style={{ ...inp, width: 64, textAlign: 'right', color: 'var(--mv-teal-deep)', fontWeight: 700, fontFamily: 'monospace', fontSize: 12 }} />;
+  if (hasValue) return <span onClick={startEdit} title="Per-kg rate above threshold — click to edit, clear to remove" className="mv-num" style={{ cursor: 'pointer', fontWeight: 700, fontSize: 11.5, color: 'var(--mv-teal-deep)' }}>£{parseFloat(initialPerKgRate).toFixed(2)}/kg</span>;
+  return <span onClick={startEdit} title="Add a per-kg rate" className="mv-num" style={{ cursor: 'pointer', fontSize: 11, color: 'var(--mv-ink-45)' }}>+ £/kg</span>;
 }
+
 
 // ─── NL search parser ─────────────────────────────────────────
 function parseNLQuery(query) {
@@ -613,102 +436,41 @@ function InternationalRateOverlay({ service, customerId, activeCardId, onClose, 
 // Looks like PriceCell but dashed border, click-to-type, POSTs on commit.
 function NewPriceCell({ service, customerId, zoneName, weightClassName, onCreated }) {
   const [editing, setEditing] = useState(false);
-  const [val, setVal]         = useState('');
-  const [saving, setSaving]   = useState(false);
-  const inputRef              = useRef(null);
-
+  const [val, setVal] = useState('');
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef(null);
   function startEdit() { setEditing(true); setTimeout(() => inputRef.current?.focus(), 0); }
-
   async function commit() {
-    const parsed = parseFloat(val);
-    if (isNaN(parsed) || parsed <= 0) { setEditing(false); setVal(''); return; }
+    const p = parseFloat(val);
+    if (isNaN(p) || p <= 0) { setEditing(false); setVal(''); return; }
     setSaving(true);
     try {
       await api.post(`/customer-rates/${customerId}`, {
-        courier_id:        service.courier_id || 0,
-        courier_code:      service.courier_code || '',
-        courier_name:      service.courier_name || '',
-        service_id:        service.service_id,
-        service_code:      service.service_code,
-        service_name:      service.service_name,
-        zone_name:         zoneName,
-        weight_class_name: weightClassName,
-        price:             parsed,
+        courier_id: service.courier_id || 0, courier_code: service.courier_code || '', courier_name: service.courier_name || '',
+        service_id: service.service_id, service_code: service.service_code, service_name: service.service_name,
+        zone_name: zoneName, weight_class_name: weightClassName, price: p,
       });
       onCreated();
-    } catch (e) {
-      console.error('[NewPriceCell] create failed', e);
-    } finally {
-      setSaving(false);
-      setEditing(false);
-      setVal('');
-    }
+    } catch (e) { console.error('[NewPriceCell] create failed', e); }
+    finally { setSaving(false); setEditing(false); setVal(''); }
   }
-
-  if (saving) {
-    return <span style={{ fontSize: 12, color: 'rgba(32,30,29,0.62)', fontFamily: 'monospace', padding: '3px 10px' }}>…</span>;
-  }
-
-  if (editing) {
-    return (
-      <input
-        ref={inputRef}
-        value={val}
-        onChange={e => setVal(e.target.value)}
-        onBlur={commit}
-        onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setEditing(false); setVal(''); } }}
-        style={{ ...inp, width: 80, textAlign: 'right', color: '#00C853', fontWeight: 700, fontFamily: 'monospace', border: '1px solid rgba(0,200,83,0.6)', background: 'rgba(0,200,83,0.08)' }}
-      />
-    );
-  }
-
-  return (
-    <span
-      onClick={startEdit}
-      title="Click to set price"
-      style={{
-        fontSize: 12, color: '#2A2A2A', cursor: 'pointer',
-        padding: '3px 10px', borderRadius: 0, fontFamily: 'monospace',
-        border: '1px dashed rgba(0,0,0,0.08)',
-        display: 'inline-block', minWidth: 52, textAlign: 'center',
-        transition: 'border-color 0.12s, color 0.12s',
-      }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(0,200,83,0.5)'; e.currentTarget.style.color = '#00C853'; }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.08)'; e.currentTarget.style.color = '#2A2A2A'; }}
-    >
-      —
-    </span>
-  );
+  if (saving) return <span className="mv-num mv-cell-dim" style={{ fontSize: 12 }}>…</span>;
+  if (editing) return <input ref={inputRef} value={val} onChange={e => setVal(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setEditing(false); setVal(''); } }} style={{ ...inp, width: 72, textAlign: 'right', color: 'var(--mv-ink)', fontWeight: 700, fontFamily: 'monospace', fontSize: 13 }} />;
+  return <span onClick={startEdit} title="Click to set a sell price" className="mv-num" style={{ cursor: 'pointer', fontSize: 13.5, color: 'var(--mv-ink-45)' }}>—</span>;
 }
 
-// ─── Service block — horizontal zone layout ───────────────────
-// For domestic services: shows ALL zones from the carrier template (fetched
-// from other customers' rates for this service_code).  Zones with a customer
-// price use PriceCell (edit/delete).  Zones with no price use NewPriceCell
-// (click → type → auto-creates the rate row).  Zone names and weight classes
-// are read-only — they come from the carrier, not the customer.
+// ─── Service block — zone × weight-band rate grid ─────────────
 function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateDelete, onRateCreated, onPerKgUpdate }) {
   const [overlayOpen, setOverlay] = useState(false);
   const isIntl = service.service_type === 'international';
 
-  // Domestic: default open; international: always uses click-to-open overlay (no inline collapse needed)
-  const [open, setOpen] = useState(true);
-
-  // Fetch zone template from other customers' rates for this service.
-  // This gives us the canonical zones/weight-bands defined at the carrier level.
   const { data: templateZones = [], isLoading: templateLoading } = useQuery({
     queryKey: ['rate-zone-template', service.service_code],
-    queryFn:  () => api.get(`/customer-rates/zones/${encodeURIComponent(service.service_code)}`).then(r => r.data),
-    enabled:  !isIntl,
-    staleTime: 120_000,
+    queryFn: () => api.get(`/customer-rates/zones/${encodeURIComponent(service.service_code)}`).then(r => r.data),
+    enabled: !isIntl, staleTime: 120_000,
   });
 
-  // Derived values (used in both header and body)
   const rateMap = {};
-  // Fallback lookup by zone name only — used when weight_class_name labels differ
-  // between what the weight_bands table derives ("0-2kg") and what customer_rates
-  // stores ("Parcel"). Without this, existing rates become invisible when a new
-  // zone is added to the service and the template is used for display.
   const rateByZone = {};
   for (const rate of service.rates) {
     rateMap[`${rate.zone_name}::${rate.weight_class_name}`] = rate;
@@ -716,140 +478,97 @@ function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateD
   }
   const zonesToShow = !isIntl
     ? (() => {
-        if (templateZones.length === 0) {
-          // No template — use the customer's own rate keys directly
-          return service.rates.map(r => ({ zone_name: r.zone_name, weight_class_name: r.weight_class_name }));
-        }
-        // Template loaded — use it if any zone NAME matches a customer rate.
-        // We check zone names only (not the full zone::weight key) because
-        // weight_class_name labels can differ between weight_bands ("0-2kg")
-        // and customer_rates ("Parcel") for the same logical band. Using only
-        // zone names means a newly-added zone (e.g. "Isle of Man") will appear
-        // alongside existing zones even when weight labels don't exactly match.
+        if (templateZones.length === 0) return service.rates.map(r => ({ zone_name: r.zone_name, weight_class_name: r.weight_class_name }));
         const customerZoneNames = new Set(service.rates.map(r => r.zone_name));
         const anyZoneMatch = templateZones.some(t => customerZoneNames.has(t.zone_name));
-        if (!anyZoneMatch && service.rates.length > 0) {
-          return service.rates.map(r => ({ zone_name: r.zone_name, weight_class_name: r.weight_class_name }));
-        }
+        if (!anyZoneMatch && service.rates.length > 0) return service.rates.map(r => ({ zone_name: r.zone_name, weight_class_name: r.weight_class_name }));
         return templateZones;
       })()
     : [];
-  const multiWeight = [...new Set(zonesToShow.map(z => z.weight_class_name))].length > 1;
+  const weightClasses = [...new Set(zonesToShow.map(z => z.weight_class_name))];
+  const zones = [...new Set(zonesToShow.map(z => z.zone_name))];
+  const multiWeight = weightClasses.length > 1;
   const pricedCount = service.rates.length;
-  const totalCount  = isIntl ? service.rate_count : zonesToShow.length;
-  const allPriced   = totalCount > 0 && pricedCount >= totalCount;
+  const totalCount = isIntl ? service.rate_count : zonesToShow.length;
+  const allPriced = totalCount > 0 && pricedCount >= totalCount;
 
-  // ── International: compact row → fullscreen overlay ──────────
+  // ── International: compact row → fullscreen overlay ──
   if (isIntl) {
     return (
       <>
-        <div
-          onClick={() => setOverlay(true)}
-          style={{ display: 'flex', alignItems: 'center', padding: '10px 18px', borderTop: '1px solid rgba(0,0,0,0.03)', cursor: 'pointer', background: 'rgba(0,188,212,0.03)' }}
-          onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,188,212,0.07)'}
-          onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,188,212,0.03)'}
-        >
-          <Globe size={12} color="#00BCD4" style={{ marginRight: 8, flexShrink: 0 }} />
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#201e1d', flex: 1 }}>{service.service_name}</span>
-          {totalCount > 0 && (
-            <span style={{ fontSize: 11, color: allPriced ? '#00C853' : '#7B2FBE', fontWeight: 700, marginRight: 12 }}>
-              {pricedCount}/{totalCount} priced
-            </span>
-          )}
-          <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#00BCD4', background: 'rgba(0,188,212,0.1)', padding: '2px 8px', borderRadius: 0, marginRight: 12 }}>{service.service_code}</span>
-          <span style={{ fontSize: 11, color: '#00BCD4', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}><Search size={11} /> Search →</span>
+        <div onClick={() => setOverlay(true)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 0', borderTop: '1px solid var(--mv-hairline)', cursor: 'pointer' }}>
+          <Globe size={13} color="var(--mv-teal-deep)" style={{ flexShrink: 0 }} />
+          <span style={{ fontSize: 14, fontWeight: 800, flex: 1 }}>{service.service_name}</span>
+          {totalCount > 0 && <span className="mv-num" style={{ fontSize: 11.5, color: allPriced ? 'var(--mv-green-deep)' : 'var(--mv-ink-52)', marginRight: 12 }}>{pricedCount}/{totalCount} priced</span>}
+          <span className="mv-num mv-cell-dim" style={{ fontSize: 11, marginRight: 12 }}>{service.service_code}</span>
+          <span className="mv-state-label" style={{ color: 'var(--mv-purple)', display: 'inline-flex', alignItems: 'center', gap: 5 }}><Search size={11} /> Open</span>
         </div>
-        {overlayOpen && (
-          <InternationalRateOverlay
-            service={service}
-            customerId={customerId}
-            activeCardId={activeCardId}
-            onClose={() => setOverlay(false)}
-            onRateUpdate={onRateUpdate}
-            onRateDelete={onRateDelete}
-            onRateCreated={onRateCreated}
-            onPerKgUpdate={onPerKgUpdate}
-          />
-        )}
+        {overlayOpen && <InternationalRateOverlay service={service} customerId={customerId} activeCardId={activeCardId} onClose={() => setOverlay(false)} onRateUpdate={onRateUpdate} onRateDelete={onRateDelete} onRateCreated={onRateCreated} onPerKgUpdate={onPerKgUpdate} />}
       </>
     );
   }
 
-  // ── Domestic: collapsible zone chips ─────────────────────────
+  // ── Domestic: zone × weight-band grid ──
+  const legendDot = (c) => ({ width: 8, height: 8, background: c, display: 'inline-block', marginRight: 5 });
   return (
-    <div style={{ borderTop: '1px solid rgba(0,0,0,0.04)' }}>
-      {/* Collapsible header */}
-      <div
-        onClick={() => setOpen(o => !o)}
-        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 18px', cursor: 'pointer' }}
-        onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'}
-        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-      >
-        {open
-          ? <ChevronDown size={11} color="rgba(32,30,29,0.62)" style={{ flexShrink: 0 }} />
-          : <ChevronRight size={11} color="rgba(32,30,29,0.62)" style={{ flexShrink: 0 }} />}
-        <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(32,30,29,0.62)', textTransform: 'uppercase', letterSpacing: '0.06em', flex: 1 }}>
-          {service.service_name}
-        </span>
-        {totalCount > 0 && (
-          <span style={{ fontSize: 10, color: allPriced ? '#00C853' : '#7B2FBE', fontWeight: 700 }}>
-            {pricedCount}/{totalCount}
-          </span>
-        )}
-        <span style={{ fontSize: 10, fontFamily: 'monospace', color: 'rgba(32,30,29,0.62)', background: 'rgba(0,0,0,0.03)', padding: '1px 6px', borderRadius: 0, border: '1px solid rgba(0,0,0,0.07)' }}>
-          {service.service_code}
-        </span>
+    <div style={{ marginBottom: 34 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-.01em' }}>
+            {service.service_name} <span className="mv-cell-dim" style={{ fontSize: 12, fontWeight: 400 }}>{service.service_code} · {service.courier_name}</span>
+          </div>
+          <div className="mv-blurb" style={{ marginTop: 2 }}>{zones.length} zone{zones.length !== 1 ? 's' : ''} × {weightClasses.length} weight class{weightClasses.length !== 1 ? 'es' : ''} · {service.rate_count} rate{service.rate_count !== 1 ? 's' : ''}</div>
+        </div>
+        <div style={{ display: 'flex', gap: 18, alignItems: 'center', paddingTop: 4 }}>
+          <span className="mv-state-label" style={{ display: 'inline-flex', alignItems: 'center' }}><span style={legendDot('var(--mv-ink)')} />1st parcel</span>
+          <span className="mv-state-label" style={{ display: 'inline-flex', alignItems: 'center' }}><span style={legendDot('var(--mv-purple)')} />2nd+ parcel</span>
+          <span className="mv-state-label" style={{ display: 'inline-flex', alignItems: 'center' }}><span style={legendDot('var(--mv-teal)')} />£ per kg</span>
+        </div>
       </div>
 
-      {/* Zone chips — only when open */}
-      {open && (
-        <div style={{ padding: '4px 18px 14px' }}>
-          {templateLoading ? (
-            <div style={{ fontSize: 11, color: 'rgba(32,30,29,0.62)' }}>Loading zones…</div>
-          ) : zonesToShow.length === 0 ? (
-            <div style={{ fontSize: 11, color: 'rgba(32,30,29,0.62)', fontStyle: 'italic' }}>No zone template found for this service</div>
-          ) : (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {zonesToShow.map(({ zone_name, weight_class_name }) => {
-                const key  = `${zone_name}::${weight_class_name}`;
-                const rate = rateMap[key] || (!multiWeight ? rateByZone[zone_name] : null);
-                return (
-                  <div key={key} style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 8,
-                    padding: '5px 8px 5px 10px',
-                    background: rate ? 'rgba(0,0,0,0.02)' : 'transparent',
-                    border: `1px solid ${rate ? 'rgba(0,0,0,0.07)' : 'rgba(0,0,0,0.03)'}`,
-                    borderRadius: 0,
-                  }}>
-                    <span style={{ fontSize: 11, color: rate ? '#666' : '#444', fontWeight: 500, whiteSpace: 'nowrap' }}>
-                      {zone_name}
-                      {multiWeight && <span style={{ color: '#333', marginLeft: 5 }}>· {weight_class_name}</span>}
-                    </span>
-                    {rate ? (
-                      <>
-                        <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
-                        <SubPriceCell rateId={rate.id} initialSubPrice={rate.price_sub} onSaved={onRateUpdate} />
-                        <PerKgCell rateId={rate.id} initialPerKgRate={rate.per_kg_rate} onSaved={onPerKgUpdate} />
-                      </>
-                    ) : (
-                      <NewPriceCell
-                        service={service}
-                        customerId={customerId}
-                        zoneName={zone_name}
-                        weightClassName={weight_class_name}
-                        onCreated={onRateCreated}
-                      />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+      {templateLoading ? (
+        <><div className="mv-rule" style={{ margin: '12px 0 0' }} /><div className="mv-blurb" style={{ marginTop: 10 }}>Loading zones…</div></>
+      ) : zones.length === 0 ? (
+        <><div className="mv-rule" style={{ margin: '12px 0 0' }} /><div className="mv-blurb" style={{ marginTop: 10 }}>No zone template found for this service.</div></>
+      ) : (
+        <div style={{ overflowX: 'auto', marginTop: 12 }}>
+          <table className="mv-table">
+            <thead>
+              <tr>
+                <th>Zone</th>
+                {weightClasses.map(wc => <th key={wc} className="is-right">{wc}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {zones.map(zone => (
+                <tr key={zone}>
+                  <td className="mv-cell-strong">{zone}</td>
+                  {weightClasses.map(wc => {
+                    const rate = rateMap[`${zone}::${wc}`] || (!multiWeight ? rateByZone[zone] : null);
+                    return (
+                      <td key={wc} className="is-right">
+                        {rate ? (
+                          <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                            <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
+                            <SubPriceCell rateId={rate.id} initialSubPrice={rate.price_sub} onSaved={onRateUpdate} />
+                            <PerKgCell rateId={rate.id} initialPerKgRate={rate.per_kg_rate} onSaved={onPerKgUpdate} />
+                          </span>
+                        ) : (
+                          <NewPriceCell service={service} customerId={customerId} zoneName={zone} weightClassName={wc} onCreated={onRateCreated} />
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
   );
 }
+
 
 // ─── Courier group ────────────────────────────────────────────
 function CourierGroup({ courierName, services, customerId, activeCardId, onRateUpdate, onRateDelete, onRateCreated, onPerKgUpdate }) {
@@ -1014,11 +733,15 @@ function CourierToggleStrip({ carriers, customerId }) {
           const isActive = carrier.active;
           const configured = (carrier.available_cards?.length || 0) > 0 || isActive;
           const state = isActive ? 'ACTIVE' : (configured ? 'OFF' : 'NOT CONFIGURED');
+          const logo = getCourierLogo(carrier.courier_code);
           return (
             <button key={carrier.courier_id}
               onClick={() => toggle.mutate({ courier_id: carrier.courier_id, active: isActive })}
               title={`${carrier.courier_name} — click to ${isActive ? 'turn off' : 'turn on'}`}
-              style={{ textAlign: 'left', padding: '16px 15px', cursor: 'pointer', border: `1.5px solid ${isActive ? 'var(--mv-ink)' : 'var(--mv-hairline-2)'}`, background: 'transparent', fontFamily: 'inherit' }}>
+              style={{ textAlign: 'left', padding: '15px 15px 16px', cursor: 'pointer', border: `1.5px solid ${isActive ? 'var(--mv-ink)' : 'var(--mv-hairline-2)'}`, background: 'transparent', fontFamily: 'inherit', display: 'flex', flexDirection: 'column', minHeight: 96 }}>
+              {logo
+                ? <img src={logo} alt={carrier.courier_name} style={{ height: 20, objectFit: 'contain', objectPosition: 'left', marginBottom: 12, opacity: isActive ? 1 : 0.4, filter: isActive ? 'none' : 'grayscale(1)' }} />
+                : <div style={{ height: 20, marginBottom: 12 }} />}
               <div style={{ fontWeight: 800, fontSize: 13, letterSpacing: '-.01em', color: isActive ? 'var(--mv-ink)' : 'var(--mv-ink-45)' }}>{carrier.courier_name}</div>
               <div className="mv-state-label" style={{ marginTop: 8, color: isActive ? 'var(--mv-green-deep)' : 'var(--mv-ink-45)' }}>{state}</div>
             </button>
