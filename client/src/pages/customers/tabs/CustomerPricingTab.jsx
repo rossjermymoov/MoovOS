@@ -1,89 +1,26 @@
 /**
- * CustomerPricingTab
- * Courier links, fuel groups, surcharge overrides, service selector, rate card view
+ * CustomerPricingTab — rebuilt to PRICING_TAB.md on the moov.css design system.
+ * Presentation only: every query, mutation and endpoint is preserved from the
+ * previous implementation. Section order: coverage strip · carriers · per-carrier
+ * config · billing modes · service selection · rate cards (accordion, one open).
  */
-
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Trash2, Globe, Search, X, ChevronDown, ChevronRight, Package, Check, Zap, AlertCircle, Percent, ToggleLeft, ToggleRight, Plus } from 'lucide-react';
+import { Search, X, Plus, Check, ChevronDown, ChevronRight, Globe } from 'lucide-react';
 import axios from 'axios';
 import { getCourierLogo } from '../../../utils/courierLogos';
 
 const api = axios.create({ baseURL: '/api' });
-
 const gbp = (n) => `£${parseFloat(n || 0).toFixed(2)}`;
+const fix2 = (n) => (n == null || n === '' ? '' : parseFloat(n).toFixed(2));
 
-const inp = {
-  background: '#FFFFFF', border: '1px solid rgba(32,30,29,0.20)',
-  borderRadius: 0, padding: '4px 10px', color: 'var(--mv-ink)', fontSize: 12,
-  outline: 'none', boxSizing: 'border-box', fontFamily: 'var(--mv-font)',
-};
-
-// ─── Inline editable price cell (first parcel — ink, click to edit) ──
-function PriceCell({ rateId, initialPrice, onSaved, onDelete }) {
-  const [editing, setEditing] = useState(false);
-  const [val, setVal] = useState(String(parseFloat(initialPrice).toFixed(2)));
-  const inputRef = useRef(null);
-  function startEdit() { setEditing(true); setTimeout(() => inputRef.current?.select(), 0); }
-  function commit() {
-    const p = parseFloat(val);
-    if (isNaN(p) || p < 0) { setVal(String(parseFloat(initialPrice).toFixed(2))); setEditing(false); return; }
-    onSaved(rateId, p); setEditing(false);
-  }
-  if (editing) return <input ref={inputRef} value={val} onChange={e => setVal(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setVal(String(parseFloat(initialPrice).toFixed(2))); setEditing(false); } }} style={{ ...inp, width: 72, textAlign: 'right', color: 'var(--mv-ink)', fontWeight: 800, fontFamily: 'monospace', fontSize: 13.5 }} />;
-  return <span onClick={startEdit} title="Sell price — click to edit" className="mv-num" style={{ cursor: 'pointer', fontWeight: 800, fontSize: 13.5, color: 'var(--mv-ink)' }}>{gbp(initialPrice)}</span>;
-}
-
-// ─── Inline editable sub-price cell (2nd+ parcels — purple) ──
-function SubPriceCell({ rateId, initialSubPrice, onSaved }) {
-  const [editing, setEditing] = useState(false);
-  const [val, setVal] = useState(initialSubPrice != null ? String(parseFloat(initialSubPrice).toFixed(2)) : '');
-  const inputRef = useRef(null);
-  const hasValue = initialSubPrice != null;
-  function startEdit() { setEditing(true); setTimeout(() => inputRef.current?.select(), 0); }
-  function commit() {
-    const t = val.trim();
-    if (t === '' || t === '-') { onSaved(rateId, null, true); setEditing(false); return; }
-    const p = parseFloat(t);
-    if (isNaN(p) || p < 0) { setVal(hasValue ? String(parseFloat(initialSubPrice).toFixed(2)) : ''); setEditing(false); return; }
-    onSaved(rateId, p, true); setEditing(false);
-  }
-  if (editing) return <input ref={inputRef} value={val} onChange={e => setVal(e.target.value)} onBlur={commit} placeholder="2nd £" onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setVal(hasValue ? String(parseFloat(initialSubPrice).toFixed(2)) : ''); setEditing(false); } }} style={{ ...inp, width: 64, textAlign: 'right', color: 'var(--mv-purple)', fontWeight: 700, fontFamily: 'monospace', fontSize: 12 }} />;
-  if (hasValue) return <span onClick={startEdit} title="2nd+ parcel rate — click to edit, clear to remove" className="mv-num" style={{ cursor: 'pointer', fontWeight: 700, fontSize: 12, color: 'var(--mv-purple)' }}>{gbp(initialSubPrice)}</span>;
-  return <span onClick={startEdit} title="Add a 2nd+ parcel rate" className="mv-num" style={{ cursor: 'pointer', fontSize: 11, color: 'var(--mv-ink-45)' }}>+ 2nd</span>;
-}
-
-// ─── Inline editable per-kg rate cell (teal) ──
-function PerKgCell({ rateId, initialPerKgRate, onSaved }) {
-  const [editing, setEditing] = useState(false);
-  const [val, setVal] = useState(initialPerKgRate != null ? String(parseFloat(initialPerKgRate).toFixed(2)) : '');
-  const inputRef = useRef(null);
-  const hasValue = initialPerKgRate != null;
-  function startEdit() { setEditing(true); setTimeout(() => inputRef.current?.select(), 0); }
-  function commit() {
-    const t = val.trim();
-    if (t === '' || t === '-') { onSaved(rateId, null); setEditing(false); return; }
-    const p = parseFloat(t);
-    if (isNaN(p) || p < 0) { setVal(hasValue ? String(parseFloat(initialPerKgRate).toFixed(2)) : ''); setEditing(false); return; }
-    onSaved(rateId, p); setEditing(false);
-  }
-  if (editing) return <input ref={inputRef} value={val} onChange={e => setVal(e.target.value)} onBlur={commit} placeholder="£/kg" onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setVal(hasValue ? String(parseFloat(initialPerKgRate).toFixed(2)) : ''); setEditing(false); } }} style={{ ...inp, width: 64, textAlign: 'right', color: 'var(--mv-teal-deep)', fontWeight: 700, fontFamily: 'monospace', fontSize: 12 }} />;
-  if (hasValue) return <span onClick={startEdit} title="Per-kg rate above threshold — click to edit, clear to remove" className="mv-num" style={{ cursor: 'pointer', fontWeight: 700, fontSize: 11.5, color: 'var(--mv-teal-deep)' }}>£{parseFloat(initialPerKgRate).toFixed(2)}/kg</span>;
-  return <span onClick={startEdit} title="Add a per-kg rate" className="mv-num" style={{ cursor: 'pointer', fontSize: 11, color: 'var(--mv-ink-45)' }}>+ £/kg</span>;
-}
-
-
-// ─── NL search parser ─────────────────────────────────────────
+/* ── NL search (unchanged) ─────────────────────────────────── */
 function parseNLQuery(query) {
   const q = query.toLowerCase();
   let weightKg = null;
   const weightMatch = q.match(/(\d+(?:\.\d+)?)\s*(?:kg|kgs|kilogram|kilograms|kilo|kilos)\b/);
-  if (weightMatch) {
-    weightKg = parseFloat(weightMatch[1]);
-  } else {
-    const gramsMatch = q.match(/(\d+(?:\.\d+)?)\s*(?:g|gram|grams)\b/);
-    if (gramsMatch) weightKg = parseFloat(gramsMatch[1]) / 1000;
-  }
+  if (weightMatch) weightKg = parseFloat(weightMatch[1]);
+  else { const g = q.match(/(\d+(?:\.\d+)?)\s*(?:g|gram|grams)\b/); if (g) weightKg = parseFloat(g[1]) / 1000; }
   let zoneTerm = q
     .replace(/(\d+(?:\.\d+)?)\s*(?:kg|kgs|kilogram|kilograms|kilo|kilos|g|gram|grams)\b/g, '')
     .replace(/\b(tell|me|the|price|for|to|from|a|an|find|get|what|is|how|much|does|it|cost|package|parcel|shipment|shipping|send|sending|weight)\b/g, '')
@@ -91,659 +28,149 @@ function parseNLQuery(query) {
   if (!zoneTerm) zoneTerm = null;
   return { weightKg, zoneTerm };
 }
-
 function weightClassCoversKg(weightClassName, weightKg) {
   if (weightKg == null) return false;
-  // Strip whitespace and KG/KGS/KILOGRAM suffixes to get a pure numeric/operator string
   let s = weightClassName.toUpperCase().replace(/\s/g, '');
   s = s.replace(/KILOGRAMS$/, '').replace(/KILOGRAM$/, '').replace(/KGS$/, '').replace(/KG$/, '').replace(/K$/, '');
-
-  // Range: "0-5" or "2.5-5"
-  const rangeMatch = s.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/);
-  if (rangeMatch) {
-    const lo = parseFloat(rangeMatch[1]), hi = parseFloat(rangeMatch[2]);
-    return weightKg > lo && weightKg <= hi;
-  }
-  // Open upper: "5+" or "OVER5"
-  const plusMatch = s.match(/^(\d+(?:\.\d+)?)\+$/) || s.match(/^OVER(\d+(?:\.\d+)?)$/);
-  if (plusMatch) return weightKg > parseFloat(plusMatch[1]);
-  // Exclusive upper: "UNDER5" or "<5"
-  const underMatch = s.match(/^(?:UNDER|<)(\d+(?:\.\d+)?)$/);
-  if (underMatch) return weightKg < parseFloat(underMatch[1]);
-  // Inclusive upper: "UPTO5" or "MAX5"
-  const uptoMatch = s.match(/^(?:UPTO|MAX)(\d+(?:\.\d+)?)$/);
-  if (uptoMatch) return weightKg <= parseFloat(uptoMatch[1]);
-  // Bare number: "5" → up to 5kg (Moov convention — e.g. "5KG" = up to 5 kg)
-  const bareMatch = s.match(/^(\d+(?:\.\d+)?)$/);
-  if (bareMatch) return weightKg <= parseFloat(bareMatch[1]);
+  const range = s.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/);
+  if (range) { const lo = parseFloat(range[1]), hi = parseFloat(range[2]); return weightKg > lo && weightKg <= hi; }
+  const plus = s.match(/^(\d+(?:\.\d+)?)\+$/) || s.match(/^OVER(\d+(?:\.\d+)?)$/);
+  if (plus) return weightKg > parseFloat(plus[1]);
+  const under = s.match(/^(?:UNDER|<)(\d+(?:\.\d+)?)$/);
+  if (under) return weightKg < parseFloat(under[1]);
+  const upto = s.match(/^(?:UPTO|MAX)(\d+(?:\.\d+)?)$/);
+  if (upto) return weightKg <= parseFloat(upto[1]);
+  const bare = s.match(/^(\d+(?:\.\d+)?)$/);
+  if (bare) return weightKg <= parseFloat(bare[1]);
   return false;
 }
+function wcSortKey(wc) {
+  const s = wc.toUpperCase().replace(/\s/g, '').replace(/KILOGRAMS?$|KGS?$|K$/, '');
+  const bare = s.match(/^(\d+(?:\.\d+)?)$/); if (bare) return parseFloat(bare[1]);
+  const range = s.match(/^(\d+(?:\.\d+)?)-/); if (range) return parseFloat(range[1]);
+  const upto = s.match(/^(?:UPTO|MAX)(\d+(?:\.\d+)?)$/); if (upto) return parseFloat(upto[1]);
+  return Infinity;
+}
+const titleCase = (s) => (s || '').replace(/\b\w/g, c => c.toUpperCase());
 
-// ─── International rate overlay ───────────────────────────────
-function InternationalRateOverlay({ service, customerId, activeCardId, onClose, onRateUpdate, onRateDelete, onRateCreated, onPerKgUpdate }) {
-  const [searchText, setSearchText] = useState('');
-  const [parsed, setParsed]         = useState({ weightKg: null, zoneTerm: null });
-  const [markup, setMarkup]         = useState('');
-  const [applying, setApplying]     = useState(false);
-  const [applyResult, setApplyResult] = useState(null); // { created, updated }
-  const searchRef                   = useRef(null);
-  const qc                          = useQueryClient();
-
-  // Fetch carrier rate card bands for markup calculation
-  const { data: cardData } = useQuery({
-    queryKey: ['carrier-rate-card-bands', activeCardId],
-    queryFn:  () => api.get(`/carrier-rate-cards/${activeCardId}/bands`).then(r => r.data),
-    enabled:  !!activeCardId,
-    staleTime: 300_000,
-  });
-
-  const cardService = cardData?.services?.find(s => s.service_code === service.service_code);
-
-  // Derive a consistent weight_class_name from a carrier band's min/max kg (lowercase, matches DB)
-  function bandLabel(band) {
-    const fmt = n => {
-      const f = parseFloat(n);
-      return Number.isInteger(f) ? String(f) : f.toFixed(f < 1 ? 3 : 1).replace(/\.?0+$/, '');
-    };
-    if (band.max_weight_kg == null) return `${fmt(band.min_weight_kg)}kg+`;
-    return `${fmt(band.min_weight_kg)}-${fmt(band.max_weight_kg)}kg`;
-  }
-
-  // Apply markup: single server-side call — deletes all existing rates for this
-  // service and re-inserts fresh rows at carrier_price × (1 + pct/100).
-  async function applyMarkup() {
-    const pct = parseFloat(markup);
-    if (isNaN(pct) || pct < 0 || !activeCardId) return;
-    setApplying(true);
-    setApplyResult(null);
-    try {
-      const result = await api.post(`/customer-rates/${customerId}/apply-markup`, {
-        service_code:         service.service_code,
-        service_id:           service.service_id,
-        service_name:         service.service_name,
-        courier_id:           service.courier_id   || 0,
-        courier_code:         service.courier_code || '',
-        courier_name:         service.courier_name || '',
-        carrier_rate_card_id: activeCardId,
-        markup_pct:           pct,
-      });
-
-      setApplyResult({ created: result.data.inserted });
-      qc.invalidateQueries(['customer-rates', customerId]);
-      onRateCreated?.();
-    } catch (e) {
-      console.error('[applyMarkup] failed', e.response?.data || e.message);
-      setApplyResult({ error: e.response?.data?.error || 'Failed to apply markup' });
-    } finally {
-      setApplying(false);
-    }
-  }
-
-  useEffect(() => { setTimeout(() => searchRef.current?.focus(), 50); }, []);
-  useEffect(() => {
-    function onKey(e) { if (e.key === 'Escape') onClose(); }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  useEffect(() => {
-    const t = setTimeout(() => {
-      if (searchText.trim()) setParsed(parseNLQuery(searchText));
-      else setParsed({ weightKg: null, zoneTerm: null });
-    }, 200);
-    return () => clearTimeout(t);
-  }, [searchText]);
-
-  const rates = service.rates;
-
-  function isMatch(rate) {
-    if (!searchText.trim()) return false;
-    const { weightKg, zoneTerm } = parsed;
-    const zoneOk   = zoneTerm ? rate.zone_name.toLowerCase().includes(zoneTerm) : true;
-    const weightOk = weightKg != null ? weightClassCoversKg(rate.weight_class_name, weightKg) : true;
-    if (zoneTerm && weightKg != null) return zoneOk && weightOk;
-    if (zoneTerm) return zoneOk;
-    if (weightKg != null) return weightOk;
-    return false;
-  }
-
-  const hasSearch   = searchText.trim().length > 0;
-  const matchedRates = hasSearch ? rates.filter(isMatch) : rates;
-  const matchCount   = hasSearch ? matchedRates.length : 0;
-
-  // Rows to display: filtered when searching, all when not
-  const displayRates = matchedRates;
-
-  // Sort weight classes numerically by extracting the leading number
-  // so "2KG" < "5KG" < "10KG" rather than alphabetical "10KG" < "2KG"
-  function wcSortKey(wc) {
-    const s = wc.toUpperCase().replace(/\s/g, '').replace(/KILOGRAMS?$|KGS?$|K$/, '');
-    const bare  = s.match(/^(\d+(?:\.\d+)?)$/);
-    if (bare) return parseFloat(bare[1]);
-    const range = s.match(/^(\d+(?:\.\d+)?)-/);
-    if (range) return parseFloat(range[1]);
-    const upto  = s.match(/^(?:UPTO|MAX)(\d+(?:\.\d+)?)$/);
-    if (upto) return parseFloat(upto[1]);
-    return Infinity;
-  }
-
-  // Build matrix from displayRates
-  const weightClasses = [...new Set(displayRates.map(r => r.weight_class_name))].sort((a, b) => wcSortKey(a) - wcSortKey(b));
-  const zones         = [...new Set(displayRates.map(r => r.zone_name))].sort();
-  const rateMap = {};
-  for (const r of displayRates) {
-    if (!rateMap[r.zone_name]) rateMap[r.zone_name] = {};
-    rateMap[r.zone_name][r.weight_class_name] = r;
-  }
-  const multiWeight = [...new Set(rates.map(r => r.weight_class_name))].length > 1;
-  const totalZones  = [...new Set(rates.map(r => r.zone_name))].length;
-
-  // Single exact match: show big price card
-  const exactMatch = hasSearch && matchCount === 1 ? matchedRates[0] : null;
-
+/* ── Editable rate cell (.rcell) — underline, £ lives in the head ─── */
+function RateNum({ value, color = 'var(--mv-ink)', weight = 600, onCommit, disabled, createHint }) {
+  const [v, setV] = useState(fix2(value));
+  const [focused, setFocused] = useState(false);
+  useEffect(() => { setV(fix2(value)); }, [value]);
+  const empty = value == null || value === '';
+  if (disabled) return <span className="mv-num" style={{ display: 'block', textAlign: 'right', color: 'var(--mv-ink-45)', fontSize: 12.5, padding: '2px 0' }}>—</span>;
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(8,9,26,0.97)', display: 'flex', flexDirection: 'column' }}>
+    <input
+      value={v}
+      onChange={e => setV(e.target.value)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => {
+        setFocused(false);
+        const t = v.trim();
+        if (t === '') { if (!empty) onCommit(null); else setV(''); return; }
+        const p = parseFloat(t);
+        if (isNaN(p) || p < 0) { setV(fix2(value)); return; }
+        setV(p.toFixed(2)); onCommit(p);
+      }}
+      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setV(fix2(value)); e.currentTarget.blur(); } }}
+      placeholder="—"
+      title={empty && createHint ? createHint : undefined}
+      className="mv-num"
+      style={{
+        width: '100%', minWidth: 46, textAlign: 'right', background: 'transparent', outline: 'none',
+        border: 'none', borderBottom: `1px ${empty ? 'dashed' : 'solid'} ${focused ? 'var(--mv-purple)' : (empty ? 'var(--mv-hairline-2)' : 'transparent')}`,
+        fontFamily: 'var(--mv-font)', fontVariantNumeric: 'tabular-nums', fontSize: 12.5,
+        color: empty ? 'var(--mv-ink-45)' : color, fontWeight: empty ? 400 : weight, padding: '2px 0',
+      }}
+    />
+  );
+}
 
-      {/* Header */}
-      <div style={{ flexShrink: 0, padding: '20px 28px 16px', borderBottom: '1px solid rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', gap: 16, background: '#eae9e9' }}>
-        <Globe size={20} color="#00BCD4" style={{ flexShrink: 0 }} />
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 17, fontWeight: 700, color: '#201e1d' }}>{service.service_name}</div>
-          <div style={{ fontSize: 12, color: 'rgba(32,30,29,0.62)', marginTop: 2 }}>
-            <span style={{ color: '#00BCD4', fontFamily: 'monospace', fontWeight: 700, marginRight: 10 }}>{service.service_code}</span>
-            {rates.length.toLocaleString()} rates · {totalZones} zones
-            {multiWeight && ` · ${[...new Set(rates.map(r => r.weight_class_name))].length} weight classes`}
-          </div>
-        </div>
-
-        {/* Search */}
-        <div style={{ position: 'relative', flex: '0 0 440px' }}>
-          <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'rgba(32,30,29,0.62)', pointerEvents: 'none' }} />
-          <input
-            ref={searchRef}
-            value={searchText}
-            onChange={e => setSearchText(e.target.value)}
-            placeholder='e.g. "Jamaica"  or  "1kg to France"'
-            style={{ width: '100%', boxSizing: 'border-box', background: '#FFFFFF', border: '1px solid rgba(0,188,212,0.5)', borderRadius: 0, padding: '10px 36px 10px 36px', color: '#201e1d', fontSize: 13, outline: 'none' }}
-          />
-          {searchText && (
-            <button onClick={() => setSearchText('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'rgba(32,30,29,0.62)', cursor: 'pointer', padding: 0, display: 'flex' }}>
-              <X size={14} />
-            </button>
-          )}
-        </div>
-
-        <button onClick={onClose} style={{ background: 'none', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 0, color: 'rgba(32,30,29,0.62)', fontSize: 12, padding: '7px 14px', cursor: 'pointer', flexShrink: 0 }}>
-          Close  <span style={{ opacity: 0.5, fontSize: 11 }}>esc</span>
-        </button>
-      </div>
-
-      {/* Markup toolbar — shown whenever a carrier rate card is linked */}
-      {activeCardId && (
-        <div style={{ flexShrink: 0, padding: '8px 28px', background: 'rgba(0,200,83,0.04)', borderBottom: '1px solid rgba(0,200,83,0.08)', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Percent size={12} color="#00C853" />
-          <span style={{ fontSize: 12, color: 'rgba(32,30,29,0.62)' }}>Markup from carrier cost</span>
-          <input
-            value={markup}
-            onChange={e => { setMarkup(e.target.value); setApplyResult(null); }}
-            onKeyDown={e => { if (e.key === 'Enter') applyMarkup(); }}
-            placeholder="e.g. 20"
-            style={{ ...inp, width: 70, textAlign: 'right', fontSize: 12, color: '#00C853', border: '1px solid rgba(0,200,83,0.4)', background: 'rgba(0,200,83,0.06)' }}
-          />
-          <span style={{ fontSize: 12, color: 'rgba(32,30,29,0.62)' }}>%</span>
-          <button
-            onClick={applyMarkup}
-            disabled={applying || !markup}
-            style={{
-              background: applying ? 'transparent' : 'rgba(0,200,83,0.12)',
-              border: '1px solid rgba(0,200,83,0.4)', borderRadius: 0,
-              color: applying ? 'rgba(32,30,29,0.62)' : '#00C853',
-              fontSize: 12, fontWeight: 700, padding: '5px 14px',
-              cursor: applying ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {applying ? 'Applying…' : 'Apply to all zones'}
-          </button>
-          {applyResult && !applyResult.error && (
-            <span style={{ fontSize: 12, color: '#00C853', fontWeight: 700 }}>
-              ✓ {applyResult.created} rates set
-            </span>
-          )}
-          {applyResult?.error && (
-            <span style={{ fontSize: 12, color: '#E91E8C', fontWeight: 700 }}>
-              ✗ {applyResult.error}
-            </span>
-          )}
-          {cardService && (
-            <span style={{ fontSize: 11, color: 'rgba(32,30,29,0.62)', marginLeft: 'auto' }}>
-              {cardService.zones.length} zones · {[...new Set(cardService.zones.flatMap(z => z.bands.map(bandLabel)))].length} weight bands in carrier card
-            </span>
-          )}
-        </div>
-      )}
-
-
-      {/* Search status bar */}
-      {hasSearch && (
-        <div style={{ flexShrink: 0, padding: '7px 28px', background: 'rgba(0,188,212,0.05)', borderBottom: '1px solid rgba(0,188,212,0.10)', display: 'flex', alignItems: 'center', gap: 14, fontSize: 12 }}>
-          <span style={{ color: matchCount === 0 ? '#E91E8C' : '#00BCD4', fontWeight: 700 }}>
-            {matchCount === 0 ? 'No matches found' : matchCount === 1 ? '1 match' : `${matchCount} matches`}
-          </span>
-          {parsed.zoneTerm   && <span style={{ color: 'rgba(32,30,29,0.62)' }}>Zone: <span style={{ color: '#201e1d' }}>{parsed.zoneTerm}</span></span>}
-          {parsed.weightKg != null && <span style={{ color: 'rgba(32,30,29,0.62)' }}>Weight: <span style={{ color: '#201e1d' }}>{parsed.weightKg} kg</span></span>}
-          <button onClick={() => setSearchText('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'rgba(32,30,29,0.62)', cursor: 'pointer', fontSize: 12 }}>Clear ✕</button>
-        </div>
-      )}
-
-      {/* ── Exact match: big price display ───────────────────── */}
-      {exactMatch && (
-        <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 28px', gap: 16 }}>
-          <div style={{ fontSize: 13, color: 'rgba(32,30,29,0.62)', fontWeight: 600, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            {service.service_name} · {exactMatch.zone_name}
-            {multiWeight && <> · {exactMatch.weight_class_name}</>}
-          </div>
-          <div style={{ fontSize: 72, fontWeight: 900, color: '#00C853', fontFamily: 'monospace', lineHeight: 1, letterSpacing: '-0.02em' }}>
-            {gbp(exactMatch.price)}
-          </div>
-          <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <PriceCell rateId={exactMatch.id} initialPrice={exactMatch.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
-            <SubPriceCell rateId={exactMatch.id} initialSubPrice={exactMatch.price_sub} onSaved={onRateUpdate} />
-            <PerKgCell rateId={exactMatch.id} initialPerKgRate={exactMatch.per_kg_rate} onSaved={onPerKgUpdate} />
-          </div>
-          <div style={{ fontSize: 12, color: 'rgba(32,30,29,0.62)', marginTop: 4 }}>Click a price to edit · amber = 2nd+ parcels · cyan = per-kg above threshold</div>
-        </div>
-      )}
-
-      {/* ── Multiple matches or no search: table ─────────────── */}
-      {!exactMatch && (
-        <div style={{ flex: 1, overflow: 'auto', padding: '0 0 40px' }}>
-          {rates.length === 0 ? (
-            <div style={{ padding: 40, textAlign: 'center', color: 'rgba(32,30,29,0.62)', fontSize: 14, fontStyle: 'italic' }}>No pricing found for this service</div>
-          ) : hasSearch && matchCount === 0 ? (
-            <div style={{ padding: 60, textAlign: 'center' }}>
-              <div style={{ fontSize: 40, marginBottom: 16 }}>🔍</div>
-              <div style={{ fontSize: 16, color: 'rgba(32,30,29,0.62)', fontWeight: 600 }}>No rates match your search</div>
-              <div style={{ fontSize: 13, color: 'rgba(32,30,29,0.62)', marginTop: 8 }}>Try a different zone name or weight</div>
-            </div>
-          ) : multiWeight ? (
-            /* Matrix: zones × weight classes */
-            <table style={{ borderCollapse: 'collapse', minWidth: '100%', fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: '#eae9e9', position: 'sticky', top: 0, zIndex: 10 }}>
-                  <th style={{ textAlign: 'left', padding: '12px 20px 12px 28px', color: 'rgba(32,30,29,0.62)', fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap', borderBottom: '1px solid rgba(0,0,0,0.08)', minWidth: 220 }}>Zone</th>
-                  {weightClasses.map(wc => (
-                    <th key={wc} style={{ textAlign: 'right', padding: '12px 20px', color: 'rgba(32,30,29,0.62)', fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap', borderBottom: '1px solid rgba(0,0,0,0.08)', minWidth: 120 }}>{wc}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {zones.map((zone, zi) => (
-                  <tr key={zone} style={{ background: zi % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
-                    <td style={{ padding: '8px 20px 8px 28px', color: '#201e1d', whiteSpace: 'nowrap', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>{zone}</td>
-                    {weightClasses.map(wc => {
-                      const rate = rateMap[zone]?.[wc];
-                      return (
-                        <td key={wc} style={{ textAlign: 'right', padding: '8px 20px', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
-                          {rate
-                            ? <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
-                                <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
-                                <SubPriceCell rateId={rate.id} initialSubPrice={rate.price_sub} onSaved={onRateUpdate} />
-                                <PerKgCell rateId={rate.id} initialPerKgRate={rate.per_kg_rate} onSaved={onPerKgUpdate} />
-                              </div>
-                            : <span style={{ color: '#333', fontSize: 12 }}>—</span>}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            /* Simple list */
-            <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: '#eae9e9', position: 'sticky', top: 0, zIndex: 10 }}>
-                  <th style={{ textAlign: 'left', padding: '12px 20px 12px 28px', color: 'rgba(32,30,29,0.62)', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>Zone</th>
-                  <th style={{ textAlign: 'right', padding: '12px 20px', color: '#00C853', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>1st parcel</th>
-                  <th style={{ textAlign: 'right', padding: '12px 20px', color: '#7B2FBE', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>2nd+</th>
-                  <th style={{ textAlign: 'right', padding: '12px 28px 12px 20px', color: '#00BCD4', fontWeight: 600, fontSize: 12, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>£/kg</th>
-                </tr>
-              </thead>
-              <tbody>
-                {displayRates.map((rate, ri) => (
-                  <tr key={rate.id} style={{ background: ri % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
-                    <td style={{ padding: '8px 20px 8px 28px', color: '#201e1d', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>{rate.zone_name}</td>
-                    <td style={{ textAlign: 'right', padding: '8px 20px', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
-                      <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
-                    </td>
-                    <td style={{ textAlign: 'right', padding: '8px 20px', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
-                      <SubPriceCell rateId={rate.id} initialSubPrice={rate.price_sub} onSaved={onRateUpdate} />
-                    </td>
-                    <td style={{ textAlign: 'right', padding: '8px 28px 8px 20px', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
-                      <PerKgCell rateId={rate.id} initialPerKgRate={rate.per_kg_rate} onSaved={onPerKgUpdate} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
+/* ── Money / percent field (.mv-money) — £/% outside, underline ─── */
+function MoneyField({ value, override, isPct, onSave, placeholder = 'std' }) {
+  const has = override != null && override !== '';
+  const [v, setV] = useState(has ? fix2(override) : '');
+  const [focused, setFocused] = useState(false);
+  useEffect(() => { setV(has ? fix2(override) : ''); }, [override]);
+  const glyph = isPct ? '%' : '£';
+  return (
+    <div className="mv-money" style={{ borderBottomColor: focused ? 'var(--mv-purple)' : 'var(--mv-hairline-2)' }}>
+      {!isPct && <span>£</span>}
+      <input
+        value={v}
+        onChange={e => setV(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => {
+          setFocused(false);
+          const t = v.trim();
+          if (t === '') { if (has) onSave(null); return; }
+          const p = parseFloat(t); if (isNaN(p) || p < 0) { setV(has ? fix2(override) : ''); return; }
+          setV(p.toFixed(2)); onSave(p);
+        }}
+        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setV(has ? fix2(override) : ''); e.currentTarget.blur(); } }}
+        placeholder={value != null ? fix2(value) : placeholder}
+        style={{ color: has ? 'var(--mv-purple)' : 'var(--mv-ink-62)', fontWeight: has ? 700 : 400 }}
+      />
+      {isPct && <span style={{ marginLeft: 2 }}>%</span>}
     </div>
   );
 }
 
-// ─── Empty price cell — creates a new rate on first entry ─────
-// Looks like PriceCell but dashed border, click-to-type, POSTs on commit.
-function NewPriceCell({ service, customerId, zoneName, weightClassName, onCreated }) {
-  const [editing, setEditing] = useState(false);
-  const [val, setVal] = useState('');
-  const [saving, setSaving] = useState(false);
-  const inputRef = useRef(null);
-  function startEdit() { setEditing(true); setTimeout(() => inputRef.current?.focus(), 0); }
-  async function commit() {
-    const p = parseFloat(val);
-    if (isNaN(p) || p <= 0) { setEditing(false); setVal(''); return; }
-    setSaving(true);
-    try {
-      await api.post(`/customer-rates/${customerId}`, {
-        courier_id: service.courier_id || 0, courier_code: service.courier_code || '', courier_name: service.courier_name || '',
-        service_id: service.service_id, service_code: service.service_code, service_name: service.service_name,
-        zone_name: zoneName, weight_class_name: weightClassName, price: p,
-      });
-      onCreated();
-    } catch (e) { console.error('[NewPriceCell] create failed', e); }
-    finally { setSaving(false); setEditing(false); setVal(''); }
-  }
-  if (saving) return <span className="mv-num mv-cell-dim" style={{ fontSize: 12 }}>…</span>;
-  if (editing) return <input ref={inputRef} value={val} onChange={e => setVal(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setEditing(false); setVal(''); } }} style={{ ...inp, width: 72, textAlign: 'right', color: 'var(--mv-ink)', fontWeight: 700, fontFamily: 'monospace', fontSize: 13 }} />;
-  return <span onClick={startEdit} title="Click to set a sell price" className="mv-num" style={{ cursor: 'pointer', fontSize: 13.5, color: 'var(--mv-ink-45)' }}>—</span>;
-}
-
-// ─── Service block — zone × weight-band rate grid ─────────────
-function ServiceBlock({ service, customerId, activeCardId, onRateUpdate, onRateDelete, onRateCreated, onPerKgUpdate }) {
-  const [overlayOpen, setOverlay] = useState(false);
-  const isIntl = service.service_type === 'international';
-
-  const { data: templateZones = [], isLoading: templateLoading } = useQuery({
-    queryKey: ['rate-zone-template', service.service_code],
-    queryFn: () => api.get(`/customer-rates/zones/${encodeURIComponent(service.service_code)}`).then(r => r.data),
-    enabled: !isIntl, staleTime: 120_000,
-  });
-
-  const rateMap = {};
-  const rateByZone = {};
-  for (const rate of service.rates) {
-    rateMap[`${rate.zone_name}::${rate.weight_class_name}`] = rate;
-    if (!rateByZone[rate.zone_name]) rateByZone[rate.zone_name] = rate;
-  }
-  const zonesToShow = !isIntl
-    ? (() => {
-        if (templateZones.length === 0) return service.rates.map(r => ({ zone_name: r.zone_name, weight_class_name: r.weight_class_name }));
-        const customerZoneNames = new Set(service.rates.map(r => r.zone_name));
-        const anyZoneMatch = templateZones.some(t => customerZoneNames.has(t.zone_name));
-        if (!anyZoneMatch && service.rates.length > 0) return service.rates.map(r => ({ zone_name: r.zone_name, weight_class_name: r.weight_class_name }));
-        return templateZones;
-      })()
-    : [];
-  const weightClasses = [...new Set(zonesToShow.map(z => z.weight_class_name))];
-  const zones = [...new Set(zonesToShow.map(z => z.zone_name))];
-  const multiWeight = weightClasses.length > 1;
-  const pricedCount = service.rates.length;
-  const totalCount = isIntl ? service.rate_count : zonesToShow.length;
-  const allPriced = totalCount > 0 && pricedCount >= totalCount;
-
-  // ── International: compact row → fullscreen overlay ──
-  if (isIntl) {
-    return (
-      <>
-        <div onClick={() => setOverlay(true)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 0', borderTop: '1px solid var(--mv-hairline)', cursor: 'pointer' }}>
-          <Globe size={13} color="var(--mv-teal-deep)" style={{ flexShrink: 0 }} />
-          <span style={{ fontSize: 14, fontWeight: 800, flex: 1 }}>{service.service_name}</span>
-          {totalCount > 0 && <span className="mv-num" style={{ fontSize: 11.5, color: allPriced ? 'var(--mv-green-deep)' : 'var(--mv-ink-52)', marginRight: 12 }}>{pricedCount}/{totalCount} priced</span>}
-          <span className="mv-num mv-cell-dim" style={{ fontSize: 11, marginRight: 12 }}>{service.service_code}</span>
-          <span className="mv-state-label" style={{ color: 'var(--mv-purple)', display: 'inline-flex', alignItems: 'center', gap: 5 }}><Search size={11} /> Open</span>
-        </div>
-        {overlayOpen && <InternationalRateOverlay service={service} customerId={customerId} activeCardId={activeCardId} onClose={() => setOverlay(false)} onRateUpdate={onRateUpdate} onRateDelete={onRateDelete} onRateCreated={onRateCreated} onPerKgUpdate={onPerKgUpdate} />}
-      </>
-    );
-  }
-
-  // ── Domestic: zone × weight-band grid ──
-  const legendDot = (c) => ({ width: 8, height: 8, background: c, display: 'inline-block', marginRight: 5 });
+/* ── 0 · Coverage strip ────────────────────────────────────── */
+function CoverageStrip({ servicesOn, totalServices, liveCarriers, ratesPriced, ratesQuoted, notPriced }) {
+  const kpis = [
+    { label: 'Services on', value: `${servicesOn} of ${totalServices}`, sub: `across ${liveCarriers} live carrier${liveCarriers === 1 ? '' : 's'}` },
+    { label: 'Rates priced', value: ratesPriced.toLocaleString('en-GB'), sub: ratesQuoted != null ? `of ${ratesQuoted.toLocaleString('en-GB')} quoted` : 'across live services' },
+    { label: 'Not yet priced', value: notPriced == null ? '—' : (notPriced === 0 ? 'None' : notPriced.toLocaleString('en-GB')), attention: !!notPriced, sub: notPriced ? 'zones a booking would fall through' : 'every quoted zone is priced' },
+    { label: 'Blended margin', value: '—', sub: 'tier target' },
+  ];
   return (
-    <div style={{ marginBottom: 34 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-.01em' }}>
-            {service.service_name} <span className="mv-cell-dim" style={{ fontSize: 12, fontWeight: 400 }}>{service.service_code} · {service.courier_name}</span>
-          </div>
-          <div className="mv-blurb" style={{ marginTop: 2 }}>{zones.length} zone{zones.length !== 1 ? 's' : ''} × {weightClasses.length} weight class{weightClasses.length !== 1 ? 'es' : ''} · {service.rate_count} rate{service.rate_count !== 1 ? 's' : ''}</div>
+    <div className="mv-kpis" style={{ marginBottom: 28 }}>
+      {kpis.map(k => (
+        <div className="mv-kpi" key={k.label}>
+          <div className="mv-kpi-label">{k.label}</div>
+          <div className={'mv-kpi-value' + (k.attention ? ' is-attention' : '')} style={{ fontSize: 27 }}>{k.value}</div>
+          <div className="mv-kpi-sub">{k.sub}</div>
         </div>
-        <div style={{ display: 'flex', gap: 18, alignItems: 'center', paddingTop: 4 }}>
-          <span className="mv-state-label" style={{ display: 'inline-flex', alignItems: 'center' }}><span style={legendDot('var(--mv-ink)')} />1st parcel</span>
-          <span className="mv-state-label" style={{ display: 'inline-flex', alignItems: 'center' }}><span style={legendDot('var(--mv-purple)')} />2nd+ parcel</span>
-          <span className="mv-state-label" style={{ display: 'inline-flex', alignItems: 'center' }}><span style={legendDot('var(--mv-teal)')} />£ per kg</span>
-        </div>
-      </div>
-
-      {templateLoading ? (
-        <><div className="mv-rule" style={{ margin: '12px 0 0' }} /><div className="mv-blurb" style={{ marginTop: 10 }}>Loading zones…</div></>
-      ) : zones.length === 0 ? (
-        <><div className="mv-rule" style={{ margin: '12px 0 0' }} /><div className="mv-blurb" style={{ marginTop: 10 }}>No zone template found for this service.</div></>
-      ) : (
-        <div style={{ overflowX: 'auto', marginTop: 12 }}>
-          <table className="mv-table">
-            <thead>
-              <tr>
-                <th>Zone</th>
-                {weightClasses.map(wc => <th key={wc} className="is-right">{wc}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {zones.map(zone => (
-                <tr key={zone}>
-                  <td className="mv-cell-strong">{zone}</td>
-                  {weightClasses.map(wc => {
-                    const rate = rateMap[`${zone}::${wc}`] || (!multiWeight ? rateByZone[zone] : null);
-                    return (
-                      <td key={wc} className="is-right">
-                        {rate ? (
-                          <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-                            <PriceCell rateId={rate.id} initialPrice={rate.price} onSaved={onRateUpdate} onDelete={onRateDelete} />
-                            <SubPriceCell rateId={rate.id} initialSubPrice={rate.price_sub} onSaved={onRateUpdate} />
-                            <PerKgCell rateId={rate.id} initialPerKgRate={rate.per_kg_rate} onSaved={onPerKgUpdate} />
-                          </span>
-                        ) : (
-                          <NewPriceCell service={service} customerId={customerId} zoneName={zone} weightClassName={wc} onCreated={onRateCreated} />
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
-
-// ─── Courier group ────────────────────────────────────────────
-function CourierGroup({ courierName, services, customerId, activeCardId, onRateUpdate, onRateDelete, onRateCreated, onPerKgUpdate }) {
-  const [open, setOpen] = useState(true);
-  const totalRates = services.reduce((a, s) => a + s.rate_count, 0);
-  const hasIntl    = services.some(s => s.service_type === 'international');
-
-  return (
-    <div className="moov-card" style={{ marginBottom: 16, overflow: 'hidden' }}>
-      <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', padding: '13px 18px', cursor: 'pointer', borderBottom: open ? '1px solid rgba(0,0,0,0.06)' : 'none' }}>
-        {open ? <ChevronDown size={14} style={{ color: '#00C853', marginRight: 8 }} /> : <ChevronRight size={14} style={{ color: 'rgba(32,30,29,0.62)', marginRight: 8 }} />}
-        <span style={{ fontSize: 14, fontWeight: 700, color: '#201e1d', flex: 1 }}>{courierName}</span>
-        {hasIntl && <span style={{ fontSize: 10, color: '#00BCD4', background: 'rgba(0,188,212,0.1)', border: '1px solid rgba(0,188,212,0.25)', borderRadius: 0, padding: '2px 7px', fontWeight: 700, marginRight: 10 }}>INTL</span>}
-        <span style={{ fontSize: 11, color: 'rgba(32,30,29,0.62)' }}>{services.length} service{services.length !== 1 ? 's' : ''} · {totalRates.toLocaleString()} rates</span>
-      </div>
-      {open && services.map(svc => (
-        <ServiceBlock
-          key={svc.service_id}
-          service={svc}
-          customerId={customerId}
-          activeCardId={activeCardId}
-          onRateUpdate={onRateUpdate}
-          onRateDelete={onRateDelete}
-          onRateCreated={onRateCreated}
-          onPerKgUpdate={onPerKgUpdate}
-        />
       ))}
     </div>
   );
 }
 
-// ─── Service selector (filtered to active carriers) ───────────
-function ServiceSelector({ customerId, activeCourierIds }) {
-  const queryClient = useQueryClient();
-
-  const { data: allServices = [] } = useQuery({
-    queryKey: ['all-carrier-services'],
-    queryFn:  () => api.get('/carriers/services').then(r => r.data),
-  });
-  const { data: selected = [] } = useQuery({
-    queryKey: ['customer-services', customerId],
-    queryFn:  () => api.get(`/customers/${customerId}/services`).then(r => r.data),
-  });
-
-  const selectedIds = new Set(selected.map(s => s.courier_service_id));
-
-  const addSvc = useMutation({
-    mutationFn: (id) => api.post(`/customers/${customerId}/services`, { courier_service_id: id }),
-    onSuccess:  () => queryClient.invalidateQueries(['customer-services', customerId]),
-  });
-  const delSvc = useMutation({
-    mutationFn: (id) => api.delete(`/customers/${customerId}/services/${id}`),
-    onSuccess:  () => queryClient.invalidateQueries(['customer-services', customerId]),
-  });
-
-  function toggle(serviceId) {
-    if (selectedIds.has(serviceId)) delSvc.mutate(serviceId);
-    else addSvc.mutate(serviceId);
-  }
-
-  // Filter services to active carriers only (if any are active)
-  const filteredServices = activeCourierIds.size > 0
-    ? allServices.filter(svc => activeCourierIds.has(svc.courier_id))
-    : allServices;
-
-  // Group by courier
-  const byCourier = {};
-  for (const svc of filteredServices) {
-    const cn = svc.courier_name || 'Unknown';
-    if (!byCourier[cn]) byCourier[cn] = { courier_id: svc.courier_id, services: [] };
-    byCourier[cn].services.push(svc);
-  }
-
-  const [openCouriers, setOpenCouriers] = useState({});
-  function toggleCourier(name) { setOpenCouriers(o => ({ ...o, [name]: !o[name] })); }
-
-  const totalSelected = selectedIds.size;
-  const couriers = Object.entries(byCourier);
-
-  if (!couriers.length) return null;
-
-  return (
-    <div className="moov-card" style={{ marginBottom: 16, overflow: 'hidden' }}>
-      <div style={{ padding: '12px 18px', borderBottom: '1px solid rgba(0,0,0,0.06)', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <Package size={14} color="#7B2FBE" />
-        <h3 style={{ fontSize: 14, fontWeight: 700, color: '#7B2FBE', margin: 0, flex: 1 }}>Service Selection</h3>
-        {totalSelected > 0
-          ? <span style={{ fontSize: 12, color: '#00C853', fontWeight: 700 }}>{totalSelected} active</span>
-          : <span style={{ fontSize: 12, color: 'rgba(32,30,29,0.62)', fontStyle: 'italic' }}>None selected — all rates shown</span>
-        }
-      </div>
-
-      {couriers.map(([courierName, { services }]) => {
-        const isOpen       = openCouriers[courierName] === true;
-        const countInGroup = services.filter(s => selectedIds.has(s.id)).length;
-        return (
-          <div key={courierName} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
-            <div
-              onClick={() => toggleCourier(courierName)}
-              style={{ display: 'flex', alignItems: 'center', padding: '9px 18px', cursor: 'pointer', background: 'rgba(0,0,0,0.02)' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.03)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'}
-            >
-              {isOpen ? <ChevronDown size={12} color="rgba(32,30,29,0.62)" style={{ marginRight: 8 }} /> : <ChevronRight size={12} color="rgba(32,30,29,0.62)" style={{ marginRight: 8 }} />}
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#201e1d', flex: 1 }}>{courierName}</span>
-              {countInGroup > 0 && (
-                <span style={{ fontSize: 11, color: '#00C853', fontWeight: 700, marginRight: 8 }}>{countInGroup}/{services.length}</span>
-              )}
-              <button onClick={e => { e.stopPropagation(); services.forEach(s => { if (!selectedIds.has(s.id)) addSvc.mutate(s.id); }); }}
-                style={{ background: 'none', border: '1px solid rgba(0,200,83,0.3)', borderRadius: 0, color: '#00C853', fontSize: 11, fontWeight: 700, padding: '2px 8px', cursor: 'pointer', marginRight: 6 }}>All</button>
-              <button onClick={e => { e.stopPropagation(); services.forEach(s => { if (selectedIds.has(s.id)) delSvc.mutate(s.id); }); }}
-                style={{ background: 'none', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 0, color: 'rgba(32,30,29,0.62)', fontSize: 11, fontWeight: 700, padding: '2px 8px', cursor: 'pointer' }}>None</button>
-            </div>
-            {isOpen && services.map(svc => {
-              const active = selectedIds.has(svc.id);
-              return (
-                <div key={svc.id} onClick={() => toggle(svc.id)}
-                  style={{ display: 'flex', alignItems: 'center', padding: '7px 18px 7px 40px', cursor: 'pointer', borderTop: '1px solid rgba(0,0,0,0.03)', background: active ? 'rgba(0,200,83,0.04)' : 'transparent' }}
-                  onMouseEnter={e => e.currentTarget.style.background = active ? 'rgba(0,200,83,0.07)' : 'rgba(0,0,0,0.02)'}
-                  onMouseLeave={e => e.currentTarget.style.background = active ? 'rgba(0,200,83,0.04)' : 'transparent'}
-                >
-                  <div style={{ width: 15, height: 15, borderRadius: 0, border: `2px solid ${active ? '#00C853' : 'rgba(0,0,0,0.14)'}`, background: active ? '#00C853' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 12, flexShrink: 0, transition: 'all 0.15s' }}>
-                    {active && <Check size={9} color="#000" strokeWidth={3} />}
-                  </div>
-                  <span style={{ fontSize: 13, color: active ? '#201e1d' : 'rgba(32,30,29,0.62)', fontWeight: active ? 600 : 400, flex: 1 }}>{svc.name}</span>
-                  <span style={{ fontSize: 11, fontFamily: 'monospace', color: active ? '#00C853' : '#444', background: active ? 'rgba(0,200,83,0.08)' : 'transparent', padding: '1px 6px', borderRadius: 0}}>{svc.service_code}</span>
-                  {svc.service_type === 'international' && (
-                    <span style={{ fontSize: 10, color: '#00BCD4', fontWeight: 700, marginLeft: 8 }}>INTL</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── Thin courier toggle strip ────────────────────────────────
-function CourierToggleStrip({ carriers, customerId }) {
+/* ── 1 · Carrier tiles ─────────────────────────────────────── */
+function CarrierTiles({ carriers, customerId }) {
   const qc = useQueryClient();
   const toggle = useMutation({
-    mutationFn: ({ courier_id, active }) =>
-      active
-        ? api.delete(`/customer-carrier-links/${customerId}/${courier_id}`)
-        : api.post(`/customer-carrier-links/${customerId}`, { courier_id }),
+    mutationFn: ({ courier_id, active }) => active
+      ? api.delete(`/customer-carrier-links/${customerId}/${courier_id}`)
+      : api.post(`/customer-carrier-links/${customerId}`, { courier_id }),
     onSuccess: () => qc.invalidateQueries(['customer-carrier-links', customerId]),
   });
   if (!carriers.length) return null;
-  const onCount = carriers.filter(c => c.active).length;
   return (
     <div style={{ marginBottom: 30 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
-        <div className="mv-section" style={{ marginBottom: 0 }}>Carriers</div>
-        <span className="mv-num" style={{ fontSize: 11.5, color: 'var(--mv-ink-52)' }}>{onCount} of {carriers.length} on</span>
-      </div>
-      <div className="mv-rule" style={{ margin: '10px 0 0' }} />
-      <p className="mv-blurb" style={{ marginTop: 10 }}>Turn a carrier on to sell it to this customer. Accounts, fuel, surcharges and services all follow what is on.</p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12, marginTop: 14 }}>
+      <div className="mv-section" style={{ marginBottom: 0 }}>Carriers</div>
+      <div className="mv-rule" style={{ margin: '10px 0 14px' }} />
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
         {carriers.map(carrier => {
-          const isActive = carrier.active;
-          const configured = (carrier.available_cards?.length || 0) > 0 || isActive;
-          const state = isActive ? 'ACTIVE' : (configured ? 'OFF' : 'NOT CONFIGURED');
+          const on = carrier.active;
           const logo = getCourierLogo(carrier.courier_code);
+          const svcCount = carrier.service_count ?? carrier.services_count ?? null;
+          const state = on
+            ? (svcCount != null ? { text: `${svcCount} service${svcCount === 1 ? '' : 's'}`, color: svcCount > 0 ? 'var(--mv-green-deep)' : 'var(--mv-magenta-deep)' } : { text: 'on', color: 'var(--mv-green-deep)' })
+            : ((carrier.available_cards?.length || 0) > 0 ? { text: 'off', color: 'var(--mv-ink-45)' } : { text: 'not configured', color: 'var(--mv-ink-45)' });
           return (
-            <button key={carrier.courier_id}
-              onClick={() => toggle.mutate({ courier_id: carrier.courier_id, active: isActive })}
-              title={`${carrier.courier_name} — click to ${isActive ? 'turn off' : 'turn on'}`}
-              style={{ textAlign: 'left', padding: '15px 15px 16px', cursor: 'pointer', border: `1.5px solid ${isActive ? 'var(--mv-ink)' : 'var(--mv-hairline-2)'}`, background: 'transparent', fontFamily: 'inherit', display: 'flex', flexDirection: 'column', minHeight: 96 }}>
-              {logo
-                ? <img src={logo} alt={carrier.courier_name} style={{ height: 20, objectFit: 'contain', objectPosition: 'left', marginBottom: 12, opacity: isActive ? 1 : 0.4, filter: isActive ? 'none' : 'grayscale(1)' }} />
-                : <div style={{ height: 20, marginBottom: 12 }} />}
-              <div style={{ fontWeight: 800, fontSize: 13, letterSpacing: '-.01em', color: isActive ? 'var(--mv-ink)' : 'var(--mv-ink-45)' }}>{carrier.courier_name}</div>
-              <div className="mv-state-label" style={{ marginTop: 8, color: isActive ? 'var(--mv-green-deep)' : 'var(--mv-ink-45)' }}>{state}</div>
+            <button key={carrier.courier_id} onClick={() => toggle.mutate({ courier_id: carrier.courier_id, active: on })}
+              title={`${carrier.courier_name} — click to ${on ? 'turn off' : 'turn on'}`}
+              style={{
+                width: 158, textAlign: 'left', padding: '15px 15px 16px', cursor: 'pointer', fontFamily: 'inherit',
+                border: `1px solid ${on ? 'var(--mv-divider)' : 'var(--mv-hairline)'}`, background: on ? 'rgba(32,30,29,.04)' : 'transparent',
+              }}>
+              <div style={{ width: 104, height: 20, marginBottom: 12, opacity: on ? 1 : 0.34, filter: on ? 'none' : 'grayscale(1)',
+                background: logo ? `url(${logo}) left center / contain no-repeat` : 'none' }} />
+              <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: '-.01em', color: on ? 'var(--mv-ink)' : 'var(--mv-ink-45)' }}>{carrier.courier_name}</div>
+              <div className="mv-state-label" style={{ marginTop: 7, color: state.color }}>{state.text}</div>
             </button>
           );
         })}
@@ -752,57 +179,42 @@ function CourierToggleStrip({ carriers, customerId }) {
   );
 }
 
-// ─── Customer fuel group row (contributes 3 grid cells) ──────
-function CustomerFuelRow({ fg, customerId }) {
+/* ── 2 · Per-carrier config ────────────────────────────────── */
+function CarrierAccountRow({ account, customerId }) {
   const qc = useQueryClient();
-  const [editing, setEditing] = useState(false);
-  const [val, setVal] = useState('');
-  const inputRef = useRef(null);
+  const [labelVal, setLabelVal] = useState(account.label || '');
+  const [acctVal, setAcctVal] = useState(account.account_number || '');
+  async function savePatch(u) { try { await api.patch(`/customer-carrier-links/${customerId}/link/${account.link_id}`, u); qc.invalidateQueries(['customer-carrier-links', customerId]); } catch (e) { console.error(e); } }
+  async function removeAccount() { if (!window.confirm('Remove this account?')) return; await api.delete(`/customer-carrier-links/${customerId}/link/${account.link_id}`); qc.invalidateQueries(['customer-carrier-links', customerId]); }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--mv-hairline)' }}>
+      <input value={labelVal} onChange={e => setLabelVal(e.target.value)} onBlur={() => { if (labelVal !== (account.label || '')) savePatch({ label: labelVal }); }} placeholder="Label"
+        style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: '1px solid transparent', outline: 'none', fontFamily: 'inherit', fontSize: 12.5, color: 'var(--mv-ink)', padding: '2px 0' }} />
+      <input value={acctVal} onChange={e => setAcctVal(e.target.value)} onBlur={() => { if (acctVal !== (account.account_number || '')) savePatch({ account_number: acctVal }); }} placeholder="Account no."
+        className="mv-num" style={{ width: 120, textAlign: 'right', background: 'transparent', border: 'none', outline: 'none', fontFamily: 'monospace', fontSize: 12.5, color: 'var(--mv-teal-deep)', padding: '2px 0' }} />
+      <button onClick={removeAccount} title="Remove" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mv-ink-45)', display: 'flex' }}><X size={13} /></button>
+    </div>
+  );
+}
+
+function FuelGroupRow({ fg, customerId }) {
+  const qc = useQueryClient();
   const setFuel = useMutation({
-    mutationFn: ({ fuelGroupId, sell_pct }) =>
-      sell_pct === null
-        ? api.delete(`/customer-carrier-links/${customerId}/fuel/${fuelGroupId}`)
-        : api.put(`/customer-carrier-links/${customerId}/fuel/${fuelGroupId}`, { sell_pct }),
+    mutationFn: ({ sell_pct }) => sell_pct === null
+      ? api.delete(`/customer-carrier-links/${customerId}/fuel/${fg.id}`)
+      : api.put(`/customer-carrier-links/${customerId}/fuel/${fg.id}`, { sell_pct }),
     onSuccess: () => qc.invalidateQueries(['customer-carrier-links', customerId]),
   });
-  function startEdit() { setVal(fg.customer_pct != null ? String(fg.customer_pct) : ''); setEditing(true); setTimeout(() => inputRef.current?.select(), 0); }
-  function commit() {
-    const t = val.trim();
-    if (t === '') { setFuel.mutate({ fuelGroupId: fg.id, sell_pct: null }); setEditing(false); return; }
-    const p = parseFloat(t);
-    if (isNaN(p) || p < 0) { setEditing(false); return; }
-    setFuel.mutate({ fuelGroupId: fg.id, sell_pct: p }); setEditing(false);
-  }
-  const hasOverride = fg.customer_pct != null;
   const cell = { padding: '9px 0', borderTop: '1px solid var(--mv-hairline)' };
   return (
     <>
       <div style={{ ...cell, fontSize: 12.5 }}>{fg.name}</div>
       <div style={{ ...cell, textAlign: 'right' }} className="mv-num mv-cell-dim">{fg.standard_sell_pct != null ? `${parseFloat(fg.standard_sell_pct).toFixed(2)}%` : '—'}</div>
-      <div style={{ ...cell, textAlign: 'right' }}>
-        {editing
-          ? <input ref={inputRef} value={val} onChange={e => setVal(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }} style={{ ...inp, width: 72, textAlign: 'right', color: 'var(--mv-purple)', fontFamily: 'monospace', fontSize: 12 }} />
-          : <span onClick={startEdit} className="mv-num" title={hasOverride ? 'Custom rate — click to edit, clear to reset' : 'Click to set a customer rate'} style={{ cursor: 'pointer', fontWeight: hasOverride ? 700 : 400, color: hasOverride ? 'var(--mv-purple)' : 'var(--mv-ink-45)' }}>{hasOverride ? `${parseFloat(fg.customer_pct).toFixed(2)}%` : 'std %'}</span>}
-      </div>
+      <div style={{ ...cell }}><MoneyField value={fg.standard_sell_pct} override={fg.customer_pct} isPct onSave={(v) => setFuel.mutate({ sell_pct: v })} /></div>
     </>
   );
 }
 
-// ─── Compact editable money/percent cell ─────────────────────
-function SurchargePriceField({ standardValue, overrideValue, isPct, onSave }) {
-  const [editing, setEditing] = useState(false);
-  const [val, setVal] = useState('');
-  const inputRef = useRef(null);
-  const hasOverride = overrideValue !== null && overrideValue !== undefined;
-  const shown = hasOverride ? overrideValue : standardValue;
-  const fmt = (v) => isPct ? `${parseFloat(v || 0).toFixed(2)}%` : `£${parseFloat(v || 0).toFixed(2)}`;
-  function startEdit() { setVal(String(parseFloat(shown || 0).toFixed(2))); setEditing(true); setTimeout(() => inputRef.current?.select(), 0); }
-  function commit() { const p = parseFloat(val); if (isNaN(p) || p < 0) { setEditing(false); return; } onSave(p); setEditing(false); }
-  if (editing) return <input ref={inputRef} value={val} onChange={e => setVal(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }} style={{ ...inp, width: 72, textAlign: 'right', color: 'var(--mv-purple)', fontFamily: 'monospace', fontSize: 12 }} />;
-  return <span onClick={startEdit} className="mv-num" title="Click to override" style={{ cursor: 'pointer', fontWeight: hasOverride ? 700 : 400, color: hasOverride ? 'var(--mv-purple)' : 'var(--mv-ink-62)' }}>{fmt(shown)}</span>;
-}
-
-// ─── Per-surcharge override row (contributes 3 grid cells) ───
 function SurchargeOverrideRow({ surcharge, override, customerId, onChanged }) {
   const qc = useQueryClient();
   const upsert = useMutation({
@@ -813,106 +225,67 @@ function SurchargeOverrideRow({ surcharge, override, customerId, onChanged }) {
   const cell = { padding: '9px 0', borderTop: '1px solid var(--mv-hairline)' };
   return (
     <>
-      <div style={{ ...cell, fontSize: 12.5 }}>{surcharge.name}</div>
-      <div style={{ ...cell, textAlign: 'right' }}>
-        <SurchargePriceField standardValue={surcharge.cost_price ?? surcharge.default_value} overrideValue={override?.cost_price_override ?? null} isPct={isPct} onSave={(v) => upsert.mutate({ cost_price_override: v })} />
-      </div>
-      <div style={{ ...cell, textAlign: 'right' }}>
-        <SurchargePriceField standardValue={surcharge.default_value} overrideValue={override?.override_value ?? null} isPct={isPct} onSave={(v) => upsert.mutate({ override_value: v })} />
-      </div>
+      <div style={{ ...cell, fontSize: 12.5 }}>{surcharge.name}{isPct ? <span className="mv-cell-dim"> · percent</span> : ''}</div>
+      <div style={{ ...cell }}><MoneyField value={surcharge.cost_price ?? surcharge.default_value} override={override?.cost_price_override ?? null} isPct={isPct} onSave={(v) => upsert.mutate({ cost_price_override: v })} /></div>
+      <div style={{ ...cell }}><MoneyField value={surcharge.default_value} override={override?.override_value ?? null} isPct={isPct} onSave={(v) => upsert.mutate({ override_value: v })} /></div>
     </>
   );
 }
 
-// ─── Single account row (label + account number, inline editable) ─
-function CarrierAccountRow({ account, customerId }) {
+function PerCarrierBlock({ carrier, customerId, allOverrides, onOverridesChange }) {
   const qc = useQueryClient();
-  const [labelVal, setLabelVal] = useState(account.label || '');
-  const [acctVal, setAcctVal] = useState(account.account_number || '');
-  const [saving, setSaving] = useState(false);
-  async function savePatch(updates) {
-    setSaving(true);
-    try { await api.patch(`/customer-carrier-links/${customerId}/link/${account.link_id}`, updates); qc.invalidateQueries(['customer-carrier-links', customerId]); }
-    catch (e) { console.error('Failed to update account:', e); }
-    finally { setSaving(false); }
-  }
-  async function removeAccount() {
-    if (!window.confirm('Remove this account?')) return;
-    await api.delete(`/customer-carrier-links/${customerId}/link/${account.link_id}`);
-    qc.invalidateQueries(['customer-carrier-links', customerId]);
-  }
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderTop: '1px solid var(--mv-hairline)' }}>
-      <input value={labelVal} onChange={e => setLabelVal(e.target.value)} onBlur={() => { if (labelVal !== (account.label || '')) savePatch({ label: labelVal }); }} onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setLabelVal(account.label || ''); }} placeholder="Label" title="Account label" style={{ ...inp, flex: 1, fontSize: 12 }} disabled={saving} />
-      <input value={acctVal} onChange={e => setAcctVal(e.target.value)} onBlur={() => { if (acctVal !== (account.account_number || '')) savePatch({ account_number: acctVal }); }} onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setAcctVal(account.account_number || ''); }} placeholder="Account No." title="Carrier account number" style={{ ...inp, width: 120, fontSize: 12, fontFamily: 'monospace', color: 'var(--mv-teal-deep)' }} disabled={saving} />
-      <button onClick={removeAccount} title="Remove this account" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mv-magenta-deep)', padding: '2px 4px', display: 'flex', alignItems: 'center', flexShrink: 0 }}><Trash2 size={12} /></button>
-    </div>
-  );
-}
-
-// ─── Per-active-carrier section: Accounts | Fuel groups | Surcharges ─
-function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesChange }) {
   const [addingAccount, setAddingAccount] = useState(false);
   const [newLabel, setNewLabel] = useState('');
   const [newAcctNo, setNewAcctNo] = useState('');
-  const [addSaving, setAddSaving] = useState(false);
   const logo = getCourierLogo(carrier.courier_code);
-  const hasFuel = carrier.active && carrier.fuel_groups?.length > 0;
-  const qc = useQueryClient();
+  const hasFuel = carrier.fuel_groups?.length > 0;
 
   const { data: surcharges = [] } = useQuery({
     queryKey: ['surcharges', carrier.courier_id],
     queryFn: () => api.get(`/surcharges?courier_id=${carrier.courier_id}`).then(r => r.data),
     staleTime: 0, refetchOnWindowFocus: true,
   });
-  const hasSurcharges = surcharges.length > 0;
-
   const changeCard = useMutation({
     mutationFn: (cardId) => api.patch(`/customer-carrier-links/${customerId}/${carrier.courier_id}`, { carrier_rate_card_id: cardId }),
     onSuccess: () => qc.invalidateQueries(['customer-carrier-links', customerId]),
   });
-
   async function addAccount() {
     if (!newAcctNo.trim() && !newLabel.trim()) return;
-    setAddSaving(true);
-    try {
-      await api.post(`/customer-carrier-links/${customerId}`, { courier_id: carrier.courier_id, account_number: newAcctNo.trim() || null, label: newLabel.trim() || null });
-      qc.invalidateQueries(['customer-carrier-links', customerId]);
-      setNewLabel(''); setNewAcctNo(''); setAddingAccount(false);
-    } finally { setAddSaving(false); }
+    await api.post(`/customer-carrier-links/${customerId}`, { courier_id: carrier.courier_id, account_number: newAcctNo.trim() || null, label: newLabel.trim() || null });
+    qc.invalidateQueries(['customer-carrier-links', customerId]); setNewLabel(''); setNewAcctNo(''); setAddingAccount(false);
   }
 
-  const activeCard = (carrier.available_cards || []).find(c => String(c.id) === String(carrier.active_card_id)) || carrier.available_cards?.[0];
-  const colhead = { fontSize: 9, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--mv-ink-45)', textAlign: 'right', paddingBottom: 8, borderBottom: '2px solid var(--mv-divider)' };
-  const colheadL = { ...colhead, textAlign: 'left' };
+  const cards = carrier.available_cards || [];
+  const colhead = { fontSize: 8.5, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--mv-ink-45)', paddingBottom: 8, borderBottom: '2px solid var(--mv-divider)' };
+  const colheadR = { ...colhead, textAlign: 'right' };
 
   return (
-    <div style={{ marginBottom: 36 }}>
+    <div style={{ marginBottom: 34 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        {logo && <img src={logo} alt={carrier.courier_name} style={{ height: 16, objectFit: 'contain' }} />}
-        <span style={{ fontWeight: 800, fontSize: 16, letterSpacing: '-.01em' }}>{carrier.courier_name}</span>
-        {activeCard && <span className="mv-cell-dim" style={{ fontSize: 11 }}>{activeCard.name}</span>}
-        {activeCard?.is_master && <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.1em', color: '#fff', background: 'var(--mv-purple)', padding: '2px 8px' }}>MASTER</span>}
-        {carrier.available_cards?.length > 1 && (
-          <select className="mv-input" style={{ marginLeft: 'auto', width: 200, fontSize: 12 }} value={String(carrier.active_card_id || '')} onChange={e => changeCard.mutate(e.target.value)}>
-            {carrier.available_cards.map(card => <option key={card.id} value={String(card.id)}>{card.name}{card.is_master ? ' (Master)' : ''}</option>)}
-          </select>
-        )}
+        <div style={{ width: 78, height: 18, opacity: 1, background: logo ? `url(${logo}) left center / contain no-repeat` : 'none' }} />
+        <span style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-.01em' }}>{carrier.courier_name}</span>
+        <span className="mv-state mv-state--settled"><span className="mv-mark mv-mark--settled" /><span className="mv-state-label">On</span></span>
       </div>
-      <div className="mv-rule" style={{ margin: '10px 0 0' }} />
+      {cards.length > 0 && (
+        <div className="mv-chips" style={{ marginTop: 12 }}>
+          <span className="mv-filter-label">Rate card</span>
+          {cards.map(card => (
+            <button key={card.id} className={'mv-chip' + (String(card.id) === String(carrier.active_card_id) ? ' is-on' : '')} onClick={() => changeCard.mutate(card.id)}>{card.name}{card.is_master ? ' · master' : ''}</button>
+          ))}
+        </div>
+      )}
+      <div className="mv-rule" style={{ margin: '14px 0 0' }} />
 
       <div style={{ display: 'grid', gridTemplateColumns: '0.9fr 1.1fr 1.3fr', gap: 40, marginTop: 18, alignItems: 'start' }}>
         {/* Accounts */}
         <div>
-          <div className="mv-section mv-section--muted" style={{ marginBottom: 8 }}>Accounts</div>
-          <div style={{ borderBottom: '2px solid var(--mv-divider)' }} />
-          {(carrier.accounts || []).map(acct => <CarrierAccountRow key={acct.link_id} account={acct} customerId={customerId} />)}
+          <div style={{ ...colhead, marginBottom: 0 }}>Accounts</div>
+          {(carrier.accounts || []).map(a => <CarrierAccountRow key={a.link_id} account={a} customerId={customerId} />)}
           {addingAccount ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingTop: 8 }}>
-              <input value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="Label" style={{ ...inp, flex: 1, fontSize: 12 }} autoFocus disabled={addSaving} onKeyDown={e => { if (e.key === 'Enter') addAccount(); if (e.key === 'Escape') setAddingAccount(false); }} />
-              <input value={newAcctNo} onChange={e => setNewAcctNo(e.target.value)} placeholder="Account No." style={{ ...inp, width: 110, fontSize: 12, fontFamily: 'monospace', color: 'var(--mv-teal-deep)' }} disabled={addSaving} onKeyDown={e => { if (e.key === 'Enter') addAccount(); if (e.key === 'Escape') setAddingAccount(false); }} />
-              <button onClick={addAccount} disabled={addSaving} title="Save" className="mv-btn mv-btn--sm" style={{ padding: '0 8px' }}><Check size={12} /></button>
-              <button onClick={() => { setAddingAccount(false); setNewLabel(''); setNewAcctNo(''); }} title="Cancel" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mv-ink-45)', display: 'flex' }}><X size={12} /></button>
+              <input value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="Label" autoFocus style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: '1px solid var(--mv-hairline-2)', outline: 'none', fontFamily: 'inherit', fontSize: 12.5, padding: '2px 0' }} onKeyDown={e => { if (e.key === 'Enter') addAccount(); if (e.key === 'Escape') setAddingAccount(false); }} />
+              <input value={newAcctNo} onChange={e => setNewAcctNo(e.target.value)} placeholder="Account no." className="mv-num" style={{ width: 110, textAlign: 'right', background: 'transparent', border: 'none', borderBottom: '1px solid var(--mv-hairline-2)', outline: 'none', fontFamily: 'monospace', fontSize: 12.5, color: 'var(--mv-teal-deep)', padding: '2px 0' }} onKeyDown={e => { if (e.key === 'Enter') addAccount(); if (e.key === 'Escape') setAddingAccount(false); }} />
+              <button onClick={addAccount} className="mv-btn mv-btn--sm" style={{ padding: '0 8px' }}><Check size={12} /></button>
             </div>
           ) : (
             <button onClick={() => setAddingAccount(true)} style={{ background: 'none', border: 0, cursor: 'pointer', color: 'var(--mv-purple)', fontSize: 11.5, fontWeight: 600, padding: '10px 0 0', display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: 'inherit' }}><Plus size={12} /> Add an account</button>
@@ -921,510 +294,472 @@ function ActiveCarrierSection({ carrier, customerId, allOverrides, onOverridesCh
 
         {/* Fuel groups */}
         <div>
-          <div className="mv-section mv-section--muted" style={{ marginBottom: 8 }}>Fuel groups</div>
           {hasFuel ? (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', columnGap: 18 }}>
-              <div style={colheadL}>Group</div><div style={colhead}>Standard</div><div style={colhead}>Theirs</div>
-              {carrier.fuel_groups.map(fg => <CustomerFuelRow key={fg.id} fg={fg} customerId={customerId} />)}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', columnGap: 16 }}>
+              <div style={colhead}>Group</div><div style={colheadR}>Standard</div><div style={colheadR}>Theirs</div>
+              {carrier.fuel_groups.map(fg => <FuelGroupRow key={fg.id} fg={fg} customerId={customerId} />)}
+              <p className="mv-blurb" style={{ gridColumn: '1 / -1', fontSize: 11, marginTop: 10 }}>Blank means they pay the standard rate.</p>
             </div>
-          ) : (<><div style={{ borderBottom: '2px solid var(--mv-divider)' }} /><p className="mv-blurb" style={{ marginTop: 8 }}>No fuel groups on this carrier.</p></>)}
-          {hasFuel && <p className="mv-blurb" style={{ fontSize: 11, marginTop: 10 }}>Leave theirs blank and they pay the standard rate.</p>}
+          ) : (<><div style={{ ...colhead, marginBottom: 0 }}>Fuel groups</div><p className="mv-blurb" style={{ marginTop: 8 }}>No fuel groups on this carrier.</p></>)}
         </div>
 
         {/* Surcharge overrides */}
         <div>
-          <div className="mv-section mv-section--muted" style={{ marginBottom: 8 }}>Surcharge overrides</div>
-          {hasSurcharges ? (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', columnGap: 18 }}>
-              <div style={colheadL}>Surcharge</div><div style={colhead}>Cost</div><div style={colhead}>Sell</div>
+          {surcharges.length > 0 ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', columnGap: 16 }}>
+              <div style={colhead}>Surcharge</div><div style={colheadR}>Cost</div><div style={colheadR}>Sell</div>
               {surcharges.map(s => <SurchargeOverrideRow key={s.id} surcharge={s} override={allOverrides.find(o => o.surcharge_id === s.id)} customerId={customerId} onChanged={onOverridesChange} />)}
+              <p className="mv-blurb" style={{ gridColumn: '1 / -1', fontSize: 11, marginTop: 10 }}>Sell overrides the standard schedule; purple means edited.</p>
             </div>
-          ) : (<><div style={{ borderBottom: '2px solid var(--mv-divider)' }} /><p className="mv-blurb" style={{ marginTop: 8 }}>No surcharges on this carrier.</p></>)}
-          {hasSurcharges && <p className="mv-blurb" style={{ fontSize: 11, marginTop: 10 }}>Cost is what the carrier bills us. Sell overrides the standard schedule; purple means edited.</p>}
+          ) : (<><div style={{ ...colhead, marginBottom: 0 }}>Surcharge overrides</div><p className="mv-blurb" style={{ marginTop: 8 }}>No surcharges on this carrier.</p></>)}
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Main tab ─────────────────────────────────────────────────
-// ─── DDP Mode Section ──────────────────────────────────────────────────────────
-// When a customer ships exclusively DDP (duty-paid), the reconciliation engine
-// must look up DDP rate-card variants for their air services. This section lets
-// operators toggle DDP mode on/off and shows the active service code overrides.
-function DDPModeSection({ customer }) {
+/* ── 3 · Billing modes ─────────────────────────────────────── */
+function BillingRow({ title, active, busy, onToggle, sentence, offLabel, onLabel, children }) {
+  return (
+    <div style={{ padding: '16px 0', borderTop: '1px solid var(--mv-hairline)' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 13.5, fontWeight: 800 }}>{title}</span>
+            <span className={`mv-state mv-state--${active ? 'settled' : 'waiting'}`}><span className={`mv-mark mv-mark--${active ? 'settled' : 'waiting'}`} /><span className="mv-state-label">{active ? 'On' : 'Off'}</span></span>
+          </div>
+          <p className="mv-blurb" style={{ margin: '4px 0 0', maxWidth: 640 }}>{sentence}</p>
+          <div style={{ marginTop: 8, display: 'flex', gap: 18 }}>
+            <span style={{ fontSize: 11.5, color: active ? 'var(--mv-ink-45)' : 'var(--mv-ink)', fontWeight: active ? 400 : 700 }}>{offLabel}</span>
+            <span style={{ fontSize: 11.5, color: active ? 'var(--mv-green-deep)' : 'var(--mv-ink-45)', fontWeight: active ? 700 : 400 }}>{onLabel}</span>
+          </div>
+        </div>
+        <div className={'mv-switch' + (active ? ' is-on' : '')} onClick={busy ? undefined : onToggle} style={{ opacity: busy ? 0.5 : 1, flexShrink: 0 }}><span /></div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function BillingModes({ customer }) {
   const qc = useQueryClient();
-  const [busy, setBusy] = useState(false);
-  const [enabled, setEnabled] = useState(!!customer.ddp_mode);
+  const [ddp, setDdp] = useState(!!customer.ddp_mode);
+  const [comp, setComp] = useState(!!customer.reconciliation_flexible_parcel_count);
+  const [mode, setMode] = useState(customer.parcel_pricing_mode || 'sub');
+  const [busy, setBusy] = useState('');
+  useEffect(() => { setDdp(!!customer.ddp_mode); }, [customer.ddp_mode]);
+  useEffect(() => { setComp(!!customer.reconciliation_flexible_parcel_count); }, [customer.reconciliation_flexible_parcel_count]);
+  useEffect(() => { setMode(customer.parcel_pricing_mode || 'sub'); }, [customer.parcel_pricing_mode]);
 
-  // Keep local state in sync if parent re-fetches with a new value
-  useEffect(() => { setEnabled(!!customer.ddp_mode); }, [customer.ddp_mode]);
-
-  const { data: overridesData, isLoading } = useQuery({
-    queryKey: ['service-code-overrides', customer.id],
-    queryFn:  () => api.get(`/customers/${customer.id}/service-code-overrides`).then(r => r.data),
-  });
+  const { data: overridesData } = useQuery({ queryKey: ['service-code-overrides', customer.id], queryFn: () => api.get(`/customers/${customer.id}/service-code-overrides`).then(r => r.data) });
   const overrides = overridesData?.overrides || [];
 
-  async function toggleDDP() {
-    const newValue = !enabled;
-    setEnabled(newValue);   // move the toggle immediately
-    setBusy(true);
-    try {
-      await api.put(`/customers/${customer.id}/ddp-mode`, { enabled: newValue });
-      qc.invalidateQueries(['customer', customer.id]);
-      qc.invalidateQueries(['service-code-overrides', customer.id]);
-    } catch (err) {
-      setEnabled(!newValue);  // revert on error
-      console.error('DDP mode toggle failed:', err.response?.data || err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
+  async function toggleDdp() { const nv = !ddp; setDdp(nv); setBusy('ddp'); try { await api.put(`/customers/${customer.id}/ddp-mode`, { enabled: nv }); qc.invalidateQueries(['customer', customer.id]); qc.invalidateQueries(['service-code-overrides', customer.id]); } catch (e) { setDdp(!nv); } finally { setBusy(''); } }
+  async function toggleComp() { const nv = !comp; setComp(nv); setBusy('comp'); try { await api.put(`/customers/${customer.id}/companion-parcel-billing`, { enabled: nv }); qc.invalidateQueries(['customer', customer.id]); } catch (e) { setComp(!nv); } finally { setBusy(''); } }
+  async function toggleMode() { const next = mode === 'multi' ? 'sub' : 'multi'; setMode(next); setBusy('mode'); try { await api.put(`/customers/${customer.id}/parcel-pricing-mode`, { mode: next }); qc.invalidateQueries(['customer', customer.id]); } catch (e) { setMode(mode); } finally { setBusy(''); } }
 
   return (
-    <div className="moov-card" style={{ marginBottom: 16, padding: '16px 20px' }}>
-      {/* Header row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: '#201e1d' }}>DDP Mode</span>
-            {enabled && (
-              <span style={{
-                fontSize: 11, fontWeight: 600, color: '#FF8F00',
-                background: 'rgba(255,143,0,0.12)', border: '1px solid rgba(255,143,0,0.35)',
-                borderRadius: 0, padding: '2px 8px', letterSpacing: '0.3px',
-              }}>ACTIVE</span>
-            )}
+    <div style={{ marginBottom: 34 }}>
+      <div className="mv-section" style={{ marginBottom: 0 }}>How their shipments are billed</div>
+      <BillingRow title="DDP mode" active={ddp} busy={busy === 'ddp'} onToggle={toggleDdp}
+        sentence="This customer books exclusively on DDP (duty-paid) air services. When on, reconciliation uses DDP rate-card variants instead of standard air rates."
+        offLabel="Off — standard air rates" onLabel="On — DDP variants">
+        {ddp && overrides.length > 0 && (
+          <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {overrides.map(ov => (
+              <span key={ov.id} className="mv-chip" style={{ cursor: 'default', gap: 6, display: 'inline-flex', alignItems: 'center' }}>
+                <span className="mv-cell-dim">{ov.carrier_name}</span><span className="mv-num" style={{ fontFamily: 'monospace' }}>{ov.courier_code} → {ov.service_code}</span>
+                <button onClick={async () => { await api.delete(`/customers/${customer.id}/service-code-overrides/${ov.id}`); qc.invalidateQueries(['service-code-overrides', customer.id]); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mv-ink-45)', display: 'flex', padding: 0 }}><X size={11} /></button>
+              </span>
+            ))}
           </div>
-          <p style={{ fontSize: 12, color: 'rgba(32,30,29,0.62)', margin: '3px 0 0' }}>
-            This customer books exclusively on DDP (duty-paid) air services.
-            When enabled, the reconciliation engine uses DDP rate-card variants
-            (e.g. DPD-10DDP) instead of standard air rates for invoice matching.
-          </p>
-        </div>
-        <button
-          onClick={toggleDDP}
-          disabled={busy}
-          title={enabled ? 'Disable DDP mode' : 'Enable DDP mode'}
-          style={{
-            background: 'none', border: 'none', cursor: busy ? 'wait' : 'pointer',
-            padding: 4, display: 'flex', alignItems: 'center', opacity: busy ? 0.5 : 1,
-          }}
-        >
-          {enabled
-            ? <ToggleRight size={32} color="#FF8F00" strokeWidth={1.5} />
-            : <ToggleLeft  size={32} color="rgba(32,30,29,0.45)" strokeWidth={1.5} />
-          }
-        </button>
+        )}
+      </BillingRow>
+      <BillingRow title="Companion parcel billing" active={comp} busy={busy === 'comp'} onToggle={toggleComp}
+        sentence="This customer books multiple parcels under the same reference on the same day. When on, reconciliation matches companion charges to the master consignment automatically."
+        offLabel="Off — match each parcel" onLabel="On — match companions" />
+      <BillingRow title="Multi-parcel pricing" active={mode === 'multi'} busy={busy === 'mode'} onToggle={toggleMode}
+        sentence={mode === 'multi' ? 'All parcels on a multi-parcel shipment are charged at the sub rate.' : 'Standard: 1st parcel at the main rate, 2nd+ at the sub rate (if set).'}
+        offLabel="Off — flat / first+sub" onLabel="On — all at sub rate" />
+    </div>
+  );
+}
+
+/* ── 4 · Service selection ─────────────────────────────────── */
+function ServiceSelection({ customerId, activeCourierIds, onOpenService }) {
+  const qc = useQueryClient();
+  const { data: allServices = [] } = useQuery({ queryKey: ['all-carrier-services'], queryFn: () => api.get('/carriers/services').then(r => r.data) });
+  const { data: selected = [] } = useQuery({ queryKey: ['customer-services', customerId], queryFn: () => api.get(`/customers/${customerId}/services`).then(r => r.data) });
+  const selectedIds = new Set(selected.map(s => s.courier_service_id));
+  const addSvc = useMutation({ mutationFn: (id) => api.post(`/customers/${customerId}/services`, { courier_service_id: id }), onSuccess: () => qc.invalidateQueries(['customer-services', customerId]) });
+  const delSvc = useMutation({ mutationFn: (id) => api.delete(`/customers/${customerId}/services/${id}`), onSuccess: () => qc.invalidateQueries(['customer-services', customerId]) });
+
+  const filtered = activeCourierIds.size > 0 ? allServices.filter(s => activeCourierIds.has(s.courier_id)) : allServices;
+  const byCourier = {};
+  for (const s of filtered) { const cn = s.courier_name || 'Unknown'; if (!byCourier[cn]) byCourier[cn] = { code: s.courier_code, services: [] }; byCourier[cn].services.push(s); }
+  const couriers = Object.entries(byCourier);
+  if (!couriers.length) return null;
+
+  return (
+    <div style={{ marginBottom: 34 }}>
+      <div className="mv-section" style={{ marginBottom: 0 }}>Service selection</div>
+      <div className="mv-rule" style={{ margin: '10px 0 0' }} />
+      {couriers.map(([name, { code, services }]) => {
+        const count = services.filter(s => selectedIds.has(s.id)).length;
+        return (
+          <div key={name} style={{ padding: '16px 0', borderBottom: '1px solid var(--mv-hairline)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <div style={{ width: 60, height: 16, background: getCourierLogo(code) ? `url(${getCourierLogo(code)}) left center / contain no-repeat` : 'none' }} />
+              <span style={{ fontWeight: 800, fontSize: 13.5 }}>{name}</span>
+              <span className="mv-num" style={{ fontSize: 11.5, color: count ? 'var(--mv-green-deep)' : 'var(--mv-ink-45)' }}>{count}/{services.length}</span>
+              <span style={{ flex: 1 }} />
+              <button className="mv-chip" onClick={() => services.forEach(s => { if (!selectedIds.has(s.id)) addSvc.mutate(s.id); })}>All</button>
+              <button className="mv-chip" onClick={() => services.forEach(s => { if (selectedIds.has(s.id)) delSvc.mutate(s.id); })}>None</button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 40px' }}>
+              {services.map(svc => {
+                const on = selectedIds.has(svc.id);
+                return (
+                  <div key={svc.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <button onClick={() => on ? delSvc.mutate(svc.id) : addSvc.mutate(svc.id)} title={on ? 'Remove' : 'Add'}
+                      style={{ width: 15, height: 15, flexShrink: 0, cursor: 'pointer', border: `1.5px solid ${on ? 'var(--mv-purple)' : 'var(--mv-hairline-2)'}`, background: on ? 'var(--mv-purple)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                      {on && <Check size={10} color="#fff" strokeWidth={3} />}
+                    </button>
+                    <button onClick={() => onOpenService(svc.service_code)} style={{ background: 'none', border: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, color: on ? 'var(--mv-ink)' : 'var(--mv-ink-62)', fontWeight: on ? 600 : 400, flex: 1, textAlign: 'left', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{svc.name}</button>
+                    <span className="mv-num mv-cell-dim" style={{ fontSize: 11 }}>{svc.service_code}</span>
+                    {svc.service_type === 'international' && <span className="mv-state-label" style={{ color: 'var(--mv-teal-deep)', border: '1px solid var(--mv-hairline-2)', padding: '1px 5px' }}>INTL</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── 5 · Rate cards (accordion, one open) ──────────────────── */
+function CoverageBar({ pct }) {
+  const colour = pct >= 100 ? 'var(--mv-green)' : pct > 85 ? 'var(--mv-purple)' : 'var(--mv-magenta)';
+  return <div style={{ width: 74, height: 3, background: 'rgba(32,30,29,.13)', flexShrink: 0 }}><div style={{ height: '100%', width: `${Math.min(100, pct)}%`, background: colour }} /></div>;
+}
+
+function DomesticBody({ service, customerId, templateZones, templateLoading, onRateUpdate, onPerKgUpdate, onRateCreated }) {
+  const [markup, setMarkup] = useState('');
+  const [applying, setApplying] = useState(false);
+  const [applyResult, setApplyResult] = useState(null);
+  const qc = useQueryClient();
+
+  const rateMap = {}; const rateByZone = {};
+  for (const r of service.rates) { rateMap[`${r.zone_name}::${r.weight_class_name}`] = r; if (!rateByZone[r.zone_name]) rateByZone[r.zone_name] = r; }
+  const source = templateZones.length ? templateZones : service.rates.map(r => ({ zone_name: r.zone_name, weight_class_name: r.weight_class_name }));
+  const zones = [...new Set(source.map(z => z.zone_name))];
+  const bands = [...new Set(source.map(z => z.weight_class_name))].sort((a, b) => wcSortKey(a) - wcSortKey(b));
+  const multiWeight = bands.length > 1;
+
+  async function applyMarkup() {
+    const pct = parseFloat(markup);
+    if (isNaN(pct) || pct < 0) return;
+    setApplying(true); setApplyResult(null);
+    try {
+      const res = await api.post(`/customer-rates/${customerId}/apply-markup`, {
+        service_code: service.service_code, service_id: service.service_id, service_name: service.service_name,
+        courier_id: service.courier_id || 0, courier_code: service.courier_code || '', courier_name: service.courier_name || '',
+        carrier_rate_card_id: service.active_card_id || service.carrier_rate_card_id, markup_pct: pct,
+      });
+      setApplyResult({ n: res.data.inserted }); qc.invalidateQueries(['customer-rates', customerId]); onRateCreated?.();
+    } catch (e) { setApplyResult({ error: e.response?.data?.error || 'Failed to apply markup' }); }
+    finally { setApplying(false); }
+  }
+
+  const createRate = async (zone, band, price) => {
+    await api.post(`/customer-rates/${customerId}`, {
+      courier_id: service.courier_id || 0, courier_code: service.courier_code || '', courier_name: service.courier_name || '',
+      service_id: service.service_id, service_code: service.service_code, service_name: service.service_name,
+      zone_name: zone, weight_class_name: band, price,
+    });
+    onRateCreated?.();
+  };
+
+  const colheadBand = { fontSize: 10, fontWeight: 600, textAlign: 'left', paddingBottom: 4, borderLeft: '1px solid var(--mv-hairline)', paddingLeft: 12 };
+  const tierHead = { fontSize: 8.5, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--mv-ink-45)', textAlign: 'right', paddingBottom: 8, borderBottom: '2px solid var(--mv-divider)', paddingLeft: 10, whiteSpace: 'nowrap' };
+
+  return (
+    <div style={{ paddingTop: 4 }}>
+      {/* markup bar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+        <span className="mv-kpi-label" style={{ marginBottom: 0 }}>Markup on carrier cost</span>
+        <div className="mv-money" style={{ width: 90 }}><input value={markup} onChange={e => { setMarkup(e.target.value); setApplyResult(null); }} onKeyDown={e => { if (e.key === 'Enter') applyMarkup(); }} placeholder="30" style={{ textAlign: 'right', color: 'var(--mv-purple)', fontWeight: 700 }} /><span>%</span></div>
+        <button className="mv-btn mv-btn--sm mv-btn--primary" onClick={applyMarkup} disabled={applying || !markup}>{applying ? 'Applying…' : 'Apply to every zone'}</button>
+        {applyResult?.n != null && <span className="mv-state-label" style={{ color: 'var(--mv-green-deep)' }}>{applyResult.n} rates rewritten at {markup}% over cost</span>}
+        {applyResult?.error && <span className="mv-state-label" style={{ color: 'var(--mv-magenta-deep)' }}>{applyResult.error}</span>}
+      </div>
+      {/* legend */}
+      <div style={{ display: 'flex', gap: 18, marginBottom: 12 }}>
+        <span className="mv-state-label" style={{ display: 'inline-flex', alignItems: 'center' }}><span style={{ width: 7, height: 7, background: 'var(--mv-ink)', display: 'inline-block', marginRight: 5 }} />1st parcel</span>
+        <span className="mv-state-label" style={{ display: 'inline-flex', alignItems: 'center', color: 'var(--mv-ink-45)' }}><span style={{ width: 7, height: 7, background: 'var(--mv-ink-45)', display: 'inline-block', marginRight: 5 }} />2nd onward</span>
+        <span className="mv-state-label" style={{ display: 'inline-flex', alignItems: 'center', color: 'var(--mv-teal-deep)' }}><span style={{ width: 7, height: 7, background: 'var(--mv-teal)', display: 'inline-block', marginRight: 5 }} />per kg over top band</span>
       </div>
 
-      {/* Active overrides list */}
-      {enabled && (
-        <div style={{ marginTop: 12, borderTop: '1px solid rgba(0,0,0,0.07)', paddingTop: 12 }}>
-          {isLoading && <span style={{ fontSize: 12, color: 'rgba(32,30,29,0.62)' }}>Loading overrides…</span>}
-          {!isLoading && overrides.length === 0 && (
-            <span style={{ fontSize: 12, color: 'rgba(32,30,29,0.62)' }}>
-              No overrides created yet. DDP variants will be set up automatically on the next reconciliation run.
-            </span>
+      {templateLoading ? <div className="mv-blurb">Loading zones…</div> : zones.length === 0 ? <div className="mv-blurb">No zone template for this service.</div> : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <thead>
+              <tr>
+                <th rowSpan={2} style={{ textAlign: 'left', verticalAlign: 'bottom', fontSize: 8.5, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--mv-ink-45)', paddingBottom: 8, borderBottom: '2px solid var(--mv-divider)', paddingRight: 16 }}>Zone</th>
+                {bands.map(b => <th key={b} colSpan={3} style={colheadBand}>{b}</th>)}
+              </tr>
+              <tr>
+                {bands.map(b => ([
+                  <th key={b + '1'} style={{ ...tierHead, borderLeft: '1px solid var(--mv-hairline)' }}>1st £</th>,
+                  <th key={b + '2'} style={tierHead}>2+ £</th>,
+                  <th key={b + 'k'} style={tierHead}>£/kg</th>,
+                ]))}
+              </tr>
+            </thead>
+            <tbody>
+              {zones.map(zone => (
+                <tr key={zone} style={{ borderBottom: '1px solid var(--mv-hairline)' }}>
+                  <td className="mv-cell-strong" style={{ padding: '10px 16px 10px 0', whiteSpace: 'nowrap' }}>{zone}</td>
+                  {bands.map(b => {
+                    const rate = rateMap[`${zone}::${b}`] || (!multiWeight ? rateByZone[zone] : null);
+                    const first = { borderLeft: '1px solid var(--mv-hairline)', paddingLeft: 12, padding: '8px 0 8px 12px' };
+                    const rest = { padding: '8px 0 8px 10px' };
+                    return ([
+                      <td key={b + '1'} style={first}>
+                        {rate
+                          ? <RateNum value={rate.price} color="var(--mv-ink)" weight={600} onCommit={(v) => v != null && onRateUpdate(rate.id, v)} />
+                          : <RateNum value={null} createHint="Type to price this zone" onCommit={(v) => v != null && createRate(zone, b, v)} />}
+                      </td>,
+                      <td key={b + '2'} style={rest}>
+                        {rate ? <RateNum value={rate.price_sub} color="var(--mv-ink-62)" weight={400} onCommit={(v) => onRateUpdate(rate.id, v, true)} /> : <RateNum value={null} disabled />}
+                      </td>,
+                      <td key={b + 'k'} style={rest}>
+                        {rate ? <RateNum value={rate.per_kg_rate} color="var(--mv-teal-deep)" weight={600} onCommit={(v) => onPerKgUpdate(rate.id, v)} /> : <RateNum value={null} disabled />}
+                      </td>,
+                    ]);
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="mv-blurb" style={{ fontSize: 11, marginTop: 12 }}>Type in any cell to set a price. Dashed cells are zones the carrier quotes and we have not priced — a booking there falls through to manual.</p>
+    </div>
+  );
+}
+
+function InternationalBody({ service, customerId, onRateUpdate, onPerKgUpdate }) {
+  const [searchText, setSearchText] = useState('');
+  const [parsed, setParsed] = useState({ weightKg: null, zoneTerm: null });
+  const searchRef = useRef(null);
+  useEffect(() => { const t = setTimeout(() => { if (searchText.trim()) setParsed(parseNLQuery(searchText)); else setParsed({ weightKg: null, zoneTerm: null }); }, 200); return () => clearTimeout(t); }, [searchText]);
+
+  const rates = service.rates || [];
+  const totalZones = [...new Set(rates.map(r => r.zone_name))].length;
+  const hasSearch = searchText.trim().length > 0;
+  function isMatch(rate) {
+    if (!hasSearch) return false;
+    const { weightKg, zoneTerm } = parsed;
+    const zoneOk = zoneTerm ? rate.zone_name.toLowerCase().includes(zoneTerm) : true;
+    const weightOk = weightKg != null ? weightClassCoversKg(rate.weight_class_name, weightKg) : true;
+    if (zoneTerm && weightKg != null) return zoneOk && weightOk;
+    if (zoneTerm) return zoneOk;
+    if (weightKg != null) return weightOk;
+    return false;
+  }
+  const matched = hasSearch ? rates.filter(isMatch) : rates;
+  const exact = hasSearch && matched.length === 1 ? matched[0] : null;
+  const shown = matched.slice(0, 14);
+
+  return (
+    <div style={{ paddingTop: 4 }}>
+      <p className="mv-blurb" style={{ marginTop: 0 }}>This service quotes {rates.length.toLocaleString('en-GB')} rates across {totalZones} destinations. Search for the one you need rather than scrolling for it.</p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 30, margin: '14px 0 18px', flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 360px', minWidth: 280 }}>
+          <div className="mv-search" style={{ width: '100%' }}>
+            <Search size={14} style={{ color: 'var(--mv-ink-45)', flexShrink: 0 }} />
+            <input ref={searchRef} value={searchText} onChange={e => setSearchText(e.target.value)} placeholder={'e.g. "1kg to Jamaica"'} />
+            {searchText && <button onClick={() => setSearchText('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mv-ink-45)', display: 'flex' }}><X size={13} /></button>}
+          </div>
+          {hasSearch && (parsed.zoneTerm || parsed.weightKg != null) && (
+            <div className="mv-kpi-label" style={{ marginTop: 8 }}>{parsed.zoneTerm ? `Destination ${titleCase(parsed.zoneTerm)}` : ''}{parsed.zoneTerm && parsed.weightKg != null ? ' · ' : ''}{parsed.weightKg != null ? `Weight ${parsed.weightKg} kg` : ''}</div>
           )}
-          {!isLoading && overrides.length > 0 && (
+        </div>
+        <div style={{ textAlign: 'right', minWidth: 200 }}>
+          {!hasSearch && <div><div className="mv-num" style={{ fontWeight: 800, fontSize: 24 }}>{rates.length.toLocaleString('en-GB')}</div><div className="mv-kpi-label">rates on this service</div></div>}
+          {hasSearch && matched.length === 0 && <div><div style={{ fontWeight: 800, fontSize: 22, color: 'var(--mv-magenta-deep)' }}>None</div><div className="mv-kpi-label">try a country name on its own</div></div>}
+          {exact && (
             <div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(32,30,29,0.62)', marginBottom: 8 }}>
-                Active Service Code Overrides
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {overrides.map(ov => (
-                  <div
-                    key={ov.id}
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 6,
-                      background: 'rgba(255,143,0,0.08)', border: '1px solid rgba(255,143,0,0.3)',
-                      borderRadius: 0, padding: '4px 10px', fontSize: 12,
-                    }}
-                  >
-                    <span style={{ color: 'rgba(32,30,29,0.62)' }}>{ov.carrier_name}</span>
-                    <span style={{ color: 'rgba(32,30,29,0.45)', fontSize: 10 }}>·</span>
-                    <span style={{ fontFamily: 'monospace', color: '#201e1d', fontWeight: 600 }}>{ov.courier_code}</span>
-                    <span style={{ color: 'rgba(32,30,29,0.45)' }}>→</span>
-                    <span style={{ fontFamily: 'monospace', color: '#FF8F00', fontWeight: 600 }}>{ov.service_code}</span>
-                    <button
-                      onClick={async () => {
-                        await api.delete(`/customers/${customer.id}/service-code-overrides/${ov.id}`);
-                        qc.invalidateQueries(['service-code-overrides', customer.id]);
-                      }}
-                      title="Remove override"
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', marginLeft: 2 }}
-                    >
-                      <X size={12} color="rgba(32,30,29,0.45)" />
-                    </button>
-                  </div>
-                ))}
-              </div>
+              <div className="mv-kicker">{titleCase(exact.zone_name)} · {exact.weight_class_name}</div>
+              {exact.price != null
+                ? <><div className="mv-num" style={{ fontWeight: 800, fontSize: 38, color: 'var(--mv-green-deep)', lineHeight: 1 }}>{gbp(exact.price)}</div><div className="mv-kpi-label" style={{ marginTop: 4 }}>first parcel · edit it below</div></>
+                : <div style={{ fontWeight: 800, fontSize: 22, color: 'var(--mv-magenta-deep)' }}>Not priced</div>}
             </div>
           )}
+        </div>
+      </div>
+
+      {(hasSearch ? matched.length > 0 : rates.length > 0) && (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left', fontSize: 8.5, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--mv-ink-45)', paddingBottom: 8, borderBottom: '2px solid var(--mv-divider)' }}>Destination</th>
+                <th style={{ textAlign: 'left', fontSize: 8.5, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--mv-ink-45)', paddingBottom: 8, borderBottom: '2px solid var(--mv-divider)' }}>Weight class</th>
+                <th style={{ textAlign: 'right', fontSize: 8.5, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--mv-ink-45)', paddingBottom: 8, borderBottom: '2px solid var(--mv-divider)' }}>1st £</th>
+                <th style={{ textAlign: 'right', fontSize: 8.5, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--mv-ink-45)', paddingBottom: 8, borderBottom: '2px solid var(--mv-divider)' }}>2+ £</th>
+                <th style={{ textAlign: 'right', fontSize: 8.5, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--mv-ink-45)', paddingBottom: 8, borderBottom: '2px solid var(--mv-divider)' }}>£/kg</th>
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map(rate => (
+                <tr key={rate.id} style={{ borderBottom: '1px solid var(--mv-hairline)' }}>
+                  <td className="mv-cell-strong" style={{ padding: '9px 12px 9px 0' }}>{rate.zone_name}</td>
+                  <td className="mv-cell-dim" style={{ padding: '9px 12px 9px 0' }}>{rate.weight_class_name}</td>
+                  <td style={{ padding: '9px 0 9px 10px' }}><RateNum value={rate.price} color="var(--mv-ink)" weight={600} onCommit={(v) => v != null && onRateUpdate(rate.id, v)} /></td>
+                  <td style={{ padding: '9px 0 9px 10px' }}><RateNum value={rate.price_sub} color="var(--mv-ink-62)" weight={400} onCommit={(v) => onRateUpdate(rate.id, v, true)} /></td>
+                  <td style={{ padding: '9px 0 9px 10px' }}><RateNum value={rate.per_kg_rate} color="var(--mv-teal-deep)" weight={600} onCommit={(v) => onPerKgUpdate(rate.id, v)} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!hasSearch && rates.length > 14 && <p className="mv-blurb" style={{ fontSize: 11, marginTop: 10 }}>Showing the first 14 of {rates.length.toLocaleString('en-GB')} rates. Search to jump to one.</p>}
         </div>
       )}
     </div>
   );
 }
 
-// ─── Companion Parcel Billing Section ──────────────────────────────────────────
-// When a customer books multiple parcels under the same reference on the same day
-// (e.g. Europa two-parcel consignments), the carrier may consolidate them under one
-// master tracking number in their invoice. This toggle enables the reconciliation
-// engine to automatically match and close out those companion charges.
-function CompanionParcelBillingSection({ customer }) {
-  const qc = useQueryClient();
-  const [busy, setBusy] = useState(false);
-  const [enabled, setEnabled] = useState(!!customer.reconciliation_flexible_parcel_count);
+function RateCardService({ service, customerId, openCode, setOpenCode, onRateUpdate, onPerKgUpdate, onRateCreated }) {
+  const isIntl = service.service_type === 'international';
+  const open = openCode === service.service_code;
 
-  useEffect(() => {
-    setEnabled(!!customer.reconciliation_flexible_parcel_count);
-  }, [customer.reconciliation_flexible_parcel_count]);
+  const { data: templateZones = [], isLoading: templateLoading } = useQuery({
+    queryKey: ['rate-zone-template', service.service_code],
+    queryFn: () => api.get(`/customer-rates/zones/${encodeURIComponent(service.service_code)}`).then(r => r.data),
+    enabled: open && !isIntl, staleTime: 120_000,
+  });
 
-  async function toggle() {
-    const newValue = !enabled;
-    setEnabled(newValue);
-    setBusy(true);
-    try {
-      await api.put(`/customers/${customer.id}/companion-parcel-billing`, { enabled: newValue });
-      qc.invalidateQueries(['customer', customer.id]);
-    } catch (err) {
-      setEnabled(!newValue);
-      console.error('Companion parcel billing toggle failed:', err.response?.data || err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
+  const priced = service.rates.length;
+  const quoted = isIntl ? service.rate_count : (templateZones.length || service.rate_count || priced);
+  const pct = quoted > 0 ? Math.round((priced / quoted) * 100) : (priced > 0 ? 100 : 0);
+  const zoneCount = isIntl ? [...new Set(service.rates.map(r => r.zone_name))].length : (templateZones.length ? [...new Set(templateZones.map(z => z.zone_name))].length : [...new Set(service.rates.map(r => r.zone_name))].length);
+  const bandCount = [...new Set((templateZones.length ? templateZones : service.rates).map(z => z.weight_class_name))].length;
+  const flat = !isIntl && bandCount <= 1;
 
   return (
-    <div className="moov-card" style={{ marginBottom: 16, padding: '16px 20px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: '#201e1d' }}>Companion Parcel Billing</span>
-            {enabled && (
-              <span style={{
-                fontSize: 11, fontWeight: 600, color: '#0891B2',
-                background: 'rgba(8,145,178,0.10)', border: '1px solid rgba(8,145,178,0.30)',
-                borderRadius: 0, padding: '2px 8px', letterSpacing: '0.3px',
-              }}>ACTIVE</span>
-            )}
-          </div>
-          <p style={{ fontSize: 12, color: 'rgba(32,30,29,0.62)', margin: '3px 0 0' }}>
-            This customer books multiple parcels under the same reference on the same day.
-            When enabled, the reconciliation engine automatically matches companion charges
-            to the master consignment and reconciles them without manual intervention.
-          </p>
-        </div>
-        <button
-          onClick={toggle}
-          disabled={busy}
-          title={enabled ? 'Disable companion parcel billing' : 'Enable companion parcel billing'}
-          style={{
-            background: 'none', border: 'none', cursor: busy ? 'wait' : 'pointer',
-            padding: 4, display: 'flex', alignItems: 'center', opacity: busy ? 0.5 : 1,
-          }}
-        >
-          {enabled
-            ? <ToggleRight size={32} color="#0891B2" strokeWidth={1.5} />
-            : <ToggleLeft  size={32} color="rgba(32,30,29,0.45)" strokeWidth={1.5} />
-          }
-        </button>
+    <div style={{ borderTop: '1px solid var(--mv-hairline)' }}>
+      <div onClick={() => setOpenCode(open ? null : service.service_code)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 0', cursor: 'pointer' }}>
+        {open ? <ChevronDown size={13} style={{ flexShrink: 0, color: 'var(--mv-purple)' }} /> : <ChevronRight size={13} style={{ flexShrink: 0, color: 'var(--mv-ink-45)' }} />}
+        <span style={{ fontWeight: 800, fontSize: 13.5, color: open ? 'var(--mv-purple)' : 'var(--mv-ink)', flexShrink: 0 }}>{service.service_name}</span>
+        {isIntl ? <span className="mv-state-label" style={{ color: 'var(--mv-teal-deep)', border: '1px solid var(--mv-hairline-2)', padding: '1px 5px', flexShrink: 0 }}>INTL</span>
+          : flat ? <span className="mv-state-label" style={{ color: 'var(--mv-ink-45)', flexShrink: 0 }}>Flat fee</span> : null}
+        <span className="mv-cell-dim" style={{ fontSize: 12, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{zoneCount} zone{zoneCount === 1 ? '' : 's'} · {bandCount} weight class{bandCount === 1 ? '' : 'es'}</span>
+        <CoverageBar pct={pct} />
+        <span className="mv-num" style={{ fontSize: 11.5, color: pct >= 100 ? 'var(--mv-green-deep)' : pct > 85 ? 'var(--mv-purple)' : 'var(--mv-magenta-deep)', flexShrink: 0 }}>{priced}/{quoted || priced}</span>
+        <span className="mv-num mv-cell-dim pc-code" style={{ fontSize: 11, flexShrink: 0 }}>{service.service_code}</span>
       </div>
+      {open && (
+        <div style={{ padding: '4px 0 20px 23px' }}>
+          {isIntl
+            ? <InternationalBody service={service} customerId={customerId} onRateUpdate={onRateUpdate} onPerKgUpdate={onPerKgUpdate} />
+            : <DomesticBody service={service} customerId={customerId} templateZones={templateZones} templateLoading={templateLoading} onRateUpdate={onRateUpdate} onPerKgUpdate={onPerKgUpdate} onRateCreated={onRateCreated} />}
+        </div>
+      )}
     </div>
   );
 }
 
-// ─── Multi-Parcel Pricing Section ──────────────────────────────────────────────
-// Controls whether multi-parcel shipments are billed as first+sub or all-at-sub.
-//
-// Pricing modes:
-//   'sub'   (default, toggle OFF): 1st parcel at the rate-card price, 2nd+ at
-//           price_sub. Only applies when price_sub values are set. If there is
-//           no price_sub, every parcel is charged at price regardless.
-//   'multi' (toggle ON): ALL parcels billed at price_sub — used for customers
-//           who consistently ship multiple parcels per order and have negotiated
-//           the sub rate on every box.
-//
-// When there is no price_sub at all (i.e. a flat single-rate customer), this
-// toggle has no effect — shown as a greyed note in that case.
-function MultiParcelPricingSection({ customer }) {
-  const qc      = useQueryClient();
-  const [busy, setBusy]       = useState(false);
-  const [mode, setMode]       = useState(customer.parcel_pricing_mode || 'sub');
-
-  useEffect(() => {
-    setMode(customer.parcel_pricing_mode || 'sub');
-  }, [customer.parcel_pricing_mode]);
-
-  const isMulti  = mode === 'multi';
-  const accent   = '#10B981';   // emerald — distinct from DDP orange + companion cyan
-  const accentBg = 'rgba(16,185,129,0.10)';
-  const accentBd = 'rgba(16,185,129,0.30)';
-
-  async function toggle() {
-    const next = isMulti ? 'sub' : 'multi';
-    setMode(next);
-    setBusy(true);
-    try {
-      await api.put(`/customers/${customer.id}/parcel-pricing-mode`, { mode: next });
-      qc.invalidateQueries(['customer', customer.id]);
-    } catch (err) {
-      setMode(isMulti ? 'multi' : 'sub');   // revert on error
-      console.error('Parcel pricing mode toggle failed:', err.response?.data || err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="moov-card" style={{ marginBottom: 16, padding: '16px 20px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: '#201e1d' }}>Multi-Parcel Pricing</span>
-            {isMulti && (
-              <span style={{
-                fontSize: 11, fontWeight: 600, color: accent,
-                background: accentBg, border: `1px solid ${accentBd}`,
-                borderRadius: 0, padding: '2px 8px', letterSpacing: '0.3px',
-              }}>ACTIVE</span>
-            )}
-          </div>
-          <p style={{ fontSize: 12, color: 'rgba(32,30,29,0.62)', margin: '3px 0 0' }}>
-            {isMulti
-              ? 'All parcels on a multi-parcel shipment are charged at the sub rate.'
-              : 'Standard: 1st parcel at the main rate, 2nd+ at the sub rate (if set).'}
-          </p>
-          <div style={{ marginTop: 6, display: 'flex', gap: 16 }}>
-            <span style={{ fontSize: 11, color: isMulti ? 'rgba(32,30,29,0.45)' : '#201e1d', fontWeight: isMulti ? 400 : 600 }}>
-              Off — flat / first+sub
-            </span>
-            <span style={{ fontSize: 11, color: isMulti ? accent : 'rgba(32,30,29,0.45)', fontWeight: isMulti ? 600 : 400 }}>
-              On — all parcels at sub rate
-            </span>
-          </div>
-        </div>
-        <button
-          onClick={toggle}
-          disabled={busy}
-          title={isMulti ? 'Switch to first+sub pricing' : 'Switch to multi-parcel (all at sub rate)'}
-          style={{
-            background: 'none', border: 'none', cursor: busy ? 'wait' : 'pointer',
-            padding: 4, display: 'flex', alignItems: 'center', opacity: busy ? 0.5 : 1,
-          }}
-        >
-          {isMulti
-            ? <ToggleRight size={32} color={accent} strokeWidth={1.5} />
-            : <ToggleLeft  size={32} color="rgba(32,30,29,0.45)" strokeWidth={1.5} />
-          }
-        </button>
-      </div>
-    </div>
-  );
-}
-
+/* ── Main ──────────────────────────────────────────────────── */
 export default function CustomerPricingTab({ customer }) {
   const qc = useQueryClient();
+  const [openCode, setOpenCode] = useState(null);
 
-  // Carrier links — drives everything
-  const { data: carriers = [] } = useQuery({
-    queryKey: ['customer-carrier-links', customer.id],
-    queryFn:  () => api.get(`/customer-carrier-links/${customer.id}`).then(r => r.data),
-  });
+  const { data: carriers = [] } = useQuery({ queryKey: ['customer-carrier-links', customer.id], queryFn: () => api.get(`/customer-carrier-links/${customer.id}`).then(r => r.data) });
+  const { data: surchargeOverrides = [] } = useQuery({ queryKey: ['surcharge-overrides', customer.id], queryFn: () => api.get(`/surcharges/customer-overrides/${customer.id}`).then(r => r.data) });
+  const { data: rateData, isLoading: ratesLoading } = useQuery({ queryKey: ['customer-rates', customer.id], queryFn: () => api.get(`/customer-rates/${customer.id}`).then(r => r.data) });
+  const { data: selectedServices = [] } = useQuery({ queryKey: ['customer-services', customer.id], queryFn: () => api.get(`/customers/${customer.id}/services`).then(r => r.data) });
+  const { data: allCarrierServices = [] } = useQuery({ queryKey: ['all-carrier-services'], queryFn: () => api.get('/carriers/services').then(r => r.data) });
 
-  // Surcharge overrides — loaded once, passed to per-carrier sections
-  const { data: surchargeOverrides = [] } = useQuery({
-    queryKey: ['surcharge-overrides', customer.id],
-    queryFn:  () => api.get(`/surcharges/customer-overrides/${customer.id}`).then(r => r.data),
-  });
-
-  // Rate data
-  const { data: rateData, isLoading: ratesLoading } = useQuery({
-    queryKey: ['customer-rates', customer.id],
-    queryFn:  () => api.get(`/customer-rates/${customer.id}`).then(r => r.data),
-  });
-
-  // Service selections (used for rate card filtering)
-  const { data: selectedServices = [] } = useQuery({
-    queryKey: ['customer-services', customer.id],
-    queryFn:  () => api.get(`/customers/${customer.id}/services`).then(r => r.data),
-  });
-
-  // All carrier services — for metadata when building placeholder rate rows.
-  // Shared cache key with ServiceSelector so no extra network request.
-  const { data: allCarrierServices = [] } = useQuery({
-    queryKey: ['all-carrier-services'],
-    queryFn:  () => api.get('/carriers/services').then(r => r.data),
-  });
-
-  const activeCarriers    = carriers.filter(c => c.active);
-  const activeCourierIds  = new Set(activeCarriers.map(c => c.courier_id));
-  // Use courier_code for rate filtering — customer_rates stores old billing-system
-  // courier_id (e.g. 150) which is different from couriers.id (e.g. 3). Both APIs
-  // expose courier_code ('DPD', 'DHL') so that's the safe cross-reference key.
+  const activeCarriers = carriers.filter(c => c.active);
+  const activeCourierIds = new Set(activeCarriers.map(c => c.courier_id));
   const activeCourierCodes = new Set(activeCarriers.map(c => c.courier_code));
-
-  // Use service_code for comparison — selectedServices has new courier_services.id (e.g. 12)
-  // while customer_rates.service_id is the old billing system ID (e.g. 764). Both share
-  // service_code ('DPD_NEXT_DAY') as the safe cross-reference key.
   const selectedCodes = new Set(selectedServices.map(s => s.service_code).filter(Boolean));
-
-  // Lookup: service_code → full service metadata (from /carriers/services)
   const allServicesMeta = Object.fromEntries(allCarrierServices.map(s => [s.service_code, s]));
-
-  // Lookup: service_code → rate data (from /customer-rates/:id)
   const rateServiceMap = Object.fromEntries((rateData?.services || []).map(s => [s.service_code, s]));
 
-  // Rate cards:
-  // Three cases:
-  // 1. selectedCodes > 0: show only the explicitly selected services
-  // 2. selectedServices configured (rows in DB) but nothing currently selected:
-  //    the user deliberately chose "none" — show empty state
-  // 3. selectedServices never configured (no rows in DB): default to showing all
-  //    rate data for active couriers — this is the normal state for most customers
   let visibleServices;
   if (selectedCodes.size > 0) {
-    // User has explicitly selected specific services — show only those
-    visibleServices = selectedServices
-      .filter(s => {
-        const meta = allServicesMeta[s.service_code];
-        if (!meta) return false;
-        return activeCourierIds.size === 0 || activeCourierIds.has(meta.courier_id);
-      })
-      .map(s => {
-        // Prefer real rate data if it exists for this service
-        if (rateServiceMap[s.service_code]) return rateServiceMap[s.service_code];
-        // Otherwise build a placeholder so the user sees the row and can add rates
-        const meta    = allServicesMeta[s.service_code];
-        const carrier = activeCarriers.find(c => c.courier_id === meta?.courier_id);
-        return {
-          service_id:   s.courier_service_id,
-          service_code: s.service_code,
-          service_name: meta?.name || s.service_code,
-          courier_id:   meta?.courier_id || 0,
-          courier_code: carrier?.courier_code || '',
-          courier_name: meta?.courier_name || carrier?.courier_name || '',
-          service_type: meta?.service_type || 'domestic',
-          rate_count:   0,
-          rates:        [],
-        };
-      });
+    visibleServices = selectedServices.filter(s => { const meta = allServicesMeta[s.service_code]; if (!meta) return false; return activeCourierIds.size === 0 || activeCourierIds.has(meta.courier_id); })
+      .map(s => rateServiceMap[s.service_code] || (() => { const meta = allServicesMeta[s.service_code]; const carrier = activeCarriers.find(c => c.courier_id === meta?.courier_id); return { service_id: s.courier_service_id, service_code: s.service_code, service_name: meta?.name || s.service_code, courier_id: meta?.courier_id || 0, courier_code: carrier?.courier_code || '', courier_name: meta?.courier_name || carrier?.courier_name || '', service_type: meta?.service_type || 'domestic', rate_count: 0, rates: [], active_card_id: carrier?.active_card_id }; })());
   } else if (selectedServices.length > 0) {
-    // Service selection has been configured for this customer but nothing is
-    // currently ticked — the user deliberately chose to show nothing
     visibleServices = [];
   } else {
-    // Service selection has never been configured — default to showing all
-    // rate data for active couriers (the standard state for most customers)
-    visibleServices = (rateData?.services || []).filter(s =>
-      activeCourierCodes.size === 0 || activeCourierCodes.has(s.courier_code)
-    );
+    visibleServices = (rateData?.services || []).filter(s => activeCourierCodes.size === 0 || activeCourierCodes.has(s.courier_code));
   }
-
-  // Map courier_code → active_card_id so ServiceBlock can fetch carrier cost prices for markup
-  const carrierCardMap = Object.fromEntries(
-    carriers.filter(c => c.active && c.active_card_id).map(c => [c.courier_code, c.active_card_id])
-  );
+  // attach active_card_id per service for markup
+  const cardByCode = Object.fromEntries(activeCarriers.filter(c => c.active_card_id).map(c => [c.courier_code, c.active_card_id]));
+  visibleServices = visibleServices.map(s => ({ ...s, active_card_id: s.active_card_id || cardByCode[s.courier_code] }));
 
   const byCourier = {};
-  for (const s of visibleServices) {
-    if (!byCourier[s.courier_name]) byCourier[s.courier_name] = { courier_code: s.courier_code, services: [] };
-    byCourier[s.courier_name].services.push(s);
-  }
+  for (const s of visibleServices) { if (!byCourier[s.courier_name]) byCourier[s.courier_name] = []; byCourier[s.courier_name].push(s); }
 
-  const visibleRates  = visibleServices.reduce((a, s) => a + s.rate_count, 0);
+  const visibleRates = visibleServices.reduce((a, s) => a + (s.rate_count || 0), 0);
+  const totalServices = (activeCourierIds.size > 0 ? allCarrierServices.filter(s => activeCourierIds.has(s.courier_id)) : allCarrierServices).length;
 
   async function handlePriceUpdate(rateId, price, isSub = false) {
     if (isSub) await api.patch(`/customer-rates/rate/${rateId}`, { price_sub: price });
-    else        await api.patch(`/customer-rates/rate/${rateId}`, { price });
+    else await api.patch(`/customer-rates/rate/${rateId}`, { price });
     qc.invalidateQueries(['customer-rates', customer.id]);
   }
-  async function handlePerKgUpdate(rateId, perKgRate) {
-    await api.patch(`/customer-rates/rate/${rateId}`, { per_kg_rate: perKgRate });
-    qc.invalidateQueries(['customer-rates', customer.id]);
-  }
-  async function handlePriceDelete(rateId) {
-    await api.delete(`/customer-rates/rate/${rateId}`);
-    qc.invalidateQueries(['customer-rates', customer.id]);
-  }
+  async function handlePerKgUpdate(rateId, perKgRate) { await api.patch(`/customer-rates/rate/${rateId}`, { per_kg_rate: perKgRate }); qc.invalidateQueries(['customer-rates', customer.id]); }
+  const refreshRates = () => qc.invalidateQueries(['customer-rates', customer.id]);
 
   return (
     <div className="mv-pricing">
-      {/* 1 — Thin carrier toggle strip */}
-      <CourierToggleStrip carriers={carriers} customerId={customer.id} />
+      <style>{`@media (max-width: 1180px){.mv-pricing .pc-code{display:none}}`}</style>
 
-      {/* 1b — DDP Mode toggle */}
-      <DDPModeSection customer={customer} />
+      <CoverageStrip servicesOn={selectedCodes.size > 0 ? selectedCodes.size : visibleServices.length} totalServices={totalServices} liveCarriers={activeCarriers.length} ratesPriced={visibleServices.reduce((a, s) => a + (s.rates?.length || 0), 0)} ratesQuoted={null} notPriced={null} />
 
-      {/* 1c — Companion Parcel Billing toggle */}
-      <CompanionParcelBillingSection customer={customer} />
+      <CarrierTiles carriers={carriers} customerId={customer.id} />
 
-      {/* 1d — Multi-Parcel Pricing mode */}
-      <MultiParcelPricingSection customer={customer} />
-
-      {/* 2 — Per-carrier: fuel groups + surcharge overrides (active carriers only) */}
       {activeCarriers.map(carrier => (
-        <ActiveCarrierSection
-          key={carrier.courier_id}
-          carrier={carrier}
-          customerId={customer.id}
-          allOverrides={surchargeOverrides}
-          onOverridesChange={() => qc.invalidateQueries(['surcharge-overrides', customer.id])}
-        />
+        <PerCarrierBlock key={carrier.courier_id} carrier={carrier} customerId={customer.id} allOverrides={surchargeOverrides} onOverridesChange={() => qc.invalidateQueries(['surcharge-overrides', customer.id])} />
       ))}
 
-      {/* 3 — Service selection (filtered to active carriers) */}
-      <ServiceSelector customerId={customer.id} activeCourierIds={activeCourierIds} />
+      <BillingModes customer={customer} />
 
-      {/* 4 — Rate cards */}
-      {visibleServices.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#201e1d', margin: 0, flex: 1 }}>
-            Rate Cards
-            <span style={{ fontSize: 13, color: 'rgba(32,30,29,0.62)', fontWeight: 400, marginLeft: 10 }}>
-              {visibleServices.length} service{visibleServices.length !== 1 ? 's' : ''}
-              {visibleRates > 0 && ` · ${visibleRates.toLocaleString()} rates`}
-            </span>
-          </h3>
+      <ServiceSelection customerId={customer.id} activeCourierIds={activeCourierIds} onOpenService={setOpenCode} />
+
+      <div>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+          <div className="mv-section" style={{ marginBottom: 0 }}>Rate cards</div>
+          <span className="mv-num" style={{ fontSize: 11.5, color: 'var(--mv-ink-52)' }}>{visibleServices.length} service{visibleServices.length === 1 ? '' : 's'}{visibleRates > 0 ? ` · ${visibleRates.toLocaleString('en-GB')} rates` : ''}</span>
         </div>
-      )}
-
-      {ratesLoading && (
-        <div className="moov-card" style={{ padding: 32, textAlign: 'center', color: 'rgba(32,30,29,0.62)' }}>Loading rates…</div>
-      )}
-
-      {!ratesLoading && visibleServices.length === 0 && selectedServices.length > 0 && selectedCodes.size === 0 && (
-        <div className="moov-card" style={{ padding: 24, textAlign: 'center', color: 'rgba(32,30,29,0.62)', fontSize: 13 }}>
-          No services selected — use <strong>Service Selection</strong> above to choose which services to display rate cards for.
-          <div style={{ marginTop: 8, fontSize: 11, color: 'rgba(32,30,29,0.45)' }}>
-            Note: selecting services here only controls the display. Rate rows in the database are unchanged.
-            Use the individual delete buttons on each rate to permanently remove pricing.
-          </div>
-        </div>
-      )}
-
-      {!ratesLoading && visibleServices.length === 0 && activeCourierIds.size > 0 && selectedCodes.size > 0 && (
-        <div className="moov-card" style={{ padding: 24, textAlign: 'center', color: 'rgba(32,30,29,0.62)', fontSize: 13 }}>
-          No rate data for the selected services yet.
-        </div>
-      )}
-
-      {Object.entries(byCourier).map(([courierName, { courier_code, services: svcs }]) => (
-        <CourierGroup
-          key={courierName}
-          courierName={courierName}
-          services={svcs}
-          customerId={customer.id}
-          activeCardId={carrierCardMap[courier_code]}
-          onRateUpdate={handlePriceUpdate}
-          onRateDelete={handlePriceDelete}
-          onRateCreated={() => qc.invalidateQueries(['customer-rates', customer.id])}
-          onPerKgUpdate={handlePerKgUpdate}
-        />
-      ))}
+        <div className="mv-rule" style={{ margin: '10px 0 0' }} />
+        {ratesLoading && <div className="mv-blurb" style={{ marginTop: 12 }}>Loading rates…</div>}
+        {!ratesLoading && visibleServices.length === 0 && <div className="mv-blurb" style={{ marginTop: 12 }}>No services selected — choose services above to price them.</div>}
+        {Object.entries(byCourier).map(([courierName, svcs]) => {
+          const on = svcs.filter(s => (s.rates?.length || 0) > 0).length;
+          const liveCard = activeCarriers.find(c => c.courier_name === courierName)?.available_cards?.find(cc => String(cc.id) === String(activeCarriers.find(c => c.courier_name === courierName)?.active_card_id));
+          return (
+            <div key={courierName} style={{ marginTop: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                <span style={{ fontWeight: 800, fontSize: 13.5 }}>{courierName}</span>
+                <span className="mv-cell-dim" style={{ fontSize: 11.5 }}>{on} of {svcs.length} service{svcs.length === 1 ? '' : 's'} on{liveCard ? ` · ${liveCard.name}` : ''}</span>
+              </div>
+              <div style={{ marginTop: 6 }}>
+                {svcs.map(svc => (
+                  <RateCardService key={svc.service_code} service={svc} customerId={customer.id} openCode={openCode} setOpenCode={setOpenCode} onRateUpdate={handlePriceUpdate} onPerKgUpdate={handlePerKgUpdate} onRateCreated={refreshRates} />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
