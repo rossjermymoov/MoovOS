@@ -373,17 +373,15 @@ function OverviewTab({ c, recent, onSaved, onDeleteRequest }) {
         </div>
       )}
 
-      {/* App controls kept, restyled — below the record */}
-      <div style={{ marginTop: 34, borderTop: '2px solid var(--mv-divider)', paddingTop: 24 }}>
-        <TestAccountSection customer={c} onToggle={onSaved} />
-        <LinkedIdsSection customer={c} />
-        <CustomerRateCardAssignments customerId={c.id} />
-      </div>
-
-      {!edit && (
-        <div className="mv-banner" style={{ marginTop: 12, justifyContent: 'space-between' }}>
-          <div><div className="mv-banner-title">Delete customer</div><div className="mv-banner-sub">Permanently removes this customer and all associated data. This cannot be undone.</div></div>
-          <button className="mv-btn mv-btn--danger mv-btn--sm" onClick={onDeleteRequest} style={{ flexShrink: 0 }}><Trash2 size={13} /> Delete customer</button>
+      {/* App-only controls live under Edit, so the read view matches the prototype */}
+      {edit && (
+        <div style={{ marginTop: 34, borderTop: '2px solid var(--mv-divider)', paddingTop: 24 }}>
+          <TestAccountSection customer={c} onToggle={onSaved} />
+          <LinkedIdsSection customer={c} />
+          <div className="mv-banner" style={{ marginTop: 12, justifyContent: 'space-between' }}>
+            <div><div className="mv-banner-title">Delete customer</div><div className="mv-banner-sub">Permanently removes this customer and all associated data. This cannot be undone.</div></div>
+            <button className="mv-btn mv-btn--danger mv-btn--sm" onClick={onDeleteRequest} style={{ flexShrink: 0 }}><Trash2 size={13} /> Delete customer</button>
+          </div>
         </div>
       )}
     </div>
@@ -545,66 +543,81 @@ function FinancialTab({ c }) {
   const pct = credit?.utilisation_pct ?? 0;
   const status = credit?.credit_status ?? 'ok';
   const barCls = status === 'over_limit' ? 'is-over' : status === 'warning' ? 'is-warn' : '';
+  const invoices = credit?.invoices || [];
+
   return (
     <div>
-      {credit?.credit_limit > 0 && (
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-            <span className="mv-kpi-label">Credit utilisation</span>
-            <span className="mv-num" style={{ fontWeight: 700, color: barCls === 'is-over' ? 'var(--mv-magenta-deep)' : 'var(--mv-ink)' }}>{pct.toFixed(1)}%</span>
-          </div>
-          <div className="mv-bar" style={{ width: '100%', height: 4 }}><span className={barCls} style={{ width: `${Math.min(pct, 100)}%` }} /></div>
-        </div>
-      )}
-      {status === 'over_limit' && <div className="mv-banner" style={{ marginBottom: 16 }}><AlertTriangle size={16} style={{ color: 'var(--mv-magenta-deep)', flexShrink: 0 }} /><div><div className="mv-banner-title">Credit limit exceeded</div><div className="mv-banner-sub">This customer should be placed on stop.</div></div></div>}
-      {status === 'warning' && <div className="mv-banner mv-banner--note" style={{ marginBottom: 16 }}><AlertTriangle size={16} style={{ color: 'var(--mv-purple-700)', flexShrink: 0 }} /><div><div className="mv-banner-title">Approaching credit limit</div><div className="mv-banner-sub">{(100 - pct).toFixed(1)}% remaining.</div></div></div>}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
-        <div style={{ display: 'flex', gap: 14, alignItems: 'center', fontSize: 12 }}>
-          <span className="mv-kpi-label" style={{ marginBottom: 0 }}>Status</span><StateMark status={c.account_status} />
-          {c.is_on_stop && c.on_stop_applied_at && <span className="mv-cell-dim">since {format(new Date(c.on_stop_applied_at), 'dd MMM yyyy')}</span>}
-          {c.is_on_stop && c.on_stop_reason && <span className="mv-cell-dim" style={{ fontStyle: 'italic' }}>“{c.on_stop_reason}”</span>}
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {c.is_on_stop ? <button className="mv-btn mv-btn--sm" onClick={() => liftStopMutation.mutate()} disabled={liftStopMutation.isPending}>Lift on stop</button> : (status !== 'ok' && !showStopForm && <button className="mv-btn mv-btn--danger mv-btn--sm" onClick={() => setShowStopForm(true)}>Apply on stop</button>)}
-          <button className="mv-btn mv-btn--sm" onClick={() => refetchCredit()} title="Refresh"><RefreshCw size={13} /></button>
-        </div>
-      </div>
-      {showStopForm && (
-        <div style={{ marginBottom: 20, borderLeft: '3px solid var(--mv-magenta)', background: 'rgba(233,30,140,.05)', padding: 16 }}>
-          <div className="mv-label">Reason for placing on stop</div>
-          <textarea className="mv-input" value={stopReason} onChange={e => setStopReason(e.target.value)} rows={2} placeholder="e.g. Credit limit exceeded — awaiting payment of overdue invoices" style={{ minHeight: 60 }} />
-          <div style={{ display: 'flex', gap: 8, marginTop: 10, justifyContent: 'flex-end' }}>
-            <button className="mv-btn mv-btn--sm" onClick={() => { setShowStopForm(false); setStopReason(''); }}>Cancel</button>
-            <button className="mv-btn mv-btn--danger mv-btn--sm" onClick={() => onStopMutation.mutate({ reason: stopReason })} disabled={!stopReason.trim() || onStopMutation.isPending}>{onStopMutation.isPending ? 'Applying…' : 'Confirm on stop'}</button>
-          </div>
-        </div>
-      )}
-      {credit?.xero_linked && (
-        <div>
-          <div className="mv-section">Outstanding invoices</div><div className="mv-rule" style={{ marginBottom: 2 }} />
-          {!credit.xero_connected && <div className="mv-blurb" style={{ marginTop: 8 }}>Xero not connected — go to Settings → Xero to connect.</div>}
-          {credit.xero_connected && credit.invoices?.length === 0 && <div className="mv-blurb" style={{ marginTop: 8 }}>No outstanding invoices in Xero.</div>}
-          {credit.xero_connected && credit.invoices?.length > 0 && (
-            <table className="mv-table" style={{ marginTop: 8 }}>
-              <thead><tr><th>Invoice</th><th>Date</th><th>Due</th><th className="is-right">Amount due</th><th>State</th></tr></thead>
-              <tbody>
-                {credit.invoices.map(inv => (
-                  <tr key={inv.id}>
-                    <td className="mv-cell-strong mv-num">{inv.number || '—'}</td>
-                    <td className="mv-num mv-cell-dim">{inv.date || '—'}</td>
-                    <td className="mv-num" style={{ color: inv.is_overdue ? 'var(--mv-magenta-deep)' : 'var(--mv-ink-62)' }}>{inv.due_date || '—'}</td>
-                    <td className="is-right mv-num" style={{ fontWeight: 700, color: inv.is_overdue ? 'var(--mv-magenta-deep)' : 'var(--mv-ink)' }}>{gbp(inv.amount_due)}</td>
-                    <td>{inv.is_overdue ? <span className="mv-state mv-state--attention"><span className="mv-mark mv-mark--attention" /><span className="mv-state-label">Overdue</span></span> : <span className="mv-state mv-state--waiting"><span className="mv-mark mv-mark--waiting" /><span className="mv-state-label">Open</span></span>}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* Invoice ledger — the prototype's table, always shown with the full column set */}
+      <table className="mv-table">
+        <thead>
+          <tr>
+            <th>Invoice</th><th>Raised</th><th>Due</th>
+            <th className="is-right">Charges</th><th className="is-right">Net</th>
+            <th className="is-right">VAT</th><th className="is-right">Total</th><th>State</th>
+          </tr>
+        </thead>
+        <tbody>
+          {invoices.length === 0 && (
+            <tr><td colSpan={8} className="mv-cell-dim" style={{ padding: '26px 0' }}>
+              {credit ? (credit.xero_connected ? 'No outstanding invoices.' : 'Connect Xero in Settings to pull this customer’s invoices.') : 'Invoices will appear here once the finance system is connected.'}
+            </td></tr>
           )}
+          {invoices.map(inv => (
+            <tr key={inv.id}>
+              <td className="mv-cell-strong mv-num">{inv.number || '—'}</td>
+              <td className="mv-num mv-cell-dim">{inv.date || '—'}</td>
+              <td className="mv-num" style={{ color: inv.is_overdue ? 'var(--mv-magenta-deep)' : 'var(--mv-ink-62)' }}>{inv.due_date || '—'}</td>
+              <td className="is-right mv-num mv-cell-dim">{inv.charges ?? '—'}</td>
+              <td className="is-right mv-num mv-cell-dim">{inv.net != null ? gbp(inv.net) : '—'}</td>
+              <td className="is-right mv-num mv-cell-dim">{inv.vat != null ? gbp(inv.vat) : '—'}</td>
+              <td className="is-right mv-num" style={{ fontWeight: 700, color: inv.is_overdue ? 'var(--mv-magenta-deep)' : 'var(--mv-ink)' }}>{gbp(inv.amount_due)}</td>
+              <td>{inv.is_overdue
+                ? <span className="mv-state mv-state--attention"><span className="mv-mark mv-mark--attention" /><span className="mv-state-label">Overdue</span></span>
+                : <span className="mv-state mv-state--waiting"><span className="mv-mark mv-mark--waiting" /><span className="mv-state-label">Open</span></span>}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {/* Credit + on-stop controls (kept functionality, below the ledger) */}
+      <div style={{ marginTop: 26, borderTop: '2px solid var(--mv-divider)', paddingTop: 20 }}>
+        {credit?.credit_limit > 0 && (
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span className="mv-kpi-label">Credit utilisation</span>
+              <span className="mv-num" style={{ fontWeight: 700, color: barCls === 'is-over' ? 'var(--mv-magenta-deep)' : 'var(--mv-ink)' }}>{pct.toFixed(1)}%</span>
+            </div>
+            <div className="mv-bar" style={{ width: '100%', height: 4 }}><span className={barCls} style={{ width: `${Math.min(pct, 100)}%` }} /></div>
+          </div>
+        )}
+        {status === 'over_limit' && <div className="mv-banner" style={{ marginBottom: 16 }}><AlertTriangle size={16} style={{ color: 'var(--mv-magenta-deep)', flexShrink: 0 }} /><div><div className="mv-banner-title">Credit limit exceeded</div><div className="mv-banner-sub">This customer should be placed on stop.</div></div></div>}
+        {status === 'warning' && <div className="mv-banner mv-banner--note" style={{ marginBottom: 16 }}><AlertTriangle size={16} style={{ color: 'var(--mv-purple-700)', flexShrink: 0 }} /><div><div className="mv-banner-title">Approaching credit limit</div><div className="mv-banner-sub">{(100 - pct).toFixed(1)}% remaining.</div></div></div>}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center', fontSize: 12 }}>
+            <span className="mv-kpi-label" style={{ marginBottom: 0 }}>Status</span><StateMark status={c.account_status} />
+            {c.is_on_stop && c.on_stop_applied_at && <span className="mv-cell-dim">since {format(new Date(c.on_stop_applied_at), 'dd MMM yyyy')}</span>}
+            {c.is_on_stop && c.on_stop_reason && <span className="mv-cell-dim" style={{ fontStyle: 'italic' }}>“{c.on_stop_reason}”</span>}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {c.is_on_stop ? <button className="mv-btn mv-btn--sm" onClick={() => liftStopMutation.mutate()} disabled={liftStopMutation.isPending}>Lift on stop</button> : (status !== 'ok' && !showStopForm && <button className="mv-btn mv-btn--danger mv-btn--sm" onClick={() => setShowStopForm(true)}>Apply on stop</button>)}
+            <button className="mv-btn mv-btn--sm" onClick={() => refetchCredit()} title="Refresh"><RefreshCw size={13} /></button>
+          </div>
         </div>
-      )}
+        {showStopForm && (
+          <div style={{ marginTop: 16, borderLeft: '3px solid var(--mv-magenta)', background: 'rgba(233,30,140,.05)', padding: 16 }}>
+            <div className="mv-label">Reason for placing on stop</div>
+            <textarea className="mv-input" value={stopReason} onChange={e => setStopReason(e.target.value)} rows={2} placeholder="e.g. Credit limit exceeded — awaiting payment of overdue invoices" style={{ minHeight: 60 }} />
+            <div style={{ display: 'flex', gap: 8, marginTop: 10, justifyContent: 'flex-end' }}>
+              <button className="mv-btn mv-btn--sm" onClick={() => { setShowStopForm(false); setStopReason(''); }}>Cancel</button>
+              <button className="mv-btn mv-btn--danger mv-btn--sm" onClick={() => onStopMutation.mutate({ reason: stopReason })} disabled={!stopReason.trim() || onStopMutation.isPending}>{onStopMutation.isPending ? 'Applying…' : 'Confirm on stop'}</button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
+
 
 // ─── Communications ──────────────────────────────────────────
 const DIR_CFG = {
@@ -755,9 +768,9 @@ export default function CustomerRecord() {
       { label: 'Claims', value: '—', sub: 'pending tracking' },
     ],
     financial: [
-      { label: 'Total exposure', value: gbp0(credit?.total_exposure ?? 0), attention: (credit?.credit_status && credit.credit_status !== 'ok'), sub: credit?.utilisation_pct ? `${credit.utilisation_pct.toFixed(0)}% of ${gbp0(credit?.credit_limit)}` : '' },
-      { label: 'Xero outstanding', value: gbp0(credit?.xero_outstanding ?? 0), sub: credit?.invoices?.length ? `${credit.invoices.length} invoices open` : 'nothing open' },
-      { label: 'Unbilled charges', value: gbp0(credit?.moovos_unbilled ?? 0), sub: `${credit?.moovos_unbilled_count ?? 0} charges` },
+      { label: 'Total exposure', value: credit ? gbp0(credit.total_exposure ?? 0) : '—', attention: (credit?.credit_status && credit.credit_status !== 'ok'), sub: credit?.utilisation_pct ? `${credit.utilisation_pct.toFixed(0)}% of ${gbp0(credit?.credit_limit)}` : (credit ? '' : 'awaiting finance link') },
+      { label: 'Xero outstanding', value: credit ? gbp0(credit.xero_outstanding ?? 0) : '—', sub: credit ? (credit.invoices?.length ? `${credit.invoices.length} invoices open` : 'nothing open') : '' },
+      { label: 'Unbilled charges', value: credit ? gbp0(credit.moovos_unbilled ?? 0) : '—', sub: credit ? `${credit.moovos_unbilled_count ?? 0} charges` : '' },
       { label: 'Days to pay', value: c.payment_terms_days ?? '—', sub: c.billing_cycle ? `billed ${c.billing_cycle}` : '' },
     ],
   };
