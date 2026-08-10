@@ -373,17 +373,18 @@ function OverviewTab({ c, recent, onSaved, onDeleteRequest }) {
         </div>
       )}
 
-      {/* App-only controls live under Edit, so the read view matches the prototype */}
+      {/* Test account + Linked IDs live under Edit; Delete is always at the bottom */}
       {edit && (
         <div style={{ marginTop: 34, borderTop: '2px solid var(--mv-divider)', paddingTop: 24 }}>
           <TestAccountSection customer={c} onToggle={onSaved} />
           <LinkedIdsSection customer={c} />
-          <div className="mv-banner" style={{ marginTop: 12, justifyContent: 'space-between' }}>
-            <div><div className="mv-banner-title">Delete customer</div><div className="mv-banner-sub">Permanently removes this customer and all associated data. This cannot be undone.</div></div>
-            <button className="mv-btn mv-btn--danger mv-btn--sm" onClick={onDeleteRequest} style={{ flexShrink: 0 }}><Trash2 size={13} /> Delete customer</button>
-          </div>
         </div>
       )}
+
+      <div className="mv-banner" style={{ marginTop: 24, justifyContent: 'space-between' }}>
+        <div><div className="mv-banner-title">Delete customer</div><div className="mv-banner-sub">Permanently removes this customer and all associated data. This cannot be undone.</div></div>
+        <button className="mv-btn mv-btn--danger mv-btn--sm" onClick={onDeleteRequest} style={{ flexShrink: 0 }}><Trash2 size={13} /> Delete customer</button>
+      </div>
     </div>
   );
 }
