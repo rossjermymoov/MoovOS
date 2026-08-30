@@ -378,6 +378,35 @@ router.delete('/:id', async (req, res, next) => {
   }
 });
 
+// ─── POST /api/shipments/delete-before-today ──────────────────────────────────
+router.post('/delete-before-today', async (req, res, next) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Delete charges created before today or associated with shipments created before today
+    const chargesRes = await query(
+      `DELETE FROM charges WHERE (created_at < $1::date) OR (shipment_id IN (SELECT id FROM shipments WHERE created_at < $1::date)) RETURNING id`,
+      [today]
+    );
+
+    const shipRes = await query(
+      `DELETE FROM shipments WHERE created_at < $1::date RETURNING id`,
+      [today]
+    );
+
+    console.log(`[shipments] Purged prior to today (${today}): deleted ${shipRes.rows.length} shipments and ${chargesRes.rows.length} charges.`);
+
+    res.json({
+      success: true,
+      deleted_shipments: shipRes.rows.length,
+      deleted_charges: chargesRes.rows.length,
+      cutoff_date: today
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── POST /api/shipments/clear-simulated ───────────────────────────────────────
 router.post('/clear-simulated', async (req, res, next) => {
   try {

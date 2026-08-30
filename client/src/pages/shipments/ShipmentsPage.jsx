@@ -103,6 +103,23 @@ export default function ShipmentsPage() {
     }
   }
 
+  async function handlePurgePriorToToday() {
+    if (!confirm('Are you sure you want to delete all shipments prior to today? This will clear historical webhook data while preserving today’s shipments.')) return;
+    try {
+      const res = await fetch('/api/shipments/delete-before-today', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`Purge completed: Deleted ${data.deleted_shipments || 0} historical shipments and ${data.deleted_charges || 0} charges.`);
+        fetchShipments();
+      } else {
+        alert(data.error || 'Failed to purge shipments');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error purging historical shipments: ' + e.message);
+    }
+  }
+
   async function handleClearSimulated() {
     if (!confirm('Clear all simulated test shipments?')) return;
     try {
@@ -134,6 +151,14 @@ export default function ShipmentsPage() {
         </div>
 
         <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            onClick={handlePurgePriorToToday}
+            className="mv-btn-danger"
+            style={{ padding: '8px 14px', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}
+            title="Delete all historical shipments recorded before today"
+          >
+            <Trash2 size={14} /> Purge Prior to Today
+          </button>
           {simulatedCount > 0 && (
             <button
               onClick={handleClearSimulated}
