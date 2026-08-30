@@ -1,39 +1,23 @@
+/**
+ * OnboardingBoard — /onboarding
+ *
+ * The Moov OS Onboarding Pipeline Board, built to docs/design-rules.md and moov.css.
+ * Displays live multi-track customer onboarding, courier depot negotiation, and SLA monitoring.
+ * Features:
+ *   - Architectural Process Tree Map banner (Core Trunk → Courier Branches → Go-Live Canopy)
+ *   - Multi-track filter chips (DPD Master, DPD Sub, UPS Direct) and SLA status chips
+ *   - Kanban stage columns with zero-radius cards, proportion bars, and SLA indicators
+ */
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   Building2, Clock, AlertTriangle, ArrowUpRight, User, Truck,
-  Layers, ChevronDown, ChevronUp, Search, Filter, ArrowRight
+  Layers, ChevronDown, ChevronUp, Search, Plus, ArrowRight
 } from 'lucide-react';
 import { onboardingApi } from '../../api/onboarding';
 
-/* ──────────────────────────────────────────────────────────────────
- * Moov OS — Onboarding Engine Board (Cyber-dark)
- * Visual Multi-Track Pipeline & Process Tree Map
- * ────────────────────────────────────────────────────────────────── */
-
-const T = {
-  charcoal: '#0B0E11', offBlack: '#15191E', offBlack2: '#1B2026',
-  border: 'rgba(255,255,255,0.06)', textHi: '#E8EEF4', textLo: '#7C8794',
-  cyan: '#22D3EE', orange: '#FB923C', red: '#FF2D55', green: '#34D399',
-  purple: '#A78BFA',
-};
-
-const SLA = {
-  standard:  { color: T.cyan,   glow: 'rgba(34,211,238,0.30)', label: 'On track'  },
-  impending: { color: T.orange, glow: 'rgba(251,146,60,0.40)', label: 'Due soon'  },
-  breached:  { color: T.red,    glow: 'rgba(255,45,85,0.55)',  label: 'Overdue'   },
-  none:      { color: T.textLo, glow: 'rgba(0,0,0,0)',         label: 'No due date' },
-};
-
-const TRACK_BADGES = {
-  core:       { label: 'Core',         color: '#A78BFA', bg: 'rgba(167,139,250,0.12)' },
-  dpd_master: { label: 'DPD Master',   color: '#00C853', bg: 'rgba(0,200,83,0.14)' },
-  dpd_sub:    { label: 'DPD Sub-Acc',  color: '#3B82F6', bg: 'rgba(59,130,246,0.14)' },
-  ups:        { label: 'UPS Direct',   color: '#F59E0B', bg: 'rgba(245,158,11,0.14)' },
-  yodel:      { label: 'Yodel',        color: '#EC4899', bg: 'rgba(236,72,153,0.14)' },
-};
-
+// SLA states mapped to Moov OS status marks
 function slaState(dueIso, nowMs) {
   if (!dueIso) return 'none';
   const remaining = new Date(dueIso).getTime() - nowMs;
@@ -54,110 +38,23 @@ function fmtRemaining(dueIso, nowMs) {
   return `${overdue ? '+' : ''}${txt}`;
 }
 
-function Card({ card, nowMs, onOpen }) {
-  const state = slaState(card.next_due_at, nowMs);
-  const s = SLA[state];
-  const breached = state === 'breached';
-  const pct = card.tasks_total ? Math.round((card.tasks_done / card.tasks_total) * 100) : 0;
-
-  const activeTracks = card.active_tracks || ['core', 'dpd_master'];
-  const colDetails = card.collection_details || {};
-
-  return (
-    <div onClick={onOpen} style={{
-      background: T.offBlack, border: `1px solid ${s.color}`, borderLeft: `3px solid ${s.color}`,
-      borderRadius: 12, padding: '12px 13px', cursor: 'pointer',
-      boxShadow: `0 0 0 1px rgba(0,0,0,0.4), 0 0 18px ${s.glow}`,
-      animation: breached ? 'moovPulse 1.4s ease-in-out infinite' : 'none',
-    }}>
-      {/* Top Header: Account number & SLA tag */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 11, fontWeight: 800, color: s.color }}>
-          {card.account_number || '—'}
-        </span>
-        <span style={{
-          display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 800,
-          textTransform: 'uppercase', letterSpacing: 0.5, color: s.color, background: `${s.color}1A`,
-          border: `1px solid ${s.color}55`, borderRadius: 999, padding: '2px 8px'
-        }}>
-          {breached ? <AlertTriangle size={11} /> : <Clock size={11} />}{s.label}
-        </span>
-      </div>
-
-      {/* Business Name */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
-        <Building2 size={15} color={T.textLo} />
-        <span style={{ fontSize: 14, fontWeight: 700, color: T.textHi }}>{card.business_name}</span>
-      </div>
-
-      {/* Courier Track Badges */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
-        {activeTracks.filter(tr => tr !== 'golive').map(tr => {
-          const b = TRACK_BADGES[tr] || { label: tr, color: T.textLo, bg: 'rgba(255,255,255,0.05)' };
-          return (
-            <span key={tr} style={{
-              fontSize: 9.5, fontWeight: 800, padding: '1.5px 6px', borderRadius: 4,
-              color: b.color, background: b.bg, border: `1px solid ${b.color}44`, textTransform: 'uppercase'
-            }}>
-              {b.label}
-            </span>
-          );
-        })}
-      </div>
-
-      {/* Next Action Box */}
-      <div style={{ background: T.offBlack2, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 9px', marginBottom: 10 }}>
-        <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase', color: T.textLo, marginBottom: 2 }}>Next action</div>
-        <div style={{ fontSize: 12.5, color: T.textHi, fontWeight: 600 }}>{card.next_action || 'All tasks complete'}</div>
-      </div>
-
-      {/* DPD Collection pill if present */}
-      {colDetails.preferred_window && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#00C853', marginBottom: 8 }}>
-          <Truck size={12} />
-          <span>Slot: <strong>{colDetails.dpd_depot_slot || colDetails.preferred_window}</strong></span>
-        </div>
-      )}
-
-      {card.next_due_at && (
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, marginBottom: 10 }}>
-          <Clock size={13} color={s.color} />
-          <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 15, fontWeight: 800, color: s.color }}>
-            {fmtRemaining(card.next_due_at, nowMs)}
-          </span>
-          <span style={{ fontSize: 10, color: T.textLo }}>{breached ? 'overdue' : 'to due'}</span>
-        </div>
-      )}
-
-      {/* Progress */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 9 }}>
-        <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.08)', borderRadius: 3, overflow: 'hidden' }}>
-          <div style={{ width: `${pct}%`, height: '100%', background: pct === 100 ? T.green : s.color }} />
-        </div>
-        <span style={{ fontSize: 10, fontWeight: 800, color: T.textLo }}>{card.tasks_done}/{card.tasks_total}</span>
-      </div>
-
-      {/* Footer: Owner & Open Link */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: `1px solid ${T.border}`, paddingTop: 9 }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: T.textLo }}>
-          <User size={11} /> {card.owner_name || 'Unassigned'}
-        </span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, color: s.color, fontWeight: 700 }}>
-          Open <ArrowUpRight size={12} />
-        </span>
-      </div>
-    </div>
-  );
-}
+const TRACK_LABELS = {
+  core:       'Core',
+  dpd_master: 'DPD Master',
+  dpd_sub:    'DPD Sub-Acc',
+  ups:        'UPS Direct',
+  yodel:      'Yodel',
+};
 
 export default function OnboardingBoard() {
   const navigate = useNavigate();
   const [nowMs, setNowMs] = useState(Date.now());
-  const [showTreeMap, setShowTreeMap] = useState(true);
+  const [showMap, setShowMap] = useState(false);
   const [trackFilter, setTrackFilter] = useState('all');
   const [slaFilter, setSlaFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // 1-second ticker for live SLA countdowns
   useEffect(() => {
     const t = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(t);
@@ -165,196 +62,351 @@ export default function OnboardingBoard() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['onboarding-board'],
-    queryFn: onboardingApi.board,
-    refetchInterval: 30_000
+    queryFn: onboardingApi.getBoard,
+    refetchInterval: 15_000,
   });
 
-  const rawColumns = data?.columns || [];
+  const columns = data?.columns || [];
   const total = data?.total || 0;
 
-  // Apply filters to cards
-  const filteredColumns = rawColumns.map(col => {
-    const matchingCards = col.cards.filter(c => {
+  // Flatten all cards for KPI calculation
+  const allCards = columns.flatMap(c => c.cards || []);
+
+  const onTrackCount = allCards.filter(c => slaState(c.next_due_at, nowMs) === 'standard').length;
+  const dueSoonCount = allCards.filter(c => slaState(c.next_due_at, nowMs) === 'impending').length;
+  const overdueCount = allCards.filter(c => slaState(c.next_due_at, nowMs) === 'breached').length;
+  const attentionCount = dueSoonCount + overdueCount;
+
+  // Filter cards per column
+  const filteredColumns = columns.map(col => {
+    const cards = (col.cards || []).filter(card => {
+      // Search filter
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchName = (card.business_name || '').toLowerCase().includes(q);
+        const matchAcc = (card.account_number || '').toLowerCase().includes(q);
+        if (!matchName && !matchAcc) return false;
+      }
       // Track filter
       if (trackFilter !== 'all') {
-        const trs = c.active_tracks || ['core', 'dpd_master'];
-        if (!trs.includes(trackFilter)) return false;
+        const trks = card.active_tracks || ['core', 'dpd_master'];
+        if (!trks.includes(trackFilter)) return false;
       }
       // SLA filter
       if (slaFilter !== 'all') {
-        const st = slaState(c.next_due_at, nowMs);
-        if (st !== slaFilter) return false;
-      }
-      // Search query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchesName = (c.business_name || '').toLowerCase().includes(q);
-        const matchesAcc = (c.account_number || '').toLowerCase().includes(q);
-        if (!matchesName && !matchesAcc) return false;
+        const st = slaState(card.next_due_at, nowMs);
+        if (slaFilter === 'standard' && st !== 'standard') return false;
+        if (slaFilter === 'impending' && st !== 'impending') return false;
+        if (slaFilter === 'breached' && st !== 'breached') return false;
       }
       return true;
     });
-    return { ...col, cards: matchingCards };
+    return { ...col, cards };
   });
 
+  // Summary colleague voice
+  const summaryText = (() => {
+    if (total === 0) return 'No customers are currently in the onboarding pipeline. New onboardings will appear here.';
+    const parts = [];
+    parts.push(`${total} customer${total === 1 ? ' is' : 's are'} active in onboarding`);
+    if (overdueCount > 0) parts.push(`${overdueCount} past SLA target`);
+    else if (dueSoonCount > 0) parts.push(`${dueSoonCount} due within 24 hours`);
+    else parts.push('all courier tracks on schedule');
+    return parts.join(', ') + '.';
+  })();
+
   return (
-    <div style={{ background: T.charcoal, minHeight: 'calc(100vh - 64px)', margin: -24, padding: 24, color: T.textHi }}>
-      <style>{`
-        @keyframes moovPulse {
-          0%,100% { box-shadow: 0 0 0 1px rgba(0,0,0,0.4), 0 0 10px ${SLA.breached.glow}; }
-          50%     { box-shadow: 0 0 0 1px rgba(0,0,0,0.4), 0 0 26px ${SLA.breached.color}; }
-        }
-        .moov-col::-webkit-scrollbar { width: 6px; }
-        .moov-col::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 3px; }
-      `}</style>
-
-      {/* Top Title & SLA Summary */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: T.textHi, margin: 0 }}>Onboarding Engine</h1>
-            <button onClick={() => setShowTreeMap(!showTreeMap)} style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 6,
-              background: 'rgba(0,200,83,0.12)', color: '#00C853', border: '1px solid rgba(0,200,83,0.3)',
-              fontSize: 11, fontWeight: 700, cursor: 'pointer'
-            }}>
-              <Layers size={13} /> {showTreeMap ? 'Hide Process Tree' : 'View Process Tree'} {showTreeMap ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+    <div className="mv-page">
+      <div className="mv-page-inner">
+        {/* ── Page Header ── */}
+        <div className="mv-head">
+          <div>
+            <div className="mv-kicker">Onboarding</div>
+            <h1 className="mv-title">Onboarding Engine</h1>
+            <p className="mv-blurb">{summaryText}</p>
+          </div>
+          <div className="mv-actions">
+            <button className="mv-btn mv-btn--secondary" onClick={() => setShowMap(!showMap)}>
+              <Layers size={14} /> {showMap ? 'Hide Process Map' : 'Process Tree Map'}
             </button>
           </div>
-          <p style={{ fontSize: 12.5, color: T.textLo, margin: '4px 0 0' }}>
-            {total} customer{total === 1 ? '' : 's'} onboarding · live multi-track SLA monitoring
-          </p>
         </div>
-        <div style={{ display: 'flex', gap: 14 }}>
-          {['standard', 'impending', 'breached'].map(k => (
-            <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: T.textLo }}>
-              <span style={{ width: 9, height: 9, borderRadius: '50%', background: SLA[k].color, boxShadow: `0 0 8px ${SLA[k].glow}` }} />{SLA[k].label}
-            </span>
-          ))}
+        <div className="mv-rule" />
+
+        {/* ── KPI Figure Strip ── */}
+        <div className="mv-kpis">
+          <div className="mv-kpi">
+            <div className="mv-kpi-label">Active Onboardings</div>
+            <div className="mv-kpi-value">{total}</div>
+            <div className="mv-kpi-sub">across active courier tracks</div>
+          </div>
+          <div className="mv-kpi">
+            <div className="mv-kpi-label">On Track</div>
+            <div className="mv-kpi-value" style={{ color: 'var(--mv-green-deep)' }}>{onTrackCount}</div>
+            <div className="mv-kpi-sub">meeting courier SLA targets</div>
+          </div>
+          <div className="mv-kpi">
+            <div className="mv-kpi-label">Needs Attention</div>
+            <div className={`mv-kpi-value ${attentionCount > 0 ? 'is-attention' : ''}`}>{attentionCount}</div>
+            <div className="mv-kpi-sub">{overdueCount} overdue · {dueSoonCount} due soon</div>
+          </div>
+          <div className="mv-kpi">
+            <div className="mv-kpi-label">Courier Tracks</div>
+            <div className="mv-kpi-value" style={{ fontSize: 20, paddingTop: 6 }}>DPD · UPS · Yodel</div>
+            <div className="mv-kpi-sub">multi-carrier parallel flow</div>
+          </div>
+        </div>
+
+        {/* ── Visual Process Tree Map Reference Banner (Expandable) ── */}
+        {showMap && <ProcessTreeMap />}
+
+        {/* ── Filter & Search Bar ── */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginTop: 24, marginBottom: 20, flexWrap: 'wrap' }}>
+          {/* Left: Track & SLA Chips */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
+            <div className="mv-chips">
+              <span className="mv-filter-label">Track:</span>
+              {[
+                { id: 'all', label: 'All Tracks' },
+                { id: 'dpd_master', label: 'DPD Master' },
+                { id: 'dpd_sub', label: 'DPD Sub-Acc' },
+                { id: 'ups', label: 'UPS Direct' },
+              ].map(t => (
+                <button key={t.id} className={`mv-chip ${trackFilter === t.id ? 'is-on' : ''}`} onClick={() => setTrackFilter(t.id)}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="mv-chips">
+              <span className="mv-filter-label">SLA:</span>
+              {[
+                { id: 'all', label: 'All' },
+                { id: 'standard', label: 'On track', mark: 'settled' },
+                { id: 'impending', label: 'Due soon', mark: 'flight' },
+                { id: 'breached', label: 'Overdue', mark: 'attention' },
+              ].map(s => (
+                <button key={s.id} className={`mv-chip ${slaFilter === s.id ? 'is-on' : ''}`} onClick={() => setSlaFilter(s.id)}>
+                  {s.mark && <span className={`mv-mark mv-mark--${s.mark}`} style={{ marginRight: 5 }} />}
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Right: Search Box */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--mv-divider)', paddingBottom: 4, width: 220 }}>
+            <Search size={14} color="var(--mv-ink-45)" />
+            <input
+              type="text"
+              placeholder="Search customer…"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: 13, fontFamily: 'inherit', color: 'var(--mv-ink)', width: '100%' }}
+            />
+          </div>
+        </div>
+
+        {/* ── Kanban Columns ── */}
+        {isLoading ? (
+          <div className="mv-blurb" style={{ padding: '30px 0' }}>Reading the onboarding pipeline…</div>
+        ) : filteredColumns.length === 0 || allCards.length === 0 ? (
+          <div style={{ padding: '40px 0', borderTop: '1px solid var(--mv-hairline)' }}>
+            <div className="mv-section">No Active Onboardings</div>
+            <p className="mv-blurb">
+              No customer onboardings matched your filter criteria. Open any customer record from the <strong>Customers</strong> directory to start a multi-track onboarding pipeline.
+            </p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${filteredColumns.length}, minmax(280px, 1fr))`, gap: 20, alignItems: 'start', overflowX: 'auto', paddingBottom: 24 }}>
+            {filteredColumns.map(col => (
+              <div key={col.stage} style={{ minWidth: 280 }}>
+                {/* Column Header */}
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', paddingBottom: 8 }}>
+                  <span className="mv-section" style={{ margin: 0, color: 'var(--mv-ink)' }}>{col.stage}</span>
+                  <span className="mv-num" style={{ fontSize: 11, color: 'var(--mv-ink-52)', fontWeight: 600 }}>
+                    {col.cards.length} {col.cards.length === 1 ? 'account' : 'accounts'}
+                  </span>
+                </div>
+                <div className="mv-rule" style={{ marginBottom: 14 }} />
+
+                {/* Cards */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {col.cards.map(card => (
+                    <BoardCard
+                      key={card.onboarding_id}
+                      card={card}
+                      nowMs={nowMs}
+                      onOpen={() => navigate(`/customers/${card.customer_id}?tab=onboarding`)}
+                    />
+                  ))}
+                  {col.cards.length === 0 && (
+                    <div style={{ padding: '24px 12px', border: '1px dashed var(--mv-hairline)', textAlign: 'center', fontSize: 12, color: 'var(--mv-ink-45)' }}>
+                      No accounts in this stage
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── BOARD CARD (Zero radius, Modernist Moov OS design) ───
+function BoardCard({ card, nowMs, onOpen }) {
+  const state = slaState(card.next_due_at, nowMs);
+  const breached = state === 'breached';
+  const impending = state === 'impending';
+
+  // Left accent mark based on SLA state
+  const leftAccent = breached ? 'var(--mv-magenta)' : impending ? 'var(--mv-purple)' : 'var(--mv-green)';
+  const statusMark = breached ? 'attention' : impending ? 'flight' : 'settled';
+  const statusLabel = breached ? 'Overdue' : impending ? 'Due soon' : 'On track';
+
+  const pct = card.tasks_total ? Math.round((card.tasks_done / card.tasks_total) * 100) : 0;
+  const activeTracks = card.active_tracks || ['core', 'dpd_master'];
+  const colDetails = card.collection_details || {};
+
+  return (
+    <div
+      onClick={onOpen}
+      style={{
+        background: '#FFFFFF',
+        border: '1px solid var(--mv-hairline)',
+        borderLeft: `3px solid ${leftAccent}`,
+        padding: '13px 14px',
+        cursor: 'pointer',
+        transition: 'box-shadow .12s, border-color .12s',
+      }}
+      onMouseEnter={e => e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)'}
+      onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}
+    >
+      {/* Top row: Account number & SLA status */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <span className="mv-num" style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--mv-ink-62)' }}>
+          {card.account_number || '—'}
+        </span>
+        <span className={`mv-state mv-state--${statusMark}`}>
+          <span className={`mv-mark mv-mark--${statusMark}`} />
+          <span className="mv-state-label" style={{ fontSize: 10 }}>{statusLabel}</span>
+        </span>
+      </div>
+
+      {/* Business Name */}
+      <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--mv-ink)', marginBottom: 8, letterSpacing: '-.01em' }}>
+        {card.business_name}
+      </div>
+
+      {/* Courier Track Chips */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
+        {activeTracks.filter(tr => tr !== 'golive').map(tr => (
+          <span key={tr} style={{
+            fontSize: 9.5, fontWeight: 600, padding: '2px 6px',
+            background: 'var(--mv-surface)', color: 'var(--mv-ink-78)',
+            border: '1px solid var(--mv-hairline-2)', textTransform: 'uppercase', letterSpacing: '.05em'
+          }}>
+            {TRACK_LABELS[tr] || tr}
+          </span>
+        ))}
+      </div>
+
+      {/* Next Action Box */}
+      <div style={{ background: 'var(--mv-surface)', padding: '7px 9px', marginBottom: 10, borderLeft: '2px solid var(--mv-divider)' }}>
+        <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--mv-ink-52)', marginBottom: 2 }}>
+          Next action
+        </div>
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--mv-ink)' }}>
+          {card.next_action || 'All tasks complete'}
         </div>
       </div>
 
-      {/* ─── VISUAL PROCESS TREE MAP REFERENCE BANNER ─── */}
-      {showTreeMap && (
-        <div style={{
-          background: '#15191E', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12,
-          padding: '14px 18px', marginBottom: 18, color: '#E8EEF4'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: '#00C853' }}>
-              Standard Multi-Track Flow (Tree Architecture)
-            </span>
-            <span style={{ fontSize: 11, color: '#7C8794' }}>Trunk & Branch Process</span>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1.3fr auto 1fr', alignItems: 'center', gap: 12 }}>
-            <div style={{ background: '#0B0E11', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 8, padding: 10 }}>
-              <div style={{ fontSize: 11, fontWeight: 800, color: '#3B82F6' }}>1. INTAKE & VERIFICATION (Trunk)</div>
-              <div style={{ fontSize: 10, color: '#7C8794', marginTop: 2 }}>Jotform / Sheet Ingest · Credit Check · Sensei Sync · Welcome Email</div>
-            </div>
-            <ArrowRight size={16} color="rgba(255,255,255,0.25)" />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-              <div style={{ background: '#0B0E11', border: '1px solid rgba(0,200,83,0.4)', borderRadius: 6, padding: '5px 8px', fontSize: 10.5 }}>
-                <span style={{ color: '#00C853', fontWeight: 700 }}>DPD Master:</span> Collection Form · Slot Negotiation · Label Setup
-              </div>
-              <div style={{ background: '#0B0E11', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 6, padding: '5px 8px', fontSize: 10.5 }}>
-                <span style={{ color: '#3B82F6', fontWeight: 700 }}>DPD Sub:</span> Sub-Account Request · Direct Carrier Link
-              </div>
-              <div style={{ background: '#0B0E11', border: '1px solid rgba(245,158,11,0.4)', borderRadius: 6, padding: '5px 8px', fontSize: 10.5 }}>
-                <span style={{ color: '#F59E0B', fontWeight: 700 }}>UPS Direct:</span> DC ID Link · Collection Schedule · Customs
-              </div>
-            </div>
-            <ArrowRight size={16} color="rgba(255,255,255,0.25)" />
-            <div style={{ background: '#0B0E11', border: '1px solid rgba(0,200,83,0.4)', borderRadius: 8, padding: 10 }}>
-              <div style={{ fontSize: 11, fontWeight: 800, color: '#00C853' }}>3. GO-LIVE & CARE (Canopy)</div>
-              <div style={{ fontSize: 10, color: '#7C8794', marginTop: 2 }}>Confirm Go-Live · CS Intro · Day 1 Care · Invoicing Handover</div>
-            </div>
-          </div>
+      {/* DPD Collection slot if negotiated */}
+      {colDetails.preferred_window && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--mv-green-deep)', marginBottom: 8 }}>
+          <Truck size={13} color="var(--mv-green)" />
+          <span>Slot: <strong>{colDetails.dpd_depot_slot || colDetails.preferred_window}</strong></span>
         </div>
       )}
 
-      {/* ─── FILTERS & SEARCH BAR ─── */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14,
-        background: T.offBlack, border: `1px solid ${T.border}`, borderRadius: 10, padding: '8px 12px', marginBottom: 18
-      }}>
-        {/* Track Filter Tabs */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 11, fontWeight: 800, color: T.textLo, textTransform: 'uppercase', marginRight: 4 }}>Track:</span>
-          {[
-            { id: 'all', label: 'All' },
-            { id: 'dpd_master', label: 'DPD Master' },
-            { id: 'dpd_sub', label: 'DPD Sub-Acc' },
-            { id: 'ups', label: 'UPS Direct' },
-          ].map(t => (
-            <button key={t.id} onClick={() => setTrackFilter(t.id)} style={{
-              padding: '4px 10px', borderRadius: 6, fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
-              border: `1px solid ${trackFilter === t.id ? '#00C853' : 'rgba(255,255,255,0.08)'}`,
-              background: trackFilter === t.id ? 'rgba(0,200,83,0.18)' : 'transparent',
-              color: trackFilter === t.id ? '#00C853' : T.textLo
-            }}>
-              {t.label}
-            </button>
-          ))}
+      {/* SLA Countdown Timer */}
+      {card.next_due_at && (
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 8 }}>
+          <Clock size={12} color={breached ? 'var(--mv-magenta)' : 'var(--mv-ink-45)'} />
+          <span className="mv-num" style={{ fontSize: 13, fontWeight: 700, color: breached ? 'var(--mv-magenta-deep)' : 'var(--mv-ink)' }}>
+            {fmtRemaining(card.next_due_at, nowMs)}
+          </span>
+          <span style={{ fontSize: 10, color: 'var(--mv-ink-45)' }}>{breached ? 'overdue' : 'remaining'}</span>
         </div>
+      )}
 
-        {/* SLA Filter Tabs */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 11, fontWeight: 800, color: T.textLo, textTransform: 'uppercase', marginRight: 4 }}>SLA:</span>
-          {[
-            { id: 'all', label: 'All' },
-            { id: 'standard', label: 'On Track' },
-            { id: 'impending', label: 'Due Soon' },
-            { id: 'breached', label: 'Overdue' },
-          ].map(s => (
-            <button key={s.id} onClick={() => setSlaFilter(s.id)} style={{
-              padding: '4px 9px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer',
-              border: `1px solid ${slaFilter === s.id ? '#22D3EE' : 'rgba(255,255,255,0.08)'}`,
-              background: slaFilter === s.id ? 'rgba(34,211,238,0.18)' : 'transparent',
-              color: slaFilter === s.id ? '#22D3EE' : T.textLo
-            }}>
-              {s.label}
-            </button>
-          ))}
+      {/* Progress Proportion Bar */}
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--mv-ink-52)', marginBottom: 4 }}>
+          <span>Progress</span>
+          <span className="mv-num">{card.tasks_done}/{card.tasks_total} ({pct}%)</span>
         </div>
-
-        {/* Search */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: T.offBlack2, border: `1px solid ${T.border}`, borderRadius: 6, padding: '4px 8px' }}>
-          <Search size={13} color={T.textLo} />
-          <input
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Filter customers…"
-            style={{ background: 'transparent', border: 'none', outline: 'none', color: T.textHi, fontSize: 12, width: 140 }}
-          />
+        <div className="mv-bar" style={{ width: '100%', height: 3 }}>
+          <span className={pct === 100 ? '' : 'is-warn'} style={{ width: `${pct}%`, background: pct === 100 ? 'var(--mv-green)' : 'var(--mv-purple)' }} />
         </div>
       </div>
 
-      {/* ─── KANBAN COLUMNS ─── */}
-      {isLoading ? (
-        <div style={{ color: T.textLo, fontSize: 13, padding: 40 }}>Loading pipeline…</div>
-      ) : !filteredColumns.length ? (
-        <div style={{ color: T.textLo, fontSize: 13, padding: 40, textAlign: 'center' }}>
-          No active onboardings found matching criteria.
+      {/* Card Footer: Owner & Open Link */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--mv-hairline)', paddingTop: 8, fontSize: 11.5 }}>
+        <span style={{ color: 'var(--mv-ink-52)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <User size={12} /> {card.owner_name || 'Unassigned'}
+        </span>
+        <span style={{ color: 'var(--mv-purple)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+          Open <ArrowUpRight size={12} />
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── PROCESS TREE MAP REFERENCE BANNER ───
+function ProcessTreeMap() {
+  return (
+    <div style={{ background: 'var(--mv-surface)', borderTop: '2px solid var(--mv-divider)', padding: '18px 20px', marginTop: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 14 }}>
+        <span className="mv-section" style={{ margin: 0 }}>Standard Multi-Track Flow (Tree Architecture)</span>
+        <span className="mv-blurb" style={{ margin: 0, fontSize: 11.5 }}>Trunk & Branch Process Reference</span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1.1fr auto 1.4fr auto 1.1fr', gap: 14, alignItems: 'center' }}>
+        {/* Node 1: Core Trunk */}
+        <div style={{ background: '#FFFFFF', border: '1px solid var(--mv-hairline)', borderLeft: '3px solid var(--mv-purple)', padding: 12 }}>
+          <div className="mv-section" style={{ marginBottom: 4 }}>1. Intake & Verification (Trunk)</div>
+          <div style={{ fontSize: 12, color: 'var(--mv-ink-78)' }}>JotForm / Sheet Ingest · Credit Check · Sensei Sync · Welcome Email</div>
         </div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${filteredColumns.length}, minmax(260px, 1fr))`, gap: 14, alignItems: 'start' }}>
-          {filteredColumns.map(col => (
-            <div key={col.stage} style={{ background: 'rgba(255,255,255,0.015)', border: `1px solid ${T.border}`, borderRadius: 14, padding: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, padding: '0 2px' }}>
-                <span style={{ fontSize: 12.5, fontWeight: 800, color: T.textHi }}>{col.stage}</span>
-                <span style={{ fontSize: 11, fontWeight: 800, color: T.textLo, background: T.offBlack2, borderRadius: 999, padding: '1px 8px' }}>
-                  {col.cards.length}
-                </span>
-              </div>
-              <div className="moov-col" style={{ display: 'flex', flexDirection: 'column', gap: 11, maxHeight: 'calc(100vh - 270px)', overflowY: 'auto' }}>
-                {col.cards.map(card => (
-                  <Card key={card.onboarding_id} card={card} nowMs={nowMs} onOpen={() => navigate(`/customers/${card.customer_id}`)} />
-                ))}
-              </div>
-            </div>
-          ))}
+
+        {/* Arrow */}
+        <div style={{ color: 'var(--mv-ink-45)' }}><ArrowRight size={16} /></div>
+
+        {/* Node 2: Courier Branches */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ background: '#FFFFFF', border: '1px solid var(--mv-hairline)', borderLeft: '3px solid var(--mv-green)', padding: '7px 10px', fontSize: 11.5 }}>
+            <strong style={{ color: 'var(--mv-green-deep)' }}>DPD Master:</strong> Collection Form · Slot Negotiation · Label Setup
+          </div>
+          <div style={{ background: '#FFFFFF', border: '1px solid var(--mv-hairline)', borderLeft: '3px solid #3B82F6', padding: '7px 10px', fontSize: 11.5 }}>
+            <strong style={{ color: '#2563EB' }}>DPD Sub:</strong> Sub-Account Request · Direct Carrier Link
+          </div>
+          <div style={{ background: '#FFFFFF', border: '1px solid var(--mv-hairline)', borderLeft: '3px solid #F59E0B', padding: '7px 10px', fontSize: 11.5 }}>
+            <strong style={{ color: '#B45309' }}>UPS Direct:</strong> DC ID Link · Collection Schedule · Customs
+          </div>
         </div>
-      )}
+
+        {/* Arrow */}
+        <div style={{ color: 'var(--mv-ink-45)' }}><ArrowRight size={16} /></div>
+
+        {/* Node 3: Go-Live Canopy */}
+        <div style={{ background: '#FFFFFF', border: '1px solid var(--mv-hairline)', borderLeft: '3px solid var(--mv-green)', padding: 12 }}>
+          <div className="mv-section" style={{ marginBottom: 4, color: 'var(--mv-green-deep)' }}>3. Go-Live & Care (Canopy)</div>
+          <div style={{ fontSize: 12, color: 'var(--mv-ink-78)' }}>Confirm Go-Live · CS Intro · Day 1 Care · Invoicing Handover</div>
+        </div>
+      </div>
     </div>
   );
 }
