@@ -712,6 +712,28 @@ router.get('/:consignment', async (req, res, next) => {
 
     res.json({ ...parcelRes.rows[0], events: eventsRes.rows });
   } catch (err) { next(err); }
+// ─── POST /api/tracking/delete-before-today ───────────────────────────────────
+router.post('/delete-before-today', async (req, res, next) => {
+  try {
+    const eRes = await query('DELETE FROM tracking_events WHERE created_at < CURRENT_DATE');
+    const pRes = await query('DELETE FROM parcels WHERE created_at < CURRENT_DATE');
+    console.log(`[tracking] Deleted tracking data before today: ${eRes.rowCount} events, ${pRes.rowCount} parcels`);
+    res.json({ success: true, events_deleted: eRes.rowCount, parcels_deleted: pRes.rowCount });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── POST /api/tracking/clear-all ─────────────────────────────────────────────
+router.post('/clear-all', async (req, res, next) => {
+  try {
+    const eRes = await query('DELETE FROM tracking_events');
+    const pRes = await query('DELETE FROM parcels');
+    console.log(`[tracking] Purged all tracking data: ${eRes.rowCount} events, ${pRes.rowCount} parcels`);
+    res.json({ success: true, events_deleted: eRes.rowCount, parcels_deleted: pRes.rowCount });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // ─── 30-day purge ─────────────────────────────────────────────────────────────

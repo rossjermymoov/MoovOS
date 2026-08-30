@@ -740,6 +740,17 @@ export default function TrackingPage() {
     }
   }
 
+  async function handlePurgePriorToday() {
+    if (!window.confirm('Delete all tracking events and parcel records from before today?')) return;
+    try {
+      const res = await api.post('/tracking/delete-before-today');
+      alert(`Purged ${res.data.events_deleted || 0} events and ${res.data.parcels_deleted || 0} parcels from before today.`);
+      refresh();
+    } catch (err) {
+      alert('Failed to purge tracking data: ' + (err.response?.data?.error || err.message));
+    }
+  }
+
   return (
     <div style={{ padding: '24px 28px' }}>
 
@@ -751,6 +762,18 @@ export default function TrackingPage() {
             {stats ? `${(stats.total_active || 0).toLocaleString()} active parcels` : 'Loading…'}
           </p>
         </div>
+        <button
+          onClick={handlePurgePriorToday}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            background: 'rgba(244,67,54,0.06)', border: '1px solid rgba(244,67,54,0.25)',
+            borderRadius: 7, color: '#F44336', fontSize: 12, fontWeight: 600,
+            padding: '7px 14px', cursor: 'pointer'
+          }}
+          title="Delete all tracking events from before today"
+        >
+          Purge Prior to Today
+        </button>
         <button onClick={refresh} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: '1px solid rgba(0,0,0,0.10)', borderRadius: 7, color: '#64748B', fontSize: 12, padding: '7px 14px', cursor: 'pointer' }}>
           <RefreshCw size={13} /> Refresh
         </button>
