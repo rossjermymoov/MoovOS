@@ -712,6 +712,8 @@ router.get('/:consignment', async (req, res, next) => {
 
     res.json({ ...parcelRes.rows[0], events: eventsRes.rows });
   } catch (err) { next(err); }
+});
+
 // ─── POST /api/tracking/delete-before-today ───────────────────────────────────
 router.post('/delete-before-today', async (req, res, next) => {
   try {
