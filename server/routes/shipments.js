@@ -79,7 +79,7 @@ router.get('/', async (req, res, next) => {
         s.platform_shipment_id,
         s.event_type,
         s.customer_id,
-        COALESCE(c.company_name, c.trading_name, s.customer_name, 'Unassigned') AS customer_display_name,
+        COALESCE(c.business_name, s.customer_name, s.customer_account, 'Unassigned') AS customer_display_name,
         s.customer_account,
         s.courier,
         s.dc_service_id,
@@ -138,7 +138,7 @@ router.get('/:id', async (req, res, next) => {
     const result = await query(
       `SELECT
         s.*,
-        COALESCE(c.company_name, c.trading_name, s.customer_name) AS customer_display_name,
+        COALESCE(c.business_name, s.customer_name, s.customer_account) AS customer_display_name,
         (
           SELECT json_agg(ch.*)
           FROM charges ch
@@ -172,7 +172,7 @@ router.post('/simulate-dpd-sample', async (req, res, next) => {
       return res.status(400).json({ error: 'customer_id is required' });
     }
 
-    const custRes = await query('SELECT id, company_name, trading_name, account_number FROM customers WHERE id = $1', [customer_id]);
+    const custRes = await query('SELECT id, business_name, account_number FROM customers WHERE id = $1', [customer_id]);
     if (!custRes.rows.length) {
       return res.status(404).json({ error: 'Customer not found' });
     }
@@ -309,7 +309,7 @@ router.post('/simulate-dpd-sample', async (req, res, next) => {
           platformId,
           customer.id,
           customer.account_number || 'CUST-TEST',
-          customer.company_name || customer.trading_name,
+          customer.business_name,
           item.dcServiceId,
           item.service,
           item.recipient,
@@ -358,7 +358,7 @@ router.post('/simulate-dpd-sample', async (req, res, next) => {
     res.status(201).json({
       success: true,
       count: insertedShipments.length,
-      customer_name: customer.company_name || customer.trading_name,
+      customer_name: customer.business_name,
       shipments: insertedShipments,
     });
   } catch (err) {
