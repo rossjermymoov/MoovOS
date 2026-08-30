@@ -1,25 +1,27 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   Users, Tag, Truck, Settings, LayoutDashboard,
-  LogOut, MessageSquare, Rocket, CheckSquare,
+  LogOut, MessageSquare, Rocket, CheckSquare, Package, FileCheck
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 export const NAV_ITEMS = [
-  { to: '/',           icon: LayoutDashboard, label: 'Today',      key: 'dashboard' },
-  { to: '/customers',  icon: Users,           label: 'Customers',  key: 'customers' },
-  { to: '/onboarding', icon: Rocket,          label: 'Onboarding', key: 'onboarding' },
-  { to: '/tracking',   icon: Truck,           label: 'Tracking',   key: 'tracking' },
-  { to: '/queries',    icon: MessageSquare,   label: 'Queries',    key: 'queries' },
-  { to: '/tasks',      icon: CheckSquare,     label: 'Tasks',      key: 'tasks' },
-  { to: '/pricing',    icon: Tag,             label: 'Pricing',    key: 'pricing' },
-  { to: '/carriers',   icon: Truck,           label: 'Carriers',   key: 'carriers' },
-  { to: '/settings',   icon: Settings,        label: 'Settings',   key: 'settings' },
+  { to: '/',                     icon: LayoutDashboard, label: 'Today',                  key: 'dashboard' },
+  { to: '/customers',            icon: Users,           label: 'Customers',              key: 'customers' },
+  { to: '/shipments',            icon: Package,         label: 'Shipments',              key: 'shipments' },
+  { to: '/invoice-reconciliation', icon: FileCheck,     label: 'Invoice Reconciliation', key: 'reconciliation' },
+  { to: '/onboarding',           icon: Rocket,          label: 'Onboarding',             key: 'onboarding' },
+  { to: '/tracking',             icon: Truck,           label: 'Tracking',               key: 'tracking' },
+  { to: '/queries',              icon: MessageSquare,   label: 'Queries',                key: 'queries' },
+  { to: '/tasks',                icon: CheckSquare,     label: 'Tasks',                  key: 'tasks' },
+  { to: '/pricing',              icon: Tag,             label: 'Pricing',                key: 'pricing' },
+  { to: '/carriers',             icon: Truck,           label: 'Carriers',               key: 'carriers' },
+  { to: '/settings',             icon: Settings,        label: 'Settings',               key: 'settings' },
 ];
 
 // Workspace = day-to-day operations · Network = configuration
 const GROUPS = [
-  { label: 'Workspace', keys: ['dashboard', 'customers', 'onboarding', 'tracking', 'queries', 'tasks', 'pricing'] },
+  { label: 'Workspace', keys: ['dashboard', 'customers', 'shipments', 'reconciliation', 'onboarding', 'tracking', 'queries', 'tasks', 'pricing'] },
   { label: 'Network',   keys: ['carriers', 'settings'] },
 ];
 

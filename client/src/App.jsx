@@ -28,6 +28,8 @@ import KatanaPage from './pages/katana/KatanaPage';
 import PricingPage from './pages/pricing/PricingPage';
 import RateCardEditor from './pages/pricing/RateCardEditor';
 import ReconciliationPage from './pages/reconciliation/ReconciliationPage';
+import InvoiceReconciliationPage from './pages/reconciliation/InvoiceReconciliationPage';
+import ShipmentsPage from './pages/shipments/ShipmentsPage';
 import RunDetailPage from './pages/reconciliation/RunDetailPage';
 import MarginReportPage from './pages/reconciliation/MarginReportPage';
 import ServiceCodeMappingsPage from './pages/reconciliation/ServiceCodeMappingsPage';
@@ -97,6 +99,8 @@ function AppRoutes() {
           <Route index element={<PricingPage />} />
           <Route path="rate-card/:id" element={<RateCardEditor />} />
         </Route>
+        <Route path="shipments" element={<ShipmentsPage />} />
+        <Route path="invoice-reconciliation" element={<InvoiceReconciliationPage />} />
         <Route path="onboarding" element={<OnboardingBoard />} />
         <Route path="tracking"  element={<TrackingPage />} />
         <Route path="tasks"     element={<TasksPage />} />
