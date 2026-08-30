@@ -26,14 +26,14 @@ import { fetchShipmentById } from '../services/voilaClient.js';
 //
 // Returns the UUID of the upserted shipment, or null if no platform_shipment_id.
 async function createOrUpdateShipment(payload, customerId) {
-  const ship = payload.shipment || {};
+  const ship = payload.shipment || payload;
 
   // Parse request_shipment JSON string → object for dc_service_id extraction
   let reqShip = {};
   try {
-    reqShip = typeof payload.request_shipment === 'string'
-      ? JSON.parse(payload.request_shipment)
-      : (payload.request_shipment || {});
+    reqShip = typeof ship.request_shipment === 'string'
+      ? JSON.parse(ship.request_shipment)
+      : (ship.request_shipment || payload.request?.shipment || {});
   } catch { /* leave empty */ }
 
   // platform_shipment_id must be a BIGINT — skip if unparseable
@@ -43,55 +43,67 @@ async function createOrUpdateShipment(payload, customerId) {
     return null;
   }
 
-  const courier        = ship.courier        || null;
+  const courier        = ship.courier        || payload.request?.courier || null;
   const dcServiceId    = reqShip.dc_service_id || ship.dc_service_id || null;
-  const reference      = ship.reference      || null;
-  const reference2     = ship.reference_2    || null;
-  const shipToPostcode = ship.ship_to_postcode || null;
-  const shipToName     = ship.ship_to_name   || null;
-  const shipToCountry  = ship.ship_to_country_iso || null;
-  const parcelCount    = ship.parcel_count   || 1;
-  const collectionDate = ship.collection_date ? ship.collection_date.split('T')[0] : null;
+  const serviceName    = ship.friendly_service_name || reqShip.courier?.friendly_service_name || null;
+  const customerAccount= ship.account_number || reqShip.account_number || null;
+  const customerName   = ship.account_name   || reqShip.account_name   || null;
+  const reference      = ship.reference      || reqShip.reference      || null;
+  const reference2     = ship.reference_2    || reqShip.reference_2    || null;
+  const shipToPostcode = ship.ship_to_postcode || reqShip.ship_to?.postcode || null;
+  const shipToName     = ship.ship_to_name   || reqShip.ship_to?.name     || null;
+  const shipToCountry  = ship.ship_to_country_iso || reqShip.ship_to?.country_iso || 'GB';
+  const parcelCount    = ship.parcel_count   || reqShip.parcels?.length || 1;
+  const collectionDate = ship.collection_date ? ship.collection_date.split('T')[0].split(' ')[0] : null;
 
-  // Tracking codes from create_label_parcels — these ARE the carrier tracking/
-  // consignment numbers (e.g. the 14-digit DPD consignment number). The pool
-  // indexes by these so it can match invoice lines to our charge records.
+  // Tracking codes from create_label_parcels or response
   const clParcels    = ship.create_label_parcels || [];
-  // Deduplicate: DHL multi-parcel consignments share one master tracking code
-  // across all parcels — without dedup the array becomes {X,X,X} which breaks
-  // pool matching (adds no extra keys but wastes space and confuses diagnostics).
-  // For DPD each parcel has its own consignment number so dedup is a no-op.
-  const trackingCodes = [...new Set(clParcels.map(p => p.tracking_code).filter(Boolean))];
+  let trackingCodes = [...new Set(clParcels.map(p => p.tracking_code).filter(Boolean))];
+  if (!trackingCodes.length && payload.response) {
+    try {
+      const respObj = typeof payload.response === 'string' ? JSON.parse(payload.response) : payload.response;
+      if (Array.isArray(respObj.tracking_codes)) {
+        trackingCodes = [...new Set(respObj.tracking_codes.filter(Boolean))];
+      }
+    } catch (_) {}
+  }
 
   // Total weight from parcels
-  const totalWeightKg = clParcels.length
+  let totalWeightKg = clParcels.length
     ? (clParcels.reduce((s, p) => s + (parseFloat(p.weight) || 0), 0) || null)
     : null;
+  if (!totalWeightKg && reqShip.parcels?.length) {
+    totalWeightKg = reqShip.parcels.reduce((s, p) => s + (parseFloat(p.weight) || 0), 0) || null;
+  }
 
   try {
     const shipRes = await query(`
       INSERT INTO shipments (
         platform_shipment_id, event_type,
-        customer_id, customer_account,
-        courier, dc_service_id,
+        customer_id, customer_account, customer_name,
+        courier, dc_service_id, service_name,
         ship_to_name, ship_to_postcode, ship_to_country_iso,
         reference, reference_2,
         parcel_count, total_weight_kg, collection_date,
         tracking_codes, raw_payload
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
       ON CONFLICT (platform_shipment_id) DO UPDATE SET
         customer_id      = COALESCE(EXCLUDED.customer_id,      shipments.customer_id),
+        customer_account = COALESCE(EXCLUDED.customer_account, shipments.customer_account),
+        customer_name    = COALESCE(EXCLUDED.customer_name,    shipments.customer_name),
+        service_name     = COALESCE(EXCLUDED.service_name,     shipments.service_name),
         tracking_codes   = COALESCE(EXCLUDED.tracking_codes,   shipments.tracking_codes),
         dc_service_id    = COALESCE(EXCLUDED.dc_service_id,    shipments.dc_service_id),
         ship_to_name     = COALESCE(EXCLUDED.ship_to_name,     shipments.ship_to_name),
         ship_to_postcode = COALESCE(EXCLUDED.ship_to_postcode, shipments.ship_to_postcode),
         collection_date  = COALESCE(EXCLUDED.collection_date,  shipments.collection_date),
+        total_weight_kg  = COALESCE(EXCLUDED.total_weight_kg,  shipments.total_weight_kg),
         updated_at     = NOW()
       RETURNING id
     `, [
       platformId, 'shipment.created',
-      customerId, ship.account_number || null,
-      courier, dcServiceId,
+      customerId, customerAccount, customerName,
+      courier, dcServiceId, serviceName,
       shipToName, shipToPostcode, shipToCountry,
       reference, reference2,
       parcelCount, totalWeightKg, collectionDate,
@@ -128,109 +140,56 @@ function authMiddleware(req, res, next) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.post('/shipment-created', authMiddleware, (req, res) => {
-  const payload = req.body;
+  const raw = req.body;
+  const payload = (raw && raw.json && typeof raw.json === 'object') ? raw.json : raw;
 
   if (!payload?.shipment) {
     return res.status(400).json({ error: 'Invalid payload: missing shipment object' });
   }
 
-  // ── Respond immediately so Voila never retries ────────────────────────────
-  // Processing synchronously caused timeouts → Voila retried → duplicate charges.
-  // We return 200 at once and process in the background. Voila considers the
-  // webhook delivered as soon as it gets a 2xx — it will not retry.
+  // ── Respond immediately so caller never retries ────────────────────────────
   res.json({ status: 'accepted' });
 
   setImmediate(async () => {
     const voilaShipmentId = String(payload.shipment?.id || '');
     try {
+      let charges = [];
+      let errors = [];
+      let customerId = null;
 
-      // ── Idempotency gate ────────────────────────────────────────────────────
-      // Three checks in order — any hit → skip silently.
-      //
-      // Check A — pricingEngine path (voila_shipment_id on charge):
-      //   Catches same webhook delivered twice or backfill retries.
-      //   The unique index idx_charges_voila_courier_active also blocks races
-      //   at the DB level via ON CONFLICT DO NOTHING in insertCharges.
-      //
-      // Check B — shipments table (platform_shipment_id):
-      //   billing.js always creates a shipments record with platform_shipment_id
-      //   = the Voila shipment ID. If that record exists AND has an active courier
-      //   charge, the shipment was already processed — skip regardless of whether
-      //   the order reference formats match.
-      //   This is the primary guard against Voila replaying old webhooks for
-      //   shipments billing.js already handled.
-      //
-      // Check C — order reference fallback:
-      //   Belt-and-braces for any edge case where the shipment record doesn't
-      //   exist but a billing.js charge does (e.g. old charges pre-shipments table).
+      try {
+        const result = await processShipment(payload);
+        charges = result.charges || [];
+        errors = result.errors || [];
+        customerId = charges[0]?.customer_id || null;
+      } catch (procErr) {
+        console.warn(`[webhooks] processShipment note for ${voilaShipmentId}:`, procErr.message);
+        errors.push(procErr.message);
+      }
 
-      if (voilaShipmentId) {
-        // Check A
-        const existingCharge = await query(
-          `SELECT id FROM charges
-           WHERE  voila_shipment_id = $1
-             AND  cancelled         = false
-             AND  charge_type       = 'courier'
-           LIMIT  1`,
-          [voilaShipmentId]
-        );
-        if (existingCharge.rows.length) {
-          console.log(`[webhooks] ${voilaShipmentId}: pricingEngine charge exists — skipping`);
-          return;
+      // If customer not resolved by pricingEngine, attempt fallback lookup in customers table
+      if (!customerId) {
+        const acct = payload.shipment?.account_number;
+        const name = payload.shipment?.account_name;
+        if (acct) {
+          const cr = await query('SELECT id FROM customers WHERE account_number = $1 LIMIT 1', [acct]);
+          if (cr.rows.length) customerId = cr.rows[0].id;
         }
-
-        // Check B — look up via shipments.platform_shipment_id
-        const platformId = parseInt(voilaShipmentId, 10);
-        if (platformId) {
-          const existingShipment = await query(
-            `SELECT c.id
-             FROM   shipments s
-             JOIN   charges   c ON c.shipment_id = s.id
-             WHERE  s.platform_shipment_id = $1
-               AND  c.charge_type          = 'courier'
-               AND  c.cancelled            = false
-             LIMIT  1`,
-            [platformId]
-          );
-          if (existingShipment.rows.length) {
-            console.log(`[webhooks] ${voilaShipmentId}: charge exists via shipment record — skipping (old webhook replay)`);
-            return;
-          }
+        if (!customerId && name) {
+          const cr = await query('SELECT id FROM customers WHERE LOWER(business_name) = LOWER($1) LIMIT 1', [name]);
+          if (cr.rows.length) customerId = cr.rows[0].id;
         }
       }
 
-      // Check C — order reference fallback
-      const ship = payload.shipment || {};
-      const orderRef = ship.reference || ship.reference_2 || '';
-      if (orderRef) {
-        const billingJsCharge = await query(
-          `SELECT id FROM charges
-           WHERE  order_id          = $1
-             AND  voila_shipment_id IS NULL
-             AND  shipment_id       IS NOT NULL
-             AND  cancelled         = false
-             AND  charge_type       = 'courier'
-           LIMIT  1`,
-          [String(orderRef)]
-        );
-        if (billingJsCharge.rows.length) {
-          console.log(`[webhooks] ${voilaShipmentId}: billing.js charge exists for order ref ${orderRef} — skipping`);
-          return;
-        }
-      }
-
-      const { charges, errors } = await processShipment(payload);
-
-      if (!charges.length) {
-        console.warn(`⚠️  Webhook ${voilaShipmentId}: no charges produced`, errors);
-        return;
-      }
-
-      const customerId = charges[0]?.customer_id || null;
+      // ALWAYS create/update the shipment record!
       const shipmentId = await createOrUpdateShipment(payload, customerId);
-      const inserted   = await insertCharges(charges, shipmentId);
 
-      console.log(`✅  Shipment ${voilaShipmentId}: ${inserted.length} charge(s) created, shipment_id=${shipmentId}`);
+      if (charges.length && shipmentId) {
+        const inserted = await insertCharges(charges, shipmentId);
+        console.log(`✅  Shipment ${voilaShipmentId}: ${inserted.length} charge(s) created, shipment_id=${shipmentId}`);
+      } else {
+        console.log(`ℹ️  Shipment ${voilaShipmentId}: recorded in shipments table (shipment_id=${shipmentId})`);
+      }
       if (errors.length) console.warn('   Warnings:', errors);
 
     } catch (err) {
@@ -245,7 +204,9 @@ router.post('/shipment-created', authMiddleware, (req, res) => {
 
 router.post('/shipment-cancelled', authMiddleware, async (req, res, next) => {
   try {
-    const { shipment } = req.body;
+    const raw = req.body;
+    const payload = (raw && raw.json && typeof raw.json === 'object') ? raw.json : raw;
+    const shipment = payload.shipment || payload;
 
     if (!shipment) {
       return res.status(400).json({ error: 'Invalid payload: missing shipment object' });
@@ -265,6 +226,14 @@ router.post('/shipment-cancelled', authMiddleware, async (req, res, next) => {
     } else {
       whereClause = 'order_id = $1';
       whereValues = [orderId];
+    }
+
+    // Mark shipment record as cancelled
+    if (shipmentId) {
+      await query(
+        `UPDATE shipments SET cancelled = true, cancelled_at = NOW(), updated_at = NOW() WHERE platform_shipment_id = $1`,
+        [parseInt(shipmentId, 10) || 0]
+      );
     }
 
     const result = await query(
