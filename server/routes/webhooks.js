@@ -135,13 +135,31 @@ function authMiddleware(req, res, next) {
   next();
 }
 
+function extractPayload(req) {
+  let raw = req.body;
+  if (!raw) return {};
+  if (typeof raw === 'string') {
+    try { raw = JSON.parse(raw); } catch (_) {}
+  }
+  if (raw && raw.json) {
+    if (typeof raw.json === 'string') {
+      try { raw = JSON.parse(raw.json); } catch (_) {}
+    } else {
+      raw = raw.json;
+    }
+  }
+  if (raw && !raw.shipment && raw.request?.shipment) {
+    raw.shipment = raw.request.shipment;
+  }
+  return raw || {};
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/v1/webhooks/shipment-created
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.post('/shipment-created', authMiddleware, (req, res) => {
-  const raw = req.body;
-  const payload = (raw && raw.json && typeof raw.json === 'object') ? raw.json : raw;
+  const payload = extractPayload(req);
 
   if (!payload?.shipment) {
     return res.status(400).json({ error: 'Invalid payload: missing shipment object' });
@@ -204,8 +222,7 @@ router.post('/shipment-created', authMiddleware, (req, res) => {
 
 router.post('/shipment-cancelled', authMiddleware, async (req, res, next) => {
   try {
-    const raw = req.body;
-    const payload = (raw && raw.json && typeof raw.json === 'object') ? raw.json : raw;
+    const payload = extractPayload(req);
     const shipment = payload.shipment || payload;
 
     if (!shipment) {
