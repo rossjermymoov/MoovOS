@@ -65,6 +65,7 @@ router.get('/board', async (_req, res, next) => {
     const { rows } = await query(`
       SELECT
         co.id AS onboarding_id, co.customer_id, co.template_name, co.started_at, co.target_go_live,
+        co.active_tracks, co.collection_details,
         c.account_number, c.business_name,
         owner.full_name AS owner_name,
         (SELECT COUNT(*) FROM onboarding_tasks t WHERE t.onboarding_id = co.id)::int AS tasks_total,
@@ -72,12 +73,13 @@ router.get('/board', async (_req, res, next) => {
         nx.title       AS next_action,
         nx.due_at      AS next_due_at,
         nx.stage_name  AS current_stage,
+        nx.track_code  AS next_track_code,
         (SELECT MAX(e.created_at) FROM onboarding_task_events e WHERE e.onboarding_id = co.id) AS last_activity_at
       FROM customer_onboarding co
       JOIN customers c ON c.id = co.customer_id
       LEFT JOIN staff owner ON owner.id = co.owner_id
       LEFT JOIN LATERAL (
-        SELECT t.title, t.due_at, s.name AS stage_name
+        SELECT t.title, t.due_at, t.track_code, s.name AS stage_name
         FROM onboarding_tasks t
         JOIN onboarding_stages s ON s.id = t.stage_id
         WHERE t.onboarding_id = co.id AND t.status <> 'complete' AND t.status <> 'skipped'
@@ -108,7 +110,7 @@ router.post('/customers/:customerId/start', async (req, res, next) => {
   const client = await getClient();
   try {
     const { customerId } = req.params;
-    const { template_id, owner_id, target_go_live, team_members } = req.body || {};
+    const { template_id, owner_id, target_go_live, team_members, active_tracks, collection_details } = req.body || {};
     if (!template_id) return res.status(400).json({ error: 'template_id is required' });
 
     // team_members: { [team_id]: staff_id } chosen for this client at go-live.
@@ -135,10 +137,11 @@ router.post('/customers/:customerId/start', async (req, res, next) => {
     await client.query('BEGIN');
 
     // 1. Onboarding header
+    const tracksToSet = active_tracks || ['core', 'dpd_master', 'golive'];
     const co = await client.query(`
-      INSERT INTO customer_onboarding (customer_id, template_id, template_name, owner_id, target_go_live)
-      VALUES ($1, $2, $3, $4, $5) RETURNING *
-    `, [customerId, template_id, tmpl.rows[0].name, owner_id || null, target_go_live || null]);
+      INSERT INTO customer_onboarding (customer_id, template_id, template_name, owner_id, target_go_live, active_tracks, collection_details)
+      VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, '{}'::jsonb)) RETURNING *
+    `, [customerId, template_id, tmpl.rows[0].name, owner_id || null, target_go_live || null, tracksToSet, collection_details ? JSON.stringify(collection_details) : null]);
     const onboardingId = co.rows[0].id;
 
     // 2. Flip the customer into 'onboarding' state.
@@ -166,12 +169,12 @@ router.post('/customers/:customerId/start', async (req, res, next) => {
       const r = await client.query(`
         INSERT INTO onboarding_tasks
           (onboarding_id, stage_id, template_task_id, title, description, position,
-           assignee_id, team_id, is_required, target_duration_hours, due_at, comms_template_id, auto_send_comms, sla_basis)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+           assignee_id, team_id, is_required, target_duration_hours, due_at, comms_template_id, auto_send_comms, sla_basis, track_code)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
         RETURNING id
       `, [onboardingId, stageMap[t.stage_id], t.id, t.title, t.description, t.position,
           assignee, t.team_id, t.is_required, t.target_duration_hours, due,
-          t.comms_template_id, t.auto_send_comms, t.sla_basis || 'onboarding_start']);
+          t.comms_template_id, t.auto_send_comms, t.sla_basis || 'onboarding_start', t.track_code || 'core']);
       taskMap[t.id] = r.rows[0].id;
     }
 
@@ -552,6 +555,120 @@ router.patch('/:onboardingId/call', async (req, res, next) => {
 
     await client.query('COMMIT');
     res.json(onb);
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════
+// COLLECTION DETAILS & NEGOTIATION
+// ════════════════════════════════════════════════════════════════════
+router.patch('/:onboardingId/collection-details', async (req, res, next) => {
+  try {
+    const { onboardingId } = req.params;
+    const details = req.body || {};
+    const { rows } = await query(
+      `UPDATE customer_onboarding
+       SET collection_details = COALESCE(collection_details, '{}'::jsonb) || $1::jsonb
+       WHERE id = $2 RETURNING *`,
+      [JSON.stringify(details), onboardingId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Onboarding not found' });
+    res.json(rows[0]);
+  } catch (err) { next(err); }
+});
+
+// ════════════════════════════════════════════════════════════════════
+// ACTIVE TRACKS & ADD TRACK
+// ════════════════════════════════════════════════════════════════════
+router.patch('/:onboardingId/active-tracks', async (req, res, next) => {
+  try {
+    const { onboardingId } = req.params;
+    const { tracks } = req.body || {};
+    if (!Array.isArray(tracks)) return res.status(400).json({ error: 'tracks must be an array' });
+    const { rows } = await query(
+      `UPDATE customer_onboarding SET active_tracks = $1 WHERE id = $2 RETURNING *`,
+      [tracks, onboardingId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Onboarding not found' });
+    res.json(rows[0]);
+  } catch (err) { next(err); }
+});
+
+router.post('/:onboardingId/add-track', async (req, res, next) => {
+  const client = await getClient();
+  try {
+    const { onboardingId } = req.params;
+    const { track_code } = req.body || {};
+    if (!track_code) return res.status(400).json({ error: 'track_code is required' });
+
+    await client.query('BEGIN');
+
+    // 1. Fetch onboarding record
+    const co = await client.query(`SELECT * FROM customer_onboarding WHERE id = $1`, [onboardingId]);
+    if (!co.rows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Onboarding not found' });
+    }
+
+    // 2. Append track_code to active_tracks if not present
+    await client.query(`
+      UPDATE customer_onboarding
+      SET active_tracks = array_append(
+        array_remove(active_tracks, $1),
+        $1
+      )
+      WHERE id = $2
+    `, [track_code, onboardingId]);
+
+    // 3. Find template for this courier or create default tasks
+    const tmpl = await client.query(
+      `SELECT * FROM onboarding_templates WHERE code = $1 LIMIT 1`,
+      [track_code === 'ups' ? 'ups_track' : (track_code === 'dpd_sub' ? 'dpd_sub_account' : 'dpd_moov_master')]
+    );
+
+    if (tmpl.rows[0]) {
+      // Find or create stage
+      const stageName = track_code === 'ups' ? 'UPS Direct Setup' : (track_code === 'dpd_sub' ? 'DPD Sub-Account Setup' : 'DPD Master Setup');
+      let stageRes = await client.query(
+        `SELECT id FROM onboarding_stages WHERE onboarding_id = $1 AND name = $2`,
+        [onboardingId, stageName]
+      );
+      let stageId = stageRes.rows[0]?.id;
+      if (!stageId) {
+        const countRes = await client.query(`SELECT COUNT(*)::int as n FROM onboarding_stages WHERE onboarding_id = $1`, [onboardingId]);
+        const pos = (countRes.rows[0]?.n || 1);
+        const newStage = await client.query(
+          `INSERT INTO onboarding_stages (onboarding_id, name, description, position)
+           VALUES ($1, $2, $3, $4) RETURNING id`,
+          [onboardingId, stageName, `Courier-specific tasks for ${track_code.toUpperCase()}`, pos]
+        );
+        stageId = newStage.rows[0].id;
+      }
+
+      // Copy template tasks for this track
+      const tmplTasks = await client.query(
+        `SELECT * FROM onboarding_template_tasks WHERE template_id = $1 AND track_code = $2 ORDER BY position`,
+        [tmpl.rows[0].id, track_code]
+      );
+
+      for (const t of tmplTasks.rows) {
+        const due = t.target_duration_hours ? new Date(Date.now() + t.target_duration_hours * 3600 * 1000) : null;
+        await client.query(`
+          INSERT INTO onboarding_tasks
+            (onboarding_id, stage_id, template_task_id, title, description, position,
+             is_required, target_duration_hours, due_at, track_code)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        `, [onboardingId, stageId, t.id, t.title, t.description, t.position, t.is_required, t.target_duration_hours, due, track_code]);
+      }
+    }
+
+    await client.query('COMMIT');
+    const tree = await loadOnboardingTree(onboardingId);
+    res.json(tree);
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     next(err);
