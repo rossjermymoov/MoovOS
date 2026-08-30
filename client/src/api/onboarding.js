@@ -14,6 +14,9 @@ export const onboardingApi = {
   complete:     (onboardingId, body = {})=> api.post(`/${onboardingId}/complete`, body).then(r => r.data),
   setCall:      (onboardingId, body)     => api.patch(`/${onboardingId}/call`, body).then(r => r.data),
   cancel:       (onboardingId)           => api.delete(`/${onboardingId}`).then(r => r.data),
+  updateCollectionDetails: (onboardingId, details) => api.patch(`/${onboardingId}/collection-details`, details).then(r => r.data),
+  updateActiveTracks: (onboardingId, tracks) => api.patch(`/${onboardingId}/active-tracks`, { tracks }).then(r => r.data),
+  addTrack:     (onboardingId, trackCode)=> api.post(`/${onboardingId}/add-track`, { track_code: trackCode }).then(r => r.data),
 
   // Tasks
   updateTask:   (taskId, data)           => api.patch(`/tasks/${taskId}`, data).then(r => r.data),
