@@ -347,23 +347,21 @@ export async function lookupCustomerSellPrice(customerId, serviceCode, weightKg,
       };
     }
 
-    // Pass 2 — open-ended top band (max IS NULL)
-    const p2 = await query(`
+    // Pass 3 — base parcel / flat rate row for this zone
+    const p3 = await query(`
       SELECT id, price, price_sub, per_kg_rate, per_kg_threshold_kg,
              min_weight_kg, max_weight_kg
       FROM   customer_rates
       WHERE  customer_id  = $1
         AND  service_code ILIKE $2
         AND  zone_name    ILIKE $3
-        AND  max_weight_kg IS NULL
-        AND  $4 > COALESCE(min_weight_kg, 0)
-      ORDER  BY min_weight_kg DESC NULLS LAST
+        AND  price IS NOT NULL
+      ORDER  BY id ASC
       LIMIT  1
-    `, [customerId, code, zoneName, weightKg]);
+    `, [customerId, code, zoneName]);
 
-    if (p2.rows.length) {
-      const r = p2.rows[0];
-      // Preserve null: price=null means "not configured" (different from price=0).
+    if (p3.rows.length) {
+      const r = p3.rows[0];
       let sellPrice = r.price != null ? round2(parseFloat(r.price)) : null;
       let overageKg = null;
       if (sellPrice != null && r.per_kg_rate != null && r.per_kg_threshold_kg != null && weightKg > parseFloat(r.per_kg_threshold_kg)) {
@@ -373,9 +371,9 @@ export async function lookupCustomerSellPrice(customerId, serviceCode, weightKg,
       return {
         sellPrice,
         sellSub:       r.price_sub != null ? round2(parseFloat(r.price_sub)) : null,
-        pass:          2,
+        pass:          3,
         overageKg,
-        bandLabel:     `>${r.min_weight_kg ?? 0}kg (open-ended)`,
+        bandLabel:     'Base Parcel Rate',
         resolvedCode:  code,
       };
     }
@@ -384,15 +382,18 @@ export async function lookupCustomerSellPrice(customerId, serviceCode, weightKg,
   }
 
   // ── Primary lookup ─────────────────────────────────────────────────────────
-  const primary = await tryServiceCode(serviceCode);
+  let primary = await tryServiceCode(serviceCode);
   if (primary) return primary;
 
+  // If serviceCode has suffix like DROPQR (e.g. DPD-12DROPQR), try base DPD-12
+  const baseCode = serviceCode.replace(/DROPQR|DROP|QR/gi, '').replace(/-+$/, '');
+  if (baseCode && baseCode !== serviceCode) {
+    primary = await tryServiceCode(baseCode);
+    if (primary) return primary;
+  }
+
   // ── Fallback lookup ────────────────────────────────────────────────────────
-  // If the primary service has no rate card for this customer/zone/weight, retry
-  // using the fallback service code (e.g. DDP variant → standard variant).
-  // This allows a single rate card to cover both DDP and non-DDP variants of
-  // the same service without duplicating every zone/weight-band row.
-  if (fallbackServiceCode && fallbackServiceCode !== serviceCode) {
+  if (fallbackServiceCode && fallbackServiceCode !== serviceCode && fallbackServiceCode !== baseCode) {
     const fallback = await tryServiceCode(fallbackServiceCode);
     if (fallback) {
       console.log(
@@ -422,37 +423,72 @@ export async function lookupCustomerSellPrice(customerId, serviceCode, weightKg,
 function normaliseShipmentPayload(payload) {
   const ship = payload.shipment || {};
 
-  // Parse request_shipment JSON string for extra fields (dc_service_id, weight, dims)
+  // Parse request_shipment or request.shipment
   let reqShip = {};
-  try {
+  if (payload.request?.shipment) {
+    reqShip = typeof payload.request.shipment === 'string'
+      ? (JSON.parse(payload.request.shipment) || {})
+      : (payload.request.shipment || {});
+  } else if (payload.request_shipment) {
     reqShip = typeof payload.request_shipment === 'string'
-      ? JSON.parse(payload.request_shipment)
+      ? (JSON.parse(payload.request_shipment) || {})
       : (payload.request_shipment || {});
-  } catch { /* leave empty */ }
+  }
 
-  // ── Service code ─────────────────────────────────────────────────────────
-  // DC webhook: shipment.courier = { service_code: 'DPD-12', ... }
-  // Voila API:  service code in request_shipment.dc_service_id or
-  //             shipment.dc_service_id (if already flat)
-  const serviceCode =
-    (typeof ship.courier === 'object' ? ship.courier?.service_code : null) ||
+  // Parse response if present
+  let respObj = {};
+  if (payload.response) {
+    try {
+      respObj = typeof payload.response === 'string'
+        ? JSON.parse(payload.response)
+        : (payload.response || {});
+    } catch (_) {}
+  }
+
+  // ── Service code: DC_service_ID is the critical ground-truth identifier! ──
+  let rawServiceCode =
     ship.dc_service_id ||
+    ship.DC_service_ID ||
     reqShip.dc_service_id ||
-    reqShip.courier?.service_code ||
+    reqShip.DC_service_ID ||
+    respObj.dc_service_id ||
+    respObj.DC_service_ID ||
+    payload.dc_service_id ||
+    payload.DC_service_ID ||
+    (typeof ship.courier === 'object' ? ship.courier?.service_code : null) ||
+    (typeof reqShip.courier === 'object' ? reqShip.courier?.service_code : null) ||
     null;
 
-  // ── Destination ──────────────────────────────────────────────────────────
-  // DC webhook: shipment.ship_to = { country_iso, postcode, name }
-  // Voila API:  shipment.ship_to_country_iso, shipment.ship_to_postcode etc.
+  // If no raw code, map friendly service names:
+  if (!rawServiceCode) {
+    const fName = String(ship.friendly_service_name || ship.service_name || reqShip.friendly_service_name || '').toLowerCase();
+    if (fName.includes('drop off') || fName.includes('dropqr') || fName.includes('qr code')) {
+      rawServiceCode = 'DPD-12DROPQR';
+    } else if (fName.includes('two day') || fName.includes('2 day') || fName.includes('2day')) {
+      rawServiceCode = 'DPD-11';
+    } else if (fName.includes('next day') || fName.includes('domestic parcel')) {
+      rawServiceCode = 'DPD-12';
+    } else if (fName.includes('saturday')) {
+      rawServiceCode = 'DPD-16';
+    } else if (fName.includes('sunday')) {
+      rawServiceCode = 'DPD-01';
+    }
+  }
+
+  const serviceCode = rawServiceCode ? String(rawServiceCode).trim() : null;
+
+  // ── Destination ──
   const countryIso =
     ship.ship_to?.country_iso ||
     ship.ship_to_country_iso  ||
+    reqShip.ship_to?.country_iso ||
     reqShip.ship_to_country_iso ||
     'GB';
 
   const postcode =
     ship.ship_to?.postcode ||
     ship.ship_to_postcode  ||
+    reqShip.ship_to?.postcode ||
     reqShip.ship_to_postcode ||
     null;
 
@@ -460,37 +496,36 @@ function normaliseShipmentPayload(payload) {
     ship.ship_to?.name ||
     ship.ship_to_name  ||
     ship.ship_to_company_name ||
+    reqShip.ship_to?.name ||
+    reqShip.ship_to?.company_name ||
     null;
 
-  // ── Parcels ───────────────────────────────────────────────────────────────
-  // DC webhook: shipment.parcels = [{ weight, dim_length, ... }]
-  // Voila API:  shipment.create_label_parcels = [{ weight, tracking_code, ... }]
-  //             OR fallback to total_weight_kg / parcel_count if no per-parcel data
+  // ── Parcels ──
   let parcels = [];
 
   if (Array.isArray(ship.parcels) && ship.parcels.length) {
     parcels = ship.parcels;
+  } else if (Array.isArray(reqShip.parcels) && reqShip.parcels.length) {
+    parcels = reqShip.parcels;
   } else if (Array.isArray(ship.create_label_parcels) && ship.create_label_parcels.length) {
-    // create_label_parcels may have weight; fall back to total_weight / count
-    const totalWeightKg = parseFloat(ship.total_weight_kg || reqShip.total_weight_kg || 0);
+    const totalWeightKg = parseFloat(ship.total_weight_kg || reqShip.total_weight_kg || reqShip._summed_total_weight || 0);
     const parcelCount   = ship.parcel_count || ship.create_label_parcels.length || 1;
     const perParcelKg   = parcelCount > 0 ? totalWeightKg / parcelCount : totalWeightKg;
 
     parcels = ship.create_label_parcels.map((clp) => ({
-      weight:     parseFloat(clp.weight || clp.weight_kg || perParcelKg) || perParcelKg,
+      weight:     parseFloat(clp.weight || clp.weight_kg || perParcelKg) || perParcelKg || 1,
       dim_length: parseFloat(clp.dim_length || clp.length || reqShip.dim_length || 0) || 0,
       dim_width:  parseFloat(clp.dim_width  || clp.width  || reqShip.dim_width  || 0) || 0,
       dim_height: parseFloat(clp.dim_height || clp.height || reqShip.dim_height || 0) || 0,
       tracking_code: clp.tracking_code || null,
     }));
   } else {
-    // Last resort: single synthetic parcel from shipment-level weight
-    const totalWeightKg = parseFloat(ship.total_weight_kg || reqShip.total_weight_kg || 0);
-    const parcelCount   = parseInt(ship.parcel_count || 1, 10);
+    const totalWeightKg = parseFloat(ship.total_weight_kg || reqShip.total_weight_kg || reqShip._summed_total_weight || 0);
+    const parcelCount   = parseInt(ship.parcel_count || reqShip.parcel_count || 1, 10);
     const perParcelKg   = parcelCount > 0 ? totalWeightKg / parcelCount : totalWeightKg;
     for (let i = 0; i < parcelCount; i++) {
       parcels.push({
-        weight:     perParcelKg,
+        weight:     perParcelKg || 1,
         dim_length: parseFloat(reqShip.dim_length || 0),
         dim_width:  parseFloat(reqShip.dim_width  || 0),
         dim_height: parseFloat(reqShip.dim_height || 0),
@@ -499,7 +534,7 @@ function normaliseShipmentPayload(payload) {
     }
   }
 
-  return { serviceCode, countryIso, postcode, shipToName, parcels };
+  return { serviceCode, countryIso, postcode, shipToName, parcels, reqShip, respObj };
 }
 
 export async function processShipment(payload) {
@@ -509,24 +544,14 @@ export async function processShipment(payload) {
 
   // Normalise payload fields — handles both DC webhook and Voila API formats.
   const norm = normaliseShipmentPayload(payload);
+  const { reqShip, respObj } = norm;
 
   try {
     // ── 1. IDENTIFY CUSTOMER ──────────────────────────────────────────────────
-    // Multi-step cascade matching billing.js behaviour so both webhook paths
-    // resolve the same customer regardless of which ID field is populated.
-    //
-    // Voila API payloads (mapToWebhookPayload) expose:
-    //   shipment.account_number — the MOOV-XXXX style account number
-    //   shipment.account_name   — the business name
-    //
-    // DC webhook payloads may also have:
-    //   shipment.billing.customer_dc_id — numeric DC customer ID
-    //
-    // customers table has: account_number, dc_customer_id, dc_id, billing_aliases,
-    // business_name. We try each in turn and take the first match.
-    const accountNumber = (shipment?.account_number || '').trim();
-    const customerDcId  = shipment?.billing?.customer_dc_id || null;
-    const accountName   = (shipment?.account_name || shipment?.ship_to_company_name || '').trim();
+    const accountNumber = (shipment?.account_number || reqShip?.account_number || '').trim();
+    const customerDcId  = shipment?.billing?.customer_dc_id || reqShip?.billing?.customer_dc_id || null;
+    const accountName   = (shipment?.account_name || reqShip?.account_name || shipment?.ship_to_company_name || '').trim();
+    const authCompany   = (payload.request?.auth_company || payload.auth_company || '').trim();
 
     let customerId        = null;
     let multi_box_pricing = null;
@@ -542,94 +567,106 @@ export async function processShipment(payload) {
       if (r.rows.length) pickCustomer(r.rows[0]);
     }
 
-    // Step 1: account_number → customers.account_number
-    if (accountNumber) {
+    // Step 1: exact account_number
+    if (!customerId && accountNumber) {
       const r = await query(
-        'SELECT id, multi_box_pricing FROM customers WHERE account_number = $1 LIMIT 1',
+        'SELECT id, multi_box_pricing FROM customers WHERE LOWER(account_number) = LOWER($1) LIMIT 1',
         [accountNumber]
       );
       if (r.rows.length) pickCustomer(r.rows[0]);
     }
 
-    // Step 2: account_number → customers.dc_customer_id (legacy numeric DC ID stored as text)
+    // Step 2: customer_carrier_links
     if (!customerId && accountNumber) {
       const r = await query(
-        'SELECT id, multi_box_pricing FROM customers WHERE dc_customer_id = $1 LIMIT 1',
+        `SELECT c.id, c.multi_box_pricing FROM customer_carrier_links ccl
+         JOIN customers c ON c.id = ccl.customer_id
+         WHERE LOWER(ccl.account_number) = LOWER($1) LIMIT 1`,
         [accountNumber]
       );
       if (r.rows.length) pickCustomer(r.rows[0]);
     }
 
-    // Step 3: account_number → customers.dc_id (alternate DC ID field)
-    if (!customerId && accountNumber) {
+    // Step 3: dc_customer_id / dc_id
+    if (!customerId && (accountNumber || customerDcId)) {
+      const val = customerDcId || accountNumber;
       const r = await query(
-        'SELECT id, multi_box_pricing FROM customers WHERE dc_id = $1 LIMIT 1',
-        [accountNumber]
+        'SELECT id, multi_box_pricing FROM customers WHERE dc_customer_id = $1 OR dc_id = $1 LIMIT 1',
+        [String(val)]
       );
       if (r.rows.length) pickCustomer(r.rows[0]);
     }
 
-    // Step 4: account_number → customers.billing_aliases array
-    if (!customerId && accountNumber) {
+    // Step 4: billing_aliases
+    if (!customerId && (accountNumber || accountName || authCompany)) {
+      const matchCandidate = accountNumber || accountName || authCompany;
       try {
         const r = await query(
           `SELECT id, multi_box_pricing FROM customers
            WHERE EXISTS (
              SELECT 1 FROM unnest(billing_aliases) a
-             WHERE LOWER(a) = LOWER($1)
+             WHERE LOWER(a) = LOWER($1) OR LOWER($1) LIKE '%' || LOWER(a) || '%' OR LOWER(a) LIKE '%' || LOWER($1) || '%'
            ) LIMIT 1`,
-          [accountNumber]
+          [matchCandidate]
         );
         if (r.rows.length) pickCustomer(r.rows[0]);
-      } catch (_) { /* billing_aliases column may not exist on all installs */ }
+      } catch (_) {}
     }
 
-    // Step 5: customerDcId → customers.dc_customer_id / dc_id
-    if (!customerId && customerDcId) {
-      const r = await query(
-        `SELECT id, multi_box_pricing FROM customers
-         WHERE dc_customer_id = $1 OR dc_id = $1 LIMIT 1`,
-        [String(customerDcId)]
-      );
-      if (r.rows.length) pickCustomer(r.rows[0]);
-    }
-
-    // Step 6: accountName → customers.business_name (exact then partial)
-    if (!customerId && accountName) {
-      const r = await query(
-        'SELECT id, multi_box_pricing FROM customers WHERE LOWER(business_name) = LOWER($1) LIMIT 1',
-        [accountName]
-      );
-      if (r.rows.length) pickCustomer(r.rows[0]);
-    }
-    if (!customerId && accountName) {
-      const r = await query(
-        `SELECT id, multi_box_pricing FROM customers
-         WHERE LOWER(business_name) LIKE LOWER($1) LIMIT 1`,
-        [`%${accountName}%`]
-      );
-      if (r.rows.length) pickCustomer(r.rows[0]);
+    // Step 5: business_name exact, partial, or reversed (e.g. 'Cranswick' -> 'Cranswick Pet Products Ltd')
+    const candidates = [accountName, accountNumber, authCompany].filter(Boolean);
+    for (const cand of candidates) {
+      if (!customerId && cand) {
+        const r = await query(
+          `SELECT id, multi_box_pricing FROM customers
+           WHERE LOWER(business_name) = LOWER($1)
+              OR LOWER(business_name) LIKE LOWER($2)
+              OR LOWER($1) LIKE '%' || LOWER(business_name) || '%'
+           ORDER BY (CASE WHEN LOWER(business_name) = LOWER($1) THEN 0 ELSE 1 END)
+           LIMIT 1`,
+          [cand, `%${cand}%`]
+        );
+        if (r.rows.length) {
+          pickCustomer(r.rows[0]);
+          break;
+        }
+      }
     }
 
     if (!customerId) {
       throw new Error(
         `No customer found for account_number="${accountNumber}", ` +
-        `dc_id="${customerDcId || ''}", name="${accountName}"`
+        `dc_id="${customerDcId || ''}", name="${accountName || authCompany}"`
       );
     }
 
     // ── 2. IDENTIFY SERVICE ───────────────────────────────────────────────────
     const serviceCode = norm.serviceCode;
-    if (!serviceCode) throw new Error('No service_code in payload — checked shipment.courier.service_code, shipment.dc_service_id, and request_shipment.dc_service_id');
+    if (!serviceCode) throw new Error('No service_code in payload — checked dc_service_id, courier.service_code, and friendly_service_name');
 
-    const svcRow = await query(
+    let svcRow = await query(
       `SELECT cs.id, cs.service_code, cs.fuel_group_id, cs.charges_per_parcel, cs.all_sub_parcel_pricing,
               fb.service_code AS rate_fallback_service_code
        FROM   courier_services cs
        LEFT JOIN courier_services fb ON fb.id = cs.rate_fallback_service_id
-       WHERE  cs.service_code = $1`,
+       WHERE  LOWER(cs.service_code) = LOWER($1)`,
       [serviceCode]
     );
+
+    if (!svcRow.rows.length) {
+      const baseCode = serviceCode.replace(/DROPQR|DROP|QR/gi, '').replace(/-+$/, '');
+      if (baseCode && baseCode !== serviceCode) {
+        svcRow = await query(
+          `SELECT cs.id, cs.service_code, cs.fuel_group_id, cs.charges_per_parcel, cs.all_sub_parcel_pricing,
+                  fb.service_code AS rate_fallback_service_code
+           FROM   courier_services cs
+           LEFT JOIN courier_services fb ON fb.id = cs.rate_fallback_service_id
+           WHERE  LOWER(cs.service_code) = LOWER($1)`,
+          [baseCode]
+        );
+      }
+    }
+
     if (!svcRow.rows.length) throw new Error(`No courier service found with code = ${serviceCode}`);
     const {
       id: serviceId,

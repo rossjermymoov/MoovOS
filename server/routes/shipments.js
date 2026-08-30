@@ -407,6 +407,74 @@ router.post('/delete-before-today', async (req, res, next) => {
   }
 });
 
+// ─── POST /api/shipments/reprice-all ──────────────────────────────────────────
+router.post('/reprice-all', async (req, res, next) => {
+  try {
+    const listRes = await query(`SELECT id, raw_payload, customer_id, dc_service_id FROM shipments ORDER BY created_at DESC LIMIT 200`);
+    let repriced = 0;
+    let errors = [];
+
+    for (const shipRow of listRes.rows) {
+      if (!shipRow.raw_payload) continue;
+      let payload = typeof shipRow.raw_payload === 'string' ? JSON.parse(shipRow.raw_payload) : shipRow.raw_payload;
+
+      try {
+        const result = await processShipment(payload);
+        const charges = result.charges || [];
+        const customerId = charges[0]?.customer_id || null;
+
+        // Update customer_id on shipment if resolved
+        if (customerId) {
+          await query('UPDATE shipments SET customer_id = $1 WHERE id = $2', [customerId, shipRow.id]);
+        }
+
+        if (charges.length) {
+          await query('DELETE FROM charges WHERE shipment_id = $1 AND status != $2', [shipRow.id, 'invoiced']);
+          await insertCharges(charges, shipRow.id);
+          repriced++;
+        }
+      } catch (err) {
+        errors.push({ id: shipRow.id, error: err.message });
+      }
+    }
+
+    res.json({ success: true, repriced, errors });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── POST /api/shipments/:id/reprice ──────────────────────────────────────────
+router.post('/:id/reprice', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const shipRes = await query('SELECT * FROM shipments WHERE id = $1', [id]);
+    if (!shipRes.rows.length) return res.status(404).json({ error: 'Shipment not found' });
+
+    const shipRow = shipRes.rows[0];
+    let payload = typeof shipRow.raw_payload === 'string' ? JSON.parse(shipRow.raw_payload) : shipRow.raw_payload;
+    if (!payload) return res.status(400).json({ error: 'No raw payload available' });
+
+    const result = await processShipment(payload);
+    const charges = result.charges || [];
+    const customerId = charges[0]?.customer_id || null;
+
+    if (customerId) {
+      await query('UPDATE shipments SET customer_id = $1 WHERE id = $2', [customerId, shipRow.id]);
+    }
+
+    if (charges.length) {
+      await query('DELETE FROM charges WHERE shipment_id = $1 AND status != $2', [shipRow.id, 'invoiced']);
+      const inserted = await insertCharges(charges, shipRow.id);
+      return res.json({ success: true, charges: inserted, errors: result.errors });
+    }
+
+    res.json({ success: false, message: 'No charges generated', errors: result.errors });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── POST /api/shipments/clear-simulated ───────────────────────────────────────
 router.post('/clear-simulated', async (req, res, next) => {
   try {

@@ -31,10 +31,23 @@ async function createOrUpdateShipment(payload, customerId) {
   // Parse request_shipment JSON string → object for dc_service_id extraction
   let reqShip = {};
   try {
-    reqShip = typeof ship.request_shipment === 'string'
-      ? JSON.parse(ship.request_shipment)
-      : (ship.request_shipment || payload.request?.shipment || {});
+    if (payload.request?.shipment) {
+      reqShip = typeof payload.request.shipment === 'string'
+        ? JSON.parse(payload.request.shipment)
+        : payload.request.shipment;
+    } else if (ship.request_shipment) {
+      reqShip = typeof ship.request_shipment === 'string'
+        ? JSON.parse(ship.request_shipment)
+        : ship.request_shipment;
+    }
   } catch { /* leave empty */ }
+
+  let respObj = {};
+  if (payload.response) {
+    try {
+      respObj = typeof payload.response === 'string' ? JSON.parse(payload.response) : payload.response;
+    } catch (_) {}
+  }
 
   // platform_shipment_id must be a BIGINT — skip if unparseable
   const platformId = ship.id ? (parseInt(ship.id, 10) || null) : null;
@@ -43,8 +56,17 @@ async function createOrUpdateShipment(payload, customerId) {
     return null;
   }
 
-  const courier        = ship.courier        || payload.request?.courier || null;
-  const dcServiceId    = reqShip.dc_service_id || ship.dc_service_id || null;
+  const courier        = ship.courier || payload.request?.courier || 'DPD';
+  const dcServiceId    =
+    ship.dc_service_id ||
+    ship.DC_service_ID ||
+    reqShip.dc_service_id ||
+    reqShip.DC_service_ID ||
+    respObj.dc_service_id ||
+    respObj.DC_service_ID ||
+    payload.dc_service_id ||
+    payload.DC_service_ID ||
+    null;
   const serviceName    = ship.friendly_service_name || reqShip.courier?.friendly_service_name || null;
   const customerAccount= ship.account_number || reqShip.account_number || null;
   const customerName   = ship.account_name   || reqShip.account_name   || null;
