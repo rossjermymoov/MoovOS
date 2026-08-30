@@ -6,19 +6,14 @@
  *
  * applies_when:
  *   'always'         → green YES  — auto-applied on every matching shipment
- *   'reconciliation' → grey CODE-ONLY — added manually when invoice arrives
- *
- * charge_per (flat rates only):
- *   'shipment' → £X / shipment
- *   'parcel'   → £X / parcel  (× parcel count)
- *
- * calc_type = 'percentage' → X% of base rate (fuel-style)
+ * Rebuilt on the Moov OS design system with ruled tables, zero border-radius,
+ * and semantic status marks.
  */
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Plus, Trash2, ChevronDown, ChevronRight, Check, X, AlertTriangle, Percent,
+  Plus, Trash2, ChevronDown, ChevronRight, Check, X, AlertTriangle,
 } from 'lucide-react';
 import { surchargesApi } from '../../api/surcharges';
 import axios from 'axios';
@@ -31,17 +26,17 @@ const FILTER_FIELDS = [
   { value: 'ship_from_country_iso', label: 'Ship From Country',   type: 'text',   hint: 'ISO code e.g. GB, DE' },
   { value: 'ship_to_country_iso',   label: 'Ship To Country',     type: 'text',   hint: 'ISO code e.g. GB, FR, DE' },
   { value: 'ship_to_postcode',      label: 'Ship To Postcode',    type: 'text',   hint: 'Outward code e.g. EC1A, SW1' },
-  { value: 'dim_length_cm',         label: 'Length (cm)',          type: 'number', hint: 'e.g. 60' },
-  { value: 'dim_width_cm',          label: 'Width (cm)',           type: 'number', hint: 'e.g. 40' },
-  { value: 'dim_height_cm',         label: 'Height (cm)',          type: 'number', hint: 'e.g. 30' },
-  { value: 'parcel_weight_kg',      label: 'Parcel Weight (kg)',   type: 'number', hint: 'Per parcel e.g. 2.5' },
-  { value: 'total_weight_kg',       label: 'Total Weight (kg)',    type: 'number', hint: 'All parcels combined' },
-  { value: 'parcel_declared_value', label: 'Parcel Value (£)',     type: 'number', hint: 'Declared value per parcel' },
-  { value: 'total_declared_value',  label: 'Total Value (£)',      type: 'number', hint: 'Total declared shipment value' },
+  { value: 'dim_length_cm',         label: 'Length (cm)',         type: 'number', hint: 'e.g. 60' },
+  { value: 'dim_width_cm',          label: 'Width (cm)',          type: 'number', hint: 'e.g. 40' },
+  { value: 'dim_height_cm',         label: 'Height (cm)',         type: 'number', hint: 'e.g. 30' },
+  { value: 'parcel_weight_kg',      label: 'Parcel Weight (kg)',  type: 'number', hint: 'Per parcel e.g. 2.5' },
+  { value: 'total_weight_kg',       label: 'Total Weight (kg)',   type: 'number', hint: 'All parcels combined' },
+  { value: 'parcel_declared_value', label: 'Parcel Value (£)',    type: 'number', hint: 'Declared value per parcel' },
+  { value: 'total_declared_value',  label: 'Total Value (£)',     type: 'number', hint: 'Total declared shipment value' },
   { value: 'parcel_count',          label: 'Number of Parcels',   type: 'number', hint: 'Integer' },
-  { value: 'dc_service_id',         label: 'Service Code',         type: 'text',   hint: 'e.g. DPD-12' },
-  { value: 'service_name',          label: 'Service Name',         type: 'text',   hint: 'e.g. DPD Next Day' },
-  { value: 'courier',               label: 'Courier',              type: 'text',   hint: 'e.g. DPD, EvRi' },
+  { value: 'dc_service_id',         label: 'Service Code',        type: 'text',   hint: 'e.g. DPD-12' },
+  { value: 'service_name',          label: 'Service Name',        type: 'text',   hint: 'e.g. DPD Next Day' },
+  { value: 'courier',               label: 'Courier',             type: 'text',   hint: 'e.g. DPD, EvRi' },
 ];
 
 const TEXT_OPS = [
@@ -65,8 +60,6 @@ const NUM_OPS = [
 function fieldDef(v) { return FILTER_FIELDS.find(f => f.value === v) || FILTER_FIELDS[0]; }
 function opsFor(v)    { return fieldDef(v).type === 'number' ? NUM_OPS : TEXT_OPS; }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 function formatRate(s) {
   if (s.calc_type === 'percentage') return `${parseFloat(s.default_value).toFixed(2)}% of base`;
   const per = s.charge_per === 'parcel' ? 'parcel' : 'shipment';
@@ -79,19 +72,16 @@ function formatDate(d) {
   return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-const col = {
-  header: { fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '0 12px 10px' },
-  cell:   { padding: '14px 12px', verticalAlign: 'middle', borderBottom: '1px solid rgba(0,0,0,0.04)' },
-};
-
 const inp = (extra = {}) => ({
-  background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.10)',
-  borderRadius: 6, color: '#0F172A', fontSize: 13, padding: '6px 10px', ...extra,
+  background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)',
+  borderRadius: 0, color: 'var(--mv-ink)', fontSize: 13, padding: '6px 10px',
+  fontFamily: 'inherit', outline: 'none', ...extra,
 });
 
 const sel = (extra = {}) => ({
-  background: '#F8FAFC', border: '1px solid rgba(0,0,0,0.12)',
-  borderRadius: 6, color: '#0F172A', fontSize: 13, padding: '6px 10px', ...extra,
+  background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)',
+  borderRadius: 0, color: 'var(--mv-ink)', fontSize: 13, padding: '6px 10px',
+  fontFamily: 'inherit', outline: 'none', ...extra,
 });
 
 // ── Chip input ─────────────────────────────────────────────────────────────────
@@ -107,11 +97,11 @@ function ChipInput({ value, onChange, placeholder }) {
   }
 
   return (
-    <div style={{ border: '1px solid rgba(0,0,0,0.10)', borderRadius: 6, background: 'rgba(0,0,0,0.06)', padding: '4px 8px', minHeight: 36, display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+    <div style={{ border: '1px solid var(--mv-hairline-2)', borderRadius: 0, background: 'var(--mv-bg)', padding: '4px 8px', minHeight: 36, display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
       {items.map((item, i) => (
-        <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(123,47,190,0.3)', border: '1px solid rgba(123,47,190,0.5)', borderRadius: 9999, padding: '2px 8px', fontSize: 12, color: '#0F172A', fontWeight: 600 }}>
+        <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'var(--mv-purple-100)', border: '1px solid var(--mv-purple-200)', borderRadius: 0, padding: '2px 8px', fontSize: 11, color: 'var(--mv-purple-700)', fontWeight: 600 }}>
           {item}
-          <button onClick={() => onChange(items.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: 0, display: 'flex' }}><X size={10} /></button>
+          <button onClick={() => onChange(items.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mv-ink-45)', padding: 0, display: 'flex' }}><X size={10} /></button>
         </span>
       ))}
       <input
@@ -120,7 +110,7 @@ function ChipInput({ value, onChange, placeholder }) {
         onKeyDown={e => { if ((e.key === 'Enter' || e.key === ',') && draft.trim()) { e.preventDefault(); add(draft); } if (e.key === 'Backspace' && !draft && items.length) onChange(items.slice(0, -1)); }}
         onBlur={() => { if (draft.trim()) add(draft); }}
         placeholder={items.length ? '' : (placeholder || 'Type and press Enter…')}
-        style={{ background: 'none', border: 'none', color: '#0F172A', fontSize: 12, outline: 'none', flex: 1, minWidth: 100, padding: '2px 0' }}
+        style={{ background: 'none', border: 'none', color: 'var(--mv-ink)', fontSize: 12, outline: 'none', flex: 1, minWidth: 100, padding: '2px 0', fontFamily: 'inherit' }}
       />
     </div>
   );
@@ -138,18 +128,29 @@ function ServicePicker({ courierId, selected = [], onChange }) {
   if (!services.length) return null;
 
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+    <div className="mv-chips">
       {services.map(svc => {
         const on = selected.includes(svc.service_code);
         return (
-          <button key={svc.id} onClick={() => onChange(on ? selected.filter(s => s !== svc.service_code) : [...selected, svc.service_code])}
-            style={{ padding: '3px 10px', borderRadius: 9999, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none', background: on ? 'rgba(0,200,83,0.2)' : 'rgba(0,0,0,0.06)', color: on ? '#00C853' : '#64748B', outline: on ? '1px solid rgba(0,200,83,0.35)' : '1px solid rgba(0,0,0,0.08)' }}>
-            {on && <Check size={10} style={{ marginRight: 4 }} />}
-            {svc.name}
+          <button
+            key={svc.id}
+            type="button"
+            onClick={() => onChange(on ? selected.filter(s => s !== svc.service_code) : [...selected, svc.service_code])}
+            className={`mv-chip ${on ? 'is-on' : ''}`}
+          >
+            {svc.name} ({svc.service_code})
           </button>
         );
       })}
-      {selected.length > 0 && <button onClick={() => onChange([])} style={{ padding: '3px 8px', borderRadius: 9999, fontSize: 11, cursor: 'pointer', border: 'none', background: 'none', color: '#E91E8C' }}>Clear</button>}
+      {selected.length > 0 && (
+        <button
+          type="button"
+          onClick={() => onChange([])}
+          style={{ background: 'none', border: 'none', color: 'var(--mv-magenta-deep)', fontSize: 11, cursor: 'pointer', padding: '4px 6px', fontWeight: 600 }}
+        >
+          Clear
+        </button>
+      )}
     </div>
   );
 }
@@ -160,14 +161,14 @@ function ConditionRow({ filter, onChange, onRemove, isFirst, logic }) {
   const isMulti = filter.op === 'in' || filter.op === 'not_in';
   return (
     <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginBottom: 6 }}>
-      <div style={{ width: 34, flexShrink: 0, paddingTop: 8, textAlign: 'center', fontSize: 10, fontWeight: 700, color: isFirst ? '#64748B' : logic === 'OR' ? '#F59E0B' : '#7B2FBE' }}>
+      <div style={{ width: 34, flexShrink: 0, paddingTop: 8, textAlign: 'center', fontSize: 10, fontWeight: 800, letterSpacing: '.1em', color: isFirst ? 'var(--mv-ink-45)' : 'var(--mv-purple)' }}>
         {isFirst ? 'IF' : logic}
       </div>
       <select value={filter.field} onChange={e => { const f = e.target.value; onChange({ ...filter, field: f, op: opsFor(f)[0].value, value: '' }); }} style={{ ...sel(), width: 180, flexShrink: 0 }}>
         {FILTER_FIELDS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
       </select>
       <select value={filter.op} onChange={e => onChange({ ...filter, op: e.target.value, value: '' })} style={{ ...sel(), width: 130, flexShrink: 0 }}>
-        {opsFor(filter.field).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        {opsFor(filter.field).map(o => <option key={o.value} value={o.label}>{o.label}</option>)}
       </select>
       <div style={{ flex: 1 }}>
         {isMulti
@@ -175,7 +176,7 @@ function ConditionRow({ filter, onChange, onRemove, isFirst, logic }) {
           : <input value={Array.isArray(filter.value) ? filter.value.join(',') : (filter.value ?? '')} onChange={e => onChange({ ...filter, value: e.target.value })} placeholder={fieldDef(filter.field).hint || 'Value'} style={{ ...inp(), width: '100%', boxSizing: 'border-box' }} type={fieldDef(filter.field).type === 'number' ? 'number' : 'text'} />
         }
       </div>
-      <button onClick={onRemove} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#E91E8C', padding: 4, display: 'flex', alignItems: 'center' }}><X size={13} /></button>
+      <button onClick={onRemove} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mv-magenta-deep)', padding: 6, display: 'flex', alignItems: 'center' }}><X size={13} /></button>
     </div>
   );
 }
@@ -183,10 +184,10 @@ function ConditionRow({ filter, onChange, onRemove, isFirst, logic }) {
 // ── Rule editor ────────────────────────────────────────────────────────────────
 
 function RuleEditor({ surchargeId, courierId, rule, onSave, onCancel }) {
-  const [name, setName]               = useState(rule?.name || '');
-  const [logic, setLogic]             = useState(rule?.logic || 'AND');
+  const [name, setName]                 = useState(rule?.name || '');
+  const [logic, setLogic]               = useState(rule?.logic || 'AND');
   const [serviceCodes, setServiceCodes] = useState(rule?.service_codes || []);
-  const [filters, setFilters]         = useState(rule?.filters || []);
+  const [filters, setFilters]           = useState(rule?.filters || []);
   const qc = useQueryClient();
 
   const save = useMutation({
@@ -198,41 +199,62 @@ function RuleEditor({ surchargeId, courierId, rule, onSave, onCancel }) {
   });
 
   return (
-    <div style={{ background: 'rgba(0,200,83,0.04)', border: '1px solid rgba(0,200,83,0.2)', borderRadius: 8, padding: 16, marginBottom: 8 }}>
-      <div style={{ marginBottom: 10 }}>
-        <label style={{ fontSize: 11, color: '#64748B', fontWeight: 600, display: 'block', marginBottom: 3, textTransform: 'uppercase' }}>Rule name</label>
+    <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', padding: 16, marginBottom: 12 }}>
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ fontSize: 9, letterSpacing: '.15em', color: 'var(--mv-purple)', fontWeight: 700, display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>Rule name</label>
         <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. EU countries" style={{ ...inp(), width: '100%', boxSizing: 'border-box' }} />
       </div>
 
-      <div style={{ marginBottom: 10 }}>
-        <label style={{ fontSize: 11, color: '#64748B', fontWeight: 600, display: 'block', marginBottom: 6, textTransform: 'uppercase' }}>
-          Apply to services <span style={{ color: '#64748B', fontWeight: 400, textTransform: 'none' }}>— leave blank for all</span>
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ fontSize: 9, letterSpacing: '.15em', color: 'var(--mv-purple)', fontWeight: 700, display: 'block', marginBottom: 6, textTransform: 'uppercase' }}>
+          Apply to services <span style={{ color: 'var(--mv-ink-45)', fontWeight: 400, textTransform: 'none' }}>— leave blank for all</span>
         </label>
         <ServicePicker courierId={courierId} selected={serviceCodes} onChange={setServiceCodes} />
       </div>
 
-      <div style={{ marginBottom: 10 }}>
+      <div style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-          <label style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', margin: 0 }}>Conditions</label>
+          <label style={{ fontSize: 9, letterSpacing: '.15em', color: 'var(--mv-purple)', fontWeight: 700, textTransform: 'uppercase', margin: 0 }}>Conditions</label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {['AND', 'OR'].map(l => (
-              <button key={l} type="button" onClick={() => setLogic(l)} style={{ padding: '3px 10px', borderRadius: 9999, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none', background: logic === l ? (l === 'AND' ? 'rgba(123,47,190,0.35)' : 'rgba(245,158,11,0.25)') : 'rgba(0,0,0,0.06)', color: logic === l ? (l === 'AND' ? '#C4B5FD' : '#F59E0B') : '#64748B' }}>
+              <button
+                key={l}
+                type="button"
+                onClick={() => setLogic(l)}
+                className={`mv-chip ${logic === l ? 'is-on' : ''}`}
+                style={{ fontSize: 10, padding: '2px 8px' }}
+              >
                 {l}
               </button>
             ))}
-            <span style={{ fontSize: 11, color: '#64748B' }}>{logic === 'AND' ? 'all match' : 'any matches'}</span>
-            <button onClick={() => setFilters(f => [...f, { field: 'ship_to_country_iso', op: 'in', value: [] }])} style={{ background: 'rgba(0,0,0,0.06)', border: 'none', borderRadius: 6, color: '#64748B', cursor: 'pointer', fontSize: 12, padding: '3px 10px', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ fontSize: 11, color: 'var(--mv-ink-52)', marginLeft: 4 }}>{logic === 'AND' ? 'all match' : 'any matches'}</span>
+            <button
+              type="button"
+              onClick={() => setFilters(f => [...f, { field: 'ship_to_country_iso', op: 'in', value: [] }])}
+              className="mv-btn mv-btn-secondary"
+              style={{ padding: '3px 8px', fontSize: 11 }}
+            >
               <Plus size={11} /> Add condition
             </button>
           </div>
         </div>
-        {filters.length === 0 && <div style={{ fontSize: 12, color: '#64748B' }}>No conditions — fires for all matching shipments on selected services.</div>}
-        {filters.map((f, i) => <ConditionRow key={i} filter={f} index={i} isFirst={i === 0} logic={logic} onChange={next => setFilters(fs => fs.map((x, j) => j === i ? next : x))} onRemove={() => setFilters(fs => fs.filter((_, j) => j !== i))} />)}
+        {filters.length === 0 && <div style={{ fontSize: 12, color: 'var(--mv-ink-52)' }}>No conditions — fires for all matching shipments on selected services.</div>}
+        {filters.map((f, i) => (
+          <ConditionRow
+            key={i}
+            filter={f}
+            index={i}
+            isFirst={i === 0}
+            logic={logic}
+            onChange={next => setFilters(fs => fs.map((x, j) => j === i ? next : x))}
+            onRemove={() => setFilters(fs => fs.filter((_, j) => j !== i))}
+          />
+        ))}
       </div>
 
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button type="button" onClick={onCancel} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: 11 }}>Cancel</button>
-        <button type="button" onClick={() => save.mutate()} disabled={!name || save.isPending} style={{ background: '#00C853', border: 'none', borderRadius: 6, color: '#fff', fontSize: 11, fontWeight: 700, padding: '5px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 10, borderTop: '1px solid var(--mv-hairline)' }}>
+        <button type="button" onClick={onCancel} className="mv-btn mv-btn-secondary" style={{ padding: '5px 12px' }}>Cancel</button>
+        <button type="button" onClick={() => save.mutate()} disabled={!name || save.isPending} className="mv-btn mv-btn-primary" style={{ padding: '5px 14px' }}>
           <Check size={11} /> {rule?.id ? 'Save rule' : 'Add rule'}
         </button>
       </div>
@@ -254,18 +276,23 @@ function RulesPanel({ surcharge, courierId }) {
   });
 
   return (
-    <div style={{ padding: '12px 16px 16px', borderTop: '1px solid rgba(0,0,0,0.04)', background: 'rgba(0,0,0,0.03)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          Trigger Rules {surcharge.applies_when === 'always' ? '— controls when this auto-fires' : '— conditions for matching on invoice reconciliation'}
+    <div style={{ padding: '16px 20px', borderTop: '1px solid var(--mv-hairline)', background: 'rgba(32,30,29,.02)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <span style={{ fontSize: 9, letterSpacing: '.15em', color: 'var(--mv-purple)', fontWeight: 700, textTransform: 'uppercase' }}>
+          Trigger Rules {surcharge.applies_when === 'always' ? '— controls auto-apply conditions' : '— conditions for invoice reconciliation matching'}
         </span>
-        <button type="button" onClick={() => { setAddingRule(true); setEditingRule(null); }} style={{ background: 'rgba(0,0,0,0.06)', border: 'none', borderRadius: 6, color: '#64748B', cursor: 'pointer', fontSize: 11, padding: '3px 10px', display: 'flex', alignItems: 'center', gap: 4 }}>
+        <button
+          type="button"
+          onClick={() => { setAddingRule(true); setEditingRule(null); }}
+          className="mv-btn mv-btn-secondary"
+          style={{ padding: '3px 9px', fontSize: 11 }}
+        >
           <Plus size={10} /> Add rule
         </button>
       </div>
 
       {rules.length === 0 && !addingRule && (
-        <div style={{ fontSize: 12, color: '#F59E0B', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 6, padding: '8px 12px' }}>
+        <div style={{ fontSize: 12, color: 'var(--mv-magenta-deep)', background: 'rgba(233,30,140,.06)', border: '1px solid rgba(233,30,140,.2)', padding: '8px 12px', marginBottom: 8 }}>
           <AlertTriangle size={12} style={{ marginRight: 6, verticalAlign: 'middle' }} />
           {surcharge.applies_when === 'always' ? 'No rules — surcharge will never auto-fire. Add at least one rule.' : 'No rules — surcharge will match any shipment during reconciliation.'}
         </div>
@@ -279,27 +306,25 @@ function RulesPanel({ surcharge, courierId }) {
             {editingRule === rule.id
               ? <RuleEditor surchargeId={surcharge.id} courierId={courierId} rule={rule} onSave={() => setEditingRule(null)} onCancel={() => setEditingRule(null)} />
               : (
-                <div style={{ background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 7, padding: '9px 12px', marginBottom: 6 }}>
-
-                  {/* Row 1 — name + logic + actions */}
+                <div style={{ background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline)', padding: '10px 14px', marginBottom: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: svcCodes.length || filters.length ? 7 : 0 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', flex: 1 }}>{rule.name}</span>
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: rule.logic === 'OR' ? 'rgba(245,158,11,0.18)' : 'rgba(123,47,190,0.18)', color: rule.logic === 'OR' ? '#F59E0B' : '#C4B5FD', flexShrink: 0 }}>{rule.logic || 'AND'}</span>
-                    <button type="button" onClick={() => setEditingRule(rule.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: '2px 4px', fontSize: 12, flexShrink: 0 }}>✏️</button>
-                    <button type="button" onClick={() => deleteRule.mutate(rule.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#E91E8C', padding: '2px 4px', display: 'flex', flexShrink: 0 }}><Trash2 size={12} /></button>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--mv-ink)', flex: 1 }}>{rule.name}</span>
+                    <span style={{ fontSize: 9, letterSpacing: '.12em', fontWeight: 800, padding: '1px 6px', background: 'var(--mv-purple-100)', color: 'var(--mv-purple-700)', flexShrink: 0 }}>
+                      {rule.logic || 'AND'}
+                    </span>
+                    <button type="button" onClick={() => setEditingRule(rule.id)} className="mv-btn mv-btn-secondary" style={{ padding: '2px 6px', fontSize: 11 }}>Edit</button>
+                    <button type="button" onClick={() => deleteRule.mutate(rule.id)} className="mv-btn mv-btn-danger" style={{ padding: '2px 6px' }}><Trash2 size={11} /></button>
                   </div>
 
-                  {/* Row 2 — services (wrapping, compact) */}
                   {svcCodes.length > 0 && (
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, flexWrap: 'wrap', marginBottom: filters.length ? 6 : 0 }}>
-                      <span style={{ fontSize: 10, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>Services</span>
+                      <span style={{ fontSize: 9, letterSpacing: '.12em', color: 'var(--mv-ink-45)', textTransform: 'uppercase', flexShrink: 0 }}>Services:</span>
                       {svcCodes.map(sc => (
-                        <span key={sc} style={{ fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 4, background: 'rgba(0,188,212,0.12)', color: '#00BCD4', border: '1px solid rgba(0,188,212,0.2)' }}>{sc}</span>
+                        <span key={sc} style={{ fontSize: 10, fontWeight: 600, padding: '1px 6px', background: 'var(--mv-purple-100)', color: 'var(--mv-purple-700)', border: '1px solid var(--mv-purple-200)' }}>{sc}</span>
                       ))}
                     </div>
                   )}
 
-                  {/* Row 3 — conditions */}
                   {filters.length > 0
                     ? <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                         {filters.map((f, i) => {
@@ -307,16 +332,15 @@ function RulesPanel({ surcharge, courierId }) {
                           const op  = [...TEXT_OPS, ...NUM_OPS].find(o => o.value === f.op)?.label || f.op;
                           const val = Array.isArray(f.value) ? f.value.join(', ') : f.value;
                           return (
-                            <span key={i} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: 'rgba(123,47,190,0.15)', color: '#C4B5FD', border: '1px solid rgba(123,47,190,0.2)' }}>
+                            <span key={i} style={{ fontSize: 11, padding: '2px 8px', background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', color: 'var(--mv-ink-78)' }}>
                               {i > 0 && <span style={{ opacity: 0.45, marginRight: 4, fontSize: 10, fontWeight: 700 }}>{rule.logic}</span>}
                               {fl} <span style={{ opacity: 0.6 }}>{op}</span> <strong>{val}</strong>
                             </span>
                           );
                         })}
                       </div>
-                    : !svcCodes.length && <span style={{ fontSize: 11, color: '#00C853' }}>Fires for all shipments</span>
+                    : !svcCodes.length && <span className="mv-status"><span className="mv-status-mark is-settled" /> FIRES FOR ALL SHIPMENTS</span>
                   }
-
                 </div>
               )
             }
@@ -344,21 +368,22 @@ function AddSurchargeForm({ courierId, onDone }) {
   });
 
   return (
-    <div style={{ background: 'rgba(0,200,83,0.04)', border: '1px solid rgba(0,200,83,0.2)', borderRadius: 10, padding: 18, marginBottom: 12 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: 10, marginBottom: 12 }}>
+    <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', padding: 18, marginBottom: 16 }}>
+      <div className="mv-section">New Carrier Surcharge</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr', gap: 10, marginBottom: 12 }}>
         <div>
-          <label style={{ fontSize: 11, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' }}>Code</label>
-          <input maxLength={4} value={form.code} onChange={e => f('code', e.target.value.toUpperCase())} placeholder="A" style={{ ...inp(), width: '100%', boxSizing: 'border-box', textAlign: 'center', fontWeight: 700, fontSize: 16, letterSpacing: '0.05em' }} />
+          <label style={{ fontSize: 9, letterSpacing: '.14em', color: 'var(--mv-ink-52)', fontWeight: 700, display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>Code</label>
+          <input maxLength={4} value={form.code} onChange={e => f('code', e.target.value.toUpperCase())} placeholder="A" style={{ ...inp(), width: '100%', boxSizing: 'border-box', textAlign: 'center', fontWeight: 700, fontSize: 15 }} />
         </div>
         <div>
-          <label style={{ fontSize: 11, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' }}>Name</label>
+          <label style={{ fontSize: 9, letterSpacing: '.14em', color: 'var(--mv-ink-52)', fontWeight: 700, display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>Name</label>
           <input value={form.name} onChange={e => f('name', e.target.value)} placeholder="e.g. Fuel and Energy Charge" style={{ ...inp(), width: '100%', boxSizing: 'border-box' }} />
         </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
         <div>
-          <label style={{ fontSize: 11, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' }}>Charge type</label>
+          <label style={{ fontSize: 9, letterSpacing: '.14em', color: 'var(--mv-ink-52)', fontWeight: 700, display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>Charge type</label>
           <select value={form.calc_type} onChange={e => { f('calc_type', e.target.value); if (e.target.value === 'percentage') f('charge_per', 'shipment'); }} style={{ ...sel(), width: '100%' }}>
             <option value="flat">Flat amount (£)</option>
             <option value="percentage">% of base rate</option>
@@ -367,7 +392,7 @@ function AddSurchargeForm({ courierId, onDone }) {
 
         {form.calc_type === 'flat' && (
           <div>
-            <label style={{ fontSize: 11, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' }}>Per</label>
+            <label style={{ fontSize: 9, letterSpacing: '.14em', color: 'var(--mv-ink-52)', fontWeight: 700, display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>Per</label>
             <select value={form.charge_per} onChange={e => f('charge_per', e.target.value)} style={{ ...sel(), width: '100%' }}>
               <option value="shipment">Shipment</option>
               <option value="parcel">Parcel</option>
@@ -376,20 +401,22 @@ function AddSurchargeForm({ courierId, onDone }) {
         )}
 
         <div>
-          <label style={{ fontSize: 11, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' }}>{form.calc_type === 'percentage' ? 'Rate (%)' : 'Amount (£)'}</label>
+          <label style={{ fontSize: 9, letterSpacing: '.14em', color: 'var(--mv-ink-52)', fontWeight: 700, display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>{form.calc_type === 'percentage' ? 'Rate (%)' : 'Amount (£)'}</label>
           <input type="number" step="0.01" value={form.default_value} onChange={e => f('default_value', e.target.value)} placeholder="0.00" style={{ ...inp(), width: '100%', boxSizing: 'border-box' }} />
         </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
         <div>
-          <label style={{ fontSize: 11, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 6, textTransform: 'uppercase' }}>Applies when</label>
-          <div style={{ display: 'inline-flex', background: 'rgba(0,0,0,0.04)', borderRadius: 7, padding: 3, gap: 2 }}>
-            {[['always', '● Always', '#00C853'], ['reconciliation', '◎ Code-only', '#64748B']].map(([val, label, clr]) => (
-              <button key={val} type="button" onClick={() => f('applies_when', val)}
-                style={{ padding: '4px 12px', borderRadius: 5, cursor: 'pointer', border: 'none', fontSize: 12, fontWeight: form.applies_when === val ? 700 : 400,
-                  background: form.applies_when === val ? (val === 'always' ? 'rgba(0,200,83,0.25)' : 'rgba(0,0,0,0.08)') : 'transparent',
-                  color: form.applies_when === val ? clr : '#475569' }}>
+          <label style={{ fontSize: 9, letterSpacing: '.14em', color: 'var(--mv-ink-52)', fontWeight: 700, display: 'block', marginBottom: 6, textTransform: 'uppercase' }}>Applies when</label>
+          <div className="mv-chips">
+            {[['always', 'Always (Auto)'], ['reconciliation', 'Code-only (Reconcile)']].map(([val, label]) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => f('applies_when', val)}
+                className={`mv-chip ${form.applies_when === val ? 'is-on' : ''}`}
+              >
                 {label}
               </button>
             ))}
@@ -397,14 +424,14 @@ function AddSurchargeForm({ courierId, onDone }) {
         </div>
 
         <div>
-          <label style={{ fontSize: 11, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' }}>Effective from</label>
+          <label style={{ fontSize: 9, letterSpacing: '.14em', color: 'var(--mv-ink-52)', fontWeight: 700, display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>Effective from</label>
           <input type="date" value={form.effective_date} onChange={e => f('effective_date', e.target.value)} style={{ ...inp(), width: '100%', boxSizing: 'border-box' }} />
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button type="button" onClick={onDone} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: 11 }}>Cancel</button>
-        <button type="button" onClick={() => create.mutate()} disabled={!form.code || !form.name || !form.default_value || create.isPending} style={{ background: '#00C853', border: 'none', borderRadius: 6, color: '#fff', fontSize: 11, fontWeight: 700, padding: '5px 14px', cursor: 'pointer' }}>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 10, borderTop: '1px solid var(--mv-hairline)' }}>
+        <button type="button" onClick={onDone} className="mv-btn mv-btn-secondary" style={{ padding: '6px 14px' }}>Cancel</button>
+        <button type="button" onClick={() => create.mutate()} disabled={!form.code || !form.name || !form.default_value || create.isPending} className="mv-btn mv-btn-primary" style={{ padding: '6px 16px' }}>
           Add surcharge
         </button>
       </div>
@@ -446,38 +473,40 @@ export default function SurchargesTab({ courierId, courierCode }) {
     onSuccess: () => qc.invalidateQueries(['surcharges']),
   });
 
-  if (isLoading) return <div style={{ color: '#64748B', fontSize: 13 }}>Loading surcharges…</div>;
+  if (isLoading) return <div style={{ color: 'var(--mv-ink-52)', fontSize: 13, padding: '24px 0' }}>Loading surcharges…</div>;
 
   return (
     <div>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
         <div>
-          <h2 style={{ fontSize: 15, fontWeight: 700, color: '#7B2FBE', margin: '0 0 4px' }}>Surcharges — {courierCode}</h2>
-          <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>
-            <span style={{ color: '#00C853', fontWeight: 700 }}>YES</span> surcharges auto-apply on every matching shipment.
-            <span style={{ color: '#64748B', fontWeight: 700, marginLeft: 8 }}>CODE-ONLY</span> are matched against invoices during reconciliation.
+          <div className="mv-section">SURCHARGE SCHEDULE · {courierCode}</div>
+          <p className="mv-blurb" style={{ margin: 0 }}>
+            Automatic surcharges apply on every matching shipment. Code-only surcharges match against weekly carrier invoices during reconciliation.
           </p>
         </div>
-        <button onClick={() => setAdding(a => !a)} style={{ background: '#00C853', border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontSize: 11, fontWeight: 700, padding: '5px 12px', display: 'flex', alignItems: 'center', gap: 5 }}>
-          <Plus size={11} /> Add surcharge
+        <button onClick={() => setAdding(a => !a)} className="mv-btn mv-btn-primary">
+          <Plus size={12} /> Add surcharge
         </button>
       </div>
 
       {adding && <AddSurchargeForm courierId={courierId} onDone={() => setAdding(false)} />}
 
       {surcharges.length === 0 && !adding && (
-        <div style={{ textAlign: 'center', color: '#64748B', padding: '48px 0', fontSize: 13 }}>No surcharges yet for {courierCode}.</div>
+        <div style={{ textAlign: 'center', color: 'var(--mv-ink-45)', padding: '48px 0', fontSize: 13 }}>No surcharges configured yet for {courierCode}.</div>
       )}
 
       {/* Table */}
       {surcharges.length > 0 && (
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <table className="mv-table">
           <thead>
             <tr>
-              {['Code', 'Name', 'Calc / Rate', 'Always?', 'Effective', ''].map(h => (
-                <th key={h} style={{ ...col.header, textAlign: h === '' ? 'right' : 'left' }}>{h}</th>
-              ))}
+              <th style={{ width: 80 }}>Code</th>
+              <th>Name</th>
+              <th style={{ width: 180 }}>Calc / Rate</th>
+              <th style={{ width: 140 }}>Application</th>
+              <th style={{ width: 120 }}>Effective</th>
+              <th style={{ width: 100, textAlign: 'right' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -485,101 +514,89 @@ export default function SurchargesTab({ courierId, courierCode }) {
               <>
                 {/* Main row */}
                 <tr key={s.id} style={{ opacity: s.active ? 1 : 0.45, cursor: 'pointer' }} onClick={() => { if (editing !== s.id) toggleExpand(s.id); }}>
-                  <td style={col.cell}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 8, background: 'rgba(245,158,11,0.2)', border: '1px solid rgba(245,158,11,0.4)', color: '#F59E0B', fontWeight: 800, fontSize: 13 }}>
-                      {s.code?.charAt(0) || '?'}
+                  <td>
+                    <span className="mv-num" style={{ fontWeight: 800, fontSize: 13, color: 'var(--mv-purple)' }}>
+                      {s.code}
                     </span>
-                    {s.code?.length > 1 && <span style={{ fontSize: 11, color: '#64748B', marginLeft: 6 }}>{s.code}</span>}
                   </td>
 
-                  <td style={col.cell}>
+                  <td>
                     {editing === s.id ? (
                       <input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} onClick={e => e.stopPropagation()} style={{ ...inp(), width: 220 }} />
                     ) : (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>{s.name}</span>
+                        <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--mv-ink)' }}>{s.name}</span>
                         {(s.rules || []).length > 0 && (
-                          <span title={`${s.rules.length} rule${s.rules.length > 1 ? 's' : ''} — click to view`} style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 3,
-                            padding: '2px 7px', borderRadius: 9999, fontSize: 10, fontWeight: 700,
-                            background: 'rgba(0,188,212,0.15)', color: '#00BCD4',
-                            border: '1px solid rgba(0,188,212,0.35)', letterSpacing: '0.04em',
-                            cursor: 'pointer',
-                          }}>
-                            ⚡ {s.rules.length} RULE{s.rules.length > 1 ? 'S' : ''}
+                          <span style={{ fontSize: 9.5, letterSpacing: '.1em', fontWeight: 800, padding: '1px 6px', background: 'var(--mv-purple-100)', color: 'var(--mv-purple-700)' }}>
+                            {s.rules.length} RULE{s.rules.length > 1 ? 'S' : ''}
                           </span>
                         )}
                         {(s.rules || []).length === 0 && s.applies_when === 'always' && (
-                          <span title="No rules — fires on every shipment for this courier" style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 3,
-                            padding: '2px 7px', borderRadius: 9999, fontSize: 10, fontWeight: 700,
-                            background: 'rgba(0,200,83,0.1)', color: '#00C853',
-                            border: '1px solid rgba(0,200,83,0.25)', letterSpacing: '0.04em',
-                          }}>
-                            ● ALL
-                          </span>
+                          <span className="mv-status"><span className="mv-status-mark is-settled" /> ALL</span>
                         )}
                       </div>
                     )}
                   </td>
 
-                  <td style={col.cell}>
+                  <td>
                     {editing === s.id ? (
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }} onClick={e => e.stopPropagation()}>
-                        <select value={editForm.calc_type} onChange={e => setEditForm(f => ({ ...f, calc_type: e.target.value }))} style={{ ...sel(), width: 130 }}>
+                        <select value={editForm.calc_type} onChange={e => setEditForm(f => ({ ...f, calc_type: e.target.value }))} style={{ ...sel(), width: 110 }}>
                           <option value="flat">£ flat</option>
-                          <option value="percentage">% of base</option>
+                          <option value="percentage">% base</option>
                         </select>
                         {editForm.calc_type === 'flat' && (
-                          <select value={editForm.charge_per} onChange={e => setEditForm(f => ({ ...f, charge_per: e.target.value }))} style={{ ...sel(), width: 110 }}>
-                            <option value="shipment">/ shipment</option>
-                            <option value="parcel">/ parcel</option>
+                          <select value={editForm.charge_per} onChange={e => setEditForm(f => ({ ...f, charge_per: e.target.value }))} style={{ ...sel(), width: 90 }}>
+                            <option value="shipment">/ ship</option>
+                            <option value="parcel">/ pcl</option>
                           </select>
                         )}
-                        <input type="number" step="0.01" value={editForm.default_value} onChange={e => setEditForm(f => ({ ...f, default_value: e.target.value }))} style={{ ...inp(), width: 80 }} />
+                        <input type="number" step="0.01" value={editForm.default_value} onChange={e => setEditForm(f => ({ ...f, default_value: e.target.value }))} style={{ ...inp(), width: 65 }} />
                       </div>
                     ) : (
-                      <span style={{ fontSize: 13, color: '#64748B', fontFamily: 'monospace' }}>{formatRate(s)}</span>
+                      <span className="mv-num" style={{ fontSize: 13, color: 'var(--mv-ink-78)', fontWeight: 600 }}>{formatRate(s)}</span>
                     )}
                   </td>
 
-                  <td style={col.cell} onClick={e => e.stopPropagation()}>
+                  <td onClick={e => e.stopPropagation()}>
                     {editing === s.id ? (
-                      <select value={editForm.applies_when} onChange={e => setEditForm(f => ({ ...f, applies_when: e.target.value }))} style={{ ...sel(), width: 130 }}>
+                      <select value={editForm.applies_when} onChange={e => setEditForm(f => ({ ...f, applies_when: e.target.value }))} style={{ ...sel(), width: 120 }}>
                         <option value="always">Always</option>
                         <option value="reconciliation">Code-only</option>
                       </select>
                     ) : s.applies_when === 'always' ? (
-                      <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 9999, background: 'rgba(0,200,83,0.2)', color: '#00C853', fontSize: 11, fontWeight: 800, letterSpacing: '0.05em' }}>YES</span>
+                      <span className="mv-status"><span className="mv-status-mark is-settled" /> ALWAYS</span>
                     ) : (
-                      <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 9999, background: 'rgba(0,0,0,0.06)', color: '#64748B', fontSize: 11, fontWeight: 700, letterSpacing: '0.03em' }}>CODE-ONLY</span>
+                      <span className="mv-status"><span className="mv-status-mark is-waiting" /> CODE-ONLY</span>
                     )}
                   </td>
 
-                  <td style={col.cell}>
+                  <td>
                     {editing === s.id ? (
-                      <input type="date" value={editForm.effective_date} onChange={e => setEditForm(f => ({ ...f, effective_date: e.target.value }))} onClick={e => e.stopPropagation()} style={{ ...inp(), width: 130 }} />
+                      <input type="date" value={editForm.effective_date} onChange={e => setEditForm(f => ({ ...f, effective_date: e.target.value }))} onClick={e => e.stopPropagation()} style={{ ...inp(), width: 120 }} />
                     ) : (
-                      <span style={{ fontSize: 12, color: '#64748B' }}>{formatDate(s.effective_date)}</span>
+                      <span className="mv-num" style={{ fontSize: 12, color: 'var(--mv-ink-52)' }}>{formatDate(s.effective_date)}</span>
                     )}
                   </td>
 
-                  <td style={{ ...col.cell, textAlign: 'right' }} onClick={e => e.stopPropagation()}>
+                  <td style={{ textAlign: 'right' }} onClick={e => e.stopPropagation()}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
                       {editing === s.id ? (
                         <>
-                          <button type="button" onClick={() => update.mutate(s.id)} disabled={update.isPending} style={{ background: '#00C853', border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontSize: 11, fontWeight: 700, padding: '3px 10px' }}>Save</button>
-                          <button type="button" onClick={() => setEditing(null)} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: 11 }}>Cancel</button>
+                          <button type="button" onClick={() => update.mutate(s.id)} disabled={update.isPending} className="mv-btn mv-btn-primary" style={{ padding: '2px 8px', fontSize: 11 }}>Save</button>
+                          <button type="button" onClick={() => setEditing(null)} className="mv-btn mv-btn-secondary" style={{ padding: '2px 6px', fontSize: 11 }}>✕</button>
                         </>
                       ) : (
                         <>
                           {expanded.has(s.id)
-                            ? <ChevronDown size={14} color="#475569" />
-                            : <ChevronRight size={14} color="#475569" />
+                            ? <ChevronDown size={14} color="var(--mv-ink-45)" />
+                            : <ChevronRight size={14} color="var(--mv-ink-45)" />
                           }
-                          <button onClick={e => { e.stopPropagation(); startEdit(s); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: '4px', fontSize: 13 }}>✏️</button>
-                          <button onClick={e => { e.stopPropagation(); toggleActive.mutate(s); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: s.active ? '#00C853' : '#475569', padding: '4px', fontSize: 12 }} title={s.active ? 'Disable' : 'Enable'}>{s.active ? '●' : '○'}</button>
-                          <button onClick={e => { e.stopPropagation(); del.mutate(s.id); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#E91E8C', padding: '4px', display: 'flex', alignItems: 'center' }}><Trash2 size={13} /></button>
+                          <button onClick={e => { e.stopPropagation(); startEdit(s); }} className="mv-btn mv-btn-secondary" style={{ padding: '3px 7px', fontSize: 11 }}>Edit</button>
+                          <button onClick={e => { e.stopPropagation(); toggleActive.mutate(s); }} className="mv-btn mv-btn-secondary" style={{ padding: '3px 7px', fontSize: 11 }} title={s.active ? 'Disable' : 'Enable'}>
+                            {s.active ? 'Disable' : 'Enable'}
+                          </button>
+                          <button onClick={e => { e.stopPropagation(); del.mutate(s.id); }} className="mv-btn mv-btn-danger" style={{ padding: '3px 7px' }}><Trash2 size={11} /></button>
                         </>
                       )}
                     </div>
