@@ -33,6 +33,7 @@ import reconciliationRouter from './routes/reconciliation.js';
 import emailRouter from './routes/email.js';
 import { sendAlert } from './services/emailService.js';
 import gmailRouter from './routes/gmail.js';
+import shipmentsRouter from './routes/shipments.js';
 import onboardingRouter from './routes/onboarding.js';
 import onboardingTemplatesRouter from './routes/onboardingTemplates.js';
 import integrationSoftwareRouter from './routes/integrationSoftware.js';
@@ -89,6 +90,7 @@ app.use('/api/teams',                 teamsRouter);
 // should send to /api/moov-charges/webhook instead
 app.use('/api/moov-charges',          billingRouter);
 app.use('/api/reconciliation',        reconciliationRouter);
+app.use('/api/shipments',             shipmentsRouter);
 app.use('/api/email',                 emailRouter);
 app.use('/api/gmail',                 gmailRouter);
 
