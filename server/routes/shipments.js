@@ -69,39 +69,46 @@ router.get('/', async (req, res, next) => {
     );
     const total = parseInt(countRes.rows[0].total, 10);
 
-    // Calculate aggregated KPI totals across all matching shipments
-    const statsRes = await query(
-      `SELECT
-        COUNT(DISTINCT s.id) AS total_shipments,
-        COUNT(DISTINCT s.id) FILTER (
-          WHERE EXISTS (
-            SELECT 1 FROM charges ch WHERE ch.shipment_id = s.id AND (ch.verified = false OR ch.verified IS NULL)
-          ) OR NOT EXISTS (
-            SELECT 1 FROM charges ch WHERE ch.shipment_id = s.id
-          )
-        ) AS awaiting_reconciliation,
-        COALESCE(SUM(ch.price), 0) AS total_revenue,
-        COALESCE(SUM(ch.cost_price), 0) AS total_cost
-      FROM shipments s
-      LEFT JOIN charges ch ON ch.shipment_id = s.id
-      ${whereClause}`,
-      params
-    );
-
-    const rawStats = statsRes.rows[0] || {};
-    const totalRev = parseFloat(rawStats.total_revenue || 0);
-    const totalCost = parseFloat(rawStats.total_cost || 0);
-    const grossMargin = totalRev - totalCost;
-    const grossMarginPct = totalRev > 0 ? (grossMargin / totalRev) * 100 : 0;
-
-    const summaryStats = {
-      total_shipments: parseInt(rawStats.total_shipments || total, 10),
-      awaiting_reconciliation: parseInt(rawStats.awaiting_reconciliation || 0, 10),
-      total_revenue: Math.round(totalRev * 100) / 100,
-      total_cost: Math.round(totalCost * 100) / 100,
-      gross_margin: Math.round(grossMargin * 100) / 100,
-      gross_margin_pct: Math.round(grossMarginPct * 10) / 10,
+    // Calculate aggregated KPI totals across all matching shipments safely
+    let summaryStats = {
+      total_shipments: total,
+      awaiting_reconciliation: 0,
+      total_revenue: 0,
+      total_cost: 0,
+      gross_margin: 0,
+      gross_margin_pct: 0,
     };
+
+    try {
+      const statsRes = await query(
+        `SELECT
+          COUNT(DISTINCT s.id) AS total_shipments,
+          COUNT(DISTINCT s.id) FILTER (WHERE ch.verified = false OR ch.id IS NULL) AS awaiting_reconciliation,
+          COALESCE(SUM(ch.price), 0) AS total_revenue,
+          COALESCE(SUM(ch.cost_price), 0) AS total_cost
+        FROM shipments s
+        LEFT JOIN charges ch ON ch.shipment_id = s.id
+        ${whereClause}`,
+        params
+      );
+
+      const rawStats = statsRes.rows[0] || {};
+      const totalRev = parseFloat(rawStats.total_revenue || 0);
+      const totalCost = parseFloat(rawStats.total_cost || 0);
+      const grossMargin = totalRev - totalCost;
+      const grossMarginPct = totalRev > 0 ? (grossMargin / totalRev) * 100 : 0;
+
+      summaryStats = {
+        total_shipments: parseInt(rawStats.total_shipments || total, 10),
+        awaiting_reconciliation: parseInt(rawStats.awaiting_reconciliation || 0, 10),
+        total_revenue: Math.round(totalRev * 100) / 100,
+        total_cost: Math.round(totalCost * 100) / 100,
+        gross_margin: Math.round(grossMargin * 100) / 100,
+        gross_margin_pct: Math.round(grossMarginPct * 10) / 10,
+      };
+    } catch (statErr) {
+      console.warn('[shipments] Warning calculating summaryStats:', statErr.message);
+    }
 
     const listParams = [...params, parseInt(limit, 10), offset];
     const limitIdx = listParams.length - 1;
