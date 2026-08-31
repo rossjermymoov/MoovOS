@@ -610,7 +610,7 @@ export default function XeroSettings() {
 
   return (
     <div className="mv-page">
-      <div className="mv-page-inner" style={{ maxWidth: 960 }}>
+      <div className="mv-page-inner">
         <SettingsNav />
 
         <div className="mv-head">
@@ -623,7 +623,7 @@ export default function XeroSettings() {
           </div>
         </div>
 
-        <div className="mv-rule" />
+        <div className="mv-rule" style={{ marginBottom: 20 }} />
 
         {banner && (
           <div style={{

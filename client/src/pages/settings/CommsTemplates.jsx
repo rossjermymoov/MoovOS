@@ -82,7 +82,7 @@ export default function CommsTemplates() {
 
   return (
     <div className="mv-page">
-      <div className="mv-page-inner" style={{ maxWidth: 960 }}>
+      <div className="mv-page-inner">
         <SettingsNav />
 
         <div className="mv-head">

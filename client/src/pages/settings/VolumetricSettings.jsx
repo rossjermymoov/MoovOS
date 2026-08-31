@@ -22,30 +22,10 @@ const api = axios.create({ baseURL: '/api' });
 // ─── Shared styles ────────────────────────────────────────────────────────────
 const inputSt = {
   width: '100%', boxSizing: 'border-box',
-  background: 'rgba(0,0,0,0.06)',
-  border: '1px solid rgba(0,0,0,0.10)',
-  borderRadius: 7, color: '#0F172A', fontSize: 12,
-  padding: '7px 10px', outline: 'none',
-};
-const btnGreen = {
-  background: 'rgba(0,200,83,0.15)', border: '1px solid rgba(0,200,83,0.4)',
-  borderRadius: 6, color: '#00C853', padding: '7px 10px', cursor: 'pointer',
-  fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5,
-};
-const btnRed = {
-  background: 'rgba(213,0,0,0.1)', border: '1px solid rgba(213,0,0,0.3)',
-  borderRadius: 6, color: '#FF5252', padding: '5px 8px', cursor: 'pointer',
-  fontSize: 12,
-};
-const btnGhost = {
-  background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.10)',
-  borderRadius: 6, color: '#64748B', padding: '5px 8px', cursor: 'pointer',
-  fontSize: 12,
-};
-const card = {
-  background: 'rgba(0,0,0,0.03)',
-  border: '1px solid rgba(0,0,0,0.08)',
-  borderRadius: 10, padding: '18px 20px', marginBottom: 16,
+  background: 'var(--mv-bg)',
+  border: '1px solid var(--mv-hairline-2)',
+  borderRadius: 0, color: 'var(--mv-ink)', fontSize: 13,
+  padding: '8px 12px', outline: 'none',
 };
 
 // ─── Formula preview ──────────────────────────────────────────────────────────
@@ -55,14 +35,14 @@ function FormulaBox({ divisor }) {
   const dimKg = divisor > 0 ? (vol / divisor).toFixed(2) : '—';
   return (
     <div style={{
-      background: 'rgba(0,200,83,0.06)', border: '1px solid rgba(0,200,83,0.2)',
-      borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#64748B',
+      background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)',
+      borderRadius: 0, padding: '10px 14px', fontSize: 12, color: 'var(--mv-ink-62)',
     }}>
-      <span style={{ color: '#00C853', fontWeight: 700 }}>Formula: </span>
+      <span style={{ color: 'var(--mv-purple)', fontWeight: 700 }}>Formula: </span>
       (L × W × H) ÷ {divisor > 0 ? divisor : '?'} = volumetric kg
       {divisor > 0 && (
-        <span style={{ marginLeft: 16, color: '#0F172A' }}>
-          Example: {eg_l} × {eg_w} × {eg_h} = {vol.toLocaleString()} cm³ ÷ {divisor} = <strong style={{ color: '#00C853' }}>{dimKg} kg</strong>
+        <span style={{ marginLeft: 16, color: 'var(--mv-ink)' }}>
+          Example: {eg_l} × {eg_w} × {eg_h} = {vol.toLocaleString()} cm³ ÷ {divisor} = <strong style={{ color: 'var(--mv-purple)' }}>{dimKg} kg</strong>
         </span>
       )}
     </div>
@@ -77,10 +57,10 @@ function RuleForm({ initial, onSave, onCancel }) {
   const valid = name.trim().length > 0 && parseInt(divisor) > 0;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 10 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 12 }}>
         <div>
-          <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 4 }}>
+          <label style={{ fontSize: 10, fontWeight: 800, color: 'var(--mv-ink-52)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 5 }}>
             Rule Name
           </label>
           <input
@@ -91,7 +71,7 @@ function RuleForm({ initial, onSave, onCancel }) {
           />
         </div>
         <div>
-          <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 4 }}>
+          <label style={{ fontSize: 10, fontWeight: 800, color: 'var(--mv-ink-52)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 5 }}>
             Divisor
           </label>
           <input
@@ -109,16 +89,17 @@ function RuleForm({ initial, onSave, onCancel }) {
         <FormulaBox divisor={parseInt(divisor)} />
       )}
 
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
-        <button style={btnGhost} onClick={onCancel}>
-          <X size={13} style={{ display: 'inline', marginRight: 4 }} />Cancel
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
+        <button className="mv-btn-ghost" style={{ padding: '6px 14px', fontSize: 12.5 }} onClick={onCancel}>
+          Cancel
         </button>
         <button
-          style={{ ...btnGreen, opacity: valid ? 1 : 0.4, cursor: valid ? 'pointer' : 'not-allowed' }}
+          className="mv-btn-primary"
+          style={{ padding: '6px 16px', fontSize: 12.5, opacity: valid ? 1 : 0.4, cursor: valid ? 'pointer' : 'not-allowed' }}
           disabled={!valid}
           onClick={() => onSave({ name: name.trim(), divisor: parseInt(divisor) })}
         >
-          <Check size={13} />Save Rule
+          <Check size={13} /> Save Rule
         </button>
       </div>
     </div>
@@ -129,19 +110,20 @@ function RuleForm({ initial, onSave, onCancel }) {
 function ServiceBadge({ service, onRemove }) {
   return (
     <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 5,
-      background: 'rgba(0,200,83,0.1)', border: '1px solid rgba(0,200,83,0.25)',
-      borderRadius: 9999, padding: '3px 10px', fontSize: 11, color: '#0F172A',
+      display: 'inline-flex', alignItems: 'center', gap: 6,
+      background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)',
+      borderRadius: 0, padding: '4px 10px', fontSize: 12, color: 'var(--mv-ink)',
     }}>
-      <span style={{ color: '#475569', fontSize: 10 }}>{service.carrier_name} /</span>
-      {service.name}
-      <span style={{ color: '#64748B', fontSize: 10 }}>({service.service_code})</span>
+      <span style={{ color: 'var(--mv-ink-52)', fontSize: 11 }}>{service.carrier_name} /</span>
+      <span style={{ fontWeight: 600 }}>{service.name}</span>
+      <span style={{ color: 'var(--mv-ink-52)', fontSize: 11 }}>({service.service_code})</span>
       {onRemove && (
         <button
           onClick={() => onRemove(service.id)}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#FF5252', padding: '0 0 0 2px', display: 'flex' }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mv-ink-45)', padding: 0, display: 'flex', marginLeft: 2 }}
+          title="Remove service"
         >
-          <X size={11} />
+          <X size={12} />
         </button>
       )}
     </span>
@@ -170,36 +152,37 @@ function RuleCard({ rule, allServices, onUpdate, onDelete, onAssign, onUnassign 
   }
 
   return (
-    <div style={card}>
+    <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', borderRadius: 0, padding: '20px 24px', marginBottom: 18 }}>
       {/* Header row */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Divide size={16} color='#00C853' />
-          <span style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>{rule.name}</span>
+          <Divide size={16} color='var(--mv-purple)' />
+          <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--mv-ink)' }}>{rule.name}</span>
           <span style={{
-            background: 'rgba(0,200,83,0.12)', border: '1px solid rgba(0,200,83,0.3)',
-            borderRadius: 6, padding: '2px 9px', fontSize: 12, color: '#00C853', fontWeight: 700,
+            background: 'var(--mv-bg)', border: '1px solid var(--mv-purple)',
+            borderRadius: 0, padding: '2px 8px', fontSize: 11.5, color: 'var(--mv-purple)', fontWeight: 800,
           }}>
             ÷ {rule.divisor.toLocaleString()}
           </span>
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button style={btnGhost} onClick={() => setEditing(e => !e)}>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="mv-btn-ghost" style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => setEditing(e => !e)}>
             {editing ? 'Cancel' : 'Edit'}
           </button>
           <button
-            style={btnRed}
+            className="mv-btn-ghost"
+            style={{ padding: '5px 10px', fontSize: 12, color: 'var(--mv-magenta-deep)' }}
             onClick={() => onDelete(rule.id)}
             title={rule.assigned_services.length > 0 ? 'Remove all service assignments first' : 'Delete rule'}
           >
-            <Trash2 size={12} />
+            <Trash2 size={13} />
           </button>
         </div>
       </div>
 
       {/* Edit form */}
       {editing && (
-        <div style={{ marginBottom: 14 }}>
+        <div style={{ marginBottom: 16 }}>
           <RuleForm
             initial={rule}
             onSave={handleSave}
@@ -210,19 +193,19 @@ function RuleCard({ rule, allServices, onUpdate, onDelete, onAssign, onUnassign 
 
       {/* Formula preview (when not editing) */}
       {!editing && (
-        <div style={{ marginBottom: 12 }}>
+        <div style={{ marginBottom: 14 }}>
           <FormulaBox divisor={rule.divisor} />
         </div>
       )}
 
       {/* Assigned services */}
-      <div>
-        <div style={{ fontSize: 11, color: '#64748B', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+      <div style={{ paddingTop: 8, borderTop: '1px solid var(--mv-hairline)' }}>
+        <div style={{ fontSize: 10, color: 'var(--mv-ink-52)', marginBottom: 8, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
           Assigned Services ({rule.assigned_services.length})
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
           {rule.assigned_services.length === 0 ? (
-            <span style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic' }}>No services assigned</span>
+            <span style={{ fontSize: 12.5, color: 'var(--mv-ink-52)', fontStyle: 'italic' }}>No services assigned</span>
           ) : (
             rule.assigned_services.map(svc => (
               <ServiceBadge
@@ -238,7 +221,7 @@ function RuleCard({ rule, allServices, onUpdate, onDelete, onAssign, onUnassign 
         {showAssign ? (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <select
-              style={{ ...inputSt, flex: 1 }}
+              style={{ ...inputSt, flex: 1, height: 34 }}
               value={selectedSvc}
               onChange={e => setSelectedSvc(e.target.value)}
             >
@@ -250,15 +233,15 @@ function RuleCard({ rule, allServices, onUpdate, onDelete, onAssign, onUnassign 
                 </option>
               ))}
             </select>
-            <button style={btnGreen} onClick={handleAssign} disabled={!selectedSvc}>
-              <Check size={13} />Assign
+            <button className="mv-btn-primary" style={{ padding: '6px 14px', fontSize: 12 }} onClick={handleAssign} disabled={!selectedSvc}>
+              <Check size={13} /> Assign
             </button>
-            <button style={btnGhost} onClick={() => { setShowAssign(false); setSelectedSvc(''); }}>
+            <button className="mv-btn-ghost" style={{ padding: '6px 10px', fontSize: 12 }} onClick={() => { setShowAssign(false); setSelectedSvc(''); }}>
               <X size={13} />
             </button>
           </div>
         ) : (
-          <button style={{ ...btnGhost, fontSize: 11 }} onClick={() => setShowAssign(true)}>
+          <button className="mv-btn-ghost" style={{ padding: '4px 10px', fontSize: 11.5 }} onClick={() => setShowAssign(true)}>
             <Plus size={12} style={{ display: 'inline', marginRight: 4 }} />
             Assign service to this rule
           </button>
@@ -314,7 +297,7 @@ export default function VolumetricSettings() {
 
   return (
     <div className="mv-page">
-      <div className="mv-page-inner" style={{ maxWidth: 900 }}>
+      <div className="mv-page-inner">
         <SettingsNav />
 
         <div className="mv-head">
@@ -332,7 +315,7 @@ export default function VolumetricSettings() {
           </div>
         </div>
 
-        <div className="mv-rule" />
+        <div className="mv-rule" style={{ marginBottom: 20 }} />
 
         {/* How it works box */}
         <div style={{
@@ -361,7 +344,7 @@ export default function VolumetricSettings() {
 
         {/* Create form */}
         {showCreate && (
-          <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', borderRadius: 0, padding: 18, marginBottom: 20 }}>
+          <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', borderRadius: 0, padding: 20, marginBottom: 20 }}>
             <div className="mv-kicker">New Formula</div>
             <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--mv-ink)', marginBottom: 14 }}>
               Create New Volumetric Rule
@@ -381,20 +364,22 @@ export default function VolumetricSettings() {
             No volumetric rules defined yet. Create one above.
           </div>
         ) : (
-          data?.rules?.map(rule => (
-            <RuleCard
-              key={rule.id}
-              rule={rule}
-              allServices={data?.services || []}
-              onUpdate={(id, body) => updateRule.mutate({ id, ...body })}
-              onDelete={id => {
-                if (!window.confirm(`Delete "${rule.name}"? This will remove it from all assigned services.`)) return;
-                deleteRule.mutate(id);
-              }}
-              onAssign={(ruleId, serviceId) => assignSvc.mutate({ ruleId, serviceId })}
-              onUnassign={serviceId => unassignSvc.mutate(serviceId)}
-            />
-          ))
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 18 }}>
+            {data?.rules?.map(rule => (
+              <RuleCard
+                key={rule.id}
+                rule={rule}
+                allServices={data?.services || []}
+                onUpdate={(id, body) => updateRule.mutate({ id, ...body })}
+                onDelete={id => {
+                  if (!window.confirm(`Delete "${rule.name}"? This will remove it from all assigned services.`)) return;
+                  deleteRule.mutate(id);
+                }}
+                onAssign={(ruleId, serviceId) => assignSvc.mutate({ ruleId, serviceId })}
+                onUnassign={serviceId => unassignSvc.mutate(serviceId)}
+              />
+            ))}
+          </div>
         )}
       </div>
     </div>

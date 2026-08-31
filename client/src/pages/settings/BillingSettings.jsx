@@ -104,7 +104,7 @@ export default function BillingSettings() {
 
   return (
     <div className="mv-page">
-      <div className="mv-page-inner" style={{ maxWidth: 800 }}>
+      <div className="mv-page-inner">
         <SettingsNav />
 
         <div className="mv-head">
@@ -135,114 +135,120 @@ export default function BillingSettings() {
           </div>
         </div>
 
-        <div className="mv-rule" />
+        <div className="mv-rule" style={{ marginBottom: 20 }} />
 
-        {/* Enabled toggle */}
-        <div style={sectionStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ color: 'var(--mv-ink)', fontWeight: 800, fontSize: 14 }}>Automatic Billing Run</div>
-              <div style={{ color: 'var(--mv-ink-52)', fontSize: 12, marginTop: 3 }}>When enabled, the server runs the billing cycle on the schedule below.</div>
-            </div>
-            <button
-              onClick={() => field('enabled', !form.enabled)}
-              className={form.enabled ? 'mv-btn-primary' : 'mv-btn-ghost'}
-              style={{ padding: '6px 16px', fontSize: 12 }}
-            >
-              {form.enabled ? 'Enabled' : 'Disabled'}
-            </button>
-          </div>
-        </div>
-
-        {/* Weekly / fortnightly schedule */}
-        <div style={sectionStyle}>
-          <div style={{ color: 'var(--mv-ink)', fontWeight: 800, fontSize: 14, marginBottom: 16 }}>Weekly &amp; Fortnightly Billing</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div>
-              <label style={labelStyle}>Billing Day</label>
-              <select value={form.billing_day_of_week} onChange={e => field('billing_day_of_week', parseInt(e.target.value))} style={inputStyle}>
-                {DAYS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>Billing Time</label>
-              <select value={form.billing_hour} onChange={e => field('billing_hour', parseInt(e.target.value))} style={inputStyle}>
-                {HOURS.map(h => <option key={h.value} value={h.value}>{h.label}</option>)}
-              </select>
-            </div>
-          </div>
-          <div style={{ marginTop: 16 }}>
-            <label style={labelStyle}>Fortnightly parity — which week runs for fortnightly customers?</label>
-            <div style={{ display: 'flex', gap: 10 }}>
-              {[0, 1].map(p => (
-                <button key={p} onClick={() => field('fortnightly_parity', p)} style={{
-                  flex: 1, padding: '8px 0', borderRadius: 0, fontSize: 13, fontWeight: 700, cursor: 'pointer',
-                  background: form.fortnightly_parity === p ? 'var(--mv-ink)' : 'var(--mv-bg)',
-                  border: `1px solid ${form.fortnightly_parity === p ? 'var(--mv-ink)' : 'var(--mv-hairline-2)'}`,
-                  color: form.fortnightly_parity === p ? 'var(--mv-bg)' : 'var(--mv-ink)',
-                }}>
-                  Week {p === 0 ? 'A' : 'B'}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: 20 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Enabled toggle */}
+            <div style={sectionStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ color: 'var(--mv-ink)', fontWeight: 800, fontSize: 14 }}>Automatic Billing Run</div>
+                  <div style={{ color: 'var(--mv-ink-52)', fontSize: 12, marginTop: 3 }}>When enabled, the server runs the billing cycle on the schedule below.</div>
+                </div>
+                <button
+                  onClick={() => field('enabled', !form.enabled)}
+                  className={form.enabled ? 'mv-btn-primary' : 'mv-btn-ghost'}
+                  style={{ padding: '6px 16px', fontSize: 12 }}
+                >
+                  {form.enabled ? 'Enabled' : 'Disabled'}
                 </button>
-              ))}
+              </div>
             </div>
-          </div>
-        </div>
 
-        {/* Monthly schedule */}
-        <div style={sectionStyle}>
-          <div style={{ color: 'var(--mv-ink)', fontWeight: 800, fontSize: 14, marginBottom: 16 }}>Monthly Billing</div>
-          <div style={{ maxWidth: 220 }}>
-            <label style={labelStyle}>Day of Month</label>
-            <select value={form.monthly_billing_date} onChange={e => field('monthly_billing_date', parseInt(e.target.value))} style={inputStyle}>
-              {Array.from({ length: 28 }, (_, i) => i + 1).map(d => (
-                <option key={d} value={d}>{d}{d === 1 ? 'st' : d === 2 ? 'nd' : d === 3 ? 'rd' : 'th'} of the month</option>
-              ))}
-            </select>
-          </div>
-        </div>
+            {/* Weekly / fortnightly schedule */}
+            <div style={sectionStyle}>
+              <div style={{ color: 'var(--mv-ink)', fontWeight: 800, fontSize: 14, marginBottom: 16 }}>Weekly &amp; Fortnightly Billing</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <label style={labelStyle}>Billing Day</label>
+                  <select value={form.billing_day_of_week} onChange={e => field('billing_day_of_week', parseInt(e.target.value))} style={inputStyle}>
+                    {DAYS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Billing Time</label>
+                  <select value={form.billing_hour} onChange={e => field('billing_hour', parseInt(e.target.value))} style={inputStyle}>
+                    {HOURS.map(h => <option key={h.value} value={h.value}>{h.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{ marginTop: 16 }}>
+                <label style={labelStyle}>Fortnightly parity — which week runs for fortnightly customers?</label>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  {[0, 1].map(p => (
+                    <button key={p} onClick={() => field('fortnightly_parity', p)} style={{
+                      flex: 1, padding: '8px 0', borderRadius: 0, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                      background: form.fortnightly_parity === p ? 'var(--mv-ink)' : 'var(--mv-bg)',
+                      border: `1px solid ${form.fortnightly_parity === p ? 'var(--mv-ink)' : 'var(--mv-hairline-2)'}`,
+                      color: form.fortnightly_parity === p ? 'var(--mv-bg)' : 'var(--mv-ink)',
+                    }}>
+                      Week {p === 0 ? 'A' : 'B'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
 
-        {/* Volume mix refresh */}
-        <div style={sectionStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <BarChart2 size={15} style={{ color: 'var(--mv-purple)' }} />
-            <div style={{ color: 'var(--mv-ink)', fontWeight: 800, fontSize: 14 }}>Volume Mix Refresh</div>
-          </div>
-          <div style={{ color: 'var(--mv-ink-52)', fontSize: 12, marginBottom: 16, lineHeight: 1.55 }}>
-            Controls when rate card projection volume mixes are automatically updated from actual billing data.
-            The DPD-ND2KG service is always counted as DPD-32 in the mix.
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div>
-              <label style={labelStyle}>Refresh Day</label>
-              <select value={form.volume_mix_refresh_day} onChange={e => field('volume_mix_refresh_day', parseInt(e.target.value))} style={inputStyle}>
-                {DAYS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>Refresh Time</label>
-              <select value={form.volume_mix_refresh_hour} onChange={e => field('volume_mix_refresh_hour', parseInt(e.target.value))} style={inputStyle}>
-                {HOURS.map(h => <option key={h.value} value={h.value}>{h.label}</option>)}
-              </select>
+            {/* Monthly schedule */}
+            <div style={sectionStyle}>
+              <div style={{ color: 'var(--mv-ink)', fontWeight: 800, fontSize: 14, marginBottom: 16 }}>Monthly Billing</div>
+              <div style={{ maxWidth: 220 }}>
+                <label style={labelStyle}>Day of Month</label>
+                <select value={form.monthly_billing_date} onChange={e => field('monthly_billing_date', parseInt(e.target.value))} style={inputStyle}>
+                  {Array.from({ length: 28 }, (_, i) => i + 1).map(d => (
+                    <option key={d} value={d}>{d}{d === 1 ? 'st' : d === 2 ? 'nd' : d === 3 ? 'rd' : 'th'} of the month</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
-          <div style={{ marginTop: 10, fontSize: 12, color: 'var(--mv-ink-52)' }}>
-            Next refresh: {nextRunDate(form.volume_mix_refresh_day, form.volume_mix_refresh_hour, 0)}
-          </div>
-        </div>
 
-        {/* Next run preview */}
-        <div style={{ ...sectionStyle, background: 'rgba(123,47,190,0.06)', border: '1px solid var(--mv-purple)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--mv-purple)' }}>
-            <Clock size={15} />
-            <span style={{ fontSize: 13, fontWeight: 700 }}>
-              Next weekly run: {nextRunDate(form.billing_day_of_week, form.billing_hour, form.billing_minute)}
-            </span>
-          </div>
-          {settings?.last_run_at && (
-            <div style={{ color: 'var(--mv-ink-52)', fontSize: 12, marginTop: 6 }}>
-              Last run: {new Date(settings.last_run_at).toLocaleString('en-GB')}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Next run preview */}
+            <div style={{ ...sectionStyle, background: 'var(--mv-surface)', border: '1px solid var(--mv-purple)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--mv-purple)' }}>
+                <Clock size={15} />
+                <span style={{ fontSize: 13, fontWeight: 700 }}>
+                  Next weekly run: {nextRunDate(form.billing_day_of_week, form.billing_hour, form.billing_minute)}
+                </span>
+              </div>
+              {settings?.last_run_at && (
+                <div style={{ color: 'var(--mv-ink-52)', fontSize: 12, marginTop: 6 }}>
+                  Last run: {new Date(settings.last_run_at).toLocaleString('en-GB')}
+                </div>
+              )}
             </div>
-          )}
+
+            {/* Volume mix refresh */}
+            <div style={sectionStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <BarChart2 size={15} style={{ color: 'var(--mv-purple)' }} />
+                <div style={{ color: 'var(--mv-ink)', fontWeight: 800, fontSize: 14 }}>Volume Mix Refresh</div>
+              </div>
+              <div style={{ color: 'var(--mv-ink-52)', fontSize: 12, marginBottom: 16, lineHeight: 1.55 }}>
+                Controls when rate card projection volume mixes are automatically updated from actual billing data.
+                The DPD-ND2KG service is always counted as DPD-32 in the mix.
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <label style={labelStyle}>Refresh Day</label>
+                  <select value={form.volume_mix_refresh_day} onChange={e => field('volume_mix_refresh_day', parseInt(e.target.value))} style={inputStyle}>
+                    {DAYS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Refresh Time</label>
+                  <select value={form.volume_mix_refresh_hour} onChange={e => field('volume_mix_refresh_hour', parseInt(e.target.value))} style={inputStyle}>
+                    {HOURS.map(h => <option key={h.value} value={h.value}>{h.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{ marginTop: 10, fontSize: 12, color: 'var(--mv-ink-52)' }}>
+                Next refresh: {nextRunDate(form.volume_mix_refresh_day, form.volume_mix_refresh_hour, 0)}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Run result */}

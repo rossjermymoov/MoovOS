@@ -16,20 +16,19 @@ import { SettingsNav } from './RulesSettings';
 const api = axios.create({ baseURL: '/api' });
 
 const S = {
-  page:        { padding: '32px 40px', maxWidth: 860, margin: '0 auto' },
-  card:        { background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10, padding: '24px 28px', marginBottom: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' },
-  cardTitle:   { fontSize: 15, fontWeight: 700, color: '#0F172A', marginBottom: 4 },
-  cardSub:     { fontSize: 13, color: '#64748B', marginBottom: 20 },
-  row:         { display: 'flex', gap: 12, alignItems: 'flex-end', marginBottom: 14 },
-  label:       { fontSize: 12, color: '#64748B', fontWeight: 600, marginBottom: 5, display: 'block', textTransform: 'uppercase', letterSpacing: '0.04em' },
-  input:       { background: '#F8FAFC', border: '1px solid rgba(0,0,0,0.10)', borderRadius: 6, padding: '8px 12px', color: '#0F172A', fontSize: 13, width: '100%', outline: 'none' },
-  btn:         { padding: '8px 18px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
-  btnPrimary:  { background: '#00C853', color: '#000' },
-  btnSecondary:{ background: '#F1F5F9', color: '#334155', border: '1px solid rgba(0,0,0,0.08)' },
-  btnDanger:   { background: 'rgba(220,38,38,0.08)', color: '#991B1B', border: '1px solid rgba(220,38,38,0.2)' },
-  toggle:      { width: 38, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 },
-  pill:        { padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 },
-  divider:     { borderTop: '1px solid rgba(0,0,0,0.06)', margin: '16px 0' },
+  card:        { background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', borderRadius: 0, padding: '22px 24px', marginBottom: 20 },
+  cardTitle:   { fontSize: 14.5, fontWeight: 800, color: 'var(--mv-ink)', marginBottom: 4 },
+  cardSub:     { fontSize: 12.5, color: 'var(--mv-ink-52)', marginBottom: 20 },
+  row:         { display: 'flex', gap: 14, alignItems: 'flex-end', marginBottom: 16 },
+  label:       { fontSize: 10, color: 'var(--mv-ink-52)', fontWeight: 800, marginBottom: 6, display: 'block', textTransform: 'uppercase', letterSpacing: '0.08em' },
+  input:       { background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)', borderRadius: 0, padding: '8px 12px', color: 'var(--mv-ink)', fontSize: 13, width: '100%', outline: 'none', boxSizing: 'border-box' },
+  btn:         { padding: '8px 16px', borderRadius: 0, border: 'none', cursor: 'pointer', fontSize: 12.5, fontWeight: 700 },
+  btnPrimary:  { background: 'var(--mv-purple)', color: '#FFFFFF' },
+  btnSecondary:{ background: 'var(--mv-bg)', color: 'var(--mv-ink)', border: '1px solid var(--mv-hairline-2)' },
+  btnDanger:   { background: 'rgba(233,30,140,0.08)', color: 'var(--mv-magenta-deep)', border: '1px solid var(--mv-magenta)' },
+  toggle:      { width: 38, height: 20, borderRadius: 0, border: 'none', cursor: 'pointer', position: 'relative', transition: 'background 0.15s', flexShrink: 0, padding: 2 },
+  pill:        { padding: '3px 8px', borderRadius: 0, fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' },
+  divider:     { borderTop: '1px solid var(--mv-hairline)', margin: '18px 0' },
 };
 
 // ─── Alert type display config ────────────────────────────────────────────────
@@ -450,7 +449,7 @@ export default function EmailSettings() {
 
   return (
     <div className="mv-page">
-      <div className="mv-page-inner" style={{ maxWidth: 900 }}>
+      <div className="mv-page-inner">
         <SettingsNav />
 
         <div className="mv-head">
@@ -463,7 +462,7 @@ export default function EmailSettings() {
           </div>
         </div>
 
-        <div className="mv-rule" />
+        <div className="mv-rule" style={{ marginBottom: 24 }} />
 
         {cfgLoading ? (
           <div style={{ color: 'var(--mv-ink-52)', fontSize: 13, textAlign: 'center', padding: 24 }}>Loading…</div>

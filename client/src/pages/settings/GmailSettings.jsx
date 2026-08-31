@@ -53,7 +53,7 @@ export default function GmailSettings() {
 
   return (
     <div className="mv-page">
-      <div className="mv-page-inner" style={{ maxWidth: 800 }}>
+      <div className="mv-page-inner">
         <SettingsNav />
 
         <div className="mv-head">
@@ -66,7 +66,7 @@ export default function GmailSettings() {
           </div>
         </div>
 
-        <div className="mv-rule" />
+        <div className="mv-rule" style={{ marginBottom: 20 }} />
 
         {/* Connection status */}
         <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', padding: '20px 24px', marginBottom: 16 }}>
