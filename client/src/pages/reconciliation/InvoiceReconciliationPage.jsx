@@ -236,7 +236,7 @@ export default function InvoiceReconciliationPage() {
 
         <div style={{ display: 'flex', gap: 10 }}>
           <button
-            onClick={loadSampleInvoice}
+            onClick={handleLoadSampleDPD}
             className="mv-btn-ghost"
             style={{ padding: '8px 14px', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}
           >
