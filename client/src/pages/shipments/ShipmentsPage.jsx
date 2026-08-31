@@ -460,18 +460,30 @@ export default function ShipmentsPage() {
             </tr>
           ) : (
             shipments.map(s => {
-              const mainCharge = s.charges?.[0];
-              const isSim = Boolean(s.raw_payload?.simulated);
-              const costVal = mainCharge?.cost_price != null ? Number(mainCharge.cost_price) : null;
-              const sellVal = mainCharge?.price != null ? Number(mainCharge.price) : null;
+              const baseCharge = s.charges?.find(c => c.charge_type === 'courier') || s.charges?.[0];
+              const surcharges = (s.charges || []).filter(c => c.charge_type === 'surcharge');
+              
+              const totalSell = (s.charges || []).reduce((sum, c) => sum + (Number(c.price) || 0), 0);
+              const totalCost = (s.charges || []).reduce((sum, c) => sum + (Number(c.cost_price) || 0), 0);
+              
+              const baseSell = baseCharge?.price != null ? Number(baseCharge.price) : null;
+              const baseCost = baseCharge?.cost_price != null ? Number(baseCharge.cost_price) : null;
+              const surchargesSell = surcharges.reduce((sum, c) => sum + (Number(c.price) || 0), 0);
+              const surchargesCost = surcharges.reduce((sum, c) => sum + (Number(c.cost_price) || 0), 0);
+
+              const hasPricing = totalSell > 0 || baseSell != null;
+              const sellVal = hasPricing ? totalSell : null;
+              const costVal = hasPricing ? totalCost : null;
               const margin = (sellVal != null && costVal != null) ? (sellVal - costVal) : null;
+              const marginPct = (sellVal && margin != null) ? ((margin / sellVal) * 100).toFixed(1) : null;
+              const isSim = Boolean(s.raw_payload?.simulated);
 
               return (
                 <tr key={s.id}>
                   <td>
                     <span
-                      className={`mv-state ${s.cancelled ? 'attention' : (mainCharge && sellVal > 0) ? 'settled' : 'waiting'}`}
-                      title={s.cancelled ? 'Cancelled' : (mainCharge && sellVal > 0) ? 'Rated & Priced' : 'Unpriced'}
+                      className={`mv-state ${s.cancelled ? 'attention' : (hasPricing && sellVal > 0) ? 'settled' : 'waiting'}`}
+                      title={s.cancelled ? 'Cancelled' : (hasPricing && sellVal > 0) ? 'Rated & Priced' : 'Unpriced'}
                     />
                   </td>
                   <td className="mv-num" style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>
@@ -527,15 +539,29 @@ export default function ShipmentsPage() {
                     )}
                   </td>
                   <td className="tar mv-num" style={{ fontWeight: 500 }}>
-                    {costVal != null ? `£${costVal.toFixed(2)}` : <span style={{ color: 'var(--mv-ink-40)' }}>—</span>}
+                    {costVal != null ? (
+                      <div>
+                        <div>£{costVal.toFixed(2)}</div>
+                        {surchargesCost > 0 && (
+                          <div style={{ fontSize: 10.5, color: 'var(--mv-ink-50)' }}>
+                            Base £{baseCost?.toFixed(2)} + Sur £{surchargesCost.toFixed(2)}
+                          </div>
+                        )}
+                      </div>
+                    ) : <span style={{ color: 'var(--mv-ink-40)' }}>—</span>}
                   </td>
                   <td className="tar mv-num" style={{ fontWeight: 700 }}>
                     {sellVal != null ? (
                       <div>
                         <div>£{sellVal.toFixed(2)}</div>
+                        {surcharges.length > 0 && (
+                          <div style={{ fontSize: 10.5, color: 'var(--mv-ink-50)', fontWeight: 500 }}>
+                            Base £{baseSell?.toFixed(2)} + {surcharges.length} surcharges (£{surchargesSell.toFixed(2)})
+                          </div>
+                        )}
                         {margin != null && (
                           <div style={{ fontSize: 10.5, color: margin >= 0 ? 'var(--mv-green)' : 'var(--mv-red)' }}>
-                            {margin >= 0 ? '+' : ''}£{margin.toFixed(2)}
+                            {margin >= 0 ? '+' : ''}£{margin.toFixed(2)} {marginPct ? `(${marginPct}%)` : ''}
                           </div>
                         )}
                       </div>
@@ -755,47 +781,46 @@ export default function ShipmentsPage() {
              <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
                {activeModalTab === 'pricing' && (
                  <div>
-                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
-                     <div className="mv-card" style={{ padding: 14, background: 'var(--mv-surface)' }}>
-                       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-60)', textTransform: 'uppercase' }}>Customer Sell Price</div>
-                       <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4 }} className="mv-num">
-                         {selectedShipment.charges?.[0]?.price != null ? `£${Number(selectedShipment.charges[0].price).toFixed(2)}` : '£0.00'}
-                       </div>
-                       <div style={{ fontSize: 11.5, color: 'var(--mv-ink-50)', marginTop: 2 }}>
-                         Billed to {selectedShipment.customer_display_name || selectedShipment.customer_name || 'Customer'}
-                       </div>
-                     </div>
+                   {(() => {
+                     const allSell = (selectedShipment.charges || []).reduce((sum, c) => sum + (Number(c.price) || 0), 0);
+                     const allCost = (selectedShipment.charges || []).reduce((sum, c) => sum + (Number(c.cost_price) || 0), 0);
+                     const allMargin = allSell - allCost;
+                     const allMarginPct = allSell > 0 ? ((allMargin / allSell) * 100).toFixed(1) : null;
 
-                     <div className="mv-card" style={{ padding: 14, background: 'var(--mv-surface)' }}>
-                       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-60)', textTransform: 'uppercase' }}>Carrier Buy Cost</div>
-                       <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4 }} className="mv-num">
-                         {selectedShipment.charges?.[0]?.cost_price != null ? `£${Number(selectedShipment.charges[0].cost_price).toFixed(2)}` : '£0.00'}
-                       </div>
-                       <div style={{ fontSize: 11.5, color: 'var(--mv-ink-50)', marginTop: 2 }}>
-                         Payable to {selectedShipment.courier || 'DPD'}
-                       </div>
-                     </div>
+                     return (
+                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
+                         <div className="mv-card" style={{ padding: 14, background: 'var(--mv-surface)' }}>
+                           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-60)', textTransform: 'uppercase' }}>Total Customer Sell Price</div>
+                           <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4 }} className="mv-num">
+                             £{allSell.toFixed(2)}
+                           </div>
+                           <div style={{ fontSize: 11.5, color: 'var(--mv-ink-50)', marginTop: 2 }}>
+                             Billed to {selectedShipment.customer_display_name || selectedShipment.customer_name || 'Customer'}
+                           </div>
+                         </div>
 
-                     <div className="mv-card" style={{ padding: 14, background: 'var(--mv-surface)' }}>
-                       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-60)', textTransform: 'uppercase' }}>Profit Margin</div>
-                       {(() => {
-                         const sVal = selectedShipment.charges?.[0]?.price != null ? Number(selectedShipment.charges[0].price) : null;
-                         const cVal = selectedShipment.charges?.[0]?.cost_price != null ? Number(selectedShipment.charges[0].cost_price) : null;
-                         const mVal = (sVal != null && cVal != null) ? (sVal - cVal) : null;
-                         const pct = (sVal && mVal != null) ? ((mVal / sVal) * 100).toFixed(1) : null;
-                         return (
-                           <>
-                             <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4, color: mVal >= 0 ? 'var(--mv-green)' : 'var(--mv-red)' }} className="mv-num">
-                               {mVal != null ? `${mVal >= 0 ? '+' : ''}£${mVal.toFixed(2)}` : '—'}
-                             </div>
-                             <div style={{ fontSize: 11.5, color: 'var(--mv-ink-50)', marginTop: 2 }}>
-                               {pct != null ? `${pct}% margin` : 'Awaiting rate calculation'}
-                             </div>
-                           </>
-                         );
-                       })()}
-                     </div>
-                   </div>
+                         <div className="mv-card" style={{ padding: 14, background: 'var(--mv-surface)' }}>
+                           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-60)', textTransform: 'uppercase' }}>Total Carrier Buy Cost</div>
+                           <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4 }} className="mv-num">
+                             £{allCost.toFixed(2)}
+                           </div>
+                           <div style={{ fontSize: 11.5, color: 'var(--mv-ink-50)', marginTop: 2 }}>
+                             Payable to {selectedShipment.courier || 'DPD'}
+                           </div>
+                         </div>
+
+                         <div className="mv-card" style={{ padding: 14, background: 'var(--mv-surface)' }}>
+                           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-60)', textTransform: 'uppercase' }}>Total Profit Margin</div>
+                           <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4, color: allMargin >= 0 ? 'var(--mv-green)' : 'var(--mv-red)' }} className="mv-num">
+                             {allMargin >= 0 ? '+' : ''}£{allMargin.toFixed(2)}
+                           </div>
+                           <div style={{ fontSize: 11.5, color: 'var(--mv-ink-50)', marginTop: 2 }}>
+                             {allMarginPct != null ? `${allMarginPct}% gross margin` : 'Awaiting rate calculation'}
+                           </div>
+                         </div>
+                       </div>
+                     );
+                   })()}
 
                    {/* Audit Details */}
                    <h4 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', marginBottom: 10 }}>
@@ -834,19 +859,40 @@ export default function ShipmentsPage() {
                            <th>Charge Type</th>
                            <th className="tar">Cost Price</th>
                            <th className="tar">Sell Price</th>
+                           <th className="tar">Margin</th>
                            <th>Status</th>
                          </tr>
                        </thead>
                        <tbody>
-                         {selectedShipment.charges.map((c, idx) => (
-                           <tr key={c.id || idx}>
-                             <td style={{ fontWeight: 600 }}>{c.description || 'Base Delivery'}</td>
-                             <td><span className="mv-chip">{c.charge_type}</span></td>
-                             <td className="tar mv-num">£{Number(c.cost_price || 0).toFixed(2)}</td>
-                             <td className="tar mv-num" style={{ fontWeight: 700 }}>£{Number(c.price || 0).toFixed(2)}</td>
-                             <td><span className={`mv-state ${c.verified ? 'settled' : 'waiting'}`} /> {c.status}</td>
-                           </tr>
-                         ))}
+                         {selectedShipment.charges.map((c, idx) => {
+                           const cSell = Number(c.price || 0);
+                           const cCost = Number(c.cost_price || 0);
+                           const cMarg = cSell - cCost;
+
+                           const chargeLabel = c.service_name || (c.charge_type === 'courier'
+                             ? `${selectedShipment.service_name || 'Base Courier Delivery'} (${selectedShipment.dc_service_id || 'DPD'})`
+                             : 'Carrier Surcharge');
+
+                           return (
+                             <tr key={c.id || idx}>
+                               <td style={{ fontWeight: 600 }}>
+                                 {chargeLabel}
+                                 {c.price_failure_reason && (
+                                   <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 400 }}>
+                                     {c.price_failure_reason}
+                                   </div>
+                                 )}
+                               </td>
+                               <td><span className="mv-chip">{c.charge_type}</span></td>
+                               <td className="tar mv-num">£{cCost.toFixed(2)}</td>
+                               <td className="tar mv-num" style={{ fontWeight: 700 }}>£{cSell.toFixed(2)}</td>
+                               <td className="tar mv-num" style={{ fontWeight: 600, color: cMarg >= 0 ? 'var(--mv-green)' : 'var(--mv-red)' }}>
+                                 {cMarg >= 0 ? '+' : ''}£{cMarg.toFixed(2)}
+                               </td>
+                               <td><span className={`mv-state ${c.verified ? 'settled' : 'waiting'}`} /> {c.status || (c.verified ? 'verified' : 'pending')}</td>
+                             </tr>
+                           );
+                         })}
                        </tbody>
                      </table>
                    ) : (

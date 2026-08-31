@@ -153,8 +153,10 @@ router.get('/', async (req, res, next) => {
           SELECT json_agg(json_build_object(
             'id', ch.id,
             'charge_type', ch.charge_type,
+            'service_name', ch.service_name,
             'price', ch.price,
             'cost_price', ch.cost_price,
+            'price_failure_reason', ch.price_failure_reason,
             'verified', ch.verified,
             'billed', ch.billed
           ))
