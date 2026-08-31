@@ -455,8 +455,8 @@ router.post('/purge-ghosts', async (req, res, next) => {
   }
 });
 
-// ─── POST /api/shipments/reprocess-all ──────────────────────────────────────────
-router.post('/reprocess-all', async (req, res, next) => {
+// ─── POST /api/shipments/reprocess-all & /reprice-all ──────────────────────────
+router.post(['/reprocess-all', '/reprice-all'], async (req, res, next) => {
   try {
     // Clean up empty ghost rows that have no tracking, no reference, and no recipient
     await query(`
