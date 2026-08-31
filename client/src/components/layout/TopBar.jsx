@@ -60,7 +60,6 @@ export default function TopBar() {
           onKeyDown={handleSearchKeyDown}
           placeholder="Search consignment, customer…"
         />
-        <kbd className="mv-kbd">⌘K</kbd>
       </div>
 
       <NotificationBell />

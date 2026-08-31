@@ -2276,48 +2276,9 @@ export default function QueriesPage() {
             </p>
           </div>
           <div className="mv-actions">
-            {/* Workspace switcher tabs */}
-            <div className="mv-tabs" style={{ marginBottom: 0 }}>
-              {[
-                { key: 'unassigned', label: 'Unassigned',      count: stats?.unassigned },
-                { key: 'mine',       label: 'Assigned to me',  count: stats?.assigned_to_me },
-                { key: 'all',        label: 'All open',        count: stats?.total_open },
-              ].map(w => {
-                const active = workspace === w.key;
-                return (
-                  <button
-                    key={w.key}
-                    onClick={() => setWorkspace(w.key)}
-                    className={`mv-tab ${active ? 'is-active' : ''}`}
-                    style={{ padding: '6px 12px', fontSize: 12.5 }}
-                  >
-                    {w.label}
-                    {w.count != null && (
-                      <span className="mv-num" style={{ marginLeft: 6, fontWeight: 800 }}>
-                        ({w.count})
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Search */}
-            <div style={{ position: 'relative' }}>
-              <Search size={13} style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: 'var(--mv-ink-52)', pointerEvents: 'none' }} />
-              <input
-                placeholder="Search consignment, customer…"
-                value={filters.search}
-                onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
-                style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', borderRadius: 0, color: 'var(--mv-ink)',
-                  fontSize: 12, padding: '7px 10px 7px 28px', width: 220, outline: 'none' }}
-              />
-            </div>
-
             <button onClick={refresh} className="mv-icon-btn" title="Refresh">
-              <RefreshCw size={13} />
+              <RefreshCw size={14} />
             </button>
-
             <button
               onClick={() => navigate('/queries/simulator')}
               className="mv-btn-ghost"
@@ -2327,7 +2288,30 @@ export default function QueriesPage() {
           </div>
         </div>
 
-        <div className="mv-rule" />
+        {/* ── Workspace Switcher Tabs ────────────────────────────────────────── */}
+        <div className="mv-tabs" style={{ marginTop: 14, marginBottom: 20 }}>
+          {[
+            { key: 'unassigned', label: 'Unassigned',      count: stats?.unassigned },
+            { key: 'mine',       label: 'Assigned to me',  count: stats?.assigned_to_me },
+            { key: 'all',        label: 'All open',        count: stats?.total_open },
+          ].map(w => {
+            const active = workspace === w.key;
+            return (
+              <button
+                key={w.key}
+                onClick={() => setWorkspace(w.key)}
+                className={`mv-tab ${active ? 'is-active' : ''}`}
+              >
+                {w.label}
+                {w.count != null && (
+                  <span className="mv-tab-count">
+                    ({w.count})
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
 
         {/* ── Threat Matrix — high-impact operational counters ───────────────── */}
         <div className="mv-kpis" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 20 }}>
@@ -2344,50 +2328,77 @@ export default function QueriesPage() {
             <div
               key={k.key}
               onClick={k.onClick || undefined}
-              className={`mv-kpi ${k.active ? 'is-active' : ''}`}
+              className={`mv-kpi ${k.active ? 'is-clickable is-active' : (k.onClick ? 'is-clickable' : '')}`}
               style={{ cursor: k.onClick ? 'pointer' : 'default' }}
             >
               <div className="mv-kpi-label">{k.label}</div>
-              <div className="mv-kpi-val mv-num">
+              <div className="mv-kpi-value mv-num">
                 {k.value ?? '—'}
               </div>
             </div>
           ))}
         </div>
 
-        {/* ── Group & Status Filter Chips ────────────────────────────────────── */}
-        <div className="mv-chips" style={{ marginBottom: 20 }}>
-          {GROUP_TABS.map(t => {
-            const isActive = t.group === '' ? !filters.group_name : filters.group_name === t.group;
-            return (
+        {/* ── Group & Status Filter Toolbar with Search ──────────────────────── */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+          <div className="mv-chips">
+            <span className="mv-filter-label">Group:</span>
+            {GROUP_TABS.map(t => {
+              const isActive = t.group === '' ? !filters.group_name : filters.group_name === t.group;
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => setFilters(f => ({ ...f, group_name: t.group, attention: false, status: '' }))}
+                  className={`mv-chip ${isActive ? 'is-on' : ''}`}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {/* Search query box */}
+            <div className="mv-search" style={{ width: 250, height: 32, padding: '4px 10px' }}>
+              <Search size={13} style={{ color: 'var(--mv-ink-45)', flexShrink: 0 }} />
+              <input
+                placeholder="Search query, customer…"
+                value={filters.search}
+                onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
+              />
+              {filters.search && (
+                <button
+                  onClick={() => setFilters(f => ({ ...f, search: '' }))}
+                  style={{ background: 'none', border: 'none', color: 'var(--mv-ink-45)', cursor: 'pointer', fontSize: 11, padding: 0 }}
+                  title="Clear search"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Status chips */}
+            <div className="mv-chips">
               <button
-                key={t.key}
-                onClick={() => setFilters(f => ({ ...f, group_name: t.group, attention: false, status: '' }))}
-                className={`mv-chip ${isActive ? 'is-active' : ''}`}
+                onClick={() => setFilters(p => ({ ...p, attention: !p.attention, pending_draft: false }))}
+                className={`mv-chip ${filters.attention ? 'is-on' : ''}`}
               >
-                {t.label}
+                ⚠ Attention
               </button>
-            );
-          })}
-          <div style={{ flex: 1 }} />
-          <button
-            onClick={() => setFilters(p => ({ ...p, attention: !p.attention, pending_draft: false }))}
-            className={`mv-chip ${filters.attention ? 'is-active' : ''}`}
-          >
-            ⚠ Attention
-          </button>
-          <button
-            onClick={() => setFilters(p => ({ ...p, pending_draft: !p.pending_draft, attention: false }))}
-            className={`mv-chip ${filters.pending_draft ? 'is-active' : ''}`}
-          >
-            ✦ To verify
-          </button>
-          <button
-            onClick={() => setFilters(p => ({ ...p, status: p.status === 'resolved' ? '' : 'resolved', attention: false }))}
-            className={`mv-chip ${filters.status === 'resolved' ? 'is-active' : ''}`}
-          >
-            Resolved
-          </button>
+              <button
+                onClick={() => setFilters(p => ({ ...p, pending_draft: !p.pending_draft, attention: false }))}
+                className={`mv-chip ${filters.pending_draft ? 'is-on' : ''}`}
+              >
+                ✦ To verify
+              </button>
+              <button
+                onClick={() => setFilters(p => ({ ...p, status: p.status === 'resolved' ? '' : 'resolved', attention: false }))}
+                className={`mv-chip ${filters.status === 'resolved' ? 'is-on' : ''}`}
+              >
+                Resolved
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* ── Command Center: live queue (2 cols) + Autopilot QA Bay (1 col) ── */}
