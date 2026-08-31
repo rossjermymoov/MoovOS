@@ -68,8 +68,25 @@ async function createOrUpdateShipment(payload, customerId) {
     payload.DC_service_ID ||
     null;
   const serviceName    = ship.friendly_service_name || reqShip.courier?.friendly_service_name || null;
-  const customerAccount= ship.account_number || reqShip.account_number || null;
-  const customerName   = ship.account_name   || reqShip.account_name   || null;
+  const customerAccount=
+    ship.account_number ||
+    reqShip.account_number ||
+    ship.billing?.customer_dc_id ||
+    reqShip.billing?.customer_dc_id ||
+    ship.customer_dc_id ||
+    reqShip.customer_dc_id ||
+    payload.request?.auth_company ||
+    payload.auth_company ||
+    null;
+  const customerName   =
+    ship.account_name ||
+    reqShip.account_name ||
+    ship.customer_name ||
+    reqShip.customer_name ||
+    ship.ship_to_company_name ||
+    ship.ship_from?.company_name ||
+    reqShip.ship_from?.company_name ||
+    null;
   const reference      = ship.reference      || reqShip.reference      || null;
   const reference2     = ship.reference_2    || reqShip.reference_2    || null;
   const shipToPostcode = ship.ship_to_postcode || reqShip.ship_to?.postcode || null;

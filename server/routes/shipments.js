@@ -113,8 +113,8 @@ router.get('/', async (req, res, next) => {
         s.platform_shipment_id,
         s.event_type,
         s.customer_id,
-        COALESCE(c.business_name, s.customer_name, s.customer_account, 'Unassigned') AS customer_display_name,
-        s.customer_account,
+        COALESCE(c.business_name, c.trading_name, c.company_name, s.customer_name, s.customer_account, 'Unassigned') AS customer_display_name,
+        COALESCE(c.account_number, s.customer_account) AS customer_account,
         s.courier,
         s.dc_service_id,
         s.service_name,
@@ -445,7 +445,12 @@ router.post('/delete-before-today', async (req, res, next) => {
 // ─── POST /api/shipments/reprice-all ──────────────────────────────────────────
 router.post('/reprice-all', async (req, res, next) => {
   try {
-    const listRes = await query(`SELECT id, raw_payload, customer_id, dc_service_id FROM shipments ORDER BY created_at DESC LIMIT 200`);
+    const listRes = await query(`
+      SELECT s.id, s.raw_payload, s.customer_id, s.dc_service_id, s.tracking_codes
+      FROM shipments s
+      ORDER BY s.created_at DESC
+      LIMIT 200
+    `);
     let repriced = 0;
     let errors = [];
 
@@ -453,14 +458,23 @@ router.post('/reprice-all', async (req, res, next) => {
       if (!shipRow.raw_payload) continue;
       let payload = typeof shipRow.raw_payload === 'string' ? JSON.parse(shipRow.raw_payload) : shipRow.raw_payload;
 
+      // Pass existing customer_id if present
+      if (shipRow.customer_id) payload.customerId = shipRow.customer_id;
+
       try {
         const result = await processShipment(payload);
         const charges = result.charges || [];
         const customerId = charges[0]?.customer_id || null;
 
-        // Update customer_id on shipment if resolved
+        // Update customer_id, customer_name, and customer_account on shipment
         if (customerId) {
-          await query('UPDATE shipments SET customer_id = $1 WHERE id = $2', [customerId, shipRow.id]);
+          const custRes = await query('SELECT business_name, account_number FROM customers WHERE id = $1', [customerId]);
+          const bName = custRes.rows[0]?.business_name;
+          const acct = custRes.rows[0]?.account_number;
+          await query(
+            'UPDATE shipments SET customer_id = $1, customer_name = COALESCE($2, customer_name), customer_account = COALESCE($3, customer_account) WHERE id = $4',
+            [customerId, bName, acct, shipRow.id]
+          );
         }
 
         if (charges.length) {
@@ -490,12 +504,20 @@ router.post('/:id/reprice', async (req, res, next) => {
     let payload = typeof shipRow.raw_payload === 'string' ? JSON.parse(shipRow.raw_payload) : shipRow.raw_payload;
     if (!payload) return res.status(400).json({ error: 'No raw payload available' });
 
+    if (shipRow.customer_id) payload.customerId = shipRow.customer_id;
+
     const result = await processShipment(payload);
     const charges = result.charges || [];
     const customerId = charges[0]?.customer_id || null;
 
     if (customerId) {
-      await query('UPDATE shipments SET customer_id = $1 WHERE id = $2', [customerId, shipRow.id]);
+      const custRes = await query('SELECT business_name, account_number FROM customers WHERE id = $1', [customerId]);
+      const bName = custRes.rows[0]?.business_name;
+      const acct = custRes.rows[0]?.account_number;
+      await query(
+        'UPDATE shipments SET customer_id = $1, customer_name = COALESCE($2, customer_name), customer_account = COALESCE($3, customer_account) WHERE id = $4',
+        [customerId, bName, acct, shipRow.id]
+      );
     }
 
     if (charges.length) {

@@ -538,7 +538,8 @@ function normaliseShipmentPayload(payload) {
 }
 
 export async function processShipment(payload) {
-  const { shipment } = payload;
+  const root = payload.json || payload;
+  const ship = root.shipment || root.request?.shipment || payload.shipment || payload.request?.shipment || {};
   const charges = [];
   const errors  = [];
 
@@ -548,10 +549,44 @@ export async function processShipment(payload) {
 
   try {
     // ── 1. IDENTIFY CUSTOMER ──────────────────────────────────────────────────
-    const accountNumber = (shipment?.account_number || reqShip?.account_number || '').trim();
-    const customerDcId  = shipment?.billing?.customer_dc_id || reqShip?.billing?.customer_dc_id || null;
-    const accountName   = (shipment?.account_name || reqShip?.account_name || shipment?.ship_to_company_name || '').trim();
-    const authCompany   = (payload.request?.auth_company || payload.auth_company || '').trim();
+    const customerDcId  = (
+      ship.billing?.customer_dc_id ||
+      reqShip?.billing?.customer_dc_id ||
+      ship.customer_dc_id ||
+      reqShip?.customer_dc_id ||
+      ship.dc_customer_id ||
+      reqShip?.dc_customer_id ||
+      payload.customer_dc_id ||
+      root.customer_dc_id ||
+      ''
+    ).toString().trim();
+
+    const accountNumber = (
+      ship.account_number ||
+      reqShip?.account_number ||
+      payload.account_number ||
+      root.account_number ||
+      ''
+    ).toString().trim();
+
+    const accountName = (
+      ship.account_name ||
+      reqShip?.account_name ||
+      ship.customer_name ||
+      reqShip?.customer_name ||
+      ship.ship_to_company_name ||
+      ship.ship_from?.company_name ||
+      reqShip?.ship_from?.company_name ||
+      ''
+    ).toString().trim();
+
+    const authCompany = (
+      root.request?.auth_company ||
+      payload.request?.auth_company ||
+      payload.auth_company ||
+      root.auth_company ||
+      ''
+    ).toString().trim();
 
     let customerId        = null;
     let multi_box_pricing = null;
@@ -561,67 +596,77 @@ export async function processShipment(payload) {
       multi_box_pricing = row.multi_box_pricing;
     };
 
-    // Direct override — carrier-direct path passes customer_id when already known
-    if (payload.customerId) {
-      const r = await query('SELECT id, multi_box_pricing FROM customers WHERE id = $1 LIMIT 1', [payload.customerId]);
+    // Direct override — carrier-direct path or reprice passes customer_id when already known
+    const directId = payload.customerId || payload.customer_id;
+    if (directId) {
+      const r = await query('SELECT id, multi_box_pricing FROM customers WHERE id = $1 LIMIT 1', [directId]);
       if (r.rows.length) pickCustomer(r.rows[0]);
     }
 
-    // Step 1: exact account_number
-    if (!customerId && accountNumber) {
-      const r = await query(
-        'SELECT id, multi_box_pricing FROM customers WHERE LOWER(account_number) = LOWER($1) LIMIT 1',
-        [accountNumber]
-      );
-      if (r.rows.length) pickCustomer(r.rows[0]);
+    // Step 1: billing_aliases match (e.g. 'Cranswick', 'Shop2X', 'DC-00123')
+    const aliasCandidates = [customerDcId, accountNumber, authCompany, accountName].filter(Boolean);
+    for (const cand of aliasCandidates) {
+      if (!customerId && cand) {
+        try {
+          const r = await query(
+            `SELECT id, multi_box_pricing FROM customers
+             WHERE EXISTS (
+               SELECT 1 FROM unnest(billing_aliases) a
+               WHERE LOWER(a) = LOWER($1)
+                  OR LOWER($1) ILIKE '%' || LOWER(a) || '%'
+                  OR LOWER(a) ILIKE '%' || LOWER($1) || '%'
+             ) LIMIT 1`,
+            [cand]
+          );
+          if (r.rows.length) {
+            pickCustomer(r.rows[0]);
+            break;
+          }
+        } catch (_) {}
+      }
     }
 
-    // Step 2: customer_carrier_links
-    if (!customerId && accountNumber) {
-      const r = await query(
-        `SELECT c.id, c.multi_box_pricing FROM customer_carrier_links ccl
-         JOIN customers c ON c.id = ccl.customer_id
-         WHERE LOWER(ccl.account_number) = LOWER($1) LIMIT 1`,
-        [accountNumber]
-      );
-      if (r.rows.length) pickCustomer(r.rows[0]);
-    }
-
-    // Step 3: dc_customer_id / dc_id
-    if (!customerId && (accountNumber || customerDcId)) {
+    // Step 2: dc_customer_id / dc_id match
+    if (!customerId && (customerDcId || accountNumber)) {
       const val = customerDcId || accountNumber;
       const r = await query(
-        'SELECT id, multi_box_pricing FROM customers WHERE dc_customer_id = $1 OR dc_id = $1 LIMIT 1',
+        `SELECT id, multi_box_pricing FROM customers
+         WHERE LOWER(dc_customer_id) = LOWER($1)
+            OR LOWER(dc_id) = LOWER($1)
+            OR LOWER(account_number) = LOWER($1)
+         LIMIT 1`,
         [String(val)]
       );
       if (r.rows.length) pickCustomer(r.rows[0]);
     }
 
-    // Step 4: billing_aliases
-    if (!customerId && (accountNumber || accountName || authCompany)) {
-      const matchCandidate = accountNumber || accountName || authCompany;
-      try {
-        const r = await query(
-          `SELECT id, multi_box_pricing FROM customers
-           WHERE EXISTS (
-             SELECT 1 FROM unnest(billing_aliases) a
-             WHERE LOWER(a) = LOWER($1) OR LOWER($1) LIKE '%' || LOWER(a) || '%' OR LOWER(a) LIKE '%' || LOWER($1) || '%'
-           ) LIMIT 1`,
-          [matchCandidate]
-        );
-        if (r.rows.length) pickCustomer(r.rows[0]);
-      } catch (_) {}
+    // Step 3: exact account_number or customer_carrier_links
+    if (!customerId && accountNumber) {
+      const r = await query(
+        `SELECT id, multi_box_pricing FROM customers WHERE LOWER(account_number) = LOWER($1)
+         UNION
+         SELECT c.id, c.multi_box_pricing FROM customer_carrier_links ccl
+         JOIN customers c ON c.id = ccl.customer_id
+         WHERE LOWER(ccl.account_number) = LOWER($1)
+         LIMIT 1`,
+        [accountNumber]
+      );
+      if (r.rows.length) pickCustomer(r.rows[0]);
     }
 
-    // Step 5: business_name exact, partial, or reversed (e.g. 'Cranswick' -> 'Cranswick Pet Products Ltd')
-    const candidates = [accountName, accountNumber, authCompany].filter(Boolean);
-    for (const cand of candidates) {
+    // Step 4: business_name / company_name / trading_name exact or partial match
+    const nameCandidates = [accountName, accountNumber, authCompany, customerDcId].filter(Boolean);
+    for (const cand of nameCandidates) {
       if (!customerId && cand) {
         const r = await query(
           `SELECT id, multi_box_pricing FROM customers
            WHERE LOWER(business_name) = LOWER($1)
               OR LOWER(business_name) LIKE LOWER($2)
               OR LOWER($1) LIKE '%' || LOWER(business_name) || '%'
+              OR LOWER(trading_name) = LOWER($1)
+              OR LOWER(trading_name) LIKE LOWER($2)
+              OR LOWER(company_name) = LOWER($1)
+              OR LOWER(company_name) LIKE LOWER($2)
            ORDER BY (CASE WHEN LOWER(business_name) = LOWER($1) THEN 0 ELSE 1 END)
            LIMIT 1`,
           [cand, `%${cand}%`]
@@ -635,8 +680,8 @@ export async function processShipment(payload) {
 
     if (!customerId) {
       throw new Error(
-        `No customer found for account_number="${accountNumber}", ` +
-        `dc_id="${customerDcId || ''}", name="${accountName || authCompany}"`
+        `No customer found for customer_dc_id="${customerDcId}", account_number="${accountNumber}", ` +
+        `auth_company="${authCompany}", name="${accountName}"`
       );
     }
 
