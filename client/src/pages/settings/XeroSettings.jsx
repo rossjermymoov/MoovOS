@@ -10,10 +10,10 @@ const api = axios.create({ baseURL: '/api' });
 // ─── Xero logo ────────────────────────────────────────────────────────────────
 function XeroLogo({ size = 24 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <rect width="24" height="24" rx="4" fill="#13B5EA"/>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ borderRadius: 0, flexShrink: 0 }}>
+      <rect width="24" height="24" fill="#13B5EA"/>
       <path d="M7.5 8L12 12.5L16.5 8M7.5 16L12 11.5L16.5 16"
-        stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+        stroke="white" strokeWidth="1.8" strokeLinecap="square" strokeLinejoin="miter"/>
     </svg>
   );
 }
@@ -23,14 +23,17 @@ function ConfidencePill({ score }) {
   // score is 0–100
   const high   = score >= 80;
   const medium = score >= 50;
-  const col    = high ? '#00C853' : medium ? '#D97706' : '#EF4444';
-  const bg     = high ? 'rgba(0,200,83,0.1)' : medium ? 'rgba(255,193,7,0.1)' : 'rgba(239,68,68,0.1)';
+  const col    = high ? 'var(--mv-green-deep)' : medium ? 'var(--mv-purple)' : 'var(--mv-magenta-deep)';
+  const bg     = high ? 'rgba(0,200,83,0.08)' : medium ? 'rgba(123,47,190,0.08)' : 'rgba(233,30,140,0.08)';
+  const border = high ? 'rgba(0,200,83,0.3)' : medium ? 'rgba(123,47,190,0.3)' : 'rgba(233,30,140,0.3)';
+
   return (
     <span style={{
-      fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
-      background: bg, border: `1px solid ${col}44`, color: col,
+      fontSize: 10.5, fontWeight: 800, padding: '2px 6px', borderRadius: 0,
+      background: bg, border: `1px solid ${border}`, color: col,
+      fontVariantNumeric: 'tabular-nums', letterSpacing: '0.04em',
     }}>
-      {score}%
+      {score}% match
     </span>
   );
 }
@@ -59,7 +62,7 @@ function ContactSearch({ customerId, onLink, onClose }) {
 
   return (
     <div style={{ position: 'relative' }}>
-      <div className="mv-search" style={{ width: 220, height: 32, padding: '0 8px' }}>
+      <div className="mv-search" style={{ width: 240, height: 32, padding: '0 8px' }}>
         <Search size={12} style={{ color: 'var(--mv-ink-45)', flexShrink: 0 }} />
         <input
           ref={inputRef}
@@ -76,25 +79,26 @@ function ContactSearch({ customerId, onLink, onClose }) {
       </div>
       {results.length > 0 && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 200,
-          background: '#1A1B3A', border: '1px solid rgba(0,0,0,0.10)',
-          borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
-          maxHeight: 220, overflowY: 'auto',
+          position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 200,
+          background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)',
+          borderRadius: 0, boxShadow: '0 6px 16px rgba(0,0,0,0.12)',
+          width: 280, maxHeight: 220, overflowY: 'auto',
         }}>
           {results.map(c => (
             <button
               key={c.id}
               onClick={() => onLink(c.id, c.name)}
               style={{
-                width: '100%', textAlign: 'left', background: 'none', border: 'none',
-                padding: '8px 12px', cursor: 'pointer', color: '#334155', fontSize: 12,
-                borderBottom: '1px solid rgba(0,0,0,0.04)',
+                width: '100%', textAlign: 'left', background: 'transparent', border: 'none',
+                padding: '8px 12px', cursor: 'pointer', color: 'var(--mv-ink)', fontSize: 12,
+                borderBottom: '1px solid var(--mv-hairline)',
+                display: 'block',
               }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.04)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'none'}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(32,30,29,0.06)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
-              <div style={{ fontWeight: 600 }}>{c.name}</div>
-              {c.email && <div style={{ color: '#64748B', fontSize: 11 }}>{c.email}</div>}
+              <div style={{ fontWeight: 700 }}>{c.name}</div>
+              {c.email && <div style={{ color: 'var(--mv-ink-52)', fontSize: 11, marginTop: 1 }}>{c.email}</div>}
             </button>
           ))}
         </div>
@@ -112,36 +116,35 @@ function CustomerRow({ customer, suggestion, onLink, onUnlink, linking, unlinkin
     return (
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '9px 14px', borderRadius: 8,
-        background: 'rgba(0,200,83,0.03)', border: '1px solid rgba(0,200,83,0.08)',
+        padding: '10px 14px', borderRadius: 0,
+        background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)',
         gap: 12,
       }}>
         {/* Our name */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
-          <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#00C853', flexShrink: 0 }} />
-          <span style={{ fontSize: 13, color: '#334155', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span className="mv-mark mv-mark--settled" />
+          <span style={{ fontSize: 13, color: 'var(--mv-ink)', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {customer.business_name}
           </span>
         </div>
 
         {/* Arrow + Xero name */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <ChevronRight size={13} color="#444" />
-          <span style={{ fontSize: 12, color: '#64748B', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {customer.xero_contact_name || <span style={{ color: '#64748B', fontFamily: 'monospace' }}>{customer.xero_contact_id?.slice(0, 8)}…</span>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <ChevronRight size={13} style={{ color: 'var(--mv-ink-45)' }} />
+          <span style={{ fontSize: 12.5, color: 'var(--mv-ink)', fontWeight: 600, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {customer.xero_contact_name || <span style={{ color: 'var(--mv-ink-52)', fontFamily: 'monospace' }}>{customer.xero_contact_id?.slice(0, 8)}…</span>}
           </span>
           <button
             onClick={onUnlink}
             disabled={unlinking}
             title="Unlink"
+            className="mv-btn-ghost"
             style={{
-              display: 'flex', alignItems: 'center', gap: 4,
-              background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.18)',
-              color: '#EF4444', borderRadius: 6, padding: '3px 9px', fontSize: 11,
-              cursor: 'pointer', fontWeight: 600, opacity: unlinking ? 0.5 : 1,
+              padding: '4px 8px', fontSize: 11.5, color: 'var(--mv-magenta-deep)',
+              opacity: unlinking ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: 4,
             }}
           >
-            <Unlink size={10} /> Unlink
+            <Unlink size={11} /> Unlink
           </button>
         </div>
       </div>
@@ -152,14 +155,14 @@ function CustomerRow({ customer, suggestion, onLink, onUnlink, linking, unlinkin
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '9px 14px', borderRadius: 8,
-      background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(0,0,0,0.04)',
+      padding: '10px 14px', borderRadius: 0,
+      background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)',
       gap: 12,
     }}>
       {/* Our name */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
-        <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#EF4444', flexShrink: 0 }} />
-        <span style={{ fontSize: 13, color: '#334155', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span className="mv-mark mv-mark--waiting" />
+        <span style={{ fontSize: 13, color: 'var(--mv-ink)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {customer.business_name}
         </span>
       </div>
@@ -174,8 +177,8 @@ function CustomerRow({ customer, suggestion, onLink, onUnlink, linking, unlinkin
           />
         ) : suggestion ? (
           <>
-            <ChevronRight size={13} color="#444" />
-            <span style={{ fontSize: 12, color: '#64748B', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <ChevronRight size={13} style={{ color: 'var(--mv-ink-45)' }} />
+            <span style={{ fontSize: 12, color: 'var(--mv-ink-62)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {suggestion.xero_name}
             </span>
             <ConfidencePill score={suggestion.score} />
@@ -183,10 +186,10 @@ function CustomerRow({ customer, suggestion, onLink, onUnlink, linking, unlinkin
             <button
               onClick={() => onLink(suggestion.xero_id, suggestion.xero_name)}
               disabled={linking}
+              className="mv-btn-primary"
               style={{
-                background: 'rgba(0,200,83,0.1)', border: '1px solid rgba(0,200,83,0.25)',
-                color: '#00C853', borderRadius: 6, padding: '3px 10px', fontSize: 11,
-                cursor: 'pointer', fontWeight: 700, opacity: linking ? 0.5 : 1,
+                padding: '4px 10px', fontSize: 11.5,
+                opacity: linking ? 0.5 : 1,
               }}
             >
               Accept
@@ -195,11 +198,8 @@ function CustomerRow({ customer, suggestion, onLink, onUnlink, linking, unlinkin
             <button
               onClick={() => setShowSearch(true)}
               title="Search manually"
-              style={{
-                background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)',
-                color: '#475569', borderRadius: 6, padding: '3px 8px', fontSize: 11,
-                cursor: 'pointer',
-              }}
+              className="mv-btn-ghost"
+              style={{ padding: '4px 8px', fontSize: 11.5 }}
             >
               <Search size={11} />
             </button>
@@ -207,11 +207,10 @@ function CustomerRow({ customer, suggestion, onLink, onUnlink, linking, unlinkin
         ) : (
           <button
             onClick={() => setShowSearch(true)}
+            className="mv-btn-ghost"
             style={{
               display: 'flex', alignItems: 'center', gap: 5,
-              background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)',
-              color: '#64748B', borderRadius: 6, padding: '4px 10px', fontSize: 11,
-              cursor: 'pointer', fontWeight: 600,
+              padding: '4px 10px', fontSize: 11.5,
             }}
           >
             <Search size={11} /> Search Xero
@@ -227,40 +226,36 @@ function ConnectionPanel({ status, onDisconnect, disconnecting }) {
   const connected = status?.connected;
   return (
     <div style={{
-      background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.07)',
-      borderRadius: 12, padding: '20px 24px', marginBottom: 20,
+      background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)',
+      borderRadius: 0, padding: '20px 24px', marginBottom: 18,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <XeroLogo size={32} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <XeroLogo size={36} />
           <div>
-            <div style={{ fontWeight: 700, fontSize: 15, color: '#1E293B' }}>Xero</div>
-            <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>Accounting integration</div>
+            <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--mv-ink)' }}>Xero Organization</div>
+            <div style={{ fontSize: 12, color: 'var(--mv-ink-52)', marginTop: 2 }}>Accounting &amp; Ledger Integration</div>
           </div>
         </div>
         {connected ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#4CAF50' }}>
-              <CheckCircle size={16} />
-              <span style={{ fontSize: 13, fontWeight: 600 }}>Connected</span>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <span className="mv-state mv-state--settled">
+              <span className="mv-mark mv-mark--settled" />
+              <span className="mv-state-label">Connected</span>
+            </span>
             <button
               onClick={onDisconnect}
               disabled={disconnecting}
+              className="mv-btn-ghost"
               style={{
-                background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)',
-                color: '#EF4444', borderRadius: 8, padding: '6px 14px', fontSize: 13,
-                cursor: 'pointer', fontWeight: 600,
+                color: 'var(--mv-magenta-deep)', padding: '6px 14px', fontSize: 12.5,
               }}
             >
               Disconnect
             </button>
           </div>
         ) : (
-          <a href="/api/xero/connect" style={{
-            background: '#13B5EA', color: '#FFF', borderRadius: 8,
-            padding: '8px 20px', fontSize: 13, fontWeight: 700, textDecoration: 'none',
-          }}>
+          <a href="/api/xero/connect" className="mv-btn-primary" style={{ textDecoration: 'none', display: 'inline-flex' }}>
             Connect to Xero
           </a>
         )}
@@ -268,29 +263,29 @@ function ConnectionPanel({ status, onDisconnect, disconnecting }) {
 
       {connected && status?.tenant_name && (
         <div style={{
-          marginTop: 14, padding: '10px 14px',
-          background: 'rgba(19,181,234,0.06)', borderRadius: 8,
-          border: '1px solid rgba(19,181,234,0.15)',
-          display: 'flex', gap: 24, fontSize: 12,
+          marginTop: 16, padding: '10px 14px',
+          background: 'var(--mv-bg)', borderRadius: 0,
+          border: '1px solid var(--mv-hairline-2)',
+          display: 'flex', gap: 28, fontSize: 12.5,
         }}>
-          <span><span style={{ color: '#64748B' }}>Organisation: </span><span style={{ color: '#334155', fontWeight: 600 }}>{status.tenant_name}</span></span>
-          <span><span style={{ color: '#64748B' }}>Tenant ID: </span><span style={{ color: '#475569', fontFamily: 'monospace' }}>{status.tenant_id?.slice(0, 8)}…</span></span>
+          <span><span style={{ color: 'var(--mv-ink-52)' }}>Organisation: </span><strong style={{ color: 'var(--mv-ink)' }}>{status.tenant_name}</strong></span>
+          <span><span style={{ color: 'var(--mv-ink-52)' }}>Tenant ID: </span><span style={{ color: 'var(--mv-ink-62)', fontFamily: 'monospace' }}>{status.tenant_id?.slice(0, 8)}…</span></span>
         </div>
       )}
 
       {!connected && (
-        <div style={{ marginTop: 14, fontSize: 12, color: '#64748B', lineHeight: 1.6 }}>
+        <div style={{ marginTop: 14, fontSize: 12.5, color: 'var(--mv-ink-62)', lineHeight: 1.6 }}>
           Create a Xero app at{' '}
-          <a href="https://developer.xero.com/app/manage" target="_blank" rel="noopener noreferrer" style={{ color: '#13B5EA' }}>
+          <a href="https://developer.xero.com/app/manage" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--mv-purple)', fontWeight: 600 }}>
             developer.xero.com/app/manage
           </a>
           {' '}with redirect URI{' '}
-          <code style={{ color: '#64748B', background: 'rgba(0,0,0,0.06)', padding: '1px 5px', borderRadius: 4 }}>
+          <code style={{ color: 'var(--mv-ink)', background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)', padding: '1px 6px' }}>
             {window.location.origin}/api/xero/callback
           </code>.
-          Then add <code style={{ color: '#64748B', background: 'rgba(0,0,0,0.06)', padding: '1px 5px', borderRadius: 4 }}>XERO_CLIENT_ID</code>{' '}
-          and <code style={{ color: '#64748B', background: 'rgba(0,0,0,0.06)', padding: '1px 5px', borderRadius: 4 }}>XERO_CLIENT_SECRET</code>{' '}
-          to your Railway environment variables.
+          Then add <code style={{ color: 'var(--mv-ink)', background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)', padding: '1px 6px' }}>XERO_CLIENT_ID</code>{' '}
+          and <code style={{ color: 'var(--mv-ink)', background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)', padding: '1px 6px' }}>XERO_CLIENT_SECRET</code>{' '}
+          to your environment variables.
         </div>
       )}
     </div>
@@ -349,48 +344,47 @@ function CustomerMatchingPanel({ connected }) {
 
   return (
     <div style={{
-      background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.07)',
-      borderRadius: 12, padding: '20px 24px',
+      background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)',
+      borderRadius: 0, padding: '20px 24px', marginTop: 18,
     }}>
       {/* Header row */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
-          <div style={{ fontWeight: 700, fontSize: 14, color: '#1E293B' }}>Customer matching</div>
-          <div style={{ fontSize: 12, color: '#64748B', marginTop: 3 }}>
-            <span style={{ color: '#00C853', fontWeight: 600 }}>{linked.length} linked</span>
-            {' / '}
-            <span style={{ color: unlinked.length > 0 ? '#EF4444' : '#666', fontWeight: 600 }}>{unlinked.length} unlinked</span>
-            {' of '}{customers.length}
-            {isFetching && <span style={{ color: '#64748B', marginLeft: 8 }}>refreshing…</span>}
+          <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--mv-ink)' }}>Customer Contact Matching</div>
+          <div style={{ fontSize: 12.5, color: 'var(--mv-ink-52)', marginTop: 4 }}>
+            <span style={{ color: 'var(--mv-green-deep)', fontWeight: 700 }}>{linked.length} linked</span>
+            {' · '}
+            <span style={{ color: unlinked.length > 0 ? 'var(--mv-magenta-deep)' : 'var(--mv-ink-52)', fontWeight: 700 }}>{unlinked.length} unlinked</span>
+            {' · '}{customers.length} total customer accounts
+            {isFetching && <span style={{ color: 'var(--mv-purple)', marginLeft: 8 }}>refreshing…</span>}
           </div>
         </div>
         <button
           onClick={handleAutoMatch}
           disabled={autoMatching}
+          className="mv-btn-primary"
           style={{
             display: 'flex', alignItems: 'center', gap: 6,
-            background: 'rgba(19,181,234,0.1)', border: '1px solid rgba(19,181,234,0.25)',
-            color: '#13B5EA', borderRadius: 8, padding: '7px 14px', fontSize: 12,
-            cursor: autoMatching ? 'not-allowed' : 'pointer', fontWeight: 600,
+            padding: '7px 14px', fontSize: 12,
             opacity: autoMatching ? 0.6 : 1,
           }}
         >
           <Zap size={13} />
-          {autoMatching ? 'Matching…' : 'Auto-match all'}
+          {autoMatching ? 'Matching…' : 'Auto-Match All'}
         </button>
       </div>
 
       {/* Auto-match result banner */}
       {autoMatchResult && !autoMatchResult.error && (
         <div style={{
-          background: 'rgba(0,200,83,0.08)', border: '1px solid rgba(0,200,83,0.2)',
-          borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12,
+          background: 'rgba(0,200,83,0.08)', border: '1px solid var(--mv-green)',
+          borderRadius: 0, padding: '10px 14px', marginBottom: 14, fontSize: 12.5,
         }}>
-          <span style={{ color: '#00C853', fontWeight: 700 }}>
+          <span style={{ color: 'var(--mv-green-deep)', fontWeight: 700 }}>
             {autoMatchResult.matched?.length || 0} matched automatically.
           </span>
           {autoMatchResult.suggestions?.length > 0 && (
-            <span style={{ color: '#64748B', marginLeft: 8 }}>
+            <span style={{ color: 'var(--mv-ink-62)', marginLeft: 8 }}>
               {autoMatchResult.suggestions.length} lower-confidence suggestions shown inline below.
             </span>
           )}
@@ -398,51 +392,43 @@ function CustomerMatchingPanel({ connected }) {
       )}
       {autoMatchResult?.error && (
         <div style={{
-          background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
-          borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: '#EF4444',
+          background: 'rgba(233,30,140,0.08)', border: '1px solid var(--mv-magenta)',
+          borderRadius: 0, padding: '10px 14px', marginBottom: 14, fontSize: 12.5, color: 'var(--mv-magenta-deep)',
         }}>
           {autoMatchResult.error}
         </div>
       )}
 
-      {/* Legend */}
-      <div style={{ fontSize: 11, color: '#64748B', marginBottom: 10, display: 'flex', gap: 16 }}>
-        <span>Confidence: <span style={{ color: '#00C853' }}>≥80% auto-accepted</span></span>
-        <span><span style={{ color: '#D97706' }}>50–79%</span> needs review</span>
-        <span><span style={{ color: '#475569' }}>&lt;50%</span> search manually</span>
+      {/* Confidence Guide */}
+      <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', marginBottom: 12, display: 'flex', gap: 18 }}>
+        <span>Confidence: <strong style={{ color: 'var(--mv-green-deep)' }}>≥80% auto-accepted</strong></span>
+        <span><strong style={{ color: 'var(--mv-purple)' }}>50–79%</strong> needs human review</span>
+        <span><strong style={{ color: 'var(--mv-ink-62)' }}>&lt;50%</strong> search manually</span>
       </div>
 
       {/* Filter tabs */}
-      <div style={{ display: 'flex', gap: 0, marginBottom: 12, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-        {[['all', 'All'], ['linked', 'Linked'], ['unlinked', 'Unlinked']].map(([val, label]) => (
+      <div className="mv-tabs" style={{ marginBottom: 14 }}>
+        {[
+          { key: 'all', label: `All (${customers.length})` },
+          { key: 'linked', label: `Linked (${linked.length})` },
+          { key: 'unlinked', label: `Unlinked (${unlinked.length})` },
+        ].map(t => (
           <button
-            key={val}
-            onClick={() => setFilter(val)}
-            style={{
-              background: 'none', border: 'none', padding: '6px 16px',
-              fontSize: 12, fontWeight: 600, cursor: 'pointer', marginBottom: -1,
-              color: filter === val ? '#13B5EA' : '#475569',
-              borderBottom: filter === val ? '2px solid #13B5EA' : '2px solid transparent',
-            }}
+            key={t.key}
+            onClick={() => setFilter(t.key)}
+            className={`mv-tab ${filter === t.key ? 'is-active' : ''}`}
+            style={{ fontSize: 12, padding: '6px 14px' }}
           >
-            {label}
-            {val === 'unlinked' && unlinked.length > 0 && (
-              <span style={{
-                marginLeft: 6, background: '#EF4444', color: '#FFF',
-                borderRadius: 10, padding: '0px 5px', fontSize: 10, fontWeight: 700,
-              }}>
-                {unlinked.length}
-              </span>
-            )}
+            {t.label}
           </button>
         ))}
       </div>
 
       {/* Customer list */}
       {isLoading ? (
-        <div style={{ color: '#64748B', fontSize: 13, padding: 16 }}>Loading customers…</div>
+        <div style={{ color: 'var(--mv-ink-52)', fontSize: 13, padding: 16 }}>Loading customers…</div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {visible.map(c => (
             <CustomerRow
               key={c.id}
@@ -455,7 +441,7 @@ function CustomerMatchingPanel({ connected }) {
             />
           ))}
           {visible.length === 0 && (
-            <div style={{ color: '#64748B', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>
+            <div style={{ color: 'var(--mv-ink-52)', fontSize: 13, padding: '24px 0', textAlign: 'center' }}>
               {filter === 'unlinked' ? 'All customers are linked to Xero.' : 'No customers found.'}
             </div>
           )}
@@ -512,10 +498,10 @@ function NominalCodesPanel() {
   return (
     <div style={{
       background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)',
-      borderRadius: 0, padding: '20px 24px', marginTop: 16,
+      borderRadius: 0, padding: '20px 24px', marginTop: 18,
     }}>
-      <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--mv-ink)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Nominal Codes</div>
-      <div style={{ fontSize: 12, color: 'var(--mv-ink-52)', marginBottom: 18, lineHeight: 1.5 }}>
+      <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--mv-ink)', marginBottom: 4 }}>Nominal Account Codes</div>
+      <div style={{ fontSize: 12.5, color: 'var(--mv-ink-52)', marginBottom: 18, lineHeight: 1.5 }}>
         These Xero account codes are applied to each invoice line item when pushing to Xero.
         Domestic applies to GB→GB shipments (VAT charged). International applies to everything else (zero-rated).
       </div>
@@ -526,7 +512,7 @@ function NominalCodesPanel() {
         <div style={{ display: 'flex', gap: 20, alignItems: 'flex-end', flexWrap: 'wrap' }}>
 
           {/* Domestic */}
-          <div style={{ flex: 1, minWidth: 180 }}>
+          <div style={{ flex: 1, minWidth: 200 }}>
             <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--mv-ink-52)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
               Domestic (GB → GB)
             </div>
@@ -540,7 +526,7 @@ function NominalCodesPanel() {
           </div>
 
           {/* International */}
-          <div style={{ flex: 1, minWidth: 180 }}>
+          <div style={{ flex: 1, minWidth: 200 }}>
             <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--mv-ink-52)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
               International (GB → non-GB)
             </div>
@@ -560,7 +546,7 @@ function NominalCodesPanel() {
               disabled={!isDirty || saveMutation.isPending}
               className={isDirty ? 'mv-btn-primary' : 'mv-btn-ghost'}
               style={{
-                fontSize: 12,
+                fontSize: 12.5,
                 cursor: (!isDirty || saveMutation.isPending) ? 'not-allowed' : 'pointer',
                 whiteSpace: 'nowrap',
                 opacity: (!isDirty || saveMutation.isPending) ? 0.5 : 1,
@@ -574,7 +560,7 @@ function NominalCodesPanel() {
       )}
 
       {saveMutation.isError && (
-        <div style={{ marginTop: 10, fontSize: 12, color: 'var(--mv-magenta)' }}>
+        <div style={{ marginTop: 10, fontSize: 12, color: 'var(--mv-magenta-deep)' }}>
           {saveMutation.error?.response?.data?.error || 'Failed to save — please try again.'}
         </div>
       )}
