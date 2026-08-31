@@ -24,53 +24,53 @@ const api = axios.create({ baseURL: '/api' });
 const _BUILD = '2026-05-23-filter-fixes'; // cache bust — fix claim deadline filter + sla breached clickable
 
 const C = {
-  bg:       '#F8FAFC',
-  surface:  '#F8FAFC',
-  card:     '#FFFFFF',
-  hover:    '#F4F6FA',
-  selected: '#EFF6FF',
-  border:   'rgba(0,0,0,0.06)',
-  green:    '#166534',
-  amber:    '#92400E',
-  red:      '#991B1B',
-  blue:     '#1E40AF',
-  text:     '#0F172A',
-  sub:      '#334155',
-  muted:    '#94A3B8',
-  greenDim: '#DCFCE7',
-  amberDim: '#FEF3C7',
-  redDim:   '#FEE2E2',
-  blueDim:  '#EFF6FF',
+  bg:       'var(--mv-bg)',
+  surface:  'var(--mv-surface)',
+  card:     'var(--mv-surface)',
+  hover:    'var(--mv-bg)',
+  selected: 'rgba(123,47,190,0.06)',
+  border:   'var(--mv-hairline-2)',
+  green:    '#00C853',
+  amber:    '#D97706',
+  red:      '#E91E8C',
+  blue:     '#7B2FBE',
+  text:     'var(--mv-ink)',
+  sub:      'var(--mv-ink-62)',
+  muted:    'var(--mv-ink-52)',
+  greenDim: 'rgba(0,200,83,0.1)',
+  amberDim: 'rgba(217,119,6,0.1)',
+  redDim:   'rgba(233,30,140,0.1)',
+  blueDim:  'rgba(123,47,190,0.1)',
 };
 
 const STATUS_CFG = {
-  open:                    { label: 'Open',              color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' },
-  awaiting_customer_info:  { label: 'Awaiting customer', color: '#92400E', bg: '#FFFBEB', border: '#FDE68A' },
-  info_received:           { label: 'Info received',     color: '#166534', bg: '#F0FDF4', border: '#BBF7D0' },
-  drafting:                { label: 'Drafting',          color: '#166534', bg: '#F0FDF4', border: '#BBF7D0' },
-  awaiting_courier:        { label: 'Awaiting courier',  color: '#92400E', bg: '#FFFBEB', border: '#FDE68A' },
-  courier_replied:         { label: 'Courier replied',   color: '#166534', bg: '#F0FDF4', border: '#BBF7D0' },
-  courier_investigating:   { label: 'Investigating',     color: '#1E40AF', bg: '#EFF6FF', border: '#BFDBFE' },
-  awaiting_customer:       { label: 'Awaiting customer', color: '#92400E', bg: '#FFFBEB', border: '#FDE68A' },
-  claim_raised:            { label: 'Claim raised',      color: '#991B1B', bg: '#FEF2F2', border: '#FECACA' },
-  awaiting_claim_docs:     { label: 'Awaiting docs',     color: '#991B1B', bg: '#FEF2F2', border: '#FECACA' },
-  claim_submitted:         { label: 'Claim submitted',   color: '#92400E', bg: '#FFFBEB', border: '#FDE68A' },
-  resolved:                { label: 'Resolved',          color: '#166534', bg: '#F0FDF4', border: '#BBF7D0' },
-  resolved_claim_approved: { label: 'Claim approved',    color: '#166534', bg: '#F0FDF4', border: '#BBF7D0' },
-  resolved_claim_rejected: { label: 'Claim rejected',    color: '#991B1B', bg: '#FEF2F2', border: '#FECACA' },
-  escalated:               { label: 'Escalated',         color: '#991B1B', bg: '#FEF2F2', border: '#FECACA' },
+  open:                    { label: 'Open',              kind: 'flight' },
+  awaiting_customer_info:  { label: 'Awaiting Customer', kind: 'waiting' },
+  info_received:           { label: 'Info Received',     kind: 'settled' },
+  drafting:                { label: 'Drafting',          kind: 'flight' },
+  awaiting_courier:        { label: 'Awaiting Courier',  kind: 'waiting' },
+  courier_replied:         { label: 'Courier Replied',   kind: 'settled' },
+  courier_investigating:   { label: 'Investigating',     kind: 'flight' },
+  awaiting_customer:       { label: 'Awaiting Customer', kind: 'waiting' },
+  claim_raised:            { label: 'Claim Raised',      kind: 'attention' },
+  awaiting_claim_docs:     { label: 'Awaiting Docs',     kind: 'attention' },
+  claim_submitted:         { label: 'Claim Submitted',   kind: 'waiting' },
+  resolved:                { label: 'Resolved',          kind: 'settled' },
+  resolved_claim_approved: { label: 'Claim Approved',    kind: 'settled' },
+  resolved_claim_rejected: { label: 'Claim Rejected',    kind: 'attention' },
+  escalated:               { label: 'Escalated',         kind: 'attention' },
 };
 
 const TYPE_CFG = {
-  whereabouts:    { label: 'WISMO',           color: C.blue },
-  not_delivered:  { label: 'Not Delivered',   color: C.red },
-  wrong_address:  { label: 'Wrong Address',   color: C.red },
-  damaged:        { label: 'Damaged',         color: C.red },
-  missing_items:  { label: 'Missing Items',   color: C.red },
-  failed_delivery:{ label: 'Failed Delivery', color: C.amber },
-  returned:       { label: 'Returned',        color: C.amber },
-  delay:          { label: 'Delay',           color: C.amber },
-  other:          { label: 'Other',           color: C.muted },
+  whereabouts:    { label: 'WISMO',           color: '#7B2FBE' },
+  not_delivered:  { label: 'Not Delivered',   color: '#E91E8C' },
+  wrong_address:  { label: 'Wrong Address',   color: '#E91E8C' },
+  damaged:        { label: 'Damaged',         color: '#E91E8C' },
+  missing_items:  { label: 'Missing Items',   color: '#E91E8C' },
+  failed_delivery:{ label: 'Failed Delivery', color: '#D97706' },
+  returned:       { label: 'Returned',        color: '#D97706' },
+  delay:          { label: 'Delay',           color: '#D97706' },
+  other:          { label: 'Other',           color: 'var(--mv-ink-52)' },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -79,62 +79,56 @@ function Badge({ label, color, bg, small }) {
   return (
     <span style={{
       display: 'inline-block',
-      padding: small ? '2px 7px' : '3px 10px',
-      borderRadius: 4,
+      padding: small ? '2px 6px' : '3px 8px',
+      borderRadius: 0,
       fontSize: small ? 10 : 11,
-      fontWeight: 600,
-      background: bg || `${color}22`,
-      color,
+      fontWeight: 700,
+      background: bg || 'var(--mv-bg)',
+      color: color || 'var(--mv-ink)',
       whiteSpace: 'nowrap',
-      border: `1px solid ${color}33`,
+      border: `1px solid ${color ? color + '44' : 'var(--mv-hairline-2)'}`,
+      textTransform: 'uppercase',
+      letterSpacing: '0.04em',
     }}>{label}</span>
   );
 }
 
 function StatusBadge({ status, small }) {
-  const cfg = STATUS_CFG[status] || { label: status, color: '#64748B', bg: '#F8FAFC', border: '#E2E8F0' };
+  const cfg = STATUS_CFG[status] || { label: status || 'Unknown', kind: 'waiting' };
   return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 4,
-      fontSize: small ? 10 : 11, fontWeight: 600,
-      padding: small ? '2px 7px' : '3px 9px',
-      borderRadius: 20,
-      background: cfg.bg,
-      color: cfg.color,
-      border: `1px solid ${cfg.border}`,
-      whiteSpace: 'nowrap',
-    }}>
-      <span style={{ width: 5, height: 5, borderRadius: '50%', background: cfg.color, display: 'inline-block', flexShrink: 0 }} />
-      {cfg.label}
+    <span className={`mv-state mv-state--${cfg.kind}`} style={{ fontSize: small ? 10.5 : 12 }}>
+      <span className={`mv-mark mv-mark--${cfg.kind}`} />
+      <span className="mv-state-label">{cfg.label}</span>
     </span>
   );
 }
 
 function TypeBadge({ type, small }) {
-  const cfg = TYPE_CFG[type] || { label: type, color: C.muted };
+  const cfg = TYPE_CFG[type] || { label: type, color: 'var(--mv-ink-52)' };
   return <Badge label={cfg.label} color={cfg.color} small={small} />;
 }
 
 const GROUP_BADGE_CFG = {
-  'Claims':    { bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
-  'Billing':   { bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
-  'Technical': { bg: '#F5F3FF', color: '#4C1D95', border: '#DDD6FE' },
-  'Queries':   { bg: '#EFF6FF', color: '#1E3A8A', border: '#BFDBFE' },
+  'Claims':    { color: '#E91E8C' },
+  'Billing':   { color: '#00C853' },
+  'Technical': { color: '#7B2FBE' },
+  'Queries':   { color: '#201e1d' },
 };
 
 function GroupBadge({ group }) {
   if (!group) return null;
-  const cfg = GROUP_BADGE_CFG[group] || { bg: '#F8FAFC', color: '#475569', border: '#E2E8F0' };
+  const cfg = GROUP_BADGE_CFG[group] || { color: 'var(--mv-ink-62)' };
   return (
     <span style={{
       display: 'inline-block',
-      fontSize: 11, fontWeight: 600,
-      padding: '3px 9px',
-      borderRadius: 6,
-      background: cfg.bg,
+      fontSize: 10.5, fontWeight: 700,
+      padding: '2px 7px',
+      borderRadius: 0,
+      background: 'var(--mv-bg)',
       color: cfg.color,
-      border: `1px solid ${cfg.border}`,
+      border: '1px solid var(--mv-hairline-2)',
       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+      textTransform: 'uppercase', letterSpacing: '0.05em',
     }}>{group}</span>
   );
 }
@@ -610,55 +604,64 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
     <div
       onClick={onClick}
       onMouseLeave={() => { setHoverPos(null); setAssignOpen(false); }}
-      className="relative flex cursor-pointer flex-col gap-4 overflow-visible rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm transition-all hover:border-slate-300 hover:shadow-md"
-      style={{ borderLeft: `4px solid ${priorityBar}` }}
+      style={{
+        position: 'relative', display: 'flex', flexDirection: 'column', gap: 12,
+        background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)',
+        borderLeft: `4px solid ${priorityBar || 'var(--mv-hairline-2)'}`,
+        padding: '16px 20px', cursor: 'pointer', marginBottom: 10,
+        transition: 'border-color 0.15s, box-shadow 0.15s',
+      }}
     >
       {/* ── Line 1: metadata shelf ────────────────────────────────────────── */}
-      <div className="flex w-full items-center justify-between border-b border-slate-100 pb-3">
+      <div style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--mv-hairline-2)', paddingBottom: 10 }}>
         {/* Left: priority badge (#M-ID + Urgent) · customer identity */}
-        <div className="flex min-w-0 items-center gap-2">
+        <div style={{ display: 'flex', minWidth: 0, alignItems: 'center', gap: 8 }}>
           {(hasNewReply || unread > 0) && (
-            <span className="h-2 w-2 shrink-0 rounded-full bg-blue-500" />
+            <span style={{ width: 8, height: 8, flexShrink: 0, background: 'var(--mv-purple)' }} />
           )}
           {q.ticket_number != null && (
-            <span className={`inline-flex shrink-0 items-center justify-center rounded-md border px-2.5 py-1 text-xs font-bold uppercase tracking-wide shadow-sm ${rowBadgeClasses(q)}`}>
+            <span className="mv-num" style={{
+              fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em',
+              background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)', padding: '2px 7px', color: 'var(--mv-ink)'
+            }}>
               #M-{q.ticket_number}
             </span>
           )}
           {pchip && (
-            <span className={`shrink-0 rounded-md border px-2 py-1 text-xs font-bold ${pchip[1]}`}>
+            <span style={{
+              fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em',
+              padding: '2px 6px', border: '1px solid var(--mv-hairline-2)', background: 'var(--mv-bg)', color: 'var(--mv-ink)'
+            }}>
               {pchip[0]}
             </span>
           )}
-          <span className="ml-2 truncate text-base font-bold tracking-tight text-slate-800">
+          <span style={{ marginLeft: 6, fontWeight: 800, fontSize: 14, color: 'var(--mv-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {q.customer_name || q.sender_email || '(unknown sender)'}
           </span>
         </div>
 
         {/* Right: status badge · time · assign */}
-        <div className="flex shrink-0 items-center gap-3 pl-4">
+        <div style={{ display: 'flex', flexShrink: 0, alignItems: 'center', gap: 12, paddingLeft: 16 }}>
           {q.courier_sla_breached && (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-red-300 bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
-              <AlertTriangle size={11} /> SLA Breached
+            <span className="mv-state mv-state--attention">
+              <span className="mv-mark mv-mark--attention" />
+              <span className="mv-state-label">SLA Breached</span>
             </span>
           )}
-          <span style={{
-            fontSize: 12, fontWeight: 500, borderRadius: 20, padding: '4px 11px',
-            display: 'inline-block', whiteSpace: 'nowrap',
-            background: statusCfg.bg || `${statusCfg.color}18`, color: statusCfg.color,
-          }}>
-            {statusCfg.label}
-          </span>
-          <span className="whitespace-nowrap text-sm text-slate-400">{timeAgo(actTime)}</span>
+          <StatusBadge status={q.status} />
+          <span className="mv-num" style={{ whiteSpace: 'nowrap', fontSize: 12, color: 'var(--mv-ink-52)' }}>{timeAgo(actTime)}</span>
 
-          {/* Assign avatar (kept for inline assignment) — Katana pill when AI-owned */}
-          <div className="relative shrink-0">
+          {/* Assign avatar */}
+          <div style={{ position: 'relative', flexShrink: 0 }}>
             {isKatana ? (
               <div
                 onClick={e => { e.stopPropagation(); setAssignOpen(v => !v); }}
                 title="Owned by Katana (AI) — draft awaiting review"
-                className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700"
-                style={{ outline: assignOpen ? '2px solid #6366F1' : 'none' }}>
+                style={{
+                  display: 'inline-flex', cursor: 'pointer', alignItems: 'center', gap: 4,
+                  border: '1px solid var(--mv-purple)', background: 'rgba(123,47,190,0.1)',
+                  padding: '2px 8px', fontSize: 11, fontWeight: 800, color: 'var(--mv-purple)'
+                }}>
                 🤖 Katana
               </div>
             ) : (
@@ -666,22 +669,26 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
                 onClick={e => { e.stopPropagation(); setAssignOpen(v => !v); }}
                 title={assigneeName ? `Assigned to ${assigneeName}` : 'Assign ticket'}
                 style={{
-                  width: 28, height: 28, borderRadius: '50%',
-                  background: initials ? 'rgba(99,102,241,0.12)' : 'rgba(0,0,0,0.04)',
+                  width: 26, height: 26,
+                  background: initials ? 'rgba(123,47,190,0.12)' : 'var(--mv-bg)',
+                  border: '1px solid var(--mv-hairline-2)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 11, fontWeight: 600, color: initials ? '#4F46E5' : C.muted,
-                  cursor: 'pointer', outline: assignOpen ? '2px solid #6366F1' : 'none',
+                  fontSize: 10.5, fontWeight: 800, color: initials ? 'var(--mv-purple)' : 'var(--mv-ink-52)',
+                  cursor: 'pointer',
                 }}>
-                {assigning ? '…' : (initials || <User size={13} color={C.muted} />)}
+                {assigning ? '…' : (initials || <User size={12} color="var(--mv-ink-52)" />)}
               </div>
             )}
             {assignOpen && (
               <div
                 onClick={e => e.stopPropagation()}
-                className="absolute right-0 z-[100] mt-2 w-48 rounded-md border border-slate-200 bg-white py-1 shadow-lg"
-                style={{ top: '100%' }}
+                style={{
+                  position: 'absolute', right: 0, zIndex: 100, marginTop: 4, width: 190,
+                  border: '1px solid var(--mv-hairline-2)', background: 'var(--mv-surface)',
+                  padding: '4px 0', boxShadow: '0 4px 16px rgba(0,0,0,0.12)', top: '100%'
+                }}
               >
-                <div style={{ padding: '6px 12px 4px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#94A3B8' }}>
+                <div style={{ padding: '6px 12px 4px', fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--mv-ink-52)' }}>
                   Assign to
                 </div>
                 {staffList.map(s => (
@@ -689,25 +696,25 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
                     key={s.id}
                     onClick={() => handleAssign(s.id)}
                     style={{
-                      padding: '7px 12px', fontSize: 13, color: s.id === q.assigned_to ? '#4F46E5' : '#0F172A',
-                      background: s.id === q.assigned_to ? 'rgba(99,102,241,0.06)' : 'transparent',
+                      padding: '7px 12px', fontSize: 12.5, color: s.id === q.assigned_to ? 'var(--mv-purple)' : 'var(--mv-ink)',
+                      background: s.id === q.assigned_to ? 'rgba(123,47,190,0.08)' : 'transparent',
                       cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
                     }}
-                    onMouseOver={e => { if (s.id !== q.assigned_to) e.currentTarget.style.background = '#F8FAFC'; }}
+                    onMouseOver={e => { if (s.id !== q.assigned_to) e.currentTarget.style.background = 'var(--mv-bg)'; }}
                     onMouseOut={e => { if (s.id !== q.assigned_to) e.currentTarget.style.background = 'transparent'; }}
                   >
-                    <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(99,102,241,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 600, color: '#4F46E5', flexShrink: 0 }}>
+                    <div style={{ width: 20, height: 20, background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: 'var(--mv-purple)', flexShrink: 0 }}>
                       {s.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                     </div>
                     <span>{s.full_name}</span>
-                    {s.id === q.assigned_to && <span style={{ marginLeft: 'auto', fontSize: 11, color: '#4F46E5' }}>✓</span>}
+                    {s.id === q.assigned_to && <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--mv-purple)' }}>✓</span>}
                   </div>
                 ))}
                 {q.assigned_to && (
                   <div
                     onClick={() => handleAssign(null)}
-                    style={{ padding: '7px 12px', fontSize: 12, color: '#94A3B8', cursor: 'pointer', borderTop: '1px solid rgba(0,0,0,0.06)', marginTop: 2 }}
-                    onMouseOver={e => e.currentTarget.style.background = '#F8FAFC'}
+                    style={{ padding: '7px 12px', fontSize: 11.5, color: 'var(--mv-ink-52)', cursor: 'pointer', borderTop: '1px solid var(--mv-hairline-2)', marginTop: 2 }}
+                    onMouseOver={e => e.currentTarget.style.background = 'var(--mv-bg)'}
                     onMouseOut={e => e.currentTarget.style.background = 'transparent'}
                   >
                     Unassign
@@ -720,18 +727,22 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
       </div>
 
       {/* ── Line 2: subject ───────────────────────────────────────────────── */}
-      <div className="flex items-start gap-2 text-sm font-medium text-slate-700">
-        <span className={['resolved','resolved_claim_approved','resolved_claim_rejected'].includes(q.status) ? 'text-slate-400 line-through' : ''}>
-          ✉️ <strong className="font-semibold text-slate-900">Subject:</strong> {q.subject || preview || '(no subject)'}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: 'var(--mv-ink-62)' }}>
+        <span className={['resolved','resolved_claim_approved','resolved_claim_rejected'].includes(q.status) ? 'line-through' : ''}>
+          ✉️ <strong style={{ color: 'var(--mv-ink)' }}>Subject:</strong> {q.subject || preview || '(no subject)'}
         </span>
       </div>
 
       {/* ── Line 3: always-visible Gemini summary box ─────────────────────── */}
-      <div className="relative mt-1 flex flex-col gap-1 rounded-lg border border-slate-100 bg-slate-50/80 p-3.5 text-xs font-medium leading-relaxed text-slate-600">
-        <div className="mb-1 flex items-center gap-1 font-bold text-slate-800">
+      <div style={{
+        position: 'relative', display: 'flex', flexDirection: 'column', gap: 4,
+        border: '1px solid var(--mv-hairline-2)', background: 'var(--mv-bg)',
+        padding: '12px 14px', fontSize: 12, lineHeight: 1.5, color: 'var(--mv-ink-62)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--mv-purple)' }}>
           <span>✨ Gemini Automation Analysis</span>
         </div>
-        <p className="text-sm text-slate-600">
+        <p style={{ margin: 0, fontSize: 12.5, color: 'var(--mv-ink)' }}>
           {fullSummary ? mdLite(fullSummary) : 'Analyzing ticket context…'}
         </p>
       </div>
@@ -1877,34 +1888,34 @@ function QuickViewModal({ card, onClose, onDispatched }) {
     } finally { setSending(false); }
   }
 
-  const panel = 'flex min-h-0 flex-col rounded-xl border border-slate-200 bg-white overflow-hidden';
-  const head  = 'border-b border-slate-100 px-4 py-2.5 text-xs font-extrabold uppercase tracking-wide';
+  const panel = 'flex min-h-0 flex-col border border-[var(--mv-hairline-2)] bg-[var(--mv-surface)] overflow-hidden';
+  const head  = 'border-b border-[var(--mv-hairline-2)] px-4 py-2.5 text-xs font-extrabold uppercase tracking-wide';
 
   return (
-    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-900/60 p-6 backdrop-blur-sm" onClick={onClose}>
-      <div className="flex max-h-[88vh] w-full max-w-7xl flex-col rounded-xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm" onClick={onClose}>
+      <div className="flex max-h-[88vh] w-full max-w-7xl flex-col bg-[var(--mv-surface)] border border-[var(--mv-hairline-2)] shadow-2xl" onClick={e => e.stopPropagation()}>
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--mv-hairline-2)] px-6 py-4">
           <div className="flex min-w-0 items-center gap-3">
-            <span className={`inline-flex shrink-0 items-center justify-center rounded-md border px-2.5 py-1 text-xs font-bold uppercase tracking-wide ${rowBadgeClasses(card)}`}>
+            <span className="inline-flex shrink-0 items-center justify-center border border-[var(--mv-hairline-2)] bg-[var(--mv-bg)] px-2.5 py-1 text-xs font-extrabold uppercase tracking-wide text-[var(--mv-ink)]">
               #M-{card.ticket_number}
             </span>
-            <span className="truncate text-base font-bold tracking-tight text-slate-800">
+            <span className="truncate text-base font-extrabold tracking-tight text-[var(--mv-ink)]">
               {card.customer_name || card.subject || 'Ticket'}
             </span>
-            {pchip && <span className={`shrink-0 rounded-md border px-2 py-0.5 text-xs font-bold ${pchip[1]}`}>{pchip[0]}</span>}
+            {pchip && <span className="shrink-0 border border-[var(--mv-hairline-2)] bg-[var(--mv-bg)] px-2 py-0.5 text-xs font-bold">{pchip[0]}</span>}
           </div>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">✕</button>
+          <button onClick={onClose} className="p-1.5 text-[var(--mv-ink-52)] hover:text-[var(--mv-ink)] font-bold">✕</button>
         </div>
 
         {/* Closure → AI suggestion intercept (no draft, no email) */}
         {isClosure ? (
           <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto p-8">
-            <div className="w-full max-w-lg rounded-2xl border border-emerald-200 bg-emerald-50/50 p-8 text-center">
-              <div className="text-lg font-black text-slate-900">🤖 We believe this ticket should be resolved.</div>
-              <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 text-left">
-                <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">Customer message snippet</div>
-                <p className="line-clamp-6 whitespace-pre-wrap text-sm leading-relaxed text-slate-600">
+            <div className="w-full max-w-lg border border-[var(--mv-green)] bg-[var(--mv-surface)] p-8 text-center">
+              <div className="text-lg font-extrabold text-[var(--mv-ink)]">🤖 We believe this ticket should be resolved.</div>
+              <div className="mt-4 border border-[var(--mv-hairline-2)] bg-[var(--mv-bg)] p-4 text-left">
+                <div className="mb-1 text-[10px] font-extrabold uppercase tracking-wide text-[var(--mv-ink-52)]">Customer message snippet</div>
+                <p className="line-clamp-6 whitespace-pre-wrap text-sm leading-relaxed text-[var(--mv-ink-62)]">
                   {cleanIncoming(card.incoming_text)?.slice(0, 400) || card.subject || '—'}
                 </p>
               </div>
@@ -1915,69 +1926,69 @@ function QuickViewModal({ card, onClose, onDispatched }) {
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden p-4 lg:grid-cols-3">
           {/* Panel 1 — inbound trigger */}
           <div className={panel}>
-            <div className={`${head} text-red-600`}>📥 Inbound Trigger</div>
-            <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap p-4 text-sm leading-relaxed text-slate-700">
+            <div className={`${head} text-[var(--mv-magenta-deep)] bg-[var(--mv-bg)]`}>📥 Inbound Trigger</div>
+            <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap p-4 text-sm leading-relaxed text-[var(--mv-ink-62)] bg-[var(--mv-surface)]">
               {cleanIncoming(card.incoming_text) || card.subject || 'No incoming message text on file.'}
             </div>
           </div>
 
           {/* Panel 2 — customer response draft */}
           <div className={panel}>
-            <div className={`${head} text-blue-600`}>👤 Customer Response Draft</div>
+            <div className={`${head} text-[var(--mv-purple)] bg-[var(--mv-bg)]`}>👤 Customer Response Draft</div>
             {card.customer_email_id ? (
               <>
                 <textarea value={custBody} onChange={e => setCustBody(e.target.value)}
-                  className="min-h-0 flex-1 resize-none p-4 text-sm leading-relaxed text-slate-800 outline-none" />
-                <div className="border-t border-slate-100 p-3">
+                  className="min-h-0 flex-1 resize-none p-4 text-sm leading-relaxed text-[var(--mv-ink)] bg-[var(--mv-surface)] outline-none" />
+                <div className="border-t border-[var(--mv-hairline-2)] p-3 bg-[var(--mv-bg)]">
                   <div className="flex gap-2">
                     <input value={custFb} onChange={e => setCustFb(e.target.value)}
                       placeholder="🛠️ Refine the customer voice…"
-                      className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-xs outline-none focus:border-slate-400" />
+                      className="min-w-0 flex-1 border border-[var(--mv-hairline-2)] bg-[var(--mv-surface)] px-3 py-2 text-xs outline-none text-[var(--mv-ink)]" />
                     <button onClick={() => refine('customer')} disabled={!custFb.trim() || refining === 'customer'}
-                      className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-40">
+                      className="mv-btn-primary text-xs" style={{ padding: '6px 12px' }}>
                       {refining === 'customer' ? '…' : 'Refine'}
                     </button>
                   </div>
                 </div>
               </>
             ) : (
-              <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-slate-400">No customer draft on this ticket.</div>
+              <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-[var(--mv-ink-52)]">No customer draft on this ticket.</div>
             )}
           </div>
 
           {/* Panel 3 — courier inquiry draft (conditional) */}
           <div className={panel}>
-            <div className={`${head} text-amber-600`}>🚚 Courier Inquiry Draft</div>
+            <div className={`${head} text-[#D97706] bg-[var(--mv-bg)]`}>🚚 Courier Inquiry Draft</div>
             {hasCourier ? (
               <>
                 <textarea value={courBody} onChange={e => setCourBody(e.target.value)}
-                  className="min-h-0 flex-1 resize-none p-4 text-sm leading-relaxed text-slate-800 outline-none" />
-                <div className="border-t border-slate-100 p-3">
+                  className="min-h-0 flex-1 resize-none p-4 text-sm leading-relaxed text-[var(--mv-ink)] bg-[var(--mv-surface)] outline-none" />
+                <div className="border-t border-[var(--mv-hairline-2)] p-3 bg-[var(--mv-bg)]">
                   <div className="flex gap-2">
                     <input value={courFb} onChange={e => setCourFb(e.target.value)}
                       placeholder="🛠️ Refine the courier urgency…"
-                      className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-xs outline-none focus:border-slate-400" />
+                      className="min-w-0 flex-1 border border-[var(--mv-hairline-2)] bg-[var(--mv-surface)] px-3 py-2 text-xs outline-none text-[var(--mv-ink)]" />
                     <button onClick={() => refine('courier')} disabled={!courFb.trim() || refining === 'courier'}
-                      className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-40">
+                      className="mv-btn-primary text-xs" style={{ padding: '6px 12px' }}>
                       {refining === 'courier' ? '…' : 'Refine'}
                     </button>
                   </div>
                 </div>
               </>
             ) : card.missing_variables ? (
-              <div className="flex flex-1 flex-col items-center justify-center gap-2 bg-amber-50/60 p-6 text-center">
-                <div className="text-sm font-bold text-amber-700">⚠️ Carrier escalation on standby</div>
-                <div className="text-xs font-medium text-amber-700">
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 bg-[var(--mv-bg)] p-6 text-center">
+                <div className="text-sm font-bold text-[#D97706]">⚠️ Carrier escalation on standby</div>
+                <div className="text-xs font-medium text-[var(--mv-ink-62)]">
                   Awaiting customer clarification for: {card.missing_variables.split(/[,;]+/).map(v => v.trim().replace(/_/g, ' ')).filter(Boolean).join(', ')}.
                 </div>
               </div>
             ) : card.triage_intent === 'ticket_closure' ? (
-              <div className="flex flex-1 flex-col items-center justify-center gap-2 bg-emerald-50/60 p-6 text-center">
-                <div className="text-sm font-bold text-emerald-700">✅ Issue Resolved / Suspended</div>
-                <div className="text-xs font-medium text-emerald-700">No carrier intervention required for this query state.</div>
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 bg-[var(--mv-bg)] p-6 text-center">
+                <div className="text-sm font-bold text-[var(--mv-green)]">✅ Issue Resolved / Suspended</div>
+                <div className="text-xs font-medium text-[var(--mv-ink-62)]">No carrier intervention required for this query state.</div>
               </div>
             ) : (
-              <div className="flex flex-1 items-center justify-center bg-slate-50/60 p-6 text-center text-sm font-medium text-slate-400">
+              <div className="flex flex-1 items-center justify-center bg-[var(--mv-bg)] p-6 text-center text-sm font-medium text-[var(--mv-ink-52)]">
                 No carrier outreach required for this query type.
               </div>
             )}
@@ -1986,19 +1997,16 @@ function QuickViewModal({ card, onClose, onDispatched }) {
         )}
 
         {/* Footer — closure confirm, or dual-dispatch */}
-        <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-4">
-          <button onClick={onClose}
-            className="rounded-lg border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+        <div className="flex items-center justify-end gap-3 border-t border-[var(--mv-hairline-2)] px-6 py-4">
+          <button onClick={onClose} className="mv-btn-ghost">
             Cancel / Close
           </button>
           {isClosure ? (
-            <button onClick={confirmClose} disabled={sending}
-              className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm shadow-emerald-100 transition hover:bg-emerald-700 disabled:opacity-50">
+            <button onClick={confirmClose} disabled={sending} className="mv-btn-primary">
               {sending ? 'Closing…' : '✓ Confirmed - Close Ticket'}
             </button>
           ) : (
-            <button onClick={dispatch} disabled={sending}
-              className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm shadow-emerald-100 transition hover:bg-emerald-700 disabled:opacity-50">
+            <button onClick={dispatch} disabled={sending} className="mv-btn-primary">
               {sending ? 'Dispatching…' : '✓ Approve & Send Balanced Strategy'}
             </button>
           )}
@@ -2053,89 +2061,88 @@ function AutopilotQABay({ refreshKey, onChanged }) {
   }
 
   return (
-    <div className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+    <div className="flex h-full flex-col border border-[var(--mv-hairline-2)] bg-[var(--mv-surface)]">
+      <div className="flex items-center justify-between border-b border-[var(--mv-hairline-2)] px-4 py-3 bg-[var(--mv-bg)]">
         <div className="flex items-center gap-2">
           <span className="text-base">🤖</span>
-          <span className="text-sm font-bold text-slate-900">Autopilot QA Guardrails</span>
+          <span className="text-xs font-extrabold uppercase tracking-wide text-[var(--mv-ink)]">Autopilot QA Guardrails</span>
         </div>
-        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">
+        <span className="border border-[var(--mv-green)] bg-[rgba(0,200,83,0.1)] px-2 py-0.5 text-xs font-bold text-[var(--mv-green-deep)]">
           {cards.length} ticket{cards.length === 1 ? '' : 's'}
         </span>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        {loading && <div className="p-6 text-center text-xs text-slate-400">Loading drafts…</div>}
+        {loading && <div className="p-6 text-center text-xs text-[var(--mv-ink-52)]">Loading drafts…</div>}
         {!loading && cards.length === 0 && (
           <div className="p-8 text-center">
-            <div className="mb-2 text-3xl">✓</div>
-            <div className="text-sm font-semibold text-slate-600">Queue clear</div>
-            <div className="text-xs text-slate-400">No tickets waiting for QA.</div>
+            <div className="mb-2 text-2xl">✓</div>
+            <div className="text-sm font-extrabold text-[var(--mv-ink)]">Queue Clear</div>
+            <div className="text-xs text-[var(--mv-ink-52)] mt-1">No tickets waiting for QA.</div>
           </div>
         )}
         {cards.map(c => (
           c.kind === 'paused' ? (
-            <div key={`p-${c.query_id}`} className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 last:mb-0">
+            <div key={`p-${c.query_id}`} className="mb-3 border border-[#D97706] bg-[var(--mv-surface)] p-3 last:mb-0">
               <div className="mb-2 flex items-center gap-2">
                 <button onClick={() => navigate(`/queries/${c.query_id}`)}
-                  className={`inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase ${rowBadgeClasses(c)}`}>
+                  className="inline-flex items-center justify-center border border-[var(--mv-hairline-2)] bg-[var(--mv-bg)] px-2 py-0.5 text-xs font-extrabold uppercase text-[var(--mv-ink)]">
                   M-{c.ticket_number}
                 </button>
-                <span className="truncate text-xs font-medium text-amber-700">{c.customer_name || c.subject}</span>
+                <span className="truncate text-xs font-medium text-[#D97706]">{c.customer_name || c.subject}</span>
               </div>
-              <p className="mb-3 text-sm font-semibold leading-snug text-amber-800">
+              <p className="mb-3 text-xs font-semibold leading-snug text-[var(--mv-ink)]">
                 🤖 Autopilot Paused: Manual review required for this complex query.
               </p>
               <button onClick={() => navigate(`/queries/${c.query_id}`)}
-                className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-bold text-amber-800 transition hover:bg-amber-100">
-                Open &amp; review →
+                className="mv-btn-ghost w-full text-xs">
+                Open &amp; Review →
               </button>
             </div>
           ) : c.kind === 'closure' ? (
-            <div key={`c-${c.query_id}`} className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 last:mb-0">
+            <div key={`c-${c.query_id}`} className="mb-3 border border-[var(--mv-green)] bg-[var(--mv-surface)] p-3 last:mb-0">
               <div className="mb-2 flex items-center gap-2">
                 <button onClick={() => navigate(`/queries/${c.query_id}`)}
-                  className={`inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase ${rowBadgeClasses(c)}`}>
+                  className="inline-flex items-center justify-center border border-[var(--mv-hairline-2)] bg-[var(--mv-bg)] px-2 py-0.5 text-xs font-extrabold uppercase text-[var(--mv-ink)]">
                   M-{c.ticket_number}
                 </button>
-                <span className="truncate text-xs font-medium text-emerald-700">{c.customer_name || c.subject}</span>
+                <span className="truncate text-xs font-medium text-[var(--mv-green-deep)]">{c.customer_name || c.subject}</span>
               </div>
-              <p className="mb-3 text-sm font-semibold leading-snug text-emerald-800">
+              <p className="mb-3 text-xs font-semibold leading-snug text-[var(--mv-ink)]">
                 🤖 AI suggests this ticket can be resolved.
               </p>
               <button onClick={() => setViewing(c)}
-                className="w-full rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-bold text-emerald-800 transition hover:bg-emerald-100">
-                👁️ Review &amp; close →
+                className="mv-btn-primary w-full text-xs">
+                👁️ Review &amp; Close →
               </button>
             </div>
           ) : (
-            <div key={c.query_id} className="mb-3 rounded-xl border border-slate-200 p-3 last:mb-0">
+            <div key={c.query_id} className="mb-3 border border-[var(--mv-hairline-2)] bg-[var(--mv-surface)] p-3 last:mb-0">
               <div className="mb-2 flex items-center gap-2">
                 <button onClick={() => navigate(`/queries/${c.query_id}`)}
-                  className={`inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase ${rowBadgeClasses(c)}`}>
+                  className="inline-flex items-center justify-center border border-[var(--mv-hairline-2)] bg-[var(--mv-bg)] px-2 py-0.5 text-xs font-extrabold uppercase text-[var(--mv-ink)]">
                   M-{c.ticket_number}
                 </button>
-                <span className="truncate text-xs font-medium text-slate-500">{c.customer_name || c.subject}</span>
-                {/* Draft channel chips */}
-                {c.customer_email_id && <span className="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">👤 Cust</span>}
-                {c.courier_email_id  && <span className="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">🚚 Courier</span>}
+                <span className="truncate text-xs font-medium text-[var(--mv-ink-52)]">{c.customer_name || c.subject}</span>
+                {c.customer_email_id && <span className="shrink-0 border border-[var(--mv-purple)] bg-[rgba(123,47,190,0.1)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--mv-purple)]">👤 Cust</span>}
+                {c.courier_email_id  && <span className="shrink-0 border border-[#D97706] bg-[rgba(217,119,6,0.1)] px-1.5 py-0.5 text-[10px] font-bold text-[#D97706]">🚚 Courier</span>}
               </div>
 
               {(c.consecutive_approvals ?? 0) >= AUTOPILOT_THRESHOLD && (
-                <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
+                <div className="mb-2 inline-flex items-center gap-1 border border-[var(--mv-green)] bg-[rgba(0,200,83,0.1)] px-2 py-0.5 text-[11px] font-bold text-[var(--mv-green-deep)]">
                   🎯 Automation Stable — Autopilot Ready
                 </div>
               )}
 
-              <p className="mb-3 line-clamp-3 text-sm leading-snug text-slate-700">{intentLine(c)}</p>
+              <p className="mb-3 line-clamp-3 text-xs leading-snug text-[var(--mv-ink-62)]">{intentLine(c)}</p>
 
               <div className="flex flex-wrap gap-2">
                 <button onClick={() => quickApprove(c)} disabled={busyId === c.query_id}
-                  className="flex-1 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:opacity-50">
+                  className="mv-btn-primary flex-1 text-xs" style={{ padding: '6px 10px' }}>
                   {busyId === c.query_id ? 'Sending…' : '✓ Quick Approve'}
                 </button>
                 <button onClick={() => setViewing(c)}
-                  className="flex items-center gap-1 rounded-md bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200">
+                  className="mv-btn-ghost text-xs" style={{ padding: '6px 10px' }}>
                   👁️ Quick View
                 </button>
               </div>
@@ -2172,8 +2179,6 @@ export default function QueriesPage() {
     sla_breached: false, search: '',
     assigned_to: '', query_type: '', priority: '', group_name: '', courier: '',
   });
-  const [autoDrafting,  setAutoDrafting]  = useState(false);
-  const [autoDraftResult, setAutoDraftResult] = useState(null);
 
   useEffect(() => {
     fetchStats(user?.id).then(setStats).catch(console.error);
@@ -2185,67 +2190,42 @@ export default function QueriesPage() {
     : 'all';
   const setWorkspace = (key) => setFilters(f => ({
     ...f,
-    status: '',
     assigned_to: key === 'unassigned' ? 'unassigned' : key === 'mine' ? (user?.id || '') : '',
   }));
 
-  useEffect(() => {
-    api.get('/staff').then(r => setStaffList(r.data)).catch(() => {});
-  }, []);
-
-  const PAGE_SIZE = 50;
-
-  const paramsFromFilters = useCallback(() => {
-    const params = {};
-    if (filters.status)          params.status              = filters.status;
-    if (filters.attention)       params.attention           = true;
-    if (filters.pending_draft)   params.pending_draft       = true;
-    if (filters.claim_deadline)  params.claim_deadline_days = 7;
-    if (filters.sla_breached)    params.sla_breached        = true;
-    if (filters.search)          params.search              = filters.search;
-    if (filters.assigned_to)     params.assigned_to         = filters.assigned_to;
-    if (filters.query_type)      params.query_type          = filters.query_type;
-    if (filters.priority)        params.priority            = filters.priority;
-    if (filters.group_name)      params.group_name          = filters.group_name;
-    if (filters.courier)         params.courier             = filters.courier;
-    return params;
-  }, [filters]);
-
-  const loadInbox = useCallback(async () => {
+  const refresh = useCallback(() => {
     setLoading(true);
-    try {
-      const d = await fetchInbox({ ...paramsFromFilters(), limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
-      setQueries(d.queries || []);
-      setTotal(d.total ?? (d.queries || []).length);
-    } catch (err) { console.error(err); }
-    finally { setLoading(false); }
-  }, [paramsFromFilters, page]);
+    fetchInbox({ ...filters, page, limit: 30 })
+      .then(d => {
+        setQueries(d.queries || []);
+        setTotal(d.total || 0);
+        setStaffList(d.staff || []);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [filters, page]);
 
-  // Any filter change resets to the first page.
-  useEffect(() => { setPage(1); }, [filters]);
+  useEffect(() => { refresh(); }, [refresh, refreshKey]);
 
-  useEffect(() => { loadInbox(); }, [loadInbox]);
+  // Pagination math
+  const limit = 30;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const startIdx = total === 0 ? 0 : (page - 1) * limit + 1;
+  const endIdx = Math.min(page * limit, total);
 
-  useEffect(() => {
-    if (refreshKey > 0) loadInbox();
-  }, [refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Pagination maths + a windowed list of page numbers.
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const startIdx   = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
-  const endIdx     = Math.min(page * PAGE_SIZE, total);
-  const pageNumbers = (() => {
-    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
-    const out = [1];
-    const lo = Math.max(2, page - 1), hi = Math.min(totalPages - 1, page + 1);
-    if (lo > 2) out.push('…');
-    for (let i = lo; i <= hi; i++) out.push(i);
-    if (hi < totalPages - 1) out.push('…');
-    out.push(totalPages);
-    return out;
-  })();
-
-  const refresh = useCallback(() => setRefreshKey(k => k + 1), []);
+  // Generate page numbers with ellipsis
+  const pageNumbers = [];
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) pageNumbers.push(i);
+  } else {
+    pageNumbers.push(1);
+    if (page > 3) pageNumbers.push('…');
+    const start = Math.max(2, page - 1);
+    const end = Math.min(totalPages - 1, page + 1);
+    for (let i = start; i <= end; i++) pageNumbers.push(i);
+    if (page < totalPages - 2) pageNumbers.push('…');
+    pageNumbers.push(totalPages);
+  }
 
   // Learning nudges — poll for auto-committed behaviours that match open tickets.
   const [nudge, setNudge] = useState(null);
@@ -2266,7 +2246,7 @@ export default function QueriesPage() {
     try {
       await api.post(`/queries/learning-nudges/${nudge.id}/apply`);
       setNudge(null);
-      refresh();
+      setRefreshKey(k => k + 1);
     } catch { /* ignore */ }
     finally { setNudgeBusy(false); }
   }
@@ -2276,8 +2256,6 @@ export default function QueriesPage() {
     api.post(`/queries/learning-nudges/${id}/dismiss`).catch(() => {});
   }
 
-  const panelFilterCount = [filters.assigned_to, filters.query_type, filters.priority, filters.group_name, filters.courier].filter(Boolean).length;
-
   // When "All Open" (no explicit status filter), always hide resolved tickets.
   const RESOLVED_STATUSES = new Set(['resolved', 'resolved_claim_approved', 'resolved_claim_rejected']);
   const displayQueries = filters.status
@@ -2285,266 +2263,253 @@ export default function QueriesPage() {
     : queries.filter(q => !RESOLVED_STATUSES.has(q.status));
 
   return (
-    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: C.bg, color: C.text, overflow: 'hidden' }}>
+    <div className="mv-page">
+      <div className="mv-page-inner" style={{ maxWidth: '100%' }}>
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 18px', borderBottom: `0.5px solid ${C.border}`, background: C.surface, flexShrink: 0 }}>
-        <span style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.03em' }}>Queries</span>
+        {/* ── Header ─────────────────────────────────────────────────────────── */}
+        <div className="mv-head">
+          <div>
+            <div className="mv-kicker">Support &amp; Customer Triage</div>
+            <h1 className="mv-title">Queries</h1>
+            <p className="mv-blurb">
+              Centralized customer communications, courier investigations, AI response drafting, and automated SLA clocks.
+            </p>
+          </div>
+          <div className="mv-actions">
+            {/* Workspace switcher tabs */}
+            <div className="mv-tabs" style={{ marginBottom: 0 }}>
+              {[
+                { key: 'unassigned', label: 'Unassigned',      count: stats?.unassigned },
+                { key: 'mine',       label: 'Assigned to me',  count: stats?.assigned_to_me },
+                { key: 'all',        label: 'All open',        count: stats?.total_open },
+              ].map(w => {
+                const active = workspace === w.key;
+                return (
+                  <button
+                    key={w.key}
+                    onClick={() => setWorkspace(w.key)}
+                    className={`mv-tab ${active ? 'is-active' : ''}`}
+                    style={{ padding: '6px 12px', fontSize: 12.5 }}
+                  >
+                    {w.label}
+                    {w.count != null && (
+                      <span className="mv-num" style={{ marginLeft: 6, fontWeight: 800 }}>
+                        ({w.count})
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
 
-        {/* Workspace switcher — Unassigned / Assigned to me / All open */}
-        <div className="ml-2 inline-flex items-center gap-1 rounded-xl bg-slate-100 p-1">
+            {/* Search */}
+            <div style={{ position: 'relative' }}>
+              <Search size={13} style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: 'var(--mv-ink-52)', pointerEvents: 'none' }} />
+              <input
+                placeholder="Search consignment, customer…"
+                value={filters.search}
+                onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
+                style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', borderRadius: 0, color: 'var(--mv-ink)',
+                  fontSize: 12, padding: '7px 10px 7px 28px', width: 220, outline: 'none' }}
+              />
+            </div>
+
+            <button onClick={refresh} className="mv-icon-btn" title="Refresh">
+              <RefreshCw size={13} />
+            </button>
+
+            <button
+              onClick={() => navigate('/queries/simulator')}
+              className="mv-btn-ghost"
+            >
+              🧪 Simulator
+            </button>
+          </div>
+        </div>
+
+        <div className="mv-rule" />
+
+        {/* ── Threat Matrix — high-impact operational counters ───────────────── */}
+        <div className="mv-kpis" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 20 }}>
           {[
-            { key: 'unassigned', label: 'Unassigned',      count: stats?.unassigned },
-            { key: 'mine',       label: 'Assigned to me',  count: stats?.assigned_to_me },
-            { key: 'all',        label: 'All open',        count: stats?.total_open },
-          ].map(w => {
-            const active = workspace === w.key;
+            { key: 'urgent', label: 'Critical Threats',     value: stats?.urgent_open,
+              onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'urgent' ? '' : 'urgent', sla_breached: false, status: '', attention: false })), active: filters.priority === 'urgent' },
+            { key: 'high',   label: 'High Priority',         value: stats?.high_open,
+              onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'high' ? '' : 'high', sla_breached: false, status: '', attention: false })), active: filters.priority === 'high' },
+            { key: 'sla',    label: 'Courier SLA Breaches',  value: stats?.courier_sla_breached,
+              onClick: () => setFilters(f => ({ ...f, sla_breached: !f.sla_breached, priority: '', status: '', attention: false })), active: filters.sla_breached },
+            { key: 'auto',   label: 'Autopilot Runs',        value: stats?.autopilot_runs,
+              onClick: null, active: false },
+          ].map(k => (
+            <div
+              key={k.key}
+              onClick={k.onClick || undefined}
+              className={`mv-kpi ${k.active ? 'is-active' : ''}`}
+              style={{ cursor: k.onClick ? 'pointer' : 'default' }}
+            >
+              <div className="mv-kpi-label">{k.label}</div>
+              <div className="mv-kpi-val mv-num">
+                {k.value ?? '—'}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Group & Status Filter Chips ────────────────────────────────────── */}
+        <div className="mv-chips" style={{ marginBottom: 20 }}>
+          {GROUP_TABS.map(t => {
+            const isActive = t.group === '' ? !filters.group_name : filters.group_name === t.group;
             return (
               <button
-                key={w.key}
-                onClick={() => setWorkspace(w.key)}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition
-                  ${active ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                key={t.key}
+                onClick={() => setFilters(f => ({ ...f, group_name: t.group, attention: false, status: '' }))}
+                className={`mv-chip ${isActive ? 'is-active' : ''}`}
               >
-                {w.label}
-                {w.count != null && (
-                  <span className={`rounded-full px-1.5 text-xs font-semibold
-                    ${active ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-600'}`}>
-                    {w.count}
-                  </span>
-                )}
+                {t.label}
               </button>
             );
           })}
-        </div>
-        <div style={{ flex: 1 }} />
-        {/* Search */}
-        <div style={{ position: 'relative' }}>
-          <Search size={12} style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: C.muted, pointerEvents: 'none' }} />
-          <input
-            placeholder="Search consignment, customer…"
-            value={filters.search}
-            onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
-            style={{ background: C.card, border: `0.5px solid ${C.border}`, borderRadius: 8, color: C.text,
-              fontSize: 12, padding: '7px 10px 7px 28px', width: 220, outline: 'none' }}
-          />
-        </div>
-        {/* Sort indicator */}
-        <span style={{ fontSize: 12, color: C.muted, display: 'flex', alignItems: 'center', gap: 4 }}>
-          <RefreshCw size={11} style={{ cursor: 'pointer' }} onClick={refresh} />
-          Last activity
-        </span>
-        {/* Automation simulator */}
-        <button
-          onClick={() => navigate('/queries/simulator')}
-          title="Open the automation simulator"
-          className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
-        >
-          🧪 Simulator
-        </button>
-
-        {/* New query */}
-        <button style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '7px 16px', borderRadius: 8, cursor: 'pointer',
-          border: 'none', background: '#0F172A',
-          color: '#F8FAFC', fontSize: 12, fontWeight: 700,
-          letterSpacing: '0.01em',
-          transition: 'background 0.12s, box-shadow 0.12s',
-        }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#1E293B'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(15,23,42,0.22)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#0F172A'; e.currentTarget.style.boxShadow = 'none'; }}
-        >
-          <span style={{ fontSize: 15, lineHeight: 1, fontWeight: 400 }}>+</span> New query
-        </button>
-      </div>
-
-      {/* ── Threat Matrix — high-impact operational counters ───────────────── */}
-      <div className="grid shrink-0 grid-cols-2 gap-3 bg-slate-50 px-[18px] pb-3 pt-3.5 lg:grid-cols-4">
-        {[
-          { key: 'urgent', label: '🚨 Critical Threats',     value: stats?.urgent_open,          accent: '#DC2626', ring: 'ring-red-200',    tint: 'bg-red-50',    text: 'text-red-700',
-            onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'urgent' ? '' : 'urgent', sla_breached: false, status: '', attention: false })), active: filters.priority === 'urgent' },
-          { key: 'high',   label: '⚠️ High Priority',         value: stats?.high_open,            accent: '#D97706', ring: 'ring-amber-200',  tint: 'bg-amber-50',  text: 'text-amber-700',
-            onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'high' ? '' : 'high', sla_breached: false, status: '', attention: false })), active: filters.priority === 'high' },
-          { key: 'sla',    label: '⏳ Courier SLA Breaches',  value: stats?.courier_sla_breached, accent: '#7C3AED', ring: 'ring-purple-200', tint: 'bg-purple-50', text: 'text-purple-700',
-            onClick: () => setFilters(f => ({ ...f, sla_breached: !f.sla_breached, priority: '', status: '', attention: false })), active: filters.sla_breached },
-          { key: 'auto',   label: '🤖 Autopilot Runs',        value: stats?.autopilot_runs,       accent: '#059669', ring: 'ring-emerald-200', tint: 'bg-emerald-50', text: 'text-emerald-700',
-            onClick: null, active: false },
-        ].map(k => (
+          <div style={{ flex: 1 }} />
           <button
-            key={k.key}
-            onClick={k.onClick || undefined}
-            className={`flex flex-col items-start rounded-2xl border p-4 text-left transition
-              ${k.tint} ${k.active ? `ring-2 ${k.ring} shadow-sm` : 'border-transparent hover:shadow-sm'}
-              ${k.onClick ? 'cursor-pointer' : 'cursor-default'}`}
-            style={{ borderColor: k.active ? k.accent : 'transparent' }}
+            onClick={() => setFilters(p => ({ ...p, attention: !p.attention, pending_draft: false }))}
+            className={`mv-chip ${filters.attention ? 'is-active' : ''}`}
           >
-            <span className="text-4xl font-extrabold leading-none" style={{ color: k.accent }}>
-              {k.value ?? '—'}
-            </span>
-            <span className={`mt-2 text-xs font-bold uppercase tracking-wide ${k.text}`}>{k.label}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* ── Group tabs ──────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', borderBottom: `0.5px solid ${C.border}`, background: C.bg, flexShrink: 0, padding: '0 18px', gap: 2 }}>
-        {GROUP_TABS.map(t => {
-          const isActive = t.group === '' ? !filters.group_name : filters.group_name === t.group;
-          const color = groupColor(t.group);
-          return (
-            <button key={t.key} onClick={() => setFilters(f => ({ ...f, group_name: t.group, attention: false, status: '' }))}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '9px 14px', border: 'none', background: 'none',
-                borderBottom: `2px solid ${isActive ? color : 'transparent'}`,
-                color: isActive ? color : C.muted,
-                fontSize: 13, fontWeight: isActive ? 600 : 400,
-                cursor: 'pointer', marginBottom: -0.5, whiteSpace: 'nowrap',
-                transition: 'color 0.1s',
-              }}
-              onMouseOver={e => { if (!isActive) e.currentTarget.style.color = C.sub; }}
-              onMouseOut={e => { if (!isActive) e.currentTarget.style.color = C.muted; }}
-            >
-              {t.group !== '' && (
-                <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0,
-                  opacity: isActive ? 1 : 0.5 }} />
-              )}
-              {t.label}
-            </button>
-          );
-        })}
-        <div style={{ flex: 1 }} />
-        {/* Status sub-filters as smaller pills */}
-        <div style={{ display: 'flex', gap: 4, alignItems: 'center', padding: '6px 0' }}>
-          <FilterPill color={C.red} active={filters.attention}
-            onClick={() => setFilters(p => ({ ...p, attention: !p.attention, pending_draft: false }))}>
             ⚠ Attention
-          </FilterPill>
-          <FilterPill color={C.green} active={filters.pending_draft}
-            onClick={() => setFilters(p => ({ ...p, pending_draft: !p.pending_draft, attention: false }))}>
-            ✦ To verify
-          </FilterPill>
-          <FilterPill color={C.blue} active={filters.status === 'resolved'}
-            onClick={() => setFilters(p => ({ ...p, status: p.status === 'resolved' ? '' : 'resolved', attention: false }))}>
-            Resolved
-          </FilterPill>
-        </div>
-      </div>
-
-      {/* ── Command Center: live queue (2 cols) + Autopilot QA Bay (1 col) ── */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 items-stretch gap-6 overflow-hidden px-[18px] py-3 xl:grid-cols-3">
-
-        {/* Columns 1 & 2 — Live Traffic Queue */}
-        <div className="flex min-h-0 flex-col xl:col-span-2">
-          <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-slate-200 bg-white">
-            {loading && <div style={{ padding: 40, textAlign: 'center', color: C.muted, fontSize: 12 }}>Loading…</div>}
-            {!loading && displayQueries.length === 0 && (
-              <div style={{ padding: 60, textAlign: 'center' }}>
-                <div style={{ fontSize: 36, marginBottom: 12 }}>📭</div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: C.sub, marginBottom: 6 }}>No queries match</div>
-                <div style={{ fontSize: 12, color: C.muted }}>Try a different filter or check back later</div>
-              </div>
-            )}
-            {!loading && displayQueries.length > 0 && (
-              <>
-                {/* Rows: Red (Urgent) & Amber (High) pinned to the top, then by activity */}
-                {[...displayQueries]
-                  .sort((a, b) =>
-                    priRank(a) - priRank(b) ||
-                    new Date(b.latest_email_at || b.created_at) - new Date(a.latest_email_at || a.created_at)
-                  )
-                  .map(q => (
-                    <InboxRow key={q.id} q={q} onClick={() => navigate(`/queries/${q.id}`)} staffList={staffList} onUpdate={refresh} />
-                  ))
-                }
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Column 3 — Autopilot QA Bay */}
-        <div className="min-h-0 xl:col-span-1">
-          <AutopilotQABay refreshKey={refreshKey} onChanged={refresh} />
-        </div>
-      </div>
-
-      {/* Right filter panel (overlay) */}
-      {showFilters && (
-        <FilterPanel
-          filters={filters}
-          setFilters={setFilters}
-          staffList={staffList}
-          onClose={() => setShowFilters(false)}
-        />
-      )}
-
-      {/* ── Pagination footer ──────────────────────────────────────────────── */}
-      {total > 0 && (
-        <div className="flex shrink-0 items-center justify-between border-t border-slate-200 bg-white px-5 py-3">
-          <span className="text-sm text-slate-500">
-            Showing {startIdx}-{endIdx} of {total} entries
-          </span>
-          <div className="inline-flex items-center gap-1">
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page <= 1}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600
-                         transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Previous
-            </button>
-            {pageNumbers.map((n, i) =>
-              n === '…' ? (
-                <span key={`e${i}`} className="px-2 text-sm text-slate-400">…</span>
-              ) : (
-                <button
-                  key={n}
-                  onClick={() => setPage(n)}
-                  className={`min-w-[36px] rounded-lg border px-3 py-1.5 text-sm font-medium transition
-                    ${n === page
-                      ? 'border-slate-900 bg-slate-900 text-white'
-                      : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-                >
-                  {n}
-                </button>
-              )
-            )}
-            <button
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600
-                         transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
-
-      {showUnmatched && <UnmatchedPanel onClose={() => setShowUnmatched(false)} />}
-
-      {/* 🎓 Smart-nudge toast — surfaced when the system auto-learns a behaviour */}
-      {nudge && (
-        <div className="fixed bottom-6 right-6 z-[1000] w-96 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
-          <div className="flex items-start justify-between gap-2">
-            <div className="text-sm font-bold text-slate-900">🎓 System Learned New Behavior</div>
-            <button onClick={dismissNudge} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700">✕</button>
-          </div>
-          <p className="mt-1 text-xs leading-relaxed text-slate-600">
-            We've recorded your phrasing preference for this scenario
-            {nudge.scenario_trigger ? <> (<span className="font-semibold text-slate-700">{nudge.scenario_trigger.replace(/_/g, ' ')}</span>)</> : null}.
-            We found <strong>{nudge.match_count}</strong> other pending ticket{nudge.match_count === 1 ? '' : 's'} matching this profile.
-          </p>
+          </button>
           <button
-            onClick={applyNudge}
-            disabled={nudgeBusy}
-            className="mt-3 w-full rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white transition hover:bg-slate-800 disabled:opacity-50"
+            onClick={() => setFilters(p => ({ ...p, pending_draft: !p.pending_draft, attention: false }))}
+            className={`mv-chip ${filters.pending_draft ? 'is-active' : ''}`}
           >
-            {nudgeBusy ? 'Updating…' : `🔄 Update Remaining Drafts (${nudge.match_count})`}
+            ✦ To verify
+          </button>
+          <button
+            onClick={() => setFilters(p => ({ ...p, status: p.status === 'resolved' ? '' : 'resolved', attention: false }))}
+            className={`mv-chip ${filters.status === 'resolved' ? 'is-active' : ''}`}
+          >
+            Resolved
           </button>
         </div>
-      )}
+
+        {/* ── Command Center: live queue (2 cols) + Autopilot QA Bay (1 col) ── */}
+        <div className="grid min-h-0 flex-1 grid-cols-1 items-stretch gap-6 overflow-hidden xl:grid-cols-3">
+
+          {/* Columns 1 & 2 — Live Traffic Queue */}
+          <div className="flex min-h-0 flex-col xl:col-span-2">
+            <div className="min-h-0 flex-1">
+              {loading && <div style={{ padding: 40, textAlign: 'center', color: 'var(--mv-ink-52)', fontSize: 13 }}>Loading…</div>}
+              {!loading && displayQueries.length === 0 && (
+                <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', padding: 60, textAlign: 'center' }}>
+                  <div style={{ fontSize: 32, marginBottom: 12 }}>📭</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--mv-ink)', marginBottom: 6 }}>No queries match</div>
+                  <div style={{ fontSize: 12, color: 'var(--mv-ink-52)' }}>Try a different filter or check back later</div>
+                </div>
+              )}
+              {!loading && displayQueries.length > 0 && (
+                <div>
+                  {[...displayQueries]
+                    .sort((a, b) =>
+                      priRank(a) - priRank(b) ||
+                      new Date(b.latest_email_at || b.created_at) - new Date(a.latest_email_at || a.created_at)
+                    )
+                    .map(q => (
+                      <InboxRow key={q.id} q={q} onClick={() => navigate(`/queries/${q.id}`)} staffList={staffList} onUpdate={refresh} />
+                    ))
+                  }
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Column 3 — Autopilot QA Bay */}
+          <div className="min-h-0 xl:col-span-1">
+            <AutopilotQABay refreshKey={refreshKey} onChanged={refresh} />
+          </div>
+        </div>
+
+        {/* Right filter panel (overlay) */}
+        {showFilters && (
+          <FilterPanel
+            filters={filters}
+            setFilters={setFilters}
+            staffList={staffList}
+            onClose={() => setShowFilters(false)}
+          />
+        )}
+
+        {/* ── Pagination footer ──────────────────────────────────────────────── */}
+        {total > 0 && (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            borderTop: '1px solid var(--mv-hairline-2)', background: 'var(--mv-surface)',
+            padding: '12px 18px', marginTop: 24
+          }}>
+            <span style={{ fontSize: 12.5, color: 'var(--mv-ink-52)' }}>
+              Showing <strong className="mv-num">{startIdx}</strong>–<strong className="mv-num">{endIdx}</strong> of <strong className="mv-num">{total}</strong> entries
+            </span>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="mv-btn-ghost"
+                style={{ fontSize: 12, padding: '4px 10px' }}
+              >
+                Previous
+              </button>
+              {pageNumbers.map((n, i) =>
+                n === '…' ? (
+                  <span key={`e${i}`} style={{ padding: '0 4px', color: 'var(--mv-ink-52)' }}>…</span>
+                ) : (
+                  <button
+                    key={n}
+                    onClick={() => setPage(n)}
+                    className={n === page ? 'mv-btn-primary' : 'mv-btn-ghost'}
+                    style={{ fontSize: 12, padding: '4px 10px', minWidth: 32 }}
+                  >
+                    {n}
+                  </button>
+                )
+              )}
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="mv-btn-ghost"
+                style={{ fontSize: 12, padding: '4px 10px' }}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showUnmatched && <UnmatchedPanel onClose={() => setShowUnmatched(false)} />}
+
+        {/* 🎓 Smart-nudge toast */}
+        {nudge && (
+          <div style={{
+            position: 'fixed', bottom: 24, right: 24, zIndex: 1000, width: 380,
+            background: 'var(--mv-surface)', border: '1px solid var(--mv-purple)', padding: 18,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.18)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--mv-ink)' }}>🎓 System Learned New Behavior</div>
+              <button onClick={dismissNudge} style={{ background: 'none', border: 'none', color: 'var(--mv-ink-52)', cursor: 'pointer' }}>✕</button>
+            </div>
+            <p style={{ margin: '8px 0 12px', fontSize: 12, lineHeight: 1.5, color: 'var(--mv-ink-62)' }}>
+              We've recorded your phrasing preference for this scenario
+              {nudge.scenario_trigger ? <> (<span style={{ fontWeight: 700, color: 'var(--mv-ink)' }}>{nudge.scenario_trigger.replace(/_/g, ' ')}</span>)</> : null}.
+              We found <strong className="mv-num">{nudge.match_count}</strong> other pending ticket{nudge.match_count === 1 ? '' : 's'} matching this profile.
+            </p>
+            <button
+              onClick={applyNudge}
+              disabled={nudgeBusy}
+              className="mv-btn-primary"
+              style={{ width: '100%', fontSize: 12 }}
+            >
+              {nudgeBusy ? 'Updating…' : `🔄 Update Remaining Drafts (${nudge.match_count})`}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

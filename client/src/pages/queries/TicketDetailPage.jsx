@@ -18,65 +18,57 @@ const api = axios.create({ baseURL: '/api' });
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const C = {
-  bg:       '#F8FAFC',  // crisp slate
-  card:     '#FFFFFF',
-  border:   'rgba(0,0,0,0.08)',
-  green:    '#166534',
-  amber:    '#92400E',
-  red:      '#991B1B',
-  blue:     '#1E40AF',
-  text:     '#0F172A',
-  sub:      '#334155',
-  muted:    '#94A3B8',
-  greenDim: '#DCFCE7',
-  amberDim: '#FEF3C7',
-  redDim:   '#FEE2E2',
-  blueDim:  '#EFF6FF',
+  bg:       'var(--mv-bg)',
+  surface:  'var(--mv-surface)',
+  card:     'var(--mv-surface)',
+  border:   'var(--mv-hairline-2)',
+  green:    '#00C853',
+  amber:    '#D97706',
+  red:      '#E91E8C',
+  blue:     '#7B2FBE',
+  text:     'var(--mv-ink)',
+  sub:      'var(--mv-ink-62)',
+  muted:    'var(--mv-ink-52)',
+  greenDim: 'rgba(0,200,83,0.1)',
+  amberDim: 'rgba(217,119,6,0.1)',
+  redDim:   'rgba(233,30,140,0.1)',
+  blueDim:  'rgba(123,47,190,0.1)',
 };
 
 // ── Status / priority config ──────────────────────────────────────────────────
 const STATUS_CFG = {
-  open:                    { label: 'Open',              color: C.blue,  bg: C.blueDim  },
-  awaiting_customer_info:  { label: 'Awaiting customer', color: C.amber, bg: C.amberDim },
-  info_received:           { label: 'Info received',     color: C.green, bg: C.greenDim },
-  drafting:                { label: 'Drafting',          color: C.green, bg: C.greenDim },
-  awaiting_courier:        { label: 'Awaiting courier',  color: C.amber, bg: C.amberDim },
-  courier_replied:         { label: 'Courier replied',   color: C.green, bg: C.greenDim },
-  courier_investigating:   { label: 'Investigating',     color: C.amber, bg: C.amberDim },
-  awaiting_customer:       { label: 'Awaiting customer', color: C.amber, bg: C.amberDim },
-  claim_raised:            { label: 'Claim raised',      color: C.red,   bg: C.redDim   },
-  awaiting_claim_docs:     { label: 'Awaiting docs',     color: C.red,   bg: C.redDim   },
-  claim_submitted:         { label: 'Claim submitted',   color: C.amber, bg: C.amberDim },
-  resolved:                { label: 'Resolved',          color: C.green, bg: C.greenDim },
-  resolved_claim_approved: { label: 'Claim approved',    color: C.green, bg: C.greenDim },
-  resolved_claim_rejected: { label: 'Claim rejected',    color: C.red,   bg: C.redDim   },
-  escalated:               { label: 'Escalated',         color: C.red,   bg: C.redDim   },
+  open:                    { label: 'Open',              kind: 'flight' },
+  awaiting_customer_info:  { label: 'Awaiting Customer', kind: 'waiting' },
+  info_received:           { label: 'Info Received',     kind: 'settled' },
+  drafting:                { label: 'Drafting',          kind: 'flight' },
+  awaiting_courier:        { label: 'Awaiting Courier',  kind: 'waiting' },
+  courier_replied:         { label: 'Courier Replied',   kind: 'settled' },
+  courier_investigating:   { label: 'Investigating',     kind: 'flight' },
+  awaiting_customer:       { label: 'Awaiting Customer', kind: 'waiting' },
+  claim_raised:            { label: 'Claim Raised',      kind: 'attention' },
+  awaiting_claim_docs:     { label: 'Awaiting Docs',     kind: 'attention' },
+  claim_submitted:         { label: 'Claim Submitted',   kind: 'waiting' },
+  resolved:                { label: 'Resolved',          kind: 'settled' },
+  resolved_claim_approved: { label: 'Claim Approved',    kind: 'settled' },
+  resolved_claim_rejected: { label: 'Claim Rejected',    kind: 'attention' },
+  escalated:               { label: 'Escalated',         kind: 'attention' },
 };
 
 const PRIORITY_CFG = {
-  urgent: { label: 'Urgent', color: C.red   },
-  high:   { label: 'High',   color: C.amber },
-  medium: { label: 'Medium', color: C.blue  },
-  low:    { label: 'Low',    color: C.muted },
+  urgent: { label: 'Urgent', color: '#E91E8C' },
+  high:   { label: 'High',   color: '#D97706' },
+  medium: { label: 'Medium', color: '#7B2FBE' },
+  low:    { label: 'Low',    color: 'var(--mv-ink-52)' },
 };
 
 const GROUPS = ['Claims', 'Queries', 'Billing', 'Technical'];
 
-// Map a ticket's state to a premium, contextual badge style (Freshdesk-like).
-//  Green = resolved/closed · Red = urgent/escalated/SLA-breached · Amber =
-//  needs attention/awaiting · Blue = normal/open.
-// Badge colour driven strictly by the priority spectrum (matching the queue's
-// left-hand indicator strip), with completed tickets overriding to green.
-//   Closed/Resolved → green · Urgent → red · High → amber · Medium → yellow · Low → blue
 function ticketBadgeClasses(ticket) {
-  const s = (ticket?.status || '').toLowerCase();
   const p = (ticket?.priority || '').toLowerCase();
-  if (['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'].includes(s))
-    return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-  if (p === 'urgent') return 'bg-red-50 text-red-700 border-red-200 font-bold';
-  if (p === 'high')   return 'bg-amber-50 text-amber-700 border-amber-200 font-bold';
-  if (p === 'medium') return 'bg-yellow-50 text-yellow-700 border-yellow-200 font-bold';
-  return 'bg-blue-50 text-blue-700 border-blue-200'; // low / default
+  if (p === 'urgent') return 'border-[var(--mv-magenta)] bg-[rgba(233,30,140,0.1)] text-[var(--mv-magenta-deep)]';
+  if (p === 'high')   return 'border-[#D97706] bg-[rgba(217,119,6,0.1)] text-[#D97706]';
+  if (p === 'medium') return 'border-[var(--mv-purple)] bg-[rgba(123,47,190,0.1)] text-[var(--mv-purple)]';
+  return 'border-[var(--mv-hairline-2)] bg-[var(--mv-bg)] text-[var(--mv-ink-52)]';
 }
 
 // Dynamic SLA countdown string from courier_sla_expires_at.
@@ -867,25 +859,30 @@ export default function TicketDetailPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden' }}>
+    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'var(--mv-bg)', overflow: 'hidden' }}>
 
       {/* ── Header ── */}
       <div style={{ flexShrink: 0 }}>
 
         {/* ── Unified Command Banner ──────────────────────────────────────── */}
-        <div className="flex w-full items-center justify-between border-b border-slate-200 bg-white p-6">
+        <div style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--mv-hairline-2)', background: 'var(--mv-surface)', padding: '16px 24px' }}>
           {/* Left — back + identity */}
-          <div className="flex min-w-0 items-center">
+          <div style={{ display: 'flex', minWidth: 0, alignItems: 'center' }}>
             <button
               onClick={() => navigate('/queries')}
-              className="mr-4 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-500 transition-colors hover:text-slate-800"
+              className="mv-btn-ghost"
+              style={{ marginRight: 16 }}
             >
               ❮ Back to Queue
             </button>
-            <span className={`mr-3 inline-flex shrink-0 items-center rounded-md border px-3 py-1 text-sm font-bold tracking-wide ${ticketBadgeClasses(ticket)}`}>
-              Moov-{ticket.ticket_number}
+            <span className="mv-num" style={{
+              marginRight: 12, display: 'inline-flex', flexShrink: 0, alignItems: 'center',
+              border: '1px solid var(--mv-hairline-2)', background: 'var(--mv-bg)', padding: '4px 8px',
+              fontSize: 12, fontWeight: 800, textTransform: 'uppercase', color: 'var(--mv-ink)'
+            }}>
+              #M-{ticket.ticket_number}
             </span>
-            <span className="truncate text-xl font-black tracking-tight text-slate-900">
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 18, fontWeight: 800, color: 'var(--mv-ink)' }}>
               {ticket.customer_name || ticket.subject || 'Ticket'}
             </span>
           </div>
@@ -893,17 +890,17 @@ export default function TicketDetailPage() {
           {/* Right — resolution control */}
           <button
             onClick={() => patch.mutate({ status: 'resolved' })}
-            className="flex shrink-0 items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-emerald-100 transition-all hover:bg-emerald-700"
+            className="mv-btn-primary"
           >
             ✓ Mark as Resolved
           </button>
         </div>
 
         {/* ── Streamlined Meta Control Shelf ──────────────────────────────── */}
-        <div className="flex items-center gap-6 border-b border-slate-200 bg-slate-50/50 px-6 py-3.5 text-sm font-medium text-slate-600">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 24, borderBottom: '1px solid var(--mv-hairline-2)', background: 'var(--mv-bg)', padding: '10px 24px', fontSize: 12.5, color: 'var(--mv-ink-62)' }}>
           {/* Assigned To */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wide text-slate-400">Assigned</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--mv-ink-52)' }}>Assigned</span>
             <InlineSelect
               value={ticket.assigned_to || ''}
               onChange={v => patch.mutate({ assigned_to: v || null })}
@@ -915,8 +912,8 @@ export default function TicketDetailPage() {
           </div>
 
           {/* Group */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wide text-slate-400">Group</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--mv-ink-52)' }}>Group</span>
             <InlineSelect
               value={ticket.group_name || ''}
               onChange={v => patch.mutate({ group_name: v || null })}
@@ -924,26 +921,27 @@ export default function TicketDetailPage() {
             />
           </div>
 
-          {/* Priority — high-visibility colour-coded badge */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wide text-slate-400">Priority</span>
-            <span className={`inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-bold uppercase tracking-wide ${ticketBadgeClasses(ticket)}`}>
+          {/* Priority */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--mv-ink-52)' }}>Priority</span>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', border: '1px solid var(--mv-hairline-2)', background: 'var(--mv-surface)',
+              padding: '3px 8px', fontSize: 11, fontWeight: 800, textTransform: 'uppercase'
+            }}>
               {(PRIORITY_CFG[ticket.priority] || PRIORITY_CFG.medium).label}
             </span>
           </div>
 
-          {/* SLA Target — live countdown, eye-catching highlight box */}
-          <div className="ml-auto flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wide text-slate-400">SLA Target</span>
+          {/* SLA Target */}
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--mv-ink-52)' }}>SLA Target</span>
             {slaText ? (
-              <span className={`inline-flex items-center rounded-lg border px-3 py-1.5 text-sm font-bold tabular-nums ${
-                ticket.courier_sla_breached
-                  ? 'border-red-200 bg-red-50 text-red-700 animate-pulse'
-                  : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
-                {slaText}
+              <span className={`mv-state ${ticket.courier_sla_breached ? 'mv-state--attention' : 'mv-state--settled'}`} style={{ border: '1px solid var(--mv-hairline-2)', padding: '4px 10px' }}>
+                <span className={`mv-mark ${ticket.courier_sla_breached ? 'mv-mark--attention' : 'mv-mark--settled'}`} />
+                <span className="mv-state-label mv-num">{slaText}</span>
               </span>
             ) : (
-              <span className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-400">
+              <span style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid var(--mv-hairline-2)', background: 'var(--mv-surface)', padding: '4px 10px', fontSize: 12, color: 'var(--mv-ink-52)' }}>
                 No SLA set
               </span>
             )}
@@ -955,21 +953,20 @@ export default function TicketDetailPage() {
       <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
 
         {/* ── Left: parallel dual-track conversation + compose ── */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, overflow: 'hidden', background: '#F8FAFC' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, overflow: 'hidden', background: 'var(--mv-bg)' }}>
 
-          {/* Two lanes, side by side: Customer Face (Track A) + Courier Face (Track B).
-              Billing/Technical tickets hide the courier lane for a clean CRM view. */}
+          {/* Two lanes, side by side: Customer Face (Track A) + Courier Face (Track B) */}
           <div className={`grid min-h-0 flex-1 gap-0 overflow-hidden ${showCourierTab ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
 
             {/* Track A — Customer Face */}
-            <div className="flex min-h-0 flex-col border-r border-slate-200 bg-white">
-              <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-3">
-                <span className="text-xs font-extrabold uppercase tracking-wide text-blue-600">👤 Customer comms</span>
-                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-700">{customerEmails.length}</span>
+            <div style={{ display: 'flex', minHeight: 0, flexDirection: 'column', borderRight: '1px solid var(--mv-hairline-2)', background: 'var(--mv-surface)' }}>
+              <div style={{ display: 'flex', flexShrink: 0, alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--mv-hairline-2)', padding: '12px 20px', background: 'var(--mv-bg)' }}>
+                <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--mv-purple)' }}>👤 Customer Comms</span>
+                <span className="mv-num" style={{ border: '1px solid var(--mv-purple)', background: 'rgba(123,47,190,0.1)', padding: '1px 6px', fontSize: 11, fontWeight: 800, color: 'var(--mv-purple)' }}>{customerEmails.length}</span>
               </div>
-              <div ref={messagesRef} className="min-h-0 flex-1 overflow-y-auto p-6">
+              <div ref={messagesRef} style={{ minHeight: 0, flex: 1, overflowY: 'auto', padding: 24 }}>
                 {customerEmails.length === 0 ? (
-                  <div className="py-12 text-center text-sm text-slate-400">No customer messages yet</div>
+                  <div style={{ padding: '48px 0', textAlign: 'center', fontSize: 13, color: 'var(--mv-ink-52)' }}>No customer messages yet</div>
                 ) : customerEmails.map(email => (
                   <ThreadItem
                     key={email.id} email={email} queryId={id}
@@ -982,16 +979,16 @@ export default function TicketDetailPage() {
 
             {/* Track B — Courier Face */}
             {showCourierTab && (
-              <div className="flex min-h-0 flex-col bg-white">
-                <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-3">
-                  <span className="text-xs font-extrabold uppercase tracking-wide text-amber-600">
-                    🚚 Courier comms{ticket.courier_name ? ` · ${ticket.courier_name}` : ''}
+              <div style={{ display: 'flex', minHeight: 0, flexDirection: 'column', background: 'var(--mv-surface)' }}>
+                <div style={{ display: 'flex', flexShrink: 0, alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--mv-hairline-2)', padding: '12px 20px', background: 'var(--mv-bg)' }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#D97706' }}>
+                    🚚 Courier Comms{ticket.courier_name ? ` · ${ticket.courier_name}` : ''}
                   </span>
-                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-700">{courierEmails.length}</span>
+                  <span className="mv-num" style={{ border: '1px solid #D97706', background: 'rgba(217,119,6,0.1)', padding: '1px 6px', fontSize: 11, fontWeight: 800, color: '#D97706' }}>{courierEmails.length}</span>
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto p-6">
+                <div style={{ minHeight: 0, flex: 1, overflowY: 'auto', padding: 24 }}>
                   {courierEmails.length === 0 ? (
-                    <div className="py-12 text-center text-sm text-slate-400">No courier correspondence yet</div>
+                    <div style={{ padding: '48px 0', textAlign: 'center', fontSize: 13, color: 'var(--mv-ink-52)' }}>No courier correspondence yet</div>
                   ) : courierEmails.map(email => (
                     <ThreadItem
                       key={email.id} email={email} queryId={id}
@@ -1014,20 +1011,16 @@ export default function TicketDetailPage() {
 
         {/* ── Right sidebar ── */}
         <div style={{
-          width: 264, flexShrink: 0, background: '#fff',
-          borderLeft: '1px solid #E2E8F0',
+          width: 280, flexShrink: 0, background: 'var(--mv-surface)',
+          borderLeft: '1px solid var(--mv-hairline-2)',
           overflowY: 'auto', padding: 0,
         }}>
-
-          {/* SLA + Assignment now live in the top header — sidebar is parcel/customer/claim only. */}
 
           {/* 1. Parcel — always shown */}
           <SbSection title="Parcel" action={
             consignment ? (
               <button onClick={() => navigate(`/tracking?q=${encodeURIComponent(consignment)}`)}
-                style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700,
-                  color: '#6366F1', background: '#EEF2FF', border: '1px solid #C7D2FE',
-                  borderRadius: 6, padding: '3px 9px', cursor: 'pointer' }}>
+                className="mv-btn-ghost" style={{ padding: '2px 7px', fontSize: 11 }}>
                 <ExternalLink size={10} /> Track
               </button>
             ) : null
@@ -1038,74 +1031,74 @@ export default function TicketDetailPage() {
                 {(courierLogo || ticket.courier_name) && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                     {courierLogo && (
-                      <div style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid #E2E8F0',
-                        background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      <div style={{ width: 28, height: 28, border: '1px solid var(--mv-hairline-2)',
+                        background: 'var(--mv-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                         overflow: 'hidden', flexShrink: 0 }}>
                         <img src={courierLogo} alt="" style={{ width: '100%', objectFit: 'contain', padding: 3 }} />
                       </div>
                     )}
-                    <span style={{ fontSize: 12.5, fontWeight: 600, color: '#0F172A' }}>{ticket.courier_name}</span>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--mv-ink)' }}>{ticket.courier_name}</span>
                     {parcel?.status && (
-                      <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, textTransform: 'capitalize',
-                        color: parcel.status === 'delivered' ? '#166534' : '#92400E',
-                        background: parcel.status === 'delivered' ? '#F0FDF4' : '#FFFBEB',
-                        padding: '2px 8px', borderRadius: 20, border: '1px solid transparent', flexShrink: 0 }}>
+                      <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 800, textTransform: 'uppercase',
+                        color: parcel.status === 'delivered' ? 'var(--mv-green-deep)' : '#D97706',
+                        background: parcel.status === 'delivered' ? 'rgba(0,200,83,0.1)' : 'rgba(217,119,6,0.1)',
+                        padding: '2px 6px', border: '1px solid var(--mv-hairline-2)', flexShrink: 0 }}>
                         {parcel.status.replace(/_/g, ' ')}
                       </span>
                     )}
                   </div>
                 )}
                 {/* Consignment chip */}
-                <div style={{ fontFamily: 'monospace', fontSize: 12.5, fontWeight: 700, color: '#0F172A',
-                  background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8,
+                <div style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 800, color: 'var(--mv-ink)',
+                  background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)',
                   padding: '8px 12px', marginBottom: 10, letterSpacing: '0.03em',
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span>{consignment}</span>
-                  <span style={{ fontSize: 10, color: '#94A3B8', fontWeight: 400, cursor: 'pointer' }}
+                  <span style={{ fontSize: 10, color: 'var(--mv-ink-52)', fontWeight: 700, cursor: 'pointer' }}
                     onClick={() => navigator.clipboard?.writeText(consignment)}
-                    title="Copy to clipboard">copy</span>
+                    title="Copy to clipboard">COPY</span>
                 </div>
                 {ticket.service_name && (
                   <SbRow label="Service">
-                    <span style={{ fontSize: 12, color: C.sub }}>{ticket.service_name}</span>
+                    <span style={{ fontSize: 12, color: 'var(--mv-ink-62)' }}>{ticket.service_name}</span>
                   </SbRow>
                 )}
                 {parcel?.recipient_postcode && (
                   <SbRow label="Postcode">
-                    <span style={{ fontSize: 12, color: C.sub }}>{parcel.recipient_postcode}</span>
+                    <span style={{ fontSize: 12, color: 'var(--mv-ink-62)' }}>{parcel.recipient_postcode}</span>
                   </SbRow>
                 )}
                 {parcel?.delivered_at && (
                   <SbRow label="Delivered">
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#166534' }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--mv-green)' }}>
                       {new Date(parcel.delivered_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </span>
                   </SbRow>
                 )}
-                {/* Tracking timeline — appears automatically when events exist */}
+                {/* Tracking timeline */}
                 {trackEvents.length > 0 && (
-                  <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #F1F5F9' }}>
-                    <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
-                      textTransform: 'uppercase', color: '#94A3B8', marginBottom: 12 }}>
+                  <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--mv-hairline-2)' }}>
+                    <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.08em',
+                      textTransform: 'uppercase', color: 'var(--mv-ink-52)', marginBottom: 12 }}>
                       {trackEvents.length} event{trackEvents.length !== 1 ? 's' : ''}
                     </p>
                     <TrackingTimeline events={trackEvents} />
                   </div>
                 )}
                 {trackEvents.length === 0 && (
-                  <div style={{ marginTop: 10, padding: '8px 10px', background: '#F8FAFC',
-                    borderRadius: 7, border: '1px solid #F1F5F9', textAlign: 'center' }}>
-                    <p style={{ fontSize: 11, color: '#CBD5E1', margin: 0 }}>No tracking events yet</p>
+                  <div style={{ marginTop: 10, padding: '8px 10px', background: 'var(--mv-bg)',
+                    border: '1px solid var(--mv-hairline-2)', textAlign: 'center' }}>
+                    <p style={{ fontSize: 11, color: 'var(--mv-ink-52)', margin: 0 }}>No tracking events yet</p>
                   </div>
                 )}
               </>
             ) : (
               /* No consignment linked */
-              <div style={{ padding: '16px 12px', background: '#F8FAFC', borderRadius: 10,
-                border: '1px dashed #E2E8F0', textAlign: 'center' }}>
+              <div style={{ padding: '16px 12px', background: 'var(--mv-bg)',
+                border: '1px dashed var(--mv-hairline-2)', textAlign: 'center' }}>
                 <div style={{ fontSize: 24, marginBottom: 8 }}>📦</div>
-                <p style={{ fontSize: 12, fontWeight: 600, color: '#94A3B8', margin: '0 0 3px' }}>No parcel linked</p>
-                <p style={{ fontSize: 11, color: '#CBD5E1', margin: 0 }}>No consignment number on this ticket</p>
+                <p style={{ fontSize: 12, fontWeight: 800, color: 'var(--mv-ink)', margin: '0 0 3px' }}>No parcel linked</p>
+                <p style={{ fontSize: 11, color: 'var(--mv-ink-52)', margin: 0 }}>No consignment number on this ticket</p>
               </div>
             )}
           </SbSection>
@@ -1115,19 +1108,19 @@ export default function TicketDetailPage() {
             <SbSection title="Customer">
               {/* Avatar + name card */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14,
-                padding: '10px 12px', background: '#F8FAFC', borderRadius: 10, border: '1px solid #E2E8F0' }}>
-                <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#DBEAFE',
-                  border: '2px solid #BFDBFE', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 14, fontWeight: 800, color: '#1D4ED8', flexShrink: 0, letterSpacing: '-0.02em' }}>
+                padding: '10px 12px', background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)' }}>
+                <div style={{ width: 32, height: 32, background: 'rgba(123,47,190,0.12)',
+                  border: '1px solid var(--mv-purple)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 13, fontWeight: 800, color: 'var(--mv-purple)', flexShrink: 0 }}>
                   {(ticket.customer_name || ticket.sender_email || '?')[0].toUpperCase()}
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', margin: 0,
+                  <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--mv-ink)', margin: 0,
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {ticket.customer_name || ticket.sender_email}
                   </p>
                   {ticket.customer_name && ticket.sender_email && (
-                    <p style={{ fontSize: 11, color: '#94A3B8', margin: '2px 0 0',
+                    <p style={{ fontSize: 11, color: 'var(--mv-ink-52)', margin: '2px 0 0',
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {ticket.sender_email}
                     </p>
@@ -1136,11 +1129,9 @@ export default function TicketDetailPage() {
               </div>
               {ticket.customer_id && (
                 <button onClick={() => navigate(`/customers/${ticket.customer_id}`)}
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    gap: 5, padding: '7px 0', borderRadius: 8, border: '1px solid #C7D2FE',
-                    background: '#EEF2FF', color: '#4338CA', fontSize: 12, fontWeight: 600,
-                    cursor: 'pointer' }}>
-                  View account →
+                  className="mv-btn-ghost"
+                  style={{ width: '100%', fontSize: 12 }}>
+                  View Account →
                 </button>
               )}
             </SbSection>
@@ -1151,53 +1142,43 @@ export default function TicketDetailPage() {
           <SbSection title="Claim">
             {/* Alert when no formal claim yet */}
             {!ticket.claim_number && (
-              <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 10,
+              <div style={{ background: 'rgba(233,30,140,0.08)', border: '1px solid var(--mv-magenta)',
                 padding: '10px 12px', marginBottom: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <svg width="13" height="13" fill="none" viewBox="0 0 14 14">
-                    <path d="M7 2v4.5M7 9.5v.5" stroke="#C2410C" strokeWidth="1.5" strokeLinecap="round"/>
-                    <circle cx="7" cy="7" r="6" stroke="#C2410C" strokeWidth="1.4"/>
-                  </svg>
-                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.07em',
-                    textTransform: 'uppercase', color: '#C2410C' }}>No claim raised yet</span>
+                  <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.07em',
+                    textTransform: 'uppercase', color: 'var(--mv-magenta-deep)' }}>No claim raised yet</span>
                 </div>
                 {ticket.claim_amount && (
-                  <p style={{ fontSize: 11.5, color: '#9A3412', margin: 0, lineHeight: 1.5 }}>
-                    Indicated value: <strong>£{Number(ticket.claim_amount).toFixed(2)}</strong>
+                  <p style={{ fontSize: 11.5, color: 'var(--mv-ink)', margin: 0, lineHeight: 1.5 }}>
+                    Indicated value: <strong className="mv-num">£{Number(ticket.claim_amount).toFixed(2)}</strong>
                   </p>
                 )}
               </div>
             )}
             {ticket.claim_number && <SbRow label="Claim no.">
-              <span style={{ fontSize: 12, color: C.text, fontWeight: 600 }}>{ticket.claim_number}</span>
+              <span className="mv-num" style={{ fontSize: 12, color: 'var(--mv-ink)', fontWeight: 800 }}>{ticket.claim_number}</span>
             </SbRow>}
             <SbRow label="Amount">
-              <span style={{ fontSize: 12, color: ticket.claim_amount ? '#0F172A' : C.muted, fontWeight: ticket.claim_amount ? 700 : 400 }}>
+              <span className="mv-num" style={{ fontSize: 12, color: ticket.claim_amount ? 'var(--mv-ink)' : 'var(--mv-ink-52)', fontWeight: ticket.claim_amount ? 800 : 400 }}>
                 {ticket.claim_amount ? `£${Number(ticket.claim_amount).toFixed(2)}` : '—'}
               </span>
             </SbRow>
             <SbRow label="Evidence">
               {(ticket.evidence_count > 0) ? (
-                <span style={{ fontSize: 12, fontWeight: 600, color: C.green }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--mv-green)' }}>
                   {ticket.evidence_count} {ticket.evidence_count === 1 ? 'file' : 'files'}
                 </span>
               ) : (
-                <span style={{ fontSize: 11, color: C.muted }}>None yet</span>
+                <span style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>None yet</span>
               )}
             </SbRow>
             {!ticket.claim_number && (
-              <button style={{ width: '100%', marginTop: 12, display: 'flex', alignItems: 'center',
-                justifyContent: 'center', gap: 6, padding: '8px 0', borderRadius: 9,
-                fontSize: 12.5, fontWeight: 700, color: '#C2410C', background: '#FFF7ED',
-                border: '1.5px solid #FED7AA', cursor: 'pointer' }}>
+              <button className="mv-btn-primary" style={{ width: '100%', marginTop: 12, fontSize: 12 }}>
                 + Raise Formal Claim
               </button>
             )}
           </SbSection>
           )}
-
-          {/* Assignment moved to the top command bar; tracking lives in the Parcel section. */}
-
         </div>
       </div>
     </div>
