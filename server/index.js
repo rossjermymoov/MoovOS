@@ -89,9 +89,11 @@ app.use('/api/v1/onboarding',         onboardingRouter);
 app.use('/api/onboarding-templates',  onboardingTemplatesRouter);
 app.use('/api/integration-software',  integrationSoftwareRouter);
 app.use('/api/teams',                 teamsRouter);
-// Webhook-safe alias — suppliers that block URLs containing "billing"
-// should send to /api/moov-charges/webhook instead
+// Webhook-safe aliases — supports various courier and integrator webhook URLs
 app.use('/api/moov-charges',          billingRouter);
+app.use('/api/billing',               billingRouter);
+app.use('/api/webhook',               billingRouter);
+app.use('/webhook',                   billingRouter);
 app.use('/api/reconciliation',        reconciliationRouter);
 app.use('/api/shipments',             shipmentsRouter);
 app.use('/api/email',                 emailRouter);

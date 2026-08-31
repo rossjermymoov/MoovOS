@@ -194,13 +194,21 @@ function extractPayload(req) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /api/v1/webhooks/shipment-created
+// POST /api/v1/webhooks/shipment-created (and aliases: /shipment.created, /created, /webhook, /)
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.post('/shipment-created', authMiddleware, (req, res) => {
+router.post(['/shipment-created', '/shipment.created', '/created', '/webhook', '/'], authMiddleware, (req, res) => {
   const payload = extractPayload(req);
+  const eventType = String(payload.event_type || payload.event || '').toLowerCase().trim();
 
-  if (!payload?.shipment) {
+  if (eventType.includes('cancel') || eventType.includes('delete')) {
+    return handleShipmentCancelled(req, res, payload);
+  }
+  if (eventType.includes('verify') || eventType.includes('scan')) {
+    return handleShipmentVerified(req, res, payload);
+  }
+
+  if (!payload?.shipment && !payload?.request?.shipment) {
     return res.status(400).json({ error: 'Invalid payload: missing shipment object' });
   }
 
