@@ -25,7 +25,7 @@ import { fetchShipmentById } from '../services/voilaClient.js';
 // (taken from charges[0].customer_id) without duplicating resolution logic.
 //
 // Returns the UUID of the upserted shipment, or null if no platform_shipment_id.
-async function createOrUpdateShipment(payload, customerId) {
+export async function createOrUpdateShipment(payload, customerId) {
   const ship = payload.shipment || payload;
 
   // Parse request_shipment JSON string → object for dc_service_id extraction
