@@ -690,24 +690,33 @@ router.get('/', async (req, res, next) => {
           p.id, p.consignment_number,
           p.courier_name, p.courier_code, p.service_name,
           p.customer_name, p.customer_account,
-          p.recipient_name, p.recipient_postcode, p.recipient_address,
+          COALESCE(p.recipient_name, c.ship_to_name, s.ship_to_name) AS recipient_name,
+          COALESCE(p.recipient_postcode, c.ship_to_postcode, s.ship_to_postcode) AS recipient_postcode,
+          COALESCE(p.recipient_address, c.ship_to_address, s.ship_to_address) AS recipient_address,
           p.status, p.status_description, p.last_location,
           p.last_event_at, p.estimated_delivery, p.delivered_at,
-          p.weight_kg,
+          COALESCE(p.weight_kg, c.weight_actual_kg, s.weight, s.total_weight) AS weight_kg,
           p.created_at,
           COALESCE(c.ship_to_country_iso, s.ship_to_country_iso) AS charge_country_iso
         FROM parcels p
         LEFT JOIN LATERAL (
-          SELECT ship_to_country_iso FROM charges
-          WHERE voila_shipment_id = p.consignment_number
+          SELECT ship_to_country_iso, ship_to_name, ship_to_postcode, ship_to_address, weight_actual_kg FROM charges
+          WHERE tracking_code = p.consignment_number
+             OR voila_shipment_id = p.consignment_number
              OR order_id = p.consignment_number
              OR (raw_payload->'tracking_codes' IS NOT NULL AND raw_payload->'tracking_codes' ? p.consignment_number)
              OR raw_payload->>'consignment_number' = p.consignment_number
+             OR raw_payload->>'tracking_number' = p.consignment_number
+          ORDER BY created_at DESC
           LIMIT 1
         ) c ON true
         LEFT JOIN LATERAL (
-          SELECT ship_to_country_iso FROM shipments
+          SELECT ship_to_country_iso, ship_to_name, ship_to_postcode, ship_to_address, weight, total_weight FROM shipments
           WHERE p.consignment_number = ANY(tracking_codes)
+             OR tracking_codes @> ARRAY[p.consignment_number]::text[]
+             OR reference = p.consignment_number
+             OR voila_shipment_id = p.consignment_number
+          ORDER BY created_at DESC
           LIMIT 1
         ) s ON true
         ${where}
@@ -787,8 +796,11 @@ router.get('/:consignment', async (req, res, next) => {
                 ship_to_country_iso, weight, total_weight, declared_weight
          FROM shipments
          WHERE $1 = ANY(tracking_codes)
+            OR tracking_codes @> ARRAY[$1]::text[]
             OR reference = $1
             OR voila_shipment_id = $1
+            OR raw_payload::text ILIKE '%' || $1 || '%'
+         ORDER BY created_at DESC
          LIMIT 1`,
         [req.params.consignment]
       );
@@ -803,16 +815,20 @@ router.get('/:consignment', async (req, res, next) => {
     let charge = null;
     try {
       const chargeRes = await query(
-        `SELECT c.weight_actual_kg, c.weight_charged_kg, c.weight_dimensional_kg,
+        `SELECT c.id, c.tracking_code, c.weight_actual_kg, c.weight_charged_kg, c.weight_dimensional_kg,
                 c.ship_to_country_iso, c.ship_to_postcode, c.ship_to_name, c.ship_to_address,
                 c.cost_price, c.sell_price, c.margin, c.despatch_date, c.raw_payload
          FROM charges c
-         WHERE c.voila_shipment_id = $1
+         WHERE c.tracking_code = $1
+            OR c.voila_shipment_id = $1
             OR c.order_id = $1
             OR (c.raw_payload->'tracking_codes' IS NOT NULL AND c.raw_payload->'tracking_codes' ? $1)
             OR c.raw_payload->>'consignment_number' = $1
             OR c.raw_payload->>'tracking_number' = $1
             OR c.raw_payload->'shipment'->>'reference' = $1
+            OR c.raw_payload->'request_shipment'->>'reference' = $1
+            OR c.raw_payload::text ILIKE '%' || $1 || '%'
+         ORDER BY c.created_at DESC
          LIMIT 1`,
         [req.params.consignment]
       );
@@ -823,9 +839,28 @@ router.get('/:consignment', async (req, res, next) => {
       // Non-fatal if charge lookup fails
     }
 
-    // Extract dimensions and payload details
-    const rawPayload = eventsRes.rows.find(e => e.raw_payload)?.raw_payload || charge?.raw_payload || shipmentRecord?.raw_payload || {};
-    const reqShip = extractRequestShipment(rawPayload);
+    // Scan all candidate payloads to find the richest request_shipment object
+    const candidatePayloads = [
+      ...eventsRes.rows.map(e => e.raw_payload),
+      charge?.raw_payload,
+      shipmentRecord?.raw_payload,
+    ].filter(Boolean);
+
+    let reqShip = {};
+    let matchedRaw = null;
+    for (const p of candidatePayloads) {
+      const extracted = extractRequestShipment(p);
+      if (extracted && (extracted.ship_to || (extracted.parcels && extracted.parcels.length) || extracted.account_name || extracted.reference)) {
+        reqShip = extracted;
+        matchedRaw = p;
+        break;
+      }
+    }
+    if (!matchedRaw && candidatePayloads.length) {
+      matchedRaw = candidatePayloads[0];
+      reqShip = extractRequestShipment(matchedRaw);
+    }
+
     const shipTo = reqShip.ship_to || reqShip.recipient || {};
     const reqParcels = reqShip.parcels || [];
     const firstP = reqParcels[0] || {};
@@ -857,7 +892,7 @@ router.get('/:consignment', async (req, res, next) => {
           ? parseFloat(firstP._summed_item_weights)
           : (reqShip._summed_total_weight != null
               ? parseFloat(reqShip._summed_total_weight)
-              : (parcel.weight_kg != null ? parcel.weight_kg : (charge?.weight_actual_kg || shipmentRecord?.weight || null))));
+              : (parcel.weight_kg != null ? parcel.weight_kg : (charge?.weight_actual_kg || shipmentRecord?.weight || shipmentRecord?.total_weight || null))));
     const is_international = country_code !== 'GB' && country_code !== 'UK';
 
     // If delivered, filter out any redundant post-delivery technical noise
@@ -867,7 +902,7 @@ router.get('/:consignment', async (req, res, next) => {
       filteredEvents = filteredEvents.slice(deliveredIdx);
     }
 
-    let parsedRawWebhook = eventsRes.rows.find(e => e.raw_payload)?.raw_payload
+    let parsedRawWebhook = matchedRaw || eventsRes.rows.find(e => e.raw_payload)?.raw_payload
       || shipmentRecord?.raw_payload
       || charge?.raw_payload
       || {
