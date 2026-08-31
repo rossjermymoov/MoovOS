@@ -297,6 +297,8 @@ function PermissionsPanel({ staffMember, onClose }) {
 
 // ─── TeamsCard ───────────────────────────────────────────────────────────────
 
+// ─── TeamsCard ───────────────────────────────────────────────────────────────
+
 function TeamsCard({ teams = [] }) {
   const queryClient = useQueryClient();
   const save = useMutation({
@@ -304,25 +306,25 @@ function TeamsCard({ teams = [] }) {
     onSuccess: () => queryClient.invalidateQueries(['teams']),
   });
   return (
-    <div className="moov-card" style={{ padding: '16px 20px', marginBottom: 16 }}>
-      <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A', marginBottom: 4 }}>Teams & shared inboxes</div>
-      <p style={{ fontSize: 12, color: '#64748B', marginBottom: 14 }}>
+    <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', padding: '16px 20px', marginBottom: 20 }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--mv-ink)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Teams &amp; Shared Inboxes</div>
+      <p style={{ fontSize: 12, color: 'var(--mv-ink-52)', marginBottom: 14 }}>
         Onboarding tasks are assigned to a team. The shared inbox is where team notifications can be sent.
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {teams.map(t => (
           <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#7B2FBE', width: 110 }}>{t.name}</span>
-            <span style={{ fontSize: 11, color: '#64748B', width: 60 }}>{(t.members || []).length} member{(t.members || []).length === 1 ? '' : 's'}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--mv-purple)', width: 130 }}>{t.name}</span>
+            <span style={{ fontSize: 11, color: 'var(--mv-ink-52)', width: 70 }}>{(t.members || []).length} member{(t.members || []).length === 1 ? '' : 's'}</span>
             <input
               defaultValue={t.inbox_email || ''}
               placeholder="team@yourdomain.com"
               onBlur={e => { if (e.target.value !== (t.inbox_email || '')) save.mutate({ id: t.id, inbox_email: e.target.value }); }}
-              style={{ flex: 1, fontSize: 13, padding: '7px 11px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', color: '#0F172A' }}
+              style={{ flex: 1, fontSize: 13, padding: '7px 11px', borderRadius: 0, border: '1px solid var(--mv-hairline-2)', background: 'var(--mv-bg)', color: 'var(--mv-ink)' }}
             />
           </div>
         ))}
-        {!teams.length && <span style={{ fontSize: 12, color: '#94A3B8' }}>Teams will appear here once the database migration has run.</span>}
+        {!teams.length && <span style={{ fontSize: 12, color: 'var(--mv-ink-45)' }}>No team records found.</span>}
       </div>
     </div>
   );
@@ -336,60 +338,55 @@ function StaffRow({ s, teams = [], onToggleActive, onChangeTeam }) {
   return (
     <>
       <tr key={s.id}>
-        <td style={{ fontWeight: 600 }}>{s.full_name}</td>
-        <td style={{ color: '#00BCD4' }}>{s.email}</td>
+        <td style={{ fontWeight: 700, color: 'var(--mv-ink)' }}>{s.full_name}</td>
+        <td style={{ color: 'var(--mv-ink-62)' }}>{s.email}</td>
         <td>
           <span style={{
-            display: 'inline-block', padding: '3px 10px', borderRadius: 6,
+            display: 'inline-block', padding: '3px 8px', borderRadius: 0,
             fontSize: 11, fontWeight: 700,
-            background: ROLE_COLORS[s.role]?.bg || 'rgba(0,0,0,0.08)',
-            color: ROLE_COLORS[s.role]?.text || '#fff',
+            background: 'var(--mv-surface)',
+            border: '1px solid var(--mv-hairline-2)',
+            color: 'var(--mv-ink)',
           }}>
             {ROLES.find(r => r.value === s.role)?.label || s.role}
           </span>
         </td>
         <td>
           <select value={s.team_id || ''} onChange={e => onChangeTeam(s.id, e.target.value || null)}
-            style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid #E2E8F0', background: '#fff', color: '#0F172A' }}>
+            style={{ fontSize: 12, padding: '5px 8px', borderRadius: 0, border: '1px solid var(--mv-hairline-2)', background: 'var(--mv-bg)', color: 'var(--mv-ink)' }}>
             <option value="">No team</option>
             {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
         </td>
         <td>
-          {/* Permission status badge */}
-          <span style={{
-            fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
-            background: s.is_admin
-              ? 'rgba(123,47,190,0.15)'
-              : s.has_password
-                ? 'rgba(0,200,83,0.12)'
-                : 'rgba(220,38,38,0.1)',
-            color: s.is_admin ? '#7B2FBE' : s.has_password ? '#00C853' : '#f87171',
-          }}>
-            {s.is_admin ? 'Admin' : s.has_password ? `${(s.page_permissions || []).length} pages` : 'No login'}
+          <span className={`mv-state ${s.is_admin ? 'mv-state--settled' : s.has_password ? 'mv-state--flight' : 'mv-state--waiting'}`}>
+            <span className={`mv-mark ${s.is_admin ? 'mv-mark--settled' : s.has_password ? 'mv-mark--flight' : 'mv-mark--waiting'}`} />
+            <span className="mv-state-label">{s.is_admin ? 'Admin' : s.has_password ? `${(s.page_permissions || []).length} pages` : 'No login'}</span>
           </span>
         </td>
         <td style={{ textAlign: 'right' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
             <button
               onClick={() => setExpanded(v => !v)}
-              style={{ background: 'none', border: 'none', color: '#7B2FBE', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
+              className="mv-btn-ghost"
+              style={{ padding: '4px 8px', fontSize: 11.5 }}
             >
-              {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
               Access
             </button>
             <button
               onClick={() => onToggleActive(s.id, false)}
-              style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
+              className="mv-icon-btn"
+              title="Deactivate staff member"
             >
-              <X size={12} /> Deactivate
+              <X size={13} />
             </button>
           </div>
         </td>
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={6} style={{ padding: '0 16px 16px' }}>
+          <td colSpan={6} style={{ padding: '0 16px 16px', background: 'var(--mv-surface)' }}>
             <PermissionsPanel staffMember={s} onClose={() => setExpanded(false)} />
           </td>
         </tr>
@@ -453,158 +450,162 @@ export default function StaffSettings() {
   const inactive = staff.filter(s => !s.is_active);
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto' }}>
-      <SettingsNav />
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: '#00C853' }}>Staff</h1>
-          <p style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>
-            Manage team members, set login passwords, and control which pages each person can access.
-          </p>
+    <div className="mv-page">
+      <div className="mv-page-inner">
+        <SettingsNav />
+
+        <div className="mv-head">
+          <div>
+            <div className="mv-kicker">Settings &amp; Access</div>
+            <h1 className="mv-title">Staff Management</h1>
+            <p className="mv-blurb">
+              Manage team members, configure authentication credentials, and control granular module permissions.
+            </p>
+          </div>
+          <div className="mv-actions">
+            <button className="mv-btn-primary" onClick={() => setShowForm(f => !f)}>
+              <UserPlus size={14} /> Add Staff Member
+            </button>
+          </div>
         </div>
-        <button className="btn-primary" onClick={() => setShowForm(f => !f)}>
-          <UserPlus size={14} /> Add Staff Member
-        </button>
-      </div>
 
-      {/* Add staff form */}
-      {showForm && (
-        <div className="moov-card" style={{ padding: 24, marginBottom: 24, border: '1px solid rgba(0,200,83,0.3)' }}>
-          <h3 style={{ fontSize: 16, fontWeight: 600, color: '#7B2FBE', marginBottom: 20 }}>New Staff Member</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#0F172A', marginBottom: 6 }}>
-                Full Name <span style={{ color: '#E91E8C' }}>*</span>
-              </label>
-              <div className="pill-input-wrap" style={errors.full_name ? { borderColor: '#E91E8C' } : {}}>
-                <input value={form.full_name} onChange={e => set('full_name', e.target.value)} placeholder="Jane Smith" />
+        <div className="mv-rule" />
+
+        {/* Add staff form */}
+        {showForm && (
+          <div style={{ padding: 20, marginBottom: 24, border: '1px solid var(--mv-hairline-2)', background: 'var(--mv-surface)' }}>
+            <div className="mv-kicker">New User</div>
+            <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--mv-ink)', marginBottom: 16 }}>Add Staff Member</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 14, marginBottom: 16 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-52)', textTransform: 'uppercase', marginBottom: 5 }}>
+                  Full Name *
+                </label>
+                <input value={form.full_name} onChange={e => set('full_name', e.target.value)} placeholder="Jane Smith"
+                  style={{ width: '100%', boxSizing: 'border-box', background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)', padding: '7px 10px', fontSize: 13, color: 'var(--mv-ink)' }} />
+                {errors.full_name && <p style={{ fontSize: 11.5, color: 'var(--mv-magenta)', marginTop: 4 }}>{errors.full_name}</p>}
               </div>
-              {errors.full_name && <p style={{ fontSize: 12, color: '#E91E8C', marginTop: 4 }}>{errors.full_name}</p>}
-            </div>
 
-            <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#0F172A', marginBottom: 6 }}>
-                Email <span style={{ color: '#E91E8C' }}>*</span>
-              </label>
-              <div className="pill-input-wrap" style={errors.email ? { borderColor: '#E91E8C' } : {}}>
-                <input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="jane@moov.co.uk" />
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-52)', textTransform: 'uppercase', marginBottom: 5 }}>
+                  Email *
+                </label>
+                <input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="jane@moov.co.uk"
+                  style={{ width: '100%', boxSizing: 'border-box', background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)', padding: '7px 10px', fontSize: 13, color: 'var(--mv-ink)' }} />
+                {errors.email && <p style={{ fontSize: 11.5, color: 'var(--mv-magenta)', marginTop: 4 }}>{errors.email}</p>}
               </div>
-              {errors.email && <p style={{ fontSize: 12, color: '#E91E8C', marginTop: 4 }}>{errors.email}</p>}
-            </div>
 
-            <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#0F172A', marginBottom: 6 }}>Role</label>
-              <div className="pill-input-wrap">
-                <select value={form.role} onChange={e => set('role', e.target.value)} style={{ paddingLeft: 16 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-52)', textTransform: 'uppercase', marginBottom: 5 }}>Role</label>
+                <select value={form.role} onChange={e => set('role', e.target.value)}
+                  style={{ width: '100%', boxSizing: 'border-box', background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)', padding: '7px 10px', fontSize: 13, color: 'var(--mv-ink)' }}>
                   {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
-                <div className="green-cap">▾</div>
               </div>
-            </div>
 
-            <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#0F172A', marginBottom: 6 }}>Team</label>
-              <div className="pill-input-wrap">
-                <select value={form.team_id} onChange={e => set('team_id', e.target.value)} style={{ paddingLeft: 16 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-52)', textTransform: 'uppercase', marginBottom: 5 }}>Team</label>
+                <select value={form.team_id} onChange={e => set('team_id', e.target.value)}
+                  style={{ width: '100%', boxSizing: 'border-box', background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)', padding: '7px 10px', fontSize: 13, color: 'var(--mv-ink)' }}>
                   <option value="">No team</option>
                   {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
-                <div className="green-cap">▾</div>
               </div>
             </div>
-          </div>
 
-          {errors.api && (
-            <div style={{ padding: 10, background: 'rgba(233,30,140,0.1)', border: '1px solid #E91E8C', borderRadius: 8, fontSize: 13, color: '#E91E8C', marginBottom: 12 }}>
-              {errors.api}
+            {errors.api && (
+              <div style={{ padding: 10, background: 'rgba(233,30,140,0.1)', border: '1px solid var(--mv-magenta)', fontSize: 12.5, color: 'var(--mv-magenta-deep)', marginBottom: 12 }}>
+                {errors.api}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="mv-btn-ghost" onClick={() => { setShowForm(false); setErrors({}); setForm(EMPTY); }}>
+                Cancel
+              </button>
+              <button className="mv-btn-primary" onClick={submit} disabled={addStaff.isPending}>
+                {addStaff.isPending ? 'Adding…' : <><Check size={14} /> Add Staff Member</>}
+              </button>
             </div>
+          </div>
+        )}
+
+        {/* Teams + shared inboxes */}
+        <TeamsCard teams={teams} />
+
+        {/* Active staff */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ padding: '12px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--mv-ink)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Active Staff</span>
+            <span style={{ fontSize: 12, color: 'var(--mv-ink-52)' }}>({active.length})</span>
+          </div>
+
+          {isLoading ? (
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--mv-ink-52)', fontSize: 13 }}>Loading…</div>
+          ) : active.length === 0 ? (
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--mv-ink-52)', fontSize: 13 }}>
+              No staff added yet. Use the button above to add your first team member.
+            </div>
+          ) : (
+            <table className="mv-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Team</th>
+                  <th>Access</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {active.map(s => (
+                  <StaffRow
+                    key={s.id}
+                    s={s}
+                    teams={teams}
+                    onToggleActive={(id, val) => toggleActive.mutate({ id, is_active: val })}
+                    onChangeTeam={(id, team_id) => changeTeam.mutate({ id, team_id })}
+                  />
+                ))}
+              </tbody>
+            </table>
           )}
-
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn-ghost" onClick={() => { setShowForm(false); setErrors({}); setForm(EMPTY); }}>
-              Cancel
-            </button>
-            <button className="btn-primary" onClick={submit} disabled={addStaff.isPending}>
-              {addStaff.isPending ? 'Adding…' : <><Check size={14} /> Add Staff Member</>}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Teams + shared inboxes */}
-      <TeamsCard teams={teams} />
-
-      {/* Active staff */}
-      <div className="moov-card" style={{ overflow: 'hidden', marginBottom: 16 }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>Active Staff</span>
-          <span style={{ marginLeft: 8, fontSize: 12, color: '#64748B' }}>{active.length} member{active.length !== 1 ? 's' : ''}</span>
         </div>
 
-        {isLoading ? (
-          <div style={{ padding: 32, textAlign: 'center', color: '#64748B', fontSize: 13 }}>Loading…</div>
-        ) : active.length === 0 ? (
-          <div style={{ padding: 32, textAlign: 'center', color: '#64748B', fontSize: 13 }}>
-            No staff added yet. Use the button above to add your first team member.
+        {/* Inactive staff */}
+        {inactive.length > 0 && (
+          <div style={{ marginTop: 24 }}>
+            <div style={{ padding: '12px 0' }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--mv-ink-52)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Inactive Staff ({inactive.length})</span>
+            </div>
+            <table className="mv-table">
+              <thead>
+                <tr><th>Name</th><th>Email</th><th>Role</th><th></th><th></th></tr>
+              </thead>
+              <tbody>
+                {inactive.map(s => (
+                  <tr key={s.id} style={{ opacity: 0.6 }}>
+                    <td>{s.full_name}</td>
+                    <td style={{ color: 'var(--mv-ink-52)' }}>{s.email}</td>
+                    <td style={{ color: 'var(--mv-ink-52)' }}>{ROLES.find(r => r.value === s.role)?.label || s.role}</td>
+                    <td></td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button
+                        onClick={() => toggleActive.mutate({ id: s.id, is_active: true })}
+                        className="mv-btn-ghost"
+                        style={{ padding: '3px 8px', fontSize: 11 }}
+                      >
+                        Reactivate
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        ) : (
-          <table className="moov-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Team</th>
-                <th>Access</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {active.map(s => (
-                <StaffRow
-                  key={s.id}
-                  s={s}
-                  teams={teams}
-                  onToggleActive={(id, val) => toggleActive.mutate({ id, is_active: val })}
-                  onChangeTeam={(id, team_id) => changeTeam.mutate({ id, team_id })}
-                />
-              ))}
-            </tbody>
-          </table>
         )}
       </div>
-
-      {/* Inactive staff */}
-      {inactive.length > 0 && (
-        <div className="moov-card" style={{ overflow: 'hidden' }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: '#64748B' }}>Inactive Staff</span>
-          </div>
-          <table className="moov-table">
-            <thead>
-              <tr><th>Name</th><th>Email</th><th>Role</th><th></th><th></th></tr>
-            </thead>
-            <tbody>
-              {inactive.map(s => (
-                <tr key={s.id} style={{ opacity: 0.5 }}>
-                  <td>{s.full_name}</td>
-                  <td style={{ color: '#64748B' }}>{s.email}</td>
-                  <td style={{ color: '#64748B' }}>{ROLES.find(r => r.value === s.role)?.label || s.role}</td>
-                  <td></td>
-                  <td style={{ textAlign: 'right' }}>
-                    <button
-                      onClick={() => toggleActive.mutate({ id: s.id, is_active: true })}
-                      style={{ background: 'none', border: 'none', color: '#00C853', cursor: 'pointer', fontSize: 12 }}
-                    >
-                      Reactivate
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
     </div>
   );
 }

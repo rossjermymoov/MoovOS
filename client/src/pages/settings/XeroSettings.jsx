@@ -508,34 +508,34 @@ function NominalCodesPanel() {
     international.trim()  !== (settings?.xero_international_account_code || '');
 
   const fieldStyle = {
-    background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.12)',
-    borderRadius: 7, padding: '8px 12px', fontSize: 13, color: '#1E293B',
+    background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)',
+    borderRadius: 0, padding: '8px 12px', fontSize: 13, color: 'var(--mv-ink)',
     width: '100%', outline: 'none', fontFamily: 'monospace', letterSpacing: '0.03em',
     boxSizing: 'border-box',
   };
 
   return (
     <div style={{
-      background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.07)',
-      borderRadius: 12, padding: '20px 24px', marginTop: 16,
+      background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)',
+      borderRadius: 0, padding: '20px 24px', marginTop: 16,
     }}>
-      <div style={{ fontWeight: 700, fontSize: 14, color: '#1E293B', marginBottom: 4 }}>Nominal codes</div>
-      <div style={{ fontSize: 12, color: '#64748B', marginBottom: 18, lineHeight: 1.5 }}>
+      <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--mv-ink)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Nominal Codes</div>
+      <div style={{ fontSize: 12, color: 'var(--mv-ink-52)', marginBottom: 18, lineHeight: 1.5 }}>
         These Xero account codes are applied to each invoice line item when pushing to Xero.
         Domestic applies to GB→GB shipments (VAT charged). International applies to everything else (zero-rated).
       </div>
 
       {isLoading ? (
-        <div style={{ color: '#64748B', fontSize: 13 }}>Loading…</div>
+        <div style={{ color: 'var(--mv-ink-52)', fontSize: 13 }}>Loading…</div>
       ) : (
         <div style={{ display: 'flex', gap: 20, alignItems: 'flex-end', flexWrap: 'wrap' }}>
 
           {/* Domestic */}
           <div style={{ flex: 1, minWidth: 180 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+            <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--mv-ink-52)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
               Domestic (GB → GB)
             </div>
-            <div style={{ fontSize: 11, color: '#64748B', marginBottom: 6 }}>VAT applied (OUTPUT2)</div>
+            <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', marginBottom: 6 }}>VAT applied (OUTPUT2)</div>
             <input
               value={domestic}
               onChange={e => setDomestic(e.target.value)}
@@ -546,10 +546,10 @@ function NominalCodesPanel() {
 
           {/* International */}
           <div style={{ flex: 1, minWidth: 180 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+            <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--mv-ink-52)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
               International (GB → non-GB)
             </div>
-            <div style={{ fontSize: 11, color: '#64748B', marginBottom: 6 }}>Zero-rated (no VAT)</div>
+            <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', marginBottom: 6 }}>Zero-rated (no VAT)</div>
             <input
               value={international}
               onChange={e => setInternational(e.target.value)}
@@ -563,26 +563,23 @@ function NominalCodesPanel() {
             <button
               onClick={() => saveMutation.mutate()}
               disabled={!isDirty || saveMutation.isPending}
+              className={isDirty ? 'mv-btn-primary' : 'mv-btn-ghost'}
               style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                background: saved ? 'rgba(0,200,83,0.12)' : isDirty ? 'rgba(19,181,234,0.12)' : 'rgba(0,0,0,0.04)',
-                border: `1px solid ${saved ? 'rgba(0,200,83,0.3)' : isDirty ? 'rgba(19,181,234,0.3)' : 'rgba(0,0,0,0.08)'}`,
-                color: saved ? '#00C853' : isDirty ? '#13B5EA' : '#94A3B8',
-                borderRadius: 8, padding: '8px 16px', fontSize: 12,
+                fontSize: 12,
                 cursor: (!isDirty || saveMutation.isPending) ? 'not-allowed' : 'pointer',
-                fontWeight: 600, whiteSpace: 'nowrap',
-                transition: 'all 0.2s',
+                whiteSpace: 'nowrap',
+                opacity: (!isDirty || saveMutation.isPending) ? 0.5 : 1,
               }}
             >
               {saved ? <CheckCircle size={13} /> : <Save size={13} />}
-              {saveMutation.isPending ? 'Saving…' : saved ? 'Saved' : 'Save codes'}
+              {saveMutation.isPending ? 'Saving…' : saved ? 'Saved' : 'Save Codes'}
             </button>
           </div>
         </div>
       )}
 
       {saveMutation.isError && (
-        <div style={{ marginTop: 10, fontSize: 12, color: '#EF4444' }}>
+        <div style={{ marginTop: 10, fontSize: 12, color: 'var(--mv-magenta)' }}>
           {saveMutation.error?.response?.data?.error || 'Failed to save — please try again.'}
         </div>
       )}
@@ -617,27 +614,39 @@ export default function XeroSettings() {
   };
 
   return (
-    <div style={{ padding: '24px 32px', maxWidth: 900, margin: '0 auto' }}>
-      <SettingsNav />
+    <div className="mv-page">
+      <div className="mv-page-inner" style={{ maxWidth: 960 }}>
+        <SettingsNav />
 
-      {banner && (
-        <div style={{
-          padding: '10px 16px', borderRadius: 8, marginBottom: 20, fontSize: 13, fontWeight: 600,
-          background: banner.type === 'success' ? 'rgba(76,175,80,0.12)' : 'rgba(239,68,68,0.12)',
-          border: `1px solid ${banner.type === 'success' ? 'rgba(76,175,80,0.3)' : 'rgba(239,68,68,0.3)'}`,
-          color: banner.type === 'success' ? '#4CAF50' : '#EF4444',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        }}>
-          {banner.msg}
-          <button onClick={() => setBanner(null)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 16 }}>×</button>
+        <div className="mv-head">
+          <div>
+            <div className="mv-kicker">Settings &amp; Accounting</div>
+            <h1 className="mv-title">Xero Integration</h1>
+            <p className="mv-blurb">
+              Sync reconciliation invoices directly to your Xero organization, map nominal accounts, and match customer ledgers.
+            </p>
+          </div>
         </div>
-      )}
 
-      <ConnectionPanel status={status} onDisconnect={handleDisconnect} disconnecting={disconnecting} />
-      <NominalCodesPanel />
-      <CustomerMatchingPanel connected={status?.connected} />
+        <div className="mv-rule" />
 
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+        {banner && (
+          <div style={{
+            padding: '10px 16px', marginBottom: 20, fontSize: 13, fontWeight: 600,
+            background: banner.type === 'success' ? 'rgba(0,200,83,0.08)' : 'rgba(233,30,140,0.08)',
+            border: `1px solid ${banner.type === 'success' ? 'var(--mv-green)' : 'var(--mv-magenta)'}`,
+            color: banner.type === 'success' ? 'var(--mv-green-deep)' : 'var(--mv-magenta-deep)',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          }}>
+            {banner.msg}
+            <button onClick={() => setBanner(null)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 16 }}>×</button>
+          </div>
+        )}
+
+        <ConnectionPanel status={status} onDisconnect={handleDisconnect} disconnecting={disconnecting} />
+        <NominalCodesPanel />
+        <CustomerMatchingPanel connected={status?.connected} />
+      </div>
     </div>
   );
 }

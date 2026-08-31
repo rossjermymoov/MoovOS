@@ -353,105 +353,84 @@ export default function RateCardEditor() {
   }
 
   const isEditable = rc.status === 'draft' || rc.status === 'rejected';
-  const statusColor = STATUS_COLOR[rc.status] || '#64748B';
 
   return (
-    <div style={{ padding: '20px 28px', minHeight: '100%', fontFamily: 'system-ui, sans-serif', color: '#334155' }}>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    <div className="mv-page">
+      <div className="mv-page-inner">
+        {/* ── Header ─────────────────────────────────────────────────────────── */}
+        <div className="mv-head">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <button onClick={() => navigate('/pricing')} className="mv-btn-ghost" style={{ padding: '7px 12px', fontSize: 12.5 }}>
+              <ArrowLeft size={14} /> Back
+            </button>
+            <div>
+              <div className="mv-kicker">Tariff Matrix &amp; Modelling</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <h1 className="mv-title" style={{ fontSize: 22 }}>
+                  {rc.prospect_company || 'Rate Card'}
+                </h1>
+                <StatusBadge status={rc.status} />
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--mv-ink-52)', marginTop: 2 }}>
+                {rc.courier_name || rc.courier_code}
+                {rc.template_name ? ` · Template: ${rc.template_name}` : ''}
+              </div>
+            </div>
+          </div>
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <button onClick={() => navigate('/pricing')}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,0,0,0.06)',
-              border: '1px solid rgba(0,0,0,0.08)', borderRadius: 7, padding: '7px 14px',
-              color: '#64748B', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
-            <ArrowLeft size={14} /> Back
-          </button>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#0F172A' }}>
-                {rc.prospect_company || 'Rate Card'}
-              </h1>
-              <span style={{ fontSize: 12, fontWeight: 700, color: statusColor,
-                background: `${statusColor}18`, border: `1px solid ${statusColor}44`,
-                borderRadius: 20, padding: '2px 10px' }}>
-                {STATUS_LABEL[rc.status] || rc.status}
+          <div className="mv-actions">
+            {savedMsg && (
+              <span className="mv-state mv-state--settled">
+                <span className="mv-mark mv-mark--settled" />
+                <span className="mv-state-label">{savedMsg}</span>
               </span>
-            </div>
-            <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
-              {rc.courier_name || rc.courier_code}
-              {rc.template_name ? ` · template: ${rc.template_name}` : ''}
-            </div>
+            )}
+            {isEditable && (
+              <>
+                <button onClick={() => updateMut.mutate()} disabled={!dirty || updateMut.isPending}
+                  className="mv-btn-ghost" style={{ opacity: !dirty ? 0.5 : 1 }}>
+                  {updateMut.isPending ? <RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={13} />}
+                  Save Draft
+                </button>
+                <button onClick={() => setShowSubmit(p => !p)} className="mv-btn-primary">
+                  <Send size={13} /> Submit for Approval
+                </button>
+              </>
+            )}
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {savedMsg && (
-            <span style={{ fontSize: 12, color: '#34D399', display: 'flex', alignItems: 'center', gap: 5 }}>
-              <Check size={12} /> {savedMsg}
-            </span>
-          )}
-          {isEditable && (
-            <>
-              <button onClick={() => updateMut.mutate()} disabled={!dirty || updateMut.isPending}
-                style={{ display: 'flex', alignItems: 'center', gap: 6,
-                  background: dirty ? 'rgba(99,102,241,0.15)' : 'rgba(0,0,0,0.03)',
-                  border: `1px solid ${dirty ? '#6366F1' : 'rgba(0,0,0,0.08)'}`,
-                  borderRadius: 7, padding: '8px 16px',
-                  color: dirty ? '#A5B4FC' : '#475569',
-                  fontSize: 13, cursor: dirty ? 'pointer' : 'default', fontWeight: 700 }}>
-                {updateMut.isPending ? <RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={13} />}
-                Save
-              </button>
-              <button onClick={() => setShowSubmit(p => !p)}
-                style={{ display: 'flex', alignItems: 'center', gap: 6,
-                  background: 'rgba(0,200,83,0.1)', border: '1px solid rgba(0,200,83,0.35)',
-                  borderRadius: 7, padding: '8px 16px',
-                  color: '#00C853', fontSize: 13, cursor: 'pointer', fontWeight: 700 }}>
-                <Send size={13} /> Submit for Approval
-              </button>
-            </>
-          )}
-        </div>
-      </div>
+        <div className="mv-rule" />
 
-      {/* Submit panel */}
-      {showSubmit && isEditable && (
-        <div style={{ marginBottom: 16, background: 'rgba(0,200,83,0.06)', border: '1px solid rgba(0,200,83,0.2)',
-          borderRadius: 9, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 13, color: '#64748B' }}>Submit as:</span>
-          <select value={submitStaff} onChange={e => setSubmitStaff(e.target.value)}
-            style={{ background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.10)',
-              borderRadius: 6, padding: '6px 10px', color: '#0F172A', fontSize: 13, outline: 'none', minWidth: 180 }}>
-            <option value="">— Your name —</option>
-            {staffList.filter(s => s.is_active).map(s => (
-              <option key={s.id} value={s.id}>{s.full_name}</option>
-            ))}
-          </select>
-          <button onClick={() => submitMut.mutate()} disabled={!submitStaff || submitMut.isPending}
-            style={{ display: 'flex', alignItems: 'center', gap: 6,
-              background: 'rgba(0,200,83,0.15)', border: '1px solid rgba(0,200,83,0.4)',
-              borderRadius: 7, padding: '7px 16px', color: '#00C853',
-              fontSize: 13, cursor: 'pointer', fontWeight: 700, opacity: !submitStaff ? 0.5 : 1 }}>
-            {submitMut.isPending ? <RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={13} />}
-            Confirm
-          </button>
-          <button onClick={() => setShowSubmit(false)}
-            style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: 4 }}>
-            <X size={15} />
-          </button>
-          {submitMut.error && <span style={{ fontSize: 12, color: '#EF4444' }}>{submitMut.error.message}</span>}
-        </div>
-      )}
+        {/* Submit panel */}
+        {showSubmit && isEditable && (
+          <div style={{ marginBottom: 20, background: 'var(--mv-surface)', border: '1px solid var(--mv-purple)', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 13, color: 'var(--mv-ink)', fontWeight: 600 }}>Submit as:</span>
+            <select value={submitStaff} onChange={e => setSubmitStaff(e.target.value)}
+              style={{ background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)', padding: '6px 10px', color: 'var(--mv-ink)', fontSize: 13, outline: 'none', minWidth: 180 }}>
+              <option value="">— Your name —</option>
+              {staffList.filter(s => s.is_active).map(s => (
+                <option key={s.id} value={s.id}>{s.full_name}</option>
+              ))}
+            </select>
+            <button onClick={() => submitMut.mutate()} disabled={!submitStaff || submitMut.isPending}
+              className="mv-btn-primary" style={{ opacity: !submitStaff ? 0.5 : 1 }}>
+              {submitMut.isPending ? <RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={13} />}
+              Confirm Submission
+            </button>
+            <button onClick={() => setShowSubmit(false)} className="mv-icon-btn">
+              <X size={15} />
+            </button>
+            {submitMut.error && <span style={{ fontSize: 12, color: 'var(--mv-magenta)' }}>{submitMut.error.message}</span>}
+          </div>
+        )}
 
-      {/* Rejected note */}
-      {rc.status === 'rejected' && rc.latest_approval?.comment && (
-        <div style={{ marginBottom: 16, background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)',
-          borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#F87171' }}>
-          <strong>Rejected:</strong> {rc.latest_approval.comment}
-        </div>
-      )}
+        {/* Rejected note */}
+        {rc.status === 'rejected' && rc.latest_approval?.comment && (
+          <div style={{ marginBottom: 16, background: 'rgba(233,30,140,0.06)', border: '1px solid var(--mv-magenta)', padding: '10px 14px', fontSize: 12.5, color: 'var(--mv-magenta-deep)' }}>
+            <strong>Rejected:</strong> {rc.latest_approval.comment}
+          </div>
+        )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16, alignItems: 'start' }}>
 
@@ -903,5 +882,6 @@ export default function RateCardEditor() {
         </div>
       </div>
     </div>
-  );
+  </div>
+);
 }

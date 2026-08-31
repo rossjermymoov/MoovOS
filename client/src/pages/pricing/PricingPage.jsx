@@ -502,249 +502,65 @@ function ReviewModal({ approval, onClose, onDone, staffList }) {
   );
 }
 
-// ─── Prospect Card ────────────────────────────────────────────────────────────
+// ─── Prospect Row ─────────────────────────────────────────────────────────────
 
 function ProspectRow({ prospect, staffList, navigate }) {
-  const [expanded, setExpanded]     = useState(false);
-  const [submitStaff, setSubmitStaff] = useState('');
-  const [editing, setEditing]       = useState(false);
-  const [editForm, setEditForm]     = useState({});
-  const [confirmDel, setConfirmDel] = useState(false);
-  const qc = useQueryClient();
-
-  const { data: rateCards = [], isLoading: rcLoading } = useQuery({
-    queryKey: ['rate-cards', prospect.id],
+  const [expanded, setExpanded] = useState(false);
+  const { data: cards = [], isLoading } = useQuery({
+    queryKey: ['pricing-cards', prospect.id],
     queryFn: () => pricingApi.rateCards(prospect.id),
     enabled: expanded,
   });
 
-  const patchMut = useMutation({
-    mutationFn: (body) => pricingApi.patchProspect(prospect.id, body),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['pricing-prospects'] }); setEditing(false); },
-  });
-
-  const deleteMut = useMutation({
-    mutationFn: () => pricingApi.deleteProspect(prospect.id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['pricing-prospects'] });
-      qc.invalidateQueries({ queryKey: ['pricing-stats'] });
-    },
-  });
-
-  const submitMut = useMutation({
-    mutationFn: (rcId) => pricingApi.submitApproval(rcId, { requested_by: submitStaff }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['pricing-prospects'] });
-      qc.invalidateQueries({ queryKey: ['pricing-approvals'] });
-    },
-  });
-
-  const topRC    = (prospect.rate_cards || [])[0];
-  const couriers = [...new Set((prospect.rate_cards || []).map(r => r.courier_code))].join(', ');
-
-  const cardBase = {
-    background: expanded ? 'rgba(99,102,241,0.04)' : 'rgba(255,255,255,0.015)',
-    border: `1px solid ${expanded ? 'rgba(99,102,241,0.2)' : 'rgba(0,0,0,0.07)'}`,
-    borderRadius: 12, marginBottom: 8, overflow: 'hidden',
-    transition: 'border-color 0.15s',
-  };
-
-  const btnBase = {
-    display: 'inline-flex', alignItems: 'center', gap: 6,
-    borderRadius: 8, fontWeight: 700, cursor: 'pointer', border: '1px solid',
-    transition: 'opacity 0.15s',
-  };
-
   return (
-    <div style={cardBase}>
-
-      {/* ── Edit form ── */}
-      {editing && (
-        <div style={{ background: 'rgba(99,102,241,0.06)', borderBottom: '1px solid rgba(99,102,241,0.18)', padding: '16px 20px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '0 14px', marginBottom: 12 }}>
-            {[
-              { key: 'company_name', label: 'Company Name' },
-              { key: 'contact_name', label: 'Contact Name' },
-              { key: 'contact_email', label: 'Email' },
-              { key: 'contact_phone', label: 'Phone' },
-            ].map(({ key, label }) => (
-              <div key={key}>
-                <label style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>{label}</label>
-                <input value={editForm[key] ?? ''} onChange={e => setEditForm(p => ({ ...p, [key]: e.target.value }))}
-                  style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(0,0,0,0.07)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 7, padding: '8px 11px', color: '#0F172A', fontSize: 13, outline: 'none' }} />
-              </div>
-            ))}
-          </div>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button onClick={() => setEditing(false)} style={{ ...btnBase, padding: '8px 18px', fontSize: 13, background: 'rgba(0,0,0,0.06)', borderColor: 'rgba(0,0,0,0.10)', color: '#64748B' }}>Cancel</button>
-            <button onClick={() => patchMut.mutate(editForm)} disabled={patchMut.isPending}
-              style={{ ...btnBase, padding: '8px 20px', fontSize: 13, background: 'rgba(99,102,241,0.18)', borderColor: '#6366F1', color: '#A5B4FC' }}>
-              Save Changes
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── Delete confirm ── */}
-      {confirmDel && (
-        <div style={{ background: 'rgba(239,68,68,0.07)', borderBottom: '1px solid rgba(239,68,68,0.2)', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 14, fontSize: 13, color: '#F87171' }}>
-          <AlertCircle size={15} />
-          <span>Delete <strong>{prospect.company_name}</strong>? This removes the prospect and all their rate cards.</span>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-            <button onClick={() => setConfirmDel(false)} style={{ ...btnBase, padding: '7px 16px', fontSize: 12, background: 'none', borderColor: 'rgba(0,0,0,0.08)', color: '#64748B' }}>Cancel</button>
-            <button onClick={() => deleteMut.mutate()} disabled={deleteMut.isPending}
-              style={{ ...btnBase, padding: '7px 18px', fontSize: 12, background: 'rgba(239,68,68,0.18)', borderColor: 'rgba(239,68,68,0.5)', color: '#EF4444' }}>
-              Yes, Delete
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── Main row ── */}
-      <div style={{ padding: '16px 20px' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-
-          {/* Left: name + contact */}
-          <div style={{ flex: '0 0 220px' }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#1E293B', lineHeight: 1.2, marginBottom: 3 }}>{prospect.company_name}</div>
-            <div style={{ fontSize: 12, color: '#64748B' }}>{prospect.contact_name}</div>
-          </div>
-
-          {/* Centre: meta chips */}
-          <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+    <div style={{ border: '1px solid var(--mv-hairline-2)', background: 'var(--mv-bg)', marginBottom: 8 }}>
+      <div onClick={() => setExpanded(!expanded)}
+        style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', cursor: 'pointer', transition: 'background .08s' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--mv-ink)' }}>{prospect.company_name}</span>
             <StatusBadge status={prospect.status} />
-            {couriers && couriers.split(', ').map(c => (
-              <span key={c} style={{ fontSize: 12, fontWeight: 700, color: '#64748B', background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 6, padding: '3px 10px' }}>{c}</span>
-            ))}
-            {topRC?.projected_weekly_revenue && (
-              <span style={{ fontSize: 13, fontWeight: 800, color: '#A5B4FC', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: 6, padding: '3px 10px' }}>
-                {gbp(topRC.projected_weekly_revenue)}/wk
-              </span>
-            )}
-            {prospect.assigned_to_name && (
-              <span style={{ fontSize: 12, color: '#64748B' }}>→ {prospect.assigned_to_name}</span>
-            )}
           </div>
-
-          {/* Right: actions */}
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-            <button
-              onClick={() => { setEditForm({ company_name: prospect.company_name, contact_name: prospect.contact_name, contact_email: prospect.contact_email || '', contact_phone: prospect.contact_phone || '' }); setEditing(true); setConfirmDel(false); }}
-              style={{ ...btnBase, padding: '8px 16px', fontSize: 12, background: 'rgba(0,0,0,0.06)', borderColor: 'rgba(0,0,0,0.10)', color: '#64748B' }}>
-              <Edit2 size={13} /> Edit
-            </button>
-            <button
-              onClick={() => { setConfirmDel(true); setEditing(false); }}
-              style={{ ...btnBase, padding: '8px 16px', fontSize: 12, background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.25)', color: '#EF4444' }}>
-              <Trash2 size={13} /> Delete
-            </button>
-            <button
-              onClick={() => setExpanded(p => !p)}
-              style={{ ...btnBase, padding: '8px 12px', fontSize: 12, background: 'rgba(0,0,0,0.03)', borderColor: 'rgba(0,0,0,0.08)', color: '#64748B' }}>
-              {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-            </button>
+          <div style={{ fontSize: 12, color: 'var(--mv-ink-52)', marginTop: 3, display: 'flex', gap: 16 }}>
+            {prospect.contact_name && <span>{prospect.contact_name}</span>}
+            {prospect.email && <span>{prospect.email}</span>}
+            {prospect.assigned_staff_name && <span>Rep: {prospect.assigned_staff_name}</span>}
           </div>
         </div>
 
-        {/* Contact details strip */}
-        {(prospect.contact_email || prospect.contact_phone) && (
-          <div style={{ display: 'flex', gap: 20, marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(0,0,0,0.04)' }}>
-            {prospect.contact_email && (
-              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#64748B' }}>
-                <Mail size={12} /> {prospect.contact_email}
-              </span>
-            )}
-            {prospect.contact_phone && (
-              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#64748B' }}>
-                <Phone size={12} /> {prospect.contact_phone}
-              </span>
-            )}
-            <span style={{ fontSize: 12, color: '#475569', marginLeft: 'auto' }}>Added {fmtD(prospect.created_at)}</span>
-          </div>
-        )}
+        <div className="mv-num" style={{ fontSize: 11.5, color: 'var(--mv-ink-52)' }}>
+          {fmtD(prospect.created_at)}
+        </div>
+
+        <button className="mv-icon-btn" style={{ border: 'none', background: 'transparent' }}>
+          {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
       </div>
 
-      {/* ── Rate cards (expanded) ── */}
       {expanded && (
-        <div style={{ borderTop: '1px solid rgba(0,0,0,0.07)', background: 'rgba(0,0,0,0.15)', padding: '14px 20px 16px' }}>
-          {rcLoading ? (
-            <div style={{ color: '#64748B', fontSize: 13 }}>Loading rate cards…</div>
-          ) : rateCards.length === 0 ? (
-            <div style={{ color: '#64748B', fontSize: 13 }}>No rate cards yet.</div>
+        <div style={{ padding: '14px 18px', borderTop: '1px solid var(--mv-hairline-2)', background: 'var(--mv-surface)' }}>
+          {isLoading ? (
+            <div style={{ fontSize: 12, color: 'var(--mv-ink-52)' }}>Loading rate cards…</div>
+          ) : cards.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--mv-ink-52)' }}>No rate cards generated for this prospect.</div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {rateCards.map(rc => {
-                const approvalStatus = rc.latest_approval?.status;
-                const rateCount = (rc.rates || []).length;
-                return (
-                  <div key={rc.id} style={{
-                    background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.08)',
-                    borderRadius: 10, padding: '14px 16px',
-                    display: 'flex', alignItems: 'center', gap: 16,
-                  }}>
-                    {/* RC details */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: '#334155', marginBottom: 4 }}>
-                        {rc.courier_name || rc.courier_code}
-                        {rc.template_name && (
-                          <span style={{ fontSize: 11, color: '#64748B', fontWeight: 400, marginLeft: 8 }}>({rc.template_name})</span>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', gap: 14, fontSize: 12, color: '#64748B' }}>
-                        <span>{rateCount} rates</span>
-                        {rc.weekly_parcels    && <span>{rc.weekly_parcels.toLocaleString('en-GB')} pcls/wk</span>}
-                        {rc.projected_weekly_profit && <span style={{ color: '#34D399', fontWeight: 700 }}>{gbp(rc.projected_weekly_profit)}/wk profit</span>}
-                      </div>
-                    </div>
-
-                    {/* Status + approval badge */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {cards.map(rc => (
+                <div key={rc.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span className="mv-num" style={{ fontWeight: 700, fontSize: 13, color: 'var(--mv-ink)' }}>Card #{rc.id.slice(0, 8)}</span>
                       <StatusBadge status={rc.status} />
-                      {approvalStatus && (
-                        <span style={{
-                          fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 6,
-                          background: approvalStatus === 'approved' ? 'rgba(52,211,153,0.12)' : approvalStatus === 'rejected' ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.1)',
-                          color:      approvalStatus === 'approved' ? '#34D399'                : approvalStatus === 'rejected' ? '#EF4444'                : '#F59E0B',
-                          border:     `1px solid ${approvalStatus === 'approved' ? 'rgba(52,211,153,0.3)' : approvalStatus === 'rejected' ? 'rgba(239,68,68,0.3)' : 'rgba(245,158,11,0.2)'}`,
-                        }}>
-                          {approvalStatus === 'approved' ? '✓ Approved' : approvalStatus === 'rejected' ? '✗ Rejected' : '⏳ Pending'}
-                        </span>
-                      )}
                     </div>
-
-                    {/* Action buttons */}
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-                      {(rc.status === 'draft' || rc.status === 'rejected') && (
-                        <button onClick={() => navigate(`/pricing/rate-card/${rc.id}`)}
-                          style={{ ...btnBase, padding: '9px 18px', fontSize: 13, background: 'rgba(0,0,0,0.07)', borderColor: 'rgba(0,0,0,0.12)', color: '#334155' }}>
-                          <Edit2 size={13} /> Edit Rates
-                        </button>
-                      )}
-                      {rc.status !== 'draft' && (
-                        <button onClick={() => navigate(`/pricing/rate-card/${rc.id}`)}
-                          style={{ ...btnBase, padding: '9px 18px', fontSize: 13, background: 'rgba(0,0,0,0.03)', borderColor: 'rgba(0,0,0,0.08)', color: '#64748B' }}>
-                          View
-                        </button>
-                      )}
-                      {rc.status === 'draft' && (
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <select value={submitStaff} onChange={e => setSubmitStaff(e.target.value)}
-                            style={{ ...selectStyle, padding: '8px 10px', fontSize: 13, width: 150, borderRadius: 8 }}>
-                            <option value="">Your name…</option>
-                            {staffList.filter(s => s.is_active).map(s => (
-                              <option key={s.id} value={s.id}>{s.full_name}</option>
-                            ))}
-                          </select>
-                          <button onClick={() => submitMut.mutate(rc.id)} disabled={!submitStaff || submitMut.isPending}
-                            style={{ ...btnBase, padding: '9px 20px', fontSize: 13, background: 'rgba(99,102,241,0.18)', borderColor: '#6366F1', color: '#A5B4FC', opacity: !submitStaff ? 0.4 : 1 }}>
-                            <Send size={13} /> Submit for Approval
-                          </button>
-                        </div>
-                      )}
+                    <div style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', marginTop: 2 }}>
+                      Couriers: {rc.couriers?.join(', ') || 'DPD'}
                     </div>
                   </div>
-                );
-              })}
+                  <button onClick={() => navigate(`/pricing/rate-card/${rc.id}`)} className="mv-btn-ghost" style={{ padding: '6px 12px', fontSize: 12 }}>
+                    <Edit2 size={12} /> Edit Rates →
+                  </button>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -787,99 +603,120 @@ export default function PricingPage() {
   ];
 
   return (
-    <div style={{ padding: '24px 28px', minHeight: '100%', fontFamily: 'system-ui, sans-serif', color: '#334155' }}>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-
-      {/* Title */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#0F172A' }}>Pricing &amp; Rate Cards</h1>
-          <div style={{ fontSize: 13, color: '#64748B', marginTop: 3 }}>Manage prospects, build rate cards, and track conversions</div>
+    <div className="mv-page">
+      <div className="mv-page-inner">
+        {/* ── Page Header ────────────────────────────────────────── */}
+        <div className="mv-head">
+          <div>
+            <div className="mv-kicker">Commercial &amp; Tariffs</div>
+            <h1 className="mv-title">Pricing &amp; Rate Cards</h1>
+            <p className="mv-blurb">
+              Prospect rate modelling, cost-plus margin simulation, volumetric surcharge calculations, and workflow approvals.
+            </p>
+          </div>
+          <div className="mv-actions">
+            <button onClick={() => setShowWizard(true)} className="mv-btn-primary">
+              <Plus size={14} /> New Rate Card
+            </button>
+          </div>
         </div>
-        <button onClick={() => setShowWizard(true)}
-          style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'rgba(99,102,241,0.15)',
-            border: '1px solid #6366F1', borderRadius: 8, padding: '9px 18px',
-            color: '#A5B4FC', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-          <Plus size={15} /> New Rate Card
-        </button>
-      </div>
 
-      {/* KPI Strip */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
-        <StatCard label="Quotes Out"     value={stats?.quotes_out    ?? '—'} color="#F59E0B" />
-        <StatCard label="Forms Sent"     value={stats?.forms_sent    ?? '—'} color="#A78BFA" />
-        <StatCard label="Forms Returned" value={stats?.forms_returned ?? '—'} color="#60A5FA" />
-        <StatCard label="In Onboarding"  value={stats?.in_onboarding ?? '—'} color="#34D399"
-          bg={stats?.in_onboarding > 0 ? 'rgba(52,211,153,0.06)' : 'rgba(0,0,0,0.03)'}
-          tooltip={stats?.onboarding_list} />
-        <StatCard label="Converted" value={stats?.converted ?? '—'} color="#00C853" bg="rgba(0,200,83,0.05)" />
-        <StatCard label="Lost"      value={stats?.lost      ?? '—'} color="#EF4444" />
-      </div>
+        <div className="mv-rule" />
 
-      {/* Pending approvals */}
-      <ApprovalBanner approvals={approvals} onReview={a => setReviewTarget(a)} />
-
-      {/* Toolbar */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 14, alignItems: 'center', flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', flex: 1, minWidth: 200, maxWidth: 320 }}>
-          <Search size={14} color="#475569" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
-          <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search company…" style={{ ...inputStyle, paddingLeft: 30 }} />
+        {/* ── KPI Strip ──────────────────────────────────── */}
+        <div className="mv-kpis">
+          <div className="mv-kpi">
+            <div className="mv-kpi-label">Quotes Out</div>
+            <div className="mv-kpi-value mv-num">{(stats?.quotes_out ?? 0).toLocaleString()}</div>
+            <div className="mv-kpi-sub">Active proposals</div>
+          </div>
+          <div className="mv-kpi">
+            <div className="mv-kpi-label">Forms Sent</div>
+            <div className="mv-kpi-value mv-num">{(stats?.forms_sent ?? 0).toLocaleString()}</div>
+            <div className="mv-kpi-sub">Awaiting customer signature</div>
+          </div>
+          <div className="mv-kpi">
+            <div className="mv-kpi-label">In Onboarding</div>
+            <div className="mv-kpi-value mv-num is-flight">{(stats?.in_onboarding ?? 0).toLocaleString()}</div>
+            <div className="mv-kpi-sub">Setting up carrier accounts</div>
+          </div>
+          <div className="mv-kpi">
+            <div className="mv-kpi-label">Converted</div>
+            <div className="mv-kpi-value mv-num is-settled">{(stats?.converted ?? 0).toLocaleString()}</div>
+            <div className="mv-kpi-sub">Live trading clients</div>
+          </div>
+          <div className="mv-kpi">
+            <div className="mv-kpi-label">Lost</div>
+            <div className="mv-kpi-value mv-num">{(stats?.lost ?? 0).toLocaleString()}</div>
+            <div className="mv-kpi-sub">Declined proposals</div>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+
+        {/* ── Approvals Banner ───────────────────────────────────── */}
+        <ApprovalBanner approvals={approvals} onReview={a => setReviewTarget(a)} />
+
+        {/* ── Filter Toolbar ─────────────────────────────────────── */}
+        <div className="mv-chips" style={{ marginTop: 20 }}>
+          <span className="mv-filter-label">Stage</span>
           {STATUS_FILTERS.map(f => (
-            <button key={f.value} onClick={() => setStatusFilter(f.value)}
-              style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
-                background: statusFilter === f.value ? 'rgba(99,102,241,0.2)' : 'rgba(0,0,0,0.04)',
-                border: statusFilter === f.value ? '1px solid #6366F1' : '1px solid rgba(0,0,0,0.08)',
-                color: statusFilter === f.value ? '#A5B4FC' : '#666' }}>
+            <button
+              key={f.value}
+              className={`mv-chip ${statusFilter === f.value ? 'is-on' : ''}`}
+              onClick={() => setStatusFilter(f.value)}
+            >
               {f.label}
             </button>
           ))}
-        </div>
-      </div>
 
-      {/* Prospect list */}
-      <div style={{ background: 'rgba(0,0,0,0.02)', border: '1px solid rgba(0,0,0,0.07)', borderRadius: 10, overflow: 'hidden', padding: 8 }}>
-        {isLoading ? (
-          <div style={{ padding: '40px 0', textAlign: 'center', color: '#64748B', fontSize: 13 }}>
-            <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite', marginRight: 8, verticalAlign: 'middle' }} />
-            Loading…
+          <span style={{ flex: 1 }} />
+
+          <div className="mv-search" style={{ width: 260 }}>
+            <Search size={14} style={{ color: 'var(--mv-ink-45)', flexShrink: 0 }} />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search company…"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mv-ink-45)', display: 'flex' }}>
+                <X size={13} />
+              </button>
+            )}
           </div>
-        ) : prospects.length === 0 ? (
-          <div style={{ padding: '48px 0', textAlign: 'center', color: '#475569', fontSize: 14 }}>
-            <Package size={28} color="#333" style={{ display: 'block', margin: '0 auto 10px' }} />
-            No prospects yet. Click <strong style={{ color: '#A5B4FC' }}>New Rate Card</strong> to get started.
-          </div>
-        ) : (
-          prospects.map(p => <ProspectRow key={p.id} prospect={p} staffList={staffList} navigate={navigate} />)
+        </div>
+
+        {/* ── Prospect List ──────────────────────────────────────── */}
+        <div style={{ marginTop: 18 }}>
+          {isLoading ? (
+            <div style={{ padding: 48, textAlign: 'center', color: 'var(--mv-ink-52)' }}>Loading commercial records…</div>
+          ) : prospects.length === 0 ? (
+            <div style={{ padding: 48, textAlign: 'center', color: 'var(--mv-ink-52)' }}>
+              No prospect records match your filter criteria.
+            </div>
+          ) : (
+            prospects.map(p => <ProspectRow key={p.id} prospect={p} staffList={staffList} navigate={navigate} />)
+          )}
+        </div>
+
+        {showWizard && (
+          <CreateWizard
+            onClose={() => setShowWizard(false)}
+            onCreated={(prospectId, rcId) => {
+              setShowWizard(false);
+              navigate(`/pricing/rate-card/${rcId}`);
+            }}
+          />
+        )}
+
+        {reviewTarget && (
+          <ReviewModal
+            approval={reviewTarget}
+            staffList={staffList}
+            onClose={() => setReviewTarget(null)}
+            onDone={() => setReviewTarget(null)}
+          />
         )}
       </div>
-
-      {prospectsData?.total > prospects.length && (
-        <div style={{ textAlign: 'center', fontSize: 12, color: '#64748B', marginTop: 10 }}>
-          Showing {prospects.length} of {prospectsData.total} prospects
-        </div>
-      )}
-
-      {showWizard && (
-        <CreateWizard
-          onClose={() => setShowWizard(false)}
-          onCreated={(prospectId, rcId) => {
-            setShowWizard(false);
-            navigate(`/pricing/rate-card/${rcId}`);
-          }}
-        />
-      )}
-
-      {reviewTarget && (
-        <ReviewModal
-          approval={reviewTarget}
-          staffList={staffList}
-          onClose={() => setReviewTarget(null)}
-          onDone={() => setReviewTarget(null)}
-        />
-      )}
     </div>
   );
 }

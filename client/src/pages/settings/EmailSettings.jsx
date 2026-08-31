@@ -449,35 +449,44 @@ export default function EmailSettings() {
   });
 
   return (
-    <div style={S.page}>
-      <SettingsNav />
+    <div className="mv-page">
+      <div className="mv-page-inner" style={{ maxWidth: 900 }}>
+        <SettingsNav />
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
-        <Mail size={22} style={{ color: '#00C853' }} />
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#0F172A' }}>Email Settings</h2>
+        <div className="mv-head">
+          <div>
+            <div className="mv-kicker">Settings &amp; Outbound Mail</div>
+            <h1 className="mv-title">Email Settings</h1>
+            <p className="mv-blurb">
+              SendGrid outbound mail credentials, webhook breach alerts, and historical backfill recovery triggers.
+            </p>
+          </div>
+        </div>
+
+        <div className="mv-rule" />
+
+        {cfgLoading ? (
+          <div style={{ color: 'var(--mv-ink-52)', fontSize: 13, textAlign: 'center', padding: 24 }}>Loading…</div>
+        ) : (
+          <ConnectionCard config={config} />
+        )}
+
+        <div className="mv-kicker" style={{ margin: '28px 0 12px' }}>
+          Alert Types &amp; Channels
+        </div>
+
+        {alertsLoading ? (
+          <div style={{ color: 'var(--mv-ink-52)', fontSize: 13, textAlign: 'center', padding: 24 }}>Loading alerts…</div>
+        ) : (
+          alerts?.map(a => <AlertCard key={a.id} alert={a} />)
+        )}
+
+        <div className="mv-kicker" style={{ margin: '28px 0 12px' }}>
+          Disaster Recovery
+        </div>
+
+        <BackfillCard />
       </div>
-
-      {cfgLoading ? (
-        <div style={{ color: '#64748B', fontSize: 14 }}>Loading…</div>
-      ) : (
-        <ConnectionCard config={config} />
-      )}
-
-      <h3 style={{ fontSize: 14, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '28px 0 14px' }}>
-        Alert Types
-      </h3>
-
-      {alertsLoading ? (
-        <div style={{ color: '#64748B', fontSize: 14 }}>Loading alerts…</div>
-      ) : (
-        alerts?.map(a => <AlertCard key={a.id} alert={a} />)
-      )}
-
-      <h3 style={{ fontSize: 14, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '28px 0 14px' }}>
-        Disaster Recovery
-      </h3>
-
-      <BackfillCard />
     </div>
   );
 }

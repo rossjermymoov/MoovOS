@@ -31,9 +31,9 @@ function describeSample(sample) {
 }
 
 const taSt = {
-  width: '100%', boxSizing: 'border-box', background: '#fff',
-  border: '1px solid #E2E8F0', borderRadius: 10, color: '#0F172A',
-  fontSize: 13, lineHeight: 1.5, padding: '12px 14px', outline: 'none',
+  width: '100%', boxSizing: 'border-box', background: 'var(--mv-bg)',
+  border: '1px solid var(--mv-hairline-2)', borderRadius: 0, color: 'var(--mv-ink)',
+  fontSize: 13, lineHeight: 1.5, padding: '10px 12px', outline: 'none',
   fontFamily: 'inherit', resize: 'vertical', minHeight: 96,
 };
 
@@ -81,104 +81,112 @@ export default function CommsTemplates() {
   }
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto' }}>
-      <SettingsNav />
+    <div className="mv-page">
+      <div className="mv-page-inner" style={{ maxWidth: 960 }}>
+        <SettingsNav />
 
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 18, gap: 16 }}>
-        <div>
-          <h2 style={{ fontSize: 19, fontWeight: 800, color: '#0F172A', margin: 0 }}>✉️ Carrier Communication Templates</h2>
-          <p style={{ fontSize: 12.5, color: '#64748B', marginTop: 5, maxWidth: 620, lineHeight: 1.5 }}>
-            Top-and-Tail boilerplate per carrier. Gemini's dynamic analysis is dropped between your header and footer when drafting outbound mail.
-          </p>
-        </div>
-        <div style={{ flexShrink: 0 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#94A3B8', display: 'block', marginBottom: 5 }}>Carrier</label>
-          <select value={code} onChange={e => selectCourier(e.target.value)}
-            style={{ ...taSt, minHeight: 0, padding: '8px 12px', minWidth: 160 }}>
-            {couriers.map(c => (
-              <option key={c.courier_code} value={c.courier_code}>
-                {(c.courier_name || c.courier_code || '').toUpperCase()}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {loading && <div style={{ padding: 28, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>Loading carriers…</div>}
-      {!loading && couriers.length === 0 && (
-        <div style={{ padding: 28, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>
-          No carriers found. Add a courier routing rule first.
-        </div>
-      )}
-
-      {!loading && couriers.length > 0 && (
-        <>
-          {/* Routing endpoints — queries + claims only (no billing). */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 22 }}>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>📬 Queries Email Address</label>
-              <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 7px' }}>For delays, missing scans, POD searches, etc.</p>
-              <input type="email" value={form.queries_email ?? ''} onChange={e => set('queries_email', e.target.value)}
-                placeholder="queries@dpd.co.uk" style={{ ...taSt, minHeight: 0, padding: '9px 12px' }} />
-            </div>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>💼 Claims Email Address</label>
-              <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 7px' }}>Only targeted when manually hitting ‘Raise Formal Claim’.</p>
-              <input type="email" value={form.claims_email ?? ''} onChange={e => set('claims_email', e.target.value)}
-                placeholder="claims@dpd.co.uk" style={{ ...taSt, minHeight: 0, padding: '9px 12px' }} />
-            </div>
-          </div>
-
-          {/* Sample tracking numbers — the engine derives the format from these. */}
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#94A3B8', marginBottom: 10 }}>
-            Tracking Number Samples
-          </div>
-          <div style={{ marginBottom: 22 }}>
-            <label style={{ fontSize: 11, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>📦 Sample tracking number(s)</label>
-            <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 7px' }}>
-              Paste one real tracking number per line — add as many formats as this carrier uses (e.g. the different Yodel/AGL variants).
-              We learn the shape automatically; anything that doesn’t match is treated as “no tracking” and we ask the customer.
+        <div className="mv-head">
+          <div>
+            <div className="mv-kicker">Settings &amp; Templates</div>
+            <h1 className="mv-title">Carrier Communication Templates</h1>
+            <p className="mv-blurb">
+              Top-and-Tail boilerplate per carrier. Gemini dynamic analysis is dropped between your header and footer when drafting outbound mail.
             </p>
-            <textarea value={form.tracking_samples ?? ''} onChange={e => set('tracking_samples', e.target.value)}
-              style={{ ...taSt, fontFamily: 'monospace', fontSize: 12 }} rows={4}
-              placeholder={'9753172394\nJD0002345678901'} />
-            {/* Live derived-shape preview */}
-            {(form.tracking_samples ?? '').trim() && (
-              <div style={{ marginTop: 8, fontSize: 11, color: '#475569' }}>
-                {(form.tracking_samples).split(/[\n,;]+/).map(s => s.trim()).filter(Boolean).map((s, i) => (
-                  <div key={i} style={{ marginTop: 2 }}>
-                    <code style={{ background: '#F1F5F9', padding: '1px 6px', borderRadius: 4 }}>{s}</code>
-                    <span style={{ color: '#94A3B8' }}> → detected: </span>
-                    <strong style={{ color: '#0F172A' }}>{describeSample(s)}</strong>
-                  </div>
+          </div>
+          <div className="mv-actions">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--mv-ink-52)' }}>Carrier:</span>
+              <select value={code} onChange={e => selectCourier(e.target.value)}
+                style={{ background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)', borderRadius: 0, padding: '6px 10px', fontSize: 13, color: 'var(--mv-ink)', minWidth: 140 }}>
+                {couriers.map(c => (
+                  <option key={c.courier_code} value={c.courier_code}>
+                    {(c.courier_name || c.courier_code || '').toUpperCase()}
+                  </option>
                 ))}
-              </div>
-            )}
+              </select>
+            </div>
           </div>
+        </div>
 
-          {/* Top-and-Tail boilerplate templates. */}
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#94A3B8', marginBottom: 10 }}>
-            Header &amp; Footer Boilerplate
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
-            {FIELDS.map(f => (
-              <div key={f.key}>
-                <label style={{ fontSize: 11, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>{f.label}</label>
-                <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 7px' }}>{f.hint}</p>
-                <textarea value={form[f.key] ?? ''} onChange={e => set(f.key, e.target.value)} style={taSt} rows={4} />
-              </div>
-            ))}
-          </div>
+        <div className="mv-rule" />
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 20 }}>
-            <button onClick={save} disabled={saving} className="btn-primary"
-              style={{ opacity: saving ? 0.6 : 1 }}>
-              {saving ? 'Saving…' : 'Save templates'}
-            </button>
-            {saved && <span style={{ fontSize: 13, fontWeight: 600, color: '#059669' }}>✓ Saved</span>}
+        {loading && <div style={{ padding: 28, textAlign: 'center', color: 'var(--mv-ink-52)', fontSize: 13 }}>Loading carriers…</div>}
+        {!loading && couriers.length === 0 && (
+          <div style={{ padding: 28, textAlign: 'center', color: 'var(--mv-ink-52)', fontSize: 13 }}>
+            No carriers found. Add a courier routing rule first.
           </div>
-        </>
-      )}
+        )}
+
+        {!loading && couriers.length > 0 && (
+          <>
+            {/* Routing endpoints */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 22 }}>
+              <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', padding: 18 }}>
+                <label style={{ fontSize: 11, fontWeight: 800, color: 'var(--mv-ink)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Queries Ingestion Email</label>
+                <p style={{ fontSize: 11, color: 'var(--mv-ink-52)', margin: '0 0 8px' }}>For delays, missing scans, POD searches, etc.</p>
+                <input type="email" value={form.queries_email ?? ''} onChange={e => set('queries_email', e.target.value)}
+                  placeholder="queries@dpd.co.uk" style={{ ...taSt, minHeight: 0, padding: '8px 10px' }} />
+              </div>
+              <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', padding: 18 }}>
+                <label style={{ fontSize: 11, fontWeight: 800, color: 'var(--mv-ink)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Claims Ingestion Email</label>
+                <p style={{ fontSize: 11, color: 'var(--mv-ink-52)', margin: '0 0 8px' }}>Only targeted when manually hitting ‘Raise Formal Claim’.</p>
+                <input type="email" value={form.claims_email ?? ''} onChange={e => set('claims_email', e.target.value)}
+                  placeholder="claims@dpd.co.uk" style={{ ...taSt, minHeight: 0, padding: '8px 10px' }} />
+              </div>
+            </div>
+
+            {/* Sample tracking numbers */}
+            <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', padding: 18, marginBottom: 22 }}>
+              <div className="mv-kicker">Format Detection</div>
+              <label style={{ fontSize: 13, fontWeight: 800, color: 'var(--mv-ink)', display: 'block', marginBottom: 4 }}>Sample Tracking Number(s)</label>
+              <p style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', margin: '0 0 10px' }}>
+                Paste one real tracking number per line. We learn the format automatically; anything non-matching triggers a customer request.
+              </p>
+              <textarea value={form.tracking_samples ?? ''} onChange={e => set('tracking_samples', e.target.value)}
+                style={{ ...taSt, fontFamily: 'monospace', fontSize: 12 }} rows={3}
+                placeholder={'9753172394\nJD0002345678901'} />
+              {/* Live derived-shape preview */}
+              {(form.tracking_samples ?? '').trim() && (
+                <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--mv-ink-62)' }}>
+                  {(form.tracking_samples).split(/[\n,;]+/).map(s => s.trim()).filter(Boolean).map((s, i) => (
+                    <div key={i} style={{ marginTop: 3 }}>
+                      <code style={{ background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)', padding: '1px 6px' }}>{s}</code>
+                      <span style={{ color: 'var(--mv-ink-52)' }}> → detected: </span>
+                      <strong style={{ color: 'var(--mv-ink)' }}>{describeSample(s)}</strong>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Top-and-Tail boilerplate templates */}
+            <div className="mv-kicker" style={{ marginBottom: 12 }}>
+              Header &amp; Footer Boilerplate
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              {FIELDS.map(f => (
+                <div key={f.key} style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', padding: 16 }}>
+                  <label style={{ fontSize: 11, fontWeight: 800, color: 'var(--mv-ink)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>{f.label}</label>
+                  <p style={{ fontSize: 11, color: 'var(--mv-ink-52)', margin: '0 0 8px' }}>{f.hint}</p>
+                  <textarea value={form[f.key] ?? ''} onChange={e => set(f.key, e.target.value)} style={taSt} rows={4} />
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 24 }}>
+              <button onClick={save} disabled={saving} className="mv-btn-primary">
+                {saving ? 'Saving…' : 'Save Templates'}
+              </button>
+              {saved && (
+                <span className="mv-state mv-state--settled">
+                  <span className="mv-mark mv-mark--settled" />
+                  <span className="mv-state-label">Saved</span>
+                </span>
+              )}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

@@ -313,86 +313,90 @@ export default function VolumetricSettings() {
   });
 
   return (
-    <div style={{ maxWidth: 860, margin: '0 auto' }}>
-      <SettingsNav />
+    <div className="mv-page">
+      <div className="mv-page-inner" style={{ maxWidth: 900 }}>
+        <SettingsNav />
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', margin: 0 }}>
-            Volumetric Weight Rules
-          </h1>
-          <p style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>
-            Define named rules (divisor) and assign them to carrier services.
-            The pricing engine uses volumetric weight when it exceeds actual weight.
-          </p>
-        </div>
-        <button style={btnGreen} onClick={() => { setShowCreate(s => !s); setError(''); }}>
-          <Plus size={14} />New Rule
-        </button>
-      </div>
-
-      {/* How it works box */}
-      <div style={{
-        background: 'rgba(0,0,0,0.03)',
-        border: '1px solid rgba(0,0,0,0.08)',
-        borderRadius: 8, padding: '12px 16px', marginBottom: 24,
-        fontSize: 12, color: '#64748B', lineHeight: 1.7,
-      }}>
-        <Package size={13} style={{ display: 'inline', marginRight: 6, color: '#00C853' }} />
-        <strong style={{ color: '#0F172A' }}>How it works: </strong>
-        When a shipment arrives, the engine calculates volumetric weight as
-        <span style={{ color: '#00C853', fontFamily: 'monospace', margin: '0 4px' }}>(L × W × H) ÷ divisor</span>
-        for each parcel. If the volumetric weight is greater than the declared weight, the volumetric
-        weight is used for weight band selection and billing. Services with no rule assigned use
-        actual weight only.
-      </div>
-
-      {/* Error */}
-      {error && (
-        <div style={{
-          background: 'rgba(213,0,0,0.12)', border: '1px solid rgba(213,0,0,0.3)',
-          borderRadius: 7, padding: '10px 14px', marginBottom: 16, color: '#FF5252', fontSize: 12,
-        }}>
-          {error}
-        </div>
-      )}
-
-      {/* Create form */}
-      {showCreate && (
-        <div style={{ ...card, border: '1px solid rgba(0,200,83,0.25)', marginBottom: 24 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#00C853', marginBottom: 12 }}>
-            Create New Volumetric Rule
+        <div className="mv-head">
+          <div>
+            <div className="mv-kicker">Settings &amp; Rating Engine</div>
+            <h1 className="mv-title">Volumetric Weight Rules</h1>
+            <p className="mv-blurb">
+              Define named divisor formulas and assign them to carrier services. The pricing engine bills by volumetric weight when it exceeds actual deadweight.
+            </p>
           </div>
-          <RuleForm
-            onSave={data => createRule.mutate(data)}
-            onCancel={() => { setShowCreate(false); setError(''); }}
-          />
+          <div className="mv-actions">
+            <button className="mv-btn-primary" onClick={() => { setShowCreate(s => !s); setError(''); }}>
+              <Plus size={14} /> New Rule
+            </button>
+          </div>
         </div>
-      )}
 
-      {/* Rule list */}
-      {isLoading ? (
-        <div style={{ color: '#64748B', fontSize: 13 }}>Loading...</div>
-      ) : data?.rules?.length === 0 ? (
-        <div style={{ ...card, textAlign: 'center', color: '#64748B', fontSize: 13, padding: 40 }}>
-          No volumetric rules defined yet. Create one above.
+        <div className="mv-rule" />
+
+        {/* How it works box */}
+        <div style={{
+          background: 'var(--mv-surface)',
+          border: '1px solid var(--mv-hairline-2)',
+          borderRadius: 0, padding: '14px 18px', marginBottom: 20,
+          fontSize: 12.5, color: 'var(--mv-ink-62)', lineHeight: 1.6,
+        }}>
+          <Package size={14} style={{ display: 'inline', marginRight: 6, color: 'var(--mv-purple)' }} />
+          <strong style={{ color: 'var(--mv-ink)' }}>How it works: </strong>
+          When a shipment arrives, the engine calculates volumetric weight as
+          <span style={{ color: 'var(--mv-purple)', fontFamily: 'monospace', margin: '0 4px', fontWeight: 700 }}>(L × W × H) ÷ divisor</span>
+          for each parcel. If the volumetric weight is greater than declared deadweight, the volumetric
+          weight is used for weight band selection and billing.
         </div>
-      ) : (
-        data?.rules?.map(rule => (
-          <RuleCard
-            key={rule.id}
-            rule={rule}
-            allServices={data?.services || []}
-            onUpdate={(id, body) => updateRule.mutate({ id, ...body })}
-            onDelete={id => {
-              if (!window.confirm(`Delete "${rule.name}"? This will remove it from all assigned services.`)) return;
-              deleteRule.mutate(id);
-            }}
-            onAssign={(ruleId, serviceId) => assignSvc.mutate({ ruleId, serviceId })}
-            onUnassign={serviceId => unassignSvc.mutate(serviceId)}
-          />
-        ))
-      )}
+
+        {/* Error */}
+        {error && (
+          <div style={{
+            background: 'rgba(233,30,140,0.08)', border: '1px solid var(--mv-magenta)',
+            borderRadius: 0, padding: '10px 14px', marginBottom: 16, color: 'var(--mv-magenta-deep)', fontSize: 12.5,
+          }}>
+            {error}
+          </div>
+        )}
+
+        {/* Create form */}
+        {showCreate && (
+          <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', borderRadius: 0, padding: 18, marginBottom: 20 }}>
+            <div className="mv-kicker">New Formula</div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--mv-ink)', marginBottom: 14 }}>
+              Create New Volumetric Rule
+            </div>
+            <RuleForm
+              onSave={data => createRule.mutate(data)}
+              onCancel={() => { setShowCreate(false); setError(''); }}
+            />
+          </div>
+        )}
+
+        {/* Rule list */}
+        {isLoading ? (
+          <div style={{ color: 'var(--mv-ink-52)', fontSize: 13, textAlign: 'center', padding: 32 }}>Loading…</div>
+        ) : data?.rules?.length === 0 ? (
+          <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', textAlign: 'center', color: 'var(--mv-ink-52)', fontSize: 13, padding: 40 }}>
+            No volumetric rules defined yet. Create one above.
+          </div>
+        ) : (
+          data?.rules?.map(rule => (
+            <RuleCard
+              key={rule.id}
+              rule={rule}
+              allServices={data?.services || []}
+              onUpdate={(id, body) => updateRule.mutate({ id, ...body })}
+              onDelete={id => {
+                if (!window.confirm(`Delete "${rule.name}"? This will remove it from all assigned services.`)) return;
+                deleteRule.mutate(id);
+              }}
+              onAssign={(ruleId, serviceId) => assignSvc.mutate({ ruleId, serviceId })}
+              onUnassign={serviceId => unassignSvc.mutate(serviceId)}
+            />
+          ))
+        )}
+      </div>
     </div>
   );
 }
