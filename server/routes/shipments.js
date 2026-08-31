@@ -63,6 +63,15 @@ router.get('/', async (req, res, next) => {
       )`);
     }
 
+    // Exclude empty ghost records (no tracking codes, no customer, no destination postcode/name, no real reference)
+    conditions.push(`NOT (
+      (s.ship_to_postcode IS NULL OR s.ship_to_postcode = '')
+      AND (s.ship_to_name IS NULL OR s.ship_to_name = '')
+      AND (s.customer_id IS NULL)
+      AND (s.reference IS NULL OR s.reference = 'REF' OR s.reference = '' OR s.reference = '—')
+      AND (s.tracking_codes IS NULL OR s.tracking_codes = '{}' OR s.tracking_codes = '{""}')
+    )`);
+
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const countRes = await query(
@@ -422,30 +431,23 @@ router.delete('/:id', async (req, res, next) => {
   }
 });
 
-// ─── POST /api/shipments/delete-before-today ──────────────────────────────────
-router.post('/delete-before-today', async (req, res, next) => {
+// ─── POST /api/shipments/purge-ghosts ─────────────────────────────────────────
+router.post('/purge-ghosts', async (req, res, next) => {
   try {
-    const today = new Date().toISOString().split('T')[0];
-    
-    // Delete charges created before today or associated with shipments created before today
-    const chargesRes = await query(
-      `DELETE FROM charges WHERE (created_at < $1::date) OR (shipment_id IN (SELECT id FROM shipments WHERE created_at < $1::date)) RETURNING id`,
-      [today]
-    );
+    const deletedRes = await query(`
+      DELETE FROM shipments
+      WHERE (
+        (ship_to_postcode IS NULL OR ship_to_postcode = '')
+        AND (ship_to_name IS NULL OR ship_to_name = '')
+        AND (customer_id IS NULL)
+        AND (reference IS NULL OR reference = 'REF' OR reference = '' OR reference = '—')
+        AND (tracking_codes IS NULL OR tracking_codes = '{}' OR tracking_codes = '{""}')
+      )
+      RETURNING id
+    `);
 
-    const shipRes = await query(
-      `DELETE FROM shipments WHERE created_at < $1::date RETURNING id`,
-      [today]
-    );
-
-    console.log(`[shipments] Purged prior to today (${today}): deleted ${shipRes.rows.length} shipments and ${chargesRes.rows.length} charges.`);
-
-    res.json({
-      success: true,
-      deleted_shipments: shipRes.rows.length,
-      deleted_charges: chargesRes.rows.length,
-      cutoff_date: today
-    });
+    console.log(`[shipments] Purged ${deletedRes.rows.length} ghost shipments.`);
+    res.json({ success: true, deleted: deletedRes.rows.length });
   } catch (err) {
     next(err);
   }
@@ -457,10 +459,13 @@ router.post('/reprocess-all', async (req, res, next) => {
     // Clean up empty ghost rows that have no tracking, no reference, and no recipient
     await query(`
       DELETE FROM shipments
-      WHERE (tracking_codes IS NULL OR tracking_codes = '{}')
-        AND reference IS NULL
-        AND (ship_to_postcode IS NULL OR ship_to_postcode = '')
-        AND (customer_name IS NULL OR customer_name = 'Unassigned' OR customer_name = '')
+      WHERE (
+        (ship_to_postcode IS NULL OR ship_to_postcode = '')
+        AND (ship_to_name IS NULL OR ship_to_name = '')
+        AND (customer_id IS NULL)
+        AND (reference IS NULL OR reference = 'REF' OR reference = '' OR reference = '—')
+        AND (tracking_codes IS NULL OR tracking_codes = '{}' OR tracking_codes = '{""}')
+      )
     `).catch(() => {});
 
     // 1. Gather all raw payloads across tracking_events, charges, and shipments

@@ -191,6 +191,22 @@ export default function ShipmentsPage() {
     }
   }
 
+  async function handlePurgeGhosts() {
+    if (!confirm('Purge all empty ghost shipments (records with no tracking codes, customer, or recipient address)?')) return;
+    try {
+      const res = await fetch('/api/shipments/purge-ghosts', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`Purged ${data.deleted || 0} ghost shipments!`);
+        fetchShipments();
+      } else {
+        alert(data.error || 'Failed to purge ghost shipments');
+      }
+    } catch (e) {
+      alert('Error purging ghost shipments: ' + e.message);
+    }
+  }
+
   async function handleClearSimulated() {
     if (!confirm('Clear all simulated test shipments?')) return;
     try {
@@ -264,12 +280,12 @@ export default function ShipmentsPage() {
             <Calculator size={14} /> Reprice All
           </button>
           <button
-            onClick={handlePurgePriorToToday}
+            onClick={handlePurgeGhosts}
             className="mv-btn-danger"
             style={{ padding: '8px 14px', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}
-            title="Delete all historical shipments recorded before today"
+            title="Delete all empty ghost shipments"
           >
-            <Trash2 size={14} /> Purge Prior to Today
+            <Trash2 size={14} /> Purge Ghost Records
           </button>
           {simulatedCount > 0 && (
             <button

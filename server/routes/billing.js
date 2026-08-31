@@ -1253,6 +1253,12 @@ export async function processShipmentCreatedWebhook(body) {
   const primaryTrackingCode = trackingCodes[0] || null;
   const trackingHashVal = computeTrackingHash(primaryTrackingCode, collectionDate);
 
+  // Reject ghost stubs that have no tracking code, reference, recipient, or platform ID
+  if (!primaryTrackingCode && (!reference || reference === 'REF') && !shipToPostcode && !shipToName && !platformId && !accountNumber) {
+    console.log('[billing] Skipping ghost stub with no tracking, reference, or recipient');
+    return null;
+  }
+
   const voilaTrackingRequestId = responseParsed.tracking_request_id ? parseInt(responseParsed.tracking_request_id, 10) : null;
   const voilaTrackingRequestHash = responseParsed.tracking_request_hash ? parseInt(responseParsed.tracking_request_hash, 10) : null;
 
