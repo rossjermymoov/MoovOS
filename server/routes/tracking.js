@@ -738,12 +738,32 @@ router.get('/:consignment', async (req, res, next) => {
     const parcel = parcelRes.rows[0];
 
     const eventsRes = await query(
-      `SELECT id, event_code, status, description, location, event_at
+      `SELECT id, event_code, status, description, location, event_at, raw_payload
        FROM tracking_events
        WHERE consignment_number = $1
        ORDER BY event_at DESC`,
       [req.params.consignment]
     );
+
+    // Look up associated shipment record if available
+    let shipmentRecord = null;
+    try {
+      const shipRes = await query(
+        `SELECT id, tracking_codes, raw_payload, ship_to_address, ship_to_name, ship_to_postcode,
+                ship_to_country_iso, weight, total_weight, declared_weight
+         FROM shipments
+         WHERE $1 = ANY(tracking_codes)
+            OR reference = $1
+            OR voila_shipment_id = $1
+         LIMIT 1`,
+        [req.params.consignment]
+      );
+      if (shipRes.rows.length) {
+        shipmentRecord = shipRes.rows[0];
+      }
+    } catch {
+      // Non-fatal if shipments query fails
+    }
 
     // Look up associated charge if available
     let charge = null;
@@ -769,8 +789,8 @@ router.get('/:consignment', async (req, res, next) => {
       // Non-fatal if charge lookup fails
     }
 
-    // Extract dimensions from raw_payload if available
-    const rawPayload = charge?.raw_payload || {};
+    // Extract dimensions and payload details
+    const rawPayload = charge?.raw_payload || shipmentRecord?.raw_payload || {};
     const reqShip = rawPayload.request_shipment || rawPayload.shipment || {};
     const pArr = reqShip.parcels || [];
     const firstP = pArr[0] || {};
@@ -790,12 +810,15 @@ router.get('/:consignment', async (req, res, next) => {
     // Resolve recipient address from all sources
     const recipientAddress = parcel.recipient_address
       || charge?.ship_to_address
+      || shipmentRecord?.ship_to_address
       || [reqShip.ship_to?.address_1, reqShip.ship_to?.address_2, reqShip.ship_to?.city, reqShip.ship_to?.county].filter(Boolean).join(', ')
       || [reqShip.address_line_1, reqShip.address_line_2, reqShip.city].filter(Boolean).join(', ')
       || null;
 
-    const country_code = detectCountryCode(parcel, charge);
-    const weight_kg = parcel.weight_kg != null ? parcel.weight_kg : (charge?.weight_actual_kg || parseFloat(firstP.weight) || null);
+    const country_code = detectCountryCode(parcel, charge || shipmentRecord);
+    const weight_kg = parcel.weight_kg != null
+      ? parcel.weight_kg
+      : (charge?.weight_actual_kg || shipmentRecord?.weight || shipmentRecord?.total_weight || parseFloat(firstP.weight) || null);
     const is_international = country_code !== 'GB' && country_code !== 'UK';
 
     // If delivered, filter out any redundant post-delivery technical noise
@@ -805,6 +828,15 @@ router.get('/:consignment', async (req, res, next) => {
       filteredEvents = filteredEvents.slice(deliveredIdx);
     }
 
+    const rawWebhook = eventsRes.rows.find(e => e.raw_payload)?.raw_payload
+      || shipmentRecord?.raw_payload
+      || charge?.raw_payload
+      || {
+        parcel_record: parcel,
+        latest_event: eventsRes.rows[0] || null,
+        total_events: eventsRes.rows.length,
+      };
+
     res.json({
       ...parcel,
       recipient_address: recipientAddress,
@@ -813,8 +845,9 @@ router.get('/:consignment', async (req, res, next) => {
       dimensions: (dimL && dimW && dimH) ? { length: dimL, width: dimW, height: dimH, divisor } : null,
       country_code,
       is_international,
-      raw_webhook: eventsRes.rows[0]?.raw_payload || charge?.raw_payload || null,
+      raw_webhook: rawWebhook,
       charge_raw_payload: charge?.raw_payload || null,
+      shipment_raw_payload: shipmentRecord?.raw_payload || null,
       events: filteredEvents,
     });
   } catch (err) { next(err); }
