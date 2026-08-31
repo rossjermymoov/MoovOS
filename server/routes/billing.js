@@ -1407,6 +1407,12 @@ export async function processShipmentCreatedWebhook(body) {
     priceFailReason = !customerId ? 'No matching customer' : 'No service code';
   }
 
+  // Clear any existing non-invoiced charges for this shipment so we recalculate cleanly
+  await query(`
+    DELETE FROM charges
+    WHERE shipment_id = $1 AND (invoice_id IS NULL OR status != 'invoiced')
+  `, [shipmentId]).catch(() => {});
+
   await query(`
     INSERT INTO charges
       (shipment_id, customer_id, charge_type,

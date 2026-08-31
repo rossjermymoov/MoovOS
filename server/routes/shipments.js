@@ -539,29 +539,18 @@ router.post('/:id/reprice', async (req, res, next) => {
     let payload = typeof shipRow.raw_payload === 'string' ? JSON.parse(shipRow.raw_payload) : shipRow.raw_payload;
     if (!payload) return res.status(400).json({ error: 'No raw payload available' });
 
-    if (shipRow.customer_id) payload.customerId = shipRow.customer_id;
+    const shipmentId = await processShipmentCreatedWebhook(payload);
+    
+    // Fetch newly calculated charges
+    const chargesRes = await query(`
+      SELECT
+        id, charge_type, service_name, price, cost_price, price_failure_reason, verified, billed, status
+      FROM charges
+      WHERE shipment_id = $1
+      ORDER BY created_at ASC
+    `, [shipRow.id]);
 
-    const result = await processShipment(payload);
-    const charges = result.charges || [];
-    const customerId = charges[0]?.customer_id || null;
-
-    if (customerId) {
-      const custRes = await query('SELECT business_name, account_number FROM customers WHERE id = $1', [customerId]);
-      const bName = custRes.rows[0]?.business_name;
-      const acct = custRes.rows[0]?.account_number;
-      await query(
-        'UPDATE shipments SET customer_id = $1, customer_name = COALESCE($2, customer_name), customer_account = COALESCE($3, customer_account) WHERE id = $4',
-        [customerId, bName, acct, shipRow.id]
-      );
-    }
-
-    if (charges.length) {
-      await query('DELETE FROM charges WHERE shipment_id = $1 AND status != $2', [shipRow.id, 'invoiced']);
-      const inserted = await insertCharges(charges, shipRow.id);
-      return res.json({ success: true, charges: inserted, errors: result.errors });
-    }
-
-    res.json({ success: false, message: 'No charges generated', errors: result.errors });
+    res.json({ success: true, charges: chargesRes.rows });
   } catch (err) {
     next(err);
   }
