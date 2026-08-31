@@ -151,6 +151,18 @@ function pick(obj, ...keys) {
 //   A) Shipment-platform format: { json: { tracking_update: { parcels: [...] }, shipment: {...} } }
 //   B) Simple flat object or array of flat objects
 
+export function extractRequestShipment(obj) {
+  if (!obj) return {};
+  let req = obj.request_shipment || obj.shipment?.request_shipment || obj.shipment || obj;
+  if (typeof req === 'string') {
+    try { req = JSON.parse(req); } catch { req = {}; }
+  }
+  if (req && typeof req.request_shipment === 'string') {
+    try { req = JSON.parse(req.request_shipment); } catch {}
+  }
+  return (req && typeof req === 'object') ? req : {};
+}
+
 export function normalisePayload(body) {
   // Unwrap platform wrapper — some services POST { json: {...}, verify: false, ... }
   const payload = (body.json && typeof body.json === 'object') ? body.json : body;
@@ -159,6 +171,10 @@ export function normalisePayload(body) {
   if (payload.tracking_update && Array.isArray(payload.tracking_update.parcels)) {
     const tu       = payload.tracking_update;
     const shipment = payload.shipment || {};
+    const reqShip  = extractRequestShipment(shipment.request_shipment ? shipment : payload);
+    const shipTo   = reqShip.ship_to || {};
+    const reqParcels = reqShip.parcels || [];
+    const firstReqP = reqParcels[0] || {};
     const events   = [];
 
     for (const parcel of tu.parcels) {
@@ -174,33 +190,34 @@ export function normalisePayload(body) {
         return ta - tb;
       });
 
+      const streetLine1 = [shipTo.address_1, shipTo.address_2, shipTo.address_3].filter(Boolean).join(', ');
+      const streetLine2 = [shipTo.city, shipTo.county, shipTo.postcode].filter(Boolean).join(', ');
+      const fullAddr = [streetLine1, streetLine2].filter(Boolean).join(', ')
+        || shipment.ship_to_address
+        || [shipment.ship_to_address_1, shipment.ship_to_address_2, shipment.ship_to_address_3, shipment.ship_to_city, shipment.ship_to_county].filter(Boolean).join(', ')
+        || shipment.address
+        || tu.address_information?.address
+        || null;
+
+      const resolvedWeight = parcel.weight || firstReqP.weight || firstReqP._summed_item_weights || reqShip._summed_total_weight || shipment.weight || null;
+
       for (const ev of sorted) {
         events.push({
           _consignment:           consignment,
-          // platform_shipment_id is the unique Voila/DC shipment ID (e.g. 249492859).
-          // This is always unique per booking — unlike shipment.reference which is the
-          // customer's sender ref and can be shared across multiple consolidated parcels
-          // (e.g. two separate DPD bookings both using reference '472393').
-          // The backfill guard MUST use platform ID to avoid silently skipping the second
-          // booking when the first one already has a charge for the same reference.
           _platform_shipment_id:  shipment.id ? String(shipment.id) : null,
-          _shipment_reference:    shipment.reference || null,
-          _courier_name:       shipment.courier || null,
+          _shipment_reference:    shipment.reference || reqShip.reference || null,
+          _courier_name:       shipment.courier || reqShip.courier?.friendly_service_name || null,
           _courier_code:       shipment.courier ? shipment.courier.toLowerCase() : null,
-          _service_name:       shipment.friendly_service_name || null,
-          _customer_name:      shipment.account_name || null,
-          _customer_account:   shipment.account_number || null,
-          _recipient_name:     shipment.ship_to_name || shipment.ship_to_company_name || shipment.recipient_name || tu.address_information?.name || null,
-          _recipient_postcode: shipment.ship_to_postcode || tu.address_information?.postcode || shipment.postcode || null,
-          _recipient_address:  shipment.ship_to_address
-            || [shipment.ship_to_address_1, shipment.ship_to_address_2, shipment.ship_to_address_3, shipment.ship_to_city, shipment.ship_to_county].filter(Boolean).join(', ')
-            || shipment.address
-            || tu.address_information?.address
-            || null,
-          _weight_kg:          parcel.weight || parcel.weight_kg || parcel.actual_weight || parcel.gross_weight || parcel.declared_weight || shipment.weight || shipment.total_weight || null,
+          _service_name:       shipment.friendly_service_name || reqShip.courier?.friendly_service_name || null,
+          _customer_name:      shipment.account_name || reqShip.account_name || null,
+          _customer_account:   shipment.account_number || reqShip.account_number || null,
+          _recipient_name:     shipTo.name || shipment.ship_to_name || shipment.ship_to_company_name || shipment.recipient_name || tu.address_information?.name || null,
+          _recipient_postcode: shipTo.postcode || shipment.ship_to_postcode || tu.address_information?.postcode || shipment.postcode || null,
+          _recipient_address:  fullAddr,
+          _weight_kg:          resolvedWeight,
           _estimated_delivery: tu.expected_delivery || shipment.tracking_expected_delivery_date || null,
           _tracking_url:       parcel.tracking_url || parcel.trackingUrl || null,
-          _raw:                ev,
+          _raw:                payload, // Store the full complete webhook payload
           // Dispatch Cloud sends the numeric code in status_code (1-18)
           // and the verbatim courier description in status / status_description.
           // Use status_code for normalisation; fall back to status text if absent.
@@ -807,35 +824,40 @@ router.get('/:consignment', async (req, res, next) => {
     }
 
     // Extract dimensions and payload details
-    const rawPayload = charge?.raw_payload || shipmentRecord?.raw_payload || {};
-    const reqShip = rawPayload.request_shipment || rawPayload.shipment || {};
-    const pArr = reqShip.parcels || [];
-    const firstP = pArr[0] || {};
-    const dimL = parseFloat(firstP.dim_length || firstP.length || rawPayload.dim_length) || null;
-    const dimW = parseFloat(firstP.dim_width || firstP.width || rawPayload.dim_width) || null;
-    const dimH = parseFloat(firstP.dim_height || firstP.height || rawPayload.dim_height) || null;
+    const rawPayload = eventsRes.rows.find(e => e.raw_payload)?.raw_payload || charge?.raw_payload || shipmentRecord?.raw_payload || {};
+    const reqShip = extractRequestShipment(rawPayload);
+    const shipTo = reqShip.ship_to || reqShip.recipient || {};
+    const reqParcels = reqShip.parcels || [];
+    const firstP = reqParcels[0] || {};
+
+    const dimL = parseFloat(firstP.dim_length || firstP.length || reqShip.dim_length) || null;
+    const dimW = parseFloat(firstP.dim_width || firstP.width || reqShip.dim_width) || null;
+    const dimH = parseFloat(firstP.dim_height || firstP.height || reqShip.dim_height) || null;
 
     // Determine volumetric divisor from courier rules
-    const courierCode = (parcel.courier_code || charge?.courier_code || '').toLowerCase();
-    const divisor = courierCode.includes('dpd') ? 4000 : 5000;
+    const courierCode = (parcel.courier_code || reqShip.courier?.friendly_service_name || charge?.courier_code || '').toLowerCase();
+    const divisor = (courierCode.includes('dpd') || (reqShip.dc_service_id && String(reqShip.dc_service_id).toUpperCase().startsWith('DPD'))) ? 4000 : 5000;
 
     let dimensionalWeightKg = charge?.weight_dimensional_kg ? Number(charge.weight_dimensional_kg) : null;
     if (!dimensionalWeightKg && dimL && dimW && dimH) {
       dimensionalWeightKg = Number(((dimL * dimW * dimH) / divisor).toFixed(2));
     }
 
-    // Resolve recipient address from all sources
-    const recipientAddress = parcel.recipient_address
-      || charge?.ship_to_address
-      || shipmentRecord?.ship_to_address
-      || [reqShip.ship_to?.address_1, reqShip.ship_to?.address_2, reqShip.ship_to?.city, reqShip.ship_to?.county].filter(Boolean).join(', ')
-      || [reqShip.address_line_1, reqShip.address_line_2, reqShip.city].filter(Boolean).join(', ')
-      || null;
+    // Resolve recipient address lines
+    const streetLine1 = [shipTo.address_1, shipTo.address_2, shipTo.address_3].filter(Boolean).join(', ');
+    const streetLine2 = [shipTo.city, shipTo.county, shipTo.postcode].filter(Boolean).join(', ');
+    const recipientAddress = (streetLine1 && streetLine2)
+      ? `${streetLine1}, ${streetLine2}`
+      : (streetLine1 || streetLine2 || parcel.recipient_address || charge?.ship_to_address || shipmentRecord?.ship_to_address || null);
 
-    const country_code = detectCountryCode(parcel, charge || shipmentRecord);
-    const weight_kg = parcel.weight_kg != null
-      ? parcel.weight_kg
-      : (charge?.weight_actual_kg || shipmentRecord?.weight || shipmentRecord?.total_weight || parseFloat(firstP.weight) || null);
+    const country_code = (shipTo.country_iso || charge?.ship_to_country_iso || shipmentRecord?.ship_to_country_iso || detectCountryCode(parcel, charge || shipmentRecord)).toUpperCase();
+    const weight_kg = firstP.weight != null
+      ? parseFloat(firstP.weight)
+      : (firstP._summed_item_weights != null
+          ? parseFloat(firstP._summed_item_weights)
+          : (reqShip._summed_total_weight != null
+              ? parseFloat(reqShip._summed_total_weight)
+              : (parcel.weight_kg != null ? parcel.weight_kg : (charge?.weight_actual_kg || shipmentRecord?.weight || null))));
     const is_international = country_code !== 'GB' && country_code !== 'UK';
 
     // If delivered, filter out any redundant post-delivery technical noise
@@ -845,7 +867,7 @@ router.get('/:consignment', async (req, res, next) => {
       filteredEvents = filteredEvents.slice(deliveredIdx);
     }
 
-    const rawWebhook = eventsRes.rows.find(e => e.raw_payload)?.raw_payload
+    let parsedRawWebhook = eventsRes.rows.find(e => e.raw_payload)?.raw_payload
       || shipmentRecord?.raw_payload
       || charge?.raw_payload
       || {
@@ -854,15 +876,30 @@ router.get('/:consignment', async (req, res, next) => {
         total_events: eventsRes.rows.length,
       };
 
+    if (parsedRawWebhook && typeof parsedRawWebhook === 'object') {
+      parsedRawWebhook = {
+        ...parsedRawWebhook,
+        request_shipment_parsed: reqShip,
+      };
+    }
+
     res.json({
       ...parcel,
+      recipient_name: shipTo.name || parcel.recipient_name || charge?.ship_to_name || null,
+      recipient_postcode: shipTo.postcode || parcel.recipient_postcode || charge?.ship_to_postcode || null,
       recipient_address: recipientAddress,
+      street_line_1: streetLine1 || null,
+      street_line_2: streetLine2 || null,
+      ship_to: shipTo,
+      customer_name: reqShip.account_name || parcel.customer_name,
+      customer_account: reqShip.account_number || parcel.customer_account,
+      service_name: reqShip.courier?.friendly_service_name || parcel.service_name,
       weight_kg,
       dimensional_weight_kg: dimensionalWeightKg,
       dimensions: (dimL && dimW && dimH) ? { length: dimL, width: dimW, height: dimH, divisor } : null,
       country_code,
       is_international,
-      raw_webhook: rawWebhook,
+      raw_webhook: parsedRawWebhook,
       charge_raw_payload: charge?.raw_payload || null,
       shipment_raw_payload: shipmentRecord?.raw_payload || null,
       events: filteredEvents,

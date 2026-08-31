@@ -689,17 +689,45 @@ function ParcelDrawer({ consignment, onClose }) {
                 <div className="mv-kicker" style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <MapPin size={12} color="var(--mv-purple)" /> Recipient &amp; Delivery Destination
                 </div>
-                {[
-                  ['Recipient Name',  data?.recipient_name || '—'],
-                  ['Street Address',  data?.recipient_address || (data?.recipient_postcode ? `Postcode: ${data.recipient_postcode}` : '—')],
-                  ['Postcode / ZIP',  data?.recipient_postcode || '—'],
-                  ['Country',         formatCountryName(data?.country_code)],
-                ].map(([label, value]) => (
-                  <div key={label} style={{ display: 'flex', padding: '8px 0', borderBottom: '1px solid var(--mv-hairline)' }}>
-                    <span style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', width: 130, flexShrink: 0 }}>{label}</span>
-                    <span style={{ fontSize: 12.5, color: 'var(--mv-ink)', fontWeight: 600 }}>{value}</span>
+                
+                <div style={{ display: 'flex', padding: '8px 0', borderBottom: '1px solid var(--mv-hairline)' }}>
+                  <span style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', width: 130, flexShrink: 0 }}>Recipient</span>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontSize: 13, color: 'var(--mv-ink)', fontWeight: 700 }}>{data?.recipient_name || '—'}</span>
+                    {data?.ship_to?.phone && (
+                      <span style={{ fontSize: 11, color: 'var(--mv-ink-52)', marginTop: 2 }}>📞 {data.ship_to.phone}</span>
+                    )}
                   </div>
-                ))}
+                </div>
+
+                <div style={{ display: 'flex', padding: '9px 0', borderBottom: '1px solid var(--mv-hairline)' }}>
+                  <span style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', width: 130, flexShrink: 0 }}>Delivery Address</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {data?.street_line_1 && (
+                      <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--mv-ink)', lineHeight: 1.35 }}>
+                        {data.street_line_1}
+                      </span>
+                    )}
+                    {data?.street_line_2 && (
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--mv-ink-70)', lineHeight: 1.35 }}>
+                        {data.street_line_2}
+                      </span>
+                    )}
+                    {!data?.street_line_1 && !data?.street_line_2 && (
+                      <span style={{ fontSize: 12.5, color: 'var(--mv-ink)', fontWeight: 600 }}>
+                        {data?.recipient_address || data?.recipient_postcode || '—'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', padding: '8px 0', borderBottom: '1px solid var(--mv-hairline)' }}>
+                  <span style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', width: 130, flexShrink: 0 }}>Destination Country</span>
+                  <span style={{ fontSize: 12.5, color: 'var(--mv-ink)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 15 }}>{getCountryFlag(data?.country_code)}</span>
+                    {formatCountryName(data?.country_code)}
+                  </span>
+                </div>
               </div>
 
               {/* Weight & Physical Specs Card */}
@@ -709,9 +737,9 @@ function ParcelDrawer({ consignment, onClose }) {
                 </div>
                 {[
                   ['Declared Weight',     data?.weight_kg != null ? `${Number(data.weight_kg).toFixed(2)} kg` : '—'],
-                  ['Dimensional Weight',  data?.dimensional_weight_kg != null ? `${Number(data.dimensional_weight_kg).toFixed(2)} kg` : (data?.dimensions ? `${((data.dimensions.length * data.dimensions.width * data.dimensions.height) / data.dimensions.divisor).toFixed(2)} kg` : '—')],
+                  ['Dimensional Weight',  data?.dimensional_weight_kg != null ? `${Number(data.dimensional_weight_kg).toFixed(2)} kg${data?.dimensions ? ` (${data.dimensions.length}×${data.dimensions.width}×${data.dimensions.height} cm ÷ ${data.dimensions.divisor})` : ''}` : '—'],
                   ['Dimensions (L×W×H)',  data?.dimensions ? `${data.dimensions.length} × ${data.dimensions.width} × ${data.dimensions.height} cm` : '—'],
-                  ['Routing Profile',     isIntl ? 'International Air Route' : 'Domestic UK Network'],
+                  ['Routing Profile',     isIntl ? `International Air Route (${data?.service_name || 'Air Cargo'})` : 'Domestic UK Network'],
                 ].map(([label, value]) => (
                   <div key={label} style={{ display: 'flex', padding: '8px 0', borderBottom: '1px solid var(--mv-hairline)' }}>
                     <span style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', width: 130, flexShrink: 0 }}>{label}</span>
