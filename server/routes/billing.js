@@ -818,7 +818,7 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData, 
 
     if (!courierId) return; // can't resolve carrier — skip surcharges
 
-    // Step 2: fetch all active surcharges for this carrier.
+    // Step 2: fetch all active surcharges for this carrier (excluding fuel, which is handled via Fuel Groups below)
     const { rows: surcharges } = await query(`
       SELECT s.*,
              COALESCE((
@@ -836,6 +836,9 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData, 
           OR UPPER(s.code) LIKE '%CARRIAGE%'
           OR UPPER(s.name) LIKE '%CARRIAGE%'
         )
+        AND UPPER(s.name) NOT LIKE '%FUEL%'
+        AND UPPER(s.code) NOT LIKE '%FUEL%'
+        AND UPPER(s.name) NOT LIKE '%ENERGY%'
         AND (s.effective_date IS NULL OR s.effective_date <= CURRENT_DATE)
     `, [courierId]);
 
