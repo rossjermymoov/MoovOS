@@ -10,13 +10,48 @@ import {
   Search, X, Truck, PackageCheck, Clock, AlertTriangle,
   ShieldAlert, RotateCcw, Package, ChevronRight, MapPin,
   RefreshCw, Store, Calendar, Plane, PackageX,
-  Warehouse, OctagonX, Navigation,
+  Warehouse, OctagonX, Navigation, Copy, Check, ExternalLink,
+  Globe, Scale, Building2
 } from 'lucide-react';
 import axios from 'axios';
 import { startOfDay, endOfDay, startOfMonth, subDays, format } from 'date-fns';
 import { getCourierLogo } from '../../utils/courierLogos';
 
 const api = axios.create({ baseURL: '/api' });
+
+// Country ISO to Full Name lookup
+const COUNTRY_MAP = {
+  GB: 'United Kingdom',
+  UK: 'United Kingdom',
+  US: 'United States',
+  USA: 'United States',
+  CA: 'Canada',
+  AU: 'Australia',
+  DE: 'Germany',
+  FR: 'France',
+  IE: 'Ireland',
+  ES: 'Spain',
+  IT: 'Italy',
+  NL: 'Netherlands',
+  BE: 'Belgium',
+  NZ: 'New Zealand',
+  CH: 'Switzerland',
+  AT: 'Austria',
+  DK: 'Denmark',
+  SE: 'Sweden',
+  NO: 'Norway',
+  FI: 'Finland',
+  PL: 'Poland',
+  PT: 'Portugal',
+  INTL: 'International',
+};
+
+function formatCountryName(code) {
+  if (!code) return '—';
+  const c = code.toUpperCase();
+  const name = COUNTRY_MAP[c];
+  return name ? `${c} — ${name}` : c;
+}
 
 // Inline courier badge
 function CourierBadge({ name, code }) {
@@ -40,7 +75,6 @@ function CourierBadge({ name, code }) {
 }
 
 // ─── Status mapping to 4-mark status language ──────────────────
-// settled = green square, flight = purple triangle, attention = magenta square, waiting = hollow square
 function getStatusState(status) {
   const s = String(status || '').toLowerCase();
   if (s === 'delivered') return { mark: 'settled', label: 'Delivered' };
@@ -99,9 +133,189 @@ function timeAgo(ts) {
   return `${d}d ago`;
 }
 
-function fmtDate(d) {
-  if (!d) return '—';
-  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+// ─── Event icon resolver ──────────────────────────────────────
+function getEventVisual(status, isInternational, description = '', location = '') {
+  const s = String(status || '').toLowerCase();
+  const desc = String(description || '').toLowerCase();
+  const loc = String(location || '').toLowerCase();
+
+  // Delivered
+  if (s === 'delivered' || desc.includes('delivered')) {
+    return {
+      Icon: PackageCheck,
+      mark: 'settled',
+      color: 'var(--mv-green-deep)',
+      bg: 'rgba(0,200,83,0.12)',
+      border: 'var(--mv-green)',
+    };
+  }
+
+  // Failed delivery / Problem / Exception
+  if (['failed_delivery', 'exception', 'damaged', 'returned', 'on_hold', 'customs_hold'].includes(s) ||
+      desc.includes('failed') || desc.includes('missed') || desc.includes('undelivered') || desc.includes('held') || desc.includes('delay')) {
+    if (s === 'customs_hold' || desc.includes('customs')) {
+      return {
+        Icon: ShieldAlert,
+        mark: 'attention',
+        color: 'var(--mv-magenta-deep)',
+        bg: 'rgba(233,30,140,0.1)',
+        border: 'var(--mv-magenta)',
+        isAlert: true,
+      };
+    }
+    return {
+      Icon: AlertTriangle,
+      mark: 'attention',
+      color: 'var(--mv-magenta-deep)',
+      bg: 'rgba(233,30,140,0.1)',
+      border: 'var(--mv-magenta)',
+      isAlert: true,
+    };
+  }
+
+  // At hub / sorting center / depot
+  if (s === 'at_depot' || desc.includes('hub') || desc.includes('depot') || desc.includes('sorting center') || desc.includes('facility') || loc.includes('hub') || loc.includes('depot')) {
+    return {
+      Icon: Warehouse,
+      mark: 'flight',
+      color: 'var(--mv-purple)',
+      bg: 'rgba(123,47,190,0.1)',
+      border: 'rgba(123,47,190,0.3)',
+    };
+  }
+
+  // Out for delivery
+  if (s === 'out_for_delivery' || desc.includes('out for delivery') || desc.includes('with courier') || desc.includes('van')) {
+    return {
+      Icon: Navigation,
+      mark: 'flight',
+      color: 'var(--mv-purple)',
+      bg: 'rgba(123,47,190,0.1)',
+      border: 'rgba(123,47,190,0.3)',
+    };
+  }
+
+  // In transit
+  if (s === 'in_transit' || desc.includes('transit') || desc.includes('departed') || desc.includes('arrived') || desc.includes('linehaul')) {
+    if (isInternational || desc.includes('plane') || desc.includes('flight') || desc.includes('air') || desc.includes('customs') || desc.includes('overseas') || desc.includes('export')) {
+      return {
+        Icon: Plane,
+        mark: 'flight',
+        color: 'var(--mv-purple)',
+        bg: 'rgba(123,47,190,0.1)',
+        border: 'rgba(123,47,190,0.3)',
+      };
+    }
+    return {
+      Icon: Truck,
+      mark: 'flight',
+      color: 'var(--mv-purple)',
+      bg: 'rgba(123,47,190,0.1)',
+      border: 'rgba(123,47,190,0.3)',
+    };
+  }
+
+  // Booked / Collected
+  if (s === 'collected' || s === 'booked' || desc.includes('collected') || desc.includes('manifested') || desc.includes('created')) {
+    return {
+      Icon: Package,
+      mark: 'waiting',
+      color: 'var(--mv-ink)',
+      bg: 'rgba(32,30,29,0.06)',
+      border: 'var(--mv-hairline-2)',
+    };
+  }
+
+  return {
+    Icon: Package,
+    mark: 'waiting',
+    color: 'var(--mv-ink-62)',
+    bg: 'rgba(32,30,29,0.06)',
+    border: 'var(--mv-hairline-2)',
+  };
+}
+
+// ─── Journey Route Stages ─────────────────────────────────────
+function JourneyProgress({ status, isInternational }) {
+  const s = String(status || '').toLowerCase();
+
+  const stages = [
+    { key: 'booked', label: 'Booked', Icon: Package },
+    { key: 'at_depot', label: 'At Hub', Icon: Warehouse },
+    { key: 'in_transit', label: isInternational ? 'Air Transit' : 'In Transit', Icon: isInternational ? Plane : Truck },
+    { key: 'out_for_delivery', label: 'Out for Delivery', Icon: Navigation },
+    { key: 'delivered', label: 'Delivered', Icon: PackageCheck },
+  ];
+
+  let currentIdx = 0;
+  if (s === 'booked' || s === 'awaiting_collection') currentIdx = 0;
+  else if (s === 'collected' || s === 'at_depot') currentIdx = 1;
+  else if (s === 'in_transit' || s === 'customs_hold' || s === 'on_hold') currentIdx = 2;
+  else if (s === 'out_for_delivery' || s === 'failed_delivery') currentIdx = 3;
+  else if (s === 'delivered') currentIdx = 4;
+
+  const isFailed = ['failed_delivery', 'exception', 'damaged', 'returned'].includes(s);
+
+  return (
+    <div style={{
+      background: 'var(--mv-surface)',
+      border: '1px solid var(--mv-hairline-2)',
+      padding: '12px 16px',
+      margin: '14px 0',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
+        {stages.map((stage, i) => {
+          const isDone = i <= currentIdx;
+          const isCurrent = i === currentIdx;
+          const StageIcon = stage.Icon;
+
+          let color = 'var(--mv-ink-45)';
+          let bg = 'var(--mv-bg)';
+          let border = 'var(--mv-hairline-2)';
+
+          if (isCurrent) {
+            if (s === 'delivered') {
+              color = 'var(--mv-green-deep)';
+              bg = 'rgba(0,200,83,0.15)';
+              border = 'var(--mv-green)';
+            } else if (isFailed) {
+              color = 'var(--mv-magenta-deep)';
+              bg = 'rgba(233,30,140,0.15)';
+              border = 'var(--mv-magenta)';
+            } else {
+              color = 'var(--mv-purple)';
+              bg = 'rgba(123,47,190,0.15)';
+              border = 'var(--mv-purple)';
+            }
+          } else if (isDone) {
+            color = 'var(--mv-purple)';
+            bg = 'rgba(123,47,190,0.08)';
+            border = 'rgba(123,47,190,0.25)';
+          }
+
+          return (
+            <div key={stage.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, zIndex: 2 }}>
+              <div style={{
+                width: 28, height: 28,
+                background: bg, border: `1px solid ${border}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: color, marginBottom: 4,
+              }}>
+                <StageIcon size={14} />
+              </div>
+              <span style={{
+                fontSize: 10, fontWeight: isCurrent ? 800 : 600,
+                color: isCurrent ? 'var(--mv-ink)' : 'var(--mv-ink-52)',
+                textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'center',
+              }}>
+                {stage.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 // ─── Claims window logic ──────────────────────────────────────
@@ -180,12 +394,12 @@ function ClaimsTab({ data, consignment }) {
   }
 
   return (
-    <div style={{ padding: '20px 24px' }}>
+    <div style={{ padding: '4px 0' }}>
       <div style={{
         background: info.expired || info.urgent ? 'rgba(233,30,140,0.06)' : 'var(--mv-surface)',
         border: `1px solid ${info.expired || info.urgent ? 'var(--mv-magenta)' : 'var(--mv-divider)'}`,
         padding: '14px 16px',
-        marginBottom: 20,
+        marginBottom: 16,
       }}>
         <div style={{ fontSize: 13, fontWeight: 800, color: info.expired || info.urgent ? 'var(--mv-magenta-deep)' : 'var(--mv-ink)', marginBottom: 2 }}>
           {statusLabel}
@@ -195,15 +409,15 @@ function ClaimsTab({ data, consignment }) {
         </div>
       </div>
 
-      <div style={{ marginBottom: 20 }}>
-        <div className="mv-section" style={{ marginBottom: 8 }}>Claims Window Rules</div>
+      <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', padding: '14px 16px', marginBottom: 16 }}>
+        <div className="mv-kicker" style={{ marginBottom: 8 }}>Claims Window Policy</div>
         {[
           ['Carrier',       data?.courier_name || '—'],
           ['Window',        `${info.windowDays} days from ${info.windowFrom}`],
-          ['Reference date',new Date(info.refDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })],
-          ['Deadline',      info.deadline.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })],
+          ['Reference Date',new Date(info.refDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })],
+          ['Hard Deadline', info.deadline.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })],
         ].map(([label, value]) => (
-          <div key={label} style={{ display: 'flex', padding: '8px 0', borderBottom: '1px solid var(--mv-hairline)' }}>
+          <div key={label} style={{ display: 'flex', padding: '7px 0', borderBottom: '1px solid var(--mv-hairline)' }}>
             <span style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', width: 120, flexShrink: 0 }}>{label}</span>
             <span style={{ fontSize: 12.5, color: 'var(--mv-ink)', fontWeight: 600 }}>{value}</span>
           </div>
@@ -211,12 +425,12 @@ function ClaimsTab({ data, consignment }) {
       </div>
 
       <div style={{
-        background: 'var(--mv-surface)',
+        background: 'var(--mv-bg)',
         border: '1px solid var(--mv-hairline-2)',
         padding: '12px 14px',
-        marginBottom: 20,
-        fontSize: 12.5,
-        color: 'var(--mv-ink)',
+        marginBottom: 16,
+        fontSize: 12,
+        color: 'var(--mv-ink-62)',
         lineHeight: 1.55,
       }}>
         {info.note}
@@ -230,7 +444,7 @@ function ClaimsTab({ data, consignment }) {
           className="mv-btn-primary"
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            width: '100%', padding: '10px 16px', fontSize: 13, textDecoration: 'none',
+            width: '100%', padding: '10px 16px', fontSize: 13, textDecoration: 'none', boxSizing: 'border-box',
           }}
         >
           {info.actionLabel} →
@@ -241,34 +455,67 @@ function ClaimsTab({ data, consignment }) {
 }
 
 // ─── Event timeline ───────────────────────────────────────────
-function EventTimeline({ events }) {
-  if (!events?.length) return <p style={{ color: 'var(--mv-ink-52)', fontSize: 13, fontStyle: 'italic' }}>No events yet</p>;
+function EventTimeline({ events, isInternational }) {
+  if (!events?.length) return <p style={{ color: 'var(--mv-ink-52)', fontSize: 13, fontStyle: 'italic', padding: 20 }}>No tracking events recorded yet</p>;
+
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative', paddingLeft: 4 }}>
       {events.map((ev, i) => {
-        const st = getStatusState(ev.status);
+        const vis = getEventVisual(ev.status, isInternational, ev.description, ev.location);
+        const EvIcon = vis.Icon;
         const isLast = i === events.length - 1;
+
         return (
-          <div key={ev.id || i} style={{ display: 'flex', gap: 14, position: 'relative', paddingBottom: isLast ? 0 : 20 }}>
+          <div key={ev.id || i} style={{ display: 'flex', gap: 14, position: 'relative', paddingBottom: isLast ? 0 : 22 }}>
+            {/* Timeline track + Icon */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
-              <span className={`mv-mark mv-mark--${st.mark}`} style={{ marginTop: 4 }} />
+              <div style={{
+                width: 28, height: 28,
+                background: vis.bg,
+                border: `1px solid ${vis.border}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: vis.color, flexShrink: 0,
+              }}>
+                <EvIcon size={14} />
+              </div>
               {!isLast && (
-                <div style={{ width: 1, flex: 1, minHeight: 20, background: 'var(--mv-divider)', marginTop: 6 }} />
+                <div style={{ width: 1, flex: 1, minHeight: 24, background: 'var(--mv-divider)', marginTop: 4 }} />
               )}
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 2 }}>
+
+            {/* Event info */}
+            <div style={{
+              flex: 1, minWidth: 0,
+              background: vis.isAlert ? 'rgba(233,30,140,0.04)' : 'transparent',
+              border: vis.isAlert ? '1px solid rgba(233,30,140,0.2)' : 'none',
+              padding: vis.isAlert ? '10px 12px' : '0 0',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
                 <StatusBadge status={ev.status} />
                 <span className="mv-num" style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>{timeAgo(ev.event_at)}</span>
               </div>
-              {ev.description && <p style={{ fontSize: 13, color: 'var(--mv-ink)', margin: '3px 0', fontWeight: 500 }}>{ev.description}</p>}
-              {ev.location && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: 'var(--mv-ink-52)' }}>
-                  <MapPin size={11} /> {ev.location}
-                </span>
+
+              {ev.description && (
+                <p style={{
+                  fontSize: 13,
+                  color: vis.isAlert ? 'var(--mv-magenta-deep)' : 'var(--mv-ink)',
+                  margin: '4px 0 6px',
+                  fontWeight: vis.isAlert ? 700 : 600,
+                  lineHeight: 1.4,
+                }}>
+                  {ev.description}
+                </p>
               )}
-              <div className="mv-num" style={{ fontSize: 10.5, color: 'var(--mv-ink-45)', marginTop: 2 }}>
-                {new Date(ev.event_at).toLocaleString('en-GB')}
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 2 }}>
+                {ev.location && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: 'var(--mv-ink-52)' }}>
+                    <MapPin size={11} style={{ color: 'var(--mv-purple)' }} /> {ev.location}
+                  </span>
+                )}
+                <span className="mv-num" style={{ fontSize: 11, color: 'var(--mv-ink-45)' }}>
+                  {new Date(ev.event_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                </span>
               </div>
             </div>
           </div>
@@ -281,6 +528,8 @@ function EventTimeline({ events }) {
 // ─── Parcel drawer ────────────────────────────────────────────
 function ParcelDrawer({ consignment, onClose }) {
   const [activeTab, setActiveTab] = useState('events');
+  const [copied, setCopied] = useState(false);
+
   const { data, isLoading } = useQuery({
     queryKey: ['parcel', consignment],
     queryFn:  () => api.get(`/tracking/${encodeURIComponent(consignment)}`).then(r => r.data),
@@ -293,12 +542,21 @@ function ParcelDrawer({ consignment, onClose }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  const copyConsignment = () => {
+    if (!consignment) return;
+    navigator.clipboard.writeText(consignment);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const isIntl = data?.is_international || (data?.country_code && data.country_code !== 'GB' && data.country_code !== 'UK');
+
   return (
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(32,30,29,0.3)', zIndex: 400 }} />
       <div style={{
         position: 'fixed', top: 0, right: 0, bottom: 0,
-        width: 500, background: 'var(--mv-bg)',
+        width: 540, background: 'var(--mv-bg)',
         borderLeft: '2px solid var(--mv-divider)',
         boxShadow: '0 12px 32px rgba(32,30,29,0.18)',
         zIndex: 500, display: 'flex', flexDirection: 'column',
@@ -309,23 +567,56 @@ function ParcelDrawer({ consignment, onClose }) {
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
             <div style={{ minWidth: 0 }}>
               <div className="mv-kicker">Consignment Telemetry</div>
-              <div className="mv-num" style={{ fontSize: 18, fontWeight: 800, color: 'var(--mv-ink)', letterSpacing: '-.02em' }}>
-                {consignment}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="mv-num" style={{ fontSize: 18, fontWeight: 800, color: 'var(--mv-ink)', letterSpacing: '-.02em' }}>
+                  {consignment}
+                </span>
+                <button
+                  onClick={copyConsignment}
+                  className="mv-btn-ghost"
+                  style={{ padding: '3px 7px', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                  title="Copy consignment number"
+                >
+                  {copied ? <Check size={12} color="var(--mv-green-deep)" /> : <Copy size={12} />}
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
               </div>
             </div>
             <button onClick={onClose} className="mv-icon-btn" title="Close"><X size={16} /></button>
           </div>
 
           {data && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12, flexWrap: 'wrap' }}>
-              <StatusBadge status={data.status} />
-              <CourierBadge name={data.courier_name} code={data.courier_code} />
-              {data.customer_name && (
-                <span style={{ fontSize: 12, color: 'var(--mv-ink-62)', fontWeight: 600 }}>
-                  {data.customer_name}
-                </span>
-              )}
-            </div>
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
+                <StatusBadge status={data.status} />
+                <CourierBadge name={data.courier_name} code={data.courier_code} />
+                {isIntl ? (
+                  <span style={{
+                    fontSize: 10.5, fontWeight: 800, padding: '2px 7px',
+                    background: 'rgba(123,47,190,0.08)', border: '1px solid var(--mv-purple)',
+                    color: 'var(--mv-purple)', display: 'inline-flex', alignItems: 'center', gap: 4,
+                  }}>
+                    <Plane size={11} /> International Air
+                  </span>
+                ) : (
+                  <span style={{
+                    fontSize: 10.5, fontWeight: 800, padding: '2px 7px',
+                    background: 'rgba(32,30,29,0.05)', border: '1px solid var(--mv-hairline-2)',
+                    color: 'var(--mv-ink-62)', display: 'inline-flex', alignItems: 'center', gap: 4,
+                  }}>
+                    <Truck size={11} /> Domestic UK
+                  </span>
+                )}
+                {data.customer_name && (
+                  <span style={{ fontSize: 12, color: 'var(--mv-ink-62)', fontWeight: 600 }}>
+                    {data.customer_name}
+                  </span>
+                )}
+              </div>
+
+              {/* Journey progress route */}
+              <JourneyProgress status={data.status} isInternational={isIntl} />
+            </>
           )}
         </div>
 
@@ -347,26 +638,94 @@ function ParcelDrawer({ consignment, onClose }) {
           {isLoading ? (
             <div style={{ padding: 40, textAlign: 'center', color: 'var(--mv-ink-52)' }}>Loading telemetry events…</div>
           ) : activeTab === 'events' ? (
-            <EventTimeline events={data?.events} />
+            <EventTimeline events={data?.events} isInternational={isIntl} />
           ) : activeTab === 'details' ? (
-            <div>
-              {[
-                ['Customer Account', data?.customer_account || '—'],
-                ['Customer Name',    data?.customer_name || '—'],
-                ['Recipient',        data?.recipient_name || '—'],
-                ['Address',          data?.recipient_address || '—'],
-                ['Postcode',         data?.recipient_postcode || '—'],
-                ['Country',          data?.country_code || 'GB'],
-                ['Service',          data?.service_name || '—'],
-                ['Weight',           data?.weight ? `${data.weight} kg` : '—'],
-                ['Despatch Date',    data?.created_at ? new Date(data.created_at).toLocaleDateString('en-GB') : '—'],
-                ['Estimated Delivery', data?.estimated_delivery ? new Date(data.estimated_delivery).toLocaleDateString('en-GB') : '—'],
-              ].map(([label, value]) => (
-                <div key={label} style={{ display: 'flex', padding: '9px 0', borderBottom: '1px solid var(--mv-hairline)' }}>
-                  <span style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', width: 130, flexShrink: 0 }}>{label}</span>
-                  <span className="mv-num" style={{ fontSize: 13, color: 'var(--mv-ink)', fontWeight: 600 }}>{value}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Destination Card */}
+              <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', padding: '16px 18px' }}>
+                <div className="mv-kicker" style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <MapPin size={12} color="var(--mv-purple)" /> Recipient &amp; Delivery Destination
                 </div>
-              ))}
+                {[
+                  ['Recipient Name',  data?.recipient_name || '—'],
+                  ['Street Address',  data?.recipient_address || '—'],
+                  ['Postcode / ZIP',  data?.recipient_postcode || '—'],
+                  ['Country',         formatCountryName(data?.country_code)],
+                ].map(([label, value]) => (
+                  <div key={label} style={{ display: 'flex', padding: '8px 0', borderBottom: '1px solid var(--mv-hairline)' }}>
+                    <span style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', width: 130, flexShrink: 0 }}>{label}</span>
+                    <span style={{ fontSize: 12.5, color: 'var(--mv-ink)', fontWeight: 600 }}>{value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Weight & Physical Specs Card */}
+              <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', padding: '16px 18px' }}>
+                <div className="mv-kicker" style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Scale size={12} color="var(--mv-purple)" /> Weight &amp; Physical Specifications
+                </div>
+                {[
+                  ['Declared Weight',   data?.weight_kg != null ? `${Number(data.weight_kg).toFixed(2)} kg` : '—'],
+                  ['Charged Weight',    data?.charge_details?.weight_charged_kg != null ? `${Number(data.charge_details.weight_charged_kg).toFixed(2)} kg` : (data?.weight_kg != null ? `${Number(data.weight_kg).toFixed(2)} kg` : '—')],
+                  ['Dimensional Weight', data?.charge_details?.weight_dimensional_kg != null ? `${Number(data.charge_details.weight_dimensional_kg).toFixed(2)} kg` : '—'],
+                  ['Routing Profile',   isIntl ? 'International Cross-Border Freight' : 'Domestic Standard Network'],
+                ].map(([label, value]) => (
+                  <div key={label} style={{ display: 'flex', padding: '8px 0', borderBottom: '1px solid var(--mv-hairline)' }}>
+                    <span style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', width: 130, flexShrink: 0 }}>{label}</span>
+                    <span className="mv-num" style={{ fontSize: 12.5, color: 'var(--mv-ink)', fontWeight: 600 }}>{value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Carrier & Service Card */}
+              <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', padding: '16px 18px' }}>
+                <div className="mv-kicker" style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Truck size={12} color="var(--mv-purple)" /> Carrier &amp; Service Telemetry
+                </div>
+                {[
+                  ['Carrier',           data?.courier_name || data?.courier_code || '—'],
+                  ['Service Name',      data?.service_name || '—'],
+                  ['Consignment Ref',   data?.consignment_number || '—'],
+                  ['Despatch Date',     data?.created_at ? new Date(data.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'],
+                  ['Estimated Delivery',data?.estimated_delivery ? new Date(data.estimated_delivery).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'],
+                  ['Last Known Hub',    data?.last_location || '—'],
+                ].map(([label, value]) => (
+                  <div key={label} style={{ display: 'flex', padding: '8px 0', borderBottom: '1px solid var(--mv-hairline)' }}>
+                    <span style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', width: 130, flexShrink: 0 }}>{label}</span>
+                    <span style={{ fontSize: 12.5, color: 'var(--mv-ink)', fontWeight: 600 }}>{value}</span>
+                  </div>
+                ))}
+                {data?.tracking_url && (
+                  <div style={{ marginTop: 12 }}>
+                    <a
+                      href={data.tracking_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mv-btn-ghost"
+                      style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}
+                    >
+                      <ExternalLink size={12} /> Open Carrier Tracking Portal
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {/* Customer Account Card */}
+              <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', padding: '16px 18px' }}>
+                <div className="mv-kicker" style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Building2 size={12} color="var(--mv-purple)" /> Customer &amp; Billing Account
+                </div>
+                {[
+                  ['Customer Name',    data?.customer_name || '—'],
+                  ['Account Code',     data?.customer_account || '—'],
+                  ['Billed Sell Price', data?.charge_details?.sell_price != null ? `£${Number(data.charge_details.sell_price).toFixed(2)}` : '—'],
+                ].map(([label, value]) => (
+                  <div key={label} style={{ display: 'flex', padding: '8px 0', borderBottom: '1px solid var(--mv-hairline)' }}>
+                    <span style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', width: 130, flexShrink: 0 }}>{label}</span>
+                    <span className="mv-num" style={{ fontSize: 12.5, color: 'var(--mv-ink)', fontWeight: 600 }}>{value}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
             <ClaimsTab data={data} consignment={consignment} />

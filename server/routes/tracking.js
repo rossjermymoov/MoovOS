@@ -694,6 +694,35 @@ router.get('/', async (req, res, next) => {
 
 // ─── GET /api/tracking/:consignment ─────────────────────────────────────────
 
+function detectCountryCode(parcel, charge) {
+  if (charge?.ship_to_country_iso) return charge.ship_to_country_iso.toUpperCase();
+  const addr = (parcel.recipient_address || '').toUpperCase();
+  const postcode = (parcel.recipient_postcode || '').trim().toUpperCase();
+  const service = (parcel.service_name || '').toUpperCase();
+
+  if (/\b(USA|UNITED STATES|AMERICA)\b/.test(addr)) return 'US';
+  if (/\b(AUSTRALIA|AUS)\b/.test(addr)) return 'AU';
+  if (/\b(CANADA|CAN)\b/.test(addr)) return 'CA';
+  if (/\b(GERMANY|DEUTSCHLAND)\b/.test(addr)) return 'DE';
+  if (/\b(FRANCE)\b/.test(addr)) return 'FR';
+  if (/\b(IRELAND|EIRE|REPUBLIC OF IRELAND)\b/.test(addr)) return 'IE';
+  if (/\b(SPAIN|ESPANA)\b/.test(addr)) return 'ES';
+  if (/\b(ITALY|ITALIA)\b/.test(addr)) return 'IT';
+  if (/\b(NETHERLANDS|HOLLAND)\b/.test(addr)) return 'NL';
+  if (/\b(BELGIUM|BELGIQUE)\b/.test(addr)) return 'BE';
+  if (/\b(NEW ZEALAND)\b/.test(addr)) return 'NZ';
+  if (/\b(SWITZERLAND|SCHWEIZ)\b/.test(addr)) return 'CH';
+
+  if (/^\d{5}(-\d{4})?$/.test(postcode)) return 'US';
+  if (/^[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}$/i.test(postcode)) return 'GB';
+
+  if (service.includes('INTL') || service.includes('INTERNATIONAL') || service.includes('AIR') || service.includes('EXPORT') || service.includes('GLOBAL')) {
+    return 'INTL';
+  }
+
+  return 'GB';
+}
+
 router.get('/:consignment', async (req, res, next) => {
   try {
     const parcelRes = await query(
@@ -701,6 +730,8 @@ router.get('/:consignment', async (req, res, next) => {
       [req.params.consignment]
     );
     if (!parcelRes.rows.length) return res.status(404).json({ error: 'Parcel not found' });
+
+    const parcel = parcelRes.rows[0];
 
     const eventsRes = await query(
       `SELECT id, event_code, status, description, location, event_at
@@ -710,7 +741,49 @@ router.get('/:consignment', async (req, res, next) => {
       [req.params.consignment]
     );
 
-    res.json({ ...parcelRes.rows[0], events: eventsRes.rows });
+    // Look up associated charge if available
+    let charge = null;
+    try {
+      const chargeRes = await query(
+        `SELECT c.weight_actual_kg, c.weight_charged_kg, c.weight_dimensional_kg,
+                c.ship_to_country_iso, c.ship_to_postcode, c.ship_to_name,
+                c.cost_price, c.sell_price, c.margin, c.despatch_date
+         FROM charges c
+         WHERE c.voila_shipment_id = $1
+            OR c.order_id = $1
+            OR (c.raw_payload->'tracking_codes' IS NOT NULL AND c.raw_payload->'tracking_codes' ? $1)
+            OR c.raw_payload->>'consignment_number' = $1
+            OR c.raw_payload->>'tracking_number' = $1
+         LIMIT 1`,
+        [req.params.consignment]
+      );
+      if (chargeRes.rows.length) {
+        charge = chargeRes.rows[0];
+      }
+    } catch {
+      // Non-fatal if charge lookup fails
+    }
+
+    const country_code = detectCountryCode(parcel, charge);
+    const weight_kg = parcel.weight_kg != null ? parcel.weight_kg : (charge?.weight_actual_kg || charge?.weight_charged_kg || null);
+    const is_international = country_code !== 'GB' && country_code !== 'UK';
+
+    res.json({
+      ...parcel,
+      weight_kg,
+      country_code,
+      is_international,
+      charge_details: charge ? {
+        weight_actual_kg: charge.weight_actual_kg,
+        weight_charged_kg: charge.weight_charged_kg,
+        weight_dimensional_kg: charge.weight_dimensional_kg,
+        cost_price: charge.cost_price,
+        sell_price: charge.sell_price,
+        margin: charge.margin,
+        ship_to_country_iso: charge.ship_to_country_iso,
+      } : null,
+      events: eventsRes.rows,
+    });
   } catch (err) { next(err); }
 });
 
