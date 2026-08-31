@@ -122,7 +122,7 @@ router.get('/', async (req, res, next) => {
         s.platform_shipment_id,
         s.event_type,
         s.customer_id,
-        COALESCE(c.business_name, c.trading_name, c.company_name, s.customer_name, s.customer_account, 'Unassigned') AS customer_display_name,
+        COALESCE(c.business_name, s.customer_name, s.customer_account, 'Unassigned') AS customer_display_name,
         COALESCE(c.account_number, s.customer_account) AS customer_account,
         s.courier,
         s.dc_service_id,
