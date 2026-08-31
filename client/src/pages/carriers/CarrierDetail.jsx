@@ -6,10 +6,11 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Plus, Check, Trash2, GripVertical, ArrowRight,
-  Phone, Mail,
+  Phone, Mail, Users,
 } from 'lucide-react';
 import axios from 'axios';
 import { carriersApi } from '../../api/carriers';
+import CourierLogo from '../../components/common/CourierLogo';
 import SurchargesTab from './SurchargesTab';
 import FuelGroupsTab from './FuelGroupsTab';
 import VolumetricTab from './VolumetricTab';
@@ -137,22 +138,54 @@ export default function CarrierDetail({ carrierId, onBack, onDrillService }) {
         </button>
 
         <div className="mv-head">
-          <div>
-            <div className="mv-kicker">CARRIER PROFILE</div>
-            <h1 className="mv-title">{carrier.name}</h1>
-            <p className="mv-blurb">
-              Account{' '}
-              <strong className="mv-num" style={{ color: 'var(--mv-ink)' }}>
-                {carrier.account_number || 'None'}
-              </strong>
-              {carrier.primary_contact_name && (
-                <span>
-                  {' '}· Contact: <strong>{carrier.primary_contact_name}</strong>
-                  {carrier.primary_contact_email && ` (${carrier.primary_contact_email})`}
-                  {carrier.primary_contact_phone && ` · ${carrier.primary_contact_phone}`}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div
+              style={{
+                width: 58,
+                height: 44,
+                background: '#ffffff',
+                border: '1px solid var(--mv-hairline-2, #e5e7eb)',
+                borderRadius: 8,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 4,
+                flexShrink: 0,
+                boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
+              }}
+            >
+              <CourierLogo courier={carrier.code || carrier.name} size={34} />
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <h1 className="mv-title" style={{ margin: 0 }}>{carrier.name}</h1>
+                <span
+                  className="mv-chip"
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    padding: '2px 7px',
+                    color: 'var(--mv-purple)',
+                    background: 'rgba(99, 102, 241, 0.08)',
+                    border: '1px solid rgba(99, 102, 241, 0.2)',
+                  }}
+                >
+                  {carrier.code}
                 </span>
-              )}
-            </p>
+              </div>
+              <p className="mv-blurb" style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                {carrier.primary_contact_name ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                    <Users size={13} style={{ color: 'var(--mv-purple)' }} />
+                    <strong>{carrier.primary_contact_name}</strong>
+                    {carrier.primary_contact_email && <span style={{ color: 'var(--mv-ink-50)' }}>({carrier.primary_contact_email})</span>}
+                    {carrier.primary_contact_phone && <span style={{ color: 'var(--mv-teal-deep)' }}>· {carrier.primary_contact_phone}</span>}
+                  </span>
+                ) : (
+                  <span style={{ color: 'var(--mv-ink-40)' }}>Direct Courier Integration</span>
+                )}
+              </p>
+            </div>
           </div>
           <div className="mv-actions">
             {carrierTab === 'services' && (

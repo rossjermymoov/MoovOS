@@ -18,11 +18,11 @@ router.get('/couriers', async (req, res, next) => {
   try {
     const result = await query(
       `SELECT c.*,
-         COUNT(cs.id)::int AS service_count,
-         COALESCE(json_agg(jsonb_build_object(
+         COUNT(DISTINCT cs.id)::int AS service_count,
+         COALESCE(json_agg(DISTINCT jsonb_build_object(
            'id',cc.id,'name',cc.name,'phone',cc.phone,'email',cc.email,
            'department',cc.department,'role',cc.role,'notes',cc.notes
-         ) ORDER BY cc.id) FILTER (WHERE cc.id IS NOT NULL), '[]') AS additional_contacts
+         )) FILTER (WHERE cc.id IS NOT NULL), '[]') AS additional_contacts
        FROM couriers c
        LEFT JOIN courier_services cs ON cs.courier_id = c.id
        LEFT JOIN courier_contacts cc ON cc.courier_id = c.id
