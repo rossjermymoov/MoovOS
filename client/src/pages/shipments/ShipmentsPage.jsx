@@ -6,13 +6,101 @@ import {
 } from 'lucide-react';
 import CourierLogo from '../../components/common/CourierLogo';
 
+function PriceBreakdownTooltip({ shipment, children }) {
+  const [show, setShow] = useState(false);
+  const charges = shipment?.charges || [];
+  
+  const totalSell = charges.reduce((sum, c) => sum + (Number(c.price) || 0), 0);
+  const totalCost = charges.reduce((sum, c) => sum + (Number(c.cost_price) || 0), 0);
+  const margin = totalSell > 0 ? (totalSell - totalCost) : null;
+  const marginPct = totalSell > 0 ? ((margin / totalSell) * 100).toFixed(1) : null;
+
+  return (
+    <div
+      style={{ position: 'relative', display: 'inline-block', width: '100%', cursor: 'help' }}
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+    >
+      {children}
+      {show && charges.length > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 'calc(100% + 8px)',
+            right: 0,
+            width: 320,
+            background: 'var(--mv-surface, #ffffff)',
+            color: 'var(--mv-ink, #1f2937)',
+            border: '1px solid var(--mv-hairline-2, #e5e7eb)',
+            borderRadius: 8,
+            boxShadow: '0 12px 28px -4px rgba(0, 0, 0, 0.18), 0 6px 12px -2px rgba(0, 0, 0, 0.08)',
+            padding: '12px 14px',
+            zIndex: 1000,
+            textAlign: 'left',
+            pointerEvents: 'none',
+            fontSize: 12,
+          }}
+        >
+          <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid var(--mv-hairline, #f3f4f6)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Price & Cost Breakdown</span>
+            <span style={{ fontSize: 10.5, color: 'var(--mv-ink-50)', fontWeight: 500 }}>{charges.length} line{charges.length === 1 ? '' : 's'}</span>
+          </div>
+
+          <table style={{ width: '100%', fontSize: 11.5, borderCollapse: 'collapse', lineHeight: '1.4' }}>
+            <thead>
+              <tr style={{ color: 'var(--mv-ink-50)', borderBottom: '1px solid var(--mv-hairline, #f3f4f6)' }}>
+                <th style={{ textAlign: 'left', paddingBottom: 4, fontWeight: 600 }}>Line Item</th>
+                <th style={{ textAlign: 'right', paddingBottom: 4, fontWeight: 600, width: 65 }}>Cost</th>
+                <th style={{ textAlign: 'right', paddingBottom: 4, fontWeight: 600, width: 65 }}>Sell</th>
+              </tr>
+            </thead>
+            <tbody>
+              {charges.map((c, idx) => (
+                <tr key={idx} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                  <td style={{ padding: '4px 0', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontWeight: c.charge_type === 'courier' ? 600 : 400 }}>
+                      {c.service_name || (c.charge_type === 'courier' ? 'Base Freight' : c.charge_type)}
+                    </span>
+                  </td>
+                  <td style={{ padding: '4px 0', textAlign: 'right', fontFamily: 'monospace' }}>
+                    {c.cost_price != null ? `£${Number(c.cost_price).toFixed(2)}` : '—'}
+                  </td>
+                  <td style={{ padding: '4px 0', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600 }}>
+                    {c.price != null ? `£${Number(c.price).toFixed(2)}` : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ borderTop: '1.5px solid var(--mv-hairline-2, #e5e7eb)', fontWeight: 700 }}>
+                <td style={{ paddingTop: 6 }}>Total</td>
+                <td style={{ paddingTop: 6, textAlign: 'right', fontFamily: 'monospace' }}>£{totalCost.toFixed(2)}</td>
+                <td style={{ paddingTop: 6, textAlign: 'right', fontFamily: 'monospace', color: 'var(--mv-purple)' }}>£{totalSell.toFixed(2)}</td>
+              </tr>
+              {margin != null && (
+                <tr style={{ fontSize: 11 }}>
+                  <td colSpan={3} style={{ paddingTop: 4, textAlign: 'right', fontWeight: 700, color: margin >= 0 ? 'var(--mv-green-deep)' : 'var(--mv-magenta-deep)' }}>
+                    Net Margin: {margin >= 0 ? '+' : ''}£{margin.toFixed(2)} {marginPct ? `(${marginPct}%)` : ''}
+                  </td>
+                </tr>
+              )}
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ShipmentsPage() {
   const [shipments, setShipments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [courierFilter, setCourierFilter] = useState('');
   const [customerFilter, setCustomerFilter] = useState('');
+  const [pricingFilter, setPricingFilter] = useState(''); // '' | 'unpriced' | 'priced'
   const [customers, setCustomers] = useState([]);
+  const [availableCouriers, setAvailableCouriers] = useState([]);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
   const [pagination, setPagination] = useState({ total: 0, pages: 1 });
@@ -29,11 +117,12 @@ export default function ShipmentsPage() {
 
   useEffect(() => {
     fetchCustomers();
+    fetchCouriers();
   }, []);
 
   useEffect(() => {
     fetchShipments();
-  }, [page, limit, search, courierFilter, customerFilter]);
+  }, [page, limit, search, courierFilter, customerFilter, pricingFilter]);
 
   async function fetchCustomers() {
     try {
@@ -47,6 +136,18 @@ export default function ShipmentsPage() {
     }
   }
 
+  async function fetchCouriers() {
+    try {
+      const res = await fetch('/api/carriers/couriers');
+      if (res.ok) {
+        const data = await res.json();
+        setAvailableCouriers(Array.isArray(data) ? data : data.couriers || []);
+      }
+    } catch (e) {
+      console.error('Failed to load couriers', e);
+    }
+  }
+
   async function fetchShipments() {
     setLoading(true);
     try {
@@ -56,6 +157,7 @@ export default function ShipmentsPage() {
         search,
         courier: courierFilter,
         customer_id: customerFilter,
+        pricing_status: pricingFilter,
       });
       const res = await fetch(`/api/shipments?${params.toString()}`);
       if (res.ok) {
@@ -390,13 +492,11 @@ export default function ShipmentsPage() {
           style={{ width: 160, height: 36 }}
         >
           <option value="">All Couriers</option>
-          <option value="DPD">DPD</option>
-          <option value="DHL">DHL</option>
-          <option value="UPS">UPS</option>
-          <option value="Evri">Evri</option>
-          <option value="Royal Mail">Royal Mail</option>
-          <option value="FedEx">FedEx</option>
-          <option value="Yodel">Yodel</option>
+          {availableCouriers.map(c => (
+            <option key={c.id || c.code} value={c.code || c.name}>
+              {c.name || c.code}
+            </option>
+          ))}
         </select>
 
         <select
@@ -412,6 +512,24 @@ export default function ShipmentsPage() {
             </option>
           ))}
         </select>
+
+        <select
+          value={pricingFilter}
+          onChange={e => { setPricingFilter(e.target.value); setPage(1); }}
+          className="pill-select"
+          style={{ width: 165, height: 36, fontWeight: pricingFilter === 'unpriced' ? 700 : 400, color: pricingFilter === 'unpriced' ? '#dc2626' : undefined }}
+        >
+          <option value="">All Pricing States</option>
+          <option value="unpriced">⚠️ Unpriced Only</option>
+          <option value="priced">✓ Priced Only</option>
+        </select>
+
+        {pricingFilter === 'unpriced' && (
+          <span className="mv-chip" style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            Filtering: Unpriced
+            <button onClick={() => setPricingFilter('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#b91c1c', padding: 0, marginLeft: 2, fontWeight: 700 }}>✕</button>
+          </span>
+        )}
       </div>
 
       {/* ── Shipments Table ─────────────────────────────────────────────── */}
@@ -444,7 +562,7 @@ export default function ShipmentsPage() {
                 <Package size={24} style={{ display: 'block', margin: '0 auto 8px', opacity: 0.4 }} />
                 <div style={{ fontWeight: 600, color: 'var(--mv-ink)', marginBottom: 4 }}>No shipments displayed currently</div>
                 <div style={{ fontSize: 12, color: 'var(--mv-ink-50)', marginBottom: 14 }}>
-                  New webhooks will appear here automatically, or you can re-ingest past webhooks from storage.
+                  {pricingFilter === 'unpriced' ? 'Great news! There are no unpriced shipments matching your filter.' : 'New webhooks will appear here automatically, or you can re-ingest past webhooks from storage.'}
                 </div>
                 <button
                   onClick={handleReprocessAll}
@@ -523,37 +641,41 @@ export default function ShipmentsPage() {
                     </div>
                   </td>
                   <td className="tar mv-num" style={{ fontWeight: 500 }}>
-                    {costVal != null ? (
-                      <div>
-                        <div>£{costVal.toFixed(2)}</div>
-                        {surchargesCost > 0 && (
-                          <div style={{ fontSize: 10.5, color: 'var(--mv-ink-50)' }}>
-                            Base £{baseCost?.toFixed(2)} + Sur £{surchargesCost.toFixed(2)}
-                          </div>
-                        )}
-                      </div>
-                    ) : <span style={{ color: 'var(--mv-ink-40)' }}>—</span>}
+                    <PriceBreakdownTooltip shipment={s}>
+                      {costVal != null ? (
+                        <div>
+                          <div>£{costVal.toFixed(2)}</div>
+                          {surchargesCost > 0 && (
+                            <div style={{ fontSize: 10.5, color: 'var(--mv-ink-50)' }}>
+                              Base £{baseCost?.toFixed(2)} + Sur £{surchargesCost.toFixed(2)}
+                            </div>
+                          )}
+                        </div>
+                      ) : <span style={{ color: 'var(--mv-ink-40)' }}>—</span>}
+                    </PriceBreakdownTooltip>
                   </td>
                   <td className="tar mv-num" style={{ fontWeight: 700 }}>
-                    {sellVal != null ? (
-                      <div>
-                        <div>£{sellVal.toFixed(2)}</div>
-                        {surcharges.length > 0 && (
-                          <div style={{ fontSize: 10.5, color: 'var(--mv-ink-50)', fontWeight: 500 }}>
-                            Base £{baseSell?.toFixed(2)} + {surcharges.length} surcharges (£{surchargesSell.toFixed(2)})
-                          </div>
-                        )}
-                        {margin != null && (
-                          <div style={{ fontSize: 10.5, color: margin >= 0 ? 'var(--mv-green)' : 'var(--mv-red)' }}>
-                            {margin >= 0 ? '+' : ''}£{margin.toFixed(2)} {marginPct ? `(${marginPct}%)` : ''}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="mv-chip" style={{ color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca', fontSize: 11 }}>
-                        Unpriced
-                      </span>
-                    )}
+                    <PriceBreakdownTooltip shipment={s}>
+                      {sellVal != null ? (
+                        <div>
+                          <div>£{sellVal.toFixed(2)}</div>
+                          {surcharges.length > 0 && (
+                            <div style={{ fontSize: 10.5, color: 'var(--mv-ink-50)', fontWeight: 500 }}>
+                              Base £{baseSell?.toFixed(2)} + {surcharges.length} surcharges (£{surchargesSell.toFixed(2)})
+                            </div>
+                          )}
+                          {margin != null && (
+                            <div style={{ fontSize: 10.5, color: margin >= 0 ? 'var(--mv-green)' : 'var(--mv-red)' }}>
+                              {margin >= 0 ? '+' : ''}£{margin.toFixed(2)} {marginPct ? `(${marginPct}%)` : ''}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="mv-chip" style={{ color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca', fontSize: 11 }}>
+                          Unpriced
+                        </span>
+                      )}
+                    </PriceBreakdownTooltip>
                   </td>
                   <td style={{ textAlign: 'center' }}>
                     <button

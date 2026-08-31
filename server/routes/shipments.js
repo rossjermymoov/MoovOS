@@ -22,6 +22,7 @@ router.get('/', async (req, res, next) => {
       search = '',
       customer_id,
       courier,
+      pricing_status,
       start_date,
       end_date,
     } = req.query;
@@ -38,6 +39,22 @@ router.get('/', async (req, res, next) => {
     if (courier) {
       params.push(courier);
       conditions.push(`s.courier ILIKE $${params.length}`);
+    }
+
+    if (pricing_status === 'unpriced') {
+      conditions.push(`NOT EXISTS (
+        SELECT 1 FROM charges ch_u
+        WHERE ch_u.shipment_id = s.id
+          AND ch_u.price IS NOT NULL
+          AND ch_u.price > 0
+      )`);
+    } else if (pricing_status === 'priced') {
+      conditions.push(`EXISTS (
+        SELECT 1 FROM charges ch_p
+        WHERE ch_p.shipment_id = s.id
+          AND ch_p.price IS NOT NULL
+          AND ch_p.price > 0
+      )`);
     }
 
     if (start_date) {
