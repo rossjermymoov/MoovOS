@@ -133,6 +133,11 @@ function timeAgo(ts) {
   return `${d}d ago`;
 }
 
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
 // ─── Event icon resolver ──────────────────────────────────────
 function getEventVisual(status, isInternational, description = '', location = '') {
   const s = String(status || '').toLowerCase();
