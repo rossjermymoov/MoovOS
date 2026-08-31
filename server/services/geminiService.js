@@ -9,38 +9,57 @@
 
 import { ISSUE_TYPES } from './courierTemplates.js';
 
-// v1beta — required for JSON mode (responseMimeType); v1 rejects it with a 400.
-const GEMINI_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+const GEMINI_MODELS = [
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+  'gemini-2.5-flash',
+  'gemini-1.5-pro',
+];
 
-// Generic Gemini 1.5 Flash text generation (REST — Node-18 safe). Replaces the
-// legacy Anthropic /v1/messages calls. Throws if the key is missing or the call
-// fails so callers can surface a clean error.
-export async function geminiGenerate(prompt, { system = '', json = false, maxTokens = 900, temperature = 0.3 } = {}) {
+// Generic Gemini text generation with multi-model failover (REST — Node-18 safe).
+// If a model hits a 429 rate limit or 503 overload, it automatically fails over to
+// the next model in the list.
+export async function geminiGenerate(prompt, { system = '', json = false, maxTokens = 2048, temperature = 0.2 } = {}) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
   const fullPrompt = system ? `${system}\n\n${prompt}` : prompt;
-  const resp = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(apiKey)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: fullPrompt }] }],
-      generationConfig: {
-        temperature,
-        maxOutputTokens: maxTokens,
-        ...(json ? { responseMimeType: 'application/json' } : {}),
-      },
-    }),
-  });
-  if (!resp.ok) {
-    const bodyText = await resp.text();
-    const e = new Error(`Gemini API error ${resp.status}: ${bodyText}`);
-    e.status = resp.status;           // e.g. 429 rate limit, 503 overloaded
-    e.body = bodyText;
-    throw e;
+
+  let lastError = null;
+  for (const model of GEMINI_MODELS) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: fullPrompt }] }],
+          generationConfig: {
+            temperature,
+            maxOutputTokens: maxTokens,
+            ...(json ? { responseMimeType: 'application/json' } : {}),
+          },
+        }),
+      });
+
+      if (resp.ok) {
+        const j = await resp.json();
+        const text = (j.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+        if (text) return text;
+      }
+
+      const bodyText = await resp.text();
+      console.warn(`[geminiGenerate] Model ${model} returned HTTP ${resp.status} (${bodyText.slice(0, 100)}) — trying fallback model`);
+      const e = new Error(`Gemini API error ${resp.status} on ${model}: ${bodyText}`);
+      e.status = resp.status;
+      e.body = bodyText;
+      lastError = e;
+    } catch (err) {
+      console.warn(`[geminiGenerate] Error on ${model}:`, err.message);
+      lastError = err;
+    }
   }
-  const j = await resp.json();
-  return (j.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+  throw lastError || new Error('All Gemini models failed');
 }
 
 const KNOWN_COURIERS = ['dpd', 'dhl', 'evri', 'hermes', 'royal_mail', 'yodel', 'ups', 'fedex', 'parcelforce'];

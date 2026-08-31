@@ -754,10 +754,51 @@ router.post('/parse-pdf', upload.single('file'), async (req, res, next) => {
 
 // ─── AI-Assisted Onboarding ──────────────────────────────────────────────────
 
+function fallbackCustomerExtract(text) {
+  const emailMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  const postcodeMatch = text.match(/\b([A-Z]{1,2}\d[A-Z\d]? ?\d[A-Z]{2})\b/i);
+  const phoneMatch = text.match(/(?:(?:\+44\s?\(0\)\s?|\+44\s?|0)\d{2,4}\s?\d{3,4}\s?\d{3,4})/);
+  const vatMatch = text.match(/\b(?:GB)?\s*(\d{9}|\d{12})\b/i);
+  const regMatch = text.match(/(?:company\s+(?:reg|no|number)|registered\s+in\s+england|crn)[:\s]*([0-9A-Z]{6,8})/i);
+  
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const firstLine = lines[0] || '';
+
+  return {
+    customer: {
+      business_name: firstLine.slice(0, 80),
+      company_type: /ltd|limited/i.test(text) ? 'limited_company' : (/llp|partnership/i.test(text) ? 'partnership' : 'sole_trader'),
+      company_reg_number: regMatch ? regMatch[1] : '',
+      vat_number: vatMatch ? vatMatch[1] : '',
+      address_line_1: '',
+      address_line_2: '',
+      city: '',
+      county: '',
+      postcode: postcodeMatch ? postcodeMatch[1].toUpperCase() : '',
+      country: 'United Kingdom',
+      phone_number: phoneMatch ? phoneMatch[0] : '',
+      primary_email: emailMatch ? emailMatch[0] : '',
+      accounts_email: emailMatch ? emailMatch[0] : '',
+      eori_number: '',
+      ioss_number: '',
+      credit_limit: 0,
+      billing_cycle: 'monthly',
+      payment_terms_days: 30,
+      tier: 'bronze'
+    },
+    contact: {
+      full_name: '',
+      job_title: '',
+      email_address: emailMatch ? emailMatch[0] : '',
+      phone_number: phoneMatch ? phoneMatch[0] : '',
+      is_main_contact: true,
+      is_finance_contact: false
+    }
+  };
+}
+
 async function callAI(systemPrompt, userContent) {
-  // Gemini 1.5 Flash (REST) — returns structured JSON for onboarding extraction.
   const text = await geminiGenerate(userContent, { system: systemPrompt, json: true, maxTokens: 4096 });
-  // Tolerate clean JSON or a markdown-fenced block.
   const match = text.match(/```json\s*([\s\S]*?)```/i) || text.match(/(\{[\s\S]*\})/);
   return JSON.parse(match ? match[1] : text);
 }
@@ -813,8 +854,14 @@ Rules:
 - Postcodes must be uppercase UK format
 - Phone numbers in UK format starting with 0 or +44`;
 
-    const result = await callAI(system, `Extract data from this application form:\n\n${application_form_text}`);
-    res.json(result);
+    try {
+      const result = await callAI(system, `Extract data from this application form:\n\n${application_form_text}`);
+      return res.json(result);
+    } catch (aiErr) {
+      console.warn('[ai-extract] Gemini API call failed, falling back to heuristic regex extractor:', aiErr.message);
+      const fallback = fallbackCustomerExtract(application_form_text);
+      return res.json(fallback);
+    }
   } catch (err) { next(err); }
 });
 
