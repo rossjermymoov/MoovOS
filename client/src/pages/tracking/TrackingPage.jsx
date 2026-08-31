@@ -737,9 +737,8 @@ function ParcelDrawer({ consignment, onClose }) {
                 </div>
                 {[
                   ['Declared Weight',     data?.weight_kg != null ? `${Number(data.weight_kg).toFixed(2)} kg` : '—'],
-                  ['Dimensional Weight',  data?.dimensional_weight_kg != null ? `${Number(data.dimensional_weight_kg).toFixed(2)} kg${data?.dimensions ? ` (${data.dimensions.length}×${data.dimensions.width}×${data.dimensions.height} cm ÷ ${data.dimensions.divisor})` : ''}` : '—'],
+                  ['Dimensional Weight',  data?.dimensional_weight_kg != null ? `${Number(data.dimensional_weight_kg).toFixed(2)} kg` : '—'],
                   ['Dimensions (L×W×H)',  data?.dimensions ? `${data.dimensions.length} × ${data.dimensions.width} × ${data.dimensions.height} cm` : '—'],
-                  ['Routing Profile',     isIntl ? `International Air Route (${data?.service_name || 'Air Cargo'})` : 'Domestic UK Network'],
                 ].map(([label, value]) => (
                   <div key={label} style={{ display: 'flex', padding: '8px 0', borderBottom: '1px solid var(--mv-hairline)' }}>
                     <span style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', width: 130, flexShrink: 0 }}>{label}</span>
@@ -778,22 +777,6 @@ function ParcelDrawer({ consignment, onClose }) {
                     </a>
                   </div>
                 )}
-              </div>
-
-              {/* Customer Account Card */}
-              <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', padding: '16px 18px' }}>
-                <div className="mv-kicker" style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Building2 size={12} color="var(--mv-purple)" /> Customer &amp; Sender Details
-                </div>
-                {[
-                  ['Customer Name',    data?.customer_name || '—'],
-                  ['Account Code',     data?.customer_account || '—'],
-                ].map(([label, value]) => (
-                  <div key={label} style={{ display: 'flex', padding: '8px 0', borderBottom: '1px solid var(--mv-hairline)' }}>
-                    <span style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', width: 130, flexShrink: 0 }}>{label}</span>
-                    <span className="mv-num" style={{ fontSize: 12.5, color: 'var(--mv-ink)', fontWeight: 600 }}>{value}</span>
-                  </div>
-                ))}
               </div>
             </div>
           ) : activeTab === 'claims' ? (
