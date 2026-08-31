@@ -70,6 +70,24 @@ export default function ShipmentsPage() {
     }
   }
 
+  async function handleReprocessAll() {
+    setRepricingAll(true);
+    try {
+      const res = await fetch('/api/shipments/reprocess-all', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`Reprocessed ${data.repriced || 0} shipments from stored webhooks!`);
+        fetchShipments();
+      } else {
+        alert(data.error || 'Failed to reprocess webhooks');
+      }
+    } catch (e) {
+      alert('Error reprocessing webhooks: ' + e.message);
+    } finally {
+      setRepricingAll(false);
+    }
+  }
+
   async function handleRepriceAll() {
     setRepricingAll(true);
     try {
@@ -227,13 +245,22 @@ export default function ShipmentsPage() {
 
         <div style={{ display: 'flex', gap: 10 }}>
           <button
+            onClick={handleReprocessAll}
+            disabled={repricingAll}
+            className="mv-btn-primary"
+            style={{ padding: '8px 14px', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}
+            title="Scan all stored webhook logs and re-ingest all shipments"
+          >
+            <RefreshCw size={14} className={repricingAll ? 'spin' : ''} /> {repricingAll ? 'Reprocessing...' : 'Reprocess Webhooks'}
+          </button>
+          <button
             onClick={handleRepriceAll}
             disabled={repricingAll}
             className="mv-btn-ghost"
             style={{ padding: '8px 14px', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}
             title="Recalculate prices for all unpriced shipments using the latest rate cards"
           >
-            <Calculator size={14} /> {repricingAll ? 'Repricing...' : 'Reprice All'}
+            <Calculator size={14} /> Reprice All
           </button>
           <button
             onClick={handlePurgePriorToToday}
@@ -400,7 +427,18 @@ export default function ShipmentsPage() {
             <tr>
               <td colSpan={13} style={{ textAlign: 'center', padding: '48px 0', color: 'var(--mv-ink-50)' }}>
                 <Package size={24} style={{ display: 'block', margin: '0 auto 8px', opacity: 0.4 }} />
-                No shipments found. New webhooks will appear here automatically.
+                <div style={{ fontWeight: 600, color: 'var(--mv-ink)', marginBottom: 4 }}>No shipments displayed currently</div>
+                <div style={{ fontSize: 12, color: 'var(--mv-ink-50)', marginBottom: 14 }}>
+                  New webhooks will appear here automatically, or you can re-ingest past webhooks from storage.
+                </div>
+                <button
+                  onClick={handleReprocessAll}
+                  disabled={repricingAll}
+                  className="mv-btn-primary"
+                  style={{ fontSize: 12, padding: '7px 14px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  <RefreshCw size={13} className={repricingAll ? 'spin' : ''} /> {repricingAll ? 'Reprocessing...' : 'Reprocess Stored Webhooks'}
+                </button>
               </td>
             </tr>
           ) : (
