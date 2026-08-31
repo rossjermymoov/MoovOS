@@ -690,35 +690,12 @@ router.get('/', async (req, res, next) => {
           p.id, p.consignment_number,
           p.courier_name, p.courier_code, p.service_name,
           p.customer_name, p.customer_account,
-          COALESCE(p.recipient_name, c.ship_to_name, s.ship_to_name) AS recipient_name,
-          COALESCE(p.recipient_postcode, c.ship_to_postcode, s.ship_to_postcode) AS recipient_postcode,
-          COALESCE(p.recipient_address, c.ship_to_address, s.ship_to_address) AS recipient_address,
+          p.recipient_name, p.recipient_postcode, p.recipient_address,
           p.status, p.status_description, p.last_location,
           p.last_event_at, p.estimated_delivery, p.delivered_at,
-          COALESCE(p.weight_kg, c.weight_actual_kg, s.weight, s.total_weight) AS weight_kg,
-          p.created_at,
-          COALESCE(c.ship_to_country_iso, s.ship_to_country_iso) AS charge_country_iso
+          p.weight_kg,
+          p.created_at
         FROM parcels p
-        LEFT JOIN LATERAL (
-          SELECT ship_to_country_iso, ship_to_name, ship_to_postcode, ship_to_address, weight_actual_kg FROM charges
-          WHERE tracking_code = p.consignment_number
-             OR voila_shipment_id = p.consignment_number
-             OR order_id = p.consignment_number
-             OR (raw_payload->'tracking_codes' IS NOT NULL AND raw_payload->'tracking_codes' ? p.consignment_number)
-             OR raw_payload->>'consignment_number' = p.consignment_number
-             OR raw_payload->>'tracking_number' = p.consignment_number
-          ORDER BY created_at DESC
-          LIMIT 1
-        ) c ON true
-        LEFT JOIN LATERAL (
-          SELECT ship_to_country_iso, ship_to_name, ship_to_postcode, ship_to_address, weight, total_weight FROM shipments
-          WHERE p.consignment_number = ANY(tracking_codes)
-             OR tracking_codes @> ARRAY[p.consignment_number]::text[]
-             OR reference = p.consignment_number
-             OR voila_shipment_id = p.consignment_number
-          ORDER BY created_at DESC
-          LIMIT 1
-        ) s ON true
         ${where}
         ORDER BY p.last_event_at DESC NULLS LAST, p.created_at DESC
         LIMIT $${idx} OFFSET $${idx+1}
@@ -730,7 +707,7 @@ router.get('/', async (req, res, next) => {
     res.json({
       parcels: dataRes.rows.map(p => ({
         ...p,
-        country_code: detectCountryCode(p, { ship_to_country_iso: p.charge_country_iso }),
+        country_code: detectCountryCode(p),
       })),
       total:   countRes.rows[0].total,
       limit:   parseInt(limit),
@@ -743,27 +720,27 @@ router.get('/', async (req, res, next) => {
 
 function detectCountryCode(parcel, charge) {
   if (charge?.ship_to_country_iso) return charge.ship_to_country_iso.toUpperCase();
-  const addr = (parcel.recipient_address || '').toUpperCase();
-  const postcode = (parcel.recipient_postcode || '').trim().toUpperCase();
-  const service = (parcel.service_name || '').toUpperCase();
+  const addr = (parcel?.recipient_address || '').toUpperCase();
+  const postcode = (parcel?.recipient_postcode || '').trim().toUpperCase();
+  const service = (parcel?.service_name || '').toUpperCase();
 
-  if (/\b(USA|UNITED STATES|AMERICA)\b/.test(addr)) return 'US';
-  if (/\b(AUSTRALIA|AUS)\b/.test(addr)) return 'AU';
-  if (/\b(CANADA|CAN)\b/.test(addr)) return 'CA';
+  if (/\b(USA|UNITED STATES|AMERICA|GEORGIA|CALIFORNIA|TEXAS|NEW YORK|FLORIDA)\b/.test(addr)) return 'US';
+  if (/\b(AUSTRALIA|AUS|NSW|VIC|QLD)\b/.test(addr)) return 'AU';
+  if (/\b(CANADA|CAN|ONTARIO|QUEBEC|BC)\b/.test(addr)) return 'CA';
   if (/\b(GERMANY|DEUTSCHLAND)\b/.test(addr)) return 'DE';
   if (/\b(FRANCE)\b/.test(addr)) return 'FR';
-  if (/\b(IRELAND|EIRE|REPUBLIC OF IRELAND)\b/.test(addr)) return 'IE';
-  if (/\b(SPAIN|ESPANA)\b/.test(addr)) return 'ES';
-  if (/\b(ITALY|ITALIA)\b/.test(addr)) return 'IT';
-  if (/\b(NETHERLANDS|HOLLAND)\b/.test(addr)) return 'NL';
-  if (/\b(BELGIUM|BELGIQUE)\b/.test(addr)) return 'BE';
-  if (/\b(NEW ZEALAND)\b/.test(addr)) return 'NZ';
+  if (/\b(IRELAND|EIRE|REPUBLIC OF IRELAND|DUBLIN)\b/.test(addr)) return 'IE';
+  if (/\b(SPAIN|ESPANA|MADRID|BARCELONA)\b/.test(addr)) return 'ES';
+  if (/\b(ITALY|ITALIA|ROMA|MILANO)\b/.test(addr)) return 'IT';
+  if (/\b(NETHERLANDS|HOLLAND|AMSTERDAM)\b/.test(addr)) return 'NL';
+  if (/\b(BELGIUM|BELGIQUE|BRUSSELS)\b/.test(addr)) return 'BE';
+  if (/\b(NEW ZEALAND|AUCKLAND)\b/.test(addr)) return 'NZ';
   if (/\b(SWITZERLAND|SCHWEIZ)\b/.test(addr)) return 'CH';
 
   if (/^\d{5}(-\d{4})?$/.test(postcode)) return 'US';
   if (/^[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}$/i.test(postcode)) return 'GB';
 
-  if (service.includes('INTL') || service.includes('INTERNATIONAL') || service.includes('AIR') || service.includes('EXPORT') || service.includes('GLOBAL')) {
+  if (service.includes('INTL') || service.includes('INTERNATIONAL') || service.includes('AIR') || service.includes('EXPORT') || service.includes('GLOBAL') || service.includes('CLASSIC DDP')) {
     return 'INTL';
   }
 
