@@ -454,6 +454,15 @@ router.post('/delete-before-today', async (req, res, next) => {
 // ─── POST /api/shipments/reprocess-all ──────────────────────────────────────────
 router.post('/reprocess-all', async (req, res, next) => {
   try {
+    // Clean up empty ghost rows that have no tracking, no reference, and no recipient
+    await query(`
+      DELETE FROM shipments
+      WHERE (tracking_codes IS NULL OR tracking_codes = '{}')
+        AND reference IS NULL
+        AND (ship_to_postcode IS NULL OR ship_to_postcode = '')
+        AND (customer_name IS NULL OR customer_name = 'Unassigned' OR customer_name = '')
+    `).catch(() => {});
+
     // 1. Gather all raw payloads across tracking_events, charges, and shipments
     const [eventsPayloads, chargesPayloads, shipmentsPayloads] = await Promise.all([
       query(`SELECT raw_payload FROM tracking_events WHERE raw_payload IS NOT NULL ORDER BY id DESC LIMIT 1000`).catch(e => { console.error('Events payload fetch error:', e); return { rows: [] }; }),
@@ -468,7 +477,7 @@ router.post('/reprocess-all', async (req, res, next) => {
     ].filter(Boolean);
 
     let repriced = 0;
-    const processedIds = new Set();
+    const processedKeys = new Set();
     const errors = [];
 
     for (const raw of allPayloads) {
@@ -480,20 +489,33 @@ router.post('/reprocess-all', async (req, res, next) => {
 
       const unwrapped = (p.json && typeof p.json === 'object') ? p.json : p;
       const ship = unwrapped.shipment || unwrapped.request?.shipment || unwrapped;
-      const platformId = parseInt(ship.id || unwrapped.shipment_id || (typeof unwrapped.request?.shipment === 'object' && unwrapped.request.shipment.id), 10) || null;
+      let reqShip = unwrapped.request?.shipment || {};
+      if (typeof reqShip === 'string') {
+        try { reqShip = JSON.parse(reqShip); } catch { reqShip = {}; }
+      }
 
-      if (platformId && processedIds.has(platformId)) continue;
-      if (platformId) processedIds.add(platformId);
+      const platformId = parseInt(ship.id || unwrapped.shipment_id || reqShip.id || unwrapped.request_log_id || unwrapped.request_log?.id, 10) || null;
+      const ref = ship.reference || reqShip.reference || unwrapped.reference || null;
+      const trackingCode = ship.create_label_parcels?.[0]?.tracking_code || unwrapped.response?.tracking_codes?.[0] || reqShip.billing?.tracking_code || unwrapped.tracking_update?.parcels?.[0]?.tracking_code || null;
+
+      // Skip payloads that have no platform ID, no reference, and no tracking code
+      if (!platformId && !ref && !trackingCode) {
+        continue;
+      }
+
+      const dedupKey = platformId ? `id_${platformId}` : (trackingCode ? `tc_${trackingCode}` : `ref_${ref}`);
+      if (processedKeys.has(dedupKey)) continue;
+      processedKeys.add(dedupKey);
 
       try {
         const shipmentId = await processShipmentCreatedWebhook(p);
         if (shipmentId) repriced++;
       } catch (err) {
-        errors.push({ platformId, error: err.message });
+        errors.push({ key: dedupKey, error: err.message });
       }
     }
 
-    res.json({ success: true, repriced, totalCandidates: allPayloads.length, errors });
+    res.json({ success: true, repriced, totalCandidates: processedKeys.size, errors });
   } catch (err) {
     next(err);
   }
