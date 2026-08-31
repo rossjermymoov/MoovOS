@@ -454,11 +454,11 @@ router.post('/delete-before-today', async (req, res, next) => {
 // ─── POST /api/shipments/reprocess-all ──────────────────────────────────────────
 router.post('/reprocess-all', async (req, res, next) => {
   try {
-    // 1. Gather all unique raw payloads across tracking_events, charges, and shipments
+    // 1. Gather all raw payloads across tracking_events, charges, and shipments
     const [eventsPayloads, chargesPayloads, shipmentsPayloads] = await Promise.all([
-      query(`SELECT DISTINCT raw_payload FROM tracking_events WHERE raw_payload IS NOT NULL ORDER BY id DESC LIMIT 500`).catch(() => ({ rows: [] })),
-      query(`SELECT DISTINCT raw_payload FROM charges WHERE raw_payload IS NOT NULL ORDER BY id DESC LIMIT 500`).catch(() => ({ rows: [] })),
-      query(`SELECT DISTINCT raw_payload FROM shipments WHERE raw_payload IS NOT NULL ORDER BY id DESC LIMIT 500`).catch(() => ({ rows: [] })),
+      query(`SELECT raw_payload FROM tracking_events WHERE raw_payload IS NOT NULL ORDER BY id DESC LIMIT 1000`).catch(e => { console.error('Events payload fetch error:', e); return { rows: [] }; }),
+      query(`SELECT raw_payload FROM charges WHERE raw_payload IS NOT NULL ORDER BY id DESC LIMIT 1000`).catch(e => { console.error('Charges payload fetch error:', e); return { rows: [] }; }),
+      query(`SELECT raw_payload FROM shipments WHERE raw_payload IS NOT NULL ORDER BY id DESC LIMIT 1000`).catch(e => { console.error('Shipments payload fetch error:', e); return { rows: [] }; }),
     ]);
 
     const allPayloads = [
