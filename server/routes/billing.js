@@ -1210,142 +1210,86 @@ router.post('/webhook', (req, res) => {
     }
 
     // ── Created ───────────────────────────────────────────────────────────────
-    const shipment       = payload.shipment || {};
-    // payload.response may arrive as a pre-parsed object or as a JSON string —
-    // handle both so billing.shipping (carrier cost) is always readable.
-    const responseParsed = (typeof payload.response === 'object' && payload.response !== null
-      ? payload.response
-      : safeJson(payload.response)) || {};
-    const billingResp    = responseParsed.billing || {};
+    await processShipmentCreatedWebhook(body);
+  } catch (err) {
+    console.error('[billing/webhook] background processing error:', err.message, err.stack);
+  }
+  })().catch(err => console.error('[billing/webhook] unhandled background error:', err.message));
+});
 
-    // Use consolidated extractor — handles all known payload shapes
-    const { accountNumber, customerDcId, dcServiceId, serviceName, totalWeightKg, parcelCount, reqShip: reqShipment }
-      = extractShipmentFields(payload);
+export async function processShipmentCreatedWebhook(body) {
+  const payload = unwrapPayload(body);
+  const eventType = payload.event_type || 'shipment.created';
 
-    const platformId     = parseInt(shipment.id || payload.shipment_id || reqShipment.id, 10) || null;
-    const accountName    = shipment.account_name   || reqShipment.account_name;
-    const courier        = shipment.courier        || reqShipment.courier?.friendly_service_name || reqShipment.courier;
-    const reference      = shipment.reference      || reqShipment.reference;
-    const reference2     = shipment.reference_2    || reqShipment.reference_2;
-    const shipToPostcode = shipment.ship_to_postcode || reqShipment.ship_to?.postcode || reqShipment.postcode || null;
-    const shipToName     = shipment.ship_to_name     || reqShipment.ship_to?.name     || reqShipment.ship_to?.company_name || null;
-    const shipToCountry  = shipment.ship_to_country_iso || reqShipment.ship_to?.country_iso || reqShipment.country_iso || 'GB';
-    const collectionDate = shipment.collection_date
-      ? shipment.collection_date.split('T')[0]
-      : (reqShipment.collection_date ? reqShipment.collection_date.split('T')[0].split(' ')[0] : null);
+  const shipment = payload.shipment || {};
+  const responseParsed = (typeof payload.response === 'object' && payload.response !== null
+    ? payload.response
+    : safeJson(payload.response)) || {};
+  const billingResp = responseParsed.billing || {};
 
-    const weightPerParcel = parcelCount > 0 && totalWeightKg ? totalWeightKg / parcelCount : totalWeightKg;
+  const { accountNumber, customerDcId, dcServiceId, serviceName, totalWeightKg, parcelCount, reqShip: reqShipment }
+    = extractShipmentFields(payload);
 
-    // Tracking codes
-    const createParcels = shipment.create_label_parcels || [];
-    const trackingCodes = createParcels.length
-      ? createParcels.map(p => p.tracking_code).filter(Boolean)
-      : (responseParsed.tracking_codes || (reqShipment.billing?.tracking_code ? [reqShipment.billing.tracking_code] : []));
+  const platformId = parseInt(shipment.id || payload.shipment_id || reqShipment.id || payload.request_log_id || payload.request_log?.id, 10) || null;
+  const accountName = shipment.account_name || reqShipment.account_name;
+  const courier = shipment.courier || reqShipment.courier?.friendly_service_name || reqShipment.courier || 'DPD';
+  const reference = shipment.reference || reqShipment.reference;
+  const reference2 = shipment.reference_2 || reqShipment.reference_2;
+  const shipToPostcode = shipment.ship_to_postcode || reqShipment.ship_to?.postcode || reqShipment.postcode || null;
+  const shipToName = shipment.ship_to_name || reqShipment.ship_to?.name || reqShipment.ship_to?.company_name || null;
+  const shipToCountry = shipment.ship_to_country_iso || reqShipment.ship_to?.country_iso || reqShipment.country_iso || 'GB';
+  const collectionDate = shipment.collection_date
+    ? String(shipment.collection_date).split('T')[0]
+    : (reqShipment.collection_date ? String(reqShipment.collection_date).split('T')[0].split(' ')[0] : null);
 
-    // Tracking hash — primary tracking code + collection date
-    // Belt-and-braces guard against courier recycling tracking numbers (every 6–12 months)
-    const primaryTrackingCode = trackingCodes[0] || null;
-    const trackingHashVal = computeTrackingHash(primaryTrackingCode, collectionDate);
+  const weightPerParcel = parcelCount > 0 && totalWeightKg ? totalWeightKg / parcelCount : totalWeightKg;
 
-    // Voila tracking request credentials — needed for on-demand tracking API calls.
-    // These sit at the top level of the parsed response JSON alongside tracking_codes.
-    const voilaTrackingRequestId   = responseParsed.tracking_request_id   ? parseInt(responseParsed.tracking_request_id, 10)   : null;
-    const voilaTrackingRequestHash = responseParsed.tracking_request_hash ? parseInt(responseParsed.tracking_request_hash, 10) : null;
+  const createParcels = shipment.create_label_parcels || [];
+  let trackingCodes = createParcels.length
+    ? createParcels.map(p => p.tracking_code).filter(Boolean)
+    : (responseParsed.tracking_codes || (reqShipment.billing?.tracking_code ? [reqShipment.billing.tracking_code] : []));
+  if (!Array.isArray(trackingCodes)) trackingCodes = [trackingCodes].filter(Boolean);
 
-    // Carrier surcharge cost — from DC billing block (used by applySurcharges until surcharge cost calc moves to rate cards)
-    const dcSurchargeCosts          = Array.isArray(billingResp.surcharges) ? billingResp.surcharges : (billingResp.surcharges != null ? [billingResp.surcharges] : []);
-    const totalCarrierSurchargeCost = dcSurchargeCosts.reduce((s, c) => s + (parseFloat(c) || 0), 0);
+  const primaryTrackingCode = trackingCodes[0] || null;
+  const trackingHashVal = computeTrackingHash(primaryTrackingCode, collectionDate);
 
-    // Resolve customer:
-    //  1. account_number → customers.account_number
-    //  2. account_number → customers.dc_customer_id
-    //  3. account_number → customers.billing_aliases  (e.g. HOF-0012 stored as alias)
-    //  4. customerDcId  → customers.dc_customer_id
-    //  5. accountName   → customers.business_name (exact, then partial)
-    //  6. accountName   → customers.billing_aliases
-    let customerId = null;
-    if (accountNumber) {
-      const cr = await query('SELECT id FROM customers WHERE account_number = $1', [accountNumber]);
-      if (cr.rows.length) {
-        customerId = cr.rows[0].id;
-      } else {
-        const cr2 = await query('SELECT id FROM customers WHERE dc_customer_id = $1', [accountNumber]);
-        if (cr2.rows.length) customerId = cr2.rows[0].id;
-      }
-    }
-    // Check billing_aliases against account_number (e.g. legacy HOF- codes stored as aliases)
-    if (!customerId && accountNumber) {
-      try {
-        const crA = await query(
-          `SELECT id FROM customers WHERE EXISTS (SELECT 1 FROM unnest(billing_aliases) a WHERE LOWER(a) = LOWER($1)) LIMIT 1`,
-          [accountNumber.trim().toLowerCase()]
-        );
-        if (crA.rows.length) customerId = crA.rows[0].id;
-      } catch (_) {}
-    }
-    if (!customerId && customerDcId) {
-      const cr3 = await query('SELECT id FROM customers WHERE dc_customer_id = $1', [customerDcId]);
-      if (cr3.rows.length) customerId = cr3.rows[0].id;
-    }
-    if (!customerId && accountName) {
-      const cr4 = await query(
-        `SELECT id FROM customers WHERE LOWER(business_name) = LOWER($1)`,
-        [accountName.trim()]
-      );
-      if (cr4.rows.length) customerId = cr4.rows[0].id;
-    }
-    if (!customerId && accountName) {
-      const cr4b = await query(
-        `SELECT id FROM customers WHERE LOWER(business_name) ILIKE $1 ORDER BY LENGTH(business_name) ASC LIMIT 1`,
-        [`%${accountName.trim()}%`]
-      );
-      if (cr4b.rows.length) customerId = cr4b.rows[0].id;
-    }
-    if (!customerId && accountName) {
-      try {
-        const cr5 = await query(
-          `SELECT id FROM customers WHERE EXISTS (SELECT 1 FROM unnest(billing_aliases) a WHERE LOWER(a) = LOWER($1)) LIMIT 1`,
-          [accountName.trim().toLowerCase()]
-        );
-        if (cr5.rows.length) customerId = cr5.rows[0].id;
-      } catch (_) {}
-    }
-    // Step 7: customerDcId → billing_aliases
-    // Covers test/dev accounts where the DC customer ID is stored as an alias
-    // rather than as the primary dc_customer_id on the customer record.
-    if (!customerId && customerDcId) {
-      try {
-        const cr6 = await query(
-          `SELECT id FROM customers WHERE EXISTS (SELECT 1 FROM unnest(billing_aliases) a WHERE LOWER(a) = LOWER($1)) LIMIT 1`,
-          [customerDcId.trim().toLowerCase()]
-        );
-        if (cr6.rows.length) customerId = cr6.rows[0].id;
-      } catch (_) {}
-    }
+  const voilaTrackingRequestId = responseParsed.tracking_request_id ? parseInt(responseParsed.tracking_request_id, 10) : null;
+  const voilaTrackingRequestHash = responseParsed.tracking_request_hash ? parseInt(responseParsed.tracking_request_hash, 10) : null;
 
-    // Effective account identifier to store — prefer accountNumber, fall back to customerDcId
-    // so the relink-customers endpoint can find unlinked shipments later.
-    const effectiveAccount = accountNumber || customerDcId || null;
+  const dcSurchargeCosts = Array.isArray(billingResp.surcharges) ? billingResp.surcharges : (billingResp.surcharges != null ? [billingResp.surcharges] : []);
+  const totalCarrierSurchargeCost = dcSurchargeCosts.reduce((s, c) => s + (parseFloat(c) || 0), 0);
 
-    // Test account check — if this customer is flagged as a test account, all
-    // charges are forced to £0 and surcharges are skipped entirely.
-    let isTestAccount = false;
-    if (customerId) {
-      const testRes = await query(
-        `SELECT is_test_account FROM customers WHERE id = $1`,
-        [customerId]
-      );
-      isTestAccount = testRes.rows[0]?.is_test_account === true;
-      if (isTestAccount) {
-        console.log(`[billing/webhook] test account ${customerId} — forcing £0 charge, skipping surcharges`);
-      }
-    }
+  let customerId = null;
+  if (accountNumber) {
+    const cr = await query('SELECT id FROM customers WHERE account_number = $1 OR dc_customer_id = $1 LIMIT 1', [accountNumber]);
+    if (cr.rows.length) customerId = cr.rows[0].id;
+  }
+  if (!customerId && customerDcId) {
+    const cr3 = await query('SELECT id FROM customers WHERE dc_customer_id = $1 LIMIT 1', [customerDcId]);
+    if (cr3.rows.length) customerId = cr3.rows[0].id;
+  }
+  if (!customerId && accountName) {
+    const cr4 = await query('SELECT id FROM customers WHERE LOWER(business_name) = LOWER($1) OR LOWER(trading_name) = LOWER($1) LIMIT 1', [accountName.trim()]);
+    if (cr4.rows.length) customerId = cr4.rows[0].id;
+  }
+  if (!customerId && accountName) {
+    const cr4b = await query('SELECT id FROM customers WHERE LOWER(business_name) ILIKE $1 ORDER BY LENGTH(business_name) ASC LIMIT 1', [`%${accountName.trim()}%`]);
+    if (cr4b.rows.length) customerId = cr4b.rows[0].id;
+  }
 
-    // Extract additional fields for dimension/value/hs_code surcharge rule filtering
-    const addl = extractAdditionalShipmentFields(payload);
+  const effectiveAccount = accountNumber || customerDcId || null;
 
-    // Upsert shipment
-    const shipRes = await query(`
+  let isTestAccount = false;
+  if (customerId) {
+    const testRes = await query('SELECT is_test_account FROM customers WHERE id = $1', [customerId]);
+    isTestAccount = testRes.rows[0]?.is_test_account === true;
+  }
+
+  const addl = extractAdditionalShipmentFields(payload);
+
+  let shipRes;
+  if (platformId) {
+    shipRes = await query(`
       INSERT INTO shipments
         (platform_shipment_id, event_type,
          customer_id, customer_account, customer_name,
@@ -1379,7 +1323,7 @@ router.post('/webhook', (req, res) => {
         updated_at                    = NOW()
       RETURNING id
     `, [
-      platformId || null, eventType,
+      platformId, eventType,
       customerId, effectiveAccount, accountName,
       courier, dcServiceId, serviceName,
       shipToName, shipToPostcode, shipToCountry,
@@ -1394,92 +1338,100 @@ router.post('/webhook', (req, res) => {
       addl.hsCodes,
       JSON.stringify(payload),
     ]);
-
-    const shipmentId = shipRes.rows[0].id;
-
-    // Skip creating a charge if one already exists for this shipment
-    const existingCharge = await query(
-      'SELECT id FROM charges WHERE shipment_id = $1 AND charge_type = $2',
-      [shipmentId, 'courier']
-    );
-    if (existingCharge.rows.length) {
-      return; // duplicate — response already sent above
-    }
-
-    // Look up rate card — pass destination postcode + country for zone resolution
-    // Test accounts bypass rate lookup entirely — all charges are £0.
-    let rate = null, priceFailReason = null, totalPrice = null;
-    if (isTestAccount) {
-      totalPrice = 0;
-    } else {
-      const result = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, shipToPostcode, shipToCountry || 'GB');
-      rate             = result.rate;
-      priceFailReason  = result.reason;
-      const pricingMode = rate ? await getParcelPricingMode(customerId) : 'sub';
-      const unitPrice   = rate ? rate.price : null;
-      totalPrice        = unitPrice != null
-        ? parseFloat(calcTotal(rate, parcelCount, pricingMode).toFixed(2))
-        : null;
-    }
-
-    // NOTE: order_id idempotency guard removed — it incorrectly blocked sub-parcel
-    // webhooks on multi-parcel orders (e.g. Europa first+sub) where both parcels share
-    // the same order reference but have distinct platform_shipment_ids and tracking codes.
-    // The shipment_id guard above (line ~1386) already handles true webhook retries.
-
-    // Insert charge — rate_id is UUID on the charges table so we leave it null;
-    // zone_name + weight_class_name carry the human-readable pricing reference.
-    const chargeRes = await query(`
-      INSERT INTO charges
-        (shipment_id, customer_id, charge_type,
-         order_id, parcel_qty, service_name,
-         price, cost_price,
-         zone_name, weight_class_name, price_auto,
-         price_failure_reason)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+  } else {
+    shipRes = await query(`
+      INSERT INTO shipments
+        (event_type,
+         customer_id, customer_account, customer_name,
+         courier, dc_service_id, service_name,
+         ship_to_name, ship_to_postcode, ship_to_country_iso,
+         reference, reference_2,
+         parcel_count, total_weight_kg, collection_date, tracking_codes,
+         tracking_hash,
+         voila_tracking_request_id, voila_tracking_request_hash,
+         ship_from_country_iso,
+         dim_length_cm, dim_width_cm, dim_height_cm, parcel_weight_kg,
+         total_declared_value, parcel_declared_value, hs_codes,
+         raw_payload)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
       RETURNING id
     `, [
-      shipmentId, customerId, 'courier',
-      reference, parcelCount, serviceName,
-      totalPrice,
-      isTestAccount ? 0 : calcCostTotal(rate, parcelCount, await isAllSubParcelPricing(dcServiceId)),
-      rate?.zone_name || null,
-      rate?.weight_class_name || null,
-      rate != null,
-      rate ? null : priceFailReason,
+      eventType,
+      customerId, effectiveAccount, accountName,
+      courier, dcServiceId, serviceName,
+      shipToName, shipToPostcode, shipToCountry,
+      reference, reference2,
+      parcelCount, totalWeightKg || null, collectionDate,
+      trackingCodes.length ? trackingCodes : null,
+      trackingHashVal,
+      voilaTrackingRequestId, voilaTrackingRequestHash,
+      addl.shipFromCountryIso,
+      addl.dimLength, addl.dimWidth, addl.dimHeight, addl.parcelWeightKg,
+      addl.totalDeclaredValue, addl.parcelDeclaredValue,
+      addl.hsCodes,
+      JSON.stringify(payload),
     ]);
+  }
 
-    // Apply surcharges (fuel, clearance, congestion, etc.) — non-blocking
-    // Skipped entirely for test accounts.
-    if (isTestAccount) {
-      console.log(`[billing/webhook] test account — surcharges skipped for shipment ${shipmentId}`);
-      return;
-    }
+  const shipmentId = shipRes.rows[0].id;
+
+  let rate = null, priceFailReason = null, totalPrice = null;
+  if (isTestAccount) {
+    totalPrice = 0;
+  } else if (customerId && dcServiceId) {
+    const result = await lookupRateWithReason(customerId, dcServiceId, serviceName, weightPerParcel, shipToPostcode, shipToCountry || 'GB');
+    rate = result.rate;
+    priceFailReason = result.reason;
+    const pricingMode = rate ? await getParcelPricingMode(customerId) : 'sub';
+    const unitPrice = rate ? rate.price : null;
+    totalPrice = unitPrice != null
+      ? parseFloat(calcTotal(rate, parcelCount, pricingMode).toFixed(2))
+      : null;
+  } else {
+    priceFailReason = !customerId ? 'No matching customer' : 'No service code';
+  }
+
+  await query(`
+    INSERT INTO charges
+      (shipment_id, customer_id, charge_type,
+       order_id, parcel_qty, service_name,
+       price, cost_price,
+       zone_name, weight_class_name, price_auto,
+       price_failure_reason)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+    ON CONFLICT DO NOTHING
+  `, [
+    shipmentId, customerId, 'courier',
+    reference, parcelCount, serviceName,
+    totalPrice,
+    isTestAccount ? 0 : calcCostTotal(rate, parcelCount, await isAllSubParcelPricing(dcServiceId)),
+    rate?.zone_name || null,
+    rate?.weight_class_name || null,
+    rate != null,
+    rate ? null : priceFailReason,
+  ]);
+
+  if (!isTestAccount && totalPrice != null) {
     await applySurcharges(shipmentId, customerId, totalPrice, {
       courier,
-      dc_service_id:          dcServiceId,
-      service_name:           serviceName,
-      ship_from_country_iso:  addl.shipFromCountryIso,
-      ship_to_country_iso:    shipToCountry,
-      ship_to_postcode:       shipToPostcode,
-      parcel_count:           parcelCount,
-      total_weight_kg:        totalWeightKg,
-      parcel_weight_kg:       addl.parcelWeightKg,
-      dim_length_cm:          addl.dimLength,
-      dim_width_cm:           addl.dimWidth,
-      dim_height_cm:          addl.dimHeight,
-      total_declared_value:   addl.totalDeclaredValue,
-      parcel_declared_value:  addl.parcelDeclaredValue,
+      dc_service_id: dcServiceId,
+      service_name: serviceName,
+      ship_from_country_iso: addl.shipFromCountryIso,
+      ship_to_country_iso: shipToCountry,
+      ship_to_postcode: shipToPostcode,
+      parcel_count: parcelCount,
+      total_weight_kg: totalWeightKg,
+      parcel_weight_kg: addl.parcelWeightKg,
+      dim_length_cm: addl.dimLength,
+      dim_width_cm: addl.dimWidth,
+      dim_height_cm: addl.dimHeight,
+      total_declared_value: addl.totalDeclaredValue,
+      parcel_declared_value: addl.parcelDeclaredValue,
     }, totalCarrierSurchargeCost);
-
-    // Success — log for observability (response already sent above)
-    console.log(`[billing/webhook] created charge ${chargeRes.rows[0].id} for shipment ${shipmentId}, price=${totalPrice}`);
-
-  } catch (err) {
-    console.error('[billing/webhook] background processing error:', err.message, err.stack);
   }
-  })().catch(err => console.error('[billing/webhook] unhandled background error:', err.message));
-});
+
+  return shipmentId;
+}
 
 // ─── GET  /api/billing/dedup-report ──────────────────────────────────────────
 // Sweeps the charges table for duplicate active courier charges.

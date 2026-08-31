@@ -8,6 +8,7 @@
 import express from 'express';
 import { query } from '../db/index.js';
 import { processShipment, insertCharges } from '../services/pricingEngine.js';
+import { processShipmentCreatedWebhook } from './billing.js';
 import { createOrUpdateShipment } from './webhooks.js';
 
 const router = express.Router();
@@ -476,41 +477,23 @@ router.post('/reprocess-all', async (req, res, next) => {
         try { p = JSON.parse(p); } catch { continue; }
       }
       if (!p) continue;
-      if (p.json && typeof p.json === 'object') p = p.json;
 
-      const ship = p.shipment || p.request?.shipment || p;
-      const platformId = parseInt(ship.id || p.shipment_id || (typeof p.request?.shipment === 'object' && p.request.shipment.id), 10) || null;
+      const unwrapped = (p.json && typeof p.json === 'object') ? p.json : p;
+      const ship = unwrapped.shipment || unwrapped.request?.shipment || unwrapped;
+      const platformId = parseInt(ship.id || unwrapped.shipment_id || (typeof unwrapped.request?.shipment === 'object' && unwrapped.request.shipment.id), 10) || null;
 
-      if (!platformId || processedIds.has(platformId)) continue;
-      processedIds.add(platformId);
+      if (platformId && processedIds.has(platformId)) continue;
+      if (platformId) processedIds.add(platformId);
 
       try {
-        const result = await processShipment(p);
-        const charges = result.charges || [];
-        let customerId = charges[0]?.customer_id || null;
-
-        if (!customerId) {
-          const acct = ship.account_number || ship.billing?.customer_dc_id;
-          if (acct) {
-            const cr = await query('SELECT id FROM customers WHERE account_number = $1 OR dc_customer_id = $1 LIMIT 1', [acct]);
-            if (cr.rows.length) customerId = cr.rows[0].id;
-          }
-        }
-
-        const shipmentId = await createOrUpdateShipment(p, customerId);
-        if (shipmentId) {
-          if (charges.length) {
-            await query('DELETE FROM charges WHERE shipment_id = $1 AND status != $2', [shipmentId, 'invoiced']);
-            await insertCharges(charges, shipmentId);
-          }
-          repriced++;
-        }
+        const shipmentId = await processShipmentCreatedWebhook(p);
+        if (shipmentId) repriced++;
       } catch (err) {
         errors.push({ platformId, error: err.message });
       }
     }
 
-    res.json({ success: true, repriced, totalCandidates: processedIds.size, errors });
+    res.json({ success: true, repriced, totalCandidates: allPayloads.length, errors });
   } catch (err) {
     next(err);
   }

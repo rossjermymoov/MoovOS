@@ -12,6 +12,7 @@ import express from 'express';
 import { query } from '../db/index.js';
 import { processShipment, insertCharges } from '../services/pricingEngine.js';
 import { fetchShipmentById } from '../services/voilaClient.js';
+import { processShipmentCreatedWebhook } from './billing.js';
 
 // ─── Helper: create or update a shipments record from a Voila webhook payload ──
 //
@@ -217,64 +218,14 @@ function extractPayload(req) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.post(['/shipment-created', '/shipment.created', '/created', '/webhook', '/'], authMiddleware, async (req, res) => {
-  const payload = extractPayload(req);
-
   // ── Respond immediately so caller gets 200 accepted ────────────────────────
   res.json({ status: 'accepted', received: true });
 
-  const voilaShipmentId = String(payload.shipment?.id || payload.id || '');
   try {
-    let charges = [];
-    let errors = [];
-    let customerId = null;
-
-    try {
-      const result = await processShipment(payload);
-      charges = result.charges || [];
-      errors = result.errors || [];
-      customerId = charges[0]?.customer_id || null;
-    } catch (procErr) {
-      console.warn(`[webhooks] processShipment note for ${voilaShipmentId}:`, procErr.message);
-      errors.push(procErr.message);
-    }
-
-    // Fallback lookup in customers table if not resolved by pricingEngine
-    if (!customerId) {
-      const ship = payload.shipment || payload.request?.shipment || payload;
-      const acct = ship.account_number || ship.billing?.customer_dc_id;
-      const name = ship.account_name || ship.customer_name;
-      if (acct) {
-        const cr = await query('SELECT id FROM customers WHERE account_number = $1 OR dc_customer_id = $1 LIMIT 1', [acct]);
-        if (cr.rows.length) customerId = cr.rows[0].id;
-      }
-      if (!customerId && name) {
-        const cr = await query('SELECT id FROM customers WHERE LOWER(business_name) = LOWER($1) OR LOWER(trading_name) = LOWER($1) LIMIT 1', [name]);
-        if (cr.rows.length) customerId = cr.rows[0].id;
-      }
-    }
-
-    // ALWAYS create the shipment record in the shipments table
-    const shipmentId = await createOrUpdateShipment(payload, customerId);
-
-    if (shipmentId) {
-      if (charges.length) {
-        const inserted = await insertCharges(charges, shipmentId);
-        console.log(`✅  Shipment ${voilaShipmentId}: ${inserted.length} charge(s) created, shipment_id=${shipmentId}`);
-      } else {
-        // Create an unpriced placeholder charge so the shipment is linked
-        const ship = payload.shipment || payload.request?.shipment || payload;
-        const ref = ship.reference || payload.reference || 'REF';
-        const sName = ship.friendly_service_name || ship.dc_service_id || 'Courier Delivery';
-        await query(`
-          INSERT INTO charges (shipment_id, customer_id, charge_type, order_id, parcel_qty, service_name, price_auto, price_failure_reason, status)
-          VALUES ($1, $2, 'courier', $3, 1, $4, false, 'No matching rate card / unmapped customer', 'pending')
-          ON CONFLICT DO NOTHING
-        `, [shipmentId, customerId, ref, sName]).catch(() => {});
-        console.log(`ℹ️  Shipment ${voilaShipmentId}: recorded in shipments table (shipment_id=${shipmentId})`);
-      }
-    }
+    const shipmentId = await processShipmentCreatedWebhook(req.body);
+    console.log(`✅ Webhook shipment ingested successfully (shipment_id=${shipmentId})`);
   } catch (err) {
-    console.error(`❌  Webhook error (shipment ${voilaShipmentId}):`, err.message);
+    console.error(`❌ Webhook ingestion error:`, err.message, err.stack);
   }
 });
 
