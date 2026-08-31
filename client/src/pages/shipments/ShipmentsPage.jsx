@@ -641,18 +641,16 @@ export default function ShipmentsPage() {
                     </div>
                   </td>
                   <td className="tar mv-num" style={{ fontWeight: 500 }}>
-                    <PriceBreakdownTooltip shipment={s}>
-                      {costVal != null ? (
-                        <div>
-                          <div>£{costVal.toFixed(2)}</div>
-                          {surchargesCost > 0 && (
-                            <div style={{ fontSize: 10.5, color: 'var(--mv-ink-50)' }}>
-                              Base £{baseCost?.toFixed(2)} + Sur £{surchargesCost.toFixed(2)}
-                            </div>
-                          )}
-                        </div>
-                      ) : <span style={{ color: 'var(--mv-ink-40)' }}>—</span>}
-                    </PriceBreakdownTooltip>
+                    {costVal != null ? (
+                      <div>
+                        <div>£{costVal.toFixed(2)}</div>
+                        {surchargesCost > 0 && (
+                          <div style={{ fontSize: 10.5, color: 'var(--mv-ink-50)' }}>
+                            Base £{baseCost?.toFixed(2)} + Sur £{surchargesCost.toFixed(2)}
+                          </div>
+                        )}
+                      </div>
+                    ) : <span style={{ color: 'var(--mv-ink-40)' }}>—</span>}
                   </td>
                   <td className="tar mv-num" style={{ fontWeight: 700 }}>
                     <PriceBreakdownTooltip shipment={s}>
