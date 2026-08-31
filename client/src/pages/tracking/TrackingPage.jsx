@@ -53,6 +53,41 @@ function formatCountryName(code) {
   return name ? `${c} — ${name}` : c;
 }
 
+function getCountryFlag(isoCode) {
+  if (!isoCode) return '🇬🇧';
+  const code = isoCode.trim().toUpperCase();
+  if (code === 'UK' || code === 'GB') return '🇬🇧';
+  if (code === 'US' || code === 'USA') return '🇺🇸';
+  if (code === 'CA') return '🇨🇦';
+  if (code === 'AU') return '🇦🇺';
+  if (code === 'DE') return '🇩🇪';
+  if (code === 'FR') return '🇫🇷';
+  if (code === 'IE') return '🇮🇪';
+  if (code === 'ES') return '🇪🇸';
+  if (code === 'IT') return '🇮🇹';
+  if (code === 'NL') return '🇳🇱';
+  if (code === 'BE') return '🇧🇪';
+  if (code === 'NZ') return '🇳🇿';
+  if (code === 'CH') return '🇨🇭';
+  if (code === 'AT') return '🇦🇹';
+  if (code === 'DK') return '🇩🇰';
+  if (code === 'SE') return '🇸🇪';
+  if (code === 'NO') return '🇳🇴';
+  if (code === 'FI') return '🇫🇮';
+  if (code === 'PL') return '🇵🇱';
+  if (code === 'PT') return '🇵🇹';
+  if (code === 'INTL') return '🌐';
+
+  if (code.length === 2) {
+    const codePoints = code
+      .split('')
+      .map(c => 127397 + c.charCodeAt(0));
+    return String.fromCodePoint(...codePoints);
+  }
+
+  return '🌐';
+}
+
 // Inline courier badge
 function CourierBadge({ name, code }) {
   const logo = getCourierLogo(code) || getCourierLogo(name);
@@ -1003,6 +1038,7 @@ export default function TrackingPage() {
                 <th>Customer</th>
                 <th>Courier</th>
                 <th>Recipient</th>
+                <th style={{ width: 85 }}>ISO</th>
                 <th>Status</th>
                 <th>Last Telemetry Event</th>
                 <th style={{ width: 110, textAlign: 'right' }}>Est. Delivery</th>
@@ -1012,11 +1048,11 @@ export default function TrackingPage() {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} style={{ padding: 48, textAlign: 'center', color: 'var(--mv-ink-52)' }}>Loading parcels…</td>
+                  <td colSpan={9} style={{ padding: 48, textAlign: 'center', color: 'var(--mv-ink-52)' }}>Loading parcels…</td>
                 </tr>
               ) : parcels.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ padding: 48, textAlign: 'center', color: 'var(--mv-ink-52)' }}>
+                  <td colSpan={9} style={{ padding: 48, textAlign: 'center', color: 'var(--mv-ink-52)' }}>
                     No parcels found matching your filter criteria.
                   </td>
                 </tr>
@@ -1047,6 +1083,16 @@ export default function TrackingPage() {
                           {p.recipient_postcode}
                         </div>
                       )}
+                    </td>
+                    <td>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 16, lineHeight: 1 }} title={COUNTRY_MAP[p.country_code] || p.country_code}>
+                          {getCountryFlag(p.country_code)}
+                        </span>
+                        <span className="mv-num" style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--mv-ink)' }}>
+                          {p.country_code || 'GB'}
+                        </span>
+                      </div>
                     </td>
                     <td><StatusBadge status={p.status} /></td>
                     <td>

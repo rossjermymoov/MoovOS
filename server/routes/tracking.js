@@ -673,12 +673,26 @@ router.get('/', async (req, res, next) => {
           p.id, p.consignment_number,
           p.courier_name, p.courier_code, p.service_name,
           p.customer_name, p.customer_account,
-          p.recipient_name, p.recipient_postcode,
+          p.recipient_name, p.recipient_postcode, p.recipient_address,
           p.status, p.status_description, p.last_location,
           p.last_event_at, p.estimated_delivery, p.delivered_at,
           p.weight_kg,
-          p.created_at
+          p.created_at,
+          COALESCE(c.ship_to_country_iso, s.ship_to_country_iso) AS charge_country_iso
         FROM parcels p
+        LEFT JOIN LATERAL (
+          SELECT ship_to_country_iso FROM charges
+          WHERE voila_shipment_id = p.consignment_number
+             OR order_id = p.consignment_number
+             OR (raw_payload->'tracking_codes' IS NOT NULL AND raw_payload->'tracking_codes' ? p.consignment_number)
+             OR raw_payload->>'consignment_number' = p.consignment_number
+          LIMIT 1
+        ) c ON true
+        LEFT JOIN LATERAL (
+          SELECT ship_to_country_iso FROM shipments
+          WHERE p.consignment_number = ANY(tracking_codes)
+          LIMIT 1
+        ) s ON true
         ${where}
         ORDER BY p.last_event_at DESC NULLS LAST, p.created_at DESC
         LIMIT $${idx} OFFSET $${idx+1}
@@ -688,7 +702,10 @@ router.get('/', async (req, res, next) => {
     ]);
 
     res.json({
-      parcels: dataRes.rows,
+      parcels: dataRes.rows.map(p => ({
+        ...p,
+        country_code: detectCountryCode(p, { ship_to_country_iso: p.charge_country_iso }),
+      })),
       total:   countRes.rows[0].total,
       limit:   parseInt(limit),
       offset:  parseInt(offset),
