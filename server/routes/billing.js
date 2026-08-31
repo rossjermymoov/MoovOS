@@ -1218,15 +1218,17 @@ router.post('/webhook', (req, res) => {
     const { accountNumber, customerDcId, dcServiceId, serviceName, totalWeightKg, parcelCount, reqShip: reqShipment }
       = extractShipmentFields(payload);
 
-    const platformId     = shipment.id;
+    const platformId     = parseInt(shipment.id || payload.shipment_id || reqShipment.id, 10) || null;
     const accountName    = shipment.account_name   || reqShipment.account_name;
-    const courier        = shipment.courier        || reqShipment.courier;
+    const courier        = shipment.courier        || reqShipment.courier?.friendly_service_name || reqShipment.courier;
     const reference      = shipment.reference      || reqShipment.reference;
     const reference2     = shipment.reference_2    || reqShipment.reference_2;
-    const shipToPostcode = shipment.ship_to_postcode;
-    const shipToName     = shipment.ship_to_name;
-    const shipToCountry  = shipment.ship_to_country_iso;
-    const collectionDate = shipment.collection_date ? shipment.collection_date.split('T')[0] : null;
+    const shipToPostcode = shipment.ship_to_postcode || reqShipment.ship_to?.postcode || reqShipment.postcode || null;
+    const shipToName     = shipment.ship_to_name     || reqShipment.ship_to?.name     || reqShipment.ship_to?.company_name || null;
+    const shipToCountry  = shipment.ship_to_country_iso || reqShipment.ship_to?.country_iso || reqShipment.country_iso || 'GB';
+    const collectionDate = shipment.collection_date
+      ? shipment.collection_date.split('T')[0]
+      : (reqShipment.collection_date ? reqShipment.collection_date.split('T')[0].split(' ')[0] : null);
 
     const weightPerParcel = parcelCount > 0 && totalWeightKg ? totalWeightKg / parcelCount : totalWeightKg;
 
@@ -1234,7 +1236,7 @@ router.post('/webhook', (req, res) => {
     const createParcels = shipment.create_label_parcels || [];
     const trackingCodes = createParcels.length
       ? createParcels.map(p => p.tracking_code).filter(Boolean)
-      : (responseParsed.tracking_codes || []);
+      : (responseParsed.tracking_codes || (reqShipment.billing?.tracking_code ? [reqShipment.billing.tracking_code] : []));
 
     // Tracking hash — primary tracking code + collection date
     // Belt-and-braces guard against courier recycling tracking numbers (every 6–12 months)
@@ -1390,6 +1392,53 @@ router.post('/webhook', (req, res) => {
     ]);
 
     const shipmentId = shipRes.rows[0].id;
+
+    // Automatically sync / create parcels in the parcels tracking table upon booking
+    for (const code of trackingCodes) {
+      if (!code) continue;
+      try {
+        const fullStreetLine1 = [reqShipment.ship_to?.address_1, reqShipment.ship_to?.address_2, reqShipment.ship_to?.address_3].filter(Boolean).join(', ');
+        const fullStreetLine2 = [reqShipment.ship_to?.city, reqShipment.ship_to?.county, reqShipment.ship_to?.postcode].filter(Boolean).join(', ');
+        const resolvedAddr = [fullStreetLine1, fullStreetLine2].filter(Boolean).join(', ') || shipment.ship_to_address || null;
+
+        await query(`
+          INSERT INTO parcels
+            (consignment_number, courier_name, courier_code, service_name,
+             customer_id, customer_name, customer_account,
+             recipient_name, recipient_postcode, recipient_address,
+             weight_kg, estimated_delivery,
+             status, status_description, last_event_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'booked', 'Shipment Booked / Manifested', NOW())
+          ON CONFLICT (consignment_number) DO UPDATE SET
+            courier_name       = COALESCE(EXCLUDED.courier_name, parcels.courier_name),
+            courier_code       = COALESCE(EXCLUDED.courier_code, parcels.courier_code),
+            service_name       = COALESCE(EXCLUDED.service_name, parcels.service_name),
+            customer_id        = COALESCE(EXCLUDED.customer_id, parcels.customer_id),
+            customer_name      = COALESCE(EXCLUDED.customer_name, parcels.customer_name),
+            customer_account   = COALESCE(EXCLUDED.customer_account, parcels.customer_account),
+            recipient_name     = COALESCE(EXCLUDED.recipient_name, parcels.recipient_name),
+            recipient_postcode = COALESCE(EXCLUDED.recipient_postcode, parcels.recipient_postcode),
+            recipient_address  = COALESCE(EXCLUDED.recipient_address, parcels.recipient_address),
+            weight_kg          = COALESCE(EXCLUDED.weight_kg, parcels.weight_kg),
+            updated_at         = NOW()
+        `, [
+          code,
+          courier,
+          courier ? courier.toLowerCase() : null,
+          serviceName,
+          customerId,
+          accountName,
+          effectiveAccount,
+          shipToName,
+          shipToPostcode,
+          resolvedAddr,
+          weightPerParcel || null,
+          null,
+        ]);
+      } catch (parcelErr) {
+        console.warn('[billing/webhook] Warning inserting parcel into parcels table:', parcelErr.message);
+      }
+    }
 
     // Skip creating a charge if one already exists for this shipment
     const existingCharge = await query(
