@@ -425,7 +425,6 @@ export default function ShipmentsPage() {
             <th>Service Code</th>
             <th>Weight</th>
             <th>Destination</th>
-            <th>Sender Ref</th>
             <th className="tar">Cost Price</th>
             <th className="tar">Sell Price</th>
             <th style={{ width: 70, textAlign: 'center' }}>Inspect</th>
@@ -435,13 +434,13 @@ export default function ShipmentsPage() {
         <tbody>
           {loading ? (
             <tr>
-              <td colSpan={12} style={{ textAlign: 'center', padding: '36px 0', color: 'var(--mv-ink-50)' }}>
+              <td colSpan={11} style={{ textAlign: 'center', padding: '36px 0', color: 'var(--mv-ink-50)' }}>
                 Loading shipments...
               </td>
             </tr>
           ) : shipments.length === 0 ? (
             <tr>
-              <td colSpan={12} style={{ textAlign: 'center', padding: '48px 0', color: 'var(--mv-ink-50)' }}>
+              <td colSpan={11} style={{ textAlign: 'center', padding: '48px 0', color: 'var(--mv-ink-50)' }}>
                 <Package size={24} style={{ display: 'block', margin: '0 auto 8px', opacity: 0.4 }} />
                 <div style={{ fontWeight: 600, color: 'var(--mv-ink)', marginBottom: 4 }}>No shipments displayed currently</div>
                 <div style={{ fontSize: 12, color: 'var(--mv-ink-50)', marginBottom: 14 }}>
@@ -522,14 +521,6 @@ export default function ShipmentsPage() {
                     <div style={{ fontSize: 11, color: 'var(--mv-ink-50)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {s.ship_to_name || '—'}
                     </div>
-                  </td>
-                  <td style={{ fontSize: 12 }} className="mv-num">
-                    {s.reference || '—'}
-                    {s.reference_2 && (
-                      <div style={{ fontSize: 10.5, color: 'var(--mv-ink-50)' }}>
-                        Ref2: {s.reference_2}
-                      </div>
-                    )}
                   </td>
                   <td className="tar mv-num" style={{ fontWeight: 500 }}>
                     {costVal != null ? (
