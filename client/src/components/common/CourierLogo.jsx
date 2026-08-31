@@ -1,8 +1,32 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { getCourierLogo } from '../../utils/courierLogos';
 
-export default function CourierLogo({ courier, service, size = 20, height = null, showLabel = false, style = {} }) {
+export default function CourierLogo({ courier, service, size = 22, height = null, showLabel = false, style = {} }) {
+  const [imgError, setImgError] = useState(false);
   const norm = String(courier || service || '').toUpperCase().trim();
   const h = height || size;
+  const logoUrl = getCourierLogo(courier) || getCourierLogo(service);
+
+  if (logoUrl && !imgError) {
+    return (
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, ...style }}>
+        <img
+          src={logoUrl}
+          alt={courier || 'Courier'}
+          onError={() => setImgError(true)}
+          style={{
+            height: h,
+            maxWidth: h * 2.8,
+            objectFit: 'contain',
+            display: 'block',
+            flexShrink: 0,
+            borderRadius: 3
+          }}
+        />
+        {showLabel && <span style={{ fontSize: 13, fontWeight: 600 }}>{courier}</span>}
+      </div>
+    );
+  }
 
   // ── DPD Vector Logo ──────────────────────────────────────────────────────────
   if (norm.includes('DPD')) {

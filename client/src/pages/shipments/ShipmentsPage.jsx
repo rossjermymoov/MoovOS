@@ -418,11 +418,10 @@ export default function ShipmentsPage() {
       <table className="mv-table">
         <thead>
           <tr>
-            <th style={{ width: 36 }}>State</th>
-            <th>Date / Time</th>
+            <th style={{ minWidth: 100 }}>Date / Time</th>
             <th>Tracking / Consignment</th>
             <th>Customer</th>
-            <th>Courier</th>
+            <th style={{ width: 68, textAlign: 'center' }}>Courier</th>
             <th>Service Code</th>
             <th>Weight</th>
             <th>Destination</th>
@@ -436,13 +435,13 @@ export default function ShipmentsPage() {
         <tbody>
           {loading ? (
             <tr>
-              <td colSpan={13} style={{ textAlign: 'center', padding: '36px 0', color: 'var(--mv-ink-50)' }}>
+              <td colSpan={12} style={{ textAlign: 'center', padding: '36px 0', color: 'var(--mv-ink-50)' }}>
                 Loading shipments...
               </td>
             </tr>
           ) : shipments.length === 0 ? (
             <tr>
-              <td colSpan={13} style={{ textAlign: 'center', padding: '48px 0', color: 'var(--mv-ink-50)' }}>
+              <td colSpan={12} style={{ textAlign: 'center', padding: '48px 0', color: 'var(--mv-ink-50)' }}>
                 <Package size={24} style={{ display: 'block', margin: '0 auto 8px', opacity: 0.4 }} />
                 <div style={{ fontWeight: 600, color: 'var(--mv-ink)', marginBottom: 4 }}>No shipments displayed currently</div>
                 <div style={{ fontSize: 12, color: 'var(--mv-ink-50)', marginBottom: 14 }}>
@@ -480,12 +479,6 @@ export default function ShipmentsPage() {
 
               return (
                 <tr key={s.id}>
-                  <td>
-                    <span
-                      className={`mv-state ${s.cancelled ? 'attention' : (hasPricing && sellVal > 0) ? 'settled' : 'waiting'}`}
-                      title={s.cancelled ? 'Cancelled' : (hasPricing && sellVal > 0) ? 'Rated & Priced' : 'Unpriced'}
-                    />
-                  </td>
                   <td className="mv-num" style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>
                     {new Date(s.created_at).toLocaleDateString('en-GB')}
                     <div style={{ fontSize: 11, color: 'var(--mv-ink-50)' }}>
@@ -508,8 +501,8 @@ export default function ShipmentsPage() {
                       Acct: {s.customer_account || '—'}
                     </div>
                   </td>
-                  <td>
-                    <CourierLogo courier={s.courier} service={s.service_name || s.dc_service_id} size={20} />
+                  <td style={{ textAlign: 'center' }}>
+                    <CourierLogo courier={s.courier} service={s.service_name || s.dc_service_id} size={24} />
                   </td>
                   <td>
                     <div style={{ fontWeight: 700, fontSize: 12.5 }}>
