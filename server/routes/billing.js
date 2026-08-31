@@ -80,15 +80,23 @@ function unwrapPayload(body) {
 }
 
 // Extract the request-shipment sub-document from any known payload shape.
-// Tries every path: request.shipment (object or string), request_shipment (string or object).
+// Tries every path: request.shipment (object or string), request_shipment (string or object), shipment.request_shipment (string or object).
 function extractReqShipment(payload) {
+  if (!payload) return {};
   const candidates = [
     typeof payload.request?.shipment === 'object' ? payload.request.shipment : null,
     safeJson(payload.request?.shipment),
     safeJson(payload.request_shipment),
     typeof payload.request_shipment === 'object' ? payload.request_shipment : null,
+    safeJson(payload.shipment?.request_shipment),
+    typeof payload.shipment?.request_shipment === 'object' ? payload.shipment.request_shipment : null,
+    safeJson(payload.json?.shipment?.request_shipment),
+    typeof payload.json?.shipment?.request_shipment === 'object' ? payload.json.shipment.request_shipment : null,
+    typeof payload.shipment === 'object' ? payload.shipment : null,
   ];
-  return candidates.find(c => c && typeof c === 'object') || {};
+  return candidates.find(c => c && typeof c === 'object' && (c.ship_to || c.account_number || c.parcels || c.billing))
+    || candidates.find(c => c && typeof c === 'object')
+    || {};
 }
 
 // Pull dc_service_id + service name + weight + account from payload — checks all known locations
