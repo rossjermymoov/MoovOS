@@ -452,7 +452,13 @@ function DomesticBody({ service, customerId, templateZones, templateLoading, onR
   const qc = useQueryClient();
 
   const rateMap = {}; const rateByZone = {};
-  for (const r of service.rates) { rateMap[`${r.zone_name}::${r.weight_class_name}`] = r; if (!rateByZone[r.zone_name]) rateByZone[r.zone_name] = r; }
+  for (const r of service.rates) {
+    rateMap[`${r.zone_name}::${r.weight_class_name}`] = r;
+    if (r.weight_class_name) {
+      rateMap[`${r.zone_name}::${r.weight_class_name.toLowerCase()}`] = r;
+    }
+    if (!rateByZone[r.zone_name]) rateByZone[r.zone_name] = r;
+  }
   const source = templateZones.length ? templateZones : service.rates.map(r => ({ zone_name: r.zone_name, weight_class_name: r.weight_class_name }));
   const zones = [...new Set(source.map(z => z.zone_name))];
   const bands = [...new Set(source.map(z => z.weight_class_name))].sort((a, b) => wcSortKey(a) - wcSortKey(b));
@@ -523,7 +529,7 @@ function DomesticBody({ service, customerId, templateZones, templateLoading, onR
                 <tr key={zone} style={{ borderBottom: '1px solid var(--mv-hairline)' }}>
                   <td className="mv-cell-strong" style={{ padding: '10px 16px 10px 0', whiteSpace: 'nowrap' }}>{zone}</td>
                   {bands.map(b => {
-                    const rate = rateMap[`${zone}::${b}`] || (!multiWeight ? rateByZone[zone] : null);
+                    const rate = rateMap[`${zone}::${b}`] || rateMap[`${zone}::${b.toLowerCase()}`] || (!multiWeight ? rateByZone[zone] : null);
                     const first = { borderLeft: '1px solid var(--mv-hairline)', paddingLeft: 12, padding: '8px 0 8px 12px' };
                     const rest = { padding: '8px 0 8px 10px' };
                     return ([
@@ -640,7 +646,7 @@ function RateCardService({ service, customerId, openCode, setOpenCode, onRateUpd
   const { data: templateZones = [], isLoading: templateLoading } = useQuery({
     queryKey: ['rate-zone-template', service.service_code],
     queryFn: () => api.get(`/customer-rates/zones/${encodeURIComponent(service.service_code)}`).then(r => r.data),
-    enabled: open && !isIntl, staleTime: 120_000,
+    enabled: open && !isIntl, staleTime: 5_000,
   });
 
   const priced = service.rates.length;

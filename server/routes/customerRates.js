@@ -11,8 +11,18 @@
 
 import express from 'express';
 import { query } from '../db/index.js';
+import { propagateWeightBands } from '../services/weightBandSync.js';
 
 const router = express.Router();
+
+// ─── POST /sync-weight-bands — propagate weight bands to all customer rates ───
+router.post('/sync-weight-bands', async (req, res, next) => {
+  try {
+    const { service_code } = req.body || {};
+    const result = await propagateWeightBands(service_code || null);
+    res.json({ success: true, ...result });
+  } catch (err) { next(err); }
+});
 
 // ─── PATCH /rate/:rateId — update price, price_sub, and/or per_kg fields ──────
 router.patch('/rate/:rateId', async (req, res, next) => {

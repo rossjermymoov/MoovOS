@@ -5,6 +5,7 @@
 
 import express from 'express';
 import { query } from '../db/index.js';
+import { propagateWeightBands } from '../services/weightBandSync.js';
 
 const router = express.Router();
 
@@ -414,6 +415,10 @@ router.post('/weight-bands', async (req, res, next) => {
        cost_per_kg != null ? cost_per_kg : null,
        cost_per_kg_threshold_kg != null ? cost_per_kg_threshold_kg : 30]
     );
+    
+    // Automatically propagate updated band bounds to dc_weight_classes and customer_rates
+    propagateWeightBands().catch(e => console.error('Error propagating weight bands:', e));
+
     res.status(201).json(result.rows[0]);
   } catch (err) { next(err); }
 });
@@ -431,6 +436,10 @@ router.patch('/weight-bands/:id', async (req, res, next) => {
       [req.params.id, ...updates.map(([, v]) => v)]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Weight band not found' });
+    
+    // Automatically propagate updated band bounds to dc_weight_classes and customer_rates
+    propagateWeightBands().catch(e => console.error('Error propagating weight bands:', e));
+
     res.json(result.rows[0]);
   } catch (err) { next(err); }
 });
@@ -439,6 +448,7 @@ router.patch('/weight-bands/:id', async (req, res, next) => {
 router.delete('/weight-bands/:id', async (req, res, next) => {
   try {
     await query('DELETE FROM weight_bands WHERE id = $1', [req.params.id]);
+    propagateWeightBands().catch(e => console.error('Error propagating weight bands:', e));
     res.json({ deleted: true });
   } catch (err) { next(err); }
 });
