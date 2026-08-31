@@ -320,23 +320,30 @@ export default function ShipmentsPage() {
 
       {/* ── Filter Bar ──────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
-        <div style={{ position: 'relative', flex: 1, maxWidth: 360 }}>
-          <Search size={14} style={{ position: 'absolute', left: 12, top: 10, color: 'var(--mv-ink-40)' }} />
+        <div className="mv-search" style={{ flex: 1, maxWidth: 360, height: 36 }}>
+          <Search size={14} style={{ color: 'var(--mv-ink-45)', flexShrink: 0 }} />
           <input
             type="text"
-            placeholder="Search tracking, reference, customer, service..."
+            placeholder="Search tracking, reference, customer, service…"
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1); }}
-            className="mv-input"
-            style={{ width: '100%', paddingLeft: 34, height: 36, fontSize: 13 }}
           />
+          {search && (
+            <button
+              onClick={() => { setSearch(''); setPage(1); }}
+              className="mv-search-clear"
+              title="Clear search"
+            >
+              ✕
+            </button>
+          )}
         </div>
 
         <select
           value={courierFilter}
           onChange={e => { setCourierFilter(e.target.value); setPage(1); }}
-          className="mv-input"
-          style={{ width: 160, height: 36, fontSize: 13 }}
+          className="pill-select"
+          style={{ width: 160, height: 36 }}
         >
           <option value="">All Couriers</option>
           <option value="DPD">DPD</option>
@@ -351,8 +358,8 @@ export default function ShipmentsPage() {
         <select
           value={customerFilter}
           onChange={e => { setCustomerFilter(e.target.value); setPage(1); }}
-          className="mv-input"
-          style={{ width: 220, height: 36, fontSize: 13 }}
+          className="pill-select"
+          style={{ width: 220, height: 36 }}
         >
           <option value="">All Customers</option>
           {customers.map(c => (

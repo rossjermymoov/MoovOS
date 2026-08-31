@@ -580,7 +580,7 @@ export default function TrackingPage() {
 
           <span style={{ flex: 1 }} />
 
-          <div className="mv-search" style={{ width: 280 }}>
+          <div className="mv-search" style={{ width: 280, height: 34 }}>
             <Search size={14} style={{ color: 'var(--mv-ink-45)', flexShrink: 0 }} />
             <input
               ref={searchRef}
@@ -591,7 +591,8 @@ export default function TrackingPage() {
             {search && (
               <button
                 onClick={() => setSearch('')}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mv-ink-45)', display: 'flex' }}
+                className="mv-search-clear"
+                title="Clear search"
               >
                 <X size={13} />
               </button>

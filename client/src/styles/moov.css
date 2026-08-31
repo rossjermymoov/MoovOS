@@ -114,35 +114,52 @@
 .mv-greet { font-weight: 800; font-size: 16px; letter-spacing: -.01em; }
 .mv-greet-sub { font-size: 11.5px; color: var(--mv-ink-52); margin-top: 1px; }
 .mv-search {
-  display: flex; align-items: center; gap: 8px; width: 280px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 280px;
+  height: 34px;
   background: var(--mv-surface);
   border: 1px solid var(--mv-hairline-2);
-  padding: 6px 10px;
-  transition: border-color .15s, background .15s;
+  border-radius: 0 !important;
+  padding: 0 10px;
+  box-sizing: border-box;
+  transition: border-color .15s, box-shadow .15s;
 }
 .mv-search:focus-within {
   border-color: var(--mv-purple);
-  background: #FFFFFF;
+  box-shadow: 0 0 0 1px var(--mv-purple);
 }
 .mv-search input {
-  flex: 1; min-width: 0; background: transparent; border: none; outline: none;
-  font-family: inherit; font-size: 12.5px; color: var(--mv-ink); padding: 0;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--mv-ink);
+  padding: 0 !important;
 }
 .mv-search input::placeholder {
   color: var(--mv-ink-45);
 }
-.mv-kbd {
-  font-size: 9.5px;
-  font-family: inherit;
-  font-weight: 700;
-  letter-spacing: .05em;
-  padding: 1px 5px;
-  background: var(--mv-bg);
-  border: 1px solid var(--mv-hairline-2);
-  color: var(--mv-ink-52);
-  line-height: 1.4;
-  display: inline-flex;
+.mv-search-clear {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--mv-ink-45);
+  display: flex;
   align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+}
+.mv-search-clear:hover {
+  color: var(--mv-ink);
 }
 .mv-icon-btn {
   width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;

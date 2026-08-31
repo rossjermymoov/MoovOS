@@ -59,22 +59,17 @@ function ContactSearch({ customerId, onLink, onClose }) {
 
   return (
     <div style={{ position: 'relative' }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 6,
-        background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.12)',
-        borderRadius: 7, padding: '5px 10px',
-      }}>
-        <Search size={12} color="#64748B" />
+      <div className="mv-search" style={{ width: 220, height: 32, padding: '0 8px' }}>
+        <Search size={12} style={{ color: 'var(--mv-ink-45)', flexShrink: 0 }} />
         <input
           ref={inputRef}
           value={q}
           onChange={e => setQ(e.target.value)}
           placeholder="Search Xero contacts…"
-          style={{ background: 'none', border: 'none', outline: 'none', color: '#334155', fontSize: 12, width: 200 }}
         />
         {searching
-          ? <RefreshCw size={11} color="#666" style={{ animation: 'spin 1s linear infinite', flexShrink: 0 }} />
-          : <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: 0, flexShrink: 0 }}>
+          ? <RefreshCw size={11} color="var(--mv-ink-45)" style={{ animation: 'spin 1s linear infinite', flexShrink: 0 }} />
+          : <button onClick={onClose} className="mv-search-clear" title="Close">
               <X size={13} />
             </button>
         }

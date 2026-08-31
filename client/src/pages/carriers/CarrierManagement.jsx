@@ -209,8 +209,8 @@ export default function CarrierManagement() {
           <div style={{ marginTop: 24 }}>
             {/* Search & Filter Bar */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div className="mv-search" style={{ width: 280 }}>
-                <Search size={14} style={{ color: 'var(--mv-ink-45)' }} />
+              <div className="mv-search" style={{ width: 280, height: 34 }}>
+                <Search size={14} style={{ color: 'var(--mv-ink-45)', flexShrink: 0 }} />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -219,9 +219,10 @@ export default function CarrierManagement() {
                 {search && (
                   <button
                     onClick={() => setSearch('')}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                    className="mv-search-clear"
+                    title="Clear search"
                   >
-                    <X size={13} style={{ color: 'var(--mv-ink-45)' }} />
+                    <X size={13} />
                   </button>
                 )}
               </div>

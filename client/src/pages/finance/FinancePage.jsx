@@ -969,18 +969,22 @@ function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ position: 'relative', flex: 1, minWidth: 180 }}>
-          <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748B' }} />
+        <div className="mv-search" style={{ flex: 1, minWidth: 200, height: 34 }}>
+          <Search size={13} style={{ color: 'var(--mv-ink-45)', flexShrink: 0 }} />
           <input
             value={search}
             onChange={e => { setSearch(e.target.value); setOffset(0); }}
             placeholder="Search order, customer…"
-            style={{
-              width: '100%', paddingLeft: 30, paddingRight: 10, height: 34,
-              background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)',
-              borderRadius: 8, color: '#0F172A', fontSize: 13,
-            }}
           />
+          {search && (
+            <button
+              onClick={() => { setSearch(''); setOffset(0); }}
+              className="mv-search-clear"
+              title="Clear search"
+            >
+              ✕
+            </button>
+          )}
         </div>
         <select
           value={custFilter}
@@ -1720,18 +1724,19 @@ export default function FinancePage() {
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
 
           {/* Search */}
-          <div className="pill-input-wrap" style={{ minWidth: 240, flex: 1 }}>
-            <Search size={14} style={{ marginLeft: 14, color: '#64748B', flexShrink: 0 }} />
+          <div className="mv-search" style={{ minWidth: 240, flex: 1, height: 34 }}>
+            <Search size={14} style={{ color: 'var(--mv-ink-45)', flexShrink: 0 }} />
             <input
               value={filters.search}
               onChange={e => setFilter('search', e.target.value)}
               placeholder="Search customer, order ID, service…"
-              style={{ flex: 1, background: 'none', border: 'none', outline: 'none',
-                color: '#0F172A', fontSize: 13, padding: '8px 14px 8px 8px' }}
             />
             {filters.search && (
-              <button onClick={() => setFilter('search', '')}
-                style={{ marginRight: 8, background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: 2 }}>
+              <button
+                onClick={() => setFilter('search', '')}
+                className="mv-search-clear"
+                title="Clear search"
+              >
                 <X size={12} />
               </button>
             )}

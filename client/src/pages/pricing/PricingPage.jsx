@@ -670,7 +670,7 @@ export default function PricingPage() {
 
           <span style={{ flex: 1 }} />
 
-          <div className="mv-search" style={{ width: 260 }}>
+          <div className="mv-search" style={{ width: 260, height: 34 }}>
             <Search size={14} style={{ color: 'var(--mv-ink-45)', flexShrink: 0 }} />
             <input
               value={search}
@@ -678,7 +678,7 @@ export default function PricingPage() {
               placeholder="Search company…"
             />
             {search && (
-              <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mv-ink-45)', display: 'flex' }}>
+              <button onClick={() => setSearch('')} className="mv-search-clear" title="Clear search">
                 <X size={13} />
               </button>
             )}

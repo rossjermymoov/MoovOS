@@ -164,25 +164,27 @@ option {
   color: var(--text-primary);
 }
 
-/* ── Search / pill input wrap ────────────────────────────────────────────────── */
-/* Kept for backward compat — now rectangular not pill */
+/* ── Search / input wrap ────────────────────────────────────────────────── */
 .pill-input-wrap {
   display: flex;
   align-items: center;
-  background: #FFFFFF;
-  border-radius: 8px;
-  border: 0.5px solid rgba(0,0,0,0.12);
+  background: var(--mv-surface, #eae9e9);
+  border-radius: 0 !important;
+  border: 1px solid var(--mv-hairline-2, rgba(0,0,0,0.18));
   overflow: hidden;
-  transition: border-color 0.12s;
+  transition: border-color 0.12s, box-shadow 0.12s;
 }
-.pill-input-wrap:focus-within { border-color: rgba(0,0,0,0.28); }
+.pill-input-wrap:focus-within {
+  border-color: var(--mv-purple, #7B2FBE);
+  box-shadow: 0 0 0 1px var(--mv-purple, #7B2FBE);
+}
 .pill-input-wrap input,
 .pill-input-wrap select {
   flex: 1;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  outline: none;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  outline: none !important;
   color: var(--text-primary);
   padding: 8px 12px;
   font-size: 13px;
@@ -193,7 +195,7 @@ option {
   border-color: transparent;
 }
 .pill-input-wrap .green-cap {
-  background: #0F172A;
+  background: var(--mv-ink, #201e1d);
   color: #FFFFFF;
   padding: 0 14px;
   height: 100%;
@@ -201,26 +203,21 @@ option {
   align-items: center;
   cursor: pointer;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 700;
   min-height: 36px;
+  border-radius: 0 !important;
 }
 
 /* ── Pill-select (standalone) ────────────────────────────────────────────────── */
 .pill-select {
-  background: #FFFFFF !important;
-  border: 0.5px solid rgba(0,0,0,0.12) !important;
-  border-radius: 8px !important;
-  color: var(--text-primary) !important;
-  padding: 7px 12px !important;
-  height: 36px;
+  background: var(--mv-surface, #eae9e9) !important;
+  border: 1px solid var(--mv-hairline-2, rgba(0,0,0,0.18)) !important;
+  border-radius: 0 !important;
+  padding: 6px 12px;
   font-size: 13px;
+  color: var(--text-primary);
   outline: none;
   cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
-  display: inline-block;
-  vertical-align: middle;
-  font-family: inherit;
 }
 .pill-select:focus { border-color: rgba(0,0,0,0.28) !important; }
 
