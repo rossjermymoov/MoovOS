@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Search, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -16,11 +16,30 @@ export default function TopBar() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [now, setNow] = useState(new Date());
+  const searchInputRef = useRef(null);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(t);
   }, []);
+
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  function handleSearchKeyDown(e) {
+    if (e.key === 'Enter' && search.trim()) {
+      const q = search.trim();
+      navigate(`/shipments?search=${encodeURIComponent(q)}`);
+    }
+  }
 
   const dateStr = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
   const firstName = user?.full_name?.split(' ')[0] || 'Ross';
@@ -34,8 +53,14 @@ export default function TopBar() {
 
       <div className="mv-search">
         <Search size={14} style={{ color: 'var(--mv-ink-45)', flexShrink: 0 }} />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search consignment, customer…" />
-        <span style={{ fontSize: 10, color: 'var(--mv-ink-45)', flexShrink: 0 }}>⌘K</span>
+        <input
+          ref={searchInputRef}
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          onKeyDown={handleSearchKeyDown}
+          placeholder="Search consignment, customer…"
+        />
+        <kbd className="mv-kbd">⌘K</kbd>
       </div>
 
       <NotificationBell />
