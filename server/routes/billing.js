@@ -1142,9 +1142,12 @@ router.post('/webhook', (req, res) => {
     // ── Guard: only process recognised shipment lifecycle events ──────────────
     const SHIPMENT_EVENTS = new Set([
       'shipment.created', 'shipment.cancelled', 'shipment.deleted', 'shipment.updated',
+      'shipment_created', 'shipment_cancelled', 'shipment_deleted', 'shipment_updated',
+      'shipment:created', 'shipment:cancelled', 'shipment:deleted', 'shipment:updated',
+      'created', 'cancelled', 'deleted', 'updated', 'shipment', 'order.created', 'order_created',
     ]);
     const TRACKING_KEYWORDS = ['tracking', 'parcel.scan', 'delivery_update', 'status_update'];
-    const lowerEvent = eventType.toLowerCase();
+    const lowerEvent = eventType.toLowerCase().trim();
     const isOtherTrackingEvent = TRACKING_KEYWORDS.some(k => lowerEvent.includes(k));
 
     if (isOtherTrackingEvent) {
@@ -1157,8 +1160,9 @@ router.post('/webhook', (req, res) => {
       return; // response already sent above
     }
 
-    // Anything else unrecognised — skip cleanly
-    if (eventType && !SHIPMENT_EVENTS.has(eventType)) {
+    // Anything else unrecognised unless it clearly contains a shipment/request_shipment object — skip cleanly
+    const hasShipmentObj = !!(payload.shipment || payload.request_shipment || payload.request?.shipment);
+    if (eventType && !SHIPMENT_EVENTS.has(lowerEvent) && !hasShipmentObj) {
       return; // response already sent above
     }
 

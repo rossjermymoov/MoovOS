@@ -232,6 +232,49 @@ export function normalisePayload(body) {
     return events;
   }
 
+  // Format C: shipment booking / creation event
+  if (payload.shipment || payload.request_shipment || (payload.event_type && String(payload.event_type).toLowerCase().includes('shipment'))) {
+    const shipment = payload.shipment || {};
+    const reqShip  = extractRequestShipment(shipment.request_shipment ? shipment : payload);
+    const shipTo   = reqShip.ship_to || {};
+    const reqParcels = reqShip.parcels || [];
+    const firstReqP = reqParcels[0] || {};
+    const createParcels = shipment.create_label_parcels || [];
+    const trackingCodes = createParcels.length
+      ? createParcels.map(p => p.tracking_code).filter(Boolean)
+      : (payload.response?.tracking_codes || (reqShip.billing?.tracking_code ? [reqShip.billing.tracking_code] : []));
+
+    const streetLine1 = [shipTo.address_1, shipTo.address_2, shipTo.address_3].filter(Boolean).join(', ');
+    const streetLine2 = [shipTo.city, shipTo.county, shipTo.postcode].filter(Boolean).join(', ');
+    const fullAddr = [streetLine1, streetLine2].filter(Boolean).join(', ') || shipment.ship_to_address || null;
+    const resolvedWeight = firstReqP.weight || firstReqP._summed_item_weights || reqShip._summed_total_weight || shipment.weight || null;
+
+    if (trackingCodes.length) {
+      return trackingCodes.map(code => ({
+        _consignment:           code,
+        _platform_shipment_id:  shipment.id ? String(shipment.id) : null,
+        _shipment_reference:    shipment.reference || reqShip.reference || null,
+        _courier_name:       shipment.courier || reqShip.courier?.friendly_service_name || null,
+        _courier_code:       shipment.courier ? shipment.courier.toLowerCase() : null,
+        _service_name:       shipment.friendly_service_name || reqShip.courier?.friendly_service_name || null,
+        _customer_name:      shipment.account_name || reqShip.account_name || null,
+        _customer_account:   shipment.account_number || reqShip.account_number || null,
+        _recipient_name:     shipTo.name || shipment.ship_to_name || shipment.ship_to_company_name || shipment.recipient_name || null,
+        _recipient_postcode: shipTo.postcode || shipment.ship_to_postcode || shipment.postcode || null,
+        _recipient_address:  fullAddr,
+        _weight_kg:          resolvedWeight,
+        _estimated_delivery: null,
+        _tracking_url:       null,
+        _raw:                payload,
+        status:              'booked',
+        status_description:  'Shipment Booked / Manifested',
+        location:            null,
+        timestamp:           new Date().toISOString(),
+        event_code:          'booked',
+      }));
+    }
+  }
+
   // Format B: simple flat event(s)
   return Array.isArray(payload) ? payload : [payload];
 }
