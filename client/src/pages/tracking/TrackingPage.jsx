@@ -653,7 +653,7 @@ function ParcelDrawer({ consignment, onClose }) {
                 </div>
                 {[
                   ['Recipient Name',  data?.recipient_name || '—'],
-                  ['Street Address',  data?.recipient_address || '—'],
+                  ['Street Address',  data?.recipient_address || (data?.recipient_postcode ? `Postcode: ${data.recipient_postcode}` : '—')],
                   ['Postcode / ZIP',  data?.recipient_postcode || '—'],
                   ['Country',         formatCountryName(data?.country_code)],
                 ].map(([label, value]) => (
@@ -667,13 +667,13 @@ function ParcelDrawer({ consignment, onClose }) {
               {/* Weight & Physical Specs Card */}
               <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', padding: '16px 18px' }}>
                 <div className="mv-kicker" style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Scale size={12} color="var(--mv-purple)" /> Weight &amp; Physical Specifications
+                  <Scale size={12} color="var(--mv-purple)" /> Weight &amp; Volumetric Specifications
                 </div>
                 {[
-                  ['Declared Weight',   data?.weight_kg != null ? `${Number(data.weight_kg).toFixed(2)} kg` : '—'],
-                  ['Charged Weight',    data?.charge_details?.weight_charged_kg != null ? `${Number(data.charge_details.weight_charged_kg).toFixed(2)} kg` : (data?.weight_kg != null ? `${Number(data.weight_kg).toFixed(2)} kg` : '—')],
-                  ['Dimensional Weight', data?.charge_details?.weight_dimensional_kg != null ? `${Number(data.charge_details.weight_dimensional_kg).toFixed(2)} kg` : '—'],
-                  ['Routing Profile',   isIntl ? 'International Cross-Border Freight' : 'Domestic Standard Network'],
+                  ['Declared Weight',     data?.weight_kg != null ? `${Number(data.weight_kg).toFixed(2)} kg` : '—'],
+                  ['Dimensional Weight',  data?.dimensional_weight_kg != null ? `${Number(data.dimensional_weight_kg).toFixed(2)} kg` : (data?.dimensions ? `${((data.dimensions.length * data.dimensions.width * data.dimensions.height) / data.dimensions.divisor).toFixed(2)} kg` : '—')],
+                  ['Dimensions (L×W×H)',  data?.dimensions ? `${data.dimensions.length} × ${data.dimensions.width} × ${data.dimensions.height} cm` : '—'],
+                  ['Routing Profile',     isIntl ? 'International Air Route' : 'Domestic UK Network'],
                 ].map(([label, value]) => (
                   <div key={label} style={{ display: 'flex', padding: '8px 0', borderBottom: '1px solid var(--mv-hairline)' }}>
                     <span style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', width: 130, flexShrink: 0 }}>{label}</span>
@@ -693,7 +693,6 @@ function ParcelDrawer({ consignment, onClose }) {
                   ['Consignment Ref',   data?.consignment_number || '—'],
                   ['Despatch Date',     data?.created_at ? new Date(data.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'],
                   ['Estimated Delivery',data?.estimated_delivery ? new Date(data.estimated_delivery).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'],
-                  ['Last Known Hub',    data?.last_location || '—'],
                 ].map(([label, value]) => (
                   <div key={label} style={{ display: 'flex', padding: '8px 0', borderBottom: '1px solid var(--mv-hairline)' }}>
                     <span style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', width: 130, flexShrink: 0 }}>{label}</span>
@@ -718,12 +717,11 @@ function ParcelDrawer({ consignment, onClose }) {
               {/* Customer Account Card */}
               <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', padding: '16px 18px' }}>
                 <div className="mv-kicker" style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Building2 size={12} color="var(--mv-purple)" /> Customer &amp; Billing Account
+                  <Building2 size={12} color="var(--mv-purple)" /> Customer &amp; Sender Details
                 </div>
                 {[
                   ['Customer Name',    data?.customer_name || '—'],
                   ['Account Code',     data?.customer_account || '—'],
-                  ['Billed Sell Price', data?.charge_details?.sell_price != null ? `£${Number(data.charge_details.sell_price).toFixed(2)}` : '—'],
                 ].map(([label, value]) => (
                   <div key={label} style={{ display: 'flex', padding: '8px 0', borderBottom: '1px solid var(--mv-hairline)' }}>
                     <span style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', width: 130, flexShrink: 0 }}>{label}</span>

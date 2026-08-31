@@ -190,10 +190,14 @@ export function normalisePayload(body) {
           _service_name:       shipment.friendly_service_name || null,
           _customer_name:      shipment.account_name || null,
           _customer_account:   shipment.account_number || null,
-          _recipient_name:     shipment.ship_to_name || shipment.ship_to_company_name || null,
-          _recipient_postcode: shipment.ship_to_postcode || tu.address_information?.postcode || null,
-          _recipient_address:  shipment.ship_to_address || null,
-          _weight_kg:          parcel.weight || null,
+          _recipient_name:     shipment.ship_to_name || shipment.ship_to_company_name || shipment.recipient_name || tu.address_information?.name || null,
+          _recipient_postcode: shipment.ship_to_postcode || tu.address_information?.postcode || shipment.postcode || null,
+          _recipient_address:  shipment.ship_to_address
+            || [shipment.ship_to_address_1, shipment.ship_to_address_2, shipment.ship_to_address_3, shipment.ship_to_city, shipment.ship_to_county].filter(Boolean).join(', ')
+            || shipment.address
+            || tu.address_information?.address
+            || null,
+          _weight_kg:          parcel.weight || parcel.weight_kg || parcel.actual_weight || parcel.gross_weight || parcel.declared_weight || shipment.weight || shipment.total_weight || null,
           _estimated_delivery: tu.expected_delivery || shipment.tracking_expected_delivery_date || null,
           _tracking_url:       parcel.tracking_url || parcel.trackingUrl || null,
           _raw:                ev,
@@ -243,10 +247,10 @@ export async function upsertEvent(event, rawBody) {
   const serviceName    = event._service_name    || pick(event, 'service', 'service_name', 'serviceName', 'product', 'service_type');
   const customerName   = event._customer_name   || pick(event, 'customer.name', 'customer_name', 'customerName', 'sender', 'sender_name', 'account_name');
   const customerAccount= event._customer_account|| pick(event, 'customer.account_number', 'account_number', 'accountNumber', 'moov_account', 'moovAccount');
-  const recipientName  = event._recipient_name  || pick(event, 'recipient.name', 'recipient_name', 'recipientName', 'consignee', 'delivery_name');
-  const recipientPost  = event._recipient_postcode || pick(event, 'recipient.postcode', 'postcode', 'delivery_postcode', 'recipientPostcode', 'zip');
-  const recipientAddr  = event._recipient_address  || pick(event, 'recipient.address', 'address', 'delivery_address', 'recipientAddress');
-  const weightKg       = event._weight_kg       || pick(event, 'weight_kg', 'weightKg', 'weight', 'gross_weight');
+  const recipientName  = event._recipient_name  || pick(event, 'recipient.name', 'recipient_name', 'recipientName', 'consignee', 'delivery_name', 'ship_to_name');
+  const recipientPost  = event._recipient_postcode || pick(event, 'recipient.postcode', 'postcode', 'delivery_postcode', 'recipientPostcode', 'zip', 'ship_to_postcode');
+  const recipientAddr  = event._recipient_address  || pick(event, 'recipient.address', 'recipient.street', 'recipient_address', 'delivery_address', 'address', 'ship_to_address', 'street', 'address_1');
+  const weightKg       = event._weight_kg       || pick(event, 'weight_kg', 'weightKg', 'weight', 'gross_weight', 'declared_weight', 'actual_weight', 'weight_actual_kg');
   const estDelivery    = event._estimated_delivery || pick(event, 'estimated_delivery', 'estimatedDelivery', 'eta', 'due_date');
   const trackingUrl    = event._tracking_url    || pick(event, 'tracking_url', 'trackingUrl', 'track_url', 'parcel_tracking_url');
 
@@ -746,14 +750,15 @@ router.get('/:consignment', async (req, res, next) => {
     try {
       const chargeRes = await query(
         `SELECT c.weight_actual_kg, c.weight_charged_kg, c.weight_dimensional_kg,
-                c.ship_to_country_iso, c.ship_to_postcode, c.ship_to_name,
-                c.cost_price, c.sell_price, c.margin, c.despatch_date
+                c.ship_to_country_iso, c.ship_to_postcode, c.ship_to_name, c.ship_to_address,
+                c.cost_price, c.sell_price, c.margin, c.despatch_date, c.raw_payload
          FROM charges c
          WHERE c.voila_shipment_id = $1
             OR c.order_id = $1
             OR (c.raw_payload->'tracking_codes' IS NOT NULL AND c.raw_payload->'tracking_codes' ? $1)
             OR c.raw_payload->>'consignment_number' = $1
             OR c.raw_payload->>'tracking_number' = $1
+            OR c.raw_payload->'shipment'->>'reference' = $1
          LIMIT 1`,
         [req.params.consignment]
       );
@@ -764,25 +769,51 @@ router.get('/:consignment', async (req, res, next) => {
       // Non-fatal if charge lookup fails
     }
 
+    // Extract dimensions from raw_payload if available
+    const rawPayload = charge?.raw_payload || {};
+    const reqShip = rawPayload.request_shipment || rawPayload.shipment || {};
+    const pArr = reqShip.parcels || [];
+    const firstP = pArr[0] || {};
+    const dimL = parseFloat(firstP.dim_length || firstP.length || rawPayload.dim_length) || null;
+    const dimW = parseFloat(firstP.dim_width || firstP.width || rawPayload.dim_width) || null;
+    const dimH = parseFloat(firstP.dim_height || firstP.height || rawPayload.dim_height) || null;
+
+    // Determine volumetric divisor from courier rules
+    const courierCode = (parcel.courier_code || charge?.courier_code || '').toLowerCase();
+    const divisor = courierCode.includes('dpd') ? 4000 : 5000;
+
+    let dimensionalWeightKg = charge?.weight_dimensional_kg ? Number(charge.weight_dimensional_kg) : null;
+    if (!dimensionalWeightKg && dimL && dimW && dimH) {
+      dimensionalWeightKg = Number(((dimL * dimW * dimH) / divisor).toFixed(2));
+    }
+
+    // Resolve recipient address from all sources
+    const recipientAddress = parcel.recipient_address
+      || charge?.ship_to_address
+      || [reqShip.ship_to?.address_1, reqShip.ship_to?.address_2, reqShip.ship_to?.city, reqShip.ship_to?.county].filter(Boolean).join(', ')
+      || [reqShip.address_line_1, reqShip.address_line_2, reqShip.city].filter(Boolean).join(', ')
+      || null;
+
     const country_code = detectCountryCode(parcel, charge);
-    const weight_kg = parcel.weight_kg != null ? parcel.weight_kg : (charge?.weight_actual_kg || charge?.weight_charged_kg || null);
+    const weight_kg = parcel.weight_kg != null ? parcel.weight_kg : (charge?.weight_actual_kg || parseFloat(firstP.weight) || null);
     const is_international = country_code !== 'GB' && country_code !== 'UK';
+
+    // If delivered, filter out any redundant post-delivery technical noise
+    let filteredEvents = eventsRes.rows;
+    const deliveredIdx = filteredEvents.findIndex(e => String(e.status).toLowerCase() === 'delivered');
+    if (deliveredIdx !== -1) {
+      filteredEvents = filteredEvents.slice(deliveredIdx);
+    }
 
     res.json({
       ...parcel,
+      recipient_address: recipientAddress,
       weight_kg,
+      dimensional_weight_kg: dimensionalWeightKg,
+      dimensions: (dimL && dimW && dimH) ? { length: dimL, width: dimW, height: dimH, divisor } : null,
       country_code,
       is_international,
-      charge_details: charge ? {
-        weight_actual_kg: charge.weight_actual_kg,
-        weight_charged_kg: charge.weight_charged_kg,
-        weight_dimensional_kg: charge.weight_dimensional_kg,
-        cost_price: charge.cost_price,
-        sell_price: charge.sell_price,
-        margin: charge.margin,
-        ship_to_country_iso: charge.ship_to_country_iso,
-      } : null,
-      events: eventsRes.rows,
+      events: filteredEvents,
     });
   } catch (err) { next(err); }
 });
