@@ -787,8 +787,9 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData, 
       WHERE shipment_id = $1
         AND charge_type = 'surcharge'
         AND invoice_id IS NULL
+        AND UPPER(service_name) NOT LIKE '%HGV%'
         AND (
-          surcharge_id IN (SELECT id FROM surcharges WHERE applies_when != 'always')
+          surcharge_id IN (SELECT id FROM surcharges WHERE applies_when != 'always' AND UPPER(name) NOT LIKE '%HGV%' AND UPPER(code) NOT LIKE '%HGV%')
           OR service_name ILIKE '%third party%'
           OR service_name ILIKE '%3rd party%'
         )
@@ -818,12 +819,6 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData, 
     if (!courierId) return; // can't resolve carrier — skip surcharges
 
     // Step 2: fetch all active surcharges for this carrier.
-    // Two categories are included:
-    //   a) Normal auto-apply surcharges (applies_when = 'always' / null) — billed to customer.
-    //   b) Absorbed-cost surcharges (reconciliation_excluded = true) — regardless of applies_when.
-    //      These are costs we pay the carrier but never pass on.  We still need a charge row
-    //      so that booking-day cost_price is accurate and profitability figures are correct.
-    //      Their sell price (price) is forced to 0 further down.
     const { rows: surcharges } = await query(`
       SELECT s.*,
              COALESCE((
@@ -834,22 +829,22 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData, 
       FROM surcharges s
       WHERE s.active = true
         AND s.courier_id = $1
-        AND s.applies_when = 'always'
+        AND (
+          s.applies_when = 'always'
+          OR UPPER(s.code) LIKE '%HGV%'
+          OR UPPER(s.name) LIKE '%HGV%'
+        )
         AND (s.effective_date IS NULL OR s.effective_date <= CURRENT_DATE)
     `, [courierId]);
 
     for (const surcharge of surcharges) {
+      const isHgv = (surcharge.name || '').toUpperCase().includes('HGV') || (surcharge.code || '').toUpperCase().includes('HGV');
       const rules = Array.isArray(surcharge.rules) ? surcharge.rules : [];
 
-      // No rules + applies_when='always' → fires on every shipment for this courier.
-      // Rules with no filter conditions also fire unconditionally (evaluateSurchargeFilters returns true).
-      // Only skip if there are rules and NONE of them match.
       let matched = false;
-      if (!rules.length) {
-        // No rules configured → applies to all shipments for this courier
+      if (isHgv || !rules.length) {
         matched = true;
       } else {
-        // Any rule match fires the surcharge (OR across rules)
         for (const rule of rules) {
           if (evaluateSurchargeFilters(rule, shipmentData)) { matched = true; break; }
         }
@@ -875,35 +870,31 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData, 
 
       // Calculate price based on calc_type and charge_per
       let price;
-      if (surcharge.calc_type === 'percentage') {
-        // Percentage of base rate (fuel-style)
+      if (isHgv) {
+        price = 0.00; // HGV is absorbed: sell for 0
+      } else if (surcharge.calc_type === 'percentage') {
         price = parseFloat(((parseFloat(basePrice) || 0) * effectiveValue / 100).toFixed(2));
       } else if (surcharge.charge_per === 'parcel') {
-        // Flat per parcel — multiply by parcel count
         price = parseFloat((effectiveValue * (shipmentData.parcel_count || 1)).toFixed(2));
       } else {
-        // Flat per shipment
         price = effectiveValue;
       }
 
-      // Carrier cost uses surcharge.cost_price — explicitly what the carrier charges us.
-      // For pass-through surcharges cost_price = default_value (e.g. HGV 13p = 13p).
-      // For surcharges we charge customers but don't pay the carrier (e.g. EPS),
-      // cost_price = 0 so reconciliation naturally ignores them.
-      const carrierCostRate = parseFloat(surcharge.cost_price ?? surcharge.default_value ?? 0);
+      // Carrier cost
       let carrierSurchargeCost;
-      if (surcharge.calc_type === 'percentage') {
-        carrierSurchargeCost = parseFloat(((parseFloat(basePrice) || 0) * carrierCostRate / 100).toFixed(2));
-      } else if (surcharge.charge_per === 'parcel') {
-        carrierSurchargeCost = parseFloat((carrierCostRate * (shipmentData.parcel_count || 1)).toFixed(2));
+      if (isHgv) {
+        carrierSurchargeCost = parseFloat((0.22 * (shipmentData.parcel_count || 1)).toFixed(2));
       } else {
-        carrierSurchargeCost = carrierCostRate;
+        const carrierCostRate = parseFloat(surcharge.cost_price ?? surcharge.default_value ?? 0);
+        if (surcharge.calc_type === 'percentage') {
+          carrierSurchargeCost = parseFloat(((parseFloat(basePrice) || 0) * carrierCostRate / 100).toFixed(2));
+        } else if (surcharge.charge_per === 'parcel') {
+          carrierSurchargeCost = parseFloat((carrierCostRate * (shipmentData.parcel_count || 1)).toFixed(2));
+        } else {
+          carrierSurchargeCost = carrierCostRate;
+        }
       }
 
-      // reconciliation_excluded = true means the carrier does NOT invoice us for this
-      // surcharge (e.g. EPS — we charge it to customers but DHL never bills us back).
-      // It does NOT mean "don't charge the customer" — that was a previous mis-reading.
-      // The reconciliation engine ignores these surcharges independently via the flag.
       const sellPrice = price;
 
       await query(`
@@ -911,6 +902,21 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData, 
           (shipment_id, customer_id, charge_type, service_name, price, cost_price, price_auto, surcharge_id, parcel_qty)
         VALUES ($1, $2, 'surcharge', $3, $4, $5, true, $6, 1)
       `, [shipmentId, customerId, surcharge.name, sellPrice, carrierSurchargeCost, surcharge.id]);
+    }
+
+    // Ensure HGV Surcharge is ALWAYS present (Sell: £0.00, Cost: £0.22 per parcel)
+    const { rows: hgvExists } = await query(
+      `SELECT id FROM charges WHERE shipment_id = $1 AND UPPER(service_name) LIKE '%HGV%'`,
+      [shipmentId]
+    );
+    if (!hgvExists.length) {
+      const parcelCount = shipmentData.parcel_count || 1;
+      const hgvCost = parseFloat((0.22 * parcelCount).toFixed(2));
+      await query(`
+        INSERT INTO charges
+          (shipment_id, customer_id, charge_type, service_name, price, cost_price, price_auto, parcel_qty)
+        VALUES ($1, $2, 'surcharge', 'HGV Surcharge', 0.00, $3, true, $4)
+      `, [shipmentId, customerId, hgvCost, parcelCount]);
     }
 
     // ── Fuel group charge ─────────────────────────────────────────────────────
