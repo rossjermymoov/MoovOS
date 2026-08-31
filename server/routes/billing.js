@@ -833,16 +833,21 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData, 
           s.applies_when = 'always'
           OR UPPER(s.code) LIKE '%HGV%'
           OR UPPER(s.name) LIKE '%HGV%'
+          OR UPPER(s.code) LIKE '%CARRIAGE%'
+          OR UPPER(s.name) LIKE '%CARRIAGE%'
         )
         AND (s.effective_date IS NULL OR s.effective_date <= CURRENT_DATE)
     `, [courierId]);
 
     for (const surcharge of surcharges) {
-      const isHgv = (surcharge.name || '').toUpperCase().includes('HGV') || (surcharge.code || '').toUpperCase().includes('HGV');
+      const isCarriageOrHgv = (surcharge.name || '').toUpperCase().includes('HGV') ||
+                              (surcharge.code || '').toUpperCase().includes('HGV') ||
+                              (surcharge.name || '').toUpperCase().includes('CARRIAGE') ||
+                              (surcharge.code || '').toUpperCase().includes('CARRIAGE');
       const rules = Array.isArray(surcharge.rules) ? surcharge.rules : [];
 
       let matched = false;
-      if (isHgv || !rules.length) {
+      if (isCarriageOrHgv || !rules.length) {
         matched = true;
       } else {
         for (const rule of rules) {
@@ -870,8 +875,8 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData, 
 
       // Calculate price based on calc_type and charge_per
       let price;
-      if (isHgv) {
-        price = 0.00; // HGV is absorbed: sell for 0
+      if (isCarriageOrHgv) {
+        price = 0.00; // Carriage / HGV is absorbed: sell for 0
       } else if (surcharge.calc_type === 'percentage') {
         price = parseFloat(((parseFloat(basePrice) || 0) * effectiveValue / 100).toFixed(2));
       } else if (surcharge.charge_per === 'parcel') {
@@ -882,7 +887,7 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData, 
 
       // Carrier cost
       let carrierSurchargeCost;
-      if (isHgv) {
+      if (isCarriageOrHgv) {
         carrierSurchargeCost = parseFloat((0.22 * (shipmentData.parcel_count || 1)).toFixed(2));
       } else {
         const carrierCostRate = parseFloat(surcharge.cost_price ?? surcharge.default_value ?? 0);
@@ -904,9 +909,9 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData, 
       `, [shipmentId, customerId, surcharge.name, sellPrice, carrierSurchargeCost, surcharge.id]);
     }
 
-    // Ensure HGV Surcharge is ALWAYS present (Sell: £0.00, Cost: £0.22 per parcel)
+    // Ensure Carriage / HGV Surcharge is ALWAYS present (Sell: £0.00, Cost: £0.22 per parcel)
     const { rows: hgvExists } = await query(
-      `SELECT id FROM charges WHERE shipment_id = $1 AND UPPER(service_name) LIKE '%HGV%'`,
+      `SELECT id FROM charges WHERE shipment_id = $1 AND (UPPER(service_name) LIKE '%HGV%' OR UPPER(service_name) LIKE '%CARRIAGE%')`,
       [shipmentId]
     );
     if (!hgvExists.length) {
@@ -915,7 +920,7 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData, 
       await query(`
         INSERT INTO charges
           (shipment_id, customer_id, charge_type, service_name, price, cost_price, price_auto, parcel_qty)
-        VALUES ($1, $2, 'surcharge', 'HGV Surcharge', 0.00, $3, true, $4)
+        VALUES ($1, $2, 'surcharge', 'Carriage Surcharge', 0.00, $3, true, $4)
       `, [shipmentId, customerId, hgvCost, parcelCount]);
     }
 
