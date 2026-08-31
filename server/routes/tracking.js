@@ -813,6 +813,8 @@ router.get('/:consignment', async (req, res, next) => {
       dimensions: (dimL && dimW && dimH) ? { length: dimL, width: dimW, height: dimH, divisor } : null,
       country_code,
       is_international,
+      raw_webhook: eventsRes.rows[0]?.raw_payload || charge?.raw_payload || null,
+      charge_raw_payload: charge?.raw_payload || null,
       events: filteredEvents,
     });
   } catch (err) { next(err); }

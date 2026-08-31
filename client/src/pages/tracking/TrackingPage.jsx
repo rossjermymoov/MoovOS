@@ -636,6 +636,9 @@ function ParcelDrawer({ consignment, onClose }) {
           <button className={`mv-tab ${activeTab === 'claims' ? 'is-active' : ''}`} onClick={() => setActiveTab('claims')}>
             Claims Window
           </button>
+          <button className={`mv-tab ${activeTab === 'raw' ? 'is-active' : ''}`} onClick={() => setActiveTab('raw')}>
+            Raw Webhook JSON
+          </button>
         </div>
 
         {/* Tab Content */}
@@ -730,8 +733,33 @@ function ParcelDrawer({ consignment, onClose }) {
                 ))}
               </div>
             </div>
-          ) : (
+          ) : activeTab === 'claims' ? (
             <ClaimsTab data={data} consignment={consignment} />
+          ) : (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div className="mv-kicker">Raw Ingested Webhook Payload</div>
+                <button
+                  onClick={() => {
+                    const str = JSON.stringify(data?.raw_webhook || data?.charge_raw_payload || data, null, 2);
+                    navigator.clipboard.writeText(str);
+                    alert('Raw webhook JSON copied to clipboard');
+                  }}
+                  className="mv-btn-ghost"
+                  style={{ fontSize: 11.5, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 5 }}
+                >
+                  <Copy size={12} /> Copy JSON
+                </button>
+              </div>
+              <pre style={{
+                background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)',
+                padding: '14px 16px', fontSize: 11.5, color: 'var(--mv-ink)',
+                fontFamily: 'monospace', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+                maxHeight: 'calc(100vh - 280px)', lineHeight: 1.5,
+              }}>
+                {JSON.stringify(data?.raw_webhook || data?.charge_raw_payload || { message: 'No raw webhook captured for this parcel' }, null, 2)}
+              </pre>
+            </div>
           )}
         </div>
       </div>
