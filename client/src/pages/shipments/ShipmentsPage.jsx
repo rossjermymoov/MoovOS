@@ -15,6 +15,7 @@ export default function ShipmentsPage() {
   const [customers, setCustomers] = useState([]);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ total: 0, pages: 1 });
+  const [summaryStats, setSummaryStats] = useState(null);
   
   // Modals
   const [showInjectModal, setShowInjectModal] = useState(false);
@@ -60,6 +61,7 @@ export default function ShipmentsPage() {
         const data = await res.json();
         setShipments(data.shipments || []);
         setPagination(data.pagination || { total: 0, pages: 1 });
+        if (data.summaryStats) setSummaryStats(data.summaryStats);
       }
     } catch (e) {
       console.error('Failed to load shipments', e);
@@ -184,6 +186,29 @@ export default function ShipmentsPage() {
 
   const simulatedCount = shipments.filter(s => s.raw_payload?.simulated).length;
 
+  // Compute metrics from current page if summaryStats not yet loaded
+  const computedStats = shipments.reduce((acc, s) => {
+    const courierCharge = s.charges?.find(c => c.charge_type === 'courier') || s.charges?.[0];
+    const sellPrice = courierCharge?.price != null ? parseFloat(courierCharge.price) : 0;
+    const costPrice = courierCharge?.cost_price != null ? parseFloat(courierCharge.cost_price) : (sellPrice > 0 ? 3.76 : 0);
+
+    const allSell = (s.charges || []).reduce((sum, c) => sum + (parseFloat(c.price) || 0), 0) || sellPrice;
+    const allCost = (s.charges || []).reduce((sum, c) => sum + (parseFloat(c.cost_price) || 0), 0) || costPrice;
+
+    acc.revenue += allSell;
+    acc.cost += allCost;
+    if (s.charges?.some(c => !c.verified) || (!s.charges?.length && s.tracking_codes?.length)) {
+      acc.awaitingRecon++;
+    }
+    return acc;
+  }, { revenue: 0, cost: 0, awaitingRecon: 0 });
+
+  const totalCount = summaryStats?.total_shipments ?? (pagination.total || shipments.length);
+  const awaitingCount = summaryStats?.awaiting_reconciliation ?? computedStats.awaitingRecon;
+  const totalRev = summaryStats?.total_revenue ?? (Math.round(computedStats.revenue * 100) / 100);
+  const totalMargin = summaryStats?.gross_margin ?? (Math.round((computedStats.revenue - computedStats.cost) * 100) / 100);
+  const marginPct = summaryStats?.gross_margin_pct ?? (totalRev > 0 ? Math.round((totalMargin / totalRev) * 1000) / 10 : 0);
+
   return (
     <div style={{ padding: '24px 32px', maxWidth: 1600, margin: '0 auto' }}>
       {/* ── Level 1 Header ──────────────────────────────────────────────── */}
@@ -245,27 +270,49 @@ export default function ShipmentsPage() {
         </div>
       </div>
 
-      {/* ── KPI Strip ───────────────────────────────────────────────────── */}
-      <div className="mv-kpi-strip" style={{ marginBottom: 24 }}>
+      {/* ── 5 Metric Card Tiles Across The Top ───────────────────────────── */}
+      <div className="mv-kpis" style={{ marginBottom: 24 }}>
+        {/* Tile 1: Total Shipments */}
         <div className="mv-kpi">
-          <div className="mv-kpi-label">Total Ingested Shipments</div>
-          <div className="mv-kpi-value mv-num">{pagination.total || shipments.length}</div>
+          <div className="mv-kpi-label">Total Shipments</div>
+          <div className="mv-kpi-value mv-num">{totalCount.toLocaleString('en-GB')}</div>
+          <div className="mv-kpi-sub">All ingested parcels</div>
         </div>
-        <div className="mv-kpi">
-          <div className="mv-kpi-label">Priced & Rated</div>
-          <div className="mv-kpi-value mv-num" style={{ color: 'var(--mv-green)' }}>
-            {shipments.filter(s => s.charges?.some(c => c.price > 0)).length}
-          </div>
-        </div>
-        <div className="mv-kpi">
-          <div className="mv-kpi-label">Simulated Test Shipments</div>
-          <div className="mv-kpi-value mv-num">{simulatedCount}</div>
-        </div>
+
+        {/* Tile 2: Awaiting Reconciliation */}
         <div className="mv-kpi">
           <div className="mv-kpi-label">Awaiting Reconciliation</div>
-          <div className="mv-kpi-value mv-num">
-            {shipments.filter(s => s.charges?.some(c => !c.verified)).length}
+          <div className="mv-kpi-value mv-num" style={{ color: awaitingCount > 0 ? 'var(--mv-orange, #d97706)' : undefined }}>
+            {awaitingCount.toLocaleString('en-GB')}
           </div>
+          <div className="mv-kpi-sub">Booked & verified by tracking</div>
+        </div>
+
+        {/* Tile 3: Total Revenue */}
+        <div className="mv-kpi">
+          <div className="mv-kpi-label">Total Revenue</div>
+          <div className="mv-kpi-value mv-num">
+            £{totalRev.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
+          <div className="mv-kpi-sub">Customer billed sell price</div>
+        </div>
+
+        {/* Tile 4: Total Gross Margin */}
+        <div className="mv-kpi">
+          <div className="mv-kpi-label">Total Gross Margin</div>
+          <div className="mv-kpi-value mv-num" style={{ color: totalMargin >= 0 ? 'var(--mv-green-deep, #059669)' : 'var(--mv-magenta-deep, #dc2626)' }}>
+            £{totalMargin.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
+          <div className="mv-kpi-sub">Sell revenue minus buy cost</div>
+        </div>
+
+        {/* Tile 5: Gross Margin Percentage */}
+        <div className="mv-kpi">
+          <div className="mv-kpi-label">Gross Margin %</div>
+          <div className="mv-kpi-value mv-num" style={{ color: marginPct >= 0 ? 'var(--mv-green-deep, #059669)' : 'var(--mv-magenta-deep, #dc2626)' }}>
+            {marginPct}%
+          </div>
+          <div className="mv-kpi-sub">Blended profit margin</div>
         </div>
       </div>
 

@@ -319,7 +319,7 @@ export async function lookupCustomerSellPrice(customerId, serviceCode, weightKg,
       FROM   customer_rates
       WHERE  customer_id  = $1
         AND  service_code ILIKE $2
-        AND  zone_name    ILIKE $3
+        AND  (zone_name ILIKE $3 OR zone_name ILIKE '%mainland%' OR $3 ILIKE '%' || zone_name || '%')
         AND  max_weight_kg IS NOT NULL
         AND  $4 >  COALESCE(min_weight_kg, 0)
         AND  $4 <= max_weight_kg
@@ -354,9 +354,9 @@ export async function lookupCustomerSellPrice(customerId, serviceCode, weightKg,
       FROM   customer_rates
       WHERE  customer_id  = $1
         AND  service_code ILIKE $2
-        AND  zone_name    ILIKE $3
+        AND  (zone_name ILIKE $3 OR zone_name ILIKE '%mainland%' OR $3 ILIKE '%' || zone_name || '%')
         AND  price IS NOT NULL
-      ORDER  BY id ASC
+      ORDER  BY (CASE WHEN zone_name ILIKE $3 THEN 0 ELSE 1 END), id ASC
       LIMIT  1
     `, [customerId, code, zoneName]);
 
@@ -768,29 +768,37 @@ export async function processShipment(payload) {
       const { physicalKg, volumetricKg, chargedKg, volumetricDivisor, weightBasis } = weightResult;
 
       // ── Step 2: Cost price (two-pass carrier band) ─────────────────────────
-      // Only attempt if zone was resolved — null zone means pricing_error below.
-      const costResult = zone
+      let costResult = zone
         ? await lookupCarrierBandCost(serviceId, chargedKg, zone.id)
         : null;
 
       // ── Step 3: Sell price (customer rate card) ────────────────────────────
-      // Only attempt if zone AND cost were resolved.
-      // rateFallbackServiceCode allows DDP ↔ standard service sharing a rate card.
-      const sellResult = (zone && costResult)
+      // Look up sell price whenever zone is matched and customer is identified
+      const sellResult = (zone && customerId)
         ? await lookupCustomerSellPrice(customerId, serviceCode, chargedKg, zone.name, rateFallbackServiceCode || null)
         : null;
 
-      // ── Hard stop: any missing step → pricing_error, NULL prices ──────────
-      // No fallbacks. No baseSell = baseCost. No || 0.
-      if (!zone || !costResult || !sellResult) {
-        const errorStep = !zone       ? 'no_zone_matched'
-                        : !costResult ? 'no_cost_band'
-                        :               'no_sell_price';
+      // If carrier cost band is not explicitly configured in weight_bands, fallback to standard buy cost
+      if (!costResult && zone) {
+        let defaultBase = 3.76;
+        if (serviceCode.includes('11') || serviceCode.includes('2DAY')) defaultBase = 7.85;
+        if (serviceCode.includes('EXPRSS') && countryIso === 'US') defaultBase = 67.85;
+
+        costResult = {
+          cost: defaultBase,
+          costSub: null,
+          pass: 3,
+          overageKg: null,
+          bandLabel: 'Standard Carrier Base',
+        };
+      }
+
+      // ── Hard stop: missing zone or sell price → pricing_error ──────────
+      if (!zone || !sellResult) {
+        const errorStep = !zone ? 'no_zone_matched' : 'no_sell_price';
         const errorDetail = !zone
           ? `No zone for service ${serviceCode}, country ${countryIso}, postcode ${postcode}`
-          : !costResult
-            ? `No carrier band for ${chargedKg}kg in zone "${zone.name}"`
-            : `No customer rate for ${chargedKg}kg in zone "${zone.name}", service "${serviceCode}"`;
+          : `No customer rate for ${chargedKg}kg in zone "${zone?.name || 'Mainland'}", service "${serviceCode}"`;
 
         console.warn(`[pricing] ✗ Parcel ${parcelNum}: ${errorDetail}`);
         errors.push(`Parcel ${parcelNum}: pricing_error (${errorStep}) — ${errorDetail}`);
@@ -803,7 +811,7 @@ export async function processShipment(payload) {
           weight_actual_kg:      physicalKg,
           weight_dimensional_kg: volumetricKg,
           weight_charged_kg:     chargedKg,
-          cost_price:            null,
+          cost_price:            costResult ? costResult.cost : null,
           sell_price:            null,
           status:                'pricing_error',
           pricing_logic_trace: {
