@@ -11,6 +11,7 @@ import express from 'express';
 import { query } from '../db/index.js';
 import { fetchShipmentByReference, fetchShipmentById, requestTrackingUpdate } from '../services/voilaClient.js';
 import { processShipment, insertCharges } from '../services/pricingEngine.js';
+import { processShipmentCreatedWebhook } from './billing.js';
 // upsertEvent and normalisePayload are defined later in this file and used by bulk runner below
 
 const router = express.Router();
@@ -489,33 +490,42 @@ export async function upsertEvent(event, rawBody) {
         backfillInFlight.add(backfillKey);
         ;(async () => {
           try {
-            console.warn(`⚠️  Tracking backfill: no charges for consignment ${consignment} (key ${backfillKey}) — fetching from Voila API`);
+            // Check if rawBody already contains shipment/booking data
+            let autoIngested = false;
+            if (rawBody) {
+              const u = (rawBody.json && typeof rawBody.json === 'object') ? rawBody.json : rawBody;
+              if (u.shipment || u.request?.shipment || u.request_shipment) {
+                const shipId = await processShipmentCreatedWebhook(rawBody);
+                if (shipId) {
+                  await query(
+                    `UPDATE charges SET verified = true, status = 'verified', updated_at = NOW() WHERE shipment_id = $1`,
+                    [shipId]
+                  );
+                  console.log(`✅  Tracking auto-ingest: created + verified shipment ${shipId} for ${backfillKey}`);
+                  autoIngested = true;
+                }
+              }
+            }
 
-            // Prefer fetching by platform ID (exact, unique) over reference (may match
-            // the wrong shipment when two bookings share the same customer reference)
-            const payload = platformShipmentInt
-              ? await fetchShipmentById(String(platformShipmentInt))
-              : await fetchShipmentByReference(String(shipmentReference));
+            if (!autoIngested) {
+              console.warn(`⚠️  Tracking backfill: fetching from Voila API for ${backfillKey}`);
+              const payload = platformShipmentInt
+                ? await fetchShipmentById(String(platformShipmentInt))
+                : await fetchShipmentByReference(String(shipmentReference));
 
-            if (!payload) {
-              console.warn(`   Backfill: Voila API returned no shipment for key ${backfillKey}`);
-              return;
+              if (!payload) {
+                console.warn(`   Backfill: Voila API returned no shipment for key ${backfillKey}`);
+                return;
+              }
+              const shipId = await processShipmentCreatedWebhook(payload);
+              if (shipId) {
+                await query(
+                  `UPDATE charges SET verified = true, status = 'verified', updated_at = NOW() WHERE shipment_id = $1`,
+                  [shipId]
+                );
+                console.log(`✅  Tracking backfill: created + verified shipment ${shipId} for ${backfillKey}`);
+              }
             }
-            const { charges, errors } = await processShipment(payload);
-            if (!charges.length) {
-              console.warn(`   Backfill: processShipment produced no charges for ${backfillKey}`, errors);
-              return;
-            }
-            const inserted = await insertCharges(charges);
-            const insertedIds = inserted.map(c => c.id);
-            if (insertedIds.length) {
-              await query(
-                `UPDATE charges SET verified = true, status = 'verified', updated_at = NOW() WHERE id = ANY($1)`,
-                [insertedIds]
-              );
-            }
-            console.log(`✅  Tracking backfill: created + verified ${inserted.length} charge(s) for ${backfillKey} (consignment ${consignment})`);
-            if (errors.length) console.warn('   Backfill warnings:', errors);
           } catch (err) {
             console.error(`❌  Tracking backfill failed for ${backfillKey}:`, err.message);
           } finally {
