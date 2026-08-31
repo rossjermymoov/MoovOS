@@ -781,6 +781,19 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData, 
   try {
     if (!shipmentId || !customerId) return;
 
+    // Clean up any invoice-only surcharges that may have been erroneously attached to this shipment
+    await query(`
+      DELETE FROM charges
+      WHERE shipment_id = $1
+        AND charge_type = 'surcharge'
+        AND invoice_id IS NULL
+        AND (
+          surcharge_id IN (SELECT id FROM surcharges WHERE applies_when != 'always')
+          OR service_name ILIKE '%third party%'
+          OR service_name ILIKE '%3rd party%'
+        )
+    `, [shipmentId]).catch(() => {});
+
     // Step 1: resolve the courier_id for this shipment.
     // Use the service code (dc_service_id) first — it's structured and accurate.
     // Fall back to the raw courier text field if no service code is available.
@@ -821,10 +834,7 @@ async function applySurcharges(shipmentId, customerId, basePrice, shipmentData, 
       FROM surcharges s
       WHERE s.active = true
         AND s.courier_id = $1
-        AND (
-          (s.applies_when = 'always' OR s.applies_when IS NULL)
-          OR s.reconciliation_excluded = true
-        )
+        AND s.applies_when = 'always'
         AND (s.effective_date IS NULL OR s.effective_date <= CURRENT_DATE)
     `, [courierId]);
 
