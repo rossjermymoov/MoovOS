@@ -1597,22 +1597,13 @@ router.post('/bulk-sync-dc-ids', async (req, res, next) => {
       }
 
       if (targetCust) {
-        // Update existing customer
-        const aliases = Array.isArray(targetCust.billing_aliases) ? [...targetCust.billing_aliases] : [];
-        if (name && !aliases.some(a => a.toLowerCase() === name.toLowerCase())) {
-          aliases.push(name);
-        }
-        if (dcId && !aliases.includes(dcId)) {
-          aliases.push(dcId);
-        }
-
+        // Update existing customer DC ID only
         await query(
           `UPDATE customers 
            SET dc_customer_id = COALESCE($1, dc_customer_id),
-               billing_aliases = $2,
                updated_at = NOW()
-           WHERE id = $3`,
-          [dcId || null, aliases, targetCust.id]
+           WHERE id = $2`,
+          [dcId || null, targetCust.id]
         );
 
         results.updated++;
