@@ -1,7 +1,23 @@
 -- Migration 327: Synchronise account_number and dc_customer_id on existing customers
--- 1. Expand account_number and dc_customer_id columns to VARCHAR(255)
+-- 1. Drop trigger temporarily to allow column alteration
+DROP TRIGGER IF EXISTS trg_customer_dc_id_sync ON customers;
+
+-- 2. Expand account_number and dc_customer_id columns to VARCHAR(255)
 ALTER TABLE customers ALTER COLUMN account_number TYPE VARCHAR(255);
 ALTER TABLE customers ALTER COLUMN dc_customer_id TYPE VARCHAR(255);
+
+-- 3. Re-create trigger function and trigger
+CREATE OR REPLACE FUNCTION sync_customer_dc_id()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.dc_customer_id := NEW.account_number;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_customer_dc_id_sync
+BEFORE INSERT OR UPDATE OF account_number ON customers
+FOR EACH ROW EXECUTE FUNCTION sync_customer_dc_id();
 
 DO $$
 DECLARE
